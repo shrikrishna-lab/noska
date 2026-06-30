@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { Settings2, Search, Plus, Filter, ArrowUpDown, X, Sparkles } from "lucide-react";
+import { Settings2, Search, Plus, Filter, ArrowUpDown, X, Sparkles, Check } from "lucide-react";
 import DatabaseView from "./components/DatabaseView";
 import { useDatabase } from "./hooks/useDatabase";
 import { getActiveView, createView } from "./services/viewService";
@@ -7,6 +7,20 @@ import { PROPERTY_TYPES, CATEGORIES } from "./services/propertyService";
 import { addProperty as addPropDef } from "./services/propertyService";
 import PeekPanel from "../page/peek/PeekPanel";
 import { generateAISummary, generateAITags } from "./services/aiService";
+
+const FILTER_OPERATORS = [
+  { id: 'contains', label: 'Contains' },
+  { id: 'equals', label: 'Equals' },
+  { id: 'not-equals', label: 'Not equal' },
+  { id: 'starts-with', label: 'Starts with' },
+  { id: 'ends-with', label: 'Ends with' },
+  { id: 'is-empty', label: 'Is empty' },
+  { id: 'is-not-empty', label: 'Is not empty' },
+  { id: 'greater-than', label: 'Greater than' },
+  { id: 'less-than', label: 'Less than' },
+  { id: 'before', label: 'Before' },
+  { id: 'after', label: 'After' },
+];
 
 export default function DatabasePage({ database, onPatch, onOpenRow, pageId, apiKey, aiProvider }) {
   const db = database || { properties: [], views: [], rows: [], activeViewId: '' };
@@ -82,6 +96,120 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
           <button onClick={() => setShowProperties(!showProperties)} className={`grid h-7 w-7 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer ${showProperties ? 'bg-[var(--accent)]/10 text-[var(--accent)]' : ''}`} title="Properties"><Settings2 size={13} /></button>
         </div>
       </div>
+
+      {showFilter && (
+        <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--secondary)]">Filter</span>
+            <button
+              onClick={() => {
+                const group = activeView?.filterGroup || { op: 'and', conditions: [], groups: [] };
+                ops.patchView({ filterGroup: { ...group, conditions: [...group.conditions, { property: db.properties[0]?.id || 'name', operator: 'contains', value: '' }] } });
+              }}
+              className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer"
+            >
+              + Add condition
+            </button>
+          </div>
+          {activeView?.filterGroup?.conditions?.length > 0 ? (
+            <div className="space-y-1.5">
+              {activeView.filterGroup.conditions.map((cond, ci) => (
+                <div key={ci} className="flex items-center gap-1.5 text-[11px]">
+                  {ci === 0 && (
+                    <span className="text-[9px] font-bold uppercase text-[var(--muted)] w-6 shrink-0">{activeView.filterGroup.op}</span>
+                  )}
+                  {ci > 0 && (
+                    <button
+                      onClick={() => ops.patchView({ filterGroup: { ...activeView.filterGroup, op: activeView.filterGroup.op === 'and' ? 'or' : 'and' } })}
+                      className="text-[9px] font-bold uppercase text-[var(--accent)] hover:underline w-6 shrink-0 cursor-pointer"
+                    >
+                      {activeView.filterGroup.op}
+                    </button>
+                  )}
+                  <select
+                    value={cond.property}
+                    onChange={(e) => {
+                      const next = [...activeView.filterGroup.conditions];
+                      next[ci] = { ...next[ci], property: e.target.value };
+                      ops.patchView({ filterGroup: { ...activeView.filterGroup, conditions: next } });
+                    }}
+                    className="rounded border border-[var(--border)] bg-transparent px-1.5 py-1 text-[11px] text-[var(--text)] outline-none max-w-[110px]"
+                  >
+                    {db.properties.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={cond.operator}
+                    onChange={(e) => {
+                      const next = [...activeView.filterGroup.conditions];
+                      next[ci] = { ...next[ci], operator: e.target.value };
+                      ops.patchView({ filterGroup: { ...activeView.filterGroup, conditions: next } });
+                    }}
+                    className="rounded border border-[var(--border)] bg-transparent px-1.5 py-1 text-[11px] text-[var(--text)] outline-none max-w-[100px]"
+                  >
+                    {FILTER_OPERATORS.map(op => (
+                      <option key={op.id} value={op.id}>{op.label}</option>
+                    ))}
+                  </select>
+                  {cond.operator !== 'is-empty' && cond.operator !== 'is-not-empty' && (
+                    <input
+                      value={cond.value}
+                      onChange={(e) => {
+                        const next = [...activeView.filterGroup.conditions];
+                        next[ci] = { ...next[ci], value: e.target.value };
+                        ops.patchView({ filterGroup: { ...activeView.filterGroup, conditions: next } });
+                      }}
+                      placeholder="Value"
+                      className="flex-1 rounded border border-[var(--border)] bg-transparent px-1.5 py-1 text-[11px] text-[var(--text)] outline-none placeholder:text-[var(--muted)] min-w-[80px]"
+                    />
+                  )}
+                  <button
+                    onClick={() => {
+                      const next = activeView.filterGroup.conditions.filter((_, i) => i !== ci);
+                      ops.patchView({ filterGroup: next.length > 0 ? { ...activeView.filterGroup, conditions: next } : null });
+                    }}
+                    className="grid h-6 w-6 place-items-center rounded hover:bg-red-500/10 text-[var(--muted)] hover:text-red-400 cursor-pointer shrink-0"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[10px] text-[var(--muted)] italic">No filters — click + Add condition to start</div>
+          )}
+        </div>
+      )}
+
+      {showSort && (
+        <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--secondary)]">Sort</div>
+          <div className="flex items-center gap-2">
+            <select
+              value={activeView?.sort || ''}
+              onChange={(e) => ops.patchView({ sort: e.target.value || null })}
+              className="rounded border border-[var(--border)] bg-transparent px-2 py-1 text-[11px] text-[var(--text)] outline-none"
+            >
+              <option value="">None</option>
+              {db.properties.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {activeView?.sort && (
+              <button
+                onClick={() => ops.patchView({ sortAsc: activeView.sortAsc !== false ? false : true })}
+                className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] cursor-pointer transition ${
+                  activeView.sortAsc !== false ? 'bg-[var(--accent)]/10 text-[var(--accent)]' : 'text-[var(--secondary)] hover:bg-[var(--hover)]'
+                }`}
+              >
+                <ArrowUpDown size={11} />
+                {activeView.sortAsc !== false ? 'Asc' : 'Desc'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {showProperties && (
         <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
