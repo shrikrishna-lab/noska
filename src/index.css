@@ -1,0 +1,380 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+:root {
+  color-scheme: dark;
+  --expo-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --expo-in: cubic-bezier(0.7, 0, 0.84, 0);
+
+  /* ─── Liquid Glass + Purple Design Tokens ─── */
+  --bg: #0A0A10;
+  --surface-1: rgba(18, 16, 28, 0.72);
+  --surface-2: rgba(24, 22, 38, 0.65);
+  --surface-3: rgba(32, 28, 50, 0.55);
+  --surface-4: rgba(42, 38, 62, 0.50);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-hover: rgba(255, 255, 255, 0.14);
+  --text: #F0EDF8;
+  --text-secondary: #B0A8C0;
+  --text-muted: #7A7490;
+  --accent: #A855F7;
+  --accent-light: #C084FC;
+  --accent-deep: #af81ff;
+  --noska-blue: #0066FF;
+  --noska-blue-glow: rgba(0, 102, 255, 0.35);
+  --noska-blue-soft: rgba(0, 102, 255, 0.12);
+  --noska-blue-light: #4791FF;
+  --noska-blue-dark: #0052CC;
+  --success: #3FB950;
+  --warning: #F4B740;
+  --danger: #F85149;
+  --shadow: rgba(0, 0, 0, 0.45);
+
+  /* Glass Surface Tokens */
+  --glass-bg: rgba(16, 14, 26, 0.60);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-light: rgba(255, 255, 255, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
+  --glass-blur: 20px;
+  --glass-blur-heavy: 40px;
+
+  /* Legacy Mappings */
+  --sidebar: var(--surface-1);
+  --editor: var(--bg);
+  --panel: var(--surface-1);
+  --surface: var(--surface-2);
+  --elevated: var(--surface-3);
+  --active: var(--surface-4);
+  --hover: var(--surface-3);
+  --border-strong: var(--border-hover);
+  --secondary: var(--text-secondary);
+  --muted: var(--text-muted);
+  --accent-soft: rgba(168, 85, 247, 0.12);
+  --accent-glow: rgba(168, 85, 247, 0.30);
+  --callout: rgba(168, 85, 247, 0.06);
+  --input: var(--surface-3);
+  --toggle: var(--text-muted);
+
+  /* Premium Glass Shadows */
+  --shadow-card: 0 2px 8px -1px rgba(0, 0, 0, 0.35), 0 1px 3px -1px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-floating: 0 12px 40px -4px rgba(0, 0, 0, 0.55), 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-modal: 0 24px 80px -8px rgba(0, 0, 0, 0.7), 0 8px 32px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+  --shadow-glow-purple: 0 0 30px -5px rgba(168, 85, 247, 0.20), 0 0 60px -10px rgba(124, 58, 237, 0.10);
+
+  --shadow-sm: 0 4px 12px -2px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px -4px rgba(168, 85, 247, 0.20);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --transition-fast: 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.light {
+  color-scheme: light;
+  --sidebar: #f0efeb;
+  --editor: #ffffff;
+  --bg: #ffffff;
+  --panel: #f0efeb;
+  --surface-1: #f0efeb;
+  --surface-2: #f8f7f4;
+  --surface-3: #e8e7e3;
+  --surface-4: #dddcd8;
+  --surface: #f8f7f4;
+  --elevated: #ffffff;
+  --active: #dddcd8;
+  --text: #1a1a18;
+  --secondary: #6b6861;
+  --muted: #8f8c84;
+  --border: #d8d6d0;
+  --border-hover: #c4c1b8;
+  --border-strong: #c4c1b8;
+  --hover: #ecebe7;
+  --accent: #1a73e8;
+  --accent-light: #4791FF;
+  --accent-deep: #0d5ebe;
+  --accent-soft: rgba(26, 115, 232, 0.08);
+  --accent-glow: rgba(26, 115, 232, 0.15);
+  --callout: #e8f0fe;
+  --input: #e8e7e3;
+  --toggle: #c4c1b8;
+  --success: #1e8e3e;
+  --warning: #e37400;
+  --danger: #d93025;
+  --shadow: 0 25px 50px -12px rgb(0 0 0 / 0.10);
+  --shadow-sm: 0 4px 12px -2px rgb(0 0 0 / 0.06);
+  --shadow-glow: 0 0 20px -4px rgba(26, 115, 232, 0.08);
+  --shadow-card: 0 2px 8px -1px rgba(0, 0, 0, 0.06), 0 1px 3px -1px rgba(0, 0, 0, 0.03);
+  --shadow-floating: 0 12px 40px -4px rgba(0, 0, 0, 0.10), 0 4px 16px -2px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 24px 80px -8px rgba(0, 0, 0, 0.15), 0 8px 32px -4px rgba(0, 0, 0, 0.08);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow-glow-purple: 0 0 30px -5px rgba(26, 115, 232, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-light: rgba(0, 0, 0, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.8);
+  --glass-blur: 20px;
+  --glass-blur-heavy: 40px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --transition-fast: 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.dark body, .dark #root {
+  background: radial-gradient(at 0% 0%, rgba(168, 85, 247, 0.06) 0px, transparent 50%),
+              radial-gradient(at 100% 100%, rgba(124, 58, 237, 0.06) 0px, transparent 50%),
+              var(--bg);
+}
+
+.light body, .light #root {
+  background: radial-gradient(at 0% 0%, rgba(35, 131, 226, 0.03) 0px, transparent 50%),
+              radial-gradient(at 100% 100%, rgba(35, 131, 226, 0.02) 0px, transparent 50%),
+              var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+/* ─── Premium Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0);
+  border-radius: 99px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 200ms ease;
+}
+
+/* Auto-hide: Fade in thumb while scrolling/hovering container */
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35) !important;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox compatibility */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+
+/* Light Theme Scrollbar overrides */
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0);
+}
+.light *:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25) !important;
+}
+.light * {
+  scrollbar-color: rgba(0, 0, 0, 0.08) transparent;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Focus Ring System ─── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 4px var(--accent-glow);
+}
+
+/* ─── Block Hover Tools ─── */
+.noska-block:focus-within .block-tools,
+.noska-block:hover .block-tools {
+  opacity: 1;
+}
+
+/* ─── Selection AI Toolbar ─── */
+.selection-toolbar {
+  animation: selectionPop 180ms var(--expo-out);
+}
+
+@keyframes selectionPop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ─── Fade In ─── */
+.fade-in {
+  animation: fadeIn 180ms var(--expo-out);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Caret Pulse ─── */
+@keyframes caret-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.animate-caret-pulse {
+  animation: caret-pulse 1s step-end infinite;
+}
+
+
+/* ─── Smooth Scroll ─── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ─── Kbd Shortcut Chip ─── */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 5px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+/* ─── Stagger Reveal ─── */
+@keyframes staggerReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-reveal > * {
+  animation: staggerReveal 300ms var(--expo-out) both;
+}
+.stagger-reveal > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-reveal > *:nth-child(2) { animation-delay: 40ms; }
+.stagger-reveal > *:nth-child(3) { animation-delay: 80ms; }
+.stagger-reveal > *:nth-child(4) { animation-delay: 120ms; }
+.stagger-reveal > *:nth-child(5) { animation-delay: 160ms; }
+.stagger-reveal > *:nth-child(6) { animation-delay: 200ms; }
+
+/* ─── Metric Card Hover Glow ─── */
+.metric-card {
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+}
+.metric-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ─── AI Panel Markdown Styles ─────────────────────────────────────────── */
+
+.ai-md-container {
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.ai-md-container > * + * {
+  margin-top: 0.35em;
+}
+
+/* Thin stroke width for Framer-style sidebar icons */
+aside svg,
+.glass-sidebar svg {
+  stroke-width: 1.4px !important;
+}
+
+/* ─── Notion Small Text Overrides ─── */
+.noska-small-text .noska-h1 {
+  font-size: 20px !important;
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.5rem !important;
+}
+.noska-small-text .noska-h2 {
+  font-size: 16px !important;
+  margin-top: 1rem !important;
+  margin-bottom: 0.5rem !important;
+}
+.noska-small-text .noska-h3 {
+  font-size: 14px !important;
+  margin-top: 0.75rem !important;
+  margin-bottom: 0.25rem !important;
+}
+.noska-small-text .noska-body {
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+}
+
+

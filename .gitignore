@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+*.local
+dev_server.log
+test-ui.mjs
+.DS_Store

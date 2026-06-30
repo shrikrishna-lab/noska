@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>/ — graphify tree viewer</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      margin: 20px 0 0 24px;
+      font-size: 2.2rem;
+      font-weight: bold;
+      color: #1e3a56;
+    }
+    .controls {
+      margin: 20px 0 15px 24px;
+    }
+    button {
+      margin-right: 10px;
+      padding: 8px 18px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s ease-in-out;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:active {
+      background: #004085;
+    }
+    #tree-container {
+      width: calc(100vw - 48px); /* Adjust for body margin/padding */
+      height: 85vh;
+      overflow: auto;
+      border-radius: 8px;
+      background: #fff;
+      margin-left: 24px;
+      margin-right: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border: 1px solid #ddd;
+    }
+    svg {
+      background: #fff;
+      border-radius: 8px;
+      display: block; /* Important for D3 */
+    }
+    .node circle {
+      stroke-width: 2.5px;
+    }
+    .node text { /* Base style for the <text> container */
+      font: 13px 'Segoe UI', sans-serif;
+      paint-order: stroke fill; /* Ensures text is readable over lines */
+      stroke: #fff; /* White halo */
+      stroke-width: 3px; /* Halo thickness */
+      stroke-linejoin: round;
+      stroke-opacity: 0.85; /* Halo opacity */
+    }
+    .link {
+      fill: none;
+      stroke-opacity: 0.7;
+      stroke-width: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h1>/ — Knowledge Graph</h1>
+  <div class="controls">
+    <button onclick="expandAll()">Expand All</button>
+    <button onclick="collapseAll()">Collapse All</button>
+    <button onclick="resetView()">Reset View</button>
+  </div>
+  <div id="tree-container">
+    <svg id="tree-svg" width="6000" height="8000"></svg>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const initialJsonData = {"name":"/","total_count":727,"children":[{"name":".agents","total_count":127,"children":[{"name":"skills","total_count":127,"children":[{"name":"supabase","total_count":23,"children":[{"name":"assets","total_count":4,"children":[{"name":"feedback-issue-template.md","total_count":4,"children":[{"name":"feedback-issue-template.md","total_count":1,"children":[]},{"name":"Fix suggestion","total_count":1,"children":[]},{"name":"Source","total_count":1,"children":[]},{"name":"What happened","total_count":1,"children":[]}]}]},{"name":"CHANGELOG.md","total_count":8,"children":[{"name":"[0.1.3](https://github.com/supabase/agent-skills/compare/v0.1.2...v0.1.3) (2026-06-02)","total_count":1,"children":[]},{"name":"[0.1.4](https://github.com/supabase/agent-skills/compare/v0.1.3...v0.1.4) (2026-06-05)","total_count":1,"children":[]},{"name":"Bug Fixes","total_count":1,"children":[]},{"name":"Bug Fixes","total_count":1,"children":[]},{"name":"Changelog","total_count":1,"children":[]},{"name":"CHANGELOG.md","total_count":1,"children":[]},{"name":"Features","total_count":1,"children":[]},{"name":"Features","total_count":1,"children":[]}]},{"name":"references","total_count":3,"children":[{"name":"skill-feedback.md","total_count":3,"children":[{"name":"Skill Feedback","total_count":1,"children":[]},{"name":"skill-feedback.md","total_count":1,"children":[]},{"name":"Steps","total_count":1,"children":[]}]}]},{"name":"SKILL.md","total_count":8,"children":[{"name":"Core Principles","total_count":1,"children":[]},{"name":"Making and Committing Schema Changes","total_count":1,"children":[]},{"name":"Reference Guides","total_count":1,"children":[]},{"name":"SKILL.md","total_count":1,"children":[]},{"name":"Supabase","total_count":1,"children":[]},{"name":"Supabase CLI","total_count":1,"children":[]},{"name":"Supabase Documentation","total_count":1,"children":[]},{"name":"Supabase MCP Server","total_count":1,"children":[]}]}]},{"name":"supabase-postgres-best-practices","total_count":104,"children":[{"name":"CHANGELOG.md","total_count":8,"children":[{"name":"[1.2.0](https://github.com/supabase/agent-skills/compare/v1.1.1...v1.2.0) (2026-06-02)","total_count":1,"children":[]},{"name":"[1.3.0](https://github.com/supabase/agent-skills/compare/v1.2.0...v1.3.0) (2026-06-05)","total_count":1,"children":[]},{"name":"Bug Fixes","total_count":1,"children":[]},{"name":"Bug Fixes","total_count":1,"children":[]},{"name":"Changelog","total_count":1,"children":[]},{"name":"CHANGELOG.md","total_count":1,"children":[]},{"name":"Features","total_count":1,"children":[]},{"name":"Features","total_count":1,"children":[]}]},{"name":"references","total_count":90,"children":[{"name":"_contributing.md","total_count":16,"children":[{"name":"1. Concrete Transformation Patterns","total_count":1,"children":[]},{"name":"2. Error-First Structure","total_count":1,"children":[]},{"name":"3. Quantified Impact","total_count":1,"children":[]},{"name":"4. Self-Contained Examples","total_count":1,"children":[]},{"name":"5. Semantic Naming","total_count":1,"children":[]},{"name":"_contributing.md","total_count":1,"children":[]},{"name":"Code Example Standards","total_count":1,"children":[]},{"name":"Comments","total_count":1,"children":[]},{"name":"Impact Level Guidelines","total_count":1,"children":[]},{"name":"Key Principles","total_count":1,"children":[]},{"name":"Language Tags","total_count":1,"children":[]},{"name":"Reference Standards","total_count":1,"children":[]},{"name":"Review Checklist","total_count":1,"children":[]},{"name":"SQL Formatting","total_count":1,"children":[]},{"name":"When to Include Application Code","total_count":1,"children":[]},{"name":"Writing Guidelines for Postgres References","total_count":1,"children":[]}]},{"name":"_sections.md","total_count":10,"children":[{"name":"1. Query Performance (query)","total_count":1,"children":[]},{"name":"2. Connection Management (conn)","total_count":1,"children":[]},{"name":"3. Security & RLS (security)","total_count":1,"children":[]},{"name":"4. Schema Design (schema)","total_count":1,"children":[]},{"name":"5. Concurrency & Locking (lock)","total_count":1,"children":[]},{"name":"6. Data Access Patterns (data)","total_count":1,"children":[]},{"name":"7. Monitoring & Diagnostics (monitor)","total_count":1,"children":[]},{"name":"8. Advanced Features (advanced)","total_count":1,"children":[]},{"name":"_sections.md","total_count":1,"children":[]},{"name":"Section Definitions","total_count":1,"children":[]}]},{"name":"_template.md","total_count":2,"children":[{"name":"[Rule Title]","total_count":1,"children":[]},{"name":"_template.md","total_count":1,"children":[]}]},{"name":"advanced-full-text-search.md","total_count":2,"children":[{"name":"advanced-full-text-search.md","total_count":1,"children":[]},{"name":"Use tsvector for Full-Text Search","total_count":1,"children":[]}]},{"name":"advanced-jsonb-indexing.md","total_count":2,"children":[{"name":"advanced-jsonb-indexing.md","total_count":1,"children":[]},{"name":"Index JSONB Columns for Efficient Querying","total_count":1,"children":[]}]},{"name":"conn-idle-timeout.md","total_count":2,"children":[{"name":"Configure Idle Connection Timeouts","total_count":1,"children":[]},{"name":"conn-idle-timeout.md","total_count":1,"children":[]}]},{"name":"conn-limits.md","total_count":2,"children":[{"name":"conn-limits.md","total_count":1,"children":[]},{"name":"Set Appropriate Connection Limits","total_count":1,"children":[]}]},{"name":"conn-pooling.md","total_count":2,"children":[{"name":"conn-pooling.md","total_count":1,"children":[]},{"name":"Use Connection Pooling for All Applications","total_count":1,"children":[]}]},{"name":"conn-prepared-statements.md","total_count":2,"children":[{"name":"conn-prepared-statements.md","total_count":1,"children":[]},{"name":"Use Prepared Statements Correctly with Pooling","total_count":1,"children":[]}]},{"name":"data-batch-inserts.md","total_count":2,"children":[{"name":"Batch INSERT Statements for Bulk Data","total_count":1,"children":[]},{"name":"data-batch-inserts.md","total_count":1,"children":[]}]},{"name":"data-n-plus-one.md","total_count":2,"children":[{"name":"data-n-plus-one.md","total_count":1,"children":[]},{"name":"Eliminate N+1 Queries with Batch Loading","total_count":1,"children":[]}]},{"name":"data-pagination.md","total_count":2,"children":[{"name":"data-pagination.md","total_count":1,"children":[]},{"name":"Use Cursor-Based Pagination Instead of OFFSET","total_count":1,"children":[]}]},{"name":"data-upsert.md","total_count":2,"children":[{"name":"data-upsert.md","total_count":1,"children":[]},{"name":"Use UPSERT for Insert-or-Update Operations","total_count":1,"children":[]}]},{"name":"lock-advisory.md","total_count":2,"children":[{"name":"lock-advisory.md","total_count":1,"children":[]},{"name":"Use Advisory Locks for Application-Level Locking","total_count":1,"children":[]}]},{"name":"lock-deadlock-prevention.md","total_count":2,"children":[{"name":"lock-deadlock-prevention.md","total_count":1,"children":[]},{"name":"Prevent Deadlocks with Consistent Lock Ordering","total_count":1,"children":[]}]},{"name":"lock-short-transactions.md","total_count":2,"children":[{"name":"Keep Transactions Short to Reduce Lock Contention","total_count":1,"children":[]},{"name":"lock-short-transactions.md","total_count":1,"children":[]}]},{"name":"lock-skip-locked.md","total_count":2,"children":[{"name":"lock-skip-locked.md","total_count":1,"children":[]},{"name":"Use SKIP LOCKED for Non-Blocking Queue Processing","total_count":1,"children":[]}]},{"name":"monitor-explain-analyze.md","total_count":2,"children":[{"name":"monitor-explain-analyze.md","total_count":1,"children":[]},{"name":"Use EXPLAIN ANALYZE to Diagnose Slow Queries","total_count":1,"children":[]}]},{"name":"monitor-pg-stat-statements.md","total_count":2,"children":[{"name":"Enable pg_stat_statements for Query Analysis","total_count":1,"children":[]},{"name":"monitor-pg-stat-statements.md","total_count":1,"children":[]}]},{"name":"monitor-vacuum-analyze.md","total_count":2,"children":[{"name":"Maintain Table Statistics with VACUUM and ANALYZE","total_count":1,"children":[]},{"name":"monitor-vacuum-analyze.md","total_count":1,"children":[]}]},{"name":"query-composite-indexes.md","total_count":2,"children":[{"name":"Create Composite Indexes for Multi-Column Queries","total_count":1,"children":[]},{"name":"query-composite-indexes.md","total_count":1,"children":[]}]},{"name":"query-covering-indexes.md","total_count":2,"children":[{"name":"query-covering-indexes.md","total_count":1,"children":[]},{"name":"Use Covering Indexes to Avoid Table Lookups","total_count":1,"children":[]}]},{"name":"query-index-types.md","total_count":2,"children":[{"name":"Choose the Right Index Type for Your Data","total_count":1,"children":[]},{"name":"query-index-types.md","total_count":1,"children":[]}]},{"name":"query-missing-indexes.md","total_count":2,"children":[{"name":"Add Indexes on WHERE and JOIN Columns","total_count":1,"children":[]},{"name":"query-missing-indexes.md","total_count":1,"children":[]}]},{"name":"query-partial-indexes.md","total_count":2,"children":[{"name":"query-partial-indexes.md","total_count":1,"children":[]},{"name":"Use Partial Indexes for Filtered Queries","total_count":1,"children":[]}]},{"name":"schema-constraints.md","total_count":2,"children":[{"name":"Add Constraints Safely in Migrations","total_count":1,"children":[]},{"name":"schema-constraints.md","total_count":1,"children":[]}]},{"name":"schema-data-types.md","total_count":2,"children":[{"name":"Choose Appropriate Data Types","total_count":1,"children":[]},{"name":"schema-data-types.md","total_count":1,"children":[]}]},{"name":"schema-foreign-key-indexes.md","total_count":2,"children":[{"name":"Index Foreign Key Columns","total_count":1,"children":[]},{"name":"schema-foreign-key-indexes.md","total_count":1,"children":[]}]},{"name":"schema-lowercase-identifiers.md","total_count":2,"children":[{"name":"schema-lowercase-identifiers.md","total_count":1,"children":[]},{"name":"Use Lowercase Identifiers for Compatibility","total_count":1,"children":[]}]},{"name":"schema-partitioning.md","total_count":2,"children":[{"name":"Partition Large Tables for Better Performance","total_count":1,"children":[]},{"name":"schema-partitioning.md","total_count":1,"children":[]}]},{"name":"schema-primary-keys.md","total_count":2,"children":[{"name":"schema-primary-keys.md","total_count":1,"children":[]},{"name":"Select Optimal Primary Key Strategy","total_count":1,"children":[]}]},{"name":"security-privileges.md","total_count":2,"children":[{"name":"Apply Principle of Least Privilege","total_count":1,"children":[]},{"name":"security-privileges.md","total_count":1,"children":[]}]},{"name":"security-rls-basics.md","total_count":2,"children":[{"name":"Enable Row Level Security for Multi-Tenant Data","total_count":1,"children":[]},{"name":"security-rls-basics.md","total_count":1,"children":[]}]},{"name":"security-rls-performance.md","total_count":2,"children":[{"name":"Optimize RLS Policies for Performance","total_count":1,"children":[]},{"name":"security-rls-performance.md","total_count":1,"children":[]}]}]},{"name":"SKILL.md","total_count":6,"children":[{"name":"How to Use","total_count":1,"children":[]},{"name":"References","total_count":1,"children":[]},{"name":"Rule Categories by Priority","total_count":1,"children":[]},{"name":"SKILL.md","total_count":1,"children":[]},{"name":"Supabase Postgres Best Practices","total_count":1,"children":[]},{"name":"When to Apply","total_count":1,"children":[]}]}]}]}]},{"name":".opencode","total_count":1,"children":[{"name":"plugins","total_count":1,"children":[{"name":"graphify.js","total_count":1,"children":[{"name":"GraphifyPlugin()","total_count":1,"children":[]}]}]}]},{"name":"features_list.md","total_count":10,"children":[{"name":"API DOCUMENTATION PAGE (in-app)","total_count":1,"children":[]},{"name":"CANVAS CONTROLS","total_count":1,"children":[]},{"name":"CANVAS ENTRY","total_count":1,"children":[]},{"name":"CARDS ON CANVAS","total_count":1,"children":[]},{"name":"FEATURE 1 \u2014 INFINITE CANVAS","total_count":1,"children":[]},{"name":"features_list.md","total_count":1,"children":[]},{"name":"HOW TO USE THIS","total_count":1,"children":[]},{"name":"ULTIMATE FEATURES PROMPT \u2014 AI NOTE APP","total_count":1,"children":[]},{"name":"\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550","total_count":1,"children":[]},{"name":"\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550","total_count":1,"children":[]}]},{"name":"package.json","total_count":25,"children":[{"name":"@dnd-kit/core","total_count":1,"children":[]},{"name":"@dnd-kit/sortable","total_count":1,"children":[]},{"name":"@dnd-kit/utilities","total_count":1,"children":[]},{"name":"@supabase/supabase-js","total_count":1,"children":[]},{"name":"@tailwindcss/postcss","total_count":1,"children":[]},{"name":"@vitejs/plugin-react","total_count":1,"children":[]},{"name":"autoprefixer","total_count":1,"children":[]},{"name":"build","total_count":1,"children":[]},{"name":"dependencies","total_count":1,"children":[]},{"name":"dev","total_count":1,"children":[]},{"name":"devDependencies","total_count":1,"children":[]},{"name":"framer-motion","total_count":1,"children":[]},{"name":"lucide-react","total_count":1,"children":[]},{"name":"name","total_count":1,"children":[]},{"name":"pg","total_count":1,"children":[]},{"name":"postcss","total_count":1,"children":[]},{"name":"preview","total_count":1,"children":[]},{"name":"private","total_count":1,"children":[]},{"name":"react","total_count":1,"children":[]},{"name":"react-dom","total_count":1,"children":[]},{"name":"scripts","total_count":1,"children":[]},{"name":"tailwindcss","total_count":1,"children":[]},{"name":"type","total_count":1,"children":[]},{"name":"version","total_count":1,"children":[]},{"name":"vite","total_count":1,"children":[]}]},{"name":"scripts","total_count":4,"children":[{"name":"run-migration.mjs","total_count":3,"children":[{"name":"run()","total_count":1,"children":[]},{"name":"sql","total_count":1,"children":[]},{"name":"supabase","total_count":1,"children":[]}]},{"name":"setup-db.js","total_count":1,"children":[]}]},{"name":"src","total_count":551,"children":[{"name":"ai","total_count":86,"children":[{"name":"agents.js","total_count":5,"children":[{"name":"AGENTS","total_count":1,"children":[]},{"name":"buildAgentPrompt()","total_count":1,"children":[]},{"name":"getAgent()","total_count":1,"children":[]},{"name":"getAgentList()","total_count":1,"children":[]},{"name":"getAllAgents()","total_count":1,"children":[]}]},{"name":"AIManager.js","total_count":26,"children":[{"name":"._getFallbackProviders()","total_count":1,"children":[]},{"name":"._notify()","total_count":1,"children":[]},{"name":"._persist()","total_count":1,"children":[]},{"name":"._tryProvider()","total_count":1,"children":[]},{"name":".checkAllProviderHealth()","total_count":1,"children":[]},{"name":".checkProviderHealth()","total_count":1,"children":[]},{"name":".configure()","total_count":1,"children":[]},{"name":".constructor()","total_count":1,"children":[]},{"name":".getActiveModelName()","total_count":1,"children":[]},{"name":".getActiveProvider()","total_count":1,"children":[]},{"name":".getActiveProviderName()","total_count":1,"children":[]},{"name":".getConfig()","total_count":1,"children":[]},{"name":".getProviderStatuses()","total_count":1,"children":[]},{"name":".guardResponse()","total_count":1,"children":[]},{"name":".init()","total_count":1,"children":[]},{"name":".isConfigured()","total_count":1,"children":[]},{"name":".migrateFromLegacy()","total_count":1,"children":[]},{"name":".send()","total_count":1,"children":[]},{"name":".sendConversation()","total_count":1,"children":[]},{"name":".setActiveAgent()","total_count":1,"children":[]},{"name":".setActiveProvider()","total_count":1,"children":[]},{"name":".setProviderConfig()","total_count":1,"children":[]},{"name":".stream()","total_count":1,"children":[]},{"name":".subscribe()","total_count":1,"children":[]},{"name":"AIManager","total_count":1,"children":[]},{"name":"DEFAULT_CONFIG","total_count":1,"children":[]}]},{"name":"ContextBuilder.js","total_count":14,"children":[{"name":"buildBreadcrumb()","total_count":1,"children":[]},{"name":"buildContext()","total_count":1,"children":[]},{"name":"buildMinimalContext()","total_count":1,"children":[]},{"name":"buildPageProperties()","total_count":1,"children":[]},{"name":"buildTagsOverview()","total_count":1,"children":[]},{"name":"buildWorkspaceContext()","total_count":1,"children":[]},{"name":"estimateTokens()","total_count":1,"children":[]},{"name":"extractPageText()","total_count":1,"children":[]},{"name":"findBacklinks()","total_count":1,"children":[]},{"name":"findChildren()","total_count":1,"children":[]},{"name":"findParent()","total_count":1,"children":[]},{"name":"findRelatedByTags()","total_count":1,"children":[]},{"name":"pageSummary()","total_count":1,"children":[]},{"name":"truncateToTokens()","total_count":1,"children":[]}]},{"name":"memory.js","total_count":15,"children":[{"name":"buildMemoryContext()","total_count":1,"children":[]},{"name":"clearMemory()","total_count":1,"children":[]},{"name":"forgetMemory()","total_count":1,"children":[]},{"name":"getDefaultMemory()","total_count":1,"children":[]},{"name":"getMemory()","total_count":1,"children":[]},{"name":"getMemoryByCategory()","total_count":1,"children":[]},{"name":"getMemoryValue()","total_count":1,"children":[]},{"name":"getPreference()","total_count":1,"children":[]},{"name":"initializeMemory()","total_count":1,"children":[]},{"name":"loadFromStorage()","total_count":1,"children":[]},{"name":"saveToStorage()","total_count":1,"children":[]},{"name":"saveUserFact()","total_count":1,"children":[]},{"name":"saveUserPreference()","total_count":1,"children":[]},{"name":"setMemory()","total_count":1,"children":[]},{"name":"setMemoryBatch()","total_count":1,"children":[]}]},{"name":"providers.js","total_count":6,"children":[{"name":"getAllProviders()","total_count":1,"children":[]},{"name":"getProvider()","total_count":1,"children":[]},{"name":"getProviderList()","total_count":1,"children":[]},{"name":"mockResponse()","total_count":1,"children":[]},{"name":"PROVIDERS","total_count":1,"children":[]},{"name":"testProviderConnection()","total_count":1,"children":[]}]},{"name":"tools.js","total_count":12,"children":[{"name":"DEFINITIONS","total_count":1,"children":[]},{"name":"executeAllToolCalls()","total_count":1,"children":[]},{"name":"executeTool()","total_count":1,"children":[]},{"name":"findPageByIdOrTitle()","total_count":1,"children":[]},{"name":"getCapabilities()","total_count":1,"children":[]},{"name":"getToolInstructions()","total_count":1,"children":[]},{"name":"hasToolCalls()","total_count":1,"children":[]},{"name":"parseToolCalls()","total_count":1,"children":[]},{"name":"stripToolCalls()","total_count":1,"children":[]},{"name":"TOOL_PATTERN","total_count":1,"children":[]},{"name":"tryParseToolJSON()","total_count":1,"children":[]},{"name":"validateParams()","total_count":1,"children":[]}]},{"name":"userProfile.js","total_count":8,"children":[{"name":"buildUserProfileContext()","total_count":1,"children":[]},{"name":"getUserProfile()","total_count":1,"children":[]},{"name":"learnUserInteraction()","total_count":1,"children":[]},{"name":"loadProfile()","total_count":1,"children":[]},{"name":"mergeProfile()","total_count":1,"children":[]},{"name":"saveProfile()","total_count":1,"children":[]},{"name":"saveUserFact()","total_count":1,"children":[]},{"name":"saveUserPreference()","total_count":1,"children":[]}]}]},{"name":"App.jsx","total_count":6,"children":[{"name":"App()","total_count":1,"children":[]},{"name":"circlePosition()","total_count":1,"children":[]},{"name":"createThemeAnimation()","total_count":1,"children":[]},{"name":"ensureThemeTransitionStyles()","total_count":1,"children":[]},{"name":"polygonClip()","total_count":1,"children":[]},{"name":"rectangleClip()","total_count":1,"children":[]}]},{"name":"components","total_count":225,"children":[{"name":"ai","total_count":20,"children":[{"name":"AIActionsCard.jsx","total_count":2,"children":[{"name":"AI_ACTIONS","total_count":1,"children":[]},{"name":"AIActionsCard()","total_count":1,"children":[]}]},{"name":"ChatMessage.jsx","total_count":2,"children":[{"name":"ActionBtn()","total_count":1,"children":[]},{"name":"ChatMessage()","total_count":1,"children":[]}]},{"name":"ChatSidebar.jsx","total_count":5,"children":[{"name":"ChatCard()","total_count":1,"children":[]},{"name":"ChatGroup()","total_count":1,"children":[]},{"name":"ChatSidebar()","total_count":1,"children":[]},{"name":"ICONS","total_count":1,"children":[]},{"name":"timeGroup()","total_count":1,"children":[]}]},{"name":"CollabAura.jsx","total_count":4,"children":[{"name":"AURA_COLORS","total_count":1,"children":[]},{"name":"CollabAura()","total_count":1,"children":[]},{"name":"Particle()","total_count":1,"children":[]},{"name":"UserAura()","total_count":1,"children":[]}]},{"name":"ContextPanel.jsx","total_count":2,"children":[{"name":"CollapsibleSection()","total_count":1,"children":[]},{"name":"ContextPanel()","total_count":1,"children":[]}]},{"name":"OnboardingSuggestions.jsx","total_count":2,"children":[{"name":"OnboardingSuggestions()","total_count":1,"children":[]},{"name":"SUGGESTIONS","total_count":1,"children":[]}]},{"name":"PageInsights.jsx","total_count":2,"children":[{"name":"analyzePage()","total_count":1,"children":[]},{"name":"PageInsights()","total_count":1,"children":[]}]},{"name":"PromptComposer.jsx","total_count":1,"children":[{"name":"PromptComposer()","total_count":1,"children":[]}]}]},{"name":"AIPanel.jsx","total_count":2,"children":[{"name":"AIPanel()","total_count":1,"children":[]},{"name":"SPRING","total_count":1,"children":[]}]},{"name":"AIRightPanel.jsx","total_count":8,"children":[{"name":"AI_ACTIONS","total_count":1,"children":[]},{"name":"AIRightPanel()","total_count":1,"children":[]},{"name":"ChatMessageBubble()","total_count":1,"children":[]},{"name":"LANGUAGES","total_count":1,"children":[]},{"name":"QUICK_ACTIONS","total_count":1,"children":[]},{"name":"SPRING","total_count":1,"children":[]},{"name":"SPRING_STIFF","total_count":1,"children":[]},{"name":"VIEW_META","total_count":1,"children":[]}]},{"name":"auth","total_count":20,"children":[{"name":"AuthBackground.jsx","total_count":1,"children":[{"name":"AuthBackground()","total_count":1,"children":[]}]},{"name":"AuthCard.jsx","total_count":1,"children":[{"name":"AuthCard()","total_count":1,"children":[]}]},{"name":"AuthDivider.jsx","total_count":1,"children":[{"name":"AuthDivider()","total_count":1,"children":[]}]},{"name":"AuthError.jsx","total_count":1,"children":[{"name":"AuthError()","total_count":1,"children":[]}]},{"name":"AuthLoading.jsx","total_count":1,"children":[{"name":"AuthLoading()","total_count":1,"children":[]}]},{"name":"AuthPage.jsx","total_count":1,"children":[{"name":"AuthPage()","total_count":1,"children":[]}]},{"name":"AuthProviders.jsx","total_count":1,"children":[{"name":"AuthProviders()","total_count":1,"children":[]}]},{"name":"LoadingScreen.jsx","total_count":1,"children":[{"name":"LoadingScreen()","total_count":1,"children":[]}]},{"name":"LoadingStageText.jsx","total_count":1,"children":[{"name":"LoadingStageText()","total_count":1,"children":[]}]},{"name":"LogoLoader.jsx","total_count":1,"children":[{"name":"LogoLoader()","total_count":1,"children":[]}]},{"name":"ProviderButton.jsx","total_count":1,"children":[{"name":"ProviderButton()","total_count":1,"children":[]}]},{"name":"RingLoader.jsx","total_count":1,"children":[{"name":"RingLoader()","total_count":1,"children":[]}]},{"name":"useAuthMotion.js","total_count":6,"children":[{"name":"itemVariants","total_count":1,"children":[]},{"name":"logoVariants","total_count":1,"children":[]},{"name":"revealVariants","total_count":1,"children":[]},{"name":"screenTransitionVariants","total_count":1,"children":[]},{"name":"SPRING_GENTLE","total_count":1,"children":[]},{"name":"SPRING_PREMIUM","total_count":1,"children":[]}]},{"name":"useLoadingStages.js","total_count":2,"children":[{"name":"STAGES","total_count":1,"children":[]},{"name":"useLoadingStages()","total_count":1,"children":[]}]}]},{"name":"collab","total_count":7,"children":[{"name":"CollabCursorLayer.jsx","total_count":3,"children":[{"name":"CollabCursorLayer()","total_count":1,"children":[]},{"name":"CursorBadge()","total_count":1,"children":[]},{"name":"CursorSVG()","total_count":1,"children":[]}]},{"name":"CollabPresenceBar.jsx","total_count":3,"children":[{"name":"CollabPresenceBar()","total_count":1,"children":[]},{"name":"getStatusIcon()","total_count":1,"children":[]},{"name":"getStatusLabel()","total_count":1,"children":[]}]},{"name":"WorkspaceJoinBar.jsx","total_count":1,"children":[{"name":"WorkspaceJoinBar()","total_count":1,"children":[]}]}]},{"name":"CommandPalette.jsx","total_count":2,"children":[{"name":"CommandPalette()","total_count":1,"children":[]},{"name":"PaletteAction()","total_count":1,"children":[]}]},{"name":"DatabaseBlock.jsx","total_count":13,"children":[{"name":"Cell()","total_count":1,"children":[]},{"name":"DatabaseBlock()","total_count":1,"children":[]},{"name":"DatabaseRowModal()","total_count":1,"children":[]},{"name":"DatabaseUtilityModal()","total_count":1,"children":[]},{"name":"DbBoard()","total_count":1,"children":[]},{"name":"DbCalendar()","total_count":1,"children":[]},{"name":"DbGallery()","total_count":1,"children":[]},{"name":"DbList()","total_count":1,"children":[]},{"name":"DbTable()","total_count":1,"children":[]},{"name":"DbViewTab()","total_count":1,"children":[]},{"name":"SelectPill()","total_count":1,"children":[]},{"name":"TagInput()","total_count":1,"children":[]},{"name":"ToolbarSelect()","total_count":1,"children":[]}]},{"name":"editor","total_count":11,"children":[{"name":"BlockContextMenu.jsx","total_count":3,"children":[{"name":"BlockContextMenu()","total_count":1,"children":[]},{"name":"blockTypes","total_count":1,"children":[]},{"name":"colorOptions","total_count":1,"children":[]}]},{"name":"EmbedBlock.jsx","total_count":3,"children":[{"name":"EmbedBlock()","total_count":1,"children":[]},{"name":"getEmbedUrl()","total_count":1,"children":[]},{"name":"PROVIDERS","total_count":1,"children":[]}]},{"name":"PageOptionsMenu.jsx","total_count":3,"children":[{"name":"fontOptions","total_count":1,"children":[]},{"name":"PageOptionsMenu()","total_count":1,"children":[]},{"name":"submenus","total_count":1,"children":[]}]},{"name":"SlashCommandMenu.jsx","total_count":2,"children":[{"name":"CATEGORIES_ORDER","total_count":1,"children":[]},{"name":"SlashCommandMenu()","total_count":1,"children":[]}]}]},{"name":"Editor.jsx","total_count":9,"children":[{"name":"Block()","total_count":1,"children":[]},{"name":"ColumnsBlock()","total_count":1,"children":[]},{"name":"dragState","total_count":1,"children":[]},{"name":"Editor()","total_count":1,"children":[]},{"name":"EmptyState()","total_count":1,"children":[]},{"name":"placeholderFor()","total_count":1,"children":[]},{"name":"renderBlockEditor()","total_count":1,"children":[]},{"name":"SelectionAIBar()","total_count":1,"children":[]},{"name":"SimpleTable()","total_count":1,"children":[]}]},{"name":"Modals.jsx","total_count":10,"children":[{"name":"CustomDialog()","total_count":1,"children":[]},{"name":"HelpModal()","total_count":1,"children":[]},{"name":"loadInvites()","total_count":1,"children":[]},{"name":"NoskaAISettings()","total_count":1,"children":[]},{"name":"OptionChips()","total_count":1,"children":[]},{"name":"saveInvites()","total_count":1,"children":[]},{"name":"SettingsModal()","total_count":1,"children":[]},{"name":"SettingsNavItem()","total_count":1,"children":[]},{"name":"ShareModal()","total_count":1,"children":[]},{"name":"TrashModal()","total_count":1,"children":[]}]},{"name":"onboarding","total_count":17,"children":[{"name":"OnboardingFlow.jsx","total_count":17,"children":[{"name":"aiProviders","total_count":1,"children":[]},{"name":"AIProviderStep()","total_count":1,"children":[]},{"name":"cardVariants","total_count":1,"children":[]},{"name":"containerVariants","total_count":1,"children":[]},{"name":"creationStages","total_count":1,"children":[]},{"name":"CreationStep()","total_count":1,"children":[]},{"name":"fadeUp","total_count":1,"children":[]},{"name":"OnboardingFlow()","total_count":1,"children":[]},{"name":"ProgressDots()","total_count":1,"children":[]},{"name":"starterPagesFor()","total_count":1,"children":[]},{"name":"StartFreshStep()","total_count":1,"children":[]},{"name":"stepVariants","total_count":1,"children":[]},{"name":"useCaseOptions","total_count":1,"children":[]},{"name":"UseCaseStep()","total_count":1,"children":[]},{"name":"WelcomePanel()","total_count":1,"children":[]},{"name":"WelcomeStep()","total_count":1,"children":[]},{"name":"WorkspaceNameStep()","total_count":1,"children":[]}]}]},{"name":"PageInspector.jsx","total_count":18,"children":[{"name":"ActivityTab()","total_count":1,"children":[]},{"name":"AITab()","total_count":1,"children":[]},{"name":"AuditTab()","total_count":1,"children":[]},{"name":"CollaborationTab()","total_count":1,"children":[]},{"name":"computeKnowledgeScore()","total_count":1,"children":[]},{"name":"computePageStats()","total_count":1,"children":[]},{"name":"DetailsTab()","total_count":1,"children":[]},{"name":"EmptyState()","total_count":1,"children":[]},{"name":"OverviewTab()","total_count":1,"children":[]},{"name":"PageInspector()","total_count":1,"children":[]},{"name":"PropertiesTab()","total_count":1,"children":[]},{"name":"RelationshipsTab()","total_count":1,"children":[]},{"name":"SectionHeader()","total_count":1,"children":[]},{"name":"StatRow()","total_count":1,"children":[]},{"name":"StatsTab()","total_count":1,"children":[]},{"name":"TabBar()","total_count":1,"children":[]},{"name":"TABS","total_count":1,"children":[]},{"name":"VersionsTab()","total_count":1,"children":[]}]},{"name":"PageTree.jsx","total_count":7,"children":[{"name":"DragGhost()","total_count":1,"children":[]},{"name":"flattenTree()","total_count":1,"children":[]},{"name":"getDescendantIds()","total_count":1,"children":[]},{"name":"NoskaPageItem()","total_count":1,"children":[]},{"name":"PageMenuAction()","total_count":1,"children":[]},{"name":"PageTree()","total_count":1,"children":[]},{"name":"SortablePageItem()","total_count":1,"children":[]}]},{"name":"permissions","total_count":3,"children":[{"name":"PermissionPanel.jsx","total_count":3,"children":[{"name":"PermissionPanel()","total_count":1,"children":[]},{"name":"ROLE_OPTIONS","total_count":1,"children":[]},{"name":"RoleBadge()","total_count":1,"children":[]}]}]},{"name":"Sidebar.jsx","total_count":7,"children":[{"name":"NoskaNavItem()","total_count":1,"children":[]},{"name":"NoskaSection()","total_count":1,"children":[]},{"name":"PageRow()","total_count":1,"children":[]},{"name":"RecentsPageItem()","total_count":1,"children":[]},{"name":"SectionTitle()","total_count":1,"children":[]},{"name":"Sidebar()","total_count":1,"children":[]},{"name":"SidebarAction()","total_count":1,"children":[]}]},{"name":"Topbar.jsx","total_count":1,"children":[{"name":"Topbar()","total_count":1,"children":[]}]},{"name":"ui","total_count":46,"children":[{"name":"icons","total_count":34,"children":[{"name":"index.jsx","total_count":34,"children":[{"name":"AnimatedAI()","total_count":1,"children":[]},{"name":"AnimatedBack()","total_count":1,"children":[]},{"name":"AnimatedBell()","total_count":1,"children":[]},{"name":"AnimatedBookmark()","total_count":1,"children":[]},{"name":"AnimatedCanvas()","total_count":1,"children":[]},{"name":"AnimatedCheck()","total_count":1,"children":[]},{"name":"AnimatedDownload()","total_count":1,"children":[]},{"name":"AnimatedExpand()","total_count":1,"children":[]},{"name":"AnimatedFolder()","total_count":1,"children":[]},{"name":"AnimatedForward()","total_count":1,"children":[]},{"name":"AnimatedHistory()","total_count":1,"children":[]},{"name":"AnimatedLock()","total_count":1,"children":[]},{"name":"AnimatedMenu()","total_count":1,"children":[]},{"name":"AnimatedPlus()","total_count":1,"children":[]},{"name":"AnimatedRedo()","total_count":1,"children":[]},{"name":"AnimatedRefresh()","total_count":1,"children":[]},{"name":"AnimatedSearch()","total_count":1,"children":[]},{"name":"AnimatedSend()","total_count":1,"children":[]},{"name":"AnimatedSettings()","total_count":1,"children":[]},{"name":"AnimatedSidebar()","total_count":1,"children":[]},{"name":"AnimatedSparkle()","total_count":1,"children":[]},{"name":"AnimatedTheme()","total_count":1,"children":[]},{"name":"AnimatedTrash()","total_count":1,"children":[]},{"name":"AnimatedUndo()","total_count":1,"children":[]},{"name":"AnimatedUnlock()","total_count":1,"children":[]},{"name":"AnimatedUpload()","total_count":1,"children":[]},{"name":"AnimatedVoice()","total_count":1,"children":[]},{"name":"AnimatedVolume()","total_count":1,"children":[]},{"name":"bouncySpring","total_count":1,"children":[]},{"name":"hoverScale","total_count":1,"children":[]},{"name":"IconWrapper()","total_count":1,"children":[]},{"name":"pressScale","total_count":1,"children":[]},{"name":"softSpring","total_count":1,"children":[]},{"name":"stiffSpring","total_count":1,"children":[]}]}]},{"name":"index.jsx","total_count":9,"children":[{"name":"Confetti()","total_count":1,"children":[]},{"name":"Field()","total_count":1,"children":[]},{"name":"FloatingMenu()","total_count":1,"children":[]},{"name":"IconButton()","total_count":1,"children":[]},{"name":"Modal()","total_count":1,"children":[]},{"name":"ModalHeader()","total_count":1,"children":[]},{"name":"TextArea","total_count":1,"children":[]},{"name":"Toast()","total_count":1,"children":[]},{"name":"useOutsideDismiss()","total_count":1,"children":[]}]},{"name":"MotionCards.jsx","total_count":2,"children":[{"name":"mockCardsData","total_count":1,"children":[]},{"name":"MotionCards()","total_count":1,"children":[]}]},{"name":"PearlButton.jsx","total_count":1,"children":[{"name":"PearlButton()","total_count":1,"children":[]}]}]},{"name":"WorkspaceViews.jsx","total_count":24,"children":[{"name":"AgentCard()","total_count":1,"children":[]},{"name":"AIHomeView()","total_count":1,"children":[]},{"name":"ChatsRoute()","total_count":1,"children":[]},{"name":"InboxRoute()","total_count":1,"children":[]},{"name":"LibraryRoute()","total_count":1,"children":[]},{"name":"loadInboxReminders()","total_count":1,"children":[]},{"name":"MARKETPLACE_CATEGORIES","total_count":1,"children":[]},{"name":"MARKETPLACE_ITEMS","total_count":1,"children":[]},{"name":"MarketplaceRoute()","total_count":1,"children":[]},{"name":"MeetingNoteRoute()","total_count":1,"children":[]},{"name":"MeetingsRoute()","total_count":1,"children":[]},{"name":"Metric()","total_count":1,"children":[]},{"name":"NewPageOverlay()","total_count":1,"children":[]},{"name":"PageCard()","total_count":1,"children":[]},{"name":"Panel()","total_count":1,"children":[]},{"name":"RouteShell()","total_count":1,"children":[]},{"name":"saveInboxReminders()","total_count":1,"children":[]},{"name":"TasksRoute()","total_count":1,"children":[]},{"name":"templateCards","total_count":1,"children":[]},{"name":"TemplatePicker()","total_count":1,"children":[]},{"name":"TemplateTile()","total_count":1,"children":[]},{"name":"viewSubtitle()","total_count":1,"children":[]},{"name":"viewTitle()","total_count":1,"children":[]},{"name":"WorkspaceView()","total_count":1,"children":[]}]}]},{"name":"features","total_count":113,"children":[{"name":"agents","total_count":8,"children":[{"name":"AgentWorkspace.jsx","total_count":8,"children":[{"name":"AgentBuilder()","total_count":1,"children":[]},{"name":"AgentDirectoryView()","total_count":1,"children":[]},{"name":"AgentSettingsView()","total_count":1,"children":[]},{"name":"AgentWorkspace()","total_count":1,"children":[]},{"name":"CustomAgentsView()","total_count":1,"children":[]},{"name":"PersonalAgentView()","total_count":1,"children":[]},{"name":"Section()","total_count":1,"children":[]},{"name":"TabButton()","total_count":1,"children":[]}]}]},{"name":"api","total_count":2,"children":[{"name":"ApiConsole.jsx","total_count":2,"children":[{"name":"API_DOCS","total_count":1,"children":[]},{"name":"ApiConsole()","total_count":1,"children":[]}]}]},{"name":"canvas","total_count":4,"children":[{"name":"CanvasCollabLayer.jsx","total_count":2,"children":[{"name":"CanvasCollabLayer()","total_count":1,"children":[]},{"name":"CollabCursor()","total_count":1,"children":[]}]},{"name":"CanvasView.jsx","total_count":2,"children":[{"name":"BLOCK_ICONS","total_count":1,"children":[]},{"name":"CanvasView()","total_count":1,"children":[]}]}]},{"name":"clipper","total_count":2,"children":[{"name":"WebClipper.jsx","total_count":2,"children":[{"name":"textToBlocks()","total_count":1,"children":[]},{"name":"WebClipper()","total_count":1,"children":[]}]}]},{"name":"collab","total_count":3,"children":[{"name":"CoThinking.jsx","total_count":3,"children":[{"name":"CommentThread()","total_count":1,"children":[]},{"name":"CoThinking()","total_count":1,"children":[]},{"name":"getCurrentUser()","total_count":1,"children":[]}]}]},{"name":"creator","total_count":10,"children":[{"name":"CreatorDashboard.jsx","total_count":10,"children":[{"name":"AnalyticsView()","total_count":1,"children":[]},{"name":"Check()","total_count":1,"children":[]},{"name":"CreatorDashboard()","total_count":1,"children":[]},{"name":"Download()","total_count":1,"children":[]},{"name":"ListingsView()","total_count":1,"children":[]},{"name":"PayoutsView()","total_count":1,"children":[]},{"name":"ProfileEditor()","total_count":1,"children":[]},{"name":"PublishForm()","total_count":1,"children":[]},{"name":"SettingsView()","total_count":1,"children":[]},{"name":"TABS","total_count":1,"children":[]}]}]},{"name":"encryption","total_count":8,"children":[{"name":"Encryption.jsx","total_count":8,"children":[{"name":"bufToHex()","total_count":1,"children":[]},{"name":"decryptData()","total_count":1,"children":[]},{"name":"deriveKey()","total_count":1,"children":[]},{"name":"encryptData()","total_count":1,"children":[]},{"name":"getBytes()","total_count":1,"children":[]},{"name":"hexToBytes()","total_count":1,"children":[]},{"name":"LockPageModal()","total_count":1,"children":[]},{"name":"UnlockPagePrompt()","total_count":1,"children":[]}]}]},{"name":"export","total_count":9,"children":[{"name":"ExportPanel.jsx","total_count":9,"children":[{"name":"blocksToHtml()","total_count":1,"children":[]},{"name":"blocksToMarkdown()","total_count":1,"children":[]},{"name":"blocksToPlainText()","total_count":1,"children":[]},{"name":"download()","total_count":1,"children":[]},{"name":"esc()","total_count":1,"children":[]},{"name":"ExportPanel()","total_count":1,"children":[]},{"name":"FORMATS","total_count":1,"children":[]},{"name":"generateContent()","total_count":1,"children":[]},{"name":"sanitizeFilename()","total_count":1,"children":[]}]}]},{"name":"focus","total_count":8,"children":[{"name":"FocusZoom.jsx","total_count":8,"children":[{"name":".constructor()","total_count":1,"children":[]},{"name":".initContext()","total_count":1,"children":[]},{"name":".setVolume()","total_count":1,"children":[]},{"name":".start()","total_count":1,"children":[]},{"name":".stop()","total_count":1,"children":[]},{"name":"AudioSynth","total_count":1,"children":[]},{"name":"FocusZoom()","total_count":1,"children":[]},{"name":"synthInstance","total_count":1,"children":[]}]}]},{"name":"ghostwriter","total_count":2,"children":[{"name":"GhostWriter.jsx","total_count":2,"children":[{"name":"GhostSuggestion()","total_count":1,"children":[]},{"name":"useGhostWriter()","total_count":1,"children":[]}]}]},{"name":"graph","total_count":19,"children":[{"name":"AmbientGlow.jsx","total_count":1,"children":[{"name":"AmbientGlow()","total_count":1,"children":[]}]},{"name":"AnimatedGridLayer.jsx","total_count":1,"children":[{"name":"AnimatedGridLayer()","total_count":1,"children":[]}]},{"name":"GraphAnimations.js","total_count":4,"children":[{"name":"BASE_SPRING","total_count":1,"children":[]},{"name":"FADE_IN_VARIANTS","total_count":1,"children":[]},{"name":"NODE_SPRING","total_count":1,"children":[]},{"name":"NODE_VARIANTS","total_count":1,"children":[]}]},{"name":"GraphBackground.jsx","total_count":1,"children":[{"name":"GraphBackground()","total_count":1,"children":[]}]},{"name":"GraphBreadcrumb.jsx","total_count":1,"children":[{"name":"GraphBreadcrumb()","total_count":1,"children":[]}]},{"name":"GraphCanvas.jsx","total_count":1,"children":[{"name":"GraphCanvas()","total_count":1,"children":[]}]},{"name":"GraphControls.jsx","total_count":1,"children":[{"name":"GraphControls()","total_count":1,"children":[]}]},{"name":"GraphEdge.jsx","total_count":1,"children":[{"name":"GraphEdgeComponent()","total_count":1,"children":[]}]},{"name":"GraphLegend.jsx","total_count":3,"children":[{"name":"CLUSTERS","total_count":1,"children":[]},{"name":"getPageCluster()","total_count":1,"children":[]},{"name":"GraphLegend()","total_count":1,"children":[]}]},{"name":"GraphMiniMap.jsx","total_count":1,"children":[{"name":"GraphMiniMap()","total_count":1,"children":[]}]},{"name":"GraphNode.jsx","total_count":1,"children":[{"name":"GraphNodeComponent()","total_count":1,"children":[]}]},{"name":"graphPhysics.js","total_count":1,"children":[{"name":"autoArrangeLayout()","total_count":1,"children":[]}]},{"name":"GraphSearch.jsx","total_count":1,"children":[{"name":"GraphSearch()","total_count":1,"children":[]}]},{"name":"GraphView.jsx","total_count":1,"children":[{"name":"GraphView()","total_count":1,"children":[]}]}]},{"name":"lineage","total_count":4,"children":[{"name":"NoteLineage.jsx","total_count":4,"children":[{"name":"EVENT_META","total_count":1,"children":[]},{"name":"formatDate()","total_count":1,"children":[]},{"name":"NoteLineage()","total_count":1,"children":[]},{"name":"timeAgoFull()","total_count":1,"children":[]}]}]},{"name":"marketplace","total_count":7,"children":[{"name":"Constants.js","total_count":2,"children":[{"name":"CATEGORIES","total_count":1,"children":[]},{"name":"SAMPLE_TEMPLATES","total_count":1,"children":[]}]},{"name":"MarketplacePage.jsx","total_count":5,"children":[{"name":"BrowseView()","total_count":1,"children":[]},{"name":"MarketplacePage()","total_count":1,"children":[]},{"name":"MyAdditionsView()","total_count":1,"children":[]},{"name":"TemplateCard()","total_count":1,"children":[]},{"name":"TemplateDetail()","total_count":1,"children":[]}]}]},{"name":"meeting","total_count":8,"children":[{"name":"MeetingWorkspace.jsx","total_count":8,"children":[{"name":"AI_STATUS_STEPS","total_count":1,"children":[]},{"name":"LANGUAGES","total_count":1,"children":[]},{"name":"MeetingWorkspace()","total_count":1,"children":[]},{"name":"PRIORITIES","total_count":1,"children":[]},{"name":"SPRING","total_count":1,"children":[]},{"name":"STATUS_OPTIONS","total_count":1,"children":[]},{"name":"TAB_SPRING","total_count":1,"children":[]},{"name":"TABS","total_count":1,"children":[]}]}]},{"name":"motion","total_count":8,"children":[{"name":"MotionSystem.jsx","total_count":8,"children":[{"name":"AnimatedModal()","total_count":1,"children":[]},{"name":"MotionInput","total_count":1,"children":[]},{"name":"MotionTextArea","total_count":1,"children":[]},{"name":"SPRING_PRESETS","total_count":1,"children":[]},{"name":"StaggerContainer()","total_count":1,"children":[]},{"name":"StaggerItem()","total_count":1,"children":[]},{"name":"StreamingText()","total_count":1,"children":[]},{"name":"useReducedMotion()","total_count":1,"children":[]}]}]},{"name":"reading","total_count":2,"children":[{"name":"ReadingMode.jsx","total_count":2,"children":[{"name":"ReadingMode()","total_count":1,"children":[]},{"name":"THEMES","total_count":1,"children":[]}]}]},{"name":"spaced","total_count":4,"children":[{"name":"SpacedRepetition.jsx","total_count":4,"children":[{"name":"RATINGS","total_count":1,"children":[]},{"name":"sm2()","total_count":1,"children":[]},{"name":"SpacedRepetition()","total_count":1,"children":[]},{"name":"StatCard()","total_count":1,"children":[]}]}]},{"name":"stacking","total_count":2,"children":[{"name":"StackedColumn.jsx","total_count":2,"children":[{"name":"ColumnStatusBar()","total_count":1,"children":[]},{"name":"StackedColumn()","total_count":1,"children":[]}]}]},{"name":"voice","total_count":3,"children":[{"name":"VoiceCapture.jsx","total_count":3,"children":[{"name":"textToBlocks()","total_count":1,"children":[]},{"name":"VoiceCapture()","total_count":1,"children":[]},{"name":"WaveformVisualizer()","total_count":1,"children":[]}]}]}]},{"name":"hooks","total_count":2,"children":[{"name":"useCursor.js","total_count":1,"children":[{"name":"useCursor()","total_count":1,"children":[]}]},{"name":"usePresence.js","total_count":1,"children":[{"name":"usePresence()","total_count":1,"children":[]}]}]},{"name":"lib","total_count":85,"children":[{"name":"auditEngine.js","total_count":17,"children":[{"name":"._flushNow()","total_count":1,"children":[]},{"name":"._scheduleFlush()","total_count":1,"children":[]},{"name":".constructor()","total_count":1,"children":[]},{"name":".getAIEvents()","total_count":1,"children":[]},{"name":".getAuditSummary()","total_count":1,"children":[]},{"name":".getBlockHistory()","total_count":1,"children":[]},{"name":".getPageAudit()","total_count":1,"children":[]},{"name":".getPageVersions()","total_count":1,"children":[]},{"name":".getPermissions()","total_count":1,"children":[]},{"name":".log()","total_count":1,"children":[]},{"name":".removePermission()","total_count":1,"children":[]},{"name":".restoreBlock()","total_count":1,"children":[]},{"name":".restoreVersion()","total_count":1,"children":[]},{"name":".saveVersion()","total_count":1,"children":[]},{"name":".setPermission()","total_count":1,"children":[]},{"name":"auditEngine","total_count":1,"children":[]},{"name":"auditInstance","total_count":1,"children":[]}]},{"name":"realtimeCollab.js","total_count":24,"children":[{"name":"._channel()","total_count":1,"children":[]},{"name":"._delChannel()","total_count":1,"children":[]},{"name":"._emit()","total_count":1,"children":[]},{"name":"._getColor()","total_count":1,"children":[]},{"name":"._setChannel()","total_count":1,"children":[]},{"name":".constructor()","total_count":1,"children":[]},{"name":".destroy()","total_count":1,"children":[]},{"name":".getUser()","total_count":1,"children":[]},{"name":".initUser()","total_count":1,"children":[]},{"name":".isJoined()","total_count":1,"children":[]},{"name":".joinPage()","total_count":1,"children":[]},{"name":".joinWorkspace()","total_count":1,"children":[]},{"name":".leavePage()","total_count":1,"children":[]},{"name":".leaveWorkspace()","total_count":1,"children":[]},{"name":".on()","total_count":1,"children":[]},{"name":".sendBlockEdit()","total_count":1,"children":[]},{"name":".sendBlockEditStop()","total_count":1,"children":[]},{"name":".sendCanvasNodeMove()","total_count":1,"children":[]},{"name":".sendCanvasTransform()","total_count":1,"children":[]},{"name":".sendCursor()","total_count":1,"children":[]},{"name":".sendSelection()","total_count":1,"children":[]},{"name":".sendTyping()","total_count":1,"children":[]},{"name":".updateStatus()","total_count":1,"children":[]},{"name":"RealtimeCollab","total_count":1,"children":[]}]},{"name":"supabase.js","total_count":1,"children":[{"name":"supabase","total_count":1,"children":[]}]},{"name":"supabaseService.js","total_count":42,"children":[{"name":"clearExpiredMemory()","total_count":1,"children":[]},{"name":"deleteAgent()","total_count":1,"children":[]},{"name":"deleteAgentAccessGrant()","total_count":1,"children":[]},{"name":"deleteAgentTrigger()","total_count":1,"children":[]},{"name":"deleteAIChat()","total_count":1,"children":[]},{"name":"deleteAIMemory()","total_count":1,"children":[]},{"name":"deleteMarketplaceTemplate()","total_count":1,"children":[]},{"name":"deletePage()","total_count":1,"children":[]},{"name":"fetchAgentAccessGrants()","total_count":1,"children":[]},{"name":"fetchAgentById()","total_count":1,"children":[]},{"name":"fetchAgentRunLogs()","total_count":1,"children":[]},{"name":"fetchAgents()","total_count":1,"children":[]},{"name":"fetchAgentTriggers()","total_count":1,"children":[]},{"name":"fetchAIChats()","total_count":1,"children":[]},{"name":"fetchAIMemory()","total_count":1,"children":[]},{"name":"fetchCreatorProfile()","total_count":1,"children":[]},{"name":"fetchCreatorProfileById()","total_count":1,"children":[]},{"name":"fetchMarketplaceTemplates()","total_count":1,"children":[]},{"name":"fetchPages()","total_count":1,"children":[]},{"name":"fetchSettings()","total_count":1,"children":[]},{"name":"fetchTemplateAdditions()","total_count":1,"children":[]},{"name":"fetchTemplateById()","total_count":1,"children":[]},{"name":"fetchUserProfile()","total_count":1,"children":[]},{"name":"mapPageFromDb()","total_count":1,"children":[]},{"name":"mapPageToDb()","total_count":1,"children":[]},{"name":"requestRefund()","total_count":1,"children":[]},{"name":"saveAgent()","total_count":1,"children":[]},{"name":"saveAgentAccessGrant()","total_count":1,"children":[]},{"name":"saveAgentRunLog()","total_count":1,"children":[]},{"name":"saveAgentTrigger()","total_count":1,"children":[]},{"name":"saveAIChat()","total_count":1,"children":[]},{"name":"saveAIChats()","total_count":1,"children":[]},{"name":"saveAIMemory()","total_count":1,"children":[]},{"name":"saveAIMemoryEntry()","total_count":1,"children":[]},{"name":"saveMarketplaceTemplate()","total_count":1,"children":[]},{"name":"savePage()","total_count":1,"children":[]},{"name":"savePages()","total_count":1,"children":[]},{"name":"saveSetting()","total_count":1,"children":[]},{"name":"saveTemplateAddition()","total_count":1,"children":[]},{"name":"setOnboardingComplete()","total_count":1,"children":[]},{"name":"upsertCreatorProfile()","total_count":1,"children":[]},{"name":"upsertUserProfile()","total_count":1,"children":[]}]},{"name":"utils.js","total_count":1,"children":[{"name":"cn()","total_count":1,"children":[]}]}]},{"name":"registry","total_count":3,"children":[{"name":"BlockRegistry.jsx","total_count":2,"children":[{"name":"BlockRegistry","total_count":1,"children":[]},{"name":"BlockType","total_count":1,"children":[]}]},{"name":"magicui","total_count":1,"children":[{"name":"animated-grid-pattern.jsx","total_count":1,"children":[{"name":"AnimatedGridPattern()","total_count":1,"children":[]}]}]}]},{"name":"utils","total_count":30,"children":[{"name":"ai.js","total_count":6,"children":[{"name":"claude()","total_count":1,"children":[]},{"name":"internetLookup()","total_count":1,"children":[]},{"name":"localTemplate()","total_count":1,"children":[]},{"name":"mockAi()","total_count":1,"children":[]},{"name":"nvidiaChat()","total_count":1,"children":[]},{"name":"runAI()","total_count":1,"children":[]}]},{"name":"helpers.js","total_count":12,"children":[{"name":"blockFor()","total_count":1,"children":[]},{"name":"covers","total_count":1,"children":[]},{"name":"emojis","total_count":1,"children":[]},{"name":"isValidUUID()","total_count":1,"children":[]},{"name":"makeEmptyDatabase()","total_count":1,"children":[]},{"name":"migrateLegacyIds()","total_count":1,"children":[]},{"name":"now()","total_count":1,"children":[]},{"name":"plainText()","total_count":1,"children":[]},{"name":"textToBlocks()","total_count":1,"children":[]},{"name":"timeAgo()","total_count":1,"children":[]},{"name":"todayLabel()","total_count":1,"children":[]},{"name":"uid()","total_count":1,"children":[]}]},{"name":"pageLinks.js","total_count":7,"children":[{"name":"extractMentions()","total_count":1,"children":[]},{"name":"extractPageText()","total_count":1,"children":[]},{"name":"getAllRelations()","total_count":1,"children":[]},{"name":"getBacklinks()","total_count":1,"children":[]},{"name":"getOutgoingLinks()","total_count":1,"children":[]},{"name":"renderMention()","total_count":1,"children":[]},{"name":"resolveMentions()","total_count":1,"children":[]}]},{"name":"storage.js","total_count":5,"children":[{"name":"flushSync()","total_count":1,"children":[]},{"name":"getUserId()","total_count":1,"children":[]},{"name":"scheduleSync()","total_count":1,"children":[]},{"name":"storageApi()","total_count":1,"children":[]},{"name":"syncQueue","total_count":1,"children":[]}]}]},{"name":"main.jsx","total_count":1,"children":[]}]},{"name":"test-ui.mjs","total_count":5,"children":[{"name":"fail()","total_count":1,"children":[]},{"name":"main()","total_count":1,"children":[]},{"name":"pass()","total_count":1,"children":[]},{"name":"results","total_count":1,"children":[]},{"name":"waitForApp()","total_count":1,"children":[]}]},{"name":"vite.config.js","total_count":1,"children":[{"name":"__dirname","total_count":1,"children":[]}]},{"name":"extract.js","total_count":1,"children":[]},{"name":"postcss.config.js","total_count":1,"children":[]},{"name":"tailwind.config.js","total_count":1,"children":[]}]};
+
+    function transformData(jsonData) {
+        // Helper function to recursively build the children structure
+        function processNode(node, parentL1StageName) {
+            let displayName = node.name;
+            // Append total_count if it exists and is not already in the name
+            if (node.total_count !== undefined) {
+                if (!/\(Total Count: \d+\)$/.test(displayName)) {
+                    displayName += ` (Total Count: ${node.total_count})`;
+                }
+            }
+
+            const newNode = { name: displayName };
+
+            if (parentL1StageName === "Root") {
+                 newNode.originalStageName = node.name;
+            } else {
+                newNode.originalStageName = parentL1StageName;
+            }
+
+            if (node.children && node.children.length > 0) {
+                const stageNameToPass = (parentL1StageName === "Root") ? node.name : parentL1StageName;
+                newNode.children = node.children.map(child => processNode(child, stageNameToPass));
+            }
+
+            return newNode;
+        }
+
+        let rootDisplayName = jsonData.name;
+        if (jsonData.total_count !== undefined && !/\(Total Count: \d+\)$/.test(rootDisplayName)) {
+            rootDisplayName += ` (Total Count: ${jsonData.total_count})`;
+        }
+
+        return {
+            name: rootDisplayName,
+            originalStageName: "Root",
+            children: (jsonData.children || []).map(child => processNode(child, "Root"))
+        };
+    }
+
+    const treeData = transformData(initialJsonData);
+
+    // Auto-populated phaseColors: every depth-1 child of the root gets
+    // a stable colour from a bigger palette so all top-level dirs are
+    // distinguishable.
+    const PALETTE = [
+      ["#3498DB","#2980B9","#AED6F1"], ["#2ECC71","#27AE60","#A9DFBF"],
+      ["#E74C3C","#C0392B","#F5B7B1"], ["#9B59B6","#8E44AD","#D7BDE2"],
+      ["#F39C12","#D68910","#FAD7A0"], ["#1ABC9C","#117864","#A2D9CE"],
+      ["#34495E","#1B2631","#ABB2B9"], ["#E67E22","#BA4A00","#F5CBA7"],
+      ["#16A085","#0E6655","#A2D9CE"], ["#D35400","#A04000","#EDBB99"],
+      ["#7F8C8D","#566573","#D5DBDB"], ["#C0392B","#7B241C","#F5B7B1"],
+      ["#2E86C1","#1B4F72","#A9CCE3"], ["#28B463","#196F3D","#A9DFBF"],
+      ["#AF7AC5","#6C3483","#D2B4DE"],
+    ];
+    const phaseColors = { "Root": { fill: "#4A4A4A", stroke: "#333333", collapsedFill: "#6C757D" },
+                          "Default": { fill: "#BDC3C7", stroke: "#95A5A6", collapsedFill: "#ECF0F1" } };
+    (initialJsonData.children || []).forEach((c, i) => {
+      const pal = PALETTE[i % PALETTE.length];
+      phaseColors[c.name] = { fill: pal[0], stroke: pal[1], collapsedFill: pal[2] };
+    });
+
+    const levelSpecificPalettes = {
+      0: { fill: "#4A4A4A", stroke: "#333333", collapsedFill: "#6C757D" },
+      2: { fill: "#6ab04c", stroke: "#508a38", collapsedFill: "#a3d391" },
+      3: { fill: "#f0932b", stroke: "#d0730f", collapsedFill: "#f6c07e" },
+      4: { fill: "#be2edd", stroke: "#a01cb3", collapsedFill: "#e08bf2" },
+      5: { fill: "#00a8ff", stroke: "#007ac1", collapsedFill: "#74d2ff" },
+      6: { fill: "#e55039", stroke: "#c23620", collapsedFill: "#f09a8d" },
+      default: { fill: "#747d8c", stroke: "#57606f", collapsedFill: "#a4b0be" }
+    };
+
+    const svgElement = d3.select("#tree-svg");
+    const initialSvgWidth = +svgElement.attr("width");
+    const initialSvgHeight = +svgElement.attr("height");
+    const margin = { top: 40, right: 120, bottom: 80, left: 450 };
+    let width = initialSvgWidth - margin.left - margin.right;
+    let height = initialSvgHeight - margin.top - margin.bottom;
+    const duration = 500;
+    let nodeCounter = 0;
+    const g = svgElement.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const treemap = d3.tree().nodeSize([40, 0]);
+    let rootNode = d3.hierarchy(treeData, d => d.children);
+    rootNode.x0 = 0;
+    rootNode.y0 = 0;
+
+    if (rootNode.children) {
+      rootNode.children.forEach(d_child => {
+        if (d_child.children) { collapseBranch(d_child); }
+      });
+    }
+    updateTree(rootNode);
+
+    function collapseBranch(d) { if (d.children) { d._children = d.children; d._children.forEach(collapseBranch); d.children = null; } }
+    function expandBranch(d) { if (d._children) { d.children = d._children; d._children = null; } if (d.children) { d.children.forEach(expandBranch); } }
+    window.expandAll = () => { expandBranch(rootNode); updateTree(rootNode); };
+    window.collapseAll = () => { if (rootNode.children) { rootNode.children.forEach(collapseBranch); } updateTree(rootNode); };
+    window.resetView = () => { if (rootNode.children) { rootNode.children.forEach(d_child => { if (d_child.children || d_child._children) { collapseBranch(d_child); } }); } if (rootNode._children && !rootNode.children) { rootNode.children = rootNode._children; rootNode._children = null; } updateTree(rootNode); };
+
+    function updateTree(source) {
+      const treeLayoutData = treemap(rootNode);
+      let nodes = treeLayoutData.descendants();
+      let links = treeLayoutData.descendants().slice(1);
+
+      let minX = 0;
+      let maxX = 0;
+      if (nodes.length > 0) {
+        minX = d3.min(nodes, d => d.x);
+        maxX = d3.max(nodes, d => d.x);
+      }
+
+      let neededHeight = Math.max(initialSvgHeight, maxX - minX + margin.top + margin.bottom + 100);
+      svgElement.transition().duration(duration / 2).attr("height", neededHeight);
+      g.transition().duration(duration / 2).attr("transform", `translate(${margin.left},${margin.top - minX + 40})`);
+
+      nodes.forEach(d => { d.y = d.depth * 400; }); // Adjust horizontal separation if needed
+
+      const node = g.selectAll('g.node').data(nodes, d => d.id || (d.id = ++nodeCounter));
+      const nodeEnter = node.enter().append('g')
+        .attr('class', d => "node" + (d.children || d._children ? " node--internal" : " node--leaf") + (d._children ? " _children" : ""))
+        .attr('transform', d => `translate(${source.y0},${source.x0})`)
+        .on('click', (event, d) => { if (d.children) { d._children = d.children; d.children = null; } else if (d._children) { d.children = d._children; d._children = null; } updateTree(d); })
+        .style('cursor', d => (d.children || d._children) ? 'pointer' : 'default');
+
+      nodeEnter.append('circle').attr('r', 1e-6);
+
+      nodeEnter.append('text')
+        .attr('dy', '.35em')
+        .attr('x', d => d.children || d._children ? -14 : 14)
+        .attr('text-anchor', d => d.children || d._children ? 'end' : 'start')
+        .style("fill-opacity", 1e-6)
+        .call(wrapText, 380);
+
+      const nodeUpdate = nodeEnter.merge(node);
+      nodeUpdate.transition().duration(duration)
+        .attr('transform', d => `translate(${d.y},${d.x})`)
+        .attr('class', d => "node" + (d.children ? " node--internal" : " node--leaf") + (d._children ? " node--internal _children" : ""));
+
+      nodeUpdate.select('circle').attr('r', 8.5)
+        .style('fill', d => {
+            let palette;
+            if (d.depth === 0) {
+                palette = levelSpecificPalettes[0];
+            } else if (d.depth === 1) {
+                palette = phaseColors[d.data.originalStageName] || phaseColors.Default;
+            } else {
+                palette = levelSpecificPalettes[d.depth] || levelSpecificPalettes.default;
+            }
+            if (d._children) return palette.collapsedFill;
+            if (d.children) return palette.fill;
+            return "#fff";
+        })
+        .style('stroke', d => {
+            let palette;
+            if (d.depth === 0) {
+                palette = levelSpecificPalettes[0];
+            } else if (d.depth === 1) {
+                palette = phaseColors[d.data.originalStageName] || phaseColors.Default;
+            } else {
+                palette = levelSpecificPalettes[d.depth] || levelSpecificPalettes.default;
+            }
+            return palette.stroke;
+        });
+      nodeUpdate.select('text').style("fill-opacity", 1).call(wrapText, 380);
+
+      const nodeExit = node.exit().transition().duration(duration).attr('transform', d => `translate(${source.y},${source.x})`).remove();
+      nodeExit.select('circle').attr('r', 1e-6);
+      nodeExit.select('text').style('fill-opacity', 1e-6);
+
+      const link = g.selectAll('path.link').data(links, d => d.id);
+      const linkEnter = link.enter().insert('path', "g").attr('class', 'link').attr('d', d => { const o = { x: source.x0, y: source.y0 }; return diagonal(o, o); });
+
+      linkEnter.merge(link).transition().duration(duration).attr('d', d => diagonal(d, d.parent))
+        .style('stroke', d => {
+            const sourceNode = d.parent;
+            if (!sourceNode) return phaseColors.Default.stroke;
+            const l1AncestorName = sourceNode.data.originalStageName;
+            const colorPalette = phaseColors[l1AncestorName] || phaseColors.Default;
+            return colorPalette.stroke;
+        });
+      link.exit().transition().duration(duration).attr('d', d => { const o = { x: source.x, y: source.y }; return diagonal(o, o); }).remove();
+      nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+    }
+
+    function diagonal(s, d) { return `M ${s.y} ${s.x} C ${(s.y + d.y) / 2} ${s.x}, ${(s.y + d.y) / 2} ${d.x}, ${d.y} ${d.x}`; }
+
+    function wrapText(textElements, maxWidth) {
+        const textPartColors = {
+            name: '#343a40',
+            count: '#0056b3'
+        };
+        const countRegex = /(\s\(Total Count: \d+\))$/;
+
+        textElements.each(function () {
+            const textD3 = d3.select(this);
+            const originalNodeText = textD3.datum().data.name;
+            const x = parseFloat(textD3.attr("x") || 0);
+            const initialDy = textD3.attr("dy");
+            const textAnchor = textD3.attr("text-anchor");
+            const lineHeight = 1.1;
+
+            textD3.text(null);
+
+            let namePart = originalNodeText;
+            let countPartText = "";
+
+            const countMatch = originalNodeText.match(countRegex);
+            if (countMatch && originalNodeText.endsWith(countMatch[0])) {
+                namePart = originalNodeText.substring(0, originalNodeText.length - countMatch[0].length).trim();
+                countPartText = countMatch[0].trim();
+            }
+
+            const tokens = [];
+            namePart.split(/\s+/).filter(Boolean).forEach(word => {
+                tokens.push({ text: word, type: 'name' });
+            });
+            if (countPartText) {
+                tokens.push({ text: countPartText, type: 'count' });
+            }
+
+            if (tokens.length === 0 && originalNodeText) {
+                tokens.push({ text: originalNodeText, type: 'name' });
+            }
+
+            let currentTspan = textD3.append("tspan").attr("x", x).attr("dy", initialDy);
+            if (textAnchor === "end") currentTspan.attr("text-anchor", "end");
+
+            let lineTokens = [];
+
+            for (let i = 0; i < tokens.length; i++) {
+                const tokenObj = tokens[i];
+
+                lineTokens.push(tokenObj);
+                currentTspan.text(lineTokens.map(t => t.text).join(" "));
+
+                if (currentTspan.node().getComputedTextLength() > maxWidth && lineTokens.length > 1) {
+                    lineTokens.pop();
+
+                    currentTspan.text(null);
+                    lineTokens.forEach((prevToken, idx) => {
+                        currentTspan.append("tspan")
+                            .text((idx > 0 ? " " : "") + prevToken.text)
+                            .style("fill", textPartColors[prevToken.type] || textPartColors.name)
+                            .style("font-weight", prevToken.type === 'count' ? "bold" : "normal");
+                    });
+
+                    lineTokens = [tokenObj];
+                    currentTspan = textD3.append("tspan").attr("x", x).attr("dy", lineHeight + "em");
+                    if (textAnchor === "end") currentTspan.attr("text-anchor", "end");
+                }
+            }
+
+            currentTspan.text(null);
+            lineTokens.forEach((token, idx) => {
+                currentTspan.append("tspan")
+                    .text((idx > 0 ? " " : "") + token.text)
+                    .style("fill", textPartColors[token.type] || textPartColors.name)
+                    .style("font-weight", token.type === 'count' ? "bold" : "normal");
+            });
+
+            if (textD3.selectAll("tspan > tspan").empty() && textD3.select("tspan").text().length === 0 && originalNodeText) {
+                let t = textD3.select("tspan");
+                let displayText = originalNodeText;
+                t.text(displayText).style("fill", textPartColors.name);
+                if (t.node() && t.node().getComputedTextLength() > maxWidth && displayText.length > 20) {
+                    let estimatedChars = Math.floor(maxWidth / (t.node().getComputedTextLength()/displayText.length) );
+                    displayText = displayText.substring(0, Math.max(0, estimatedChars - 3)) + "...";
+                    t.text(displayText);
+                }
+            }
+        });
+    }
+  </script>
+</body>
+</html>
