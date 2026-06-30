@@ -296,7 +296,7 @@ function PremiumBranch({
 function PremiumPageItem({
   page, active, selected, hasChildren, expanded,
   depth, ancestors, onToggleCollapse, onSelect, onPatchPage,
-  onAddInside,
+  onAddInside, allBlocks, collapsedPages,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -488,6 +488,8 @@ function PremiumPageItem({
                 onSelect={onSelect}
                 onPatchPage={onPatchPage}
                 onAddInside={onAddInside}
+                allBlocks={allBlocks}
+                collapsedPages={collapsedPages}
               />
             );
           })}
@@ -730,6 +732,7 @@ export default function PageTree({
               onTrashPage={onTrashPage}
               onToast={onToast}
               allBlocks={allBlocks}
+              collapsedPages={collapsedPages}
             />
           ))}
         </div>
