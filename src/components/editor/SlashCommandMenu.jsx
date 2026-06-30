@@ -38,13 +38,15 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
     return qi === q.length;
   };
 
+  const SUGGESTED_IDS = ["text", "h1", "h2", "bullet", "todo", "image", "divider", "toggle", "callout", "database-inline"];
+
   const getFilteredGroups = () => {
     const all = getFilteredCommands(search);
     const groups = {};
     CATEGORIES_ORDER.forEach((cat) => { groups[cat] = []; });
     all.forEach((cmd) => {
       if (cmd.category === "Page actions") return;
-      const cat = cmd.category || "Basic blocks";
+      const cat = !search && SUGGESTED_IDS.includes(cmd.id) ? "Suggested" : cmd.category || "Basic blocks";
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(cmd);
     });

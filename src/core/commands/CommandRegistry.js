@@ -258,56 +258,56 @@ const database = [
     icon: "Table", category: "Database",
     description: "Spreadsheet-style database table",
     preview: "Add a database table — rows and columns like a spreadsheet",
-    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "table-view", ctx.text)); }
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "table", ctx.text)); }
   },
   {
     id: "board-view", title: "Board view", aliases: ["kanban", "board"],
     icon: "Layout", category: "Database",
     description: "Kanban-style board view",
     preview: "Add a Kanban board — organize by status or category",
-    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "board-view", ctx.text)); }
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "board", ctx.text)); }
   },
   {
     id: "gallery-view", title: "Gallery view", aliases: ["grid", "cards"],
     icon: "ImageIcon", category: "Database",
     description: "Card/image gallery view",
     preview: "Add a gallery — show items as image cards",
-    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "gallery-view", ctx.text)); }
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "gallery", ctx.text)); }
   },
   {
     id: "list-view", title: "List view", aliases: ["simple-list"],
     icon: "List", category: "Database",
     description: "Simple list view",
     preview: "Add a list view — compact text rows",
-    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "list-view", ctx.text)); }
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "list", ctx.text)); }
   },
   {
     id: "calendar-view", title: "Calendar view", aliases: ["calendar", "schedule"],
     icon: "Calendar", category: "Database",
     description: "Calendar/date-based view",
     preview: "Add a calendar — view items by date",
-    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "calendar-view", ctx.text)); }
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "calendar", ctx.text)); }
   },
   {
     id: "timeline-view", title: "Timeline view", aliases: ["gantt", "roadmap"],
     icon: "Clock", category: "Database",
     description: "Timeline/Gantt chart view",
     preview: "Add a timeline — visualize project schedules",
-    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "timeline-view", ctx.text)); }
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "timeline", ctx.text)); }
   },
   {
     id: "dashboard-view", title: "Dashboard view", aliases: ["dashboard"],
     icon: "LayoutDashboard", category: "Database",
     description: "Dashboard with widgets",
     preview: "Add a dashboard — combine multiple views",
-    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "dashboard-view", ctx.text)); }
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "dashboard", ctx.text)); }
   },
   {
     id: "map-view", title: "Map view", aliases: ["map", "geography"],
     icon: "MapPin", category: "Database",
     description: "Geographic map view",
     preview: "Add a map — pin items by location",
-    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "map-view", ctx.text)); }
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "map", ctx.text)); }
   },
   {
     id: "form", title: "Form", aliases: ["survey"],
@@ -769,5 +769,17 @@ function blockForTree(block, type, text = block.text || "") {
     parentId: block.parentId || null,
     content: block.content || [],
     text
+  };
+}
+
+function blockForDatabaseView(block, viewType, text = block.text || "") {
+  const next = blockFor("database", text);
+  return {
+    ...next,
+    id: block.id,
+    parentId: block.parentId || null,
+    content: block.content || [],
+    text,
+    properties: { ...next.properties, view: viewType },
   };
 }
