@@ -12,6 +12,22 @@ import { blockFor } from "../../utils/helpers";
 let _commands = new Map();
 let _listeners = new Set();
 
+// ── Preview Normalization Shim ─────────────────────────────────
+// Converts old `preview: "string"` to `preview: { description, image? }`
+// at read time, so all consumers see a consistent shape.
+function normalizePreview(cmd) {
+  if (!cmd) return cmd;
+  const raw = cmd.preview;
+  if (typeof raw === "string") {
+    return { ...cmd, preview: { description: raw } };
+  }
+  if (raw && typeof raw === "object" && typeof raw.description === "string") {
+    return cmd; // Already correct shape
+  }
+  // Fallback: no preview field or unexpected type
+  return { ...cmd, preview: { description: cmd.description || "" } };
+}
+
 export function registerCommand(cmd) {
   _commands.set(cmd.id, cmd);
   _listeners.forEach((fn) => fn(cmd.id, cmd));
@@ -19,16 +35,16 @@ export function registerCommand(cmd) {
 }
 
 export function getCommand(id) {
-  return _commands.get(id);
+  return normalizePreview(_commands.get(id));
 }
 
 export function getAllCommands() {
-  return Array.from(_commands.values());
+  return Array.from(_commands.values()).map(normalizePreview);
 }
 
 export function getFilteredCommands(query, ctx = {}) {
   const q = (query || "").toLowerCase();
-  return getAllCommands()
+  return Array.from(_commands.values())
     .filter((c) => {
       if (c.available && !c.available(ctx)) return false;
       if (!q) return true;
@@ -42,7 +58,8 @@ export function getFilteredCommands(query, ctx = {}) {
       const aTitle = a.title.toLowerCase().startsWith(q) ? 0 : 1;
       const bTitle = b.title.toLowerCase().startsWith(q) ? 0 : 1;
       return aTitle - bTitle;
-    });
+    })
+    .map(normalizePreview);
 }
 
 export function getCommandsByCategory(category) {
@@ -64,7 +81,7 @@ const basic = [
     id: "text", title: "Text", aliases: ["paragraph", "p"],
     icon: "Type", category: "Basic blocks",
     description: "Plain text block — the default block type",
-    preview: "A simple text block for writing content",
+    preview: { description: "A simple text block for writing content", image: "/previews/text.svg" },
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "text", ctx.text)); }
   },
   {
@@ -128,7 +145,7 @@ const basic = [
     icon: "ChevronRight", category: "Basic blocks",
     description: "Collapsible block with nested children",
     shortcut: ">",
-    preview: "A collapsible section — hide/show nested blocks",
+    preview: { description: "A collapsible section — hide/show nested blocks", image: "/previews/toggle.svg" },
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "toggle", ctx.text)); }
   },
   {
@@ -145,7 +162,7 @@ const basic = [
     id: "callout", title: "Callout", aliases: ["info", "note"],
     icon: "MessageSquare", category: "Basic blocks",
     description: "Highlighted information box",
-    preview: "An info box — highlight important content",
+    preview: { description: "An info box — highlight important content", image: "/previews/callout.svg" },
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "callout", ctx.text)); }
   },
   {
@@ -181,6 +198,27 @@ const basic = [
       });
     }
   },
+  {
+    id: "simple-table", title: "Simple Table", aliases: ["table", "grid"],
+    icon: "Table", category: "Basic blocks",
+    description: "Simple text grid table",
+    preview: "Add a basic table — plain text cells",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "table", ctx.text)); }
+  },
+  {
+    id: "template-button", title: "Template button", aliases: ["template", "clone"],
+    icon: "CopyPlus", category: "Advanced blocks",
+    description: "A button that clones a predefined set of blocks",
+    preview: "Add a template button — clicking it inserts predefined blocks",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "template_button", ctx.text)); }
+  },
+  {
+    id: "block-equation", title: "Block equation", aliases: ["math", "equation", "display-math", "latex-block"],
+    icon: "Edit3", category: "Advanced blocks",
+    description: "Centered math block — renders LaTeX with KaTeX",
+    preview: "Add a centered math equation — type LaTeX and see it rendered",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "block-equation", ctx.text)); }
+  },
 ];
 
 // ── Media ───────────────────────────────────────────────────────
@@ -189,7 +227,7 @@ const media = [
     id: "image", title: "Image", aliases: ["img", "photo", "picture"],
     icon: "Image", category: "Media",
     description: "Upload or embed an image",
-    preview: "Add an image — upload from device or paste a URL",
+    preview: { description: "Add an image — upload from device or paste a URL", image: "/previews/image.svg" },
     execute(ctx) {
       const patch = blockForTree(ctx.block, "image", ctx.text);
       patch.text = "";
@@ -222,7 +260,7 @@ const media = [
     id: "code", title: "Code", aliases: ["pre", "snippet"],
     icon: "Code", category: "Media",
     description: "Code block with syntax highlighting",
-    preview: "Add a code block — choose language for highlighting",
+    preview: { description: "Add a code block — choose language for highlighting", image: "/previews/code.svg" },
     execute(ctx) {
       ctx.onPatch(blockForTree(ctx.block, "code", ctx.text));
     }
@@ -257,14 +295,14 @@ const database = [
     id: "table-view", title: "Table view", aliases: ["db-table", "spreadsheet"],
     icon: "Table", category: "Database",
     description: "Spreadsheet-style database table",
-    preview: "Add a database table — rows and columns like a spreadsheet",
+    preview: { description: "Add a database table — rows and columns like a spreadsheet", image: "/previews/table-view.svg" },
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "table", ctx.text)); }
   },
   {
     id: "board-view", title: "Board view", aliases: ["kanban", "board"],
     icon: "Layout", category: "Database",
     description: "Kanban-style board view",
-    preview: "Add a Kanban board — organize by status or category",
+    preview: { description: "Add a Kanban board — organize by status or category", image: "/previews/board-view.svg" },
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "board", ctx.text)); }
   },
   {
@@ -330,6 +368,55 @@ const database = [
     preview: "Add a full-page database — opens as its own page",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "database-full", ctx.text)); }
   },
+  {
+    id: "bar-chart-v", title: "Vertical bar chart", aliases: ["bar", "vertical-bar", "column-chart"],
+    icon: "BarChart3", category: "Database",
+    description: "Vertical bar chart visualization",
+    preview: "Add a vertical bar chart — visualize data with columns",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "bar-chart-v", ctx.text)); }
+  },
+  {
+    id: "bar-chart-h", title: "Horizontal bar chart", aliases: ["horizontal-bar", "hbar"],
+    icon: "BarChart3", category: "Database",
+    description: "Horizontal bar chart visualization",
+    preview: "Add a horizontal bar chart — visualize data with horizontal bars",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "bar-chart-h", ctx.text)); }
+  },
+  {
+    id: "line-chart", title: "Line chart", aliases: ["line", "trend"],
+    icon: "LineChart", category: "Database",
+    description: "Line chart visualization",
+    preview: "Add a line chart — visualize trends over time",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "line-chart", ctx.text)); }
+  },
+  {
+    id: "donut-chart", title: "Donut chart", aliases: ["donut", "pie", "ring"],
+    icon: "PieChart", category: "Database",
+    description: "Donut chart visualization",
+    preview: "Add a donut chart — show proportions and percentages",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "donut-chart", ctx.text)); }
+  },
+  {
+    id: "number-chart", title: "Number chart", aliases: ["number", "metric", "kpi"],
+    icon: "Hash", category: "Database",
+    description: "Number chart visualization",
+    preview: "Add a number chart — display a key metric or KPI",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "number-chart", ctx.text)); }
+  },
+  {
+    id: "feed-view", title: "Feed view", aliases: ["feed", "rss"],
+    icon: "Activity", category: "Database",
+    description: "RSS-style feed view",
+    preview: "Add a feed — view items as a stream",
+    execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "feed", ctx.text)); }
+  },
+  {
+    id: "linked-view", title: "Linked view of data source", aliases: ["linked", "source", "linked-db"],
+    icon: "Link", category: "Database",
+    description: "View referencing another database",
+    preview: "Add a linked view — reference data from another page",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "linked-view", ctx.text)); }
+  },
 ];
 
 // ── Advanced Blocks ─────────────────────────────────────────────
@@ -338,7 +425,7 @@ const advanced = [
     id: "table-of-contents", title: "Table of contents", aliases: ["toc"],
     icon: "BookOpen", category: "Advanced blocks",
     description: "Auto-generated table of contents from headings",
-    preview: "Auto-generates a table of contents from all headings on the page",
+    preview: { description: "Auto-generates a table of contents from all headings on the page", image: "/previews/table-of-contents.svg" },
     execute(ctx) {
       ctx.onDelete();
       ctx.onAdd("table-of-contents", "");
@@ -421,28 +508,28 @@ const advanced = [
 // ── Layout ──────────────────────────────────────────────────────
 const layout = [
   {
-    id: "2-columns", title: "2 columns", aliases: ["cols2", "split"],
+    id: "2-columns", title: "2 columns", aliases: ["2col", "cols2", "split"],
     icon: "Columns2", category: "Layout",
     description: "Two-column layout",
-    preview: "Split into two equal columns — drag blocks between them",
+    preview: { description: "Split into two equal columns — drag blocks between them", image: "/previews/2-columns.svg" },
     execute(ctx) { ctx.onDelete(); ctx.onAdd("2-columns", ""); }
   },
   {
-    id: "3-columns", title: "3 columns", aliases: ["cols3"],
+    id: "3-columns", title: "3 columns", aliases: ["3col", "cols3"],
     icon: "Columns3", category: "Layout",
     description: "Three-column layout",
     preview: "Split into three columns",
     execute(ctx) { ctx.onDelete(); ctx.onAdd("3-columns", ""); }
   },
   {
-    id: "4-columns", title: "4 columns", aliases: ["cols4"],
+    id: "4-columns", title: "4 columns", aliases: ["4col", "cols4"],
     icon: "Columns3", category: "Layout",
     description: "Four-column layout",
     preview: "Split into four columns",
     execute(ctx) { ctx.onDelete(); ctx.onAdd("4-columns", ""); }
   },
   {
-    id: "5-columns", title: "5 columns", aliases: ["cols5"],
+    id: "5-columns", title: "5 columns", aliases: ["5col", "cols5"],
     icon: "Columns3", category: "Layout",
     description: "Five-column layout",
     preview: "Split into five columns",
@@ -456,7 +543,7 @@ const inline = [
     id: "mention-page", title: "Mention a page", aliases: ["@page", "[[", "link"],
     icon: "FileText", category: "Inline",
     description: "Search and link to another page",
-    preview: "Mention another page — search by title, click to open",
+    preview: { description: "Mention another page — search by title, click to open", image: "/previews/mention-page.svg" },
     execute(ctx) {
       ctx.onPatch({
         type: "mention", text: ctx.text ? `@${ctx.text}` : "@",
@@ -532,7 +619,55 @@ const inline = [
     preview: "Add a math equation — rendered with KaTeX",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "inline-equation", ctx.text)); }
   },
+  {
+    id: "color", title: "Color", aliases: ["text color", "font color"],
+    icon: "Palette", category: "Inline",
+    description: "Change text color — select text then pick a color from the toolbar",
+    preview: "Use the floating toolbar color palette to change selected text color",
+    execute(ctx) { ctx.onPatch({ text: ctx.block.text || "" }); }
+  },
+  {
+    id: "highlight", title: "Highlight", aliases: ["bg color", "background"],
+    icon: "Highlighter", category: "Inline",
+    description: "Highlight text with background color — pick from the toolbar palette",
+    preview: "Use the floating toolbar to highlight selected text with a background color",
+    execute(ctx) { ctx.onPatch({ text: ctx.block.text || "" }); }
+  },
 ];
+
+// ── Color Presets ──────────────────────────────────────────────────
+const COLORS = ["default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"];
+COLORS.forEach((c) => {
+  const colorCommands = [
+    {
+      id: `color-${c}`, title: `${c.charAt(0).toUpperCase() + c.slice(1)}`, aliases: c === "default" ? ["reset-color"] : [`${c}-text`],
+      icon: "Palette", category: "Inline",
+      description: c === "default" ? "Reset block text color to default" : `Set text color to ${c}`,
+      execute(ctx) {
+        const text = ctx.text || ctx.block.text || "";
+        if (c === "default") {
+          ctx.onPatch({ text: text.replace(/@@\w[\w-]*:/g, "").replace(/@@/g, "") });
+        } else {
+          ctx.onPatch({ text: `@@${c}:${text}@@` });
+        }
+      }
+    },
+    {
+      id: `color-bg-${c}`, title: `${c.charAt(0).toUpperCase() + c.slice(1)} background`, aliases: [`${c}-bg`, `${c}-background`],
+      icon: "Highlighter", category: "Inline",
+      description: c === "default" ? "Reset block background to default" : `Set block background to ${c}`,
+      execute(ctx) {
+        const text = ctx.text || ctx.block.text || "";
+        if (c === "default") {
+          ctx.onPatch({ text: text.replace(/@@bg-\w+:/g, "").replace(/@@/g, "") });
+        } else {
+          ctx.onPatch({ text: `@@bg-${c}:${text}@@` });
+        }
+      }
+    }
+  ];
+  colorCommands.forEach(registerCommand);
+});
 
 // ── Embeds ──────────────────────────────────────────────────────
 const embeds = [
@@ -588,6 +723,126 @@ const embeds = [
     icon: "FileText", category: "Embeds",
     description: "Embed a PDF viewer",
     preview: "Embed a PDF document — view inline",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "abstract", title: "Abstract", aliases: ["abstract"],
+    icon: "FilePlus", category: "Embeds",
+    description: "Embed an Abstract design file",
+    preview: "Embed a design from Abstract",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "invision", title: "Invision", aliases: ["invision"],
+    icon: "Eye", category: "Embeds",
+    description: "Embed an Invision prototype",
+    preview: "Embed a prototype from Invision",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "mixpanel", title: "Mixpanel", aliases: ["mixpanel"],
+    icon: "BarChart3", category: "Embeds",
+    description: "Embed a Mixpanel report",
+    preview: "Embed analytics from Mixpanel",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "framer", title: "Framer", aliases: ["framer"],
+    icon: "Monitor", category: "Embeds",
+    description: "Embed a Framer prototype",
+    preview: "Embed a prototype from Framer",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "whimsical", title: "Whimsical", aliases: ["whimsical"],
+    icon: "Pen", category: "Embeds",
+    description: "Embed a Whimsical diagram",
+    preview: "Embed a diagram from Whimsical",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "miro", title: "Miro", aliases: ["miro"],
+    icon: "Grid3X3", category: "Embeds",
+    description: "Embed a Miro board",
+    preview: "Embed a whiteboard from Miro",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "sketch", title: "Sketch", aliases: ["sketch"],
+    icon: "Pen", category: "Embeds",
+    description: "Embed a Sketch design",
+    preview: "Embed a design from Sketch",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "excalidraw", title: "Excalidraw", aliases: ["excalidraw"],
+    icon: "Pen", category: "Embeds",
+    description: "Embed an Excalidraw drawing",
+    preview: "Embed a drawing from Excalidraw",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "typeform", title: "Typeform", aliases: ["typeform"],
+    icon: "FormInput", category: "Embeds",
+    description: "Embed a Typeform survey",
+    preview: "Embed a form from Typeform",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "replit", title: "Replit", aliases: ["replit"],
+    icon: "Code", category: "Embeds",
+    description: "Embed a Replit project",
+    preview: "Embed a coding environment from Replit",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "hex", title: "Hex", aliases: ["hex"],
+    icon: "Hash", category: "Embeds",
+    description: "Embed a Hex notebook",
+    preview: "Embed a data notebook from Hex",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "deepnote", title: "Deepnote", aliases: ["deepnote"],
+    icon: "Database", category: "Embeds",
+    description: "Embed a Deepnote notebook",
+    preview: "Embed a notebook from Deepnote",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "trello", title: "Trello", aliases: ["trello"],
+    icon: "Layout", category: "Embeds",
+    description: "Embed a Trello board",
+    preview: "Embed a board from Trello",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "dropbox-paper", title: "Dropbox Paper", aliases: ["dropbox-paper", "dropbox"],
+    icon: "FolderOpen", category: "Embeds",
+    description: "Embed a Dropbox Paper document",
+    preview: "Embed a document from Dropbox Paper",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "evernote", title: "Evernote", aliases: ["evernote"],
+    icon: "FileText", category: "Embeds",
+    description: "Embed an Evernote note",
+    preview: "Embed a note from Evernote",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "workflowy", title: "Workflowy", aliases: ["workflowy"],
+    icon: "Workflow", category: "Embeds",
+    description: "Embed a Workflowy outline",
+    preview: "Embed an outline from Workflowy",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "word", title: "Word", aliases: ["word"],
+    icon: "FileText", category: "Embeds",
+    description: "Embed a Microsoft Word document",
+    preview: "Embed a document from Microsoft Word",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "monday", title: "Monday", aliases: ["monday"],
+    icon: "LayoutDashboard", category: "Embeds",
+    description: "Embed a Monday.com board",
+    preview: "Embed a board from Monday.com",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "quip", title: "Quip", aliases: ["quip"],
+    icon: "FileText", category: "Embeds",
+    description: "Embed a Quip document",
+    preview: "Embed a document from Quip",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
+  },
+  { id: "zip", title: "ZIP", aliases: ["zip", "archive"],
+    icon: "FileArchive", category: "Embeds",
+    description: "Embed a ZIP archive",
+    preview: "Embed a ZIP file for download",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "embed-generic", ctx.text)); }
   },
 ];
@@ -676,9 +931,9 @@ const pageActions = [
   {
     id: "customize", title: "Customize page", aliases: ["theme"],
     icon: "Palette", category: "Page actions",
-    description: "Customize page appearance",
-    preview: "Change the page icon, cover, and font",
-    execute(ctx) { ctx.onPagePatch?.({}); }
+    description: "Customize page appearance — background, typography, cover, icon, access",
+    preview: "Open the customize panel to change page background, typography, cover image, page icon, lock settings, and more",
+    execute(ctx) { ctx.setCustomizeOpen?.(true); }
   },
   {
     id: "lock", title: "Lock page", aliases: ["lock-page"],
@@ -774,6 +1029,8 @@ function blockForTree(block, type, text = block.text || "") {
 
 function blockForDatabaseView(block, viewType, text = block.text || "") {
   const next = blockFor("database", text);
+  const defaultViews = [...(next.database?.views || [])];
+  if (defaultViews.length > 0) defaultViews[0] = { ...defaultViews[0], type: viewType, name: viewType.charAt(0).toUpperCase() + viewType.slice(1) };
   return {
     ...next,
     id: block.id,
@@ -781,5 +1038,6 @@ function blockForDatabaseView(block, viewType, text = block.text || "") {
     content: block.content || [],
     text,
     properties: { ...next.properties, view: viewType },
+    database: { ...next.database, view: viewType, views: defaultViews },
   };
 }
