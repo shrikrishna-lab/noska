@@ -20,6 +20,7 @@
     "highlight.js": "^11.11.1",
     "katex": "^0.17.0",
     "lucide-react": "latest",
+    "mermaid": "11.4.1",
     "pg": "^8.22.0",
     "react": "latest",
     "react-dom": "latest",

@@ -16,6 +16,7 @@ import PagePeek from "./PagePeek";
 import MediaUploadPlaceholder from "./MediaUploadPlaceholder";
 import CodeBlock from "./CodeBlock";
 import ChartBlock from "./ChartBlock";
+import MermaidBlock from "./MermaidBlock";
 import SimpleTable from "./SimpleTable";
 import ColumnsBlock from "./ColumnsBlock";
 import DatabaseBlock from "../DatabaseBlock";
@@ -198,8 +199,8 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
             {!collapsed && childBlocks.length > 0 && (
               <div className="ml-6 mt-2 space-y-1">
                 {childBlocks.map(child => (
-                  <div key={child.id} className="text-xs text-[var(--muted)] border-l-2 border-[var(--border)] pl-3 py-1">
-                    Nested block
+                  <div key={child.id} className="text-sm text-[var(--text-secondary)] border-l-2 border-[var(--border)] pl-3 py-1 whitespace-pre-wrap">
+                    {child.text || <span className="text-[var(--muted)] italic">Empty block</span>}
                   </div>
                 ))}
               </div>
@@ -574,14 +575,51 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
   }
 
   if (block.type === "breadcrumb") {
+    // Build the real page-ancestry chain (root → … → current page).
+    const owningPage = page || pages.find(p => p.blocks?.some(b => b.id === block.id));
+    const chain = [];
+    let cur = owningPage;
+    const guard = new Set();
+    while (cur && !guard.has(cur.id)) {
+      guard.add(cur.id);
+      chain.unshift(cur);
+      cur = cur.parentId ? pages.find(p => p.id === cur.parentId) : null;
+    }
     return (
-      <div className="flex items-center gap-1.5 text-xs text-[var(--muted)] font-medium bg-[var(--surface)] py-1.5 px-3 rounded-lg border border-[var(--border)]">
-        <span>Workspace</span>
-        <span>/</span>
-        <span className="text-[var(--secondary)]">{pages[0]?.title || "My Page"}</span>
-        <span>/</span>
-        <span className="text-[var(--text)] font-semibold">{block.text || "Current Block"}</span>
-      </div>
+      <nav className="flex items-center gap-1 flex-wrap text-xs font-medium bg-[var(--surface)] py-1.5 px-3 rounded-lg border border-[var(--border)]">
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => chain[0] && onNavigate?.(chain[0].id)}
+          className="text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+        >
+          Workspace
+        </button>
+        {chain.length === 0 && (
+          <>
+            <ChevronRight size={12} className="text-[var(--muted)]" />
+            <span className="text-[var(--muted)] italic">This page</span>
+          </>
+        )}
+        {chain.map((p, i) => (
+          <React.Fragment key={p.id}>
+            <ChevronRight size={12} className="text-[var(--muted)] shrink-0" />
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => onNavigate?.(p.id, { altKey: e.altKey })}
+              className={`transition cursor-pointer inline-flex items-center gap-1 ${
+                i === chain.length - 1
+                  ? "text-[var(--text)] font-semibold"
+                  : "text-[var(--secondary)] hover:text-[var(--text)]"
+              }`}
+            >
+              {p.icon && <span>{p.icon}</span>}
+              {p.title || "Untitled"}
+            </button>
+          </React.Fragment>
+        ))}
+      </nav>
     );
   }
 
@@ -677,9 +715,14 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
           />
           {block.open && block.content && block.content.length > 0 && (
             <div className="ml-4 mt-1 space-y-1">
-              {block.content.map(id => (
-                <div key={id} className="text-xs text-[var(--muted)]">Nested block</div>
-              ))}
+              {block.content.map(id => {
+                const child = page?.blocks?.find(b => b.id === id);
+                return (
+                  <div key={id} className="text-sm text-[var(--text-secondary)] border-l-2 border-[var(--border)] pl-3 py-1 whitespace-pre-wrap">
+                    {child?.text || <span className="text-[var(--muted)] italic">Empty block</span>}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -689,27 +732,15 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
 
   if (block.type === "mermaid") {
     return (
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="flex items-center gap-1.5 mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-          <span>Diagram</span>
-        </div>
-        <TextArea
-          ref={ref}
-          value={block.text}
-          onChange={(text) => onPatch({ text })}
-          onKeyDown={onKeyDown}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          readOnly={isLocked}
-          className="font-mono text-xs"
-          placeholder="graph TD; A-->B;"
-        />
-        {block.text && (
-          <div className="mt-2 p-3 bg-[var(--callout)] rounded text-xs text-[var(--muted)] text-center">
-            Mermaid diagram: {block.text.slice(0, 60)}...
-          </div>
-        )}
-      </div>
+      <MermaidBlock
+        block={block}
+        onPatch={onPatch}
+        onKeyDown={onKeyDown}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        isLocked={isLocked}
+        innerRef={ref}
+      />
     );
   }
 

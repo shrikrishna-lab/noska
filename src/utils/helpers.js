@@ -60,6 +60,12 @@ export const covers = [
 
 export const emojis = ["📝", "📌", "💡", "✅", "🧠", "🚀", "📚", "🎯", "🗓️", "🔖"];
 
+// Rotating default background tints for column layouts. Named tokens (not raw
+// hex) so ColumnsBlock can map them to light/dark-correct CSS values and the
+// color picker can highlight the active one. Matches the "2 columns" preview
+// (green + blue) then extends with more palette colors for 3/4/5 columns.
+export const COLUMN_TINTS = ["green", "blue", "orange", "purple", "yellow"];
+
 export function timeAgo(iso) {
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 60000) return "just now";
@@ -120,8 +126,12 @@ export function blockFor(type, text = '') {
   if (type === 'page') props.title = text;
   else if (type === 'todo') { props.richText = [{ text }]; props.checked = false; }
   else if (type === 'callout') { props.richText = [{ text }]; props.icon = '💡'; props.tone = 'info'; }
-  else if (type === 'table') { props.table = [['Name','Status','Owner'],['Draft','Doing','Me']]; }
-  else if (type === '2-columns' || type === '3-columns' || type === '4-columns' || type === '5-columns') props.columns = [['Column one'],['Column two']];
+  else if (type === 'table') { props.table = [['','',''],['','','']]; }
+  else if (type === '2-columns' || type === '3-columns' || type === '4-columns' || type === '5-columns') {
+    const n = parseInt(type, 10) || 2;
+    props.columns = Array.from({ length: n }, () => ['']);
+    props.columnColors = Array.from({ length: n }, (_, i) => COLUMN_TINTS[i % COLUMN_TINTS.length]);
+  }
   else if (type === 'database') Object.assign(props, makeEmptyDatabase());
   else if (type === 'image') props.url = text;
   else if (type === 'code') { props.richText = [{ text }]; props.language = 'plain'; }
@@ -138,7 +148,10 @@ export function blockFor(type, text = '') {
   else if (type.startsWith('toggle-h') || type === 'ai-block' || type === 'mermaid' || type === 'ai-meeting' || type === 'inline-equation') { props.richText = [{ text }]; }
   else { props.richText = [{ text }]; }
   const block = createBlock(type, { properties: props });
-  if (type === '2-columns' || type === '3-columns' || type === '4-columns' || type === '5-columns') block.columns = props.columns;
+  if (type === '2-columns' || type === '3-columns' || type === '4-columns' || type === '5-columns') {
+    block.columns = props.columns;
+    block.columnColors = props.columnColors;
+  }
   if (type === 'database' || type === 'database-inline' || type === 'database-full') block.database = props;
   if (type === 'tabs') { block.tabs = props.tabs; block.activeTabIdx = 0; }
   if (type === 'button') block.templateBlocks = props.templateBlocks || [];
