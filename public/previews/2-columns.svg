@@ -1,16 +1,11 @@
 <svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="200" height="120" rx="8" fill="#F7F7F7"/>
-  <!-- Left column -->
+  <!-- Left column (green tint, empty) -->
   <rect x="16" y="16" width="78" height="80" rx="6" fill="#E8F5E9" stroke="#C8E6C9" stroke-width="1"/>
-  <rect x="24" y="28" width="60" height="6" rx="3" fill="#A5D6A7"/>
-  <rect x="24" y="40" width="50" height="6" rx="3" fill="#C8E6C9"/>
-  <rect x="24" y="52" width="62" height="6" rx="3" fill="#C8E6C9"/>
-  <!-- Right column -->
+  <!-- Right column (blue tint, empty) -->
   <rect x="104" y="16" width="78" height="80" rx="6" fill="#E3F2FD" stroke="#BBDEFB" stroke-width="1"/>
-  <rect x="112" y="28" width="56" height="6" rx="3" fill="#90CAF9"/>
-  <rect x="112" y="40" width="62" height="6" rx="3" fill="#BBDEFB"/>
-  <rect x="112" y="52" width="44" height="6" rx="3" fill="#BBDEFB"/>
-  <!-- Divider indicator -->
-  <line x1="99" y1="20" x2="99" y2="92" stroke="#DDD" stroke-width="1" stroke-dasharray="4 2"/>
-  <text x="16" y="110" font-family="system-ui" font-size="10" fill="#999">Two-column layout</text>
+  <!-- Faint empty-state placeholder cue in each column -->
+  <rect x="26" y="30" width="46" height="5" rx="2.5" fill="#C8E6C9" opacity="0.7"/>
+  <rect x="114" y="30" width="46" height="5" rx="2.5" fill="#BBDEFB" opacity="0.7"/>
+  <text x="16" y="110" font-family="system-ui" font-size="10" fill="#999">Two empty columns — type in each</text>
 </svg>
