@@ -141,16 +141,25 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
     return result;
   }, [groups]);
 
-  // Auto-highlight first non-group item on open
+  // Auto-highlight first non-group item on open.
+  // Focus the search box ONLY on the closed→open transition — never on
+  // subsequent initialSearch changes, so clicking back into the block editor
+  // (or continuing to type there) doesn't keep stealing focus into the menu.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
     if (open) {
+      const justOpened = !wasOpenRef.current;
+      wasOpenRef.current = true;
       setSearch(initialSearch);
       setActiveCategory(null);
       // Find first non-group item index
       const firstItemIdx = flatItems.findIndex(item => !item._isGroup);
       setHighlightedIndex(firstItemIdx >= 0 ? firstItemIdx : -1);
-      setTimeout(() => searchRef.current?.focus(), 50);
+      if (justOpened) {
+        setTimeout(() => searchRef.current?.focus(), 50);
+      }
     } else {
+      wasOpenRef.current = false;
       setPreviewCmd(null);
     }
   }, [open, initialSearch]);

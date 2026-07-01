@@ -1295,6 +1295,10 @@ function Block({
   const [inlineAI, setInlineAI] = useState(null);
   const inlineAIBlockRef = useRef(null);
   const menuButtonRef = useRef(null);
+  // Set true only when the user actually presses the "/" key, so the slash
+  // menu opens on a real keystroke — not when clicking into / focusing a block
+  // whose text already contains "/".
+  const slashKeyPressedRef = useRef(false);
   
   const slashRef = useOutsideDismiss(slashOpen, () => setSlashOpen(false));
   const mentionRef = useOutsideDismiss(mentionOpen, () => setMentionOpen(false));
@@ -1538,21 +1542,25 @@ function Block({
     // Skip slash detection during IME composition
     if (e.nativeEvent?.isComposing) return;
 
+    // Clear any stale slash-key flag when a different key is pressed, so the
+    // menu never opens from a leftover flag on later edits.
+    if (e.key !== "/" && slashKeyPressedRef.current) {
+      slashKeyPressedRef.current = false;
+    }
+
     // ── Slash command trigger (spec §5.1 / §17) ──
     // Skip inside code and math blocks (spec §11)
     if (e.key === "/" && block.type !== "code" && block.type !== "inline-equation") {
       const ta = e.target;
       const cursorPos = ta.selectionStart ?? (block.text || "").length;
       const textBefore = (block.text || "").slice(0, cursorPos);
-      // Regex match: at line start OR after space (spec §17 step 1)
-      const match = textBefore.match(/(?:^|\s)\/([a-zA-Z0-9-]*)$/);
-      if (!match) return;
-
-      setSlashOpen(true);
-      setSlashQuery(match[1] || "");
-      const caretRect = getCaretRect();
-      const pos = positionSlashMenu(caretRect);
-      if (pos) setSlashPos(pos);
+      // The "/" hasn't been inserted yet on keydown. It's a valid trigger if the
+      // caret is at line start or immediately after whitespace.
+      const validTrigger = textBefore === "" || /\s$/.test(textBefore);
+      if (!validTrigger) return;
+      // Flag that a real "/" keystroke happened; patchWithSlashDetection will
+      // open the menu once the "/" is inserted into the text.
+      slashKeyPressedRef.current = true;
       return;
     }
 
@@ -1696,9 +1704,21 @@ function Block({
 
   const patchWithSlashDetection = (patch) => {
     if (page.isLocked || blockPermission === 'view') return;
-    if (typeof patch.text === "string" && patch.text.startsWith("/")) {
-      setSlashOpen(true);
-      setSlashQuery(patch.text.slice(1));
+    if (typeof patch.text === "string") {
+      const m = patch.text.match(/(?:^|\s)\/([a-zA-Z0-9-]*)$/);
+      if (slashKeyPressedRef.current && m) {
+        // A real "/" keystroke just inserted a slash at a valid position → open.
+        slashKeyPressedRef.current = false;
+        setSlashOpen(true);
+        setSlashQuery(m[1] || "");
+        const caretRect = getCaretRect();
+        const pos = positionSlashMenu(caretRect);
+        if (pos) setSlashPos(pos);
+      } else if (slashOpen) {
+        // Menu already open: keep the query in sync while typing after "/".
+        if (m) setSlashQuery(m[1] || "");
+        else setSlashOpen(false); // caret moved off the "/query" token → close
+      }
     }
     if (!mentionOpen && typeof patch.text === "string") {
       detectMention(patch.text);
