@@ -202,7 +202,7 @@ const basic = [
     id: "simple-table", title: "Simple Table", aliases: ["table", "grid"],
     icon: "Table", category: "Basic blocks",
     description: "Simple text grid table",
-    preview: "Add a basic table — plain text cells",
+    preview: "A basic text grid, starting as an empty 3×2 table (no sample data). Type in any cell, resize columns, and add rows/columns as needed.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "table", ctx.text)); }
   },
   {
@@ -295,126 +295,126 @@ const database = [
     id: "table-view", title: "Table view", aliases: ["db-table", "spreadsheet"],
     icon: "Table", category: "Database",
     description: "Spreadsheet-style database table",
-    preview: { description: "Add a database table — rows and columns like a spreadsheet", image: "/previews/table-view.svg" },
+    preview: { description: "Spreadsheet-style rows and columns. Starts with one Name column — add your own properties (text, select, date, number…), switch to Board/Calendar/Gallery anytime.", image: "/previews/table-view.svg" },
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "table", ctx.text)); }
   },
   {
     id: "board-view", title: "Board view", aliases: ["kanban", "board"],
     icon: "Layout", category: "Database",
     description: "Kanban-style board view",
-    preview: { description: "Add a Kanban board — organize by status or category", image: "/previews/board-view.svg" },
+    preview: { description: "Kanban board grouped by a Select/Status property. Add one to create columns, then drag cards between them. Same data as the table view.", image: "/previews/board-view.svg" },
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "board", ctx.text)); }
   },
   {
     id: "gallery-view", title: "Gallery view", aliases: ["grid", "cards"],
     icon: "ImageIcon", category: "Database",
     description: "Card/image gallery view",
-    preview: "Add a gallery — show items as image cards",
+    preview: "Cards with a cover image or icon. Best for visual collections — add rows, then pick which properties show on each card.",
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "gallery", ctx.text)); }
   },
   {
     id: "list-view", title: "List view", aliases: ["simple-list"],
     icon: "List", category: "Database",
     description: "Simple list view",
-    preview: "Add a list view — compact text rows",
+    preview: "Compact one-line rows with inline property tags. Same data as the table — switch views anytime without losing content.",
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "list", ctx.text)); }
   },
   {
     id: "calendar-view", title: "Calendar view", aliases: ["calendar", "schedule"],
     icon: "Calendar", category: "Database",
     description: "Calendar/date-based view",
-    preview: "Add a calendar — view items by date",
+    preview: "Places rows on a calendar by a Date property. Add a Date property to position entries; click a day to add an entry.",
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "calendar", ctx.text)); }
   },
   {
     id: "timeline-view", title: "Timeline view", aliases: ["gantt", "roadmap"],
     icon: "Clock", category: "Database",
     description: "Timeline/Gantt chart view",
-    preview: "Add a timeline — visualize project schedules",
+    preview: "Horizontal Gantt-style bars across a date range. Needs start/end Date properties to plot durations for planning.",
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "timeline", ctx.text)); }
   },
   {
     id: "dashboard-view", title: "Dashboard view", aliases: ["dashboard"],
     icon: "LayoutDashboard", category: "Database",
     description: "Dashboard with widgets",
-    preview: "Add a dashboard — combine multiple views",
+    preview: "Combine charts and view widgets over one data source. Add rows and properties first, then charts summarize them. (Renderer in progress.)",
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "dashboard", ctx.text)); }
   },
   {
     id: "map-view", title: "Map view", aliases: ["map", "geography"],
     icon: "MapPin", category: "Database",
     description: "Geographic map view",
-    preview: "Add a map — pin items by location",
+    preview: "Plots rows on a map by a location/address property. Add a text address or coordinates property to pin entries. (Renderer in progress.)",
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "map", ctx.text)); }
   },
   {
     id: "form", title: "Form", aliases: ["survey"],
     icon: "FormInput", category: "Database",
     description: "Fillable form",
-    preview: "Add a form — collect structured data",
+    preview: "A fillable form that writes submissions into a database. Starts with one field — add fields, mark required, and share to collect responses.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "form", ctx.text)); }
   },
   {
     id: "database-inline", title: "Database – Inline", aliases: ["db-inline"],
     icon: "Database", category: "Database",
     description: "Inline database in the page",
-    preview: "Add an inline database — all views available",
+    preview: "An empty database embedded in this page. Starts with one Name column and no rows — add properties and switch between Table/Board/List/Gallery views inline.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "database-inline", ctx.text)); }
   },
   {
     id: "database-full", title: "Database – Full page", aliases: ["db-full"],
     icon: "Database", category: "Database",
     description: "Full-page database",
-    preview: "Add a full-page database — opens as its own page",
+    preview: "A database that opens as its own full page. Starts empty with one Name column — build your schema and add rows on the dedicated page.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "database-full", ctx.text)); }
   },
   {
     id: "bar-chart-v", title: "Vertical bar chart", aliases: ["bar", "vertical-bar", "column-chart"],
     icon: "BarChart3", category: "Database",
     description: "Vertical bar chart visualization",
-    preview: "Add a vertical bar chart — visualize data with columns",
+    preview: "Vertical bars comparing values across categories. Opens with editable sample data — set your own labels, values, and colors, or connect a database property.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "bar-chart-v", ctx.text)); }
   },
   {
     id: "bar-chart-h", title: "Horizontal bar chart", aliases: ["horizontal-bar", "hbar"],
     icon: "BarChart3", category: "Database",
     description: "Horizontal bar chart visualization",
-    preview: "Add a horizontal bar chart — visualize data with horizontal bars",
+    preview: "Horizontal bars, ideal for ranking long labels. Opens with editable sample data — customize labels, values, and colors, or bind to a data source.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "bar-chart-h", ctx.text)); }
   },
   {
     id: "line-chart", title: "Line chart", aliases: ["line", "trend"],
     icon: "LineChart", category: "Database",
     description: "Line chart visualization",
-    preview: "Add a line chart — visualize trends over time",
+    preview: "A trend line over ordered points. Opens with editable sample data — enter your own series or connect a database of dated values.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "line-chart", ctx.text)); }
   },
   {
     id: "donut-chart", title: "Donut chart", aliases: ["donut", "pie", "ring"],
     icon: "PieChart", category: "Database",
     description: "Donut chart visualization",
-    preview: "Add a donut chart — show proportions and percentages",
+    preview: "Proportional segments showing parts of a whole. Opens with editable sample data — set slice labels/values or connect a data source.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "donut-chart", ctx.text)); }
   },
   {
     id: "number-chart", title: "Number chart", aliases: ["number", "metric", "kpi"],
     icon: "Hash", category: "Database",
     description: "Number chart visualization",
-    preview: "Add a number chart — display a key metric or KPI",
+    preview: "A single big KPI number with a label. Opens editable — type your metric, or connect a database property to aggregate it live.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "number-chart", ctx.text)); }
   },
   {
     id: "feed-view", title: "Feed view", aliases: ["feed", "rss"],
     icon: "Activity", category: "Database",
     description: "RSS-style feed view",
-    preview: "Add a feed — view items as a stream",
+    preview: "A vertical stream of entries, newest first. Same database as other views — add rows and switch view types anytime.",
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "feed", ctx.text)); }
   },
   {
     id: "linked-view", title: "Linked view of data source", aliases: ["linked", "source", "linked-db"],
     icon: "Link", category: "Database",
     description: "View referencing another database",
-    preview: "Add a linked view — reference data from another page",
+    preview: "Shows an existing database from elsewhere in your workspace. Pick the source, then filter/sort it independently without copying the data.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "linked-view", ctx.text)); }
   },
 ];
@@ -442,7 +442,7 @@ const advanced = [
     id: "breadcrumb", title: "Breadcrumb", aliases: ["path"],
     icon: "Route", category: "Advanced blocks",
     description: "Shows page hierarchy path",
-    preview: "Add breadcrumbs — shows the page path from the root",
+    preview: "Shows the real path from your workspace root to this page, auto-built from the page tree. Each crumb is clickable to jump up the hierarchy.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "breadcrumb", ctx.text)); }
   },
   {
@@ -493,7 +493,7 @@ const advanced = [
     id: "mermaid", title: "Code – Mermaid", aliases: ["diagram", "chart"],
     icon: "Code", category: "Advanced blocks",
     description: "Mermaid diagram renderer",
-    preview: "Render diagrams from Mermaid syntax — flowcharts, sequence diagrams, etc.",
+    preview: "Renders a live diagram from Mermaid text — flowcharts, sequence, Gantt, and more. Starts empty; type syntax and it renders instantly below.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "mermaid", ctx.text)); }
   },
   {
@@ -511,28 +511,28 @@ const layout = [
     id: "2-columns", title: "2 columns", aliases: ["2col", "cols2", "split"],
     icon: "Columns2", category: "Layout",
     description: "Two-column layout",
-    preview: { description: "Split into two equal columns — drag blocks between them", image: "/previews/2-columns.svg" },
+    preview: { description: "Two side-by-side columns, tinted green + blue by default. Both start empty — type in each and recolor per column. Add/remove columns anytime.", image: "/previews/2-columns.svg" },
     execute(ctx) { ctx.onDelete(); ctx.onAdd("2-columns", ""); }
   },
   {
     id: "3-columns", title: "3 columns", aliases: ["3col", "cols3"],
     icon: "Columns3", category: "Layout",
     description: "Three-column layout",
-    preview: "Split into three columns",
+    preview: "Three empty columns (green/blue/orange tints). Type in each, change any column's background color, or add/remove columns after inserting.",
     execute(ctx) { ctx.onDelete(); ctx.onAdd("3-columns", ""); }
   },
   {
     id: "4-columns", title: "4 columns", aliases: ["4col", "cols4"],
     icon: "Columns3", category: "Layout",
     description: "Four-column layout",
-    preview: "Split into four columns",
+    preview: "Four empty columns with rotating palette tints. Each is independently editable and recolorable; add or remove columns as needed.",
     execute(ctx) { ctx.onDelete(); ctx.onAdd("4-columns", ""); }
   },
   {
     id: "5-columns", title: "5 columns", aliases: ["5col", "cols5"],
     icon: "Columns3", category: "Layout",
     description: "Five-column layout",
-    preview: "Split into five columns",
+    preview: "Five empty columns with rotating palette tints. Type into each, recolor per column, and add/remove columns after inserting.",
     execute(ctx) { ctx.onDelete(); ctx.onAdd("5-columns", ""); }
   },
 ];

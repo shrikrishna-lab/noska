@@ -82,6 +82,25 @@ export default function BoardView({ rows, properties, onPatchRow, onAddRow, acti
     return key;
   };
 
+  // Empty-state: no group (select/status) property configured yet.
+  // Guides the user to add one instead of showing fake Kanban columns.
+  if (!isSelectType) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-2)] py-10 px-6 text-center min-h-[200px]">
+        <div className="text-sm font-medium text-[var(--secondary)]">Board needs a grouping property</div>
+        <p className="text-xs text-[var(--muted)] max-w-[280px]">
+          Add a <span className="font-medium text-[var(--text)]">Select</span> or <span className="font-medium text-[var(--text)]">Status</span> property to organize cards into columns.
+        </p>
+        <button
+          onClick={onAddRow}
+          className="mt-1 flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--secondary)] hover:text-[var(--text)] hover:border-[var(--border-strong)] transition cursor-pointer"
+        >
+          <Plus size={13} /> Add a card
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex gap-3 overflow-x-auto pb-4 min-h-[200px]">
       {groupKeys.map(key => {

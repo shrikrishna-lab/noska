@@ -8,17 +8,13 @@ import { uid } from "../../../utils/helpers";
 
 /** @returns {DatabaseSchema} */
 export function createEmptyDatabase() {
+  // Minimal empty schema — one Name column, zero rows, no fake sample options.
   return {
     properties: [
       { id: 'name', name: 'Name', type: 'text' },
-      { id: 'status', name: 'Status', type: 'select', options: ['Backlog', 'Next', 'Doing', 'Done'] },
-      { id: 'date', name: 'Date', type: 'date' },
-      { id: 'priority', name: 'Priority', type: 'select', options: ['None', 'Low', 'Medium', 'High', 'Urgent'] },
-      { id: 'done', name: 'Done', type: 'checkbox' },
     ],
     views: [
       { id: 'default-table', type: 'table', name: 'Table', sort: 'name', sortAsc: true, filterGroup: null, filters: { operator: 'and', conditions: [] }, sorts: [] },
-      { id: 'default-board', type: 'board', name: 'Board', sort: 'name', sortAsc: true, groupBy: 'status', filterGroup: null, filters: { operator: 'and', conditions: [] }, sorts: [] },
     ],
     rows: [],
     activeViewId: 'default-table',

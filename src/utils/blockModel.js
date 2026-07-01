@@ -315,18 +315,16 @@ export function setBlockTitle(block, title) {
 
 // ── Utils ─────────────────────────────────────────────────────
 export function makeEmptyDatabase() {
+  // Minimal empty structure: a single "Name" title column and zero rows.
+  // No pre-seeded sample columns/rows — the user builds their own schema.
+  // Additional properties (Status, Date, etc.) are added on demand via the UI.
   return {
     view: 'table',
     groupBy: 'status',
     filter: '',
     sort: 'name',
     properties: [
-      { id: 'name', name: 'Name', type: 'text' },
-      { id: 'status', name: 'Status', type: 'select' },
-      { id: 'date', name: 'Date', type: 'date' },
-      { id: 'priority', name: 'Priority', type: 'select' },
-      { id: 'done', name: 'Done', type: 'checkbox' },
-      { id: 'notes', name: 'Notes', type: 'text' }
+      { id: 'name', name: 'Name', type: 'text' }
     ],
     rows: [],
     views: [{ id: 'v-default', name: 'Table', type: 'table' }],
