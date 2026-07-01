@@ -15,6 +15,7 @@ import ImageBlock from "./ImageBlock";
 import PagePeek from "./PagePeek";
 import MediaUploadPlaceholder from "./MediaUploadPlaceholder";
 import CodeBlock from "./CodeBlock";
+import ChartBlock from "./ChartBlock";
 import SimpleTable from "./SimpleTable";
 import ColumnsBlock from "./ColumnsBlock";
 import DatabaseBlock from "../DatabaseBlock";
@@ -534,57 +535,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
   }
 
   if (block.type.includes("chart")) {
-    const title = block.text || "Chart Data Visualization";
-    return (
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-2">
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">{block.type.replace("-", " ")}</span>
-          <span className="text-[11px] text-[var(--secondary)] font-semibold">{title}</span>
-        </div>
-        <div className="h-32 flex items-center justify-center gap-3 border border-[var(--border)] bg-[var(--surface)] rounded-md p-3">
-          {block.type === "bar-chart-v" && (
-            <div className="flex items-end justify-around w-full h-full pt-4">
-              <div className="w-6 bg-[var(--accent)] rounded-t h-[30%]" />
-              <div className="w-6 bg-[var(--noska-blue)] rounded-t h-[65%]" />
-              <div className="w-6 bg-emerald-500 rounded-t h-[45%]" />
-              <div className="w-6 bg-amber-500 rounded-t h-[90%]" />
-            </div>
-          )}
-          {block.type === "bar-chart-h" && (
-            <div className="flex flex-col justify-around w-full h-full py-2">
-              <div className="h-3 bg-[var(--accent)] rounded-r w-[60%]" />
-              <div className="h-3 bg-[var(--noska-blue)] rounded-r w-[85%]" />
-              <div className="h-3 bg-emerald-500 rounded-r w-[40%]" />
-            </div>
-          )}
-          {block.type === "line-chart" && (
-            <div className="relative w-full h-full flex items-center justify-center">
-              <div className="absolute inset-0 flex items-center justify-between px-4">
-                <div className="w-2 h-2 rounded-full bg-[var(--accent)]" style={{ marginTop: 20 }} />
-                <div className="w-2 h-2 rounded-full bg-[var(--noska-blue)]" style={{ marginBottom: 40 }} />
-                <div className="w-2 h-2 rounded-full bg-emerald-500" style={{ marginTop: 10 }} />
-              </div>
-              <svg className="w-full h-full absolute inset-0 text-[var(--accent)]" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <path d="M 0 60 Q 25 20, 50 80 T 100 40" fill="none" stroke="currentColor" strokeWidth="2" />
-              </svg>
-            </div>
-          )}
-          {block.type === "donut-chart" && (
-            <div className="relative w-24 h-24 flex items-center justify-center rounded-full border-4 border-[var(--accent)] border-t-[var(--noska-blue)] border-r-emerald-500 rotate-45">
-              <div className="w-12 h-12 rounded-full bg-[var(--elevated)] flex items-center justify-center -rotate-45">
-                <span className="text-[9px] font-bold text-[var(--text-secondary)]">75%</span>
-              </div>
-            </div>
-          )}
-          {block.type === "number-chart" && (
-            <div className="text-center">
-              <div className="text-3xl font-black text-[var(--accent)]">1,248</div>
-              <div className="text-[9px] text-[var(--muted)] uppercase font-semibold">Page Interactions</div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+    return <ChartBlock block={block} onPatch={onPatch} isLocked={isLocked} />;
   }
 
   if (block.type === "button") {
