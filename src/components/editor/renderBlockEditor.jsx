@@ -162,9 +162,6 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
     const richText = block.properties?.richText != null
       ? block.properties.richText
       : markdownToRichText(block.text || '');
-    const childBlocks = (block.content || [])
-      .map(id => page?.blocks?.find(b => b.id === id))
-      .filter(Boolean);
     return (
       <div>
         <div className="flex items-start gap-1">
@@ -197,15 +194,10 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
               className={cls}
               placeholder="Toggle"
             />
-            {!collapsed && childBlocks.length > 0 && (
-              <div className="ml-6 mt-2 space-y-1">
-                {childBlocks.map(child => (
-                  <div key={child.id} className="text-sm text-[var(--text-secondary)] border-l-2 border-[var(--border)] pl-3 py-1 whitespace-pre-wrap">
-                    {child.text || <span className="text-[var(--muted)] italic">Empty block</span>}
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Nested children are rendered as real editable blocks by the main
+                editor flow (flattened list with depth indentation + collapse).
+                No read-only child preview is rendered here to avoid duplicate /
+                non-editable output. */}
           </div>
         </div>
       </div>
@@ -727,18 +719,9 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
             className={`${cls} ${sizeCls}`}
             placeholder="Toggle heading..."
           />
-          {block.open && block.content && block.content.length > 0 && (
-            <div className="ml-4 mt-1 space-y-1">
-              {block.content.map(id => {
-                const child = page?.blocks?.find(b => b.id === id);
-                return (
-                  <div key={id} className="text-sm text-[var(--text-secondary)] border-l-2 border-[var(--border)] pl-3 py-1 whitespace-pre-wrap">
-                    {child?.text || <span className="text-[var(--muted)] italic">Empty block</span>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {/* Nested children render as real editable blocks via the main editor
+              flow (flattened list + depth indentation + collapse). No read-only
+              child preview here. */}
         </div>
       </div>
     );

@@ -448,8 +448,8 @@ const advanced = [
   {
     id: "tabs", title: "Tabs", aliases: ["tab-container"],
     icon: "Layout", category: "Advanced blocks",
-    description: "Tabbed container for organizing content",
-    preview: "Add tabs — organize content in tabbed sections",
+    description: "Tabbed sections — each tab holds editable text",
+    preview: "Switchable tabbed sections. Each tab holds editable text you can rename; nested blocks per tab aren't supported yet.",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "tabs", ctx.text)); }
   },
   {
