@@ -146,21 +146,21 @@ export default function CommandPalette({ open, onClose, context = {} }) {
             exit={{ opacity: 0, scale: 0.95, y: -8 }}
             transition={{ type: "spring", stiffness: 380, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[580px] flex flex-col overflow-hidden rounded-xl border border-[var(--border-strong)] bg-[var(--elevated)] shadow-[var(--shadow-floating)]"
+            className="relative w-full max-w-[580px] flex flex-col overflow-hidden rounded-xl border border-[var(--border-hover)] bg-[var(--panel)] shadow-[var(--shadow-floating)]"
           >
             {/* Search */}
             <div className="relative flex items-center border-b border-[var(--border)]">
-              <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+              <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 ref={inputRef}
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setHighlightedIndex(0); }}
                 onKeyDown={handleKeyDown}
                 placeholder={query.startsWith(">") ? "Search pages..." : "Search commands and pages..."}
-                className="w-full bg-transparent pl-10 pr-10 py-3 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+                className="w-full bg-transparent pl-10 pr-10 py-3 text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
               />
               {query && (
-                <button onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] cursor-pointer">
+                <button onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer">
                   <X size={14} />
                 </button>
               )}
@@ -169,7 +169,7 @@ export default function CommandPalette({ open, onClose, context = {} }) {
             {/* Results */}
             <div ref={listRef} className="overflow-y-auto max-h-[320px] py-1 scrollbar-none">
               {results.length === 0 ? (
-                <div className="px-4 py-8 text-center text-xs text-[var(--muted)]">
+                <div className="px-4 py-8 text-center text-xs text-[var(--text-muted)]">
                   {query.startsWith(">")
                     ? "No pages found"
                     : "No results — type to search commands, or > to search pages"}
@@ -186,18 +186,18 @@ export default function CommandPalette({ open, onClose, context = {} }) {
                         onClick={() => handleSelect(item)}
                         onMouseEnter={() => setHighlightedIndex(idx)}
                         className={`flex w-full items-center gap-3 px-4 py-2 text-left text-xs transition-colors cursor-pointer ${
-                          isSelected ? "bg-[var(--accent)]/10" : ""
+                          isSelected ? "bg-[var(--accent-soft)]" : ""
                         }`}
                       >
-                        <span className="flex h-6 w-6 items-center justify-center rounded bg-[var(--hover)] text-[var(--secondary)] shrink-0">
+                        <span className="flex h-6 w-6 items-center justify-center rounded bg-[var(--hover)] text-[var(--text-secondary)] shrink-0">
                           {renderIcon(cmd.icon)}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-[var(--text)] truncate">{cmd.title}</div>
-                          <div className="text-[10px] text-[var(--muted)] truncate">{cmd.description || cmd.preview || ""}</div>
+                          <div className="text-[10px] text-[var(--text-muted)] truncate">{cmd.description || cmd.preview || ""}</div>
                         </div>
                         {cmd.shortcut && (
-                          <span className="text-[9px] text-[var(--muted)] font-mono shrink-0">{cmd.shortcut}</span>
+                          <span className="text-[9px] text-[var(--text-muted)] font-mono shrink-0">{cmd.shortcut}</span>
                         )}
                       </button>
                     );
@@ -211,15 +211,15 @@ export default function CommandPalette({ open, onClose, context = {} }) {
                         onClick={() => handleSelect(item)}
                         onMouseEnter={() => setHighlightedIndex(idx)}
                         className={`flex w-full items-center gap-3 px-4 py-2 text-left text-xs transition-colors cursor-pointer ${
-                          isSelected ? "bg-[var(--accent)]/10" : ""
+                          isSelected ? "bg-[var(--accent-soft)]" : ""
                         }`}
                       >
-                        <span className="flex h-6 w-6 items-center justify-center rounded bg-[var(--hover)] text-[var(--secondary)] shrink-0">
+                        <span className="flex h-6 w-6 items-center justify-center rounded bg-[var(--hover)] text-[var(--text-secondary)] shrink-0">
                           {p.icon || renderIcon("FileText")}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-[var(--text)] truncate">{p.title || "Untitled"}</div>
-                          <div className="text-[10px] text-[var(--muted)] truncate">
+                          <div className="text-[10px] text-[var(--text-muted)] truncate">
                             {p.blocks?.length || 0} blocks
                           </div>
                         </div>
@@ -233,7 +233,7 @@ export default function CommandPalette({ open, onClose, context = {} }) {
             </div>
 
             {/* Footer */}
-            <div className="border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2 flex items-center gap-3 text-[10px] text-[var(--muted)]">
+            <div className="border-t border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
               <span className="flex items-center gap-1">
                 <kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono text-[9px]">↑↓</kbd>
                 Navigate

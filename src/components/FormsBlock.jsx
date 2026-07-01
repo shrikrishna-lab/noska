@@ -128,7 +128,7 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
                         }}
                         className="w-16 bg-transparent text-[10px] outline-none"
                       />
-                      <button onClick={() => updateField(f.id, { options: (f.options || []).filter((_, i) => i !== oi) })} className="text-[var(--muted)] hover:text-red-400 cursor-pointer">
+                      <button onClick={() => updateField(f.id, { options: (f.options || []).filter((_, i) => i !== oi) })} className="text-[var(--muted)] hover:text-[var(--danger)] cursor-pointer">
                         <Trash2 size={10} />
                       </button>
                     </div>
@@ -155,7 +155,7 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
                 </select>
               </div>
             </div>
-            <button onClick={() => removeField(f.id)} className="mt-1 text-[var(--muted)] hover:text-red-400 cursor-pointer">
+            <button onClick={() => removeField(f.id)} className="mt-1 text-[var(--muted)] hover:text-[var(--danger)] cursor-pointer">
               <Trash2 size={13} />
             </button>
           </div>
@@ -172,7 +172,7 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
       <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-green-400 flex items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--success)] flex items-center gap-1">
               <Send size={12} /> Submission received
             </span>
             <span className="text-[10px] text-[var(--muted)]">({submissions.length + 1} total)</span>
@@ -226,13 +226,13 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
           <div key={f.id} className="space-y-1">
             <label className="flex items-center gap-1 text-[11px] font-medium text-[var(--secondary)]">
               {f.label}
-              {f.required && <span className="text-red-400">*</span>}
+              {f.required && <span className="text-[var(--danger)]">*</span>}
             </label>
             {f.type === "textarea" ? (
               <textarea
                 value={formData[f.id] || ""}
                 onChange={(e) => { setFormData({ ...formData, [f.id]: e.target.value }); setErrors({ ...errors, [f.id]: null }); }}
-                className={`w-full rounded border ${errors[f.id] ? "border-red-400" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)] resize-none`}
+                className={`w-full rounded border ${errors[f.id] ? "border-[var(--danger)]" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)] resize-none`}
                 rows={3}
                 placeholder={`Enter ${f.label.toLowerCase()}...`}
               />
@@ -240,7 +240,7 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
               <select
                 value={formData[f.id] || ""}
                 onChange={(e) => { setFormData({ ...formData, [f.id]: e.target.value }); setErrors({ ...errors, [f.id]: null }); }}
-                className={`w-full rounded border ${errors[f.id] ? "border-red-400" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]`}
+                className={`w-full rounded border ${errors[f.id] ? "border-[var(--danger)]" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]`}
               >
                 <option value="">Select...</option>
                 {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
@@ -260,11 +260,11 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
                 type={f.type === "number" ? "number" : f.type === "email" ? "email" : "text"}
                 value={formData[f.id] || ""}
                 onChange={(e) => { setFormData({ ...formData, [f.id]: e.target.value }); setErrors({ ...errors, [f.id]: null }); }}
-                className={`w-full rounded border ${errors[f.id] ? "border-red-400" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]`}
+                className={`w-full rounded border ${errors[f.id] ? "border-[var(--danger)]" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]`}
                 placeholder={`Enter ${f.label.toLowerCase()}...`}
               />
             )}
-            {errors[f.id] && <p className="text-[10px] text-red-400">{errors[f.id]}</p>}
+            {errors[f.id] && <p className="text-[10px] text-[var(--danger)]">{errors[f.id]}</p>}
           </div>
         ))}
       </div>

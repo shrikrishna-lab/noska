@@ -12,10 +12,10 @@ const ROLE_OPTIONS = [
 
 function RoleBadge({ role }) {
   const colorMap = {
-    owner: 'text-amber-400 bg-amber-400/10',
-    admin: 'text-purple-400 bg-purple-400/10',
-    editor: 'text-blue-400 bg-blue-400/10',
-    commenter: 'text-green-400 bg-green-400/10',
+    owner: 'text-[var(--warning)] bg-[var(--warning)]/10',
+    admin: 'text-[var(--accent-deep)] bg-[var(--accent-deep)]/10',
+    editor: 'text-[var(--noska-blue)] bg-[var(--noska-blue)]/10',
+    commenter: 'text-[var(--success)] bg-[var(--success)]/10',
     viewer: 'text-[var(--muted)] bg-[var(--surface-3)]'
   };
   return (
@@ -159,7 +159,7 @@ export default function PermissionPanel({ pageId, onClose }) {
               {perm.role !== 'owner' && (
                 <button
                   onClick={() => handleRemove(perm.user_id)}
-                  className="p-1 rounded text-[var(--muted)] hover:text-red-400 hover:bg-red-400/10 transition"
+                  className="p-1 rounded text-[var(--muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 transition"
                   title="Remove collaborator"
                 >
                   <X size={10} />

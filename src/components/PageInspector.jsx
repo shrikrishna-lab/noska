@@ -234,7 +234,7 @@ function OverviewTab({ page, pages, relations, versionsCount, auditCount, aiEven
           {knowledge.metrics.map(m => (
             <div key={m.label} className="flex items-center justify-between text-[10px]">
               <span className="flex items-center gap-1 text-[var(--muted)]" title={m.detail}>
-                {m.pass ? <CheckCircle size={9} className="text-green-400 shrink-0" /> : <XCircle size={9} className="text-rose-400 shrink-0" />}
+                {m.pass ? <CheckCircle size={9} className="text-[var(--accent)] shrink-0" /> : <XCircle size={9} className="text-[var(--secondary)] shrink-0" />}
                 <span className="truncate">{m.label}</span>
               </span>
               <span className="text-[var(--text)] shrink-0 ml-1">+{m.weight}</span>

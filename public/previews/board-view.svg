@@ -1,0 +1,15 @@
+<svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="120" rx="8" fill="#F7F7F7"/>
+  <!-- Column 1 -->
+  <rect x="12" y="16" width="54" height="12" rx="3" fill="#D0D0D0"/>
+  <rect x="12" y="32" width="54" height="28" rx="4" fill="#E8E8E8"/>
+  <rect x="12" y="64" width="54" height="28" rx="4" fill="#E8E8E8"/>
+  <!-- Column 2 -->
+  <rect x="72" y="16" width="54" height="12" rx="3" fill="#D0D0D0"/>
+  <rect x="72" y="32" width="54" height="28" rx="4" fill="#E8E8E8"/>
+  <rect x="72" y="64" width="54" height="28" rx="4" fill="#E8E8E8"/>
+  <!-- Column 3 -->
+  <rect x="132" y="16" width="54" height="12" rx="3" fill="#D0D0D0"/>
+  <rect x="132" y="32" width="54" height="28" rx="4" fill="#E8E8E8"/>
+  <text x="16" y="110" font-family="system-ui" font-size="10" fill="#999">Kanban board</text>
+</svg>

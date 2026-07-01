@@ -36,7 +36,7 @@ export default function CollabPresenceBar({ users = [], ownStatus = 'viewing', p
             {u.userAvatar || '👤'}
             <span
               className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-[var(--surface)] ${
-                u.status === 'editing' ? 'bg-emerald-400' : u.status === 'idle' ? 'bg-amber-400' : 'bg-blue-400'
+                u.status === 'editing' ? 'bg-[var(--success)]' : u.status === 'idle' ? 'bg-[var(--warning)]' : 'bg-[var(--noska-blue)]'
               }`}
             />
           </span>

@@ -46,10 +46,10 @@ export default function Topbar({
   return (
     <header className="flex h-11 shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg)] px-3">
       {!sidebarOpen && <IconButton icon={AnimatedMenu} label="Open sidebar" onClick={onSidebar} />}
-      <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] text-[var(--secondary)]">
+      <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] text-[var(--text-secondary)]">
         <span>{page.icon}</span>
         <span className="truncate text-[var(--text)]">{page.title || "Untitled"}</span>
-        <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-[var(--muted)]">
+        <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">
           <AnimatedLock size={10} />
           Private
         </span>
@@ -65,14 +65,14 @@ export default function Topbar({
                 key={mode}
                 onClick={() => onPageModeChange?.(mode)}
                 className={`px-3 py-1 text-[11px] h-full flex items-center rounded-md relative z-10 transition-colors duration-150 outline-none ${
-                  active ? "text-[var(--text)] font-semibold" : "text-[var(--secondary)] hover:text-[var(--text)]"
+                  active ? "text-[var(--text)] font-semibold" : "text-[var(--text-secondary)] hover:text-[var(--text)]"
                 }`}
               >
                 {active && (
                   <motion.div
                     layoutId="topbar-mode-pill"
                     transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                    className="absolute inset-0 bg-[var(--surface)] border border-[var(--border-strong)] rounded-md z-0 shadow-sm"
+                    className="absolute inset-0 bg-[var(--surface-2)] border border-[var(--border-hover)] rounded-md z-0 shadow-sm"
                   />
                 )}
                 <span className="relative z-10">{label}</span>
@@ -89,10 +89,10 @@ export default function Topbar({
         </div>
       )}
 
-      <span className="mr-1 text-xs text-[var(--muted)] shrink-0">✓ {saveState}</span>
+      <span className="mr-1 text-xs text-[var(--text-muted)] shrink-0">✓ {saveState}</span>
       <button
         onClick={onShare}
-        className="flex h-7 items-center gap-1 rounded-md px-2 text-[13px] text-[var(--secondary)] hover:bg-[var(--hover)] shrink-0"
+        className="flex h-7 items-center gap-1 rounded-md px-2 text-[13px] text-[var(--text-secondary)] hover:bg-[var(--hover)] shrink-0"
       >
         <AnimatedLock size={14} />
         Share
@@ -116,7 +116,7 @@ export default function Topbar({
       <IconButton icon={AnimatedCanvas} label="Reading Mode" onClick={onReadingModeToggle} />
       <button
         onClick={() => onThemeChange(dark ? "light" : "dark")}
-        className="grid h-7 w-7 place-items-center rounded-md text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition duration-200"
+        className="grid h-7 w-7 place-items-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition duration-200"
         title="Toggle theme"
       >
         <AnimatedTheme size={16} active={dark} />

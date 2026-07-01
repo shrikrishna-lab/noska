@@ -38,7 +38,7 @@ export default function WorkspaceJoinBar({ onOpenSettings }) {
         className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)]/60 hover:bg-[var(--hover)] px-2 py-1 text-[10px] text-[var(--text-secondary)] transition group"
         title="Leave collaboration workspace"
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" />
         <Users size={10} />
         <span>Online</span>
         <span className="text-[9px] text-[var(--muted)] ml-0.5">· Leave</span>
@@ -60,7 +60,7 @@ export default function WorkspaceJoinBar({ onOpenSettings }) {
         className="p-1.5 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition"
         title="Copy workspace link to invite others"
       >
-        {copied ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
+        {copied ? <Check size={10} className="text-[var(--success)]" /> : <Copy size={10} />}
       </button>
     </div>
   );

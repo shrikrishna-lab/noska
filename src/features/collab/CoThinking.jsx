@@ -177,7 +177,7 @@ export default function CoThinking({
             <motion.div
               animate={{ opacity: [1, 0.5, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
-              className="flex items-center gap-1.5 text-xs text-emerald-400"
+              className="flex items-center gap-1.5 text-xs text-[var(--success)]"
             >
               <Wifi size={12} />
               Live
@@ -213,7 +213,7 @@ export default function CoThinking({
                 onClick={copyLink}
                 className="shrink-0 grid h-6 w-6 place-items-center rounded text-[var(--muted)] hover:text-[var(--text)]"
               >
-                {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                {copied ? <Check size={13} className="text-[var(--success)]" /> : <Copy size={13} />}
               </button>
             </div>
 
@@ -255,7 +255,7 @@ export default function CoThinking({
                 onClick={endSession}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
-                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10"
+                className="flex items-center gap-1.5 rounded-lg border border-[var(--danger)]/30 px-3 py-1.5 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger)]/10"
               >
                 <WifiOff size={12} />
                 End Session

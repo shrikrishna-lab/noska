@@ -336,11 +336,11 @@ export default function Sidebar({
               setSwitcherOpen(o => !o);
               setAppMenuOpen(false);
             }}
-            className="flex-grow min-w-0 flex items-center gap-2.5 px-2 py-1 rounded-lg hover:bg-[var(--hover)] transition duration-150 outline-none cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-noska-blue"
+            className="flex-grow min-w-0 flex items-center gap-2.5 px-2 py-1 rounded-lg hover:bg-[var(--hover)] transition duration-150 outline-none cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-[var(--noska-blue)]"
             title="Switch Workspace"
           >
             {/* Framer-style Icon Box */}
-            <div className="w-8 h-8 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center p-1.5 shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <div className="w-8 h-8 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center p-1.5 shrink-0 shadow-[inset_0_1px_0_var(--glass-highlight)]">
               <img src="/logo.png" className="w-full h-full object-contain pointer-events-none" alt="Noska Logo" />
             </div>
             
@@ -362,7 +362,7 @@ export default function Sidebar({
               setAppMenuOpen(o => !o);
               setSwitcherOpen(false);
             }}
-            className="w-8 h-8 rounded-lg hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] transition duration-150 outline-none flex items-center justify-center cursor-pointer shrink-0 focus-visible:ring-1 focus-visible:ring-noska-blue"
+            className="w-8 h-8 rounded-lg hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] transition duration-150 outline-none flex items-center justify-center cursor-pointer shrink-0 focus-visible:ring-1 focus-visible:ring-[var(--noska-blue)]"
             title="Application Menu"
           >
             <AnimatedMenu size={14} />
@@ -448,7 +448,7 @@ export default function Sidebar({
                                   }`}
                                 >
                                   <span className="flex items-center gap-1.5 truncate">
-                                    {subItem.checked && <span className="text-noska-blue font-bold shrink-0">✓</span>}
+                                    {subItem.checked && <span className="text-[var(--noska-blue)] font-bold shrink-0">✓</span>}
                                     <span className="truncate">{subItem.label}</span>
                                   </span>
                                   {subItem.shortcut && (
@@ -484,7 +484,7 @@ export default function Sidebar({
               >
                 {/* Current Workspace Info */}
                 <div className="flex items-center gap-2.5 px-1">
-                  <div className="h-8.5 w-8.5 rounded-lg bg-gradient-to-tr from-noska-blue to-cyan-500 flex items-center justify-center text-sm font-bold text-white shadow-sm shrink-0">
+                  <div className="h-8.5 w-8.5 rounded-lg bg-gradient-to-tr from-[var(--noska-blue)] to-[var(--noska-blue-light)] flex items-center justify-center text-sm font-bold text-white shadow-sm shrink-0">
                     {workspaceName.charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -494,14 +494,14 @@ export default function Sidebar({
                   <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       onClick={() => { setSwitcherOpen(false); onSettings(); }}
-                      className="h-6.5 w-6.5 rounded-md hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-noska-blue"
+                      className="h-6.5 w-6.5 rounded-md hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)]"
                       title="Workspace Settings"
                     >
                       <AnimatedMenu size={12} />
                     </button>
                     <button
                       onClick={() => { setSwitcherOpen(false); onShare?.(); }}
-                      className="h-6.5 w-6.5 rounded-md hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-noska-blue"
+                      className="h-6.5 w-6.5 rounded-md hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)]"
                       title="Invite Members / Share"
                     >
                       <Users size={12} />
@@ -523,19 +523,19 @@ export default function Sidebar({
                           setWorkspaceName(ws);
                           setSwitcherOpen(false);
                         }}
-                        className={`w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-noska-blue ${
+                        className={`w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] ${
                           isActive ? "bg-[var(--hover)] text-[var(--text)] font-semibold" : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate">
                           <div className={`h-5 w-5 rounded flex items-center justify-center text-[10px] font-bold text-[var(--text)] shrink-0 ${
-                            isActive ? "bg-noska-blue" : "bg-[var(--surface-3)]"
+                            isActive ? "bg-[var(--noska-blue)]" : "bg-[var(--surface-3)]"
                           }`}>
                             {ws.charAt(0)}
                           </div>
                           <span className="truncate text-[12px]">{ws}</span>
                         </div>
-                        {isActive && <span className="text-noska-blue font-bold shrink-0">✓</span>}
+                        {isActive && <span className="text-[var(--noska-blue)] font-bold shrink-0">✓</span>}
                       </button>
                     );
                   })}
@@ -554,7 +554,7 @@ export default function Sidebar({
                       }
                       setSwitcherOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-noska-blue text-[11.5px]"
+                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] text-[11.5px]"
                   >
                     <AnimatedPlus size={11} className="text-[var(--text-secondary)]" />
                     <span>New workspace</span>
@@ -573,7 +573,7 @@ export default function Sidebar({
                       }
                       setSwitcherOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-noska-blue text-[11.5px]"
+                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] text-[11.5px]"
                   >
                     <Users size={11} className="text-[var(--muted)]" />
                     <span>Add new account</span>
@@ -585,9 +585,9 @@ export default function Sidebar({
                       }
                       setSwitcherOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-rose-400 hover:bg-rose-500/10 text-left transition duration-100 font-semibold cursor-pointer outline-none focus:ring-1 focus:ring-rose-400 text-[11.5px]"
+                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--danger)] hover:bg-[var(--danger)]/10 text-left transition duration-100 font-semibold cursor-pointer outline-none focus:ring-1 focus:ring-[var(--danger)] text-[11.5px]"
                   >
-                    <X size={11} className="text-rose-400 shrink-0" />
+                    <X size={11} className="text-[var(--danger)] shrink-0" />
                     <span>Log out</span>
                   </button>
                 </div>
@@ -604,7 +604,7 @@ export default function Sidebar({
                       <div className="font-bold text-[var(--text)] truncate leading-none text-[11.5px]">{activeAccount.name}</div>
                       <div className="text-[9px] text-[var(--muted)] truncate mt-1">{activeAccount.email}</div>
                     </div>
-                    <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.5 rounded-md shrink-0 font-bold leading-none">Active</span>
+                    <span className="text-[8px] bg-[var(--success)]/20 text-[var(--success)] border border-[var(--success)]/30 px-1 py-0.5 rounded-md shrink-0 font-bold leading-none">Active</span>
                   </div>
 
                   {accounts.filter(a => !a.active).map((acc, i) => (
@@ -637,7 +637,7 @@ export default function Sidebar({
         <div className="px-3 pt-3 pb-2 select-none shrink-0 bg-[var(--sidebar)]">
           <button
             onClick={onSearch}
-            className="flex h-[34px] w-full items-center gap-2 rounded-lg bg-[var(--surface-1)] border border-[var(--border)] px-3 text-left hover:bg-[var(--hover)] hover:border-[var(--border)] transition duration-150 outline-none cursor-pointer group focus-visible:ring-1 focus-visible:ring-noska-blue"
+            className="flex h-[34px] w-full items-center gap-2 rounded-lg bg-[var(--surface-1)] border border-[var(--border)] px-3 text-left hover:bg-[var(--hover)] hover:border-[var(--border)] transition duration-150 outline-none cursor-pointer group focus-visible:ring-1 focus-visible:ring-[var(--noska-blue)]"
           >
             <AnimatedSearch size={13} className="text-[var(--text-secondary)] group-hover:text-[var(--text)] shrink-0" />
             <span className="flex-1 text-[12.5px] text-[var(--text-secondary)] group-hover:text-[var(--text)] font-medium leading-none">Search workspace...</span>
@@ -661,7 +661,7 @@ export default function Sidebar({
               <div className="text-[10px] text-[var(--muted)] px-3.5 py-1.5 italic">Starred pages appear here</div>
             ) : (
               pages.filter(p => p.favorite && !p.trashed).map(p => (
-                <NoskaNavItem key={p.id} icon={(props) => <Star {...props} size={11} className="fill-yellow-500 text-yellow-500" />} label={p.title || "Untitled"} onClick={() => onSelect(p.id)} active={p.id === activeId} compact={true} />
+                <NoskaNavItem key={p.id} icon={(props) => <Star {...props} size={11} className="fill-[var(--warning)] text-[var(--warning)]" />} label={p.title || "Untitled"} onClick={() => onSelect(p.id)} active={p.id === activeId} compact={true} />
               ))
             )}
           </NoskaSection>
@@ -770,7 +770,7 @@ export default function Sidebar({
           {/* Premium "New Creation" Action Button */}
           <button
             onClick={() => onNew("blank")}
-            className="flex h-[32px] w-full items-center gap-1.5 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white border border-[var(--border)] px-2.5 text-left text-[11.5px] hover:-translate-y-px hover:shadow-md active:scale-[0.98] transition-all duration-150 shadow-sm outline-none focus:ring-2 focus:ring-noska-blue cursor-pointer font-semibold"
+            className="flex h-[32px] w-full items-center gap-1.5 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white border border-[var(--border)] px-2.5 text-left text-[11.5px] hover:-translate-y-px hover:shadow-md active:scale-[0.98] transition-all duration-150 shadow-sm outline-none focus:ring-2 focus:ring-[var(--noska-blue)] cursor-pointer font-semibold"
           >
             <AnimatedPlus size={11} className="shrink-0 text-white" />
             <span className="flex-1 text-white font-medium truncate">New Creation</span>
@@ -837,7 +837,7 @@ function RecentsPageItem({ page, active, onSelect, onRemove }) {
           e.stopPropagation();
           onRemove(page.id);
         }}
-        className="mr-1.5 grid h-5 w-5 place-items-center rounded-md opacity-0 group-hover:opacity-100 hover:bg-[var(--hover)] text-[var(--muted)] hover:text-rose-400 z-10 transition-all outline-none cursor-pointer"
+        className="mr-1.5 grid h-5 w-5 place-items-center rounded-md opacity-0 group-hover:opacity-100 hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--danger)] z-10 transition-all outline-none cursor-pointer"
         title="Remove from recents"
       >
         <X size={10} />
@@ -902,7 +902,7 @@ function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ari
           className="absolute inset-0 bg-[var(--active)] border border-[var(--border)] shadow-sm rounded-lg z-0"
         />
       )}
-      <Icon size={compact ? 11 : 13} className={`shrink-0 z-10 transition-colors ${active ? "text-noska-blue" : "text-[var(--text-secondary)]"}`} />
+      <Icon size={compact ? 11 : 13} className={`shrink-0 z-10 transition-colors ${active ? "text-[var(--noska-blue)]" : "text-[var(--text-secondary)]"}`} />
       <span className="min-w-0 flex-1 z-10 relative">
         <span className={`block truncate ${active ? "font-semibold" : "font-normal"}`}>{label}</span>
         {subtitle && <span className="block truncate text-[9px] text-[var(--muted)] leading-none mt-0.5">{subtitle}</span>}
@@ -938,7 +938,7 @@ export function PageRow({ page, active, onSelect, onPatchPage, collapsed, onColl
         title="Favorite"
         onClick={() => onPatchPage(page.id, { favorite: !page.favorite })}
       >
-        <Star size={14} className={page.favorite ? "fill-yellow-400 text-yellow-400" : ""} />
+        <Star size={14} className={page.favorite ? "fill-[var(--warning)] text-[var(--warning)]" : ""} />
       </button>
     </div>
   );

@@ -47,10 +47,10 @@ function sm2(quality, review = {}) {
 /* ─── Rating buttons ─── */
 
 const RATINGS = [
-  { quality: 1, label: "Again", color: "text-red-400", bg: "bg-red-500/10 hover:bg-red-500/20", key: "1" },
-  { quality: 3, label: "Hard", color: "text-amber-400", bg: "bg-amber-500/10 hover:bg-amber-500/20", key: "2" },
-  { quality: 4, label: "Good", color: "text-emerald-400", bg: "bg-emerald-500/10 hover:bg-emerald-500/20", key: "3" },
-  { quality: 5, label: "Easy", color: "text-blue-400", bg: "bg-blue-500/10 hover:bg-blue-500/20", key: "4" }
+  { quality: 1, label: "Again", color: "text-[var(--danger)]", bg: "bg-[var(--danger)]/10 hover:bg-[var(--danger)]/20", key: "1" },
+  { quality: 3, label: "Hard", color: "text-[var(--accent)]", bg: "bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20", key: "2" },
+  { quality: 4, label: "Good", color: "text-[var(--success)]", bg: "bg-[var(--success)]/10 hover:bg-[var(--success)]/20", key: "3" },
+  { quality: 5, label: "Easy", color: "text-[var(--noska-blue)]", bg: "bg-[var(--noska-blue)]/10 hover:bg-[var(--noska-blue)]/20", key: "4" }
 ];
 
 /* ─── main component ─── */
@@ -190,12 +190,12 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
           <div className="p-6 space-y-5">
             <div className="grid grid-cols-3 gap-3">
               <StatCard icon={Brain} label="Total Cards" value={allReviewableCards.length} color="text-[var(--accent)]" />
-              <StatCard icon={Clock} label="Due Today" value={dueCards.length} color="text-amber-400" />
-              <StatCard icon={Trophy} label="Mastery" value={`${mastery}%`} color="text-emerald-400" />
+              <StatCard icon={Clock} label="Due Today" value={dueCards.length} color="text-[var(--accent)]" />
+              <StatCard icon={Trophy} label="Mastery" value={`${mastery}%`} color="text-[var(--success)]" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <StatCard icon={Flame} label="Streak" value={streak} color="text-orange-400" />
-              <StatCard icon={Zap} label="Reviewed Today" value={sessionStats.reviewed} color="text-blue-400" />
+              <StatCard icon={Flame} label="Streak" value={streak} color="text-[var(--warning)]" />
+              <StatCard icon={Zap} label="Reviewed Today" value={sessionStats.reviewed} color="text-[var(--noska-blue)]" />
             </div>
             {allReviewableCards.length === 0 && (
               <div className="text-center py-6 text-sm text-[var(--muted)]">

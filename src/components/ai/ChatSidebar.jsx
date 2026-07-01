@@ -51,14 +51,14 @@ function ChatCard({ chat, active, onSelect, onRename, onArchive, onDelete, onDup
     >
       {/* Icon */}
       <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-        chat.chatType === 'shared' ? 'bg-emerald-500/10' :
-        chat.chatType === 'collab' ? 'bg-purple-500/10' :
-        chat.pinned ? 'bg-amber-500/10' : 'bg-[var(--surface-3)]'
+        chat.chatType === 'shared' ? 'bg-[var(--success)]/10' :
+        chat.chatType === 'collab' ? 'bg-[var(--accent-soft)]' :
+        chat.pinned ? 'bg-[var(--accent)]/10' : 'bg-[var(--surface-3)]'
       }`}>
         <GroupIcon size={10} className={
-          chat.chatType === 'shared' ? 'text-emerald-400' :
-          chat.chatType === 'collab' ? 'text-purple-400' :
-          chat.pinned ? 'text-amber-400' : 'text-[var(--muted)]'
+          chat.chatType === 'shared' ? 'text-[var(--success)]' :
+          chat.chatType === 'collab' ? 'text-[var(--accent-deep)]' :
+          chat.pinned ? 'text-[var(--accent)]' : 'text-[var(--muted)]'
         } />
       </div>
 
@@ -82,7 +82,7 @@ function ChatCard({ chat, active, onSelect, onRename, onArchive, onDelete, onDup
               {chat.pageTitle && (
                 <span className="text-[8px] text-[var(--muted)] truncate max-w-[60px]">· {chat.pageTitle}</span>
               )}
-              {chat.pinned && <Pin size={7} className="text-amber-400" />}
+              {chat.pinned && <Pin size={7} className="text-[var(--accent)]" />}
             </div>
           </>
         )}
@@ -106,14 +106,14 @@ function ChatCard({ chat, active, onSelect, onRename, onArchive, onDelete, onDup
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onArchive?.(chat.id); }}
-          className="p-0.5 rounded text-[var(--muted)] hover:text-amber-400 hover:bg-amber-400/10 transition"
+          className="p-0.5 rounded text-[var(--muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 transition"
           title={chat.archived ? 'Restore' : 'Archive'}
         >
           {chat.archived ? <ArchiveRestore size={9} /> : <Archive size={9} />}
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete?.(chat.id); }}
-          className="p-0.5 rounded text-[var(--muted)] hover:text-red-400 hover:bg-red-400/10 transition"
+          className="p-0.5 rounded text-[var(--muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 transition"
           title="Delete"
         >
           <Trash2 size={9} />

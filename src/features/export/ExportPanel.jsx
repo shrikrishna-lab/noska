@@ -310,7 +310,7 @@ export default function ExportPanel({ page, pages, onClose, onToast }) {
             whileTap={{ scale: 0.97 }}
             className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-4 py-2 text-xs font-medium text-[var(--text)] hover:bg-[var(--hover)]"
           >
-            {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+            {copied ? <Check size={13} className="text-[var(--success)]" /> : <Copy size={13} />}
             {copied ? "Copied" : "Copy"}
           </motion.button>
           <motion.button

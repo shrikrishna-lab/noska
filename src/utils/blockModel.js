@@ -83,6 +83,14 @@ export const BLOCK_TYPES = {
   table_of_contents: { label: 'Table of contents', icon: '📑', props: { pageIds: [] } },
   tabs:          { label: 'Tabs',          icon: '📂', props: { tabs: [] } },
   form:          { label: 'Form',          icon: '📋', props: { formConfig: { fields: [], submitButtonText: 'Submit', anonymous: false, showResults: false }, submissions: [] } },
+  'toggle-h1':   { label: 'Toggle heading 1', icon: '▶', props: { richText: [] } },
+  'toggle-h2':   { label: 'Toggle heading 2', icon: '▶', props: { richText: [] } },
+  'toggle-h3':   { label: 'Toggle heading 3', icon: '▶', props: { richText: [] } },
+  'ai-block':    { label: 'AI block',      icon: '🤖', props: { richText: [] } },
+  mermaid:       { label: 'Mermaid',        icon: '📊', props: { richText: [] } },
+  'ai-meeting':  { label: 'AI meeting',     icon: '🎙', props: { richText: [] } },
+  'inline-equation': { label: 'Inline equation', icon: '∑', props: { richText: [] } },
+  'block-equation': { label: 'Block equation', icon: '∑', props: { richText: [] } },
 };
 
 export const BLOCK_TYPE_LIST = Object.keys(BLOCK_TYPES);
@@ -320,6 +328,8 @@ export function makeEmptyDatabase() {
       { id: 'done', name: 'Done', type: 'checkbox' },
       { id: 'notes', name: 'Notes', type: 'text' }
     ],
-    rows: []
+    rows: [],
+    views: [{ id: 'v-default', name: 'Table', type: 'table' }],
+    activeViewId: 'v-default'
   };
 }

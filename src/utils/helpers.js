@@ -5,6 +5,7 @@ import {
   getBlockTitle, setBlockTitle, makeEmptyDatabase, insertBetween,
   getPagePermission, resolvePermission
 } from './blockModel.js';
+import katex from 'katex';
 
 export { uid, now, createBlock, getBlock, getChildren, getAncestors,
   getDescendants, getRootPages, addChild, insertChildAt, removeChild,
@@ -95,6 +96,7 @@ export function blockFor(type, text = '') {
     'toggle-h1': 'toggle-h1', 'toggle-h2': 'toggle-h2', 'toggle-h3': 'toggle-h3',
     'ai-block': 'ai-block', mermaid: 'mermaid', 'ai-meeting': 'ai-meeting',
     'inline-equation': 'inline-equation',
+    'block-equation': 'block-equation',
     'embed-generic': 'embed-generic',
     'google-drive': 'embed-generic', tweet: 'embed-generic',
     'github-gist': 'embed-generic', 'google-maps': 'embed-generic',
@@ -136,6 +138,13 @@ export function blockFor(type, text = '') {
   else if (type.startsWith('toggle-h') || type === 'ai-block' || type === 'mermaid' || type === 'ai-meeting' || type === 'inline-equation') { props.richText = [{ text }]; }
   else { props.richText = [{ text }]; }
   const block = createBlock(type, { properties: props });
+  if (type === '2-columns' || type === '3-columns' || type === '4-columns' || type === '5-columns') block.columns = props.columns;
+  if (type === 'database' || type === 'database-inline' || type === 'database-full') block.database = props;
+  if (type === 'tabs') { block.tabs = props.tabs; block.activeTabIdx = 0; }
+  if (type === 'button') block.templateBlocks = props.templateBlocks || [];
+  if (type === 'form') block.formConfig = props.formConfig;
+  if (type === 'synced-block') block.syncedGroupId = crypto.randomUUID();
+  if (type === 'breadcrumb' || type === 'table-of-contents') block.pageIds = props.pageIds || [];
   block.text = text;
   if (type === 'table') block.table = props.table;
   return block;
@@ -231,6 +240,17 @@ export function renderInlineMarkdown(text) {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/~~(.+?)~~/g, '<s>$1</s>')
     .replace(/`(.+?)`/g, '<code class="inline-code">$1</code>')
-    .replace(/\$\$(.+?)\$\$/g, '<span class="inline-equation">$1</span>');
+    .replace(/\$\$(.+?)\$\$/g, (_, eq) => {
+      try {
+        return katex.renderToString(eq, { throwOnError: false, displayMode: false });
+      } catch {
+        return `<span class="inline-equation">${eq}</span>`;
+      }
+    });
+  const colorNames = ["red","blue","green","orange","purple","pink","brown","gray","yellow","teal","indigo","coral","rose","lime","mint","sky","lavender","peach","charcoal"];
+  colorNames.forEach(c => {
+    html = html.replace(new RegExp(`@@${c}:([^@]+)@@`, 'g'), `<span style="color:var(--clr-${c})">$1</span>`);
+    html = html.replace(new RegExp(`@@bg-${c}:([^@]+)@@`, 'g'), `<span style="background:var(--clr-bg-${c});padding:0 3px;border-radius:3px">$1</span>`);
+  });
   return html;
 }

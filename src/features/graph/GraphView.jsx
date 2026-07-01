@@ -6,6 +6,7 @@ import GraphMiniMap from "./GraphMiniMap";
 import GraphSearch from "./GraphSearch";
 import GraphBreadcrumb from "./GraphBreadcrumb";
 import GraphLegend, { getPageCluster } from "./GraphLegend";
+import GraphInfoPanel from "./GraphInfoPanel";
 import { autoArrangeLayout } from "./graphPhysics";
 import { getAllRelations } from "../../utils/pageLinks";
 
@@ -17,6 +18,9 @@ export default function GraphView({ pages, activeId, onSelect }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [linkFilters, setLinkFilters] = useState({ hierarchy: true, tag: true, mention: true });
+  const [tagFilter, setTagFilter] = useState(null);
   
   // Respect prefers-reduced-motion setting
   const [animated, setAnimated] = useState(() => {
@@ -131,7 +135,7 @@ export default function GraphView({ pages, activeId, onSelect }) {
     
     visiblePages.forEach((page) => {
       // Parent-child relationships
-      if (page.parentId && visibleIds.has(page.parentId)) {
+      if (linkFilters.hierarchy && page.parentId && visibleIds.has(page.parentId)) {
         const childPos = nodePositions[page.id];
         const parentPos = nodePositions[page.parentId];
         if (childPos && parentPos) {
@@ -149,53 +153,58 @@ export default function GraphView({ pages, activeId, onSelect }) {
       // Shared tags relationships
       visiblePages.forEach((other) => {
         if (other.id === page.id) return;
-        const hasSharedTag = page.tags?.some((t) => other.tags?.includes(t));
-        if (hasSharedTag) {
-          const exists = calculatedLinks.some(
-            (l) => l.id === `${page.id}-${other.id}` || l.id === `${other.id}-${page.id}`
-          );
-          if (!exists) {
-            const pos1 = nodePositions[page.id];
-            const pos2 = nodePositions[other.id];
-            if (pos1 && pos2) {
-              calculatedLinks.push({
-                id: `${page.id}-${other.id}`,
-                x1: pos1.x + 80,
-                y1: pos1.y + 20,
-                x2: pos2.x + 80,
-                y2: pos2.y + 20,
-                type: "tag"
-              });
+        const sharedTags = page.tags?.filter((t) => other.tags?.includes(t)) || [];
+        if (linkFilters.tag && sharedTags.length > 0) {
+          const matchTag = !tagFilter || sharedTags.includes(tagFilter);
+          if (matchTag) {
+            const exists = calculatedLinks.some(
+              (l) => l.id === `${page.id}-${other.id}` || l.id === `${other.id}-${page.id}`
+            );
+            if (!exists) {
+              const pos1 = nodePositions[page.id];
+              const pos2 = nodePositions[other.id];
+              if (pos1 && pos2) {
+                calculatedLinks.push({
+                  id: `${page.id}-${other.id}`,
+                  x1: pos1.x + 80,
+                  y1: pos1.y + 20,
+                  x2: pos2.x + 80,
+                  y2: pos2.y + 20,
+                  type: "tag"
+                });
+              }
             }
           }
         }
       });
 
       // [[ mention relationships
-      const relations = getAllRelations(page.id, pages);
-      relations.outgoing.forEach((link) => {
-        if (!visibleIds.has(link.pageId)) return;
-        const linkId = `${page.id}-${link.pageId}`;
-        const exists = calculatedLinks.some(
-          (l) => l.id === linkId || l.id === `${link.pageId}-${page.id}`
-        );
-        if (exists) return;
-        const pos1 = nodePositions[page.id];
-        const pos2 = nodePositions[link.pageId];
-        if (pos1 && pos2) {
-          calculatedLinks.push({
-            id: linkId,
-            x1: pos1.x + 80,
-            y1: pos1.y + 20,
-            x2: pos2.x + 80,
-            y2: pos2.y + 20,
-            type: "mention"
-          });
-        }
-      });
+      if (linkFilters.mention) {
+        const relations = getAllRelations(page.id, pages);
+        relations.outgoing.forEach((link) => {
+          if (!visibleIds.has(link.pageId)) return;
+          const linkId = `${page.id}-${link.pageId}`;
+          const exists = calculatedLinks.some(
+            (l) => l.id === linkId || l.id === `${link.pageId}-${page.id}`
+          );
+          if (exists) return;
+          const pos1 = nodePositions[page.id];
+          const pos2 = nodePositions[link.pageId];
+          if (pos1 && pos2) {
+            calculatedLinks.push({
+              id: linkId,
+              x1: pos1.x + 80,
+              y1: pos1.y + 20,
+              x2: pos2.x + 80,
+              y2: pos2.y + 20,
+              type: "mention"
+            });
+          }
+        });
+      }
     });
     return calculatedLinks;
-  }, [pages, nodePositions]);
+  }, [pages, nodePositions, linkFilters, tagFilter]);
 
   // Center camera focused on a specific selected node
   const centerOnNode = (nodeId) => {
@@ -208,7 +217,12 @@ export default function GraphView({ pages, activeId, onSelect }) {
 
     setPan({ x: targetPanX, y: targetPanY });
     setScale(targetScale);
+    setSelectedNodeId(nodeId);
     onSelect?.(nodeId);
+  };
+
+  const handleNodeSelect = (nodeId) => {
+    setSelectedNodeId(prev => prev === nodeId ? null : nodeId);
   };
 
   // Center Graph
@@ -311,7 +325,7 @@ export default function GraphView({ pages, activeId, onSelect }) {
         showLabels={showLabels}
         animated={animated}
         onNodeDrag={handleNodeDrag}
-        onNodeSelect={centerOnNode}
+        onNodeSelect={onSelect}
       />
 
       {/* Top Left Navigation Trace */}
@@ -333,6 +347,12 @@ export default function GraphView({ pages, activeId, onSelect }) {
         onToggleAnimation={() => setAnimated(!animated)}
         onExport={handleExport}
         onToggleSearch={() => setIsSearchOpen(!isSearchOpen)}
+        onNodeSelect={handleNodeSelect}
+        linkFilters={linkFilters}
+        onLinkFilterChange={setLinkFilters}
+        tagFilter={tagFilter}
+        onTagFilterChange={setTagFilter}
+        allTags={[...new Set(pages.filter(p => !p.trashed).flatMap(p => p.tags || []))]}
       />
 
       {/* Search overlay dropdown widget */}
@@ -346,6 +366,30 @@ export default function GraphView({ pages, activeId, onSelect }) {
 
       {/* Cluster Tags Map Legend */}
       <GraphLegend />
+
+      {/* Node Detail Info Panel */}
+      {selectedNodeId && (
+        <GraphInfoPanel
+          page={pages.find(p => p.id === selectedNodeId)}
+          nodePosition={nodePositions[selectedNodeId]}
+          onClose={() => setSelectedNodeId(null)}
+          onCenter={() => centerOnNode(selectedNodeId)}
+        />
+      )}
+
+      {/* Tag filter indicator */}
+      {tagFilter && (
+        <div className="absolute bottom-20 left-4 z-20 flex items-center gap-2 rounded-lg bg-[var(--elevated)]/80 backdrop-blur-md border border-[var(--border)] px-3 py-1.5 shadow-md">
+          <span className="text-[10px] text-[var(--muted)]">Filtering:</span>
+          <span className="text-[11px] font-medium text-[var(--text)]">{tagFilter}</span>
+          <button
+            onClick={() => setTagFilter(null)}
+            className="ml-1 text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Figma styled bottom-right Interactive Minimap */}
       <GraphMiniMap

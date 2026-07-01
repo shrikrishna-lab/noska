@@ -421,7 +421,7 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
 
   const statusText = recording ? (paused ? "Paused" : "Live") : "Ready";
   const statusColor = recording
-    ? (paused ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20")
+    ? (paused ? "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20" : "bg-[var(--danger)]/10 text-[var(--danger)] border-[var(--danger)]/20")
     : "bg-[var(--surface-3)] text-[var(--muted)] border-[var(--border)]";
 
   return (
@@ -448,7 +448,7 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
             </button>
           )}
           <span className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-medium ${statusColor}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${recording ? (paused ? "bg-amber-400" : "bg-rose-400 animate-pulse") : "bg-[var(--muted)]"}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${recording ? (paused ? "bg-[var(--warning)]" : "bg-[var(--danger)] animate-pulse") : "bg-[var(--muted)]"}`} />
             {statusText}
           </span>
         </div>
@@ -547,7 +547,7 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                       <span className="text-[10px] font-medium text-[var(--text-secondary)]">Live Notes</span>
                       {recording && !paused && (
                         <span className="flex items-center gap-1 text-[8px] text-[var(--muted)]">
-                          <span className="w-1 h-1 rounded-full bg-rose-400 animate-pulse" />
+                          <span className="w-1 h-1 rounded-full bg-[var(--danger)] animate-pulse" />
                           Recording
                         </span>
                       )}
@@ -585,7 +585,7 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                           {AI_STATUS_STEPS.slice(0, Math.min(aiStep + 1, AI_STATUS_STEPS.length)).map((step, i) => (
                             <div key={step} className="flex items-center gap-1.5 text-[9px]">
                               {i < aiStep ? (
-                                <span className="w-3 h-3 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center"><span className="text-[6px]">✓</span></span>
+                                <span className="w-3 h-3 rounded-full bg-[var(--success)]/15 text-[var(--success)] flex items-center justify-center"><span className="text-[6px]">✓</span></span>
                               ) : i === aiStep ? (
                                 <Loader2 size={9} className="animate-spin text-[var(--accent)]" />
                               ) : (
@@ -657,7 +657,7 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] font-medium text-[var(--text)]">{line.speaker}</span>
                               <span className="text-[8px] text-[var(--muted)]">{line.time}</span>
-                              <span className={`text-[7px] px-1 py-0.5 rounded ${(line.confidence || 0.9) > 0.9 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                              <span className={`text-[7px] px-1 py-0.5 rounded ${(line.confidence || 0.9) > 0.9 ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-[var(--warning)]/10 text-[var(--warning)]'}`}>
                                 {Math.round((line.confidence || 0.9) * 100)}%
                               </span>
                             </div>
@@ -705,7 +705,7 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                                     {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
                                   </select>
                                 ) : (
-                                  <button onClick={() => startEditing(task.id, "priority")} className={`px-1 py-0.5 rounded ${task.priority === "High" ? 'bg-rose-500/10 text-rose-400' : task.priority === "Medium" ? 'bg-amber-500/10 text-amber-400' : 'bg-[var(--surface-3)] text-[var(--muted)]'}`}>{task.priority}</button>
+                                  <button onClick={() => startEditing(task.id, "priority")} className={`px-1 py-0.5 rounded ${task.priority === "High" ? 'bg-[var(--danger)]/10 text-[var(--danger)]' : task.priority === "Medium" ? 'bg-[var(--warning)]/10 text-[var(--warning)]' : 'bg-[var(--surface-3)] text-[var(--muted)]'}`}>{task.priority}</button>
                                 )}
                               </span>
                               <span className="w-0.5 h-0.5 rounded-full bg-[var(--border)]" />
@@ -743,20 +743,20 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                     ) : (
                       <>
                         {highlightLines.map((line, i) => (
-                          <div key={line.id} className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-3">
+                          <div key={line.id} className="rounded-lg border border-[var(--warning)]/15 bg-[var(--warning)]/5 p-3">
                             <div className="flex items-center gap-1 mb-1">
-                              <Star size={8} className="text-amber-400" />
-                              <span className="text-[8px] font-medium text-amber-400 uppercase tracking-wider">Key Point {i + 1}</span>
+                              <Star size={8} className="text-[var(--warning)]" />
+                              <span className="text-[8px] font-medium text-[var(--warning)] uppercase tracking-wider">Key Point {i + 1}</span>
                             </div>
                             <p className="text-[11px] text-[var(--text-secondary)]">{line.text}</p>
                             <div className="text-[8px] text-[var(--muted)] mt-1">{line.speaker} · {line.time}</div>
                           </div>
                         ))}
                         {decisionLine && (
-                          <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 p-3">
+                          <div className="rounded-lg border border-[var(--success)]/15 bg-[var(--success)]/5 p-3">
                             <div className="flex items-center gap-1 mb-1">
-                              <Zap size={8} className="text-emerald-400" />
-                              <span className="text-[8px] font-medium text-emerald-400 uppercase tracking-wider">Decision</span>
+                              <Zap size={8} className="text-[var(--success)]" />
+                              <span className="text-[8px] font-medium text-[var(--success)] uppercase tracking-wider">Decision</span>
                             </div>
                             <p className="text-[11px] text-[var(--text-secondary)]">{decisionLine.text}</p>
                             <div className="text-[8px] text-[var(--muted)] mt-1">{decisionLine.speaker} · {decisionLine.time}</div>
@@ -781,15 +781,15 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                         {timelineEvents.map((item, i) => (
                           <div key={i} className="relative flex items-start gap-2">
                             <div className={`absolute -left-[13px] top-1 w-[6px] h-[6px] rounded-full border-2 ${
-                              item.type === "start" ? 'bg-emerald-400 border-emerald-400' :
+                              item.type === "start" ? 'bg-[var(--success)] border-[var(--success)]' :
                               item.type === "decision" ? 'bg-[var(--accent)] border-[var(--accent)]' :
-                              item.type === "live" ? 'bg-rose-400 border-rose-400 animate-pulse' :
-                              item.type === "question" ? 'bg-amber-400 border-amber-400' :
+                              item.type === "live" ? 'bg-[var(--danger)] border-[var(--danger)] animate-pulse' :
+                              item.type === "question" ? 'bg-[var(--warning)] border-[var(--warning)]' :
                               'bg-[var(--surface-3)] border-[var(--border)]'
                             }`} />
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="text-[8px] text-[var(--muted)] w-8 shrink-0">{item.time}</span>
-                              <span className={`text-[10px] ${item.type === "live" ? 'text-rose-400' : 'text-[var(--text-secondary)]'}`}>{item.label}</span>
+                              <span className={`text-[10px] ${item.type === "live" ? 'text-[var(--danger)]' : 'text-[var(--text-secondary)]'}`}>{item.label}</span>
                             </div>
                           </div>
                         ))}
@@ -850,8 +850,8 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                           <div className="text-[9px] text-[var(--text-secondary)] truncate">{p.name}</div>
                           <div className="text-[7px] text-[var(--muted)]">{p.role}</div>
                         </div>
-                        {p.active && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
-                        <button onClick={() => removeParticipant(p.id)} className="p-0.5 rounded text-[var(--muted)] opacity-0 group-hover:opacity-100 hover:text-rose-400 transition">
+                        {p.active && <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] shrink-0" />}
+                        <button onClick={() => removeParticipant(p.id)} className="p-0.5 rounded text-[var(--muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--danger)] transition">
                           <X size={8} />
                         </button>
                       </div>
@@ -925,7 +925,7 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                         <GripVertical size={8} className="text-[var(--muted)] opacity-0 group-hover:opacity-100 transition shrink-0" />
                         <Link2 size={8} className="text-[var(--muted)] shrink-0" />
                         <span className="truncate flex-1">{item.label}</span>
-                        <button onClick={() => removeLinkedItem(item.id)} className="p-0.5 rounded text-[var(--muted)] opacity-0 group-hover:opacity-100 hover:text-rose-400 transition">
+                        <button onClick={() => removeLinkedItem(item.id)} className="p-0.5 rounded text-[var(--muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--danger)] transition">
                           <X size={7} />
                         </button>
                       </div>
@@ -1003,18 +1003,18 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
 
           <div className="flex items-center gap-1.5">
             {!recording ? (
-              <button onClick={handleStartRecording} className="flex items-center gap-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 text-[10px] font-medium transition">
+              <button onClick={handleStartRecording} className="flex items-center gap-1.5 rounded-lg bg-[var(--danger)] hover:bg-[var(--danger)]/90 text-white px-3 py-1.5 text-[10px] font-medium transition">
                 <Mic size={11} />
                 Start Recording
               </button>
             ) : (
               <>
                 {paused ? (
-                  <button onClick={handleResumeRecording} className="flex items-center gap-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 text-[10px] font-medium transition">
+                  <button onClick={handleResumeRecording} className="flex items-center gap-1.5 rounded-lg bg-[var(--success)] hover:bg-[var(--success)]/90 text-white px-3 py-1.5 text-[10px] font-medium transition">
                     <Play size={11} /> Resume
                   </button>
                 ) : (
-                  <button onClick={handlePauseRecording} className="flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 text-[10px] font-medium transition">
+                  <button onClick={handlePauseRecording} className="flex items-center gap-1.5 rounded-lg bg-[var(--warning)] hover:bg-[var(--warning)]/90 text-white px-3 py-1.5 text-[10px] font-medium transition">
                     <Pause size={11} /> Pause
                   </button>
                 )}
@@ -1029,13 +1029,13 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
 
           {recording && (
             <div className="flex items-center gap-2 text-[9px] text-[var(--muted)]">
-              <span className={`flex items-center gap-1 ${paused ? 'text-amber-400' : 'text-rose-400'}`}>
+              <span className={`flex items-center gap-1 ${paused ? 'text-[var(--warning)]' : 'text-[var(--danger)]'}`}>
                 <Volume2 size={9} />
                 {paused ? "Paused" : `${Math.round(volume * 100)}%`}
               </span>
               {streamRef.current && recording && !paused && (
-                <span className="flex items-center gap-1 text-emerald-400">
-                  <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="flex items-center gap-1 text-[var(--success)]">
+                  <span className="w-1 h-1 rounded-full bg-[var(--success)] animate-pulse" />
                   Live
                 </span>
               )}

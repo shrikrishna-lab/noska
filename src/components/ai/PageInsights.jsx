@@ -101,7 +101,7 @@ export default function PageInsights({ page, pages, onSend }) {
               onClick={() => onSend?.(`${issue.action} for this page`)}
               className="flex items-center gap-2 w-full p-1.5 rounded-lg hover:bg-[var(--hover)] text-left group transition-colors"
             >
-              <AlertCircle size={11} className="text-amber-400 shrink-0" />
+              <AlertCircle size={11} className="text-[var(--warning)] shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-medium text-[var(--text)] truncate">{issue.label}</div>
                 <div className="text-[8px] text-[var(--muted)] truncate">{issue.detail}</div>
@@ -113,7 +113,7 @@ export default function PageInsights({ page, pages, onSend }) {
       )}
 
       {strengths.length > 0 && issues.length === 0 && (
-        <div className="flex items-center gap-1 text-[9px] text-green-400">
+        <div className="flex items-center gap-1 text-[9px] text-[var(--success)]">
           <CheckCircle size={9} />
           All checks passed
         </div>

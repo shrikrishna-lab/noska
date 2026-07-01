@@ -316,7 +316,7 @@ export default function BlockContextMenu({
                       onClick={() => handleAction(item)}
                       onMouseEnter={() => setHighlightedIndex(idx)}
                       className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                        item.danger ? "text-red-400 hover:bg-red-500/10" : "text-[var(--text)]"
+                        item.danger ? "text-[var(--danger)] hover:bg-[var(--danger)]/10" : "text-[var(--text)]"
                       } ${isSelected ? "bg-[var(--hover)]" : ""}`}
                     >
                       {activeSubmenu === "color" && item.colorInfo ? (
@@ -326,7 +326,7 @@ export default function BlockContextMenu({
                       ) : activeSubmenu === "move-to" ? (
                         <span className="text-sm">📄</span>
                       ) : (
-                        item.icon && <item.icon size={13} className={`shrink-0 ${item.danger ? "text-red-400" : "text-[var(--secondary)]"}`} />
+                        item.icon && <item.icon size={13} className={`shrink-0 ${item.danger ? "text-[var(--danger)]" : "text-[var(--secondary)]"}`} />
                       )}
 
                       <span className="flex-1 truncate">{item.label}</span>

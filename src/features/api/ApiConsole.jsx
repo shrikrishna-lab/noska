@@ -223,7 +223,7 @@ export default function ApiConsole({ pages, activePageId, addPage, updatePage, o
         {/* API Key Banner */}
         <div className="bg-[var(--surface)] border-b border-[var(--border)] px-5 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2 text-xs">
-            <Key size={14} className="text-amber-400" />
+            <Key size={14} className="text-[var(--warning)]" />
             <span className="text-[var(--secondary)]">API Key:</span>
             {apiKey ? (
               <code className="bg-[var(--bg)] border border-[var(--border)] px-2 py-0.5 rounded font-mono text-[var(--text)] text-[11px]">
@@ -239,7 +239,7 @@ export default function ApiConsole({ pages, activePageId, addPage, updatePage, o
                 onClick={copyKey}
                 className="flex items-center gap-1 rounded bg-[var(--bg)] border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--text)] hover:bg-[var(--hover)] font-medium"
               >
-                {copiedKey ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                {copiedKey ? <Check size={12} className="text-[var(--success)]" /> : <Copy size={12} />}
                 {copiedKey ? "Copied" : "Copy"}
               </button>
             )}
@@ -263,10 +263,10 @@ export default function ApiConsole({ pages, activePageId, addPage, updatePage, o
             {API_DOCS.map((route) => {
               const isSelected = selectedRoute.id === route.id;
               const methodColors = {
-                GET: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                POST: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-                PATCH: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                DELETE: "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                GET: "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/20",
+                POST: "bg-[var(--noska-blue-soft)] text-[var(--noska-blue)] border-[var(--noska-blue)]/20",
+                PATCH: "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20",
+                DELETE: "bg-[var(--danger)]/10 text-[var(--danger)] border-[var(--danger)]/20"
               };
               return (
                 <button
@@ -355,7 +355,7 @@ export default function ApiConsole({ pages, activePageId, addPage, updatePage, o
                   <label className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">Response</label>
                   {respStatus && (
                     <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded ${
-                      respStatus.startsWith("2") ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+                      respStatus.startsWith("2") ? "bg-[var(--success)]/10 text-[var(--success)]" : "bg-[var(--danger)]/10 text-[var(--danger)]"
                     }`}>
                       {respStatus}
                     </span>

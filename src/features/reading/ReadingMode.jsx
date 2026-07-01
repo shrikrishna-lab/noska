@@ -568,7 +568,7 @@ export default function ReadingMode({ page, onClose, onPagePatch }) {
                       </button>
                       <button
                         onClick={() => removeHighlight(h)}
-                        className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded text-red-500 hover:text-red-600 transition"
+                        className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded text-[var(--danger)] hover:text-[var(--danger)] transition"
                         title="Delete Highlight"
                       >
                         <Trash2 size={12} />

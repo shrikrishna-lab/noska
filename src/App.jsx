@@ -6,7 +6,8 @@ import Editor from "./components/Editor";
 import { WorkspaceView, NewPageOverlay } from "./components/WorkspaceViews";
 import LoadingScreen from "./components/auth/LoadingScreen";
 import AuthPage from "./components/auth/AuthPage";
-import OnboardingFlow from "./components/onboarding/OnboardingFlow";
+import OnboardingPage from "./onboarding/pages/OnboardingPage";
+import { starterPagesFor, starterPageForTemplate } from "./onboarding/services/onboardingService";
 import AIPanel from "./components/AIPanel";
 import AIRightPanel from "./components/AIRightPanel";
 import CommandPalette from "./components/CommandPalette";
@@ -101,7 +102,7 @@ function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [appView, setAppView] = useState("page");
   const [pageMode, setPageMode] = useState("doc"); // "doc" | "canvas" | "graph"
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState("light");
   const [themeFx, setThemeFx] = useState({
     variant: "rectangle",
     start: "bottom-up",
@@ -253,6 +254,82 @@ function App() {
       let loadedSettings = {};
       let loadedChats = [];
 
+      // ⚠️ TEST MODE: skip all Supabase calls and load exclusively from localStorage.
+      if (import.meta.env.VITE_TEST_MODE === 'true') {
+        const pairs = await Promise.all(
+          ["pages", "activeId", "workspaceName", "theme", "sidebarOpen", "apiKey",
+           "themeFx", "aiProvider", "nvidiaKey", "appView", "aiChats", "activeChatId",
+           "stackedPageIds"].map((k) => store.get(k))
+        );
+        if (!mounted) return;
+
+        if (pairs[0].value) {
+          try { loadedPages = JSON.parse(pairs[0].value); } catch (e) { console.warn("App: failed to parse pages from storage", e); }
+        }
+        if (pairs[10].value) {
+          try { loadedChats = JSON.parse(pairs[10].value); } catch (e) { console.warn("App: failed to parse chats from storage", e); }
+        }
+
+        const { idMap } = migrateLegacyIds(loadedPages, loadedChats);
+        if (idMap && Object.keys(idMap).length > 0) {
+          if (pairs[1].value) {
+            const savedId = JSON.parse(pairs[1].value);
+            if (idMap[savedId]) pairs[1].value = JSON.stringify(idMap[savedId]);
+          }
+          if (pairs[12]?.value) {
+            const stack = JSON.parse(pairs[12].value);
+            pairs[12].value = JSON.stringify(stack.map((s) => idMap[s] || s));
+          }
+        }
+
+        loadedPages = purgeExpiredTrash(
+          normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })))
+        );
+        setPages(loadedPages);
+        setAiChats(loadedChats);
+
+        const firstId = loadedPages[0]?.id;
+        if (pairs[1].value) {
+          const savedId = JSON.parse(pairs[1].value);
+          if (loadedPages.some((p) => p.id === savedId)) {
+            setActiveId(savedId);
+            setStackedPageIds([savedId]);
+          } else if (firstId) {
+            setActiveId(firstId);
+            setStackedPageIds([firstId]);
+          }
+        } else if (firstId) {
+          setActiveId(firstId);
+          setStackedPageIds([firstId]);
+        }
+
+        if (pairs[2].value) {
+          try {
+            const savedName = JSON.parse(pairs[2].value);
+            if (savedName !== "Noska") setWorkspaceName(savedName);
+          } catch {}
+        }
+        if (pairs[4].value) setSidebarOpen(JSON.parse(pairs[4].value));
+        if (pairs[5].value) setApiKey(JSON.parse(pairs[5].value));
+        if (pairs[6].value) setThemeFx(JSON.parse(pairs[6].value));
+        if (pairs[7].value) setAiProvider(JSON.parse(pairs[7].value));
+        if (pairs[8].value) setNvidiaKey(JSON.parse(pairs[8].value));
+        if (pairs[9].value) setAppView(JSON.parse(pairs[9].value));
+        if (pairs[11].value) setActiveChatId(JSON.parse(pairs[11].value));
+
+        realtimeCollab.initUser(
+          localStorage.getItem("noska_user_id") || uid(),
+          "Test Workspace",
+          "👤"
+        );
+
+        hydrated.current = true;
+        setLoading(false);
+        initializeMemory().catch(() => {});
+        setAppFlowState("workspace");
+        return;
+      }
+
       // 1. Check session FIRST — determines user isolation
       const { data: { session } } = await supabase.auth.getSession();
       if (!mounted) return;
@@ -396,6 +473,15 @@ function App() {
           setActiveId(hash[1]);
           setStackedPageIds((prev) => prev.includes(hash[1]) ? prev : [hash[1]]);
         }
+
+        // ⚠️ TEST MODE BYPASS — NEVER enable in production builds.
+        // When VITE_TEST_MODE=true, skip the auth/onboarding flow and jump
+        // directly into the workspace so automated end-to-end tests can
+        // interact with the editor without Supabase authentication.
+        // Only VITE_TEST_MODE=true in a local .env file (never committed).
+        if (import.meta.env.VITE_TEST_MODE === 'true') {
+          setAppFlowState("workspace");
+        }
         return;
       }
 
@@ -485,27 +571,56 @@ function App() {
     setAppFlowState("onboarding");
   }, []);
 
-  // Onboarding complete handler
-  const handleOnboardingComplete = useCallback(async (formData) => {
-    if (formData.workspaceName) setWorkspaceName(formData.workspaceName);
-    const user = realtimeCollab?.getUser?.();
-    try {
-      let freshPages = await fetchPages(user?.userId);
-      freshPages = purgeExpiredTrash(normalizePages(freshPages.map(p => ({ ...p, content: p.content || [] }))));
-      if (freshPages.length > 0) {
-        setPages(freshPages);
-        setActiveId(freshPages[0].id);
-        setStackedPageIds([freshPages[0].id]);
+  // Build starter pages (local state, no DB dependency)
+  const handleFinalize = useCallback(async (formData) => {
+    const result = [];
+    if (formData.useCase) {
+      result.push(...starterPagesFor(formData.useCase));
+    } else {
+      if (formData.pageTitle) {
+        result.push({
+          id: uid(), title: formData.pageTitle, icon: "📄",
+          favorite: false, trashed: false, tags: [], parentId: null,
+          lineage: [{ action: "created", timestamp: now(), detail: "First page from onboarding" }],
+          blocks: textToBlocks(`# ${formData.pageTitle}\n\nWelcome to your first page!`)
+        });
       }
-    } catch (e) {
-      console.warn("App: failed to reload pages after onboarding", e);
+      if (formData.template) {
+        result.push(starterPageForTemplate(formData.template));
+      }
     }
-    if (user?.userId) {
-      try {
-        await setOnboardingComplete(user.userId, formData.useCase, formData.workspaceName);
-      } catch (e) {
-        console.warn("App: failed to save onboarding complete", e);
+    if (result.length === 0) {
+      result.push({
+        id: uid(), title: "Getting Started", icon: "🚀",
+        favorite: false, trashed: false, tags: [], parentId: null,
+        lineage: [{ action: "created", timestamp: now(), detail: "Default starter page" }],
+        blocks: textToBlocks("# Getting Started\n\nWelcome to Noska!")
+      });
+    }
+    return result;
+  }, []);
+
+  // Onboarding complete — set pages directly in state, persist async
+  const handleOnboardingComplete = useCallback(async (formData, starterPages) => {
+    if (formData.workspaceName) setWorkspaceName(formData.workspaceName);
+    const pages = starterPages && starterPages.length > 0 ? starterPages : [{
+      id: uid(), title: "Getting Started", icon: "🚀",
+      favorite: false, trashed: false, tags: [], parentId: null,
+      lineage: [{ action: "created", timestamp: now(), detail: "Fallback starter page" }],
+      blocks: textToBlocks("# Getting Started\n\nWelcome to Noska!")
+    }];
+    setPages(pages);
+    setActiveId(pages[0].id);
+    setStackedPageIds([pages[0].id]);
+    const user = realtimeCollab?.getUser?.();
+    const userId = user?.userId;
+    if (userId) {
+      for (const page of pages) {
+        try { await savePage(page, userId); } catch (e) {}
       }
+      try {
+        await setOnboardingComplete(userId, formData.useCase, formData.workspaceName);
+      } catch (e) {}
     }
     setAppFlowState("workspace");
   }, []);
@@ -1624,17 +1739,17 @@ function App() {
 
   return (
     <AnimatePresence mode="wait">
-      {appFlowState === "loading" && (
+      {appFlowState === "loading" && import.meta.env.VITE_TEST_MODE !== 'true' && (
         <LoadingScreen key="loader" onComplete={() => setAppFlowState("auth")} />
       )}
       {appFlowState === "auth" && (
         <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
       )}
       {appFlowState === "onboarding" && !onboardingOpen && (
-        <OnboardingFlow key="onboarding" initialWorkspaceName={workspaceName} onComplete={handleOnboardingComplete} />
+        <OnboardingPage key="onboarding" initialWorkspaceName={workspaceName} onFinalize={handleFinalize} onComplete={handleOnboardingComplete} />
       )}
       {onboardingOpen && (
-        <OnboardingFlow key="onboarding-overlay" initialWorkspaceName={workspaceName} onComplete={(data) => { setOnboardingOpen(false); handleOnboardingComplete(data); }} />
+        <OnboardingPage key="onboarding-overlay" overlay initialWorkspaceName={workspaceName} onFinalize={handleFinalize} onComplete={(data) => { setOnboardingOpen(false); handleOnboardingComplete(data); }} />
       )}
       {appFlowState === "workspace" && (
         <motion.div

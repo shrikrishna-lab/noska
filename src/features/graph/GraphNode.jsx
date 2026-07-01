@@ -71,7 +71,7 @@ function GraphNodeComponent({
       )}
       
       {page.favorite && (
-        <Star size={10} className="fill-yellow-500 text-yellow-500 shrink-0 select-none" />
+        <Star size={10} className="fill-[var(--warning)] text-[var(--warning)] shrink-0 select-none" />
       )}
       
       {/* Category Colored Indicator Dot */}

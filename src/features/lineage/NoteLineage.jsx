@@ -18,14 +18,14 @@ import {
 /* ─── Icon mapping for lineage events ─── */
 
 const EVENT_META = {
-  created:     { icon: FilePlus,   color: "text-emerald-400", bg: "bg-emerald-500/10", label: "Created" },
-  duplicated:  { icon: Copy,       color: "text-blue-400",    bg: "bg-blue-500/10",    label: "Duplicated from" },
-  ai_generated:{ icon: Sparkles,   color: "text-purple-400",  bg: "bg-purple-500/10",  label: "AI Generated" },
-  forked:      { icon: GitBranch,  color: "text-cyan-400",    bg: "bg-cyan-500/10",    label: "Forked from" },
-  template:    { icon: FileText,   color: "text-amber-400",   bg: "bg-amber-500/10",   label: "From template" },
+  created:     { icon: FilePlus,   color: "text-[var(--success)]", bg: "bg-[var(--success)]/10", label: "Created" },
+  duplicated:  { icon: Copy,       color: "text-[var(--noska-blue)]", bg: "bg-[var(--noska-blue-soft)]", label: "Duplicated from" },
+  ai_generated:{ icon: Sparkles,   color: "text-[var(--accent-deep)]", bg: "bg-[var(--accent-deep)]/10", label: "AI Generated" },
+  forked:      { icon: GitBranch,  color: "text-[var(--noska-blue-light)]", bg: "bg-[var(--noska-blue-light)]/10", label: "Forked from" },
+  template:    { icon: FileText,   color: "text-[var(--warning)]", bg: "bg-[var(--warning)]/10", label: "From template" },
   edited:      { icon: Edit3,      color: "text-[var(--secondary)]", bg: "bg-[var(--surface)]", label: "Edited" },
-  trashed:     { icon: Trash2,     color: "text-red-400",     bg: "bg-red-500/10",     label: "Trashed" },
-  restored:    { icon: RotateCcw,  color: "text-green-400",   bg: "bg-green-500/10",   label: "Restored" }
+  trashed:     { icon: Trash2,     color: "text-[var(--danger)]", bg: "bg-[var(--danger)]/10", label: "Trashed" },
+  restored:    { icon: RotateCcw,  color: "text-[var(--success)]", bg: "bg-[var(--success)]/10", label: "Restored" }
 };
 
 function timeAgoFull(iso) {

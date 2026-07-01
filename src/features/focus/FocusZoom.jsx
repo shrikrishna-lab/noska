@@ -471,7 +471,7 @@ export default function FocusZoom({ block, onClose, onPatch }) {
                 cy="20"
                 r="18"
                 className={`transition-all duration-1000 ${
-                  pomoBreak ? "stroke-emerald-500" : "stroke-[#2383E2]"
+                  pomoBreak ? "stroke-[var(--success)]" : "stroke-[#2383E2]"
                 }`}
                 strokeWidth="2.5"
                 fill="transparent"
@@ -484,7 +484,7 @@ export default function FocusZoom({ block, onClose, onPatch }) {
 
           <div className="flex flex-col">
             <span className="text-xs font-semibold tracking-wider font-mono">
-              {formatPomoTime()} {pomoBreak && <span className="text-emerald-500 text-[10px]">BREAK</span>}
+              {formatPomoTime()} {pomoBreak && <span className="text-[var(--success)] text-[10px]">BREAK</span>}
             </span>
             <div className="flex items-center gap-2 mt-0.5">
               <button
@@ -496,7 +496,7 @@ export default function FocusZoom({ block, onClose, onPatch }) {
               <span className="opacity-30">|</span>
               <button
                 onClick={resetPomo}
-                className="text-[10px] uppercase font-bold tracking-wider opacity-60 hover:opacity-100 hover:text-red-500"
+                className="text-[10px] uppercase font-bold tracking-wider opacity-60 hover:opacity-100 hover:text-[var(--danger)]"
               >
                 Reset
               </button>

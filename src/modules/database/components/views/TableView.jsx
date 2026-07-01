@@ -111,7 +111,7 @@ export default function TableView({ rows, properties, onPatchRow, onDeleteRow, o
               <td className="px-2 py-1.5">
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
                   <button onClick={() => onDuplicateRow(row.id)} className="grid h-6 w-6 place-items-center rounded hover:bg-[var(--hover)] text-[var(--muted)] cursor-pointer" title="Duplicate"><Copy size={12} /></button>
-                  <button onClick={() => onDeleteRow(row.id)} className="grid h-6 w-6 place-items-center rounded hover:bg-red-500/10 text-[var(--muted)] hover:text-red-400 cursor-pointer" title="Delete"><Trash2 size={12} /></button>
+                  <button onClick={() => onDeleteRow(row.id)} className="grid h-6 w-6 place-items-center rounded hover:bg-[var(--danger)]/10 text-[var(--muted)] hover:text-[var(--danger)] cursor-pointer" title="Delete"><Trash2 size={12} /></button>
                 </div>
               </td>
             </tr>
@@ -127,7 +127,7 @@ export default function TableView({ rows, properties, onPatchRow, onDeleteRow, o
           <div className="flex items-center gap-1 text-[10px] text-[var(--muted)]">
             <span>{selectedIds.size} selected</span>
             <button onClick={() => { onDuplicateRow([...selectedIds]); setSelectedIds(new Set()); }} className="text-[var(--accent)] hover:underline cursor-pointer">Duplicate</button>
-            <button onClick={() => { [...selectedIds].forEach(id => onDeleteRow(id)); setSelectedIds(new Set()); }} className="text-red-400 hover:underline cursor-pointer">Delete</button>
+            <button onClick={() => { [...selectedIds].forEach(id => onDeleteRow(id)); setSelectedIds(new Set()); }} className="text-[var(--danger)] hover:underline cursor-pointer">Delete</button>
           </div>
         )}
       </div>
@@ -194,6 +194,11 @@ function SelectCell({ value, options, onChange }) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-lg border border-[var(--border)] bg-[var(--elevated)] py-1 shadow-lg">
+            {value && (
+              <button onClick={() => { onChange(''); setOpen(false); }} className="w-full px-2.5 py-1 text-left text-xs text-[var(--muted)] italic hover:bg-[var(--hover)]">
+                Clear
+              </button>
+            )}
             {options.map(opt => (
               <button key={opt} onClick={() => { onChange(opt); setOpen(false); }} className={`w-full px-2.5 py-1 text-left text-xs hover:bg-[var(--hover)] ${value === opt ? 'text-[var(--accent)] font-medium' : 'text-[var(--text)]'}`}>
                 {opt}

@@ -412,7 +412,7 @@ export default function AIPanel({
           </div>
 
           {!isConfigured && (
-            <span className="text-[7px] text-amber-400/70 bg-amber-400/10 px-1 py-0.5 rounded">No API key</span>
+            <span className="text-[7px] text-[var(--accent)]/70 bg-[var(--accent)]/10 px-1 py-0.5 rounded">No API key</span>
           )}
 
           <span className="flex items-center gap-0.5 rounded-md bg-[var(--surface-3)] px-1 py-0.5 text-[7px] text-[var(--muted)] font-mono">
@@ -491,7 +491,7 @@ export default function AIPanel({
                       {toolResults.map((r, i) => (
                         <div key={i} className="flex items-center gap-1.5">
                           <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full ${
-                            r.ok ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+                            r.ok ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'bg-[var(--danger)]/15 text-[var(--danger)]'
                           }`}>
                             {r.ok ? <Check size={7} /> : <X size={7} />}
                           </span>

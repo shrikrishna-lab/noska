@@ -220,7 +220,7 @@ export const MotionInput = React.forwardRef(function MotionInput(
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={SPRING_PRESETS.soft}
-            className="text-xs text-red-500 mt-1 pl-1 font-medium overflow-hidden"
+            className="text-xs text-[var(--danger)] mt-1 pl-1 font-medium overflow-hidden"
           >
             {error}
           </motion.span>

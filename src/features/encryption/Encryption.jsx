@@ -152,7 +152,7 @@ export function LockPageModal({ pageTitle, onLock, onClose, onToast }) {
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Lock size={18} className="text-rose-400" />
+            <Lock size={18} className="text-[var(--danger)]" />
             <h2 className="font-semibold text-[var(--text)]">Encrypt Page</h2>
           </div>
           <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-md text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]">
@@ -165,7 +165,7 @@ export function LockPageModal({ pageTitle, onLock, onClose, onToast }) {
           The data is only decrypted locally in your browser.
         </p>
 
-        <div className="p-3 mb-4 rounded-lg bg-rose-500/10 border border-rose-500/20 flex gap-2 text-rose-300">
+        <div className="p-3 mb-4 rounded-lg bg-[var(--danger)]/10 border border-[var(--danger)]/20 flex gap-2 text-[var(--danger)]">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
           <span className="text-[11px] leading-relaxed">
             <strong>Warning:</strong> Noska cannot recover this passphrase. If you forget it, the page data will be lost forever.
@@ -198,7 +198,7 @@ export function LockPageModal({ pageTitle, onLock, onClose, onToast }) {
             />
           </div>
 
-          {error && <div className="text-xs text-rose-400 font-medium">{error}</div>}
+          {error && <div className="text-xs text-[var(--danger)] font-medium">{error}</div>}
 
           <div className="flex gap-2 justify-end pt-2">
             <button
@@ -211,7 +211,7 @@ export function LockPageModal({ pageTitle, onLock, onClose, onToast }) {
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-lg bg-red-500 hover:bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-sm"
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--danger)] hover:bg-[var(--danger)]/90 px-4 py-2 text-xs font-semibold text-white shadow-sm"
               disabled={loading}
             >
               {loading ? (
@@ -259,7 +259,7 @@ export function UnlockPagePrompt({ pageTitle, onUnlock, onDecryptRemove, onToast
         transition={SPRING_PRESETS.soft}
         className="text-center w-full"
       >
-        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400">
+        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--danger)]/10 text-[var(--danger)]">
           <KeyRound size={28} />
         </div>
 
@@ -281,7 +281,7 @@ export function UnlockPagePrompt({ pageTitle, onUnlock, onDecryptRemove, onToast
             />
           </div>
 
-          {error && <div className="text-xs text-rose-400 text-center font-medium">{error}</div>}
+          {error && <div className="text-xs text-[var(--danger)] text-center font-medium">{error}</div>}
 
           <button
             type="submit"
@@ -306,7 +306,7 @@ export function UnlockPagePrompt({ pageTitle, onUnlock, onDecryptRemove, onToast
                 onDecryptRemove();
               }
             }}
-            className="text-xs text-rose-400/70 hover:text-rose-400 hover:underline"
+            className="text-xs text-[var(--danger)]/70 hover:text-[var(--danger)] hover:underline"
           >
             Force delete page
           </button>

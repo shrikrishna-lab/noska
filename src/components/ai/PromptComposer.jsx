@@ -86,7 +86,7 @@ export default function PromptComposer({
           {loading ? (
             <button
               onClick={onAbort}
-              className="flex items-center gap-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2 py-1 text-[10px] font-medium transition"
+              className="flex items-center gap-1 rounded-lg bg-[var(--danger)]/10 text-[var(--danger)] hover:bg-[var(--danger)]/20 px-2 py-1 text-[10px] font-medium transition"
             >
               <StopCircle size={10} />
               Stop

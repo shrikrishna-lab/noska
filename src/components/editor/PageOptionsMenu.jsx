@@ -257,6 +257,7 @@ export default function PageOptionsMenu({
 
           {/* Font segment control (only on top-level and when search is empty) */}
           {!activeSubmenu && !search && (
+            <>
             <div className="border-b border-[var(--border)] bg-[var(--surface)] p-2 flex flex-col gap-1.5">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] px-1">Typography</span>
               <div className="grid grid-cols-3 gap-1 bg-[var(--surface)] p-1 rounded-lg border border-[var(--border)]">
@@ -281,6 +282,32 @@ export default function PageOptionsMenu({
                 })}
               </div>
             </div>
+
+            <div className="border-b border-[var(--border)] bg-[var(--surface)] p-2 flex flex-col gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] px-1">Page Color</span>
+              <div className="grid grid-cols-8 gap-1.5 px-1 py-1">
+                {[
+                  null,
+                  "#1a1a2e", "#16213e", "#0f3460", "#533483",
+                  "#3d0000", "#1b4332", "#2d3436", "#180a20",
+                  "#fff3e0", "#fce4ec", "#e8f5e9", "#e3f2fd",
+                  "#fff8e1", "#f3e5f5", "#e0f2f1", "#fbe9e7",
+                ].map((color) => (
+                  <button
+                    key={color ?? "default"}
+                    onClick={() => onPagePatch?.({ pageBg: color })}
+                    className={`h-6 w-6 rounded-full border-2 transition-all cursor-pointer ${
+                      (page?.pageBg ?? null) === color
+                        ? "border-[var(--accent)] scale-110"
+                        : "border-[var(--border)] hover:border-[var(--border-strong)]"
+                    }`}
+                    style={color ? { background: color } : { background: "var(--bg)", borderStyle: "dashed" }}
+                    title={color ?? "Default"}
+                  />
+                ))}
+              </div>
+            </div>
+            </>
           )}
 
           {/* Action List (Scrollable middle container) */}
@@ -298,10 +325,10 @@ export default function PageOptionsMenu({
                     onClick={() => handleAction(item)}
                     onMouseEnter={() => setHighlightedIndex(idx)}
                     className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                      isItemDanger ? "text-red-400 hover:bg-red-500/10" : "text-[var(--text)]"
+                      isItemDanger ? "text-[var(--danger)] hover:bg-[var(--danger)]/10" : "text-[var(--text)]"
                     } ${isSelected ? "bg-[var(--hover)]" : ""}`}
                   >
-                    <item.icon size={13} className={`shrink-0 ${isItemDanger ? "text-red-400" : "text-[var(--secondary)]"}`} />
+                    <item.icon size={13} className={`shrink-0 ${isItemDanger ? "text-[var(--danger)]" : "text-[var(--secondary)]"}`} />
                     <span className="flex-1 truncate">{item.label}</span>
                     
                     {item.toggle && (

@@ -239,7 +239,7 @@ export default function AIRightPanel({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12 }}
-            className="fixed inset-0 z-50 bg-black/15 backdrop-blur-[2px]"
+            className="fixed inset-0 z-50 bg-[var(--bg)]/60 backdrop-blur-sm"
             onClick={onClose}
           />
 
@@ -637,9 +637,9 @@ export default function AIRightPanel({
                   {loading ? (
                     <button
                       onClick={() => {}}
-                      className="flex items-center gap-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 px-1.5 py-1 text-[9px] font-medium transition"
+                      className="flex items-center gap-1 rounded-md bg-[var(--danger)]/10 text-[var(--danger)] hover:bg-[var(--danger)]/20 px-1.5 py-1 text-[9px] font-medium transition"
                     >
-                      <span className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
+                      <span className="w-1 h-1 rounded-full bg-[var(--danger)] animate-pulse" />
                     </button>
                   ) : (
                     <motion.button

@@ -83,7 +83,7 @@ function getEmbedUrl(url, type) {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
     if (match && match[2]?.length === 11) {
-      return `https://www.youtube.com/embed/${match[2]}`;
+      return `https://www.youtube.com/embed/${match[2]}?rel=0&modestbranding=1`;
     }
   }
 
@@ -139,6 +139,11 @@ function getEmbedUrl(url, type) {
     if (match) {
       return `https://embed.music.apple.com/us/album/${match[1]}`;
     }
+  }
+
+  if (type === "tweet") {
+    const match = url.match(/\/status\/(\d+)/);
+    if (match) return `https://platform.twitter.com/embed/Tweet.html?id=${match[1]}`;
   }
 
   if (type === "pdf") return url;
@@ -262,7 +267,7 @@ export default function EmbedBlock({ block, onPatch, onKeyDown, onDelete }) {
               </a>
               <button
                 onClick={() => { setInputUrl(""); onPatch({ text: "" }); }}
-                className="rounded p-1 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-red-400 transition"
+                className="rounded p-1 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--danger)] transition"
                 title="Clear embed"
               >
                 <Trash2 size={12} />
@@ -270,7 +275,7 @@ export default function EmbedBlock({ block, onPatch, onKeyDown, onDelete }) {
               {onDelete && (
                 <button
                   onClick={onDelete}
-                  className="rounded p-1 text-[var(--muted)] hover:bg-red-500/10 hover:text-red-400 transition"
+                  className="rounded p-1 text-[var(--muted)] hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] transition"
                   title="Delete block"
                 >
                   <Trash2 size={12} />

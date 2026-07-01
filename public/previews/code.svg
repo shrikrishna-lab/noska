@@ -1,0 +1,13 @@
+<svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="120" rx="8" fill="#F7F7F7"/>
+  <!-- Code block background -->
+  <rect x="16" y="16" width="168" height="80" rx="6" fill="#2D2D2D"/>
+  <!-- Code lines -->
+  <rect x="28" y="28" width="60" height="6" rx="3" fill="#7EC8E3"/>
+  <rect x="92" y="28" width="40" height="6" rx="3" fill="#C3E88D"/>
+  <rect x="28" y="40" width="80" height="6" rx="3" fill="#F0F0F0" opacity="0.6"/>
+  <rect x="40" y="52" width="100" height="6" rx="3" fill="#FFCB6B"/>
+  <rect x="40" y="64" width="70" height="6" rx="3" fill="#F0F0F0" opacity="0.6"/>
+  <rect x="28" y="76" width="30" height="6" rx="3" fill="#7EC8E3"/>
+  <text x="16" y="110" font-family="system-ui" font-size="10" fill="#999">Code with syntax highlighting</text>
+</svg>

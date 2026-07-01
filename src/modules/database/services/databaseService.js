@@ -17,8 +17,8 @@ export function createEmptyDatabase() {
       { id: 'done', name: 'Done', type: 'checkbox' },
     ],
     views: [
-      { id: 'default-table', type: 'table', name: 'Table', sort: 'name', sortAsc: true, filterGroup: null },
-      { id: 'default-board', type: 'board', name: 'Board', sort: 'name', sortAsc: true, groupBy: 'status', filterGroup: null },
+      { id: 'default-table', type: 'table', name: 'Table', sort: 'name', sortAsc: true, filterGroup: null, filters: { operator: 'and', conditions: [] }, sorts: [] },
+      { id: 'default-board', type: 'board', name: 'Board', sort: 'name', sortAsc: true, groupBy: 'status', filterGroup: null, filters: { operator: 'and', conditions: [] }, sorts: [] },
     ],
     rows: [],
     activeViewId: 'default-table',
@@ -49,7 +49,7 @@ function getDefaultValue(prop) {
     case 'done': return false;
     case 'number': return 0;
     case 'date': return '';
-    case 'select': return (prop.options && prop.options[0]) || '';
+    case 'select': return '';
     case 'multi-select': return [];
     case 'created-time': return new Date().toISOString();
     case 'updated-time': return new Date().toISOString();
@@ -99,6 +99,9 @@ export function removeProperty(db, propId) {
       ...v,
       hiddenProperties: v.hiddenProperties?.filter(h => h !== propId),
       groupBy: v.groupBy === propId ? undefined : v.groupBy,
+      filters: v.filters ? { ...v.filters, conditions: (v.filters.conditions || []).filter(c => c.columnId !== propId) } : v.filters,
+      sorts: (v.sorts || []).filter(s => s.columnId !== propId),
+      filterGroup: v.filterGroup ? { ...v.filterGroup, conditions: (v.filterGroup.conditions || []).filter(c => c.property !== propId) } : v.filterGroup,
     })),
   };
 }

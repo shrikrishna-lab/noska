@@ -24,8 +24,20 @@
 /**
  * @typedef {Object} FilterCondition
  * @property {string} property
- * @property {"contains"|"equals"|"not-equals"|"starts-with"|"ends-with"|"is-empty"|"is-not-empty"|"greater-than"|"less-than"|"between"|"before"|"after"} operator
+ * @property {"contains"|"not-contains"|"equals"|"not-equals"|"starts-with"|"ends-with"|"is-empty"|"is-not-empty"|"greater-than"|"less-than"|"between"|"before"|"after"|"is"|"is-before"|"is-after"|"is-checked"|"is-unchecked"} operator
  * @property {string} value
+ */
+
+/**
+ * @typedef {Object} FilterConfig — spec-style flat filters
+ * @property {"and"|"or"} operator
+ * @property {Array<{ columnId: string, condition: string, value?: string }>} conditions
+ */
+
+/**
+ * @typedef {Object} SortConfig — spec-style sort entry
+ * @property {string} columnId
+ * @property {"ascending"|"descending"} direction
  */
 
 /**
@@ -40,10 +52,12 @@
  * @property {string} id
  * @property {"table"|"board"|"calendar"|"timeline"|"gallery"|"list"|"graph"|"mind-map"} type
  * @property {string} name
- * @property {string} [sort]
- * @property {boolean} [sortAsc]
- * @property {string} [filter]
- * @property {FilterGroup} [filterGroup]
+ * @property {string} [sort] — legacy single sort property
+ * @property {boolean} [sortAsc] — legacy sort direction
+ * @property {string} [filter] — legacy filter string
+ * @property {FilterGroup} [filterGroup] — legacy nested filter group
+ * @property {FilterConfig} [filters] — spec-style flat filters (Phase 4)
+ * @property {SortConfig[]} [sorts] — spec-style sort array (Phase 4)
  * @property {string} [groupBy] — property id for board grouping
  * @property {string[]} [hiddenProperties]
  * @property {number} [columnWidths] — map of property id to width

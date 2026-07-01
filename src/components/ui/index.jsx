@@ -203,9 +203,8 @@ export function Confetti() {
   );
 }
 
-export const TextArea = React.forwardRef(function TextArea({ value, onChange, onKeyDown, onFocus, onBlur, className = "", placeholder, readOnly, disabled, style }, ref) {
+export const TextArea = React.forwardRef(function TextArea({ value, onChange, onKeyDown, onPaste, onFocus, onBlur, className = "", placeholder, readOnly, disabled, style }, ref) {
   const localRef = useRef(null);
-  const [isFocused, setIsFocused] = useState(false);
 
   const setRef = (node) => {
     localRef.current = node;
@@ -216,39 +215,30 @@ export const TextArea = React.forwardRef(function TextArea({ value, onChange, on
   useEffect(() => {
     const el = localRef.current;
     if (!el) return;
-    el.style.height = "0px";
-    el.style.height = `${Math.max(32, el.scrollHeight)}px`;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(40, el.scrollHeight)}px`;
   }, [value]);
 
   return (
-    <motion.div
-      animate={{
-        boxShadow: isFocused ? "0 1px 0 0 var(--accent)" : "none"
+    <textarea
+      ref={setRef}
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
+      onPaste={onPaste}
+      onFocus={(e) => {
+        onFocus?.(e);
       }}
-      transition={SPRING_PRESETS.stiff}
-      className="w-full"
-    >
-      <textarea
-        ref={setRef}
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        onFocus={(e) => {
-          setIsFocused(true);
-          onFocus?.(e);
-        }}
-        onBlur={(e) => {
-          setIsFocused(false);
-          onBlur?.(e);
-        }}
-        rows={1}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        disabled={disabled}
-        style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", ...style }}
-        className={`w-full resize-none overflow-hidden bg-transparent px-1 py-1 text-[var(--text)] outline-none placeholder:text-[var(--muted)] ${className}`}
-      />
-    </motion.div>
+      onBlur={(e) => {
+        onBlur?.(e);
+      }}
+      rows={1}
+      placeholder={placeholder}
+      readOnly={readOnly}
+      disabled={disabled}
+      style={{ lineHeight: "inherit", ...style }}
+      className={`w-full resize-none overflow-hidden bg-transparent px-2 py-1.5 text-[var(--text)] outline-none placeholder:text-[var(--muted)] ${className}`}
+    />
   );
 });
 

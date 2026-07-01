@@ -110,7 +110,7 @@ export default function MotionCards({ onCreateTemplate }) {
                       </div>
                       {card.items.map((item, idx) => (
                         <div key={idx} className="flex items-center gap-2 text-xs text-[var(--text)]">
-                          <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                          <CheckCircle2 size={12} className="text-[var(--success)] shrink-0" />
                           <span>{item}</span>
                         </div>
                       ))}

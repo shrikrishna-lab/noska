@@ -189,7 +189,7 @@ export function WorkspaceView({
                 </div>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 metric-card">
                   <div className="text-[10px] uppercase font-semibold text-[var(--muted)]">Reviews Due</div>
-                  <div className="text-xl font-bold text-rose-400 mt-1">{dueReviewsCount}</div>
+                  <div className="text-xl font-bold text-[var(--danger)] mt-1">{dueReviewsCount}</div>
                 </div>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 metric-card">
                   <div className="text-[10px] uppercase font-semibold text-[var(--muted)]">Favorites</div>
@@ -212,7 +212,7 @@ export function WorkspaceView({
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{page.icon || "📝"}</span>
                         <span className="truncate text-sm font-semibold text-[var(--text)]">{page.title || "Untitled"}</span>
-                        {page.isEncrypted && <Lock size={11} className="text-rose-400 shrink-0" />}
+                        {page.isEncrypted && <Lock size={11} className="text-[var(--danger)] shrink-0" />}
                       </div>
                       <div className="mt-2 text-xs leading-5 text-[var(--secondary)] line-clamp-2 min-h-[40px]">
                         {plainText(page) || <span className="italic text-[var(--muted)]">Empty document page</span>}
@@ -321,7 +321,7 @@ export function WorkspaceView({
               <Panel title="Recall & Spaced Repetition">
                 <div className="mt-2 p-3 rounded-xl bg-[var(--surface)] border border-[var(--border-strong)]">
                   <div className="flex items-center gap-3">
-                    <div className="grid h-10 w-10 place-items-center rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                    <div className="grid h-10 w-10 place-items-center rounded-lg bg-[var(--danger)]/10 border border-[var(--danger)]/20 text-[var(--danger)]">
                       <Brain size={20} />
                     </div>
                     <div>
@@ -353,7 +353,7 @@ export function WorkspaceView({
                   </div>
                   <div className="flex items-center justify-between rounded-lg bg-[var(--surface)] p-2.5">
                     <span className="text-[var(--secondary)] font-medium">Security (Encrypted Pages)</span>
-                    <span className="font-bold text-rose-400">
+                    <span className="font-bold text-[var(--danger)]">
                       {pages.filter(p => !p.trashed).length > 0 ? `${Math.round((pages.filter(p => p.isEncrypted && !p.trashed).length / pages.filter(p => !p.trashed).length) * 100)}%` : "0%"}
                     </span>
                   </div>
@@ -597,7 +597,7 @@ function LibraryRoute({ pages, workspaceName, onSelect, onNew }) {
               onClick={() => setActiveTab(tab)}
               className={`flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold ${activeTab === tab ? "bg-[var(--active)] text-[var(--text)]" : "text-[var(--secondary)] hover:bg-[var(--surface)]"}`}
             >
-              {tab === "Favorites" ? <Star size={16} className="fill-yellow-500 text-yellow-500" /> : <Table2 size={16} />}
+              {tab === "Favorites" ? <Star size={16} className="fill-[var(--warning)] text-[var(--warning)]" /> : <Table2 size={16} />}
               {tab}
             </button>
           ))}
@@ -826,7 +826,7 @@ function MeetingsRoute({ onNew }) {
               <div className="mt-1 text-xs">{connected ? `Connected as ${window.realtimeCollab?.getUser?.()?.userId || 'user@email.com'}` : "Not connected to any account."}</div>
               <button
                 onClick={() => setConnected(!connected)}
-                className={`mt-3 rounded-md px-3 py-2 text-xs font-medium text-white ${connected ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" : "bg-[var(--accent)]"}`}
+                className={`mt-3 rounded-md px-3 py-2 text-xs font-medium text-white ${connected ? "bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20" : "bg-[var(--accent)]"}`}
               >
                 {connected ? "Disconnect" : "Connect calendar"}
               </button>
@@ -917,7 +917,7 @@ function InboxRoute({ onNew, onToast }) {
                 </button>
               </div>
               <div className="mt-4 flex items-center gap-2 text-[var(--secondary)]"><CalendarDays size={17} />Due Date</div>
-              <div className="mt-2 text-red-400">{rem.date}</div>
+              <div className="mt-2 text-[var(--danger)]">{rem.date}</div>
             </div>
             <div className="text-sm text-[var(--muted)]">{rem.date ? new Date(rem.date).toLocaleDateString?.()?.slice(0, 6) || rem.date : 'No date'}</div>
           </div>
@@ -932,7 +932,7 @@ function InboxRoute({ onNew, onToast }) {
                   <span>{r.text}</span>
                 </div>
               ))}
-              <button onClick={() => { setReminders([]); saveInboxReminders([]); }} className="text-[9px] text-rose-400 hover:underline">Clear dismissed</button>
+              <button onClick={() => { setReminders([]); saveInboxReminders([]); }} className="text-[9px] text-[var(--danger)] hover:underline">Clear dismissed</button>
             </div>
           </details>
         )}
@@ -1001,7 +1001,7 @@ function MarketplaceRoute({ onNew, onToast }) {
             <button key={chip} onClick={() => setSelectedCategory(chip)}
               className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
                 selectedCategory === chip
-                  ? "border-yellow-900 bg-yellow-950/40 text-yellow-300"
+                  ? "border-[var(--warning)] bg-[var(--warning)]/20 text-[var(--warning)]"
                   : "border-[var(--border)] bg-[var(--panel)] text-[var(--text)] hover:bg-[var(--hover)]"
               }`}
             >
@@ -1164,12 +1164,12 @@ function PageCard({ page, onSelect }) {
 const templateCards = [
   { id: "blank", title: "Empty page", icon: FileText, tone: "border-[var(--border)] bg-[var(--bg)]", description: "Start from a blank page." },
   { id: "database", title: "Empty database", icon: Database, tone: "border-[var(--border)] bg-[var(--bg)]", description: "Start from a database shell." },
-  { id: "tasks", title: "Tasks Tracker", icon: CheckSquare, tone: "border-emerald-900/70 bg-emerald-950/30", description: "Stay organized with tasks, your way." },
-  { id: "projects", title: "Projects", icon: Search, tone: "border-blue-900/70 bg-blue-950/35", description: "Manage projects start to finish." },
-  { id: "docs", title: "Document Hub", icon: FileText, tone: "border-red-900/70 bg-red-950/30", description: "Collaborate on docs in one hub." },
-  { id: "brainstorm", title: "Brainstorm Session", icon: Sparkles, tone: "border-orange-900/70 bg-orange-950/30", description: "Spark new ideas together." },
-  { id: "standup", title: "Meeting Notes", icon: CalendarDays, tone: "border-yellow-900/70 bg-yellow-950/25", description: "Turn meetings into action." },
-  { id: "goals", title: "Goals Tracker", icon: CheckSquare, tone: "border-sky-900/70 bg-sky-950/35", description: "Set team goals, achieve together." }
+  { id: "tasks", title: "Tasks Tracker", icon: CheckSquare, tone: "border-[var(--success)]/70 bg-[var(--success)]/15", description: "Stay organized with tasks, your way." },
+  { id: "projects", title: "Projects", icon: Search, tone: "border-[var(--accent)]/70 bg-[var(--accent)]/15", description: "Manage projects start to finish." },
+  { id: "docs", title: "Document Hub", icon: FileText, tone: "border-[var(--danger)]/70 bg-[var(--danger)]/15", description: "Collaborate on docs in one hub." },
+  { id: "brainstorm", title: "Brainstorm Session", icon: Sparkles, tone: "border-[var(--warning)]/70 bg-[var(--warning)]/20", description: "Spark new ideas together." },
+  { id: "standup", title: "Meeting Notes", icon: CalendarDays, tone: "border-[var(--warning)]/70 bg-[var(--warning)]/20", description: "Turn meetings into action." },
+  { id: "goals", title: "Goals Tracker", icon: CheckSquare, tone: "border-[var(--accent)]/70 bg-[var(--accent)]/15", description: "Set team goals, achieve together." }
 ];
 
 export function TemplatePicker({ onClose, onCreate }) {

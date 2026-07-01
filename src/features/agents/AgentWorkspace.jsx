@@ -76,7 +76,7 @@ function PersonalAgentView({ pages, onToast }) {
           <p className="text-xs text-[var(--muted)]">Your personal AI assistant · {personality} personality</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => setPlanMode(!planMode)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition ${planMode ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)]'}`}><Shield size={12} /> {planMode ? 'Plan Mode On' : 'Plan Mode Off'}</button>
+          <button onClick={() => setPlanMode(!planMode)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition ${planMode ? 'bg-[var(--warning)]/10 border-[var(--warning)]/30 text-[var(--warning)]' : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)]'}`}><Shield size={12} /> {planMode ? 'Plan Mode On' : 'Plan Mode Off'}</button>
         </div>
       </div>
 
@@ -95,7 +95,7 @@ function PersonalAgentView({ pages, onToast }) {
               <h4 className="text-xs font-semibold text-[var(--text)]">{s.name}</h4>
               <p className="text-[10px] text-[var(--muted)] truncate">{s.prompt}</p>
             </div>
-            <button onClick={() => setSkills(prev => prev.filter(x => x.id !== s.id))} className="text-[var(--muted)] hover:text-red-400"><Trash2 size={11} /></button>
+            <button onClick={() => setSkills(prev => prev.filter(x => x.id !== s.id))} className="text-[var(--muted)] hover:text-[var(--danger)]"><Trash2 size={11} /></button>
           </div>
         ))}
         {showSkillEditor ? (
@@ -114,8 +114,8 @@ function PersonalAgentView({ pages, onToast }) {
 
       {/* Plan mode explanation */}
       {planMode && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-          <p className="text-xs text-amber-400 font-medium">Plan Mode Active</p>
+        <div className="rounded-xl border border-[var(--warning)]/20 bg-[var(--warning)]/5 p-3">
+          <p className="text-xs text-[var(--warning)] font-medium">Plan Mode Active</p>
           <p className="text-[10px] text-[var(--muted)] mt-0.5">The agent will show a diff/preview of changes for approval before executing.</p>
         </div>
       )}
@@ -149,8 +149,8 @@ function CustomAgentsView({ agents, onToast, onNew, onToggle, onDelete, onDuplic
               </div>
               <div className="flex items-center gap-1.5">
                 <button onClick={() => onDuplicateAgent(a)} className="p-1.5 rounded text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]"><Copy size={11} /></button>
-                <button onClick={() => onDelete(a.id)} className="p-1.5 rounded text-[var(--muted)] hover:text-red-400 hover:bg-[var(--hover)]"><Trash2 size={11} /></button>
-                <button onClick={() => onToggle(a.id)} className={`p-1.5 rounded ${a.status === 'active' ? 'text-emerald-400 hover:text-emerald-300' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>{a.status === 'active' ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}</button>
+                <button onClick={() => onDelete(a.id)} className="p-1.5 rounded text-[var(--muted)] hover:text-[var(--danger)] hover:bg-[var(--hover)]"><Trash2 size={11} /></button>
+                <button onClick={() => onToggle(a.id)} className={`p-1.5 rounded ${a.status === 'active' ? 'text-[var(--success)] hover:text-[var(--success)]/80' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>{a.status === 'active' ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}</button>
               </div>
             </div>
           ))}
@@ -232,7 +232,7 @@ function AgentBuilder({ pages, onSave, onCancel }) {
               <Zap size={11} className="text-[var(--accent)]" />
               <span className="text-xs text-[var(--text)] capitalize">{t.type}</span>
               <span className="text-[10px] text-[var(--muted)]">{JSON.stringify(t.config)}</span>
-              <button onClick={() => setForm(f => ({ ...f, triggers: f.triggers.filter((_, j) => j !== i) }))} className="ml-auto text-[var(--muted)] hover:text-red-400"><Trash2 size={10} /></button>
+              <button onClick={() => setForm(f => ({ ...f, triggers: f.triggers.filter((_, j) => j !== i) }))} className="ml-auto text-[var(--muted)] hover:text-[var(--danger)]"><Trash2 size={10} /></button>
             </div>
           ))}
           <div className="flex gap-2">
@@ -256,7 +256,7 @@ function AgentBuilder({ pages, onSave, onCancel }) {
               <Shield size={11} className="text-[var(--accent)]" />
               <span className="text-xs text-[var(--text)]">{g.resourceType}:{g.resourceId}</span>
               <span className="text-[10px] text-[var(--muted)]">({g.level})</span>
-              <button onClick={() => setForm(f => ({ ...f, accessGrants: f.accessGrants.filter((_, j) => j !== i) }))} className="ml-auto text-[var(--muted)] hover:text-red-400"><Trash2 size={10} /></button>
+              <button onClick={() => setForm(f => ({ ...f, accessGrants: f.accessGrants.filter((_, j) => j !== i) }))} className="ml-auto text-[var(--muted)] hover:text-[var(--danger)]"><Trash2 size={10} /></button>
             </div>
           ))}
           <div className="flex gap-2">
@@ -317,7 +317,7 @@ function AgentDirectoryView({ agents, onToast, onInstall }) {
                 <p className="text-xs text-[var(--secondary)] mt-1.5">{t.description}</p>
                 <div className="flex items-center gap-2 mt-3">
                   {isInstalled(t.id) ? (
-                    <span className="text-[10px] text-emerald-400 font-medium">Installed</span>
+                    <span className="text-[10px] text-[var(--success)] font-medium">Installed</span>
                   ) : (
                     <button onClick={() => onInstall(t)} className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[10px] font-semibold text-white"><Plus size={10} /> Install</button>
                   )}

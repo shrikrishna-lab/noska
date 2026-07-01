@@ -278,7 +278,7 @@ Rules:
           className="w-[400px] rounded-xl border border-[var(--border-strong)] bg-[var(--bg)] p-6 shadow-2xl text-center"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <AlertCircle size={40} className="mx-auto mb-4 text-amber-400" />
+          <AlertCircle size={40} className="mx-auto mb-4 text-[var(--accent)]" />
           <h3 className="text-lg font-semibold text-[var(--text)] mb-2">Browser Not Supported</h3>
           <p className="text-sm text-[var(--secondary)] mb-4">
             Voice capture requires the Web Speech API, which is only available in Chrome, Edge, and other Chromium-based browsers.
@@ -318,9 +318,9 @@ Rules:
             <motion.span
               animate={{ opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.5, repeat: Infinity }}
-              className="flex items-center gap-1.5 text-xs font-medium text-red-400"
+              className="flex items-center gap-1.5 text-xs font-medium text-[var(--danger)]"
             >
-              <span className="h-2 w-2 rounded-full bg-red-400" />
+              <span className="h-2 w-2 rounded-full bg-[var(--danger)]" />
               {formatTime(elapsed)}
             </motion.span>
           )}
@@ -370,7 +370,7 @@ Rules:
                 onClick={stopRecording}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 text-sm font-semibold text-white shadow-lg"
+                className="flex items-center gap-2 rounded-full bg-[var(--danger)] px-6 py-3 text-sm font-semibold text-white shadow-lg"
               >
                 <Square size={14} />
                 Stop

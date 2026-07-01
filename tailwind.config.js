@@ -10,12 +10,16 @@ export default {
       },
       colors: {
         noska: {
-          sidebar: "#191919",
-          teal: "#0F7B6C",
-          hover: "#F1F1F0",
+          bg: "#F0FAFF",
+          surface: "#F0F0F0",
+          accent: "#E3CFB3",
+          "accent-deep": "#C9B090",
+          "accent-light": "#F0E6D6",
+          sidebar: "#F5F7FA",
+          hover: "#E8E8E8",
           blue: "#0066FF",
-          blueGlow: "rgba(0, 102, 255, 0.35)",
-          blueSoft: "rgba(0, 102, 255, 0.12)",
+          blueGlow: "rgba(0, 102, 255, 0.25)",
+          blueSoft: "rgba(0, 102, 255, 0.08)",
           blueLight: "#4791FF",
           blueDark: "#0052CC"
         }

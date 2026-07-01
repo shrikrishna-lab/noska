@@ -26,7 +26,7 @@ export default function ImageBlock({
   const [align, setAlign] = useState(block.imageAlign || "center");
   const [resizing, setResizing] = useState(null);
   const [naturalSize, setNaturalSize] = useState(null);
-  const [customWidth, setCustomWidth] = useState(null);
+  const [customWidth, setCustomWidth] = useState(block.imageWidth || null);
   const imgRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -63,6 +63,13 @@ export default function ImageBlock({
       setResizing(null);
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      const finalW = imgRef.current?.style.width;
+      if (finalW && !finalW.includes("auto") && !finalW.includes("%")) {
+        const px = parseInt(finalW);
+        if (!isNaN(px) && Math.abs(px - (naturalSize?.width || px)) > 5) {
+          onPatch?.({ imageWidth: px });
+        }
+      }
     };
 
     document.addEventListener("mousemove", onMove);
@@ -241,7 +248,7 @@ function ToolbarButton({ icon: Icon, size, tooltip, onClick, danger, label }) {
       onClick={onClick}
       title={tooltip}
       className={`flex items-center gap-1 rounded px-1.5 py-1 text-white/80 hover:text-white transition cursor-pointer ${
-        danger ? "hover:bg-red-500/60" : "hover:bg-white/10"
+        danger ? "hover:bg-[var(--danger)]/60" : "hover:bg-white/10"
       }`}
     >
       <Icon size={size || 12} />

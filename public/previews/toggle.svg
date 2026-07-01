@@ -1,0 +1,11 @@
+<svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="120" rx="8" fill="#F7F7F7"/>
+  <!-- Toggle arrow -->
+  <path d="M20 28 L28 34 L20 40" stroke="#666" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="36" y="28" width="120" height="10" rx="4" fill="#D0D0D0"/>
+  <!-- Nested content -->
+  <rect x="36" y="50" width="148" height="6" rx="3" fill="#E8E8E8"/>
+  <rect x="36" y="62" width="130" height="6" rx="3" fill="#E8E8E8"/>
+  <rect x="36" y="74" width="110" height="6" rx="3" fill="#E8E8E8"/>
+  <text x="16" y="110" font-family="system-ui" font-size="10" fill="#999">Toggle list</text>
+</svg>

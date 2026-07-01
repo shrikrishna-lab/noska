@@ -112,8 +112,8 @@ function PublishForm({ pages, onPublish, onCancel }) {
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-          <p className="text-[10px] text-amber-400">Make sure all linked content is inside the template page tree. Pages linking to external content will be blocked from publishing.</p>
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--warning)]/5 border border-[var(--warning)]/20">
+          <p className="text-[10px] text-[var(--warning)]">Make sure all linked content is inside the template page tree. Pages linking to external content will be blocked from publishing.</p>
         </div>
         <div className="flex items-center gap-3 pt-2">
           <button type="submit" className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent)]/90 transition"><Save size={14} /> Create Draft</button>
@@ -148,7 +148,7 @@ function ListingsView({ listings, onToast }) {
                   <span>{l.addCount} adds</span>
                 </div>
               </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${l.status === 'published' ? 'bg-emerald-500/10 text-emerald-400' : l.status === 'draft' ? 'bg-amber-500/10 text-amber-400' : l.status === 'in_review' ? 'bg-blue-500/10 text-blue-400' : 'bg-red-500/10 text-red-400'}`}>{l.status}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${l.status === 'published' ? 'bg-[var(--success)]/10 text-[var(--success)]' : l.status === 'draft' ? 'bg-[var(--warning)]/10 text-[var(--warning)]' : l.status === 'in_review' ? 'bg-[var(--noska-blue-soft)] text-[var(--noska-blue)]' : 'bg-[var(--danger)]/10 text-[var(--danger)]'}`}>{l.status}</span>
             </div>
           ))}
         </div>

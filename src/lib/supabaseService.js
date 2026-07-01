@@ -548,7 +548,7 @@ function mapPageFromDb(db) {
     id: db.id,
     title: db.title || "Untitled",
     icon: db.icon || "📝",
-    cover: db.cover || "linear-gradient(135deg,#0f7b6c,#2dd4bf,#f4d35e)",
+    cover: db.cover !== undefined ? db.cover : "linear-gradient(135deg,#0f7b6c,#2dd4bf,#f4d35e)",
     parentId: db.parent_id,
     favorite: db.favorite || false,
     trashed: db.trashed || false,

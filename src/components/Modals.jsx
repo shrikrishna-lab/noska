@@ -199,7 +199,7 @@ export function SettingsModal({
                     <button
                       key={sub}
                       onClick={() => setPeopleTab(sub)}
-                      className={`pb-2 px-1 transition ${peopleTab === sub ? "border-b-2 border-[var(--text)] text-[var(--text)]" : "hover:text-[var(--text)]"}`}
+                      className={`pb-2 px-1 transition ${peopleTab === sub ? "border-b-2 border-[var(--accent)] text-[var(--text)]" : "hover:text-[var(--text)]"}`}
                     >
                       {sub} {sub === "Members" ? `(${members.length})` : sub === "Guests" ? `(${guests.length})` : ""}
                     </button>
@@ -241,12 +241,12 @@ export function SettingsModal({
               </div>
               <div className="flex items-center justify-between rounded border border-[var(--border)] bg-[var(--panel)] p-3">
                 <div>
-                  <div className="text-sm font-semibold text-rose-400">Log out</div>
+                  <div className="text-sm font-semibold text-[var(--danger)]">Log out</div>
                   <div className="text-xs text-[var(--muted)]">Sign out of your account</div>
                 </div>
                 <button
                   onClick={() => { onLogout?.(); onClose?.(); }}
-                  className="rounded-lg border border-[var(--border)] px-4 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition"
+                  className="rounded-lg border border-[var(--border)] px-4 py-2 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger)]/10 transition"
                 >
                   Log out
                 </button>
@@ -259,7 +259,9 @@ export function SettingsModal({
                             <span className="text-sm font-medium">{g}</span>
                             <button
                               onClick={() => setGuests(guests.filter((_, idx) => idx !== i))}
-                              className="text-rose-400 text-xs hover:underline"
+                              className="text-[var(--danger)] text-xs hover:underline"
+
+                            
                             >
                               Revoke
                             </button>
@@ -319,7 +321,7 @@ export function SettingsModal({
                                 setSaveStatus(`Group "${g}" deleted.`);
                                 setTimeout(() => setSaveStatus(""), 2000);
                               }}
-                              className="text-rose-400 hover:text-rose-400 text-xs font-semibold"
+                              className="text-[var(--danger)] hover:text-[var(--danger)] text-xs font-semibold"
                             >
                               Delete
                             </button>
@@ -466,7 +468,7 @@ export function SettingsModal({
                   </div>
                   <button
                     onClick={() => setGoogleCalConnected(!googleCalConnected)}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${googleCalConnected ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
+                    className={`px-3 py-1 rounded text-xs font-semibold transition ${googleCalConnected ? "bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
                   >
                     {googleCalConnected ? "Disconnect" : "Connect"}
                   </button>
@@ -482,7 +484,7 @@ export function SettingsModal({
                       setSaveStatus(outlookConnected ? "Outlook Calendar disconnected" : "Outlook Calendar connected");
                       setTimeout(() => setSaveStatus(""), 2000);
                     }}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${outlookConnected ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
+                    className={`px-3 py-1 rounded text-xs font-semibold transition ${outlookConnected ? "bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
                   >
                     {outlookConnected ? "Disconnect" : "Connect"}
                   </button>
@@ -524,7 +526,7 @@ export function SettingsModal({
                   </div>
                   <button
                     onClick={() => setGithubConnected(!githubConnected)}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${githubConnected ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
+                    className={`px-3 py-1 rounded text-xs font-semibold transition ${githubConnected ? "bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
                   >
                     {githubConnected ? "Disconnect" : "Connect"}
                   </button>
@@ -536,7 +538,7 @@ export function SettingsModal({
                   </div>
                   <button
                     onClick={() => setSlackConnected(!slackConnected)}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${slackConnected ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
+                    className={`px-3 py-1 rounded text-xs font-semibold transition ${slackConnected ? "bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
                   >
                     {slackConnected ? "Disconnect" : "Connect"}
                   </button>
@@ -565,7 +567,7 @@ export function SettingsModal({
                       <tr key={idx} className="hover:bg-[var(--hover)]">
                         <td className="p-3 font-semibold">{srv.name}</td>
                         <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${srv.status === "Active" ? "bg-emerald-500/20 text-emerald-400" : "bg-[var(--surface)] text-[var(--muted)]"}`}>
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${srv.status === "Active" ? "bg-[var(--success)]/20 text-[var(--success)]" : "bg-[var(--surface)] text-[var(--muted)]"}`}>
                             {srv.status}
                           </span>
                         </td>
@@ -619,7 +621,7 @@ export function SettingsModal({
                     {em}
                     <button
                       onClick={() => setCustomEmojis(customEmojis.filter((_, i) => i !== idx))}
-                      className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full h-4 w-4 text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                      className="absolute -top-1.5 -right-1.5 bg-[var(--danger)] text-white rounded-full h-4 w-4 text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                     >
                       ✕
                     </button>
@@ -662,7 +664,7 @@ export function SettingsModal({
                   setSaveStatus("Local offline cache cleared successfully.");
                   setTimeout(() => setSaveStatus(""), 2500);
                 }}
-                className="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-2 rounded text-xs font-semibold hover:bg-rose-500/30"
+                className="bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30 px-3 py-2 rounded text-xs font-semibold hover:bg-[var(--danger)]/30"
               >
                 Clear Local Cache
               </button>
@@ -679,7 +681,7 @@ export function SettingsModal({
                     <span className="text-sm font-semibold"># {tName}</span>
                     <button
                       onClick={() => setTeamspaces(teamspaces.filter((_, idx) => idx !== i))}
-                      className="text-rose-400 text-xs hover:underline"
+                      className="text-[var(--danger)] text-xs hover:underline"
                     >
                       Delete
                     </button>
@@ -874,7 +876,7 @@ function NoskaAISettings({
             <div className="text-lg font-bold text-[var(--text)]">{aiManager.getActiveModelName()}</div>
             <div className="text-xs text-[var(--secondary)] mt-0.5">via {aiManager.getActiveProviderName()}</div>
           </div>
-          <div className={`h-3 w-3 rounded-full ${aiManager.isConfigured() ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]" : "bg-amber-400"}`} />
+          <div className={`h-3 w-3 rounded-full ${aiManager.isConfigured() ? "bg-[var(--success)] shadow-[0_0_8px_var(--success)]" : "bg-amber-400"}`} />
         </div>
       </div>
 
@@ -901,7 +903,7 @@ function NoskaAISettings({
                 <div className="flex items-center gap-3">
                   {/* Status dot */}
                   <div className={`h-2 w-2 rounded-full flex-shrink-0 ${
-                    hasKey ? "bg-emerald-400" : "bg-[var(--muted)]"
+                    hasKey ? "bg-[var(--success)]" : "bg-[var(--muted)]"
                   }`} />
 
                   {/* Provider info */}
@@ -973,8 +975,8 @@ function NoskaAISettings({
                 {testResult && (
                   <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${
                     testResult.ok
-                      ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                      : "bg-red-500/10 border border-red-500/20 text-red-300"
+                      ? "bg-[var(--success)]/10 border border-[var(--success)]/20 text-[var(--success)]"
+                      : "bg-[var(--danger)]/10 border border-[var(--danger)]/20 text-[var(--danger)]"
                   }`}>
                     {testResult.ok ? "✓ Connection successful" : `✗ ${testResult.error || "Connection failed"}`}
                   </div>
@@ -1187,7 +1189,7 @@ export function ShareModal({ page, onClose, onToast }) {
                 key={item}
                 onClick={() => setTab(item)}
                 className={`border-b-2 px-3 py-3 text-sm font-medium capitalize ${
-                  tab === item ? "border-[var(--text)] text-[var(--text)]" : "border-transparent text-[var(--secondary)] hover:text-[var(--text)]"
+                  tab === item ? "border-[var(--accent)] text-[var(--text)]" : "border-transparent text-[var(--secondary)] hover:text-[var(--text)]"
                 }`}
               >
                 {item}
@@ -1220,7 +1222,7 @@ export function ShareModal({ page, onClose, onToast }) {
                       </span>
                       <span className="flex-1 truncate">{inv.email}</span>
                       <span className="text-[var(--muted)] text-[9px]">{inv.role}</span>
-                      <button onClick={() => removeInvite(i)} className="text-rose-400 hover:text-rose-400 text-[9px]">✕</button>
+                      <button onClick={() => removeInvite(i)} className="text-[var(--danger)] hover:text-[var(--danger)] text-[9px]">✕</button>
                     </div>
                   ))}
                 </div>
@@ -1501,9 +1503,9 @@ export function HelpModal({ onClose }) {
               </p>
 
               {ticketSubmitted ? (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
+                <div className="rounded-xl border border-[var(--success)]/30 bg-[var(--success)]/10 p-6 text-center">
                   <div className="text-2xl mb-2">✅</div>
-                  <div className="text-sm font-semibold text-emerald-400">Ticket Submitted</div>
+                  <div className="text-sm font-semibold text-[var(--success)]">Ticket Submitted</div>
                   <div className="text-xs text-[var(--secondary)] mt-1">Thank you for your feedback! We'll review it shortly.</div>
                   <button
                     onClick={() => { setTicketSubmitted(false); setTicketTitle(""); setTicketBody(""); }}

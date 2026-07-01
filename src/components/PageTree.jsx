@@ -101,10 +101,10 @@ function HoverToolbar({ onAddInside, onMenu, onFavorite, onAI, onPeek, isFavorit
       </button>
       <button
         onClick={(e) => { e.stopPropagation(); onFavorite?.(); }}
-        className={`grid h-5 w-5 place-items-center rounded-md hover:bg-[var(--hover)] cursor-pointer transition-colors ${isFavorite ? 'text-amber-400' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+        className={`grid h-5 w-5 place-items-center rounded-md hover:bg-[var(--hover)] cursor-pointer transition-colors ${isFavorite ? 'text-[var(--accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
         title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
       >
-        <Star size={11} className={isFavorite ? 'fill-amber-400' : ''} />
+        <Star size={11} className={isFavorite ? 'fill-[var(--accent)]' : ''} />
       </button>
       <button
         onClick={(e) => { e.stopPropagation(); onAI?.(); }}
@@ -138,7 +138,7 @@ function PageMenuAction({ icon: Icon, label, shortcut, right, muted, onClick }) 
   );
 }
 
-function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCollapse, onSelect, onAddInside, onPatchPage }) {
+function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCollapse, onSelect, onAddInside, onPatchPage, onDuplicatePage, onRenamePage, onTrashPage, onCopyLink, onRemoveFromRecents, onToggleOffline, onToast }) {
   const [childHoverId, setChildHoverId] = useState(null);
   if (!collapsedPages.has(page.id) && page.content?.length) {
     const children = page.content.filter(id => isPageEntity(allBlocks.find(b => b.id === id)));
@@ -169,6 +169,13 @@ function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCol
                 onSelect={onSelect}
                 onAddInside={onAddInside}
                 onPatchPage={onPatchPage}
+                onDuplicatePage={onDuplicatePage}
+                onRenamePage={onRenamePage}
+                onTrashPage={onTrashPage}
+                onCopyLink={onCopyLink}
+                onRemoveFromRecents={onRemoveFromRecents}
+                onToggleOffline={onToggleOffline}
+                onToast={onToast}
                 parentHovered={childHoverId === page.id}
               />
             </div>
@@ -183,6 +190,8 @@ function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCol
 function PremiumBranch({
   page, depth, active, hasChildren, expanded, onToggleCollapse,
   onSelect, onAddInside, onPatchPage, parentHovered,
+  onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
+  onRemoveFromRecents, onToggleOffline, onToast,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -249,8 +258,8 @@ function PremiumBranch({
         <span className={`truncate text-[12.5px] ${active ? 'font-semibold' : 'font-normal'}`}>
           {page.title || 'Untitled'}
         </span>
-        {page.favorite && <Star size={8} className="text-amber-400 shrink-0 inline fill-amber-400 ml-0.5" />}
-        {page.isEncrypted && <Lock size={9} className="text-rose-400 shrink-0 inline ml-0.5" />}
+        {page.favorite && <Star size={8} className="text-[var(--accent)] shrink-0 inline fill-[var(--accent)] ml-0.5" />}
+        {page.isEncrypted && <Lock size={9} className="text-[var(--secondary)] shrink-0 inline ml-0.5" />}
       </div>
 
       {/* Hover Toolbar */}
@@ -271,23 +280,33 @@ function PremiumBranch({
           label={page.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
           onClick={() => { onPatchPage(page.id, { favorite: !page.favorite }); setMenuOpen(false); }}
         />
-        <PageMenuAction icon={ArchiveRestore} label="Remove from Recents" muted onClick={() => {}} />
+        <PageMenuAction
+          icon={ArchiveRestore}
+          label="Remove from Recents"
+          muted
+          onClick={() => { onRemoveFromRecents?.(page.id); setMenuOpen(false); }}
+        />
         <div className="my-2 border-t border-[var(--border)]" />
-        <PageMenuAction icon={AnimatedDownload} label="Available offline" right={
-          <span className={`flex h-6 w-10 items-center rounded-full p-0.5 transition ${page.offline ? 'bg-[var(--accent)] justify-end' : 'bg-[var(--toggle)] justify-start'}`}>
-            <span className="h-5 w-5 rounded-full bg-white" />
-          </span>
-        } />
+        <PageMenuAction
+          icon={AnimatedDownload}
+          label="Available offline"
+          onClick={() => { onToggleOffline?.(page.id); setMenuOpen(false); }}
+          right={
+            <span className={`flex h-6 w-10 items-center rounded-full p-0.5 transition ${page.offline ? 'bg-[var(--accent)] justify-end' : 'bg-[var(--toggle)] justify-start'}`}>
+              <span className="h-5 w-5 rounded-full bg-[var(--surface-2)]" />
+            </span>
+          }
+        />
         <div className="my-2 border-t border-[var(--border)]" />
-        <PageMenuAction icon={Link2} label="Copy link" />
-        <PageMenuAction icon={Copy} label="Duplicate" shortcut="Ctrl+D" />
-        <PageMenuAction icon={AnimatedSend} label="Rename" shortcut="Ctrl+Shift+R" />
-        <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" />
-        <PageMenuAction icon={AnimatedTrash} label="Move to Trash" />
+        <PageMenuAction icon={Link2} label="Copy link" onClick={() => { onCopyLink?.(page.id); setMenuOpen(false); }} />
+        <PageMenuAction icon={Copy} label="Duplicate" shortcut="Ctrl+D" onClick={() => { onDuplicatePage?.(page.id); setMenuOpen(false); }} />
+        <PageMenuAction icon={AnimatedSend} label="Rename" shortcut="Ctrl+Shift+R" onClick={() => { onRenamePage?.(page.id); setMenuOpen(false); }} />
+        <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" onClick={() => { onToast?.("Move to is not yet implemented"); setMenuOpen(false); }} />
+        <PageMenuAction icon={AnimatedTrash} label="Move to Trash" onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
         <div className="my-2 border-t border-[var(--border)]" />
-        <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" />
-        <PageMenuAction icon={AnimatedCanvas} label="Open in new window" />
-        <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" />
+        <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(`#page/${page.id}`, '_blank'); setMenuOpen(false); }} />
+        <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(`#page/${page.id}`, '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
+        <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
       </FloatingMenu>
     </div>
   );
@@ -296,7 +315,9 @@ function PremiumBranch({
 function PremiumPageItem({
   page, active, selected, hasChildren, expanded,
   depth, ancestors, onToggleCollapse, onSelect, onPatchPage,
-  onAddInside, allBlocks, collapsedPages,
+  onAddInside, allBlocks, collapsedPages, activeId,
+  onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
+  onRemoveFromRecents, onToggleOffline, onToast,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -413,8 +434,8 @@ function PremiumPageItem({
           <span className={`truncate text-[12.5px] ${active ? 'font-semibold' : 'font-normal'}`}>
             {page.title || 'Untitled'}
           </span>
-          {page.favorite && <Star size={8} className="text-amber-400 shrink-0 inline fill-amber-400 ml-0.5" />}
-          {page.isEncrypted && <Lock size={9} className="text-rose-400 shrink-0 inline ml-0.5" />}
+          {page.favorite && <Star size={8} className="text-[var(--accent)] shrink-0 inline fill-[var(--accent)] ml-0.5" />}
+          {page.isEncrypted && <Lock size={9} className="text-[var(--secondary)] shrink-0 inline ml-0.5" />}
         </div>
 
         {/* Hover Toolbar */}
@@ -439,28 +460,29 @@ function PremiumPageItem({
             icon={ArchiveRestore}
             label="Remove from Recents"
             muted
-            onClick={() => { setMenuOpen(false); }}
+            onClick={() => { onRemoveFromRecents?.(page.id); setMenuOpen(false); }}
           />
           <div className="my-2 border-t border-[var(--border)]" />
           <PageMenuAction
             icon={AnimatedDownload}
             label="Available offline"
+            onClick={() => { onToggleOffline?.(page.id); setMenuOpen(false); }}
             right={
               <span className={`flex h-6 w-10 items-center rounded-full p-0.5 transition ${page.offline ? 'bg-[var(--accent)] justify-end' : 'bg-[var(--toggle)] justify-start'}`}>
-                <span className="h-5 w-5 rounded-full bg-white" />
+                <span className="h-5 w-5 rounded-full bg-[var(--surface-2)]" />
               </span>
             }
           />
           <div className="my-2 border-t border-[var(--border)]" />
-          <PageMenuAction icon={Link2} label="Copy link" />
-          <PageMenuAction icon={Copy} label="Duplicate" shortcut="Ctrl+D" />
-          <PageMenuAction icon={AnimatedSend} label="Rename" shortcut="Ctrl+Shift+R" />
-          <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" />
-          <PageMenuAction icon={AnimatedTrash} label="Move to Trash" />
+          <PageMenuAction icon={Link2} label="Copy link" onClick={() => { onCopyLink?.(page.id); setMenuOpen(false); }} />
+          <PageMenuAction icon={Copy} label="Duplicate" shortcut="Ctrl+D" onClick={() => { onDuplicatePage?.(page.id); setMenuOpen(false); }} />
+          <PageMenuAction icon={AnimatedSend} label="Rename" shortcut="Ctrl+Shift+R" onClick={() => { onRenamePage?.(page.id); setMenuOpen(false); }} />
+          <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" onClick={() => { onToast?.("Move to is not yet implemented"); setMenuOpen(false); }} />
+          <PageMenuAction icon={AnimatedTrash} label="Move to Trash" onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
           <div className="my-2 border-t border-[var(--border)]" />
-          <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" />
-          <PageMenuAction icon={AnimatedCanvas} label="Open in new window" />
-          <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" />
+          <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(`#page/${page.id}`, '_blank'); setMenuOpen(false); }} />
+          <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(`#page/${page.id}`, '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
+          <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
         </FloatingMenu>
       </div>
 
@@ -490,6 +512,7 @@ function PremiumPageItem({
                 onAddInside={onAddInside}
                 allBlocks={allBlocks}
                 collapsedPages={collapsedPages}
+                activeId={activeId}
               />
             );
           })}
@@ -733,6 +756,7 @@ export default function PageTree({
               onToast={onToast}
               allBlocks={allBlocks}
               collapsedPages={collapsedPages}
+              activeId={activeId}
             />
           ))}
         </div>

@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import RingLoader from "./RingLoader";
 
 const GOOGLE_SVG = (
-  <svg className="w-5 h-5 mr-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+  <svg className="w-4 h-4 mr-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
     <path
       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
       fill="#4285F4"
@@ -24,7 +24,7 @@ const GOOGLE_SVG = (
 );
 
 const GITHUB_SVG = (
-  <svg className="w-5 h-5 mr-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+  <svg className="w-4 h-4 mr-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
     <path
       fillRule="evenodd"
       clipRule="evenodd"
@@ -48,22 +48,22 @@ export default function ProviderButton({
       type="button"
       onClick={onClick}
       disabled={disabled || isLoading}
-      whileHover={{ y: -1, boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)" }}
-      whileTap={{ y: 1, scale: 0.99 }}
+      whileHover={{ scale: 1.01, backgroundColor: "#111115" }}
+      whileTap={{ scale: 0.99 }}
       className={`
-        w-full h-11 px-4 rounded-lg flex items-center justify-center
-        bg-[#111116] border border-white/[0.04] text-[var(--text)]
-        font-medium text-sm transition-colors duration-150 relative overflow-hidden
-        hover:bg-[#16161c] hover:border-white/[0.08] cursor-pointer
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-noska-blue focus-visible:ring-offset-2 focus-visible:ring-offset-[#030307]
-        disabled:opacity-50 disabled:cursor-not-allowed
+        w-full h-11 px-4 rounded-[4px] flex items-center justify-center
+        bg-[#000000] border border-white/[0.12] text-white
+        font-medium text-xs tracking-normal transition-all duration-150 relative overflow-hidden
+        hover:border-white/[0.22] cursor-pointer
+        focus:outline-none focus-visible:ring-1 focus-visible:ring-white/40
+        disabled:opacity-40 disabled:cursor-not-allowed
       `}
       aria-label={label}
       aria-busy={isLoading}
     >
       {isLoading ? (
         <span className="flex items-center justify-center">
-          <RingLoader size={16} className="mr-2" />
+          <RingLoader size={14} className="mr-2" />
           <span className="opacity-70">Connecting...</span>
         </span>
       ) : (
@@ -72,9 +72,6 @@ export default function ProviderButton({
           <span>{label}</span>
         </span>
       )}
-
-      {/* Glass Light Reflection Line Overlay */}
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-white/[0.01] to-white/[0.05]" />
     </motion.button>
   );
 }

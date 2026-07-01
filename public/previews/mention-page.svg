@@ -1,0 +1,16 @@
+<svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="120" rx="8" fill="#F7F7F7"/>
+  <!-- Text line with mention -->
+  <rect x="16" y="30" width="60" height="8" rx="4" fill="#E0E0E0"/>
+  <!-- Mention chip -->
+  <rect x="82" y="26" width="80" height="16" rx="4" fill="#E3F2FD"/>
+  <rect x="88" y="31" width="8" height="6" rx="1" fill="#90CAF9"/>
+  <rect x="100" y="31" width="50" height="6" rx="3" fill="#64B5F6"/>
+  <!-- Continuation -->
+  <rect x="168" y="30" width="16" height="8" rx="4" fill="#E0E0E0"/>
+  <rect x="16" y="50" width="140" height="8" rx="4" fill="#E0E0E0"/>
+  <!-- Page icon -->
+  <rect x="16" y="72" width="12" height="14" rx="2" fill="#E0E0E0" stroke="#BBB" stroke-width="1"/>
+  <rect x="34" y="76" width="80" height="6" rx="3" fill="#E0E0E0"/>
+  <text x="16" y="110" font-family="system-ui" font-size="10" fill="#999">Mention a page inline</text>
+</svg>

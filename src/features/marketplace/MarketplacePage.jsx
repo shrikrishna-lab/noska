@@ -147,11 +147,11 @@ function TemplateCard({ template: t, onClick, purchased }) {
           </div>
           <div className="flex items-center gap-1">
             {t.price === 0 ? (
-              <span className="text-[10px] font-semibold text-emerald-400">Free</span>
+              <span className="text-[10px] font-semibold text-[var(--success)]">Free</span>
             ) : (
               <span className="text-[10px] font-semibold text-[var(--accent)]">${t.price.toFixed(2)}</span>
             )}
-            {purchased && <BadgeCheck size={10} className="text-emerald-400" />}
+            {purchased && <BadgeCheck size={10} className="text-[var(--success)]" />}
           </div>
         </div>
       </div>
@@ -174,14 +174,14 @@ function TemplateDetail({ template: t, onAdd, onBuy, onBack, purchased, onToast 
             <div className="flex items-center gap-2 mt-1 text-xs text-[var(--muted)]">
               <span>by {t.creatorName}</span>
               <span>·</span>
-              <span className="flex items-center gap-0.5"><Star size={10} className="text-amber-400" /> {t.rating}</span>
+              <span className="flex items-center gap-0.5"><Star size={10} className="text-[var(--warning)]" /> {t.rating}</span>
               <span>·</span>
               <Download size={10} /> {t.addCount} adds
             </div>
             <p className="text-sm text-[var(--secondary)] mt-3 leading-5">{t.description}</p>
             <div className="flex items-center gap-3 mt-4">
               {purchased ? (
-                <span className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400"><BadgeCheck size={14} /> Added to workspace</span>
+                <span className="flex items-center gap-1.5 rounded-lg bg-[var(--success)]/10 px-4 py-2 text-sm font-semibold text-[var(--success)]"><BadgeCheck size={14} /> Added to workspace</span>
               ) : t.price === 0 ? (
                 <button onClick={() => onAdd(t)} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent)]/90 transition"><Plus size={14} /> Add Free</button>
               ) : (
@@ -204,7 +204,7 @@ function TemplateDetail({ template: t, onAdd, onBuy, onBack, purchased, onToast 
               <h4 className="text-sm font-semibold text-[var(--text)] mb-2">What's included</h4>
               <ul className="space-y-1.5">
                 {['Pre-built page structure with sample content', 'Organized by sections with clear headings', 'Ready-to-use templates', 'Customizable to your workflow'].map((f, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-[var(--secondary)]"><BadgeCheck size={12} className="mt-0.5 text-emerald-400 shrink-0" /> {f}</li>
+                  <li key={i} className="flex items-start gap-2 text-xs text-[var(--secondary)]"><BadgeCheck size={12} className="mt-0.5 text-[var(--success)] shrink-0" /> {f}</li>
                 ))}
               </ul>
             </div>
@@ -241,7 +241,7 @@ function MyAdditionsView({ additions, onToast }) {
                   <Clock size={9} /> {new Date(a.addedAt).toLocaleDateString()}
                 </div>
               </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${a.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{a.status}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${a.status === 'active' ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-[var(--danger)]/10 text-[var(--danger)]'}`}>{a.status}</span>
             </div>
           ))}
         </div>

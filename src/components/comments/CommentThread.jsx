@@ -79,7 +79,7 @@ export default function CommentThread({ comments, blockId, pageId, onAddComment,
               </div>
               <button
                 onClick={() => onResolveComment?.(c.id)}
-                className="text-[var(--muted)] hover:text-green-400 cursor-pointer p-0.5"
+                className="text-[var(--muted)] hover:text-[var(--success)] cursor-pointer p-0.5"
                 title="Resolve"
               >
                 <Check size={12} />
@@ -103,7 +103,7 @@ export default function CommentThread({ comments, blockId, pageId, onAddComment,
                     {(c.userName || "?")[0]}
                   </div>
                   <span className="text-[10px] text-[var(--muted)]">{c.userName}</span>
-                  <Check size={10} className="text-green-400" />
+                  <Check size={10} className="text-[var(--success)]" />
                 </div>
                 <p className="text-[11px] text-[var(--muted)] line-through">{c.text}</p>
               </div>
