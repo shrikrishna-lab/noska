@@ -6,6 +6,7 @@ const CalendarView = lazy(() => import("./views/CalendarView"));
 const ListView     = lazy(() => import("./views/ListView"));
 const GalleryView  = lazy(() => import("./views/GalleryView"));
 const TimelineView = lazy(() => import("./views/TimelineView"));
+const FeedView     = lazy(() => import("./views/FeedView"));
 const GraphView    = lazy(() => import("./views/GraphView"));
 
 const VIEW_MAP = {
@@ -15,6 +16,7 @@ const VIEW_MAP = {
   list: ListView,
   gallery: GalleryView,
   timeline: TimelineView,
+  feed: FeedView,
   graph: GraphView,
 };
 

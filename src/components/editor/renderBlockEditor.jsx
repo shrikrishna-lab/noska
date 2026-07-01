@@ -20,6 +20,7 @@ import MermaidBlock from "./MermaidBlock";
 import SimpleTable from "./SimpleTable";
 import ColumnsBlock from "./ColumnsBlock";
 import DatabaseBlock from "../DatabaseBlock";
+import LinkedViewBlock from "./LinkedViewBlock";
 import FormsBlock from "../FormsBlock";
 
 function placeholderFor(type) {
@@ -426,6 +427,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
   if (block.type === "table") return <SimpleTable block={block} onPatch={onPatch} isLocked={isLocked} />;
   if (block.type === "columns" || block.type.endsWith("-columns")) return <ColumnsBlock block={block} onPatch={onPatch} isLocked={isLocked} />;
   if (block.type === "database" || block.type === "database-inline" || block.type === "database-full") return <DatabaseBlock block={block} onPatch={onPatch} isLocked={isLocked} apiKey={apiKey} aiProvider={aiProvider} page={page} />;
+  if (block.type === "linked-view") return <LinkedViewBlock block={block} onPatch={onPatch} isLocked={isLocked} pages={pages} page={page} apiKey={apiKey} aiProvider={aiProvider} onNavigate={onNavigate} />;
   
   if (block.type === "callout") {
     return <CalloutBlock block={block} cls={cls} isLocked={isLocked} onPatch={onPatch} onKeyDown={onKeyDown} onFocus={onFocus} onBlur={onBlur} onPasteUrl={onPasteUrl} />;
@@ -539,7 +541,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
     return <ChartBlock block={block} onPatch={onPatch} isLocked={isLocked} />;
   }
 
-  if (block.type === "button") {
+  if (block.type === "button" || block.type === "template_button") {
     const isTemplate = Array.isArray(block.templateBlocks) && block.templateBlocks.length > 0;
     return (
       <div className="my-2">
