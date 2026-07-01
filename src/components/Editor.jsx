@@ -1203,6 +1203,11 @@ export default function Editor({
           onExport: () => handleExport(),
           onAnalytics: () => setAnalyticsOpen(true),
           onHistory: () => setHistoryOpen(true),
+          onMoveTo: () => setMoveToOpen(true),
+          onToggleSuggest: () => { setSuggestEdits(v => !v); onToast?.(`Suggest edits ${!suggestEdits ? "ON" : "OFF"}`); },
+          onWiki: () => handleWikiConversion(),
+          setCustomizeOpen,
+          onPresent: () => setPresentationMode(true),
           onAskAI,
         }}
       />

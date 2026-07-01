@@ -887,7 +887,7 @@ const pageActions = [
     description: "Move page to another parent",
     shortcut: "Ctrl+Shift+P",
     preview: "Move this page under a different parent in the sidebar",
-    execute(ctx) { ctx.onPagePatch?.({}); }
+    execute(ctx) { if (ctx.onMoveTo) ctx.onMoveTo(); else ctx.onToast?.("Open the page ••• menu to move this page"); }
   },
   {
     id: "trash", title: "Move to Trash", aliases: ["delete", "remove"],
@@ -902,7 +902,7 @@ const pageActions = [
     description: "Present page as slideshow",
     shortcut: "Ctrl+Alt+P",
     preview: "Present this page in full-screen slideshow mode",
-    execute(ctx) { ctx.onPagePatch?.({ presentationMode: true }); }
+    execute(ctx) { if (ctx.onPresent) ctx.onPresent(); else ctx.onPagePatch?.({ presentationMode: true }); }
   },
   {
     id: "offline", title: "Available offline", aliases: [],
@@ -956,14 +956,14 @@ const pageActions = [
     icon: "FileEdit", category: "Page actions",
     description: "Suggest edits mode",
     preview: "Edit in suggestion mode — changes are tracked",
-    execute(ctx) { ctx.onToast?.("Suggest edits mode toggled"); }
+    execute(ctx) { if (ctx.onToggleSuggest) ctx.onToggleSuggest(); else ctx.onToast?.("Open the page ••• menu to toggle suggest edits"); }
   },
   {
     id: "translate", title: "Translate", aliases: ["language"],
     icon: "Languages", category: "Page actions",
-    description: "Translate page to another language",
-    preview: "Translate this page to a different language",
-    execute(ctx) { ctx.onToast?.("Translation panel opened"); }
+    description: "Translate page to another language (coming soon)",
+    preview: "Translate this page to another language. Requires a translation service — not yet available.",
+    execute(ctx) { ctx.onToast?.("Translation isn't available yet"); }
   },
   {
     id: "import", title: "Import", aliases: ["import-file"],
@@ -984,7 +984,7 @@ const pageActions = [
     icon: "Globe", category: "Page actions",
     description: "Convert page to wiki format",
     preview: "Convert to a wiki-style page with auto-linking",
-    execute(ctx) { ctx.onToast?.("Wiki mode toggled"); }
+    execute(ctx) { if (ctx.onWiki) ctx.onWiki(); else ctx.onToast?.("Open the page ••• menu to convert to a wiki"); }
   },
   {
     id: "analytics", title: "Updates & analytics", aliases: ["stats", "insights"],
