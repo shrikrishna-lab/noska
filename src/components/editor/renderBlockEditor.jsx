@@ -646,7 +646,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
       <div className="my-2 rounded-lg border border-[var(--noska-blue)]/30 bg-[var(--noska-blue-soft)]">
         <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--noska-blue)] border-b border-[var(--noska-blue)]/20">
           <span>⟳</span>
-          <span>Synced block</span>
+          <span>Reference block</span>
           <span className="ml-auto text-[9px] text-[var(--muted)] font-normal normal-case">
             {block.syncedGroupId?.slice(0, 8)}
           </span>

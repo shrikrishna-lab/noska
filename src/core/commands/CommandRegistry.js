@@ -453,10 +453,10 @@ const advanced = [
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "tabs", ctx.text)); }
   },
   {
-    id: "synced-block", title: "Synced block", aliases: ["sync", "reference"],
+    id: "synced-block", title: "Reference block", aliases: ["sync", "reference", "synced"],
     icon: "Copy", category: "Advanced blocks",
-    description: "Content that syncs across all instances",
-    preview: "Add a synced block — editing one updates all copies",
+    description: "A highlighted reference block for content you want to call out",
+    preview: "A distinct bordered block for referenceable content. (Live cross-instance syncing is planned — for now it behaves as a standalone highlighted block.)",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "synced-block", ctx.text)); }
   },
   {
