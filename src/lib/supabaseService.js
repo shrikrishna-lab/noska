@@ -1,5 +1,16 @@
 import { supabase } from "./supabase";
 
+// Refuse any owner-scoped write that lacks an authenticated user id. Under the
+// owner-scoped RLS model a null/empty owner would either fail the WITH CHECK
+// policy or (pre-migration) create an unusable orphaned row. Fail fast instead.
+// Spec: .kiro/specs/auth-rls-security-migration (Requirements 1.3, 6.2, 6.4)
+function requireOwner(userId) {
+  if (!userId) {
+    throw new Error("[supabase] refusing write without an authenticated user");
+  }
+  return userId;
+}
+
 // ============ PAGES ============
 
 export async function fetchPages(userId) {
@@ -11,8 +22,9 @@ export async function fetchPages(userId) {
 }
 
 export async function savePage(page, userId) {
+  requireOwner(userId);
   const dbPage = mapPageToDb(page);
-  if (userId) dbPage.user_id = userId;
+  dbPage.user_id = userId;
   const { data, error } = await supabase
     .from("pages")
     .upsert(dbPage, { onConflict: "id" })
@@ -23,11 +35,12 @@ export async function savePage(page, userId) {
 }
 
 export async function savePages(pages, userId) {
+  requireOwner(userId);
   if (!pages.length) return [];
   const dbPages = pages
     .map((p) => {
       const db = mapPageToDb(p);
-      if (userId) db.user_id = userId;
+      db.user_id = userId;
       return db;
     })
     .sort((a, b) => (a.parent_id ? 1 : 0) - (b.parent_id ? 1 : 0));
@@ -86,6 +99,7 @@ export async function fetchAIChats(userId) {
 }
 
 export async function saveAIChat(chat, userId) {
+  requireOwner(userId);
   const { data, error } = await supabase
     .from("ai_chats")
     .upsert({
@@ -98,7 +112,7 @@ export async function saveAIChat(chat, userId) {
       page_id: chat.pageId || null,
       page_title: chat.pageTitle || null,
       collaborators: chat.collaborators || [],
-      ...(userId ? { user_id: userId } : {})
+      user_id: userId
     }, { onConflict: "id" })
     .select()
     .single();
@@ -119,6 +133,7 @@ export async function saveAIChat(chat, userId) {
 }
 
 export async function saveAIChats(chats, userId) {
+  requireOwner(userId);
   if (!chats.length) return;
   const dbChats = chats.map((c) => ({
     id: c.id,
@@ -130,7 +145,7 @@ export async function saveAIChats(chats, userId) {
     page_id: c.pageId || null,
     page_title: c.pageTitle || null,
     collaborators: c.collaborators || [],
-    ...(userId ? { user_id: userId } : {})
+    user_id: userId
   }));
   const { error } = await supabase
     .from("ai_chats")
@@ -215,6 +230,7 @@ export async function fetchUserProfile(userId) {
 }
 
 export async function upsertUserProfile(profile) {
+  requireOwner(profile?.userId);
   const { data, error } = await supabase
     .from("user_profiles")
     .upsert({
@@ -234,6 +250,7 @@ export async function upsertUserProfile(profile) {
 }
 
 export async function setOnboardingComplete(userId, useCase, workspaceName) {
+  requireOwner(userId);
   const { error } = await supabase
     .from("user_profiles")
     .upsert({
@@ -269,6 +286,7 @@ export async function fetchCreatorProfileById(id) {
 }
 
 export async function upsertCreatorProfile(profile) {
+  requireOwner(profile?.userId);
   const { data, error } = await supabase
     .from("creator_profiles")
     .upsert({
@@ -316,6 +334,7 @@ export async function fetchTemplateById(id) {
 }
 
 export async function saveMarketplaceTemplate(template) {
+  requireOwner(template?.ownerId);
   const { data, error } = await supabase
     .from("marketplace_templates")
     .upsert({
@@ -418,6 +437,7 @@ export async function fetchAgentById(id) {
 }
 
 export async function saveAgent(agent) {
+  requireOwner(agent?.ownerId);
   const { data, error } = await supabase
     .from("agents")
     .upsert({

@@ -5,3 +5,6 @@ dist
 dev_server.log
 test-ui.mjs
 .DS_Store
+
+# MCP config may contain personal access tokens — never commit
+.kiro/settings/mcp.json

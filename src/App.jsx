@@ -33,6 +33,7 @@ import { initializeMemory } from "./ai/memory";
 import { realtimeCollab } from "./lib/realtimeCollab";
 import { auditEngine } from "./lib/auditEngine";
 import { supabase } from "./lib/supabase";
+import { TEST_MODE } from "./lib/envGuard";
 
 
 import {
@@ -255,7 +256,8 @@ function App() {
       let loadedChats = [];
 
       // ⚠️ TEST MODE: skip all Supabase calls and load exclusively from localStorage.
-      if (import.meta.env.VITE_TEST_MODE === 'true') {
+      // TEST_MODE is forced off against the production project (see envGuard.js).
+      if (TEST_MODE) {
         const pairs = await Promise.all(
           ["pages", "activeId", "workspaceName", "theme", "sidebarOpen", "apiKey",
            "themeFx", "aiProvider", "nvidiaKey", "appView", "aiChats", "activeChatId",
@@ -475,11 +477,11 @@ function App() {
         }
 
         // ⚠️ TEST MODE BYPASS — NEVER enable in production builds.
-        // When VITE_TEST_MODE=true, skip the auth/onboarding flow and jump
+        // When TEST_MODE is on, skip the auth/onboarding flow and jump
         // directly into the workspace so automated end-to-end tests can
         // interact with the editor without Supabase authentication.
-        // Only VITE_TEST_MODE=true in a local .env file (never committed).
-        if (import.meta.env.VITE_TEST_MODE === 'true') {
+        // TEST_MODE is forced off against production by envGuard.js.
+        if (TEST_MODE) {
           setAppFlowState("workspace");
         }
         return;
@@ -1739,7 +1741,7 @@ function App() {
 
   return (
     <AnimatePresence mode="wait">
-      {appFlowState === "loading" && import.meta.env.VITE_TEST_MODE !== 'true' && (
+      {appFlowState === "loading" && !TEST_MODE && (
         <LoadingScreen key="loader" onComplete={() => setAppFlowState("auth")} />
       )}
       {appFlowState === "auth" && (
