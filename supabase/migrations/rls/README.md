@@ -39,3 +39,14 @@ step. The Supabase MCP is read-only; enabling write access is itself gated.
 
 Every apply is preceded by a plain-text SQL re-review checkpoint. Run against the
 **staging** project first; production (`yxgtmzksnyarlivgxujf`) only after G2.
+
+## Security audit note (git history rewrite)
+
+During Wave 1 of this migration, a Supabase `service_role` key was found
+hardcoded in `scripts/run-migration.mjs`, committed since the initial commit.
+The key was rotated in the Supabase dashboard (the committed key is now dead),
+the script was deleted, and git history was rewritten with `git filter-repo` to
+purge the file from all commits before the repo's first push to any remote. This
+note exists so future audits have a record of when and why history was rewritten.
+No other credentials (anon key, `sbp_` tokens, other JWTs) were found in the
+repository.
