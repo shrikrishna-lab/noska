@@ -101,6 +101,7 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
 
     all.forEach(cmd => {
       if (cmd.category === "Page actions") return;
+      if (cmd.hideFromSlash) return; // formatting/color commands live in the selection toolbar, not the slash menu
       const cat = !search ? cmd.category || "Basic blocks" : cmd.category;
       if (!byCategory[cat]) byCategory[cat] = [];
       byCategory[cat].push(cmd);

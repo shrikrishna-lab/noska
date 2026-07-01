@@ -591,37 +591,37 @@ const inline = [
   },
   {
     id: "bold", title: "Bold", aliases: ["bold", "strong"],
-    icon: "Bold", category: "Inline",
+    icon: "Bold", category: "Inline", hideFromSlash: true,
     description: "Bold (Ctrl+B)",
-    preview: "Wrap selected text in **bold** markers",
+    preview: "Select text and use the toolbar (or Ctrl+B) to make it bold",
     execute(ctx) { ctx.onPatch({ text: `**${ctx.block.text || ctx.text}**` }); }
   },
   {
     id: "italic", title: "Italic", aliases: ["italic", "em"],
-    icon: "Italic", category: "Inline",
+    icon: "Italic", category: "Inline", hideFromSlash: true,
     description: "Italic (Ctrl+I)",
-    preview: "Wrap selected text in *italic* markers",
+    preview: "Select text and use the toolbar (or Ctrl+I) to italicize it",
     execute(ctx) { ctx.onPatch({ text: `*${ctx.block.text || ctx.text}*` }); }
   },
   {
     id: "underline", title: "Underline", aliases: ["underline", "u"],
-    icon: "Underline", category: "Inline",
+    icon: "Underline", category: "Inline", hideFromSlash: true,
     description: "Underline (Ctrl+U)",
-    preview: "Wrap selected text in <u>underline</u> markers",
+    preview: "Select text and use the toolbar (or Ctrl+U) to underline it",
     execute(ctx) { ctx.onPatch({ text: `<u>${ctx.block.text || ctx.text}</u>` }); }
   },
   {
     id: "strikethrough", title: "Strikethrough", aliases: ["strikethrough", "strike"],
-    icon: "Type", category: "Inline",
+    icon: "Type", category: "Inline", hideFromSlash: true,
     description: "Strikethrough (Ctrl+Shift+S)",
-    preview: "Wrap selected text in ~~strikethrough~~ markers",
+    preview: "Select text and use the toolbar to strike it through",
     execute(ctx) { ctx.onPatch({ text: `~~${ctx.block.text || ctx.text}~~` }); }
   },
   {
     id: "inline-code", title: "Inline code", aliases: ["code", "monospace"],
-    icon: "Code", category: "Inline",
+    icon: "Code", category: "Inline", hideFromSlash: true,
     description: "Inline code (Ctrl+`)",
-    preview: "Wrap selected text in `code` markers",
+    preview: "Select text and use the toolbar (or Ctrl+`) to format as code",
     execute(ctx) { ctx.onPatch({ text: `\`${ctx.block.text || ctx.text}\`` }); }
   },
   {
@@ -633,14 +633,14 @@ const inline = [
   },
   {
     id: "color", title: "Color", aliases: ["text color", "font color"],
-    icon: "Palette", category: "Inline",
+    icon: "Palette", category: "Inline", hideFromSlash: true,
     description: "Change text color — select text then pick a color from the toolbar",
     preview: "Use the floating toolbar color palette to change selected text color",
     execute(ctx) { ctx.onPatch({ text: ctx.block.text || "" }); }
   },
   {
     id: "highlight", title: "Highlight", aliases: ["bg color", "background"],
-    icon: "Highlighter", category: "Inline",
+    icon: "Highlighter", category: "Inline", hideFromSlash: true,
     description: "Highlight text with background color — pick from the toolbar palette",
     preview: "Use the floating toolbar to highlight selected text with a background color",
     execute(ctx) { ctx.onPatch({ text: ctx.block.text || "" }); }
@@ -653,7 +653,7 @@ COLORS.forEach((c) => {
   const colorCommands = [
     {
       id: `color-${c}`, title: `${c.charAt(0).toUpperCase() + c.slice(1)}`, aliases: c === "default" ? ["reset-color"] : [`${c}-text`],
-      icon: "Palette", category: "Inline",
+      icon: "Palette", category: "Inline", hideFromSlash: true,
       description: c === "default" ? "Reset block text color to default" : `Set text color to ${c}`,
       execute(ctx) {
         const text = ctx.text || ctx.block.text || "";
@@ -666,7 +666,7 @@ COLORS.forEach((c) => {
     },
     {
       id: `color-bg-${c}`, title: `${c.charAt(0).toUpperCase() + c.slice(1)} background`, aliases: [`${c}-bg`, `${c}-background`],
-      icon: "Highlighter", category: "Inline",
+      icon: "Highlighter", category: "Inline", hideFromSlash: true,
       description: c === "default" ? "Reset block background to default" : `Set block background to ${c}`,
       execute(ctx) {
         const text = ctx.text || ctx.block.text || "";
