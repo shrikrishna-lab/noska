@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { Plus, GripVertical, Trash2, Copy, ChevronDown, ChevronUp, ArrowUpDown } from "lucide-react";
+import { PROPERTY_TYPES } from "../../types/database";
+import { colorForOption } from "../../utils/optionColors";
 
 /** @param {{ rows: import("../../types/database").DatabaseRow[], properties: import("../../types/database").PropertyDefinition[], onPatchRow, onDeleteRow, onDuplicateRow, onAddRow, activeView: import("../../types/database").ViewDefinition, onPatchView }} p */
 export default function TableView({ rows, properties, onPatchRow, onDeleteRow, onDuplicateRow, onAddRow, activeView, onPatchView, onRowClick }) {
@@ -52,7 +54,10 @@ export default function TableView({ rows, properties, onPatchRow, onDeleteRow, o
                 className="relative px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--secondary)] cursor-pointer select-none hover:bg-[var(--hover)] group"
                 onClick={() => handleSort(prop.id)}
               >
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[var(--muted)] font-normal text-[11px] leading-none w-3.5 text-center shrink-0" aria-hidden>
+                    {PROPERTY_TYPES[prop.type]?.icon || 'Aa'}
+                  </span>
                   <span>{prop.name}</span>
                   {activeView.sort === prop.id && (
                     sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />
@@ -121,7 +126,7 @@ export default function TableView({ rows, properties, onPatchRow, onDeleteRow, o
       <div className="flex items-center gap-2 px-3 py-2 border-t border-[var(--border)]">
         <button onClick={onAddRow} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--secondary)] transition cursor-pointer">
           <Plus size={13} />
-          <span>New</span>
+          <span>New page</span>
         </button>
         {selectedIds.size > 1 && (
           <div className="flex items-center gap-1 text-[10px] text-[var(--muted)]">
@@ -185,25 +190,39 @@ function CellRenderer({ row, prop, editing, onStartEdit, onCommit, onCancel }) {
 
 function SelectCell({ value, options, onChange }) {
   const [open, setOpen] = useState(false);
+  const pill = (v) => {
+    const c = colorForOption(v);
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium max-w-full truncate"
+        style={{ background: c.fill, color: c.text }}>
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.dot }} />
+        <span className="truncate">{v}</span>
+      </span>
+    );
+  };
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs hover:bg-[var(--hover)] cursor-pointer">
-        {value || <span className="text-[var(--muted)]">—</span>}
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-1 rounded px-1 py-0.5 text-xs hover:bg-[var(--hover)] cursor-pointer max-w-full">
+        {value ? pill(value) : <span className="text-[var(--muted)]">—</span>}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-lg border border-[var(--border)] bg-[var(--elevated)] py-1 shadow-lg">
+          <div className="absolute top-full left-0 z-20 mt-1 min-w-[140px] rounded-lg border border-[var(--border)] bg-[var(--elevated)] py-1 shadow-lg">
             {value && (
               <button onClick={() => { onChange(''); setOpen(false); }} className="w-full px-2.5 py-1 text-left text-xs text-[var(--muted)] italic hover:bg-[var(--hover)]">
                 Clear
               </button>
             )}
-            {options.map(opt => (
-              <button key={opt} onClick={() => { onChange(opt); setOpen(false); }} className={`w-full px-2.5 py-1 text-left text-xs hover:bg-[var(--hover)] ${value === opt ? 'text-[var(--accent)] font-medium' : 'text-[var(--text)]'}`}>
-                {opt}
-              </button>
-            ))}
+            {options.map(opt => {
+              const c = colorForOption(opt);
+              return (
+                <button key={opt} onClick={() => { onChange(opt); setOpen(false); }} className="flex w-full items-center gap-2 px-2.5 py-1 text-left text-xs hover:bg-[var(--hover)]">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.dot }} />
+                  <span className={value === opt ? 'font-medium text-[var(--text)]' : 'text-[var(--text)]'}>{opt}</span>
+                </button>
+              );
+            })}
           </div>
         </>
       )}
@@ -214,10 +233,17 @@ function SelectCell({ value, options, onChange }) {
 function MultiSelectCell({ value, onChange }) {
   const tags = Array.isArray(value) ? value : (value ? String(value).split(',').map(s => s.trim()).filter(Boolean) : []);
   return (
-    <div className="flex flex-wrap gap-0.5">
-      {tags.map(t => (
-        <span key={t} className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--secondary)]">{t}</span>
-      ))}
+    <div className="flex flex-wrap gap-1">
+      {tags.map(t => {
+        const c = colorForOption(t);
+        return (
+          <span key={t} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+            style={{ background: c.fill, color: c.text }}>
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.dot }} />
+            {t}
+          </span>
+        );
+      })}
     </div>
   );
 }

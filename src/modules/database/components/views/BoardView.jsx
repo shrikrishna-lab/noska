@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useCallback } from "react";
 import { Plus } from "lucide-react";
 import { sortRowsByMultiple } from "../../utils/sortEngine";
+import { colorForOption } from "../../utils/optionColors";
 
 export default function BoardView({ rows, properties, onPatchRow, onAddRow, activeView, onRowClick }) {
   const [dragOverCol, setDragOverCol] = useState(null);
@@ -116,8 +117,9 @@ export default function BoardView({ rows, properties, onPatchRow, onAddRow, acti
             onDrop={(e) => handleDrop(e, key)}
           >
             <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--secondary)]">
-                {columnLabel(key)} <span className="ml-1 text-[var(--muted)] font-normal">{colRows.length}</span>
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--secondary)]">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: key === '__no_status__' ? 'var(--muted)' : colorForOption(key).dot }} />
+                {columnLabel(key)} <span className="ml-0.5 text-[var(--muted)] font-normal normal-case">{colRows.length}</span>
               </span>
             </div>
             <div className="space-y-1.5 p-2 min-h-[60px]">

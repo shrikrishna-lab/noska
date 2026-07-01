@@ -1,5 +1,6 @@
 import React from "react";
 import { Plus } from "lucide-react";
+import { colorForOption } from "../../utils/optionColors";
 
 export default function ListView({ rows, properties, onPatchRow, onAddRow, activeView, onRowClick }) {
   const hiddenSet = new Set(activeView?.hiddenProperties || []);
@@ -28,6 +29,17 @@ export default function ListView({ rows, properties, onPatchRow, onAddRow, activ
                 {inlineProps.slice(0, 4).map(p => {
                   const val = row[p.id];
                   const display = Array.isArray(val) ? val.join(', ') : String(val);
+                  const isSelectType = p.type === 'select' || p.type === 'status' || p.type === 'priority' || p.type === 'multi-select';
+                  if (isSelectType) {
+                    const c = colorForOption(display);
+                    return (
+                      <span key={p.id} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium max-w-[130px] truncate"
+                        style={{ background: c.fill, color: c.text }} title={`${p.name}: ${display}`}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.dot }} />
+                        <span className="truncate">{display}</span>
+                      </span>
+                    );
+                  }
                   return (
                     <span
                       key={p.id}
