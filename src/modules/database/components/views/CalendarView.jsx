@@ -49,6 +49,12 @@ export default function CalendarView({ rows, properties, onPatchRow, onAddRow, o
           <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); } else setCurrentMonth(m => m - 1); }} className="grid h-7 w-7 place-items-center rounded hover:bg-[var(--hover)] cursor-pointer"><ChevronLeft size={15} /></button>
           <span className="text-sm font-semibold text-[var(--text)]">{MONTH_NAMES[currentMonth]} {currentYear}</span>
           <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); } else setCurrentMonth(m => m + 1); }} className="grid h-7 w-7 place-items-center rounded hover:bg-[var(--hover)] cursor-pointer"><ChevronRight size={15} /></button>
+          <button
+            onClick={() => { const now = new Date(); setCurrentMonth(now.getMonth()); setCurrentYear(now.getFullYear()); }}
+            className="ml-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+          >
+            Today
+          </button>
         </div>
         <button onClick={onAddRow} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--secondary)] transition cursor-pointer"><Plus size={13} /><span>New</span></button>
       </div>

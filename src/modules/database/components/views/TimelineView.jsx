@@ -12,6 +12,31 @@ export default function TimelineView({ rows, properties, onPatchRow, onAddRow, o
   const dayWidth = 20 * zoom;
   const totalDays = startDate && endDate ? Math.ceil((new Date(endDate[dateProp.id]) - new Date(startDate[dateProp.id])) / (1000 * 60 * 60 * 24)) + 1 : 30;
 
+  // Date-scale ticks and the "today" marker offset (in px from the track start).
+  const rangeStart = startDate ? new Date(startDate[dateProp.id]) : null;
+  const scaleTicks = useMemo(() => {
+    if (!rangeStart) return [];
+    const ticks = [];
+    // One tick per ~week (or per day when zoomed in enough).
+    const step = dayWidth >= 40 ? 1 : 7;
+    for (let d = 0; d < totalDays; d += step) {
+      const date = new Date(rangeStart);
+      date.setDate(date.getDate() + d);
+      ticks.push({ offset: d * dayWidth, label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
+    }
+    return ticks;
+  }, [rangeStart, totalDays, dayWidth]);
+
+  const todayOffset = useMemo(() => {
+    if (!rangeStart) return null;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((today - rangeStart) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0 || diffDays > totalDays) return null; // today outside range
+    return diffDays * dayWidth;
+  }, [rangeStart, totalDays, dayWidth]);
+
+  const LABEL_COL = 144; // width of the left task-label column (w-36)
+
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">
@@ -35,25 +60,55 @@ export default function TimelineView({ rows, properties, onPatchRow, onAddRow, o
           ) : rows.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-sm text-[var(--muted)]">Add rows with date properties to see them on the timeline</div>
           ) : (
-            rows.map((row, idx) => {
-              const dt = row[dateProp?.id];
-              const dayOffset = dt && startDate ? Math.round((new Date(dt) - new Date(startDate[dateProp.id])) / (1000 * 60 * 60 * 24)) : 0;
-              return (
-                <div key={row.id} onClick={() => onRowClick?.(row.id)} className="flex items-center gap-3 py-1.5 group">
-                  <div className="w-36 shrink-0 text-xs text-[var(--text)] truncate font-medium">{row.name || 'Untitled'}</div>
-                  <div className="relative h-6 flex-1 rounded bg-[var(--surface-2)]">
-                    <div
-                      className="absolute top-0.5 h-5 rounded bg-[var(--accent)]/60 flex items-center px-2 text-[9px] text-white font-medium truncate cursor-pointer hover:bg-[var(--accent)]/80 transition"
-                      style={{ left: dayOffset * dayWidth, width: Math.max(60, dayWidth * 2) }}
-                      title={row.name}
-                    >
-                      {row.name || 'Untitled'}
+            <>
+              {/* Date scale header */}
+              <div className="flex items-end gap-3 pb-1 mb-2 border-b border-[var(--border)]">
+                <div className="shrink-0" style={{ width: LABEL_COL }} />
+                <div className="relative flex-1 h-5">
+                  {scaleTicks.map((t, i) => (
+                    <div key={i} className="absolute top-0 flex flex-col items-start" style={{ left: t.offset }}>
+                      <span className="text-[9px] text-[var(--muted)] whitespace-nowrap">{t.label}</span>
                     </div>
-                  </div>
-                  <span className="w-24 shrink-0 text-[10px] text-[var(--muted)] text-right">{dt || ''}</span>
+                  ))}
+                  {/* Today marker label */}
+                  {todayOffset != null && (
+                    <div className="absolute -top-0.5 flex flex-col items-center" style={{ left: todayOffset, transform: 'translateX(-50%)' }}>
+                      <span className="text-[8px] font-semibold text-[var(--danger)]">Today</span>
+                    </div>
+                  )}
                 </div>
-              );
-            })
+                <div className="w-24 shrink-0" />
+              </div>
+
+              <div className="relative">
+                {/* Today vertical line spanning all rows */}
+                {todayOffset != null && (
+                  <div
+                    className="absolute top-0 bottom-0 w-px bg-[var(--danger)]/70 z-10 pointer-events-none"
+                    style={{ left: LABEL_COL + 12 + todayOffset }}
+                  />
+                )}
+                {rows.map((row, idx) => {
+                  const dt = row[dateProp?.id];
+                  const dayOffset = dt && startDate ? Math.round((new Date(dt) - new Date(startDate[dateProp.id])) / (1000 * 60 * 60 * 24)) : 0;
+                  return (
+                    <div key={row.id} onClick={() => onRowClick?.(row.id)} className="flex items-center gap-3 py-1.5 group">
+                      <div className="w-36 shrink-0 text-xs text-[var(--text)] truncate font-medium">{row.name || 'Untitled'}</div>
+                      <div className="relative h-6 flex-1 rounded bg-[var(--surface-2)]">
+                        <div
+                          className="absolute top-0.5 h-5 rounded bg-[var(--accent)]/60 flex items-center px-2 text-[9px] text-white font-medium truncate cursor-pointer hover:bg-[var(--accent)]/80 transition"
+                          style={{ left: dayOffset * dayWidth, width: Math.max(60, dayWidth * 2) }}
+                          title={row.name}
+                        >
+                          {row.name || 'Untitled'}
+                        </div>
+                      </div>
+                      <span className="w-24 shrink-0 text-[10px] text-[var(--muted)] text-right">{dt || ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>
