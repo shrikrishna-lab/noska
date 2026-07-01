@@ -337,7 +337,7 @@ const database = [
     id: "dashboard-view", title: "Dashboard view", aliases: ["dashboard"],
     icon: "LayoutDashboard", category: "Database",
     description: "Dashboard with widgets",
-    preview: "Combine charts and view widgets over one data source. Add rows and properties first, then charts summarize them. (Renderer in progress.)",
+    preview: "Live summary widgets over this database — total count, breakdowns by each Select property, and completion % per checkbox. Updates automatically as rows change.",
     execute(ctx) { ctx.onPatch(blockForDatabaseView(ctx.block, "dashboard", ctx.text)); }
   },
   {
@@ -365,7 +365,7 @@ const database = [
     id: "database-full", title: "Database – Full page", aliases: ["db-full"],
     icon: "Database", category: "Database",
     description: "Full-page database",
-    preview: "A database that opens as its own full page. Starts empty with one Name column — build your schema and add rows on the dedicated page.",
+    preview: "A database with a page-like full-width frame and title header. Starts empty with one Name column — build your schema and add rows. (Standalone-page navigation is planned.)",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "database-full", ctx.text)); }
   },
   {

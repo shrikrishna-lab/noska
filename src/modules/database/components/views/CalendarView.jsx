@@ -38,6 +38,12 @@ export default function CalendarView({ rows, properties, onPatchRow, onAddRow, o
 
   return (
     <div className="rounded-lg border border-[var(--border)]">
+      {!dateProp && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] bg-[var(--accent)]/8 text-[11px] text-[var(--secondary)]">
+          <span className="text-[var(--accent)]">ℹ</span>
+          Add a <span className="font-medium text-[var(--text)]">Date</span> property to plot entries on the calendar.
+        </div>
+      )}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
         <div className="flex items-center gap-2">
           <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); } else setCurrentMonth(m => m - 1); }} className="grid h-7 w-7 place-items-center rounded hover:bg-[var(--hover)] cursor-pointer"><ChevronLeft size={15} /></button>

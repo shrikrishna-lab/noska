@@ -27,7 +27,12 @@ export default function TimelineView({ rows, properties, onPatchRow, onAddRow, o
       </div>
       <div className="overflow-x-auto">
         <div className="min-w-[600px] p-4" style={{ width: totalDays * dayWidth + 200 }}>
-          {rows.length === 0 ? (
+          {!dateProp ? (
+            <div className="flex flex-col items-center justify-center gap-1 py-12 text-center">
+              <div className="text-sm font-medium text-[var(--secondary)]">Timeline needs a Date property</div>
+              <div className="text-xs text-[var(--muted)] max-w-[280px]">Add a <span className="font-medium text-[var(--text)]">Date</span> property to position rows along the timeline.</div>
+            </div>
+          ) : rows.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-sm text-[var(--muted)]">Add rows with date properties to see them on the timeline</div>
           ) : (
             rows.map((row, idx) => {
