@@ -567,15 +567,27 @@ const inline = [
     id: "date-reminder", title: "Date or reminder", aliases: ["date", "reminder", "/date"],
     icon: "Clock", category: "Inline",
     description: "Insert a date with optional reminder",
-    preview: "Add a date with reminder — pick a date, set notification",
-    execute(ctx) { ctx.onPatch({ ...ctx.block, text: ctx.block.text || "/" }); }
+    preview: "Inserts today's date as editable text. Open the date picker to change it or add a reminder.",
+    execute(ctx) {
+      if (ctx.onDatePicker) { ctx.onDatePicker(); return; }
+      // Fallback: insert a real, editable date immediately (no fake placeholder).
+      const d = new Date();
+      const dateStr = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+      const base = (ctx.block.text || "").replace(/^\/\w*\s*/, "");
+      ctx.onPatch({ text: `${base}@${dateStr}` });
+    }
   },
   {
     id: "emoji", title: "Emoji", aliases: ["smiley", "icon"],
     icon: "Smile", category: "Inline",
     description: "Insert an emoji",
-    preview: "Pick an emoji — search by keyword",
-    execute(ctx) { ctx.onPatch({ ...ctx.block, text: ctx.block.text || "/" }); }
+    preview: "Opens an emoji picker. Pick one to insert it inline; searchable by keyword.",
+    execute(ctx) {
+      if (ctx.onEmojiPicker) { ctx.onEmojiPicker(); return; }
+      // Fallback: insert a default emoji the user can replace (no fake "/").
+      const base = (ctx.block.text || "").replace(/^\/\w*\s*/, "");
+      ctx.onPatch({ text: `${base}😀` });
+    }
   },
   {
     id: "bold", title: "Bold", aliases: ["bold", "strong"],

@@ -41,6 +41,30 @@ import { IconButton, FloatingMenu, useOutsideDismiss, TextArea } from "./ui";
 import { emojis, covers, blockFor, getPagePermission, renderInlineMarkdown, softDelete, getDescendants, turnInto } from "../utils/helpers";
 import { richTextToPlainText } from "../utils/richText";
 import DatabaseBlock from "./DatabaseBlock";
+
+// Searchable emoji catalog for the /emoji picker (keyword-indexed).
+const EMOJI_CATALOG = [
+  { e: "😀", k: ["smile", "happy", "grin"] }, { e: "😂", k: ["laugh", "joy", "lol"] },
+  { e: "😍", k: ["love", "heart", "eyes"] }, { e: "🤔", k: ["think", "hmm"] },
+  { e: "😎", k: ["cool", "sunglasses"] }, { e: "😢", k: ["cry", "sad", "tear"] },
+  { e: "😡", k: ["angry", "mad"] }, { e: "👍", k: ["thumbsup", "yes", "like", "ok"] },
+  { e: "👎", k: ["thumbsdown", "no", "dislike"] }, { e: "👏", k: ["clap", "applause"] },
+  { e: "🙌", k: ["hands", "celebrate", "praise"] }, { e: "🙏", k: ["pray", "please", "thanks"] },
+  { e: "💪", k: ["strong", "muscle", "flex"] }, { e: "🔥", k: ["fire", "hot", "lit"] },
+  { e: "✨", k: ["sparkle", "shiny", "magic"] }, { e: "⭐", k: ["star", "favorite"] },
+  { e: "🎉", k: ["party", "celebrate", "tada"] }, { e: "🚀", k: ["rocket", "launch", "ship"] },
+  { e: "💡", k: ["idea", "bulb", "light"] }, { e: "📌", k: ["pin", "important"] },
+  { e: "📝", k: ["note", "memo", "write"] }, { e: "✅", k: ["check", "done", "yes", "task"] },
+  { e: "❌", k: ["cross", "no", "wrong", "cancel"] }, { e: "⚠️", k: ["warning", "caution"] },
+  { e: "❤️", k: ["heart", "love", "red"] }, { e: "💙", k: ["heart", "blue"] },
+  { e: "🎯", k: ["target", "goal", "aim"] }, { e: "📚", k: ["books", "read", "study"] },
+  { e: "🧠", k: ["brain", "mind", "smart"] }, { e: "🗓️", k: ["calendar", "date", "schedule"] },
+  { e: "🔖", k: ["bookmark", "tag"] }, { e: "🏆", k: ["trophy", "win", "award"] },
+  { e: "💼", k: ["work", "business", "briefcase"] }, { e: "📊", k: ["chart", "data", "graph"] },
+  { e: "🔗", k: ["link", "chain", "url"] }, { e: "🔒", k: ["lock", "secure", "private"] },
+  { e: "⏰", k: ["clock", "alarm", "time"] }, { e: "🎨", k: ["art", "paint", "design"] },
+  { e: "🌟", k: ["star", "glow", "special"] }, { e: "☕", k: ["coffee", "break", "cafe"] },
+];
 import BlockContextMenu from "./editor/BlockContextMenu";
 import SlashCommandMenu from "./editor/SlashCommandMenu";
 import PageOptionsMenu from "./editor/PageOptionsMenu";
@@ -1262,6 +1286,9 @@ function Block({
   const [slashQuery, setSlashQuery] = useState("");
   const [slashPos, setSlashPos] = useState(null);
   const [mentionOpen, setMentionOpen] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [emojiPickerPos, setEmojiPickerPos] = useState(null);
+  const [emojiSearch, setEmojiSearch] = useState("");
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionPos, setMentionPos] = useState(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -1629,6 +1656,17 @@ function Block({
       onPagePatch,
       page,
       pages,
+      onEmojiPicker: () => {
+        if (inputRef.current) setEmojiPickerPos(inputRef.current.getBoundingClientRect());
+        setEmojiSearch("");
+        setEmojiPickerOpen(true);
+      },
+      onDatePicker: () => {
+        // Reuse the mention picker's Dates section for date selection.
+        if (inputRef.current) setMentionPos(inputRef.current.getBoundingClientRect());
+        setMentionQuery("");
+        setMentionOpen(true);
+      },
     };
     executeCommand(type, ctx);
     setSlashOpen(false);
@@ -1961,6 +1999,54 @@ function Block({
                 Type @today, @tomorrow or filter pages
               </div>
             </motion.div>,
+            document.body
+          )}
+        </AnimatePresence>
+
+        {/* Emoji picker (triggered by the /emoji command) */}
+        <AnimatePresence>
+          {emojiPickerOpen && emojiPickerPos && createPortal(
+            <>
+              <div className="fixed inset-0 z-[129]" onClick={() => setEmojiPickerOpen(false)} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 3 }}
+                transition={SPRING_PRESETS.stiff}
+                style={{ top: emojiPickerPos.bottom + 4, left: emojiPickerPos.left }}
+                className="fixed z-[130] w-[280px] rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] p-2 shadow-xl"
+                role="dialog" aria-label="Insert emoji"
+              >
+                <input
+                  autoFocus
+                  value={emojiSearch}
+                  onChange={(e) => setEmojiSearch(e.target.value)}
+                  placeholder="Search emoji..."
+                  className="w-full mb-2 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]"
+                />
+                <div className="grid grid-cols-8 gap-0.5 max-h-[180px] overflow-y-auto scrollbar-thin">
+                  {(() => {
+                    const q = emojiSearch.trim().toLowerCase();
+                    const catalog = EMOJI_CATALOG.filter(e => !q || e.k.some(k => k.includes(q)));
+                    const list = catalog.length ? catalog.map(e => e.e) : emojis;
+                    return list.map((emoji, i) => (
+                      <button
+                        key={`${emoji}-${i}`}
+                        onClick={() => {
+                          const base = (block.text || "").replace(/^\/\w*\s*/, "");
+                          onPatch({ text: `${base}${emoji}` });
+                          setEmojiPickerOpen(false);
+                          setEmojiSearch("");
+                        }}
+                        className="flex items-center justify-center w-7 h-7 rounded text-lg hover:bg-[var(--hover)] transition cursor-pointer"
+                      >
+                        {emoji}
+                      </button>
+                    ));
+                  })()}
+                </div>
+              </motion.div>
+            </>,
             document.body
           )}
         </AnimatePresence>
