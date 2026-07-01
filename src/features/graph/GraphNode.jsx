@@ -12,7 +12,9 @@ function GraphNodeComponent({
   isHighlighted,
   onDrag,
   onClick,
-  showLabels = true
+  showLabels = true,
+  sizeScale = 1,
+  degree = 0
 }) {
   const cluster = getPageCluster(page);
 
@@ -54,6 +56,8 @@ function GraphNodeComponent({
         boxShadow: shadowGlow,
         opacity: nodeOpacity,
         zIndex: isActive ? 40 : isHighlighted ? 35 : 20,
+        scale: sizeScale,
+        transformOrigin: "center center",
       }}
       className={`w-[160px] h-[40px] rounded-full border px-3.5 flex items-center gap-2 cursor-grab active:cursor-grabbing select-none transition-opacity duration-200 bg-[var(--surface)]/80 backdrop-blur-md ${
         isActive 
@@ -67,6 +71,17 @@ function GraphNodeComponent({
       {showLabels && (
         <span className="truncate text-xs font-medium text-[var(--text)] select-none flex-1 leading-none">
           {page.title || "Untitled"}
+        </span>
+      )}
+
+      {/* Connection-count badge (shown when node has links) */}
+      {degree > 0 && (
+        <span
+          className="shrink-0 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-semibold flex items-center justify-center select-none"
+          style={{ backgroundColor: `${cluster.color}22`, color: cluster.color }}
+          title={`${degree} connection${degree === 1 ? "" : "s"}`}
+        >
+          {degree}
         </span>
       )}
       

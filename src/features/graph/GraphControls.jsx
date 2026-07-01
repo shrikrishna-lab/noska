@@ -11,8 +11,10 @@ import {
   Download, 
   Search,
   Filter,
-  Tags
+  Tags,
+  Circle
 } from "lucide-react";
+import GraphLayoutMenu from "./GraphLayoutMenu";
 
 export default function GraphControls({
   onZoomIn,
@@ -30,7 +32,11 @@ export default function GraphControls({
   onLinkFilterChange,
   tagFilter,
   onTagFilterChange,
-  allTags
+  allTags,
+  activeLayout,
+  onApplyLayout,
+  sizeByConnections,
+  onToggleSizeByConnections
 }) {
   const [showFilters, setShowFilters] = useState(false);
 
@@ -48,6 +54,7 @@ export default function GraphControls({
     { icon: <Crosshair size={14} />, label: "Center View", onClick: onCenterGraph },
     { icon: <Sparkles size={14} className="text-[var(--warning)]" />, label: "Auto Arrange Layout", onClick: onAutoArrange },
     { icon: <Type size={14} />, label: showLabels ? "Hide Labels" : "Show Labels", onClick: onToggleLabels, active: showLabels },
+    { icon: <Circle size={14} />, label: sizeByConnections ? "Uniform node size" : "Size by connections", onClick: onToggleSizeByConnections, active: sizeByConnections },
     { icon: animated ? <Pause size={14} /> : <Play size={14} />, label: animated ? "Pause Animation" : "Play Animation", onClick: onToggleAnimation, active: animated },
     { icon: <Filter size={14} />, label: "Toggle Filters", onClick: () => setShowFilters(!showFilters), active: showFilters },
     { icon: <Download size={14} />, label: "Export Graph", onClick: onExport }
@@ -56,6 +63,8 @@ export default function GraphControls({
   return (
     <>
       <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 rounded-xl bg-[var(--elevated)]/80 backdrop-blur-md border border-[var(--border-strong)] p-1.5 shadow-lg">
+        <GraphLayoutMenu activeLayout={activeLayout} onApply={onApplyLayout} />
+        <div className="w-px h-6 bg-[var(--border-strong)] mx-0.5" />
         {buttons.map((btn, index) => (
           <button
             key={index}

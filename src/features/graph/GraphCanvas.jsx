@@ -16,7 +16,10 @@ export default function GraphCanvas({
   showLabels,
   animated,
   onNodeDrag,
-  onNodeSelect
+  onNodeSelect,
+  degrees = {},
+  maxDegree = 1,
+  sizeByConnections = false
 }) {
   const visiblePages = pages.filter((p) => !p.trashed);
 
@@ -108,6 +111,10 @@ export default function GraphCanvas({
         const isDimmed = isNodeDimmed(page.id);
         const isHighlighted = isNodeHighlighted(page.id);
 
+        // Node size scale from connection count (1.0 – 1.5x) when enabled
+        const deg = degrees[page.id] || 0;
+        const sizeScale = sizeByConnections ? 1 + Math.min(0.5, (deg / maxDegree) * 0.5) : 1;
+
         return (
           <GraphNode
             key={page.id}
@@ -119,6 +126,8 @@ export default function GraphCanvas({
             onDrag={onNodeDrag}
             onClick={onNodeSelect}
             showLabels={showLabels}
+            sizeScale={sizeScale}
+            degree={deg}
           />
         );
       })}

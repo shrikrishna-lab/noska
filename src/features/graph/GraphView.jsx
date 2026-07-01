@@ -7,7 +7,9 @@ import GraphSearch from "./GraphSearch";
 import GraphBreadcrumb from "./GraphBreadcrumb";
 import GraphLegend, { getPageCluster } from "./GraphLegend";
 import GraphInfoPanel from "./GraphInfoPanel";
+import GraphLayoutMenu from "./GraphLayoutMenu";
 import { autoArrangeLayout } from "./graphPhysics";
+import { computeLayout, computeDegrees } from "./graphLayouts";
 import { getAllRelations } from "../../utils/pageLinks";
 
 export default function GraphView({ pages, activeId, onSelect }) {
@@ -21,6 +23,8 @@ export default function GraphView({ pages, activeId, onSelect }) {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [linkFilters, setLinkFilters] = useState({ hierarchy: true, tag: true, mention: true });
   const [tagFilter, setTagFilter] = useState(null);
+  const [activeLayout, setActiveLayout] = useState("force");
+  const [sizeByConnections, setSizeByConnections] = useState(false);
   
   // Respect prefers-reduced-motion setting
   const [animated, setAnimated] = useState(() => {
@@ -271,7 +275,28 @@ export default function GraphView({ pages, activeId, onSelect }) {
   const handleAutoArrange = () => {
     const solvedPositions = autoArrangeLayout(pages, links, nodePositions, 500, 350);
     savePositions(solvedPositions);
+    setActiveLayout("force");
   };
+
+  // Apply a named layout algorithm (radial / circle / grid / timeline / force)
+  const handleApplyLayout = (layoutId) => {
+    setActiveLayout(layoutId);
+    if (layoutId === "force") {
+      handleAutoArrange();
+      return;
+    }
+    const cx = 520, cy = 400;
+    const solved = computeLayout(layoutId, pages, cx, cy);
+    if (solved) {
+      savePositions(solved);
+      // Recenter after layout so the arrangement is visible
+      setTimeout(() => handleFitGraph(), 30);
+    }
+  };
+
+  // Degree map for optional connection-based node sizing
+  const degrees = useMemo(() => computeDegrees(pages, links), [pages, links]);
+  const maxDegree = useMemo(() => Math.max(1, ...Object.values(degrees)), [degrees]);
 
   // Export JSON Map
   const handleExport = () => {
@@ -326,6 +351,9 @@ export default function GraphView({ pages, activeId, onSelect }) {
         animated={animated}
         onNodeDrag={handleNodeDrag}
         onNodeSelect={onSelect}
+        degrees={degrees}
+        maxDegree={maxDegree}
+        sizeByConnections={sizeByConnections}
       />
 
       {/* Top Left Navigation Trace */}
@@ -353,6 +381,10 @@ export default function GraphView({ pages, activeId, onSelect }) {
         tagFilter={tagFilter}
         onTagFilterChange={setTagFilter}
         allTags={[...new Set(pages.filter(p => !p.trashed).flatMap(p => p.tags || []))]}
+        activeLayout={activeLayout}
+        onApplyLayout={handleApplyLayout}
+        sizeByConnections={sizeByConnections}
+        onToggleSizeByConnections={() => setSizeByConnections((s) => !s)}
       />
 
       {/* Search overlay dropdown widget */}
