@@ -148,7 +148,8 @@ export default function BlockContextMenu({
     }
 
     if (item.id === "copy-link") {
-      navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}#page/${pages[0]?.id || ""}`);
+      const slug = window.location.pathname.split('/').filter(Boolean)[0] || 'workspace';
+      navigator.clipboard.writeText(`${window.location.origin}/${slug}/${pages[0]?.id || ""}`);
       onToast?.("Block deep link copied!");
     }
 

@@ -24,6 +24,16 @@ import {
 } from './ui/icons';
 import { emojis, timeAgo } from '../utils/helpers';
 import { isPageEntity } from '../utils/pageTreeOps';
+
+/** Builds a real /<workspace-slug>/<pageId> URL by swapping the page-id
+ * segment of the current path — App.jsx's URL-sync effect keeps the
+ * workspace-slug segment accurate, so this stays correct without needing to
+ * thread workspaceName through the whole tree. */
+function pageUrl(pageId) {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const slug = parts[0] || 'workspace';
+  return `${window.location.origin}/${slug}/${pageId}`;
+}
 import {
   getAncestorPath, flattenTreeFromContent,
   getDescendantIdsFromContent, smartDepthOpacity,
@@ -304,8 +314,8 @@ function PremiumBranch({
         <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" onClick={() => { onToast?.("Move to is not yet implemented"); setMenuOpen(false); }} />
         <PageMenuAction icon={AnimatedTrash} label="Move to Trash" onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
         <div className="my-2 border-t border-[var(--border)]" />
-        <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(`#page/${page.id}`, '_blank'); setMenuOpen(false); }} />
-        <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(`#page/${page.id}`, '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
+        <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(pageUrl(page.id), '_blank'); setMenuOpen(false); }} />
+        <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(pageUrl(page.id), '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
         <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
       </FloatingMenu>
     </div>
@@ -480,8 +490,8 @@ function PremiumPageItem({
           <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" onClick={() => { onToast?.("Move to is not yet implemented"); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedTrash} label="Move to Trash" onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
           <div className="my-2 border-t border-[var(--border)]" />
-          <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(`#page/${page.id}`, '_blank'); setMenuOpen(false); }} />
-          <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(`#page/${page.id}`, '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
+          <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(pageUrl(page.id), '_blank'); setMenuOpen(false); }} />
+          <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(pageUrl(page.id), '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
         </FloatingMenu>
       </div>

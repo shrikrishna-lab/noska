@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Confetti, Toast } from "./components/ui";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
@@ -46,7 +47,8 @@ import {
   blockFor,
   textToBlocks,
   makeEmptyDatabase,
-  migrateLegacyIds
+  migrateLegacyIds,
+  slugifyWorkspaceName
 } from "./utils/helpers";
 import { storageApi } from "./utils/storage";
 import {
@@ -84,6 +86,9 @@ function purgeExpiredTrash(sourcePages, referenceTime = Date.now()) {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const routeParams = useParams();
   const [appFlowState, setAppFlowState] = useState("loading"); // "loading" | "auth" | "onboarding" | "workspace"
   const [pages, setPages] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -470,10 +475,9 @@ function App() {
           nvidiaKey: legacyNvidiaKey
         });
 
-        const hash = window.location.hash.match(/^#page\/(.+)$/);
-        if (hash?.[1] && loadedPages.some((p) => p.id === hash[1])) {
-          setActiveId(hash[1]);
-          setStackedPageIds((prev) => prev.includes(hash[1]) ? prev : [hash[1]]);
+        if (routeParams.pageId && loadedPages.some((p) => p.id === routeParams.pageId)) {
+          setActiveId(routeParams.pageId);
+          setStackedPageIds((prev) => prev.includes(routeParams.pageId) ? prev : [routeParams.pageId]);
         }
 
         // ⚠️ TEST MODE BYPASS — NEVER enable in production builds.
@@ -497,11 +501,15 @@ function App() {
         const profile = await fetchUserProfile(u.id);
         if (profile?.onboarding_complete) {
           // Returning user: set their data
-          setPages(normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] }))));
+          const normalized = normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })));
+          setPages(normalized);
           setAiChats(loadedChats);
-          if (loadedPages.length > 0) {
-            setActiveId(loadedPages[0].id);
-            setStackedPageIds([loadedPages[0].id]);
+          if (normalized.length > 0) {
+            const deepLinkId = routeParams.pageId && normalized.some((p) => p.id === routeParams.pageId)
+              ? routeParams.pageId
+              : normalized[0].id;
+            setActiveId(deepLinkId);
+            setStackedPageIds([deepLinkId]);
           }
           setAppFlowState("workspace");
         } else {
@@ -541,36 +549,74 @@ function App() {
         nvidiaKey: storedNvidiaKey ? JSON.parse(storedNvidiaKey) : ""
       });
 
-      const hash = window.location.hash.match(/^#page\/(.+)$/);
-      if (hash?.[1] && loadedPages.some((p) => p.id === hash[1])) {
-        setActiveId(hash[1]);
-        setStackedPageIds((prev) => prev.includes(hash[1]) ? prev : [hash[1]]);
+      if (routeParams.pageId && loadedPages.some((p) => p.id === routeParams.pageId)) {
+        setActiveId(routeParams.pageId);
+        setStackedPageIds((prev) => prev.includes(routeParams.pageId) ? prev : [routeParams.pageId]);
       }
     })();
     return () => { mounted = false; };
   }, []);
 
-  // Auth success handler
+  // Auth success handler — routes returning users straight to their
+  // workspace, and only first-time users (no profile yet, or
+  // onboarding_complete === false) to /onboarding.
   const handleAuthSuccess = useCallback(async (userData) => {
     const uname = userData.userName || 'Workspace User';
     realtimeCollab.initUser(userData.userId, uname, userData.avatarUrl || '👤');
-    setWorkspaceName(`${uname}'s Workspace`);
-    setPages([]);
-    setAiChats([]);
-    setActiveId(null);
-    setStackedPageIds([]);
     try { localStorage.setItem("noska_user_id", userData.userId); } catch {}
+
+    let existingProfile = null;
+    try {
+      existingProfile = await fetchUserProfile(userData.userId);
+    } catch (e) {
+      console.warn("App: failed to fetch user profile", e);
+    }
+
     try {
       await upsertUserProfile({
         userId: userData.userId,
         userName: uname,
         email: userData.email,
-        avatarUrl: userData.avatarUrl
+        avatarUrl: userData.avatarUrl,
+        // Preserve an existing onboarding_complete flag — upsertUserProfile
+        // otherwise defaults it to false, which would silently re-onboard
+        // returning users on every login.
+        onboardingComplete: existingProfile?.onboarding_complete ?? false,
+        useCase: existingProfile?.use_case,
+        workspaceName: existingProfile?.workspace_name
       });
     } catch (e) {
       console.warn("App: failed to save user profile", e);
     }
-    setAppFlowState("onboarding");
+
+    if (existingProfile?.onboarding_complete) {
+      // Returning user signing in mid-session (the initial mount bootstrap
+      // already ran before this sign-in completed) — load their data now.
+      try {
+        const [remotePages, remoteChats] = await Promise.all([
+          fetchPages(userData.userId),
+          fetchAIChats(userData.userId)
+        ]);
+        const normalized = normalizePages(remotePages.map(p => ({ ...p, content: p.content || [] })));
+        setPages(normalized);
+        setAiChats(remoteChats);
+        if (normalized.length > 0) {
+          setActiveId(normalized[0].id);
+          setStackedPageIds([normalized[0].id]);
+        }
+      } catch (e) {
+        console.warn("App: failed to load returning user's pages", e);
+      }
+      if (existingProfile.workspace_name) setWorkspaceName(existingProfile.workspace_name);
+      setAppFlowState("workspace");
+    } else {
+      setWorkspaceName(`${uname}'s Workspace`);
+      setPages([]);
+      setAiChats([]);
+      setActiveId(null);
+      setStackedPageIds([]);
+      setAppFlowState("onboarding");
+    }
   }, []);
 
   // Build starter pages (local state, no DB dependency)
@@ -733,13 +779,27 @@ function App() {
     return () => clearTimeout(t);
   }, [pages, activeId, workspaceName, theme, sidebarOpen, apiKey, themeFx, aiProvider, nvidiaKey, appView, aiChats, activeChatId, stackedPageIds, decryptionKeys]);
 
+  // Keep the URL in sync with appFlowState: /login while signing in,
+  // /onboarding for first-time users, /<workspace-slug>/<pageId> once inside
+  // the workspace. Uses replace so these transitions don't spam browser
+  // history — back/forward within the workspace is handled by
+  // selectByOffset/sidebar navigation, not URL history entries.
   useEffect(() => {
-    if (!hydrated.current || !activeId) return;
-    const nextHash = `#page/${activeId}`;
-    if (window.location.hash !== nextHash) {
-      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+    if (appFlowState === "loading") return;
+    if (appFlowState === "auth") {
+      if (location.pathname !== "/login") navigate("/login", { replace: true });
+      return;
     }
-  }, [activeId]);
+    if (appFlowState === "onboarding") {
+      if (location.pathname !== "/onboarding") navigate("/onboarding", { replace: true });
+      return;
+    }
+    if (appFlowState === "workspace") {
+      const slug = slugifyWorkspaceName(workspaceName);
+      const nextPath = activeId ? `/${slug}/${activeId}` : `/${slug}`;
+      if (location.pathname !== nextPath) navigate(nextPath, { replace: true });
+    }
+  }, [appFlowState, activeId, workspaceName, location.pathname]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -1640,7 +1700,8 @@ function App() {
   }, [activeId, pages]);
 
   const copyPageLink = async (pageId) => {
-    const url = `${window.location.origin}${window.location.pathname}#page/${pageId}`;
+    const slug = slugifyWorkspaceName(workspaceName);
+    const url = `${window.location.origin}/${slug}/${pageId}`;
     try {
       await navigator.clipboard.writeText(url);
       showToast("Link copied");

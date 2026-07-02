@@ -16,6 +16,21 @@ export { uid, now, createBlock, getBlock, getChildren, getAncestors,
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function isValidUUID(id) { return UUID_RE.test(id); }
 
+/** URL-safe slug for the workspace segment of a page URL, e.g.
+ * "/my-workspace/<pageId>". Falls back to "workspace" if the name has no
+ * ASCII letters/digits (e.g. purely emoji or non-Latin names) so the route
+ * segment is never empty. */
+export function slugifyWorkspaceName(name) {
+  const slug = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug || "workspace";
+}
+
 export function migrateLegacyIds(loadedPages, loadedChats) {
   const idMap = {};
   for (const page of loadedPages) {

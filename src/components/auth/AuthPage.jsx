@@ -58,8 +58,12 @@ export default function AuthPage({ onAuthSuccess }) {
     setIsConnecting(true);
     try {
       const { error: signInError } = await supabase.auth.signInWithOAuth({
+        // Must land back on a route that mounts App (which imports the
+        // Supabase client and runs detectSessionInUrl) — "/" is now the
+        // public marketing LandingPage and never touches Supabase, so the
+        // OAuth callback tokens would otherwise be stranded in the URL.
         provider,
-        options: { redirectTo: window.location.origin }
+        options: { redirectTo: `${window.location.origin}/login` }
       });
       if (signInError) throw signInError;
     } catch (e) {
