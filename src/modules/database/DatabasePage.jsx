@@ -1,15 +1,16 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Settings2, Search, Plus, Filter, ArrowUpDown, X, Sparkles, Check, ChevronDown, GripVertical, Eye, EyeOff } from "lucide-react";
+import { Settings2, Search, Plus, Filter, ArrowUpDown, X, Sparkles, Check, ChevronDown, GripVertical, Eye, EyeOff, Maximize2, Minimize2, Zap, ChevronUp } from "lucide-react";
 import DatabaseView from "./components/DatabaseView";
 import { useDatabase } from "./hooks/useDatabase";
 import { getActiveView, createView } from "./services/viewService";
 import { PROPERTY_TYPES, CATEGORIES } from "./services/propertyService";
+import { VIEW_TYPES } from "./types/database";
 import { addProperty as addPropDef } from "./services/propertyService";
 import { operatorsForType } from "./utils/filterEngine";
 import PeekPanel from "../page/peek/PeekPanel";
 import { generateAISummary, generateAITags } from "./services/aiService";
 
-export default function DatabasePage({ database, onPatch, onOpenRow, pageId, apiKey, aiProvider }) {
+export default function DatabasePage({ database, onPatch, onOpenRow, pageId, apiKey, aiProvider, onToast, title, icon }) {
   const db = {
     properties: [],
     views: [],
@@ -29,10 +30,19 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
   const [createViewOpen, setCreateViewOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const [newViewType, setNewViewType] = useState("table");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [automationsOpen, setAutomationsOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [newDropdownOpen, setNewDropdownOpen] = useState(false);
+  const [renamingViewId, setRenamingViewId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState("");
 
   const filterRef = useRef(null);
   const sortRef = useRef(null);
   const createRef = useRef(null);
+  const automationsRef = useRef(null);
+  const aiRef = useRef(null);
+  const newDropdownRef = useRef(null);
 
   // Close popovers on outside click
   useEffect(() => {
@@ -40,6 +50,9 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
       if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilter(false);
       if (sortRef.current && !sortRef.current.contains(e.target)) setShowSort(false);
       if (createRef.current && !createRef.current.contains(e.target)) setCreateViewOpen(false);
+      if (automationsRef.current && !automationsRef.current.contains(e.target)) setAutomationsOpen(false);
+      if (aiRef.current && !aiRef.current.contains(e.target)) setAiOpen(false);
+      if (newDropdownRef.current && !newDropdownRef.current.contains(e.target)) setNewDropdownOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -143,6 +156,28 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
     setNewViewName("");
   };
 
+  const commitRenameView = (viewId) => {
+    const name = renameDraft.trim();
+    const nextViews = db.views.map(v => v.id === viewId ? { ...v, name: name || v.name } : v);
+    onPatch({ views: nextViews });
+    setRenamingViewId(null);
+    setRenameDraft("");
+  };
+
+  const startRenameView = (view) => {
+    setRenamingViewId(view.id);
+    setRenameDraft(view.name);
+  };
+
+  const moveView = (viewId, dir) => {
+    const idx = db.views.findIndex(v => v.id === viewId);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= db.views.length) return;
+    const next = [...db.views];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    onPatch({ views: next });
+  };
+
   // --- Column visibility helpers ---
   const hiddenSet = new Set(activeView?.hiddenProperties || []);
   const toggleHidden = (propId) => {
@@ -161,23 +196,64 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
   }, [activeFilters, db.properties]);
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden relative">
+    <div className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden relative ${isFullscreen ? "fixed inset-0 z-[200] rounded-none border-0 overflow-auto" : ""}`}>
+      {/* Section header row — emoji/icon + bold title above the database */}
+      {title && (
+        <div className="flex items-center gap-2 px-4 pt-3">
+          <span className="text-base leading-none">{icon || "🗄️"}</span>
+          <span className="text-sm font-bold text-[var(--text)]">{title}</span>
+        </div>
+      )}
       {/* View tabs + toolbar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">
         <div className="flex items-center gap-1">
-          {db.views.map(view => (
-            <button
-              key={view.id}
-              onClick={() => switchView(view.id)}
-              className={`rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer ${
-                activeView?.id === view.id
-                  ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
-                  : 'text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]'
-              }`}
-            >
-              {view.name}
-            </button>
-          ))}
+          {db.views.map(view => {
+            const viewIcon = (VIEW_TYPES.find(vt => vt.id === view.type) || {}).icon || '📋';
+            const isActive = activeView?.id === view.id;
+            const isRenaming = renamingViewId === view.id;
+            return (
+              <div key={view.id} className="group/view relative flex items-center">
+                {isRenaming ? (
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={e => setRenameDraft(e.target.value)}
+                    onBlur={() => commitRenameView(view.id)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') commitRenameView(view.id);
+                      if (e.key === 'Escape') { setRenamingViewId(null); setRenameDraft(""); }
+                    }}
+                    className="rounded px-2 py-1 text-[11px] font-medium bg-[var(--surface)] border border-[var(--accent)] text-[var(--text)] outline-none w-[120px]"
+                  />
+                ) : (
+                  <button
+                    onClick={() => switchView(view.id)}
+                    onDoubleClick={(e) => { e.stopPropagation(); startRenameView(view); }}
+                    className={`flex items-center gap-1 rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer ${
+                      isActive
+                        ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
+                        : 'text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]'
+                    }`}
+                    title={`${view.name} (double-click to rename)`}
+                  >
+                    <span className="text-[11px] leading-none">{viewIcon}</span>
+                    <span>{view.name}</span>
+                  </button>
+                )}
+                {/* Reorder chevrons on hover */}
+                {isActive && !isRenaming && (
+                  <div className="absolute -right-5 top-1/2 -translate-y-1/2 flex flex-col opacity-0 group-hover/view:opacity-100 transition">
+                    <button onClick={(e) => { e.stopPropagation(); moveView(view.id, -1); }} className="grid h-3 w-3 place-items-center text-[var(--muted)] hover:text-[var(--text)] cursor-pointer" title="Move left">
+                      <ChevronUp size={11} className="rotate-[-90deg]" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); moveView(view.id, 1); }} className="grid h-3 w-3 place-items-center text-[var(--muted)] hover:text-[var(--text)] cursor-pointer" title="Move right">
+                      <ChevronDown size={11} className="rotate-[-90deg]" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
           <div className="relative" ref={createRef}>
             <button
               onClick={() => setCreateViewOpen(!createViewOpen)}
@@ -416,6 +492,85 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
           </div>
 
           <button onClick={() => setShowProperties(!showProperties)} className={`grid h-7 w-7 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer ${showProperties ? 'bg-[var(--accent)]/10 text-[var(--accent)]' : ''}`} title="Properties"><Settings2 size={13} /></button>
+
+          {/* Automations (lightning) — stub */}
+          <div className="relative" ref={automationsRef}>
+            <button
+              onClick={() => setAutomationsOpen(!automationsOpen)}
+              className={`grid h-7 w-7 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer ${automationsOpen ? 'bg-[var(--accent)]/10 text-[var(--accent)]' : ''}`}
+              title="Automations"
+            >
+              <Zap size={13} />
+            </button>
+            {automationsOpen && (
+              <div className="absolute top-full right-0 mt-1 z-50 w-[200px] rounded-lg border border-[var(--border)] bg-[var(--elevated)] p-3 shadow-xl text-center">
+                <Zap size={18} className="mx-auto mb-1.5 text-[var(--accent)]" />
+                <div className="text-[11px] font-semibold text-[var(--text)] mb-0.5">Automations</div>
+                <div className="text-[10px] text-[var(--muted)]">Coming soon — trigger actions on row changes.</div>
+              </div>
+            )}
+          </div>
+
+          {/* AI (sparkle) — stub */}
+          <div className="relative" ref={aiRef}>
+            <button
+              onClick={() => setAiOpen(!aiOpen)}
+              className={`grid h-7 w-7 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer ${aiOpen ? 'bg-[var(--accent)]/10 text-[var(--accent)]' : ''}`}
+              title="Ask AI about this data"
+            >
+              <Sparkles size={13} />
+            </button>
+            {aiOpen && (
+              <div className="absolute top-full right-0 mt-1 z-50 w-[200px] rounded-lg border border-[var(--border)] bg-[var(--elevated)] p-3 shadow-xl text-center">
+                <Sparkles size={18} className="mx-auto mb-1.5 text-[var(--accent)]" />
+                <div className="text-[11px] font-semibold text-[var(--text)] mb-0.5">Ask AI</div>
+                <div className="text-[10px] text-[var(--muted)]">Coming soon — query and summarize this database.</div>
+              </div>
+            )}
+          </div>
+
+          {/* Expand / fullscreen */}
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="grid h-7 w-7 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer"
+            title={isFullscreen ? "Exit fullscreen" : "Open in fullscreen"}
+          >
+            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
+
+          {/* Split "New" button + dropdown */}
+          <div className="relative flex items-stretch ml-1" ref={newDropdownRef}>
+            <button
+              onClick={() => ops.addRow()}
+              className="flex items-center gap-1 rounded-l-md bg-[var(--accent)] px-2.5 h-7 text-[11px] font-semibold text-white hover:opacity-90 transition cursor-pointer"
+            >
+              <Plus size={13} />
+              New
+            </button>
+            <button
+              onClick={() => setNewDropdownOpen(!newDropdownOpen)}
+              className="rounded-r-md bg-[var(--accent)] px-1 h-7 text-white hover:opacity-90 transition cursor-pointer border-l border-white/20"
+              title="More creation options"
+            >
+              <ChevronDown size={12} />
+            </button>
+            {newDropdownOpen && (
+              <div className="absolute top-full right-0 mt-1 z-50 min-w-[160px] rounded-lg border border-[var(--border)] bg-[var(--elevated)] py-1 shadow-xl">
+                <button
+                  onClick={() => { ops.addRow(); setNewDropdownOpen(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
+                >
+                  <Plus size={12} /> New page
+                </button>
+                <button
+                  onClick={() => { onToast?.("New with AI coming soon"); setNewDropdownOpen(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
+                >
+                  <Sparkles size={12} /> New with AI
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -510,6 +665,26 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Empty / filtered state — Edit filters + New page buttons */}
+      {filteredRows.length === 0 && (
+        <div className="flex items-center justify-center gap-2 py-10 px-4">
+          {hasFilters && (
+            <button
+              onClick={() => setShowFilter(true)}
+              className="rounded-md border border-[var(--border)] px-3 py-1.5 text-[11px] font-medium text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+            >
+              Edit filters
+            </button>
+          )}
+          <button
+            onClick={() => ops.addRow()}
+            className="flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-1.5 text-[11px] font-medium text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+          >
+            <Plus size={13} /> New page
+          </button>
         </div>
       )}
 

@@ -418,7 +418,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
   }
   if (block.type === "table") return <SimpleTable block={block} onPatch={onPatch} isLocked={isLocked} />;
   if (block.type === "columns" || block.type.endsWith("-columns")) return <ColumnsBlock block={block} onPatch={onPatch} isLocked={isLocked} />;
-  if (block.type === "database" || block.type === "database-inline") return <DatabaseBlock block={block} onPatch={onPatch} isLocked={isLocked} apiKey={apiKey} aiProvider={aiProvider} page={page} />;
+  if (block.type === "database" || block.type === "database-inline") return <DatabaseBlock block={block} onPatch={onPatch} isLocked={isLocked} apiKey={apiKey} aiProvider={aiProvider} page={page} onToast={onToast} />;
   if (block.type === "database-full") return (
     <div className="my-3 -mx-2 rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] bg-[var(--surface-2)]">
@@ -427,7 +427,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
         <span className="ml-auto text-[10px] uppercase tracking-wider text-[var(--muted)]">Full page</span>
       </div>
       <div className="p-3">
-        <DatabaseBlock block={block} onPatch={onPatch} isLocked={isLocked} apiKey={apiKey} aiProvider={aiProvider} page={page} />
+        <DatabaseBlock block={block} onPatch={onPatch} isLocked={isLocked} apiKey={apiKey} aiProvider={aiProvider} page={page} onToast={onToast} />
       </div>
     </div>
   );

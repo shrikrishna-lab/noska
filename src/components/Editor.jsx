@@ -335,6 +335,8 @@ export default function Editor({
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [activeId, setActiveId] = useState(null);
+  const [titleEmojiOpen, setTitleEmojiOpen] = useState(false);
+  const titleEmojiRef = useRef(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const {
@@ -493,6 +495,14 @@ export default function Editor({
       onRenameFocusDone?.();
     }
   }, [renameFocusId, page.id, onRenameFocusDone]);
+
+  // Dismiss title emoji picker on outside click
+  useEffect(() => {
+    if (!titleEmojiOpen) return;
+    const handler = (e) => { if (titleEmojiRef.current && !titleEmojiRef.current.contains(e.target)) setTitleEmojiOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [titleEmojiOpen]);
 
   // Auto-save version history when blocks change
   useEffect(() => {
@@ -815,14 +825,98 @@ export default function Editor({
             </motion.div>
           )}
         </AnimatePresence>
-        <input
-          ref={titleRef}
-          value={page.title}
-          readOnly={page.isLocked}
-          onChange={(e) => onPagePatch({ title: e.target.value })}
-          className="mb-5 w-full bg-transparent text-[36px] font-bold leading-tight tracking-normal text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-          placeholder="Untitled" aria-label="Page title" aria-label="Page title"
-        />
+        {/* Page title row with hover controls + icon picker */}
+        <div className="group/title relative flex items-start gap-1 mb-5">
+          {/* Hover-revealed title controls — mirrors block-tools pattern */}
+          {!page.isLocked && (
+            <div className="block-tools flex w-12 shrink-0 items-start justify-end gap-0.5 pt-2 transition z-20 opacity-0 group-hover/title:opacity-100">
+              {/* Drag handle (visual — title is structural, not in block list) */}
+              <button
+                className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:scale-110 active:scale-90 cursor-grab active:cursor-grabbing transition-transform touch-none"
+                aria-label="Drag title"
+                draggable="false"
+              >
+                <GripVertical size={15} />
+              </button>
+              {/* Add block above (inserts at top of block list + opens slash menu) */}
+              <button
+                className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer transition"
+                aria-label="Add block above title"
+                onClick={() => {
+                  const nextId = crypto.randomUUID();
+                  const blocks = page.blocks || [];
+                  onBlocks([{ id: nextId, type: "text", text: "" }, ...blocks]);
+                  setOpenSlashForBlockId(nextId);
+                }}
+              >
+                <Plus size={15} />
+              </button>
+              {/* Comment on title */}
+              <div className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActiveCommentBlockId(activeCommentBlockId === "__title__" ? null : "__title__"); }}
+                  className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${
+                    (page.comments || []).some(c => c.blockId === "__title__" && !c.resolvedAt)
+                      ? "text-[var(--accent)] opacity-100"
+                      : "text-[var(--muted)] opacity-0 group-hover/title:opacity-100"
+                  } hover:bg-[var(--hover)]`}
+                  aria-label="Toggle comments on title"
+                >
+                  <MessageCircle size={13} />
+                </button>
+                {activeCommentBlockId === "__title__" && (
+                  <>
+                    <div className="fixed inset-0 z-[150]" onClick={() => setActiveCommentBlockId(null)} />
+                    <div className="absolute top-0 left-full ml-2 z-[160]">
+                      <CommentThread
+                        comments={(page.comments || []).filter(c => c.blockId === "__title__")}
+                        blockId="__title__"
+                        pageId={page.id}
+                        onAddComment={handleAddComment}
+                        onResolveComment={handleResolveComment}
+                        onClose={() => setActiveCommentBlockId(null)}
+                        pages={pages}
+                        onNavigate={onNavigate}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Page icon (emoji picker) */}
+          <div className="relative shrink-0 mt-1" ref={titleEmojiRef}>
+            <button
+              disabled={page.isLocked}
+              className="text-[36px] leading-none hover:bg-[var(--hover)] rounded px-0.5 transition cursor-pointer"
+              onClick={() => setTitleEmojiOpen(!titleEmojiOpen)}
+              aria-label="Change page icon"
+            >
+              {page.icon || "📝"}
+            </button>
+            {titleEmojiOpen && (
+              <div className="absolute top-full left-0 mt-1 z-50 w-[208px] bg-[var(--elevated)] border border-[var(--border)] rounded-lg shadow-xl grid grid-cols-8 gap-0.5 p-1.5 max-h-[160px] overflow-y-auto">
+                {emojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    className="flex items-center justify-center w-6 h-6 rounded text-sm hover:bg-[var(--hover)] transition"
+                    onClick={() => { onPagePatch({ icon: emoji }); setTitleEmojiOpen(false); }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <input
+            ref={titleRef}
+            value={page.title}
+            readOnly={page.isLocked}
+            onChange={(e) => onPagePatch({ title: e.target.value })}
+            className="flex-1 min-w-0 bg-transparent text-[36px] font-bold leading-tight tracking-normal text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+            placeholder="Untitled" aria-label="Page title"
+          />
+        </div>
         {(page.blocks || []).length === 0 && <EmptyState onAdd={() => onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked} />}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(e.active.id)} onDragEnd={handleDragEnd}>
           <SortableContext items={flatBlockIds} strategy={verticalListSortingStrategy}>
