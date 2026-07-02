@@ -1,0 +1,457 @@
+/* Enterprise Page Styling — scoped under .marketing, see marketing-theme.css */
+
+.marketing .enterprise-wrapper {
+  padding-bottom: 80px;
+}
+
+/* 1. Hero Section */
+.marketing .enterprise-hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 60px;
+  align-items: center;
+  padding: 80px 24px;
+}
+
+.marketing .hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.marketing .enterprise-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--mkt-accent-purple);
+  background-color: rgba(144, 101, 253, 0.1);
+  padding: 6px 12px;
+  border-radius: 30px;
+  width: max-content;
+}
+
+.marketing .enterprise-hero h1 {
+  font-size: 56px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.marketing .enterprise-hero p {
+  font-size: 18px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.5;
+}
+
+/* Isometric Mockup Graphic */
+.marketing .enterprise-isometric-card {
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.02);
+  padding: 24px;
+  transform: perspective(800px) rotateY(-10deg) rotateX(10deg);
+  transition: transform 0.5s;
+}
+
+.marketing .enterprise-isometric-card:hover {
+  transform: perspective(800px) rotateY(-2deg) rotateX(2deg);
+}
+
+.marketing .card-top-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--mkt-border-color);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.marketing .isometric-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.marketing .iso-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--mkt-bg-secondary);
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--mkt-border-color);
+}
+
+.marketing .iso-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.marketing .iso-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.marketing .iso-status.active {
+  background-color: rgba(39, 174, 96, 0.15);
+  color: #27ae60;
+}
+
+.marketing .iso-status.idle {
+  background-color: rgba(144, 101, 253, 0.15);
+  color: var(--mkt-accent-purple);
+}
+
+/* 2. Trust Banner */
+.marketing .trust-banner-section {
+  background-color: var(--mkt-bg-secondary);
+  border-top: 1px solid var(--mkt-border-color);
+  border-bottom: 1px solid var(--mkt-border-color);
+  padding: 32px 0;
+}
+
+.marketing .trust-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.marketing .trust-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--mkt-text-muted);
+  letter-spacing: 0.05em;
+}
+
+.marketing .trust-logos {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.marketing .trust-logo-card {
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+/* 3. Sub Tab Group Section */
+.marketing .enterprise-features {
+  padding: 80px 24px;
+}
+
+.marketing .sub-tab-group {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 40px;
+  border-bottom: 1px solid var(--mkt-border-color);
+  padding-bottom: 1px;
+}
+
+.marketing .sub-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 12px 24px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--mkt-transition-fast);
+}
+
+.marketing .sub-tab-btn:hover {
+  color: var(--mkt-text-primary);
+}
+
+.marketing .sub-tab-btn.active {
+  color: var(--mkt-text-primary);
+  border-bottom-color: var(--mkt-brand-color);
+}
+
+.marketing .sub-tab-showcase {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 60px;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 16px;
+  padding: 48px;
+  align-items: center;
+  min-height: 380px;
+}
+
+.marketing .showcase-content-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.marketing .showcase-content-left h3 {
+  font-size: 32px;
+}
+
+.marketing .showcase-content-left p {
+  font-size: 16px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .bullet-checklist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.marketing .bullet-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+.marketing .sub-tab-showcase .showcase-content-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.marketing .showcase-graphic {
+  width: 260px;
+  height: 200px;
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  animation: mkt-fadeIn 0.3s ease-out;
+}
+
+.marketing .centered-icon {
+  animation: mkt-float 3s ease-in-out infinite;
+}
+
+@keyframes mkt-float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+  100% { transform: translateY(0px); }
+}
+
+.marketing .graphic-mini-badge {
+  font-size: 11px;
+  font-weight: 700;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 6px 12px;
+  border-radius: 6px;
+  width: 180px;
+  text-align: center;
+}
+
+.marketing .workspace-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.marketing .w-box {
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.marketing .log-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.marketing .log-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--mkt-bg-secondary);
+  font-family: var(--mkt-mono);
+}
+
+/* 4. Request Demo Form Section */
+.marketing .request-demo-section {
+  padding: 80px 24px;
+}
+
+.marketing .demo-form-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 60px;
+  align-items: start;
+}
+
+.marketing .demo-form-left {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.marketing .demo-form-left h2 {
+  font-size: 40px;
+  line-height: 1.15;
+}
+
+.marketing .demo-form-left p {
+  font-size: 16.5px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .quote-box {
+  border-left: 3px solid var(--mkt-brand-color);
+  padding-left: 20px;
+  margin-top: 20px;
+}
+
+.marketing .quote-text {
+  font-style: italic;
+  font-size: 15.5px;
+  color: var(--mkt-text-primary);
+  margin-bottom: 8px;
+}
+
+.marketing .quote-author {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--mkt-text-secondary);
+}
+
+/* Contact Form Card */
+.marketing .demo-form-right {
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: var(--mkt-card-shadow);
+}
+
+.marketing .contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.marketing .contact-form h3 {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.marketing .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.marketing .form-group label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .form-group input,
+.marketing .form-group select,
+.marketing .form-group textarea {
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+  background-color: var(--mkt-bg-secondary);
+  transition: all var(--mkt-transition-fast);
+}
+
+.marketing .form-group input:focus,
+.marketing .form-group select:focus,
+.marketing .form-group textarea:focus {
+  border-color: var(--mkt-text-primary);
+  background-color: var(--mkt-bg-primary);
+  box-shadow: 0 0 0 2px var(--mkt-brand-tint);
+}
+
+.marketing .submit-btn {
+  padding: 12px;
+  font-size: 15px;
+  width: 100%;
+}
+
+.marketing .success-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 40px 0;
+}
+
+.marketing .success-message h3 {
+  font-size: 24px;
+}
+
+.marketing .success-message p {
+  color: var(--mkt-text-secondary);
+}
+
+/* Responsive Overrides */
+@media (max-width: 992px) {
+  .marketing .enterprise-hero {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  .marketing .enterprise-hero h1 {
+    font-size: 36px;
+  }
+
+  .marketing .sub-tab-showcase {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 32px;
+  }
+
+  .marketing .demo-form-grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  .marketing .demo-form-left h2 {
+    font-size: 32px;
+  }
+}

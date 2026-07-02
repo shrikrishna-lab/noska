@@ -1,0 +1,313 @@
+.marketing .navbar-container {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--mkt-border-color);
+  z-index: 1000;
+  height: 64px;
+  display: flex;
+  align-items: center;
+}
+
+.marketing .navbar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 100%;
+}
+
+.marketing .navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.marketing .navbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 19px;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .navbar-brand-logo {
+  height: 28px;
+  width: 28px;
+  object-fit: contain;
+}
+
+.marketing .logo-text {
+  font-family: var(--mkt-font-heading);
+  letter-spacing: -0.03em;
+}
+
+.marketing .navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketing .nav-item-dropdown {
+  position: relative;
+}
+
+.marketing .nav-btn,
+.marketing .nav-link {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mkt-text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--mkt-transition-fast);
+}
+
+.marketing .nav-btn:hover,
+.marketing .nav-link:hover,
+.marketing .nav-action-text:hover {
+  background-color: var(--mkt-brand-tint);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .nav-link.active {
+  color: var(--mkt-text-primary);
+  background-color: var(--mkt-brand-tint);
+  font-weight: 600;
+}
+
+.marketing .nav-btn svg {
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .nav-btn svg.rotate {
+  transform: rotate(180deg);
+}
+
+/* Dropdown Drawer Panel */
+.marketing .dropdown-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02);
+  padding: 12px;
+  min-width: 320px;
+  animation: mkt-fadeIn 0.15s ease-out;
+  z-index: 1010;
+}
+
+@keyframes mkt-fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.marketing .dropdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.marketing .dropdown-grid.single-col {
+  grid-template-columns: 1fr;
+  min-width: 240px;
+}
+
+.marketing .dropdown-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  transition: background-color var(--mkt-transition-fast);
+}
+
+.marketing .dropdown-item:hover {
+  background-color: var(--mkt-bg-secondary);
+}
+
+.marketing .item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+  flex-shrink: 0;
+}
+
+.marketing .item-icon.tint-purple {
+  background-color: rgba(144, 101, 253, 0.1);
+  color: var(--mkt-accent-purple);
+}
+
+.marketing .item-icon.tint-blue {
+  background-color: var(--mkt-accent-blue-tint);
+  color: var(--mkt-accent-blue);
+}
+
+.marketing .item-icon.tint-red {
+  background-color: rgba(235, 87, 87, 0.1);
+  color: var(--mkt-accent-red);
+}
+
+.marketing .item-icon.tint-yellow {
+  background-color: rgba(242, 201, 76, 0.1);
+  color: var(--mkt-accent-yellow);
+}
+
+.marketing .item-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.marketing .item-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--mkt-text-primary);
+  line-height: 1.2;
+}
+
+.marketing .item-desc {
+  font-size: 11px;
+  color: var(--mkt-text-secondary);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* Right Actions */
+.marketing .navbar-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.marketing .nav-action-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mkt-text-secondary);
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all var(--mkt-transition-fast);
+  cursor: pointer;
+}
+
+.marketing .divider-vertical {
+  height: 16px;
+  width: 1px;
+  background-color: var(--mkt-border-color);
+}
+
+.marketing .btn-nav-cta {
+  padding: 6px 12px;
+  font-size: 13.5px;
+}
+
+.marketing .mobile-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--mkt-text-primary);
+  cursor: pointer;
+}
+
+/* Mobile Drawer styles */
+.marketing .mobile-drawer {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  width: 100%;
+  height: calc(100vh - 64px);
+  background-color: var(--mkt-bg-primary);
+  z-index: 999;
+  overflow-y: auto;
+  border-top: 1px solid var(--mkt-border-color);
+  animation: mkt-slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 24px;
+}
+
+@keyframes mkt-slideIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.marketing .mobile-drawer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.marketing .mobile-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--mkt-text-muted);
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.marketing .mobile-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-bottom: 1px solid var(--mkt-border-color);
+  padding-bottom: 16px;
+}
+
+.marketing .mobile-item {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--mkt-text-primary);
+  padding: 8px 0;
+}
+
+.marketing .mobile-flat-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 1px solid var(--mkt-border-color);
+  padding-bottom: 16px;
+}
+
+.marketing .mobile-flat-item {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .mobile-cta-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+}
+
+/* Responsive Overrides */
+@media (max-width: 992px) {
+  .marketing .navbar-links,
+  .marketing .hide-mobile,
+  .marketing .divider-vertical {
+    display: none !important;
+  }
+
+  .marketing .mobile-toggle {
+    display: block;
+  }
+
+  .marketing .navbar-logo {
+    font-size: 18px;
+  }
+}

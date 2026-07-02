@@ -1,0 +1,879 @@
+/* Home Page Styling — scoped under .marketing, see marketing-theme.css */
+
+.marketing .home-wrapper {
+  padding-bottom: 80px;
+}
+
+/* 1. Hero Section */
+.marketing .hero-section {
+  text-align: center;
+  padding: 80px 24px 60px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.marketing .hero-title {
+  font-size: 64px;
+  letter-spacing: -0.03em;
+  max-width: 800px;
+  margin-bottom: 24px;
+  line-height: 1.1;
+}
+
+.marketing .highlight-text {
+  position: relative;
+  display: inline-block;
+}
+
+.marketing .highlight-text::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  width: 100%;
+  height: 8px;
+  background-color: var(--mkt-accent-yellow);
+  z-index: -1;
+  opacity: 0.6;
+}
+
+.marketing .hero-subtitle {
+  font-size: 20px;
+  color: var(--mkt-text-secondary);
+  max-width: 680px;
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+.marketing .hero-cta-group {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 64px;
+}
+
+.marketing .btn-lg {
+  padding: 12px 24px;
+  font-size: 16.5px;
+}
+
+/* Application Preview Mockup */
+.marketing .hero-preview-container {
+  width: 100%;
+  max-width: 960px;
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+  overflow: hidden;
+  background-color: var(--mkt-bg-primary);
+  text-align: left;
+}
+
+.marketing .preview-top-bar {
+  background-color: var(--mkt-bg-secondary);
+  border-bottom: 1px solid var(--mkt-border-color);
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  position: relative;
+}
+
+.marketing .dots-group {
+  display: flex;
+  gap: 6px;
+}
+
+.marketing .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.marketing .dot.red { background-color: var(--mkt-accent-red); }
+.marketing .dot.yellow { background-color: var(--mkt-accent-yellow); }
+.marketing .dot.green { background-color: #27ae60; }
+
+.marketing .address-bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: var(--mkt-text-secondary);
+  font-weight: 500;
+}
+
+.marketing .preview-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  height: 400px;
+}
+
+.marketing .preview-sidebar {
+  background-color: var(--mkt-bg-secondary);
+  border-right: 1px solid var(--mkt-border-color);
+  padding: 20px 12px;
+}
+
+.marketing .sidebar-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--mkt-text-muted);
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+  padding-left: 8px;
+}
+
+.marketing .sidebar-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marketing .sidebar-list li {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--mkt-text-secondary);
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.marketing .sidebar-list li.active,
+.marketing .sidebar-list li:hover {
+  background-color: var(--mkt-border-color);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .preview-content {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.marketing .preview-content h2 {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.marketing .preview-content .intro {
+  font-size: 15px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.marketing .preview-card {
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 8px;
+  padding: 16px;
+  background-color: var(--mkt-bg-primary);
+}
+
+.marketing .preview-card h3 {
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.marketing .preview-card p {
+  font-size: 13px;
+  color: var(--mkt-text-secondary);
+  margin-bottom: 12px;
+}
+
+.marketing .badge {
+  font-size: 11px;
+  font-weight: 600;
+  background-color: var(--mkt-bg-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .badge.warning {
+  background-color: rgba(242, 201, 76, 0.15);
+  color: #b8860b;
+}
+
+/* 2. Marquee Section */
+.marketing .marquee-section {
+  background-color: var(--mkt-bg-secondary);
+  border-top: 1px solid var(--mkt-border-color);
+  border-bottom: 1px solid var(--mkt-border-color);
+  padding: 32px 0;
+  text-align: center;
+}
+
+.marketing .marquee-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--mkt-text-muted);
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+}
+
+.marketing .brand-logo-text {
+  font-family: var(--mkt-font-heading);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--mkt-text-secondary);
+  opacity: 0.6;
+  letter-spacing: -0.03em;
+  transition: opacity 0.3s;
+}
+
+.marketing .brand-logo-text:hover {
+  opacity: 1;
+}
+
+/* 3. Features Section */
+.marketing .features-section {
+  padding: 100px 24px;
+}
+
+.marketing .section-header {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto 48px auto;
+}
+
+.marketing .section-header h2 {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.marketing .section-header p {
+  font-size: 18px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .features-tab-group {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.marketing .tab-btn {
+  background: none;
+  border: 1px solid var(--mkt-border-color);
+  padding: 10px 20px;
+  border-radius: 30px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--mkt-transition-fast);
+}
+
+.marketing .tab-btn:hover {
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .tab-btn.active {
+  background-color: var(--mkt-brand-color);
+  color: #ffffff;
+  border-color: var(--mkt-brand-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Showcase Panels */
+.marketing .features-showcase-panel {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 48px;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+  padding: 48px;
+  align-items: center;
+  min-height: 480px;
+}
+
+.marketing .showcase-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.marketing .category-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.marketing .category-label.text-blue { color: var(--mkt-accent-blue); }
+.marketing .category-label.text-red { color: var(--mkt-accent-red); }
+.marketing .category-label.text-yellow { color: #d4a017; }
+.marketing .category-label.text-purple { color: var(--mkt-accent-purple); }
+
+.marketing .showcase-info h3 {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.marketing .showcase-info p {
+  font-size: 16px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .interactive-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+  background-color: var(--mkt-bg-primary);
+  padding: 6px 12px;
+  border-radius: 6px;
+  width: max-content;
+  border: 1px dashed var(--mkt-border-color);
+}
+
+.marketing .showcase-visual {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Showcase Mockups details */
+.marketing .interactive-docs-mockup,
+.marketing .interactive-wikis-mockup,
+.marketing .interactive-projects-mockup,
+.marketing .interactive-ai-mockup {
+  width: 100%;
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.04);
+  overflow: hidden;
+  animation: mkt-fadeIn 0.3s ease-out;
+}
+
+/* 1. Docs Mockup */
+.marketing .interactive-docs-mockup {
+  padding: 24px;
+}
+
+.marketing .mockup-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.marketing .mockup-header .emoji {
+  font-size: 24px;
+}
+
+.marketing .mockup-header h4 {
+  font-size: 18px;
+}
+
+.marketing .divider {
+  border: none;
+  border-top: 1px solid var(--mkt-border-color);
+  margin-bottom: 16px;
+}
+
+.marketing .mockup-p {
+  font-size: 13.5px;
+  color: var(--mkt-text-secondary);
+  margin-bottom: 16px;
+}
+
+.marketing .todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .todo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.marketing .todo-item span {
+  font-size: 14px;
+  color: var(--mkt-text-primary);
+  transition: all 0.2s;
+}
+
+.marketing .todo-item.completed span {
+  text-decoration: line-through;
+  color: var(--mkt-text-muted);
+}
+
+.marketing .checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--mkt-text-muted);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.marketing .checkbox.checked {
+  background-color: var(--mkt-brand-color);
+  border-color: var(--mkt-brand-color);
+  color: white;
+}
+
+/* 2. Wikis Mockup */
+.marketing .interactive-wikis-mockup {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  height: 280px;
+}
+
+.marketing .wiki-sidebar {
+  background-color: var(--mkt-bg-secondary);
+  border-right: 1px solid var(--mkt-border-color);
+  padding: 16px 8px;
+}
+
+.marketing .sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mkt-text-muted);
+  margin-bottom: 12px;
+}
+
+.marketing .wiki-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marketing .wiki-link {
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  color: var(--mkt-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marketing .wiki-link.active {
+  background-color: var(--mkt-border-color);
+  color: var(--mkt-text-primary);
+  font-weight: 600;
+}
+
+.marketing .wiki-body {
+  padding: 24px;
+}
+
+.marketing .wiki-body h4 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.marketing .wiki-body p {
+  font-size: 13px;
+  color: var(--mkt-text-secondary);
+  margin-bottom: 20px;
+}
+
+.marketing .wiki-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.marketing .wiki-grid-card {
+  border: 1px solid var(--mkt-border-color);
+  padding: 12px;
+  border-radius: 6px;
+  background-color: var(--mkt-bg-secondary);
+}
+
+.marketing .wiki-grid-card h5 {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.marketing .wiki-grid-card p {
+  font-size: 11px;
+  margin-bottom: 0;
+}
+
+/* 3. Projects Mockup */
+.marketing .interactive-projects-mockup {
+  padding: 16px;
+  height: 280px;
+  overflow-y: auto;
+}
+
+.marketing .kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  height: 100%;
+}
+
+.marketing .kanban-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .column-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 4px;
+}
+
+.marketing .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--mkt-text-muted);
+}
+
+.marketing .kanban-column:nth-child(1) .status-dot { background-color: var(--mkt-accent-red); }
+.marketing .kanban-column:nth-child(2) .status-dot { background-color: var(--mkt-accent-yellow); }
+.marketing .kanban-column:nth-child(3) .status-dot { background-color: #27ae60; }
+
+.marketing .status-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .column-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.marketing .kanban-card {
+  border: 1px solid var(--mkt-border-color);
+  background-color: var(--mkt-bg-primary);
+  padding: 10px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.marketing .kanban-card:hover {
+  transform: translateY(-1px);
+  border-color: #d1d1d1;
+}
+
+.marketing .kanban-card h5 {
+  font-size: 12.5px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.marketing .card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.marketing .priority-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.marketing .priority-tag.high {
+  background-color: rgba(235, 87, 87, 0.12);
+  color: var(--mkt-accent-red);
+}
+
+.marketing .priority-tag.medium {
+  background-color: rgba(242, 201, 76, 0.15);
+  color: #b8860b;
+}
+
+.marketing .task-id {
+  font-size: 9px;
+  color: var(--mkt-text-muted);
+}
+
+/* 4. AI Mockup */
+.marketing .interactive-ai-mockup {
+  padding: 20px;
+}
+
+.marketing .ai-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mkt-accent-purple);
+  margin-bottom: 12px;
+}
+
+.marketing .ai-chat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.marketing .ai-prompt-box {
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.marketing .prompt-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mkt-text-muted);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.marketing .prompt-input {
+  font-size: 13px;
+  color: var(--mkt-text-primary);
+  font-weight: 500;
+}
+
+.marketing .ai-response-box {
+  background-color: rgba(144, 101, 253, 0.04);
+  border: 1px solid rgba(144, 101, 253, 0.15);
+  padding: 12px;
+  border-radius: 8px;
+  min-height: 80px;
+}
+
+.marketing .response-text {
+  font-size: 13px;
+  color: var(--mkt-text-primary);
+  line-height: 1.45;
+}
+
+.marketing .typing-cursor {
+  font-weight: 700;
+  color: var(--mkt-accent-purple);
+  animation: mkt-blink 0.8s infinite;
+}
+
+@keyframes mkt-blink {
+  50% { opacity: 0; }
+}
+
+.marketing .ai-action-btn {
+  align-self: flex-start;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* 4. Testimonials Section */
+.marketing .testimonials-section {
+  padding: 60px 24px;
+}
+
+.marketing .testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.marketing .testimonial-card {
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--mkt-card-shadow);
+  transition: all var(--mkt-transition-normal);
+}
+
+.marketing .testimonial-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--mkt-card-shadow-hover);
+}
+
+.marketing .testimonial-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.marketing .user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.marketing .user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--mkt-bg-tertiary);
+  color: var(--mkt-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.marketing .user-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.marketing .user-handle {
+  font-size: 11px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .rating {
+  color: #ffc107;
+  display: flex;
+  gap: 2px;
+}
+
+.marketing .testimonial-quote {
+  font-size: 14px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* 5. Stats Section */
+.marketing .stats-section {
+  padding: 80px 24px;
+  text-align: center;
+}
+
+.marketing .stats-header {
+  margin-bottom: 48px;
+}
+
+.marketing .stats-header h2 {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.marketing .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.marketing .stat-card {
+  padding: 32px;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 12px;
+}
+
+.marketing .stat-num {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--mkt-text-primary);
+  margin-bottom: 8px;
+  font-family: var(--mkt-font-heading);
+}
+
+.marketing .stat-label {
+  font-size: 14px;
+  color: var(--mkt-text-secondary);
+  font-weight: 600;
+}
+
+/* 6. Final CTA Section */
+.marketing .final-cta-section {
+  padding: 60px 24px 80px 24px;
+}
+
+.marketing .cta-banner {
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+  padding: 64px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: var(--mkt-card-shadow);
+}
+
+.marketing .cta-banner h2 {
+  font-size: 44px;
+  margin-bottom: 12px;
+}
+
+.marketing .cta-banner p {
+  font-size: 18px;
+  color: var(--mkt-text-secondary);
+  margin-bottom: 32px;
+  max-width: 500px;
+}
+
+.marketing .cta-btn-group {
+  display: flex;
+  gap: 16px;
+}
+
+/* Responsive Overrides */
+@media (max-width: 992px) {
+  .marketing .hero-title {
+    font-size: 44px;
+  }
+
+  .marketing .features-showcase-panel {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 32px;
+  }
+
+  .marketing .testimonials-grid,
+  .marketing .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .marketing .preview-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .marketing .preview-sidebar {
+    display: none;
+  }
+
+  .marketing .interactive-wikis-mockup {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .marketing .wiki-sidebar {
+    display: none;
+  }
+}

@@ -1,0 +1,213 @@
+import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  ChevronDown, Menu, X, Sparkles, BookOpen,
+  Database, CheckSquare, FileText, Building2,
+  Users, Briefcase, GraduationCap, LifeBuoy, ArrowRight
+} from 'lucide-react';
+import './Navbar.css';
+
+export default function Navbar() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState(null);
+  const location = useLocation();
+
+  // Close mobile menu on page change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setActiveDropdown(null);
+  }, [location]);
+
+  return (
+    <nav className="navbar-container">
+      <div className="navbar-content mkt-container">
+        {/* Left Side: Logo & Main Navigation */}
+        <div className="navbar-left">
+          <Link to="/" className="navbar-logo">
+            <img src="/logo.png" alt="Noska Logo" className="navbar-brand-logo" />
+            <span className="logo-text">Noska</span>
+          </Link>
+
+          <div className="navbar-links">
+            {/* Product Dropdown */}
+            <div
+              className="nav-item-dropdown"
+              onMouseEnter={() => setActiveDropdown('product')}
+              onMouseLeave={() => setActiveDropdown(null)}
+            >
+              <button className="nav-btn">
+                Product <ChevronDown size={14} className={activeDropdown === 'product' ? 'rotate' : ''} />
+              </button>
+              {activeDropdown === 'product' && (
+                <div className="dropdown-panel">
+                  <div className="dropdown-section">
+                    <div className="dropdown-grid">
+                      <Link to="/product" className="dropdown-item">
+                        <div className="item-icon tint-purple"><Sparkles size={18} /></div>
+                        <div className="item-content">
+                          <p className="item-title">Noska AI</p>
+                          <p className="item-desc">Integrated AI assistant</p>
+                        </div>
+                      </Link>
+                      <Link to="/product" className="dropdown-item">
+                        <div className="item-icon tint-blue"><FileText size={18} /></div>
+                        <div className="item-content">
+                          <p className="item-title">Docs</p>
+                          <p className="item-desc">Simple, beautiful documents</p>
+                        </div>
+                      </Link>
+                      <Link to="/product" className="dropdown-item">
+                        <div className="item-icon tint-red"><Database size={18} /></div>
+                        <div className="item-content">
+                          <p className="item-title">Wikis</p>
+                          <p className="item-desc">Centralize team knowledge</p>
+                        </div>
+                      </Link>
+                      <Link to="/product" className="dropdown-item">
+                        <div className="item-icon tint-yellow"><CheckSquare size={18} /></div>
+                        <div className="item-content">
+                          <p className="item-title">Projects</p>
+                          <p className="item-desc">Connected tasks & roadmaps</p>
+                        </div>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Solutions Dropdown */}
+            <div
+              className="nav-item-dropdown"
+              onMouseEnter={() => setActiveDropdown('solutions')}
+              onMouseLeave={() => setActiveDropdown(null)}
+            >
+              <button className="nav-btn">
+                Solutions <ChevronDown size={14} className={activeDropdown === 'solutions' ? 'rotate' : ''} />
+              </button>
+              {activeDropdown === 'solutions' && (
+                <div className="dropdown-panel">
+                  <div className="dropdown-grid single-col">
+                    <Link to="/enterprise" className="dropdown-item">
+                      <div className="item-icon"><Building2 size={18} /></div>
+                      <div className="item-content">
+                        <p className="item-title">Enterprise</p>
+                        <p className="item-desc">Scale support and security</p>
+                      </div>
+                    </Link>
+                    <a href="#small-business" className="dropdown-item">
+                      <div className="item-icon"><Users size={18} /></div>
+                      <div className="item-content">
+                        <p className="item-title">Small business</p>
+                        <p className="item-desc">Run your whole startup</p>
+                      </div>
+                    </a>
+                    <a href="#personal" className="dropdown-item">
+                      <div className="item-icon"><Briefcase size={18} /></div>
+                      <div className="item-content">
+                        <p className="item-title">Personal use</p>
+                        <p className="item-desc">Organize your life & notes</p>
+                      </div>
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Resources Dropdown */}
+            <div
+              className="nav-item-dropdown"
+              onMouseEnter={() => setActiveDropdown('resources')}
+              onMouseLeave={() => setActiveDropdown(null)}
+            >
+              <button className="nav-btn">
+                Resources <ChevronDown size={14} className={activeDropdown === 'resources' ? 'rotate' : ''} />
+              </button>
+              {activeDropdown === 'resources' && (
+                <div className="dropdown-panel">
+                  <div className="dropdown-grid single-col">
+                    <a href="#blog" className="dropdown-item">
+                      <div className="item-icon"><BookOpen size={18} /></div>
+                      <div className="item-content">
+                        <p className="item-title">Blog</p>
+                        <p className="item-desc">News, stories & insights</p>
+                      </div>
+                    </a>
+                    <a href="#guides" className="dropdown-item">
+                      <div className="item-icon"><GraduationCap size={18} /></div>
+                      <div className="item-content">
+                        <p className="item-title">Guides & tutorials</p>
+                        <p className="item-desc">Learn how to build workspace</p>
+                      </div>
+                    </a>
+                    <a href="#help" className="dropdown-item">
+                      <div className="item-icon"><LifeBuoy size={18} /></div>
+                      <div className="item-content">
+                        <p className="item-title">Help center</p>
+                        <p className="item-desc">Get support and answers</p>
+                      </div>
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Link to="/pricing" className={`nav-link ${location.pathname === '/pricing' ? 'active' : ''}`}>Pricing</Link>
+            <Link to="/enterprise" className={`nav-link ${location.pathname === '/enterprise' ? 'active' : ''}`}>Enterprise</Link>
+          </div>
+        </div>
+
+        {/* Right Side: Account Actions */}
+        <div className="navbar-right-actions">
+          <Link to="/enterprise" className="nav-action-text hide-mobile">Request a demo</Link>
+          <div className="divider-vertical hide-mobile"></div>
+          <Link to="/login" className="nav-action-text">Log in</Link>
+          <Link to="/login" className="btn btn-primary btn-nav-cta">Get Noska free</Link>
+          <button className="mobile-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Drawer Menu */}
+      {mobileMenuOpen && (
+        <div className="mobile-drawer">
+          <div className="mobile-drawer-links">
+            <div className="mobile-group">
+              <p className="mobile-group-title">Product</p>
+              <Link to="/product" className="mobile-item">Noska AI</Link>
+              <Link to="/product" className="mobile-item">Docs</Link>
+              <Link to="/product" className="mobile-item">Wikis</Link>
+              <Link to="/product" className="mobile-item">Projects</Link>
+            </div>
+
+            <div className="mobile-group">
+              <p className="mobile-group-title">Solutions</p>
+              <Link to="/enterprise" className="mobile-item">Enterprise</Link>
+              <a href="#small-business" className="mobile-item">Small Business</a>
+              <a href="#personal" className="mobile-item">Personal</a>
+            </div>
+
+            <div className="mobile-group">
+              <p className="mobile-group-title">Resources</p>
+              <a href="#blog" className="mobile-item">Blog</a>
+              <a href="#guides" className="mobile-item">Guides</a>
+              <a href="#help" className="mobile-item">Help Center</a>
+            </div>
+
+            <div className="mobile-flat-links">
+              <Link to="/pricing" className="mobile-flat-item">Pricing</Link>
+              <Link to="/enterprise" className="mobile-flat-item">Enterprise</Link>
+              <Link to="/enterprise" className="mobile-flat-item">Request a demo</Link>
+              <Link to="/login" className="mobile-flat-item">Log in</Link>
+            </div>
+
+            <Link to="/login" className="btn btn-primary mobile-cta-btn">
+              Get Noska free <ArrowRight size={16} />
+            </Link>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+}

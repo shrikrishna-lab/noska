@@ -2,15 +2,23 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.jsx";
-import LandingPage from "./pages/LandingPage.jsx";
+import MarketingLayout from "./pages/marketing/MarketingLayout.jsx";
+import MarketingHome from "./pages/marketing/Home.jsx";
+import MarketingPricing from "./pages/marketing/Pricing.jsx";
+import MarketingEnterprise from "./pages/marketing/Enterprise.jsx";
+import MarketingProduct from "./pages/marketing/Product.jsx";
 import "./index.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
-        {/* Public marketing page — never runs the auth/session bootstrap. */}
-        <Route path="/" element={<LandingPage />} />
+        {/* Public marketing site — never runs the auth/session bootstrap.
+            Each page shares the Navbar/Footer via MarketingLayout. */}
+        <Route path="/" element={<MarketingLayout><MarketingHome /></MarketingLayout>} />
+        <Route path="/pricing" element={<MarketingLayout><MarketingPricing /></MarketingLayout>} />
+        <Route path="/enterprise" element={<MarketingLayout><MarketingEnterprise /></MarketingLayout>} />
+        <Route path="/product" element={<MarketingLayout><MarketingProduct /></MarketingLayout>} />
         {/* Everything else (login, onboarding, and the workspace itself) is
             handled by App, which reads the current route to decide what to
             show and keeps the URL in sync as auth/onboarding state resolves. */}

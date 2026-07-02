@@ -1,0 +1,407 @@
+/* Product Page Styling — scoped under .marketing, see marketing-theme.css */
+
+.marketing .product-wrapper {
+  padding-bottom: 80px;
+}
+
+/* Product Hero */
+.marketing .product-hero {
+  text-align: center;
+  padding: 80px 24px 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.marketing .product-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--mkt-accent-blue);
+  background-color: var(--mkt-accent-blue-tint);
+  padding: 6px 12px;
+  border-radius: 30px;
+  margin-bottom: 20px;
+}
+
+.marketing .product-hero h1 {
+  font-size: 56px;
+  max-width: 800px;
+  margin-bottom: 16px;
+  letter-spacing: -0.03em;
+}
+
+.marketing .product-hero p {
+  font-size: 18px;
+  color: var(--mkt-text-secondary);
+  max-width: 600px;
+  line-height: 1.5;
+}
+
+/* Selector controls grid */
+.marketing .showcase-selector-section {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.marketing .showcase-grid-controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.marketing .control-card {
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--mkt-transition-normal);
+  box-shadow: var(--mkt-card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.marketing .control-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--mkt-card-shadow-hover);
+}
+
+.marketing .control-card.active {
+  border-color: var(--mkt-text-primary);
+  border-width: 2px;
+}
+
+.marketing .control-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--mkt-bg-secondary);
+}
+
+.marketing .control-icon.purple { background-color: rgba(144, 101, 253, 0.1); color: var(--mkt-accent-purple); }
+.marketing .control-icon.blue { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
+.marketing .control-icon.red { background-color: rgba(235, 87, 87, 0.1); color: var(--mkt-accent-red); }
+.marketing .control-icon.yellow { background-color: rgba(242, 201, 76, 0.15); color: #d4a017; }
+
+.marketing .control-card h4 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.marketing .control-card p {
+  font-size: 12px;
+  color: var(--mkt-text-secondary);
+}
+
+/* Selected feature panel */
+.marketing .selected-feature-panel {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 60px;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+  padding: 48px;
+  align-items: center;
+  min-height: 420px;
+}
+
+.marketing .panel-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.marketing .panel-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.marketing .panel-badge.ai { background-color: rgba(144, 101, 253, 0.15); color: var(--mkt-accent-purple); }
+.marketing .panel-badge.docs { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
+.marketing .panel-badge.wikis { background-color: rgba(235, 87, 87, 0.15); color: var(--mkt-accent-red); }
+.marketing .panel-badge.projects { background-color: rgba(242, 201, 76, 0.2); color: #b8860b; }
+
+.marketing .panel-info h2 {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.marketing .panel-subtitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .panel-desc {
+  font-size: 15px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .panel-bullets {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .panel-bullets li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .bullet-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--mkt-text-primary);
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.marketing .panel-visual {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.marketing .visual-display {
+  width: 100%;
+  max-width: 380px;
+}
+
+.marketing .product-mini-mockup {
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: mkt-fadeIn 0.35s ease-out;
+}
+
+.marketing .mock-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .product-mini-mockup hr {
+  border: none;
+  border-top: 1px solid var(--mkt-border-color);
+}
+
+/* AI Mockup details */
+.marketing .mock-text-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .text-original {
+  font-size: 11px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .text-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mkt-accent-purple);
+  background-color: rgba(144, 101, 253, 0.05);
+  border-left: 2px solid var(--mkt-accent-purple);
+  padding: 8px;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Docs Mockup details */
+.marketing .command-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.marketing .selector-item {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .selector-item.active {
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+  font-weight: 600;
+  border: 1px solid var(--mkt-border-color);
+}
+
+/* Wikis Mockup details */
+.marketing .verified-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  border-bottom: 1px solid var(--mkt-bg-secondary);
+  padding-bottom: 8px;
+}
+
+.marketing .badge-verified {
+  font-size: 10px;
+  font-weight: 700;
+  background-color: rgba(39, 174, 96, 0.12);
+  color: #27ae60;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.marketing .badge-draft {
+  font-size: 10px;
+  font-weight: 700;
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Projects Mockup details */
+.marketing .properties-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.marketing .prop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.marketing .prop-row span:first-child {
+  color: var(--mkt-text-muted);
+  font-weight: 500;
+}
+
+.marketing .prop-row span:last-child {
+  font-weight: 600;
+}
+
+.marketing .p-high {
+  background-color: rgba(235, 87, 87, 0.12);
+  color: var(--mkt-accent-red);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.marketing .p-status {
+  background-color: rgba(242, 201, 76, 0.15);
+  color: #b8860b;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Specs Grid */
+.marketing .product-specs {
+  padding: 80px 24px;
+}
+
+.marketing .specs-header {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto 48px auto;
+}
+
+.marketing .specs-header h2 {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.marketing .specs-header p {
+  font-size: 17px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .specs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.marketing .spec-card {
+  border: 1px solid var(--mkt-border-color);
+  padding: 28px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--mkt-bg-primary);
+  box-shadow: var(--mkt-card-shadow);
+  transition: all var(--mkt-transition-normal);
+}
+
+.marketing .spec-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--mkt-card-shadow-hover);
+}
+
+.marketing .spec-icon {
+  color: var(--mkt-text-primary);
+}
+
+.marketing .spec-card h4 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.marketing .spec-card p {
+  font-size: 13.5px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.45;
+}
+
+/* Responsive Overrides */
+@media (max-width: 992px) {
+  .marketing .product-hero h1 {
+    font-size: 36px;
+  }
+
+  .marketing .showcase-grid-controls {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .marketing .selected-feature-panel {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 32px;
+  }
+
+  .marketing .specs-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}

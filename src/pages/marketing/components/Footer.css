@@ -1,0 +1,125 @@
+.marketing .footer-container {
+  background-color: var(--mkt-bg-primary);
+  border-top: 1px solid var(--mkt-border-color);
+  padding: 60px 0 32px 0;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .footer-content {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+
+.marketing .footer-brand-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.marketing .footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .social-links {
+  display: flex;
+  gap: 16px;
+}
+
+.marketing .social-links a {
+  color: var(--mkt-text-secondary);
+  transition: color var(--mkt-transition-fast);
+}
+
+.marketing .social-links a:hover {
+  color: var(--mkt-text-primary);
+}
+
+.marketing .language-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--mkt-border-color);
+  padding: 6px 12px;
+  border-radius: 6px;
+  width: max-content;
+  background-color: var(--mkt-bg-secondary);
+}
+
+.marketing .language-selector select {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--mkt-text-secondary);
+  cursor: pointer;
+  outline: none;
+  font-weight: 500;
+}
+
+.marketing .footer-links-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.marketing .footer-col-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--mkt-text-primary);
+  letter-spacing: 0.05em;
+}
+
+.marketing .footer-links-col ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.marketing .footer-links-col a {
+  font-size: 13.5px;
+  color: var(--mkt-text-secondary);
+  transition: color var(--mkt-transition-fast);
+}
+
+.marketing .footer-links-col a:hover {
+  color: var(--mkt-text-primary);
+  text-decoration: underline;
+}
+
+.marketing .footer-bottom {
+  border-top: 1px solid var(--mkt-border-color);
+  margin-top: 48px;
+  padding-top: 24px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.marketing .copyright-text {
+  font-size: 12px;
+  color: var(--mkt-text-muted);
+}
+
+/* Responsive Footer */
+@media (max-width: 768px) {
+  .marketing .footer-content {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .marketing .footer-brand-col {
+    border-bottom: 1px solid var(--mkt-border-color);
+    padding-bottom: 24px;
+  }
+
+  .marketing .footer-bottom {
+    margin-top: 32px;
+  }
+}
