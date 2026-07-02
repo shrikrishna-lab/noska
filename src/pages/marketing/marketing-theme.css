@@ -36,9 +36,14 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* The authenticated app sets `body { overflow: hidden }` (src/index.css)
+     since it manages its own internal scroll areas. Both mount under the
+     same <body>, so the marketing site needs its own scroll container
+     instead of relying on normal page scroll. */
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .marketing a {
