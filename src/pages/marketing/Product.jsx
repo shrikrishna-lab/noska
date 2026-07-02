@@ -32,11 +32,11 @@ export default function Product() {
     wikis: {
       title: 'Wikis: Centralize your information.',
       subtitle: 'Clear paths to any document.',
-      desc: 'Turn folders of documents into clean Wiki hubs. Prevent duplicate files and establish a single source of truth.',
+      desc: 'Turn folders of documents into clean Wiki hubs, and use the Thought Graph to see how everything connects instead of guessing.',
       points: [
-        'Page nesting: Keep folders and articles organized in trees.',
-        'Verification: Mark official documents with green badges.',
-        'Workspace links: Map articles to project tasks or databases.'
+        'Page nesting: Keep folders and articles organized in trees, as deep as you need.',
+        'Thought Graph: A force-directed map of every page and its real connections.',
+        'Backlinks: Every mention links back, so context is never one-directional.'
       ]
     },
     projects: {
@@ -144,15 +144,15 @@ export default function Product() {
               )}
               {selectedFeature === 'wikis' && (
                 <div className="product-mini-mockup wikis-card">
-                  <div className="mock-title">📖 Verification Badges</div>
+                  <div className="mock-title">🕸️ Thought Graph</div>
                   <hr />
                   <div className="verified-row">
-                    <span>Employee Handbook.docx</span>
-                    <span className="badge-verified">✓ Verified Official</span>
+                    <span>Employee Handbook</span>
+                    <span className="badge-verified">6 linked pages</span>
                   </div>
                   <div className="verified-row">
-                    <span>Office Setup Expenses</span>
-                    <span className="badge-draft">Draft</span>
+                    <span>Engineering Onboarding</span>
+                    <span className="badge-draft">2 linked pages</span>
                   </div>
                 </div>
               )}
@@ -186,13 +186,13 @@ export default function Product() {
           </div>
           <div className="spec-card">
             <Zap size={24} className="spec-icon" />
-            <h4>Developer API</h4>
-            <p>Sync Noska databases with internal scripts. Integrate Github webhooks or build custom Slack bots.</p>
+            <h4>Built-in API console</h4>
+            <p>Every page and block route is documented in-app. Generate a token and run live requests against your own workspace, no external API portal required.</p>
           </div>
           <div className="spec-card">
             <ShieldCheck size={24} className="spec-icon" />
-            <h4>Compliance & Certs</h4>
-            <p>Host company wikis securely with complete encryption, SOC 2 Type II assurance, and custom IP restrictions.</p>
+            <h4>Real encryption, real scoping</h4>
+            <p>Lock pages with client-side AES-GCM encryption, and rely on Postgres row-level security scoped to your account on every table — not a shared policy.</p>
           </div>
         </div>
       </section>

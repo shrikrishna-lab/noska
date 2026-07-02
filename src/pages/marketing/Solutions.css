@@ -1,0 +1,164 @@
+/* Solutions page — scoped under .marketing, see marketing-theme.css */
+
+.marketing .solutions-wrapper {
+  padding-bottom: 40px;
+}
+
+.marketing .solutions-hero {
+  text-align: center;
+  padding: 90px 24px 60px 24px;
+  max-width: 700px !important;
+}
+
+.marketing .solutions-hero h1 {
+  font-size: 48px;
+  letter-spacing: -0.03em;
+  margin-bottom: 16px;
+}
+
+.marketing .solutions-hero p {
+  font-size: 17px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.5;
+}
+
+.marketing .solutions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 90px;
+  padding: 40px 24px 100px 24px;
+}
+
+.marketing .solution-row {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 56px;
+  align-items: center;
+}
+
+.marketing .solution-row.reversed {
+  grid-template-columns: 1.2fr 0.8fr;
+}
+
+.marketing .solution-row.reversed .solution-row-visual {
+  order: 2;
+}
+
+.marketing .solution-row-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 220px;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+}
+
+.marketing .solution-icon-badge {
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.marketing .solution-icon-badge.tint-blue { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
+.marketing .solution-icon-badge.tint-purple { background-color: rgba(144, 101, 253, 0.12); color: var(--mkt-accent-purple); }
+.marketing .solution-icon-badge.tint-red { background-color: rgba(235, 87, 87, 0.12); color: var(--mkt-accent-red); }
+.marketing .solution-icon-badge.tint-yellow { background-color: rgba(242, 201, 76, 0.18); color: #b8860b; }
+
+.marketing .solution-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mkt-text-muted);
+  margin-bottom: 10px;
+  display: block;
+}
+
+.marketing .solution-row-content h2 {
+  font-size: 30px;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+
+.marketing .solution-row-content p {
+  font-size: 15.5px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.marketing .solution-points {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .solution-point {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.marketing .solution-point .check-icon {
+  color: #27ae60;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.marketing .solutions-cta {
+  padding: 20px 24px 100px 24px;
+}
+
+.marketing .solutions-cta .cta-banner {
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+  padding: 60px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.marketing .solutions-cta .cta-banner h2 {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.marketing .solutions-cta .cta-banner p {
+  font-size: 16px;
+  color: var(--mkt-text-secondary);
+  margin-bottom: 28px;
+  max-width: 480px;
+}
+
+.marketing .solutions-cta .cta-btn-group {
+  display: flex;
+  gap: 14px;
+}
+
+@media (max-width: 992px) {
+  .marketing .solutions-hero h1 {
+    font-size: 34px;
+  }
+
+  .marketing .solution-row,
+  .marketing .solution-row.reversed {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .marketing .solution-row.reversed .solution-row-visual {
+    order: 0;
+  }
+
+  .marketing .solution-row-visual {
+    height: 160px;
+  }
+}

@@ -41,7 +41,6 @@ export default function Pricing() {
       btnText: 'Start Business trial',
       features: [
         'Everything in Plus',
-        'SAML Single Sign-On (SSO)',
         'Private teamspaces',
         'Advanced page analytics',
         '90-day page history',
@@ -50,16 +49,15 @@ export default function Pricing() {
     },
     {
       name: 'Enterprise',
-      desc: 'Advanced controls & support to run your organization.',
+      desc: 'Talk to us — SSO/SCIM are roadmap items we build with design partners.',
       price: 'Custom',
       btnText: 'Contact sales',
       features: [
         'Everything in Business',
-        'User provisioning (SCIM)',
-        'Advanced security & audit logs',
-        'Dedicated customer success support',
+        'Dedicated support channel',
         'Unlimited page history',
-        'Custom guest limits'
+        'Custom guest limits',
+        'Early access to SAML SSO & SCIM as they ship'
       ]
     }
   ];
@@ -205,18 +203,25 @@ export default function Pricing() {
                 <td colSpan={5}>Security & Admin</td>
               </tr>
               <tr>
-                <td className="feature-col">SAML Single Sign-On</td>
-                <td>—</td>
-                <td>—</td>
+                <td className="feature-col">Row-level security on every table</td>
+                <td>✓</td>
+                <td>✓</td>
                 <td>✓</td>
                 <td>✓</td>
               </tr>
               <tr>
-                <td className="feature-col">Audit logs</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
+                <td className="feature-col">Client-side page encryption</td>
                 <td>✓</td>
+                <td>✓</td>
+                <td>✓</td>
+                <td>✓</td>
+              </tr>
+              <tr>
+                <td className="feature-col">SAML SSO & SCIM</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>Roadmap</td>
               </tr>
               <tr>
                 <td className="feature-col">Custom guest limits</td>

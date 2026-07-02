@@ -43,53 +43,48 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Footer Navigation Columns */}
+        {/* Footer Navigation Columns — every link below points at a real
+            in-app route. Nothing links to a placeholder blog/careers/media
+            page that doesn't exist yet. */}
         <div className="footer-links-col">
           <p className="footer-col-title">Product</p>
           <ul>
             <li><Link to="/product">Noska AI</Link></li>
             <li><Link to="/product">Docs</Link></li>
-            <li><Link to="/product">Wikis</Link></li>
-            <li><Link to="/product">Projects</Link></li>
-            <li><a href="#whats-new">What's new</a></li>
+            <li><Link to="/product">Databases</Link></li>
+            <li><Link to="/changelog">What's new</Link></li>
           </ul>
         </div>
 
         <div className="footer-links-col">
           <p className="footer-col-title">Solutions</p>
           <ul>
+            <li><Link to="/solutions">Personal use</Link></li>
+            <li><Link to="/solutions">Students & teams</Link></li>
             <li><Link to="/enterprise">Enterprise</Link></li>
-            <li><a href="#small-business">Small business</a></li>
-            <li><a href="#personal">Personal</a></li>
-            <li><a href="#design">Design</a></li>
-            <li><a href="#engineering">Engineering</a></li>
           </ul>
         </div>
 
         <div className="footer-links-col">
           <p className="footer-col-title">Resources</p>
           <ul>
-            <li><a href="#help">Help center</a></li>
-            <li><a href="#guides">Guides & tutorials</a></li>
-            <li><a href="#community">Community</a></li>
-            <li><a href="#templates">Templates</a></li>
-            <li><a href="#integrations">Integrations</a></li>
+            <li><Link to="/resources">Guides & shortcuts</Link></li>
+            <li><Link to="/changelog">Changelog</Link></li>
+            <li><Link to="/login">Help center</Link></li>
           </ul>
         </div>
 
         <div className="footer-links-col">
           <p className="footer-col-title">Company</p>
           <ul>
-            <li><a href="#about">About us</a></li>
-            <li><a href="#careers">Careers</a></li>
-            <li><a href="#media">Media kit</a></li>
+            <li><Link to="/pricing">Pricing</Link></li>
             <li><Link to="/enterprise">Contact sales</Link></li>
           </ul>
         </div>
       </div>
 
       <div className="footer-bottom mkt-container">
-        <p className="copyright-text">© {new Date().getFullYear()} Noska Labs, Inc. All rights reserved.</p>
+        <p className="copyright-text">© {new Date().getFullYear()} Noska. All rights reserved.</p>
       </div>
     </footer>
   );

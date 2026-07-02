@@ -88,27 +88,27 @@ export default function Navbar() {
               {activeDropdown === 'solutions' && (
                 <div className="dropdown-panel">
                   <div className="dropdown-grid single-col">
+                    <Link to="/solutions" className="dropdown-item">
+                      <div className="item-icon"><Users size={18} /></div>
+                      <div className="item-content">
+                        <p className="item-title">All solutions</p>
+                        <p className="item-desc">Personal, students, teams & writers</p>
+                      </div>
+                    </Link>
                     <Link to="/enterprise" className="dropdown-item">
                       <div className="item-icon"><Building2 size={18} /></div>
                       <div className="item-content">
                         <p className="item-title">Enterprise</p>
-                        <p className="item-desc">Scale support and security</p>
+                        <p className="item-desc">What's built, what's on the roadmap</p>
                       </div>
                     </Link>
-                    <a href="#small-business" className="dropdown-item">
-                      <div className="item-icon"><Users size={18} /></div>
-                      <div className="item-content">
-                        <p className="item-title">Small business</p>
-                        <p className="item-desc">Run your whole startup</p>
-                      </div>
-                    </a>
-                    <a href="#personal" className="dropdown-item">
+                    <Link to="/solutions" className="dropdown-item">
                       <div className="item-icon"><Briefcase size={18} /></div>
                       <div className="item-content">
                         <p className="item-title">Personal use</p>
                         <p className="item-desc">Organize your life & notes</p>
                       </div>
-                    </a>
+                    </Link>
                   </div>
                 </div>
               )}
@@ -126,34 +126,34 @@ export default function Navbar() {
               {activeDropdown === 'resources' && (
                 <div className="dropdown-panel">
                   <div className="dropdown-grid single-col">
-                    <a href="#blog" className="dropdown-item">
-                      <div className="item-icon"><BookOpen size={18} /></div>
-                      <div className="item-content">
-                        <p className="item-title">Blog</p>
-                        <p className="item-desc">News, stories & insights</p>
-                      </div>
-                    </a>
-                    <a href="#guides" className="dropdown-item">
+                    <Link to="/resources" className="dropdown-item">
                       <div className="item-icon"><GraduationCap size={18} /></div>
                       <div className="item-content">
-                        <p className="item-title">Guides & tutorials</p>
-                        <p className="item-desc">Learn how to build workspace</p>
+                        <p className="item-title">Guides & shortcuts</p>
+                        <p className="item-desc">Real keyboard shortcuts & feature guides</p>
                       </div>
-                    </a>
-                    <a href="#help" className="dropdown-item">
+                    </Link>
+                    <Link to="/changelog" className="dropdown-item">
+                      <div className="item-icon"><BookOpen size={18} /></div>
+                      <div className="item-content">
+                        <p className="item-title">Changelog</p>
+                        <p className="item-desc">What's actually shipped, dated</p>
+                      </div>
+                    </Link>
+                    <Link to="/login" className="dropdown-item">
                       <div className="item-icon"><LifeBuoy size={18} /></div>
                       <div className="item-content">
                         <p className="item-title">Help center</p>
-                        <p className="item-desc">Get support and answers</p>
+                        <p className="item-desc">In-app once you sign in</p>
                       </div>
-                    </a>
+                    </Link>
                   </div>
                 </div>
               )}
             </div>
 
             <Link to="/pricing" className={`nav-link ${location.pathname === '/pricing' ? 'active' : ''}`}>Pricing</Link>
-            <Link to="/enterprise" className={`nav-link ${location.pathname === '/enterprise' ? 'active' : ''}`}>Enterprise</Link>
+            <Link to="/changelog" className={`nav-link ${location.pathname === '/changelog' ? 'active' : ''}`}>Changelog</Link>
           </div>
         </div>
 
@@ -183,16 +183,15 @@ export default function Navbar() {
 
             <div className="mobile-group">
               <p className="mobile-group-title">Solutions</p>
+              <Link to="/solutions" className="mobile-item">All solutions</Link>
               <Link to="/enterprise" className="mobile-item">Enterprise</Link>
-              <a href="#small-business" className="mobile-item">Small Business</a>
-              <a href="#personal" className="mobile-item">Personal</a>
             </div>
 
             <div className="mobile-group">
               <p className="mobile-group-title">Resources</p>
-              <a href="#blog" className="mobile-item">Blog</a>
-              <a href="#guides" className="mobile-item">Guides</a>
-              <a href="#help" className="mobile-item">Help Center</a>
+              <Link to="/resources" className="mobile-item">Guides & shortcuts</Link>
+              <Link to="/changelog" className="mobile-item">Changelog</Link>
+              <Link to="/login" className="mobile-item">Help Center</Link>
             </div>
 
             <div className="mobile-flat-links">

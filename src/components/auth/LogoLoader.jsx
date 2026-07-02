@@ -18,7 +18,7 @@ export default function LogoLoader({ className = "" }) {
           ease: "easeInOut",
         }}
       />
-      
+
       {/* Main Logo Container */}
       <motion.div
         variants={logoVariants}

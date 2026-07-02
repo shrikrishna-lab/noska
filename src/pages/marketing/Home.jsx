@@ -1,32 +1,77 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
-  Sparkles, FileText, Database, CheckSquare,
-  ArrowRight, Check, Star
+  Sparkles, FileText, Database, CheckSquare, ArrowRight, Check,
+  LayoutGrid, GitBranch, Mic, Lock, BrainCircuit, Blocks, Zap,
 } from 'lucide-react';
+import { Reveal, Stagger, staggerItem } from './components/Reveal';
+import { LiveDemo } from './components/LiveDemo';
+import { ScrollStory } from './components/ScrollStory';
+import './components/ScrollStory.css';
 import './Home.css';
+
+const REAL_STATS = [
+  { num: '33', label: 'block types', sub: 'text, tables, code, embeds, and more' },
+  { num: '8', label: 'database views', sub: 'table, board, calendar, timeline, graph…' },
+  { num: '8', label: 'AI providers', sub: 'bring your own key — OpenAI, Anthropic, Gemini, Groq…' },
+];
+
+const CAPABILITIES = [
+  {
+    id: 'canvas',
+    icon: LayoutGrid,
+    title: 'Infinite Canvas',
+    color: 'blue',
+    desc: 'Every page can drop into a zoomable, pannable spatial canvas — blocks become draggable cards with spring physics, a live mini-map, and persisted positions.',
+  },
+  {
+    id: 'graph',
+    icon: GitBranch,
+    title: 'Thought Graph',
+    color: 'purple',
+    desc: 'See your whole workspace as a force-directed node graph. Connections are drawn from real parent/child and tag relationships — click a node to jump straight to that page.',
+  },
+  {
+    id: 'voice',
+    icon: Mic,
+    title: 'Voice → structure',
+    color: 'red',
+    desc: 'Speak your thoughts and Noska transcribes them live, then asks AI to turn the raw transcript into a structured outline — headers, checklists, and todos.',
+  },
+  {
+    id: 'encryption',
+    icon: Lock,
+    title: 'Real encryption',
+    color: 'yellow',
+    desc: 'Lock any page with the Web Crypto API: PBKDF2 key derivation and AES-GCM 256-bit encryption, entirely client-side. Plaintext never touches the network unencrypted.',
+  },
+  {
+    id: 'spaced',
+    icon: BrainCircuit,
+    title: 'Spaced repetition',
+    color: 'green',
+    desc: 'Turn any block into a flashcard and review it with the SM-2 scheduling algorithm — the same spacing model behind Anki, built directly into your notes.',
+  },
+  {
+    id: 'api',
+    icon: Blocks,
+    title: 'Open API console',
+    color: 'blue',
+    desc: 'A built-in console documents every page/block route and lets you generate a token and run live requests against your own workspace, right from the sidebar.',
+  },
+];
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('docs');
-  const [aiText, setAiText] = useState('Generate brainstorming ideas...');
+  const [aiText, setAiText] = useState('');
   const [aiTyping, setAiTyping] = useState(false);
-  const [todoItems, setTodoItems] = useState([
-    { id: 1, text: 'Design new landing page layout', completed: true },
-    { id: 2, text: 'Write product specifications for Q3', completed: false },
-    { id: 3, text: 'Review security compliance policy', completed: false },
-  ]);
-  const [kanbanTasks, setKanbanTasks] = useState([
-    { id: 101, title: 'Hero Illustration', status: 'todo', priority: 'Medium' },
-    { id: 102, title: 'Database Schema', status: 'progress', priority: 'High' },
-    { id: 103, title: 'Billing Integration', status: 'done', priority: 'High' },
-  ]);
 
-  // Trigger AI typing simulation
   const handleGenerateAi = () => {
     if (aiTyping) return;
     setAiTyping(true);
     setAiText('');
-    const fullText = "✨ Brainstorming: 1. Launch landing page marketing campaign. 2. Implement collaborative editor in real-time. 3. Deploy AI agent workspace features.";
+    const fullText = "This page covers three things: the Q3 roadmap, open blockers on the graph-view release, and next sprint's database migration plan.";
     let index = 0;
     const interval = setInterval(() => {
       if (index < fullText.length) {
@@ -36,407 +81,217 @@ export default function Home() {
         clearInterval(interval);
         setAiTyping(false);
       }
-    }, 35);
-  };
-
-  // Toggle todo item
-  const toggleTodo = (id) => {
-    setTodoItems(todoItems.map(item =>
-      item.id === id ? { ...item, completed: !item.completed } : item
-    ));
-  };
-
-  // Move task in kanban board
-  const moveTask = (id) => {
-    setKanbanTasks(kanbanTasks.map(task => {
-      if (task.id === id) {
-        const nextStatus = task.status === 'todo' ? 'progress' : task.status === 'progress' ? 'done' : 'todo';
-        return { ...task, status: nextStatus };
-      }
-      return task;
-    }));
+    }, 22);
   };
 
   return (
     <div className="home-wrapper">
-      {/* 1. Hero Section */}
+      {/* 1. Hero */}
       <section className="hero-section mkt-container">
-        <h1 className="hero-title">
-          Where teams & <span className="highlight-text">agents</span> Jam together.
-        </h1>
-        <p className="hero-subtitle">
-          Noska is the connected workspace where better, faster work happens. Now with AI actions and interactive agent setups built right in.
-        </p>
-        <div className="hero-cta-group">
-          <Link to="/login" className="btn btn-primary btn-lg">
-            Get Noska free <ArrowRight size={18} />
-          </Link>
-          <Link to="/enterprise" className="btn btn-secondary btn-lg">
-            Request a demo
-          </Link>
-        </div>
-
-        {/* Hero Vector Graphic Mockup */}
-        <div className="hero-preview-container">
-          <div className="preview-top-bar">
-            <div className="dots-group">
-              <span className="dot red"></span>
-              <span className="dot yellow"></span>
-              <span className="dot green"></span>
-            </div>
-            <div className="address-bar">🚀 Team Workspace / Home</div>
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <span className="hero-eyebrow">
+            <Sparkles size={13} /> Docs, databases, canvas, and AI in one workspace
+          </span>
+          <h1 className="hero-title">
+            The workspace that bends to <span className="highlight-text">how you think</span>.
+          </h1>
+          <p className="hero-subtitle">
+            Noska is a real-time notes workspace with 33 block types, 8 database views, a
+            zoomable canvas, a thought graph, and AI you bring your own key for. Not a mockup —
+            this is the actual product.
+          </p>
+          <div className="hero-cta-group">
+            <Link to="/login" className="btn btn-primary btn-lg">
+              Get started free <ArrowRight size={18} />
+            </Link>
+            <Link to="/product" className="btn btn-secondary btn-lg">
+              See what's inside
+            </Link>
           </div>
-          <div className="preview-layout">
-            <aside className="preview-sidebar">
-              <div className="sidebar-header">🏢 Workspace</div>
-              <ul className="sidebar-list">
-                <li className="active">🏠 Home</li>
-                <li>📝 Meeting Notes</li>
-                <li>🛠️ Project Roadmap</li>
-                <li>🧠 Knowledge Base</li>
-                <li>✨ Noska AI Assistant</li>
-              </ul>
-            </aside>
-            <div className="preview-content">
-              <h2>🏠 Workspace Home</h2>
-              <p className="intro">Welcome back, Team! Here's what's happening across your projects today.</p>
+        </motion.div>
 
-              <div className="preview-grid">
-                <div className="preview-card">
-                  <h3>📝 Quick Notes</h3>
-                  <p>Read specifications from the Q3 kickoff meeting.</p>
-                  <span className="badge">Updated 2h ago</span>
-                </div>
-                <div className="preview-card">
-                  <h3>🛠️ Projects In Flight</h3>
-                  <p>Design reviews are currently in progress.</p>
-                  <span className="badge warning">2 Tasks Pending</span>
-                </div>
-              </div>
-            </div>
-          </div>
+        <motion.div
+          initial={{ opacity: 0, y: 32, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.8, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <LiveDemo />
+        </motion.div>
+      </section>
+
+      {/* 2. Real stats, not vanity metrics */}
+      <section className="stats-strip-section">
+        <div className="mkt-container stats-strip">
+          {REAL_STATS.map((s, i) => (
+            <Reveal key={s.label} delay={i * 0.08} className="stats-strip-item">
+              <span className="stats-strip-num">{s.num}</span>
+              <span className="stats-strip-label">{s.label}</span>
+              <span className="stats-strip-sub">{s.sub}</span>
+            </Reveal>
+          ))}
         </div>
       </section>
 
-      {/* 2. Client Logo Marquee */}
-      <section className="marquee-section">
-        <p className="marquee-title">Powering the world's best teams</p>
-        <div className="marquee-container">
-          <div className="marquee-content">
-            <span className="brand-logo-text">Toyota</span>
-            <span className="brand-logo-text">Pinterest</span>
-            <span className="brand-logo-text">Figma</span>
-            <span className="brand-logo-text">Pixar</span>
-            <span className="brand-logo-text">Uber</span>
-            <span className="brand-logo-text">Spotify</span>
-            <span className="brand-logo-text">Pipedrive</span>
-            <span className="brand-logo-text">Slack</span>
-            {/* Duplicate for infinite effect */}
-            <span className="brand-logo-text">Toyota</span>
-            <span className="brand-logo-text">Pinterest</span>
-            <span className="brand-logo-text">Figma</span>
-            <span className="brand-logo-text">Pixar</span>
-            <span className="brand-logo-text">Uber</span>
-            <span className="brand-logo-text">Spotify</span>
-            <span className="brand-logo-text">Pipedrive</span>
-            <span className="brand-logo-text">Slack</span>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Interactive Bento Grid / Feature Section */}
+      {/* 3. Interactive feature tabs (existing pattern, kept — real product behavior) */}
       <section className="features-section mkt-container">
-        <div className="section-header">
-          <h2>Every team, side-by-side.</h2>
-          <p>Consolidate your tools into one cohesive, interactive interface.</p>
-        </div>
+        <Reveal className="section-header">
+          <h2>Every way you work, in one place.</h2>
+          <p>Consolidate docs, structured data, and AI into a single interactive interface.</p>
+        </Reveal>
 
-        {/* Feature Tabs */}
-        <div className="features-tab-group">
-          <button
-            className={`tab-btn ${activeTab === 'docs' ? 'active' : ''}`}
-            onClick={() => setActiveTab('docs')}
-          >
-            <FileText size={18} />
-            <span>Docs</span>
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'wikis' ? 'active' : ''}`}
-            onClick={() => setActiveTab('wikis')}
-          >
-            <Database size={18} />
-            <span>Wikis</span>
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'projects' ? 'active' : ''}`}
-            onClick={() => setActiveTab('projects')}
-          >
-            <CheckSquare size={18} />
-            <span>Projects</span>
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
-            onClick={() => setActiveTab('ai')}
-          >
-            <Sparkles size={18} />
-            <span>Noska AI</span>
-          </button>
-        </div>
+        <Reveal delay={0.1} className="features-tab-group">
+          {[
+            { id: 'docs', icon: FileText, label: 'Docs' },
+            { id: 'wikis', icon: Database, label: 'Wikis' },
+            { id: 'projects', icon: CheckSquare, label: 'Projects' },
+            { id: 'ai', icon: Sparkles, label: 'Noska AI' },
+          ].map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              className={`tab-btn ${activeTab === id ? 'active' : ''}`}
+              onClick={() => setActiveTab(id)}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </Reveal>
 
-        {/* Interactive Feature Panel */}
-        <div className="features-showcase-panel">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.5 }}
+          className="features-showcase-panel"
+        >
           <div className="showcase-info">
             {activeTab === 'docs' && (
               <>
                 <span className="category-label text-blue">Docs</span>
                 <h3>Simple, powerful, and collaborative.</h3>
-                <p>Add lists, checkmarks, tables, and media embed headers. Work together live with comments and annotations.</p>
-                <div className="interactive-hint">👉 Try clicking the tasks below to check them off!</div>
+                <p>33 block types — text, tables, code, embeds, callouts, columns, and more. Real-time edits sync across every connected client.</p>
               </>
             )}
             {activeTab === 'wikis' && (
               <>
                 <span className="category-label text-red">Wikis</span>
-                <h3>Centralize your team knowledge base.</h3>
-                <p>No more searching through drive folders. Nest pages inside pages, search instantly, and assign owners to files.</p>
+                <h3>Nest pages, link freely, never lose track.</h3>
+                <p>Build a page tree as deep as you need. The Thought Graph view visualizes every link so your knowledge base stays navigable, not tangled.</p>
               </>
             )}
             {activeTab === 'projects' && (
               <>
                 <span className="category-label text-yellow">Projects</span>
-                <h3>Manage complex projects easily.</h3>
-                <p>Track sprints, roadmap priorities, and custom task workflows. View your board as Kanban, Table, or Calendar.</p>
-                <div className="interactive-hint">👉 Try clicking a task card to move it to the next column!</div>
+                <h3>Databases with 8 real view types.</h3>
+                <p>Table, board, calendar, timeline, gallery, list, graph, and mind-map — all reading from the same underlying rows, switch anytime.</p>
               </>
             )}
             {activeTab === 'ai' && (
               <>
                 <span className="category-label text-purple">Noska AI</span>
-                <h3>Supercharge your mind and writing.</h3>
-                <p>Brainstorm new features, summarize lengthy papers, translate docs, and search your entire workspace automatically.</p>
-                <div className="interactive-hint">👉 Click "Brainstorm" below to run the AI assistant!</div>
+                <h3>Bring your own key, pick your model.</h3>
+                <p>8 providers supported out of the box — OpenAI, Anthropic, Gemini, Groq, OpenRouter, NVIDIA NIM, and local Ollama/LM Studio for fully offline AI.</p>
+                <div className="interactive-hint">👉 Click "Ask AI" below — this response is really generated by the typing animation, not a canned screenshot.</div>
               </>
             )}
           </div>
 
           <div className="showcase-visual">
-            {activeTab === 'docs' && (
-              <div className="interactive-docs-mockup">
-                <div className="mockup-header">
-                  <span className="emoji">📝</span>
-                  <h4>Product Specs: Q3 Landing Page</h4>
-                </div>
-                <hr className="divider" />
-                <p className="mockup-p">We are building a highly aesthetic, responsive user experience mimicking the Noska site. Here is the checklist:</p>
-                <div className="todo-list">
-                  {todoItems.map(item => (
-                    <div
-                      key={item.id}
-                      className={`todo-item ${item.completed ? 'completed' : ''}`}
-                      onClick={() => toggleTodo(item.id)}
-                    >
-                      <div className={`checkbox ${item.completed ? 'checked' : ''}`}>
-                        {item.completed && <Check size={12} />}
-                      </div>
-                      <span>{item.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'wikis' && (
-              <div className="interactive-wikis-mockup">
-                <div className="wiki-sidebar">
-                  <div className="sidebar-title">📚 Company Wiki</div>
-                  <div className="wiki-links">
-                    <span className="wiki-link active">📖 Employee Handbook</span>
-                    <span className="wiki-link">🎨 Brand Identity Guidelines</span>
-                    <span className="wiki-link">🖥️ Engineering Best Practices</span>
-                    <span className="wiki-link">📊 Office Policies</span>
-                  </div>
-                </div>
-                <div className="wiki-body">
-                  <h4>📖 Employee Handbook</h4>
-                  <p>Welcome to our central handbook. Everything you need to know about working with us is right here.</p>
-                  <div className="wiki-grid">
-                    <div className="wiki-grid-card">
-                      <h5>🏢 Office Info</h5>
-                      <p>Locations, maps, schedules</p>
-                    </div>
-                    <div className="wiki-grid-card">
-                      <h5>🎁 Benefits</h5>
-                      <p>Healthcare, holidays, setup allowances</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'projects' && (
-              <div className="interactive-projects-mockup">
-                <div className="kanban-board">
-                  {['todo', 'progress', 'done'].map(status => (
-                    <div key={status} className="kanban-column">
-                      <div className="column-header">
-                        <span className="status-dot"></span>
-                        <span className="status-title">{status.toUpperCase()}</span>
-                      </div>
-                      <div className="column-cards">
-                        {kanbanTasks.filter(task => task.status === status).map(task => (
-                          <div
-                            key={task.id}
-                            className="kanban-card"
-                            onClick={() => moveTask(task.id)}
-                          >
-                            <h5>{task.title}</h5>
-                            <div className="card-footer">
-                              <span className={`priority-tag ${task.priority.toLowerCase()}`}>
-                                {task.priority}
-                              </span>
-                              <span className="task-id">#{task.id}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'ai' && (
+            {activeTab === 'ai' ? (
               <div className="interactive-ai-mockup">
                 <div className="ai-chat-header">
                   <Sparkles size={16} className="sparkle-icon" />
-                  <span>Noska AI Writer</span>
+                  <span>Ask AI about this page</span>
                 </div>
                 <div className="ai-chat-body">
                   <div className="ai-prompt-box">
-                    <p className="prompt-label">Ask AI to write:</p>
-                    <div className="prompt-input">"Brainstorm launch ideas for landing page..."</div>
+                    <p className="prompt-label">You asked:</p>
+                    <div className="prompt-input">"What's covered on this page?"</div>
                   </div>
                   <div className="ai-response-box">
                     <p className="response-text">{aiText}</p>
                     {aiTyping && <span className="typing-cursor">|</span>}
                   </div>
-                  <button
-                    className="btn btn-primary ai-action-btn"
-                    onClick={handleGenerateAi}
-                    disabled={aiTyping}
-                  >
-                    <Sparkles size={14} /> {aiTyping ? 'Thinking...' : 'Brainstorm Now'}
+                  <button className="btn btn-primary ai-action-btn" onClick={handleGenerateAi} disabled={aiTyping}>
+                    <Sparkles size={14} /> {aiTyping ? 'Thinking…' : aiText ? 'Ask again' : 'Ask AI'}
                   </button>
                 </div>
               </div>
+            ) : (
+              <div className="tab-icon-display">
+                {activeTab === 'docs' && <FileText size={64} strokeWidth={1.2} />}
+                {activeTab === 'wikis' && <Database size={64} strokeWidth={1.2} />}
+                {activeTab === 'projects' && <CheckSquare size={64} strokeWidth={1.2} />}
+              </div>
             )}
           </div>
+        </motion.div>
+      </section>
+
+      {/* 4. Scroll-scrubbed product walkthrough — a real animated sequence
+          driven by scroll position, not a video asset. */}
+      <ScrollStory />
+
+      {/* 5. Capabilities grid — replaces fabricated testimonials/logos with
+          real, distinctive features that are actually shipped. */}
+      <section className="capabilities-section mkt-container">
+        <Reveal className="section-header">
+          <h2>Built with a few things most note apps skip.</h2>
+          <p>These aren't roadmap promises — they're in the app today.</p>
+        </Reveal>
+
+        <Stagger className="capabilities-grid">
+          {CAPABILITIES.map(({ id, icon: Icon, title, color, desc }) => (
+            <motion.div key={id} variants={staggerItem} className="capability-card">
+              <div className={`capability-icon tint-${color}`}>
+                <Icon size={22} strokeWidth={1.6} />
+              </div>
+              <h3>{title}</h3>
+              <p>{desc}</p>
+            </motion.div>
+          ))}
+        </Stagger>
+      </section>
+
+      {/* 5. Security — real, verifiable practices instead of unearned
+          compliance badges (no SOC2/ISO cert has actually been issued). */}
+      <section className="security-section">
+        <div className="mkt-container security-grid">
+          <Reveal>
+            <span className="section-eyebrow"><Zap size={13} /> Under the hood</span>
+            <h2>Your data, scoped to you.</h2>
+            <p>
+              Every table is protected by Postgres row-level security policies scoped to your
+              authenticated user id — not a shared "allow all" rule. Page encryption uses your
+              browser's native Web Crypto API; the passphrase and plaintext never leave your
+              device unencrypted.
+            </p>
+          </Reveal>
+          <Stagger className="security-checklist">
+            {[
+              'Owner-scoped Postgres row-level security on every table',
+              'Auth required for all writes — no anonymous data paths',
+              'Client-side AES-GCM 256-bit encryption for locked pages',
+              'Bring your own AI key — it never touches our servers',
+            ].map((item) => (
+              <motion.div key={item} variants={staggerItem} className="security-item">
+                <Check size={16} className="check-icon" />
+                <span>{item}</span>
+              </motion.div>
+            ))}
+          </Stagger>
         </div>
       </section>
 
-      {/* 4. Testimonials Section */}
-      <section className="testimonials-section mkt-container">
-        <div className="section-header">
-          <h2>Loved by builders worldwide.</h2>
-          <p>Read reviews from professionals who build on Noska every single day.</p>
-        </div>
-
-        <div className="testimonials-grid">
-          <div className="testimonial-card">
-            <div className="card-header">
-              <div className="user-info">
-                <span className="user-avatar">AD</span>
-                <div>
-                  <h4 className="user-name">Andrew Chen</h4>
-                  <p className="user-handle">General Partner, Andreessen Horowitz</p>
-                </div>
-              </div>
-              <div className="rating">
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-              </div>
-            </div>
-            <p className="testimonial-quote">
-              "We run our entire investment thesis, pipeline, and startup database inside Noska. The database relations are unmatched."
-            </p>
-          </div>
-
-          <div className="testimonial-card">
-            <div className="card-header">
-              <div className="user-info">
-                <span className="user-avatar">SL</span>
-                <div>
-                  <h4 className="user-name">Sarah Lim</h4>
-                  <p className="user-handle">Lead Designer, Figma</p>
-                </div>
-              </div>
-              <div className="rating">
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-              </div>
-            </div>
-            <p className="testimonial-quote">
-              "As a designer, I care about structure and typography. Noska gives us complete flexibility without cluttering the interface."
-            </p>
-          </div>
-
-          <div className="testimonial-card">
-            <div className="card-header">
-              <div className="user-info">
-                <span className="user-avatar">MK</span>
-                <div>
-                  <h4 className="user-name">Michael Koenig</h4>
-                  <p className="user-handle">CTO, Pipedrive</p>
-                </div>
-              </div>
-              <div className="rating">
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-                <Star size={14} fill="currentColor" />
-              </div>
-            </div>
-            <p className="testimonial-quote">
-              "Connecting our engineering roadmaps with our product spec wikis cut down meeting overhead by 40%. Highly recommended."
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. Community Statistics */}
-      <section className="stats-section mkt-container">
-        <div className="stats-header">
-          <h2>Join a global community.</h2>
-          <p>Our global network of creators, designers, and guides build alongside us.</p>
-        </div>
-        <div className="stats-grid">
-          <div className="stat-card">
-            <p className="stat-num">10M+</p>
-            <p className="stat-label">Community members</p>
-          </div>
-          <div className="stat-card">
-            <p className="stat-num">150K+</p>
-            <p className="stat-label">Free starter templates</p>
-          </div>
-          <div className="stat-card">
-            <p className="stat-num">1M+</p>
-            <p className="stat-label">Active integrations built</p>
-          </div>
-        </div>
-      </section>
-
-      {/* 6. Final CTA Section */}
+      {/* 6. Final CTA */}
       <section className="final-cta-section mkt-container">
-        <div className="cta-banner">
-          <h2>Get started for free today.</h2>
-          <p>Play around with templates, connect your tools, or invite your team to collaborate.</p>
+        <Reveal className="cta-banner">
+          <h2>Start writing in less than a minute.</h2>
+          <p>No credit card. No fake trial countdown. Just a workspace that's ready when you are.</p>
           <div className="cta-btn-group">
             <Link to="/login" className="btn btn-primary btn-lg">
               Get Noska free
@@ -445,7 +300,7 @@ export default function Home() {
               View all plans <ArrowRight size={16} />
             </Link>
           </div>
-        </div>
+        </Reveal>
       </section>
     </div>
   );

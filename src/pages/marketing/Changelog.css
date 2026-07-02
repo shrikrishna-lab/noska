@@ -1,0 +1,98 @@
+/* Changelog page — scoped under .marketing, see marketing-theme.css */
+
+.marketing .changelog-wrapper {
+  padding-bottom: 100px;
+}
+
+.marketing .changelog-hero {
+  text-align: center;
+  padding: 90px 24px 60px 24px;
+  max-width: 680px !important;
+}
+
+.marketing .changelog-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--mkt-accent-purple);
+  background-color: rgba(144, 101, 253, 0.1);
+  padding: 6px 12px;
+  border-radius: 30px;
+  margin-bottom: 20px;
+}
+
+.marketing .changelog-hero h1 {
+  font-size: 44px;
+  letter-spacing: -0.03em;
+  margin-bottom: 14px;
+}
+
+.marketing .changelog-hero p {
+  font-size: 16px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.55;
+}
+
+.marketing .changelog-list {
+  max-width: 720px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.marketing .changelog-entry {
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 14px;
+  padding: 24px 26px;
+  background-color: var(--mkt-bg-primary);
+}
+
+.marketing .changelog-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.marketing .changelog-date {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--mkt-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.marketing .changelog-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.marketing .changelog-tag.tag-security { background-color: rgba(39, 174, 96, 0.14); color: #27ae60; }
+.marketing .changelog-tag.tag-editor { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
+.marketing .changelog-tag.tag-databases { background-color: rgba(242, 201, 76, 0.18); color: #b8860b; }
+.marketing .changelog-tag.tag-core { background-color: rgba(144, 101, 253, 0.12); color: var(--mkt-accent-purple); }
+.marketing .changelog-tag.tag-ai { background-color: rgba(144, 101, 253, 0.12); color: var(--mkt-accent-purple); }
+.marketing .changelog-tag.tag-study { background-color: rgba(235, 87, 87, 0.12); color: var(--mkt-accent-red); }
+
+.marketing .changelog-entry h3 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.marketing .changelog-entry p {
+  font-size: 14px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.55;
+}
+
+@media (max-width: 992px) {
+  .marketing .changelog-hero h1 {
+    font-size: 32px;
+  }
+}

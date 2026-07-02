@@ -1,24 +1,37 @@
 /* Home Page Styling — scoped under .marketing, see marketing-theme.css */
 
 .marketing .home-wrapper {
-  padding-bottom: 80px;
+  padding-bottom: 40px;
+  overflow: hidden;
 }
 
-/* 1. Hero Section */
+/* 1. Hero */
 .marketing .hero-section {
-  text-align: center;
-  padding: 80px 24px 60px 24px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 56px;
   align-items: center;
+  padding: 96px 24px 80px 24px;
+}
+
+.marketing .hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--mkt-accent-purple);
+  background-color: rgba(144, 101, 253, 0.1);
+  padding: 6px 12px;
+  border-radius: 30px;
+  margin-bottom: 20px;
 }
 
 .marketing .hero-title {
-  font-size: 64px;
+  font-size: 52px;
   letter-spacing: -0.03em;
-  max-width: 800px;
-  margin-bottom: 24px;
-  line-height: 1.1;
+  line-height: 1.08;
+  margin-bottom: 20px;
 }
 
 .marketing .highlight-text {
@@ -29,27 +42,27 @@
 .marketing .highlight-text::after {
   content: '';
   position: absolute;
-  bottom: 4px;
+  bottom: 2px;
   left: 0;
   width: 100%;
-  height: 8px;
+  height: 10px;
   background-color: var(--mkt-accent-yellow);
   z-index: -1;
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .marketing .hero-subtitle {
-  font-size: 20px;
+  font-size: 17px;
   color: var(--mkt-text-secondary);
-  max-width: 680px;
-  margin-bottom: 32px;
-  line-height: 1.5;
+  max-width: 46ch;
+  margin-bottom: 28px;
+  line-height: 1.55;
 }
 
 .marketing .hero-cta-group {
   display: flex;
-  gap: 16px;
-  margin-bottom: 64px;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .marketing .btn-lg {
@@ -57,182 +70,208 @@
   font-size: 16.5px;
 }
 
-/* Application Preview Mockup */
-.marketing .hero-preview-container {
-  width: 100%;
-  max-width: 960px;
-  border: 1px solid var(--mkt-border-color);
-  border-radius: 12px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
-  overflow: hidden;
-  background-color: var(--mkt-bg-primary);
-  text-align: left;
+/* Live demo mockup — real interactive recreation, cursor-tilt on hover */
+.marketing .demo-perspective {
+  perspective: 1400px;
 }
 
-.marketing .preview-top-bar {
+.marketing .demo-window {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 14px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  background-color: var(--mkt-bg-primary);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.marketing .demo-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.marketing .demo-topbar {
   background-color: var(--mkt-bg-secondary);
   border-bottom: 1px solid var(--mkt-border-color);
-  height: 40px;
+  height: 38px;
   display: flex;
   align-items: center;
-  padding: 0 16px;
+  padding: 0 14px;
   position: relative;
 }
 
-.marketing .dots-group {
+.marketing .demo-dots {
   display: flex;
   gap: 6px;
 }
 
-.marketing .dot {
-  width: 10px;
-  height: 10px;
+.marketing .demo-dot {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
 }
 
-.marketing .dot.red { background-color: var(--mkt-accent-red); }
-.marketing .dot.yellow { background-color: var(--mkt-accent-yellow); }
-.marketing .dot.green { background-color: #27ae60; }
+.marketing .demo-dot.red { background-color: var(--mkt-accent-red); }
+.marketing .demo-dot.yellow { background-color: var(--mkt-accent-yellow); }
+.marketing .demo-dot.green { background-color: #27ae60; }
 
-.marketing .address-bar {
+.marketing .demo-address {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--mkt-text-secondary);
   font-weight: 500;
 }
 
-.marketing .preview-layout {
+.marketing .demo-body {
   display: grid;
-  grid-template-columns: 200px 1fr;
-  height: 400px;
+  grid-template-columns: 150px 1fr;
+  min-height: 320px;
 }
 
-.marketing .preview-sidebar {
+.marketing .demo-sidebar {
   background-color: var(--mkt-bg-secondary);
   border-right: 1px solid var(--mkt-border-color);
-  padding: 20px 12px;
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
-.marketing .sidebar-header {
-  font-size: 11px;
+.marketing .demo-sidebar-title {
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--mkt-text-muted);
   letter-spacing: 0.05em;
-  margin-bottom: 12px;
-  padding-left: 8px;
+  margin-bottom: 8px;
+  padding-left: 6px;
 }
 
-.marketing .sidebar-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.marketing .sidebar-list li {
-  font-size: 13.5px;
+.marketing .demo-sidebar-item {
+  font-size: 12px;
   font-weight: 500;
   color: var(--mkt-text-secondary);
   padding: 6px 8px;
   border-radius: 6px;
-  cursor: pointer;
 }
 
-.marketing .sidebar-list li.active,
-.marketing .sidebar-list li:hover {
+.marketing .demo-sidebar-item.active {
   background-color: var(--mkt-border-color);
   color: var(--mkt-text-primary);
+  font-weight: 600;
 }
 
-.marketing .preview-content {
-  padding: 32px;
+.marketing .demo-content {
+  padding: 22px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.marketing .preview-content h2 {
-  font-size: 28px;
+.marketing .demo-heading {
+  font-size: 20px;
   font-weight: 700;
 }
 
-.marketing .preview-content .intro {
-  font-size: 15px;
-  color: var(--mkt-text-secondary);
+.marketing .demo-todos {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 
-.marketing .preview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.marketing .preview-card {
-  border: 1px solid var(--mkt-border-color);
-  border-radius: 8px;
-  padding: 16px;
-  background-color: var(--mkt-bg-primary);
-}
-
-.marketing .preview-card h3 {
-  font-size: 16px;
-  margin-bottom: 6px;
-}
-
-.marketing .preview-card p {
+.marketing .demo-todo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
   font-size: 13px;
-  color: var(--mkt-text-secondary);
-  margin-bottom: 12px;
+  color: var(--mkt-text-primary);
 }
 
-.marketing .badge {
-  font-size: 11px;
-  font-weight: 600;
-  background-color: var(--mkt-bg-secondary);
-  padding: 4px 8px;
+.marketing .demo-checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 2px solid var(--mkt-text-muted);
   border-radius: 4px;
-  color: var(--mkt-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
 }
 
-.marketing .badge.warning {
-  background-color: rgba(242, 201, 76, 0.15);
-  color: #b8860b;
+.marketing .demo-checkbox.checked {
+  background-color: var(--mkt-brand-color);
+  border-color: var(--mkt-brand-color);
+  color: white;
 }
 
-/* 2. Marquee Section */
-.marketing .marquee-section {
+.marketing .demo-todo-done {
+  text-decoration: line-through;
+  color: var(--mkt-text-muted);
+}
+
+.marketing .demo-ai-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--mkt-text-muted);
+  border: 1px dashed var(--mkt-border-color);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 4px;
+}
+
+/* 2. Real-stats strip (replaces vanity metrics) */
+.marketing .stats-strip-section {
   background-color: var(--mkt-bg-secondary);
   border-top: 1px solid var(--mkt-border-color);
   border-bottom: 1px solid var(--mkt-border-color);
-  padding: 32px 0;
+  padding: 44px 0;
+}
+
+.marketing .stats-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
   text-align: center;
 }
 
-.marketing .marquee-title {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--mkt-text-muted);
-  letter-spacing: 0.05em;
-  margin-bottom: 16px;
+.marketing .stats-strip-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.marketing .brand-logo-text {
+.marketing .stats-strip-num {
+  font-size: 40px;
+  font-weight: 800;
   font-family: var(--mkt-font-heading);
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--mkt-text-secondary);
-  opacity: 0.6;
-  letter-spacing: -0.03em;
-  transition: opacity 0.3s;
+  letter-spacing: -0.02em;
 }
 
-.marketing .brand-logo-text:hover {
-  opacity: 1;
+.marketing .stats-strip-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .stats-strip-sub {
+  font-size: 12.5px;
+  color: var(--mkt-text-muted);
 }
 
 /* 3. Features Section */
@@ -291,7 +330,6 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-/* Showcase Panels */
 .marketing .features-showcase-panel {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
@@ -301,7 +339,7 @@
   border-radius: 20px;
   padding: 48px;
   align-items: center;
-  min-height: 480px;
+  min-height: 420px;
 }
 
 .marketing .showcase-info {
@@ -323,7 +361,7 @@
 .marketing .category-label.text-purple { color: var(--mkt-accent-purple); }
 
 .marketing .showcase-info h3 {
-  font-size: 32px;
+  font-size: 30px;
   line-height: 1.2;
 }
 
@@ -351,10 +389,11 @@
   justify-content: center;
 }
 
-/* Showcase Mockups details */
-.marketing .interactive-docs-mockup,
-.marketing .interactive-wikis-mockup,
-.marketing .interactive-projects-mockup,
+.marketing .tab-icon-display {
+  color: var(--mkt-text-muted);
+  opacity: 0.5;
+}
+
 .marketing .interactive-ai-mockup {
   width: 100%;
   background-color: var(--mkt-bg-primary);
@@ -362,265 +401,6 @@
   border-radius: 12px;
   box-shadow: 0 10px 25px rgba(0,0,0,0.04);
   overflow: hidden;
-  animation: mkt-fadeIn 0.3s ease-out;
-}
-
-/* 1. Docs Mockup */
-.marketing .interactive-docs-mockup {
-  padding: 24px;
-}
-
-.marketing .mockup-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.marketing .mockup-header .emoji {
-  font-size: 24px;
-}
-
-.marketing .mockup-header h4 {
-  font-size: 18px;
-}
-
-.marketing .divider {
-  border: none;
-  border-top: 1px solid var(--mkt-border-color);
-  margin-bottom: 16px;
-}
-
-.marketing .mockup-p {
-  font-size: 13.5px;
-  color: var(--mkt-text-secondary);
-  margin-bottom: 16px;
-}
-
-.marketing .todo-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.marketing .todo-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.marketing .todo-item span {
-  font-size: 14px;
-  color: var(--mkt-text-primary);
-  transition: all 0.2s;
-}
-
-.marketing .todo-item.completed span {
-  text-decoration: line-through;
-  color: var(--mkt-text-muted);
-}
-
-.marketing .checkbox {
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--mkt-text-muted);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.marketing .checkbox.checked {
-  background-color: var(--mkt-brand-color);
-  border-color: var(--mkt-brand-color);
-  color: white;
-}
-
-/* 2. Wikis Mockup */
-.marketing .interactive-wikis-mockup {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  height: 280px;
-}
-
-.marketing .wiki-sidebar {
-  background-color: var(--mkt-bg-secondary);
-  border-right: 1px solid var(--mkt-border-color);
-  padding: 16px 8px;
-}
-
-.marketing .sidebar-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--mkt-text-muted);
-  margin-bottom: 12px;
-}
-
-.marketing .wiki-links {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.marketing .wiki-link {
-  font-size: 12.5px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  color: var(--mkt-text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.marketing .wiki-link.active {
-  background-color: var(--mkt-border-color);
-  color: var(--mkt-text-primary);
-  font-weight: 600;
-}
-
-.marketing .wiki-body {
-  padding: 24px;
-}
-
-.marketing .wiki-body h4 {
-  font-size: 18px;
-  margin-bottom: 8px;
-}
-
-.marketing .wiki-body p {
-  font-size: 13px;
-  color: var(--mkt-text-secondary);
-  margin-bottom: 20px;
-}
-
-.marketing .wiki-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.marketing .wiki-grid-card {
-  border: 1px solid var(--mkt-border-color);
-  padding: 12px;
-  border-radius: 6px;
-  background-color: var(--mkt-bg-secondary);
-}
-
-.marketing .wiki-grid-card h5 {
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.marketing .wiki-grid-card p {
-  font-size: 11px;
-  margin-bottom: 0;
-}
-
-/* 3. Projects Mockup */
-.marketing .interactive-projects-mockup {
-  padding: 16px;
-  height: 280px;
-  overflow-y: auto;
-}
-
-.marketing .kanban-board {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  height: 100%;
-}
-
-.marketing .kanban-column {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.marketing .column-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-bottom: 4px;
-}
-
-.marketing .status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--mkt-text-muted);
-}
-
-.marketing .kanban-column:nth-child(1) .status-dot { background-color: var(--mkt-accent-red); }
-.marketing .kanban-column:nth-child(2) .status-dot { background-color: var(--mkt-accent-yellow); }
-.marketing .kanban-column:nth-child(3) .status-dot { background-color: #27ae60; }
-
-.marketing .status-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--mkt-text-secondary);
-}
-
-.marketing .column-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.marketing .kanban-card {
-  border: 1px solid var(--mkt-border-color);
-  background-color: var(--mkt-bg-primary);
-  padding: 10px;
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-  cursor: pointer;
-  transition: transform 0.2s, border-color 0.2s;
-}
-
-.marketing .kanban-card:hover {
-  transform: translateY(-1px);
-  border-color: #d1d1d1;
-}
-
-.marketing .kanban-card h5 {
-  font-size: 12.5px;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-
-.marketing .card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.marketing .priority-tag {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.marketing .priority-tag.high {
-  background-color: rgba(235, 87, 87, 0.12);
-  color: var(--mkt-accent-red);
-}
-
-.marketing .priority-tag.medium {
-  background-color: rgba(242, 201, 76, 0.15);
-  color: #b8860b;
-}
-
-.marketing .task-id {
-  font-size: 9px;
-  color: var(--mkt-text-muted);
-}
-
-/* 4. AI Mockup */
-.marketing .interactive-ai-mockup {
   padding: 20px;
 }
 
@@ -666,13 +446,13 @@
   border: 1px solid rgba(144, 101, 253, 0.15);
   padding: 12px;
   border-radius: 8px;
-  min-height: 80px;
+  min-height: 70px;
 }
 
 .marketing .response-text {
   font-size: 13px;
   color: var(--mkt-text-primary);
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .marketing .typing-cursor {
@@ -691,125 +471,124 @@
   font-size: 13px;
 }
 
-/* 4. Testimonials Section */
-.marketing .testimonials-section {
-  padding: 60px 24px;
+/* 4. Capabilities grid (real, shipped features) */
+.marketing .capabilities-section {
+  padding: 80px 24px;
 }
 
-.marketing .testimonials-grid {
+.marketing .capabilities-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  gap: 20px;
 }
 
-.marketing .testimonial-card {
-  background-color: var(--mkt-bg-primary);
+.marketing .capability-card {
   border: 1px solid var(--mkt-border-color);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: 14px;
+  padding: 26px;
+  background-color: var(--mkt-bg-primary);
   box-shadow: var(--mkt-card-shadow);
   transition: all var(--mkt-transition-normal);
-}
-
-.marketing .testimonial-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--mkt-card-shadow-hover);
-}
-
-.marketing .testimonial-card .card-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-}
-
-.marketing .user-info {
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
 }
 
-.marketing .user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background-color: var(--mkt-bg-tertiary);
-  color: var(--mkt-text-primary);
+.marketing .capability-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--mkt-card-shadow-hover);
+}
+
+.marketing .capability-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 13px;
 }
 
-.marketing .user-name {
-  font-size: 14px;
-  font-weight: 600;
+.marketing .capability-icon.tint-blue { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
+.marketing .capability-icon.tint-purple { background-color: rgba(144, 101, 253, 0.12); color: var(--mkt-accent-purple); }
+.marketing .capability-icon.tint-red { background-color: rgba(235, 87, 87, 0.12); color: var(--mkt-accent-red); }
+.marketing .capability-icon.tint-yellow { background-color: rgba(242, 201, 76, 0.18); color: #b8860b; }
+.marketing .capability-icon.tint-green { background-color: rgba(39, 174, 96, 0.12); color: #27ae60; }
+
+.marketing .capability-card h3 {
+  font-size: 17px;
 }
 
-.marketing .user-handle {
-  font-size: 11px;
-  color: var(--mkt-text-secondary);
-}
-
-.marketing .rating {
-  color: #ffc107;
-  display: flex;
-  gap: 2px;
-}
-
-.marketing .testimonial-quote {
-  font-size: 14px;
+.marketing .capability-card p {
+  font-size: 13.5px;
   color: var(--mkt-text-secondary);
   line-height: 1.5;
-  font-style: italic;
 }
 
-/* 5. Stats Section */
-.marketing .stats-section {
-  padding: 80px 24px;
-  text-align: center;
-}
-
-.marketing .stats-header {
-  margin-bottom: 48px;
-}
-
-.marketing .stats-header h2 {
-  font-size: 36px;
-  margin-bottom: 8px;
-}
-
-.marketing .stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-}
-
-.marketing .stat-card {
-  padding: 32px;
+/* 5. Security section (real practices, no fabricated certs) */
+.marketing .security-section {
   background-color: var(--mkt-bg-secondary);
-  border: 1px solid var(--mkt-border-color);
-  border-radius: 12px;
+  border-top: 1px solid var(--mkt-border-color);
+  border-bottom: 1px solid var(--mkt-border-color);
+  padding: 90px 24px;
 }
 
-.marketing .stat-num {
-  font-size: 48px;
-  font-weight: 800;
-  color: var(--mkt-text-primary);
-  margin-bottom: 8px;
-  font-family: var(--mkt-font-heading);
+.marketing .security-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
 }
 
-.marketing .stat-label {
-  font-size: 14px;
+.marketing .section-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mkt-accent-blue);
+  margin-bottom: 14px;
+}
+
+.marketing .security-grid h2 {
+  font-size: 34px;
+  margin-bottom: 14px;
+}
+
+.marketing .security-grid p {
+  font-size: 15.5px;
   color: var(--mkt-text-secondary);
-  font-weight: 600;
+  line-height: 1.6;
+}
+
+.marketing .security-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.marketing .security-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.marketing .security-item .check-icon {
+  color: #27ae60;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 /* 6. Final CTA Section */
 .marketing .final-cta-section {
-  padding: 60px 24px 80px 24px;
+  padding: 40px 24px 100px 24px;
 }
 
 .marketing .cta-banner {
@@ -825,12 +604,12 @@
 }
 
 .marketing .cta-banner h2 {
-  font-size: 44px;
+  font-size: 40px;
   margin-bottom: 12px;
 }
 
 .marketing .cta-banner p {
-  font-size: 18px;
+  font-size: 17px;
   color: var(--mkt-text-secondary);
   margin-bottom: 32px;
   max-width: 500px;
@@ -839,41 +618,40 @@
 .marketing .cta-btn-group {
   display: flex;
   gap: 16px;
+  justify-content: center;
 }
 
 /* Responsive Overrides */
 @media (max-width: 992px) {
-  .marketing .hero-title {
-    font-size: 44px;
+  .marketing .hero-section {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    padding: 56px 24px 48px 24px;
+    text-align: center;
   }
 
-  .marketing .features-showcase-panel {
+  .marketing .hero-cta-group {
+    justify-content: center;
+  }
+
+  .marketing .hero-title {
+    font-size: 38px;
+  }
+
+  .marketing .stats-strip,
+  .marketing .capabilities-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .marketing .features-showcase-panel,
+  .marketing .security-grid {
     grid-template-columns: 1fr;
     gap: 32px;
     padding: 32px;
   }
 
-  .marketing .testimonials-grid,
-  .marketing .stats-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .marketing .preview-layout {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-
-  .marketing .preview-sidebar {
-    display: none;
-  }
-
-  .marketing .interactive-wikis-mockup {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-
-  .marketing .wiki-sidebar {
-    display: none;
+  .marketing .demo-body {
+    grid-template-columns: 110px 1fr;
   }
 }

@@ -41,9 +41,24 @@
   /* The authenticated app sets `body { overflow: hidden }` (src/index.css)
      since it manages its own internal scroll areas. Both mount under the
      same <body>, so the marketing site needs its own scroll container
-     instead of relying on normal page scroll. */
+     instead of relying on normal page scroll. `100dvh` (with `100vh`
+     fallback for older browsers) avoids the mobile-Safari address-bar
+     resize trap where a static 100vh clips content below the fold. */
   height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Belt-and-suspenders: ensure the whole ancestor chain actually allows this
+   container to size against the viewport instead of collapsing to content
+   height, which would make overflow-y: auto a no-op. */
+html:has(.marketing),
+body:has(.marketing),
+#root:has(.marketing) {
+  height: 100%;
+  overflow: hidden;
 }
 
 .marketing a {

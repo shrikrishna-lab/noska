@@ -50,46 +50,43 @@ export default function Enterprise() {
           <div className="enterprise-isometric-card">
             <div className="card-top-bar">
               <Shield size={16} className="text-purple" />
-              <span>Enterprise Admin Controls</span>
+              <span>Access & Data Controls</span>
             </div>
             <div className="isometric-content">
               <div className="iso-row">
-                <span className="iso-label">SAML Single Sign-On (SSO)</span>
+                <span className="iso-label">Google / GitHub OAuth</span>
                 <span className="iso-status active">Active</span>
               </div>
               <div className="iso-row">
-                <span className="iso-label">SCIM User Provisioning</span>
+                <span className="iso-label">Owner-scoped row-level security</span>
                 <span className="iso-status active">Active</span>
               </div>
               <div className="iso-row">
-                <span className="iso-label">Audit Logs Export</span>
-                <span className="iso-status idle">Ready</span>
+                <span className="iso-label">Client-side page encryption</span>
+                <span className="iso-status active">Active</span>
               </div>
               <div className="iso-row">
-                <span className="iso-label">IP Range Restrictions</span>
-                <span className="iso-status idle">Configured</span>
+                <span className="iso-label">SAML SSO / SCIM</span>
+                <span className="iso-status idle">Roadmap</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 2. Trust Banner / Scale stats */}
+      {/* 2. What's actually in place today — no unearned compliance badges */}
       <section className="trust-banner-section">
         <div className="mkt-container trust-container">
-          <p className="trust-title">Trusted by industry leaders worldwide</p>
+          <p className="trust-title">What's actually built in, today</p>
           <div className="trust-logos">
             <div className="trust-logo-card">
-              <span>Forbes Cloud 100</span>
+              <span>Postgres row-level security, owner-scoped</span>
             </div>
             <div className="trust-logo-card">
-              <span>SOC2 Type II</span>
+              <span>Auth required for every write</span>
             </div>
             <div className="trust-logo-card">
-              <span>ISO 27001 Certified</span>
-            </div>
-            <div className="trust-logo-card">
-              <span>HIPAA Compliant</span>
+              <span>Client-side AES-GCM page encryption</span>
             </div>
           </div>
         </div>
@@ -131,34 +128,34 @@ export default function Enterprise() {
           <div className="showcase-content-left">
             {activeSubTab === 'security' && (
               <>
-                <h3>Enforce company-wide safety rules.</h3>
-                <p>Verify user logins via SAML Single Sign-On (SSO) integrations like Okta, Azure AD, or OneLogin. Block public page sharing and prevent external downloads of sensitive company specs.</p>
+                <h3>Owner-scoped data access, by default.</h3>
+                <p>Every table is protected by Postgres row-level security scoped to the authenticated user — not a shared "allow all" policy. Locked pages are encrypted client-side with AES-GCM before anything is stored.</p>
                 <ul className="bullet-checklist">
-                  <li><CheckCircle size={16} className="check-icon" /> Single Sign-On integration</li>
-                  <li><CheckCircle size={16} className="check-icon" /> Granular guest sharing permissions</li>
-                  <li><CheckCircle size={16} className="check-icon" /> Domain verification policies</li>
+                  <li><CheckCircle size={16} className="check-icon" /> Google / GitHub OAuth via Supabase Auth</li>
+                  <li><CheckCircle size={16} className="check-icon" /> Row-level security on every table</li>
+                  <li><CheckCircle size={16} className="check-icon" /> SAML SSO — on the roadmap, not yet shipped</li>
                 </ul>
               </>
             )}
             {activeSubTab === 'scale' && (
               <>
-                <h3>Partition domains & manage growth.</h3>
-                <p>Support thousands of employees with private workspaces, departmental wikis, and team-specific integrations. Connect Slack channels directly to engineering teamspaces while keeping executive boards private.</p>
+                <h3>Built for one workspace, growing toward many.</h3>
+                <p>Today, Noska supports a single workspace per account with a full page tree, database views, and the Thought Graph to keep large knowledge bases navigable. Multi-workspace and team roles are next on the roadmap.</p>
                 <ul className="bullet-checklist">
-                  <li><CheckCircle size={16} className="check-icon" /> Multi-workspace structure</li>
-                  <li><CheckCircle size={16} className="check-icon" /> Custom teamspace templates</li>
-                  <li><CheckCircle size={16} className="check-icon" /> Automated guest user cleanups</li>
+                  <li><CheckCircle size={16} className="check-icon" /> Deep page nesting, no practical depth limit</li>
+                  <li><CheckCircle size={16} className="check-icon" /> Thought Graph for navigating large workspaces</li>
+                  <li><CheckCircle size={16} className="check-icon" /> Multi-workspace & team roles — on the roadmap</li>
                 </ul>
               </>
             )}
             {activeSubTab === 'admin' && (
               <>
-                <h3>Audit user actions and manage API tokens.</h3>
-                <p>Monitor change histories, audit page edits, and track document shares with detailed audit logs. Export reports to JSON or connect with security monitoring platforms (SIEM) like Splunk.</p>
+                <h3>An open API console, not a black box.</h3>
+                <p>The built-in API console documents every page/block route and lets you generate a token and run live requests against your own workspace data — no separate developer portal needed.</p>
                 <ul className="bullet-checklist">
-                  <li><CheckCircle size={16} className="check-icon" /> Interactive audit log history</li>
-                  <li><CheckCircle size={16} className="check-icon" /> SCIM automated member sync</li>
-                  <li><CheckCircle size={16} className="check-icon" /> Developer API tokens sandbox</li>
+                  <li><CheckCircle size={16} className="check-icon" /> In-app API console with live request playground</li>
+                  <li><CheckCircle size={16} className="check-icon" /> Page history and note lineage tracking</li>
+                  <li><CheckCircle size={16} className="check-icon" /> SCIM provisioning & SIEM export — on the roadmap</li>
                 </ul>
               </>
             )}
@@ -167,8 +164,8 @@ export default function Enterprise() {
             {activeSubTab === 'security' && (
               <div className="showcase-graphic security-graphic">
                 <Lock size={48} className="text-blue centered-icon" />
-                <div className="graphic-mini-badge">SSO Verified</div>
-                <div className="graphic-mini-badge">GDPR Compliant</div>
+                <div className="graphic-mini-badge">AES-GCM 256-bit</div>
+                <div className="graphic-mini-badge">Row-level security</div>
               </div>
             )}
             {activeSubTab === 'scale' && (
@@ -183,9 +180,9 @@ export default function Enterprise() {
             {activeSubTab === 'admin' && (
               <div className="showcase-graphic admin-graphic">
                 <div className="log-rows">
-                  <div className="log-row"><span>Sarah L.</span> <span>edited</span> <span>Brand Deck</span></div>
-                  <div className="log-row"><span>John K.</span> <span>shared</span> <span>API keys</span></div>
-                  <div className="log-row"><span>Admin</span> <span>revoked</span> <span>Guest #34</span></div>
+                  <div className="log-row"><span>GET</span> <span>/api/pages</span> <span>200</span></div>
+                  <div className="log-row"><span>POST</span> <span>/api/pages/:id/blocks</span> <span>201</span></div>
+                  <div className="log-row"><span>PUT</span> <span>/api/blocks/:id</span> <span>200</span></div>
                 </div>
               </div>
             )}
@@ -200,8 +197,11 @@ export default function Enterprise() {
             <h2>Let's talk about setting up Noska for your organization.</h2>
             <p>Schedule a call with one of our enterprise architects to explore team plans, pricing options, API integrations, and customized security setups.</p>
             <div className="quote-box">
-              <p className="quote-text">"Noska consolidated 5 separate collaboration platforms into a single source of truth for our 1,200 employees."</p>
-              <p className="quote-author">— Head of Engineering, Pixar Animation Studios</p>
+              <p className="quote-text">
+                We're early — enterprise features like SSO and SCIM are still on the roadmap.
+                If your team needs them, tell us and we'll build with you as a design partner,
+                not after the fact.
+              </p>
             </div>
           </div>
           <div className="demo-form-right" id="contact">

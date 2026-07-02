@@ -90,19 +90,19 @@ export default function AuthPage({ onAuthSuccess }) {
         >
           {/* Noska Brand Logo */}
           <div className="w-16 h-16 mb-8 bg-white border border-slate-200/80 flex items-center justify-center p-3.5 shrink-0 rounded-2xl shadow-lg animate-pulse-subtle">
-            <img 
-              src="/logo.png" 
-              alt="Noska Logo" 
-              className="w-full h-full object-contain pointer-events-none select-none" 
+            <img
+              src="/logo.png"
+              alt="Noska Logo"
+              className="w-full h-full object-contain pointer-events-none select-none"
             />
           </div>
 
           {/* Social Logins */}
           <div className="w-full flex flex-col gap-3">
-            <AuthProviders 
-              onProviderClick={handleProviderClick} 
-              loadingProvider={loadingProvider} 
-              disabled={isConnecting} 
+            <AuthProviders
+              onProviderClick={handleProviderClick}
+              loadingProvider={loadingProvider}
+              disabled={isConnecting}
             />
           </div>
 
