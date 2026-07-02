@@ -1,1 +1,0 @@
-Capture every shortcut and behavior.

@@ -1,1 +1,0 @@
-Document colors, spacing, radius, shadows, elevations.

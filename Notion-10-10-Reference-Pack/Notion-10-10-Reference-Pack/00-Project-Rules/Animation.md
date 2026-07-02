@@ -1,1 +1,0 @@
-120-200ms, fade, scale, translate, ease-out.

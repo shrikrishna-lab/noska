@@ -1,1 +1,0 @@
-Document interactions before implementation.
