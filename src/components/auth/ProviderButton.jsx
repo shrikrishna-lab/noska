@@ -48,14 +48,14 @@ export default function ProviderButton({
       type="button"
       onClick={onClick}
       disabled={disabled || isLoading}
-      whileHover={{ scale: 1.01, backgroundColor: "#111115" }}
+      whileHover={{ scale: 1.01, backgroundColor: "#f8fafc" }}
       whileTap={{ scale: 0.99 }}
       className={`
-        w-full h-11 px-4 rounded-[4px] flex items-center justify-center
-        bg-[#000000] border border-white/[0.12] text-white
-        font-medium text-xs tracking-normal transition-all duration-150 relative overflow-hidden
-        hover:border-white/[0.22] cursor-pointer
-        focus:outline-none focus-visible:ring-1 focus-visible:ring-white/40
+        w-full h-11 px-4 rounded-[8px] flex items-center justify-center
+        bg-white border border-slate-200/80 text-slate-800
+        font-semibold text-xs tracking-normal transition-all duration-150 relative overflow-hidden
+        hover:border-slate-300 hover:text-slate-900 cursor-pointer shadow-sm
+        focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/40
         disabled:opacity-40 disabled:cursor-not-allowed
       `}
       aria-label={label}

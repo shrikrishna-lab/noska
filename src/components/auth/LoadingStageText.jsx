@@ -11,7 +11,7 @@ export default function LoadingStageText({ text, className = "" }) {
           animate={{ opacity: 0.6, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className="text-xs font-mono font-medium tracking-widest text-[var(--text-secondary)]"
+          className="text-[11px] font-mono font-medium tracking-widest text-slate-500"
           aria-live="polite"
         >
           {text}

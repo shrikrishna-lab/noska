@@ -6,7 +6,7 @@ export default function RingLoader({ size = 24, className = "" }) {
     <div className={`relative flex items-center justify-center ${className}`}>
       {/* Ambient shadow/glow ring */}
       <div 
-        className="absolute rounded-full border border-white/[0.03] pointer-events-none"
+        className="absolute rounded-full border border-slate-200/80 pointer-events-none"
         style={{ width: size + 4, height: size + 4 }}
       />
       

@@ -110,8 +110,8 @@ export default function AuthBackground() {
 
       ctx.globalCompositeOperation = "source-over";
 
-      // 1. Draw solid dark backdrop color (#050505)
-      ctx.fillStyle = "#050505";
+      // 1. Draw solid light backdrop color (#f8fafc)
+      ctx.fillStyle = "#f8fafc";
       ctx.fillRect(0, 0, w, h);
 
       // Smooth pointer coordinate interpolation
@@ -186,7 +186,8 @@ export default function AuthBackground() {
           if (radius > 0.15) {
             ctx.beginPath();
             ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.8})`;
+            // Light Theme: Use transparent black dots
+            ctx.fillStyle = `rgba(0, 0, 0, ${opacity * 0.08 + revealFactor * 0.18})`;
             ctx.fill();
           }
         }
@@ -214,7 +215,7 @@ export default function AuthBackground() {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 w-full h-full overflow-hidden z-0 select-none pointer-events-auto bg-[#050505]"
+      className="absolute inset-0 w-full h-full overflow-hidden z-0 select-none pointer-events-auto bg-[#f8fafc]"
     >
       <canvas
         ref={canvasRef}

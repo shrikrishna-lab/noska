@@ -7,7 +7,7 @@ export default function LogoLoader({ className = "" }) {
     <div className={`relative flex items-center justify-center ${className}`}>
       {/* Background Soft Glow Field */}
       <motion.div
-        className="absolute w-24 h-24 rounded-full bg-noska-blue/20 blur-2xl"
+        className="absolute w-24 h-24 rounded-full bg-gradient-to-tr from-blue-400/25 to-indigo-400/25 blur-2xl"
         animate={{
           scale: [1, 1.2, 1],
           opacity: [0.3, 0.6, 0.3],

@@ -8,13 +8,13 @@ export default function AuthLoading({ message = "Connecting to your workspace...
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 bg-[#0c0c12]/85 backdrop-blur-md z-30 flex flex-col items-center justify-center gap-3.5 rounded-xl border border-white/[0.04]"
+      className="fixed inset-0 bg-white/60 backdrop-blur-md z-50 flex flex-col items-center justify-center gap-4"
     >
       <RingLoader size={28} />
       <motion.span 
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 0.75, y: 0 }}
-        className="text-xs font-mono tracking-widest text-[var(--text-secondary)]"
+        className="text-[11px] font-mono font-medium tracking-wider text-slate-500 uppercase"
       >
         {message}
       </motion.span>
