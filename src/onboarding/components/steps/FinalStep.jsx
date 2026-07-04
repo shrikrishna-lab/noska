@@ -84,7 +84,7 @@ export default function FinalStep() {
             animate={{ opacity: 1 }}
             className="relative z-10"
           >
-            <h1 className="text-3xl font-bold text-white tracking-tight">
+            <h1 className="text-3xl font-bold text-[var(--text)] tracking-tight">
               You're all set!
             </h1>
             <p className="text-[var(--text-secondary)] mt-3 text-sm leading-relaxed">
@@ -99,13 +99,13 @@ export default function FinalStep() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.2 + i * 0.1 }}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-noska-blue/10 flex items-center justify-center shrink-0">
-                    <item.icon className="w-4 h-4 text-noska-blue" />
+                  <div className="w-8 h-8 rounded-lg bg-[var(--noska-blue-soft)] flex items-center justify-center shrink-0">
+                    <item.icon className="w-4 h-4 text-[var(--noska-blue)]" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-white">{item.label}</p>
+                    <p className="text-sm font-medium text-[var(--text)]">{item.label}</p>
                     <p className="text-xs text-[var(--text-secondary)]">{item.desc}</p>
                   </div>
                 </motion.div>
@@ -118,7 +118,7 @@ export default function FinalStep() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.8 }}
               onClick={complete}
-              className="mt-8 group px-8 py-3 rounded-xl bg-noska-blue text-white font-medium text-sm hover:bg-noska-blue/90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-noska-blue focus-visible:ring-offset-2 focus-visible:ring-offset-[#030307] inline-flex items-center gap-2"
+              className="mt-8 group px-8 py-3 rounded-xl bg-[var(--noska-blue)] text-white font-medium text-sm hover:opacity-90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] inline-flex items-center gap-2"
             >
               Start using Noska
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />

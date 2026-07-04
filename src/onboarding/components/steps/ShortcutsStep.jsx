@@ -36,11 +36,11 @@ export default function ShortcutsStep() {
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: "spring", stiffness: 200, damping: 15 }}
-          className="w-12 h-12 mx-auto mb-4 bg-white/[0.05] rounded-xl border border-white/[0.08] flex items-center justify-center"
+          className="w-12 h-12 mx-auto mb-4 bg-[var(--surface-2)] rounded-xl border border-[var(--border)] flex items-center justify-center"
         >
-          <Keyboard className="w-6 h-6 text-noska-blue" />
+          <Keyboard className="w-6 h-6 text-[var(--noska-blue)]" />
         </motion.div>
-        <h2 className="text-2xl font-bold text-white">Keyboard shortcuts</h2>
+        <h2 className="text-2xl font-bold text-[var(--text)]">Keyboard shortcuts</h2>
         <p className="text-[var(--text-secondary)] mt-2 text-sm">
           Master these to fly around your workspace.
         </p>
@@ -54,19 +54,19 @@ export default function ShortcutsStep() {
             initial="initial"
             animate="animate"
             transition={{ delay: i * 0.04 }}
-            className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+            className="flex items-center gap-3 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]"
           >
-            <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
-              <item.icon className="w-4 h-4 text-noska-blue" />
+            <div className="w-8 h-8 rounded-lg bg-[var(--hover)] flex items-center justify-center shrink-0">
+              <item.icon className="w-4 h-4 text-[var(--noska-blue)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white">{item.label}</p>
+              <p className="text-xs font-medium text-[var(--text)]">{item.label}</p>
             </div>
             <div className="flex gap-0.5 shrink-0">
               {item.keys.map((k, j) => (
                 <span
                   key={j}
-                  className="text-[9px] font-mono text-[var(--text-secondary)] bg-white/[0.06] px-1.5 py-0.5 rounded border border-white/[0.06]"
+                  className="text-[9px] font-mono text-[var(--text-secondary)] bg-[var(--surface-3)] px-1.5 py-0.5 rounded border border-[var(--border)]"
                 >
                   {k}
                 </span>
@@ -82,19 +82,19 @@ export default function ShortcutsStep() {
         transition={{ delay: 0.7 }}
         className="mt-6 text-center text-[10px] text-[var(--text-secondary)]"
       >
-        Press <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-noska-blue">Ctrl + K</kbd> to see all available commands
+        Press <kbd className="px-1.5 py-0.5 rounded bg-[var(--surface-3)] text-[11px] font-mono text-[var(--noska-blue)]">Ctrl + K</kbd> to see all available commands
       </motion.p>
 
       <div className="flex gap-3 mt-6 justify-center">
         <button
           onClick={back}
-          className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+          className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-hover)]"
         >
           Back
         </button>
         <button
           onClick={next}
-          className="px-6 py-2.5 rounded-lg bg-noska-blue text-white font-medium text-sm hover:bg-noska-blue/90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-noska-blue focus-visible:ring-offset-2 focus-visible:ring-offset-[#030307]"
+          className="px-6 py-2.5 rounded-lg bg-[var(--noska-blue)] text-white font-medium text-sm hover:opacity-90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
         >
           Continue
         </button>

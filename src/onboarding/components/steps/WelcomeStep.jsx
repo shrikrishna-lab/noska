@@ -32,7 +32,7 @@ export default function WelcomeStep() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
-        className="text-3xl font-bold tracking-tight text-white"
+        className="text-3xl font-bold tracking-tight text-[var(--text)]"
       >
         Welcome to Noska
       </motion.h1>
@@ -58,7 +58,7 @@ export default function WelcomeStep() {
           { emoji: "📊", label: "Organize" },
           { emoji: "🤖", label: "Create" }
         ].map((item, i) => (
-          <div key={i} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+          <div key={i} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]">
             <span className="text-xl">{item.emoji}</span>
             <span className="text-[10px] text-[var(--text-secondary)] font-medium">{item.label}</span>
           </div>
@@ -71,7 +71,7 @@ export default function WelcomeStep() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.55 }}
         onClick={next}
-        className="mt-8 group px-8 py-3 rounded-xl bg-noska-blue text-white font-medium text-sm hover:bg-noska-blue/90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-noska-blue focus-visible:ring-offset-2 focus-visible:ring-offset-[#030307] inline-flex items-center gap-2"
+        className="mt-8 group px-8 py-3 rounded-xl bg-[var(--noska-blue)] text-white font-medium text-sm hover:opacity-90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] inline-flex items-center gap-2"
       >
         Get Started
         <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />

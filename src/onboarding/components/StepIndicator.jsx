@@ -28,10 +28,10 @@ export default function StepIndicator({ current, total, showLabels = false }) {
               layout
               className={`h-1.5 rounded-full transition-all duration-500 ${
                 isPast
-                  ? "bg-noska-blue w-4"
+                  ? "bg-[var(--noska-blue)] w-4"
                   : isActive
-                  ? "bg-noska-blue w-8"
-                  : "bg-white/10 w-1.5"
+                  ? "bg-[var(--noska-blue)] w-8"
+                  : "bg-[var(--border)] w-1.5"
               }`}
             />
           );

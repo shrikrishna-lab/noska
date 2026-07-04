@@ -27,7 +27,7 @@ export default function CollaborationIntro() {
       className="max-w-lg mx-auto w-full"
     >
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Work together</h2>
+        <h2 className="text-2xl font-bold text-[var(--text)]">Work together</h2>
         <p className="text-[var(--text-secondary)] mt-2 text-sm">
           Noska is built for teams. Collaborate in real-time, share knowledge, and stay aligned.
         </p>
@@ -41,13 +41,13 @@ export default function CollaborationIntro() {
             initial="initial"
             animate="animate"
             transition={{ delay: i * 0.06 }}
-            className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] hover:border-white/[0.1] transition-all"
+            className="flex items-center gap-3 p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] hover:bg-[var(--hover)] hover:border-[var(--border-hover)] transition-all"
           >
-            <div className="w-9 h-9 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
-              <item.icon className="w-4 h-4 text-noska-blue" />
+            <div className="w-9 h-9 rounded-lg bg-[var(--hover)] flex items-center justify-center shrink-0">
+              <item.icon className="w-4 h-4 text-[var(--noska-blue)]" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-medium text-white">{item.label}</p>
+              <p className="text-xs font-medium text-[var(--text)]">{item.label}</p>
               <p className="text-[10px] text-[var(--text-secondary)]">{item.desc}</p>
             </div>
           </motion.div>
@@ -57,13 +57,13 @@ export default function CollaborationIntro() {
       <div className="flex gap-3 mt-8 justify-center">
         <button
           onClick={back}
-          className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+          className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-hover)]"
         >
           Back
         </button>
         <button
           onClick={next}
-          className="px-6 py-2.5 rounded-lg bg-noska-blue text-white font-medium text-sm hover:bg-noska-blue/90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-noska-blue focus-visible:ring-offset-2 focus-visible:ring-offset-[#030307]"
+          className="px-6 py-2.5 rounded-lg bg-[var(--noska-blue)] text-white font-medium text-sm hover:opacity-90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
         >
           Continue
         </button>

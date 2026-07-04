@@ -39,7 +39,7 @@ function OnboardingInner({ overlay = false }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      className={`fixed inset-0 z-50 flex flex-col bg-[#030307] overflow-hidden ${overlay ? "backdrop-blur-sm" : ""}`}
+      className={`fixed inset-0 z-50 flex flex-col bg-[var(--bg)] text-[var(--text)] overflow-hidden ${overlay ? "backdrop-blur-sm" : ""}`}
     >
       {step < totalSteps - 1 && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3">
@@ -50,7 +50,7 @@ function OnboardingInner({ overlay = false }) {
       {overlay && (
         <button
           onClick={skip}
-          className="absolute top-6 right-6 z-10 w-8 h-8 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center hover:bg-white/[0.1] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+          className="absolute top-6 right-6 z-10 w-8 h-8 rounded-lg bg-[var(--hover)] border border-[var(--border)] flex items-center justify-center hover:bg-[var(--active)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)]"
           aria-label="Close onboarding"
         >
           <X className="w-4 h-4 text-[var(--text-secondary)]" />

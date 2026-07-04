@@ -33,9 +33,9 @@ export default function BlocksIntro() {
       className="max-w-lg mx-auto w-full"
     >
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Building with blocks</h2>
+        <h2 className="text-2xl font-bold text-[var(--text)]">Building with blocks</h2>
         <p className="text-[var(--text-secondary)] mt-2 text-sm">
-          Everything in Noska is a block. Type <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-noska-blue">/</kbd> to choose from dozens of block types.
+          Everything in Noska is a block. Type <kbd className="px-1.5 py-0.5 rounded bg-[var(--surface-3)] text-[11px] font-mono text-[var(--noska-blue)]">/</kbd> to choose from dozens of block types.
         </p>
       </div>
 
@@ -47,13 +47,13 @@ export default function BlocksIntro() {
             initial="initial"
             animate="animate"
             transition={{ delay: i * 0.04 }}
-            className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] hover:border-white/[0.1] transition-all"
+            className="flex items-center gap-3 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] hover:bg-[var(--hover)] hover:border-[var(--border-hover)] transition-all"
           >
-            <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
-              <item.icon className="w-4 h-4 text-noska-blue" />
+            <div className="w-8 h-8 rounded-lg bg-[var(--hover)] flex items-center justify-center shrink-0">
+              <item.icon className="w-4 h-4 text-[var(--noska-blue)]" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-medium text-white">{item.label}</p>
+              <p className="text-xs font-medium text-[var(--text)]">{item.label}</p>
               <p className="text-[10px] text-[var(--text-secondary)]">{item.desc}</p>
             </div>
           </motion.div>
@@ -64,24 +64,24 @@ export default function BlocksIntro() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
-        className="mt-6 p-3 rounded-xl bg-noska-blue/5 border border-noska-blue/10 flex items-center gap-3"
+        className="mt-6 p-3 rounded-xl bg-[var(--noska-blue-soft)] border border-[var(--noska-blue-soft)] flex items-center gap-3"
       >
-        <Slash className="w-5 h-5 text-noska-blue shrink-0" />
+        <Slash className="w-5 h-5 text-[var(--noska-blue)] shrink-0" />
         <p className="text-xs text-[var(--text-secondary)]">
-          Press <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-noska-blue">/</kbd> anywhere on a page to open the block menu with categories, search, and previews.
+          Press <kbd className="px-1.5 py-0.5 rounded bg-[var(--surface-3)] text-[11px] font-mono text-[var(--noska-blue)]">/</kbd> anywhere on a page to open the block menu with categories, search, and previews.
         </p>
       </motion.div>
 
       <div className="flex gap-3 mt-8 justify-center">
         <button
           onClick={back}
-          className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+          className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-hover)]"
         >
           Back
         </button>
         <button
           onClick={next}
-          className="px-6 py-2.5 rounded-lg bg-noska-blue text-white font-medium text-sm hover:bg-noska-blue/90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-noska-blue focus-visible:ring-offset-2 focus-visible:ring-offset-[#030307]"
+          className="px-6 py-2.5 rounded-lg bg-[var(--noska-blue)] text-white font-medium text-sm hover:opacity-90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
         >
           Continue
         </button>

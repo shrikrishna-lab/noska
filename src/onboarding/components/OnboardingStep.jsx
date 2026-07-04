@@ -26,7 +26,7 @@ export default function OnboardingStep({
       className={`w-full ${maxWidth} ${centered ? "text-center mx-auto" : ""} ${className}`}
     >
       {title && (
-        <h2 className="text-2xl font-bold text-white tracking-tight">{title}</h2>
+        <h2 className="text-2xl font-bold text-[var(--text)] tracking-tight">{title}</h2>
       )}
       {subtitle && (
         <p className="text-[var(--text-secondary)] mt-2 text-sm leading-relaxed">{subtitle}</p>
@@ -39,7 +39,7 @@ export default function OnboardingStep({
           {showBack && (
             <button
               onClick={onBack}
-              className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+              className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-hover)]"
             >
               {backLabel}
             </button>
@@ -47,7 +47,7 @@ export default function OnboardingStep({
           {showSkip && (
             <button
               onClick={onSkip}
-              className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 underline underline-offset-2"
+              className="px-5 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-hover)] underline underline-offset-2"
             >
               {skipLabel}
             </button>
