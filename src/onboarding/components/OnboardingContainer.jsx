@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { OnboardingProvider, useOnboardingContext } from "../context/OnboardingContext";
 import StepIndicator from "./StepIndicator";
+import LivePreviewSidebar from "./LivePreviewSidebar";
 import { containerVariants } from "../animations/variants";
 
 const WelcomeStep = lazy(() => import("./steps/WelcomeStep"));
@@ -39,34 +40,40 @@ function OnboardingInner({ overlay = false }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      className={`fixed inset-0 z-50 flex flex-col bg-[var(--bg)] text-[var(--text)] overflow-hidden ${overlay ? "backdrop-blur-sm" : ""}`}
+      className={`fixed inset-0 z-50 flex bg-[var(--bg)] text-[var(--text)] overflow-hidden ${overlay ? "backdrop-blur-sm" : ""}`}
     >
-      {step < totalSteps - 1 && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3">
-          <StepIndicator current={step} total={totalSteps} showLabels />
-        </div>
-      )}
+      {/* Live preview of the real Sidebar — updates as the user makes
+          choices, so what they see here is exactly what they land in. */}
+      <LivePreviewSidebar />
 
-      {overlay && (
-        <button
-          onClick={skip}
-          className="absolute top-6 right-6 z-10 w-8 h-8 rounded-lg bg-[var(--hover)] border border-[var(--border)] flex items-center justify-center hover:bg-[var(--active)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)]"
-          aria-label="Close onboarding"
-        >
-          <X className="w-4 h-4 text-[var(--text-secondary)]" />
-        </button>
-      )}
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        {step < totalSteps - 1 && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3">
+            <StepIndicator current={step} total={totalSteps} showLabels />
+          </div>
+        )}
 
-      <div className="flex-1 flex items-center justify-center px-4 py-20">
-        <AnimatePresence mode="wait" custom={direction}>
-          <Suspense
-            fallback={
-              <div className="w-8 h-8 border-2 border-noska-blue border-t-transparent rounded-full animate-spin" />
-            }
+        {overlay && (
+          <button
+            onClick={skip}
+            className="absolute top-6 right-6 z-10 w-8 h-8 rounded-lg bg-[var(--hover)] border border-[var(--border)] flex items-center justify-center hover:bg-[var(--active)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)]"
+            aria-label="Close onboarding"
           >
-            <StepComponent key={`step-${step}`} />
-          </Suspense>
-        </AnimatePresence>
+            <X className="w-4 h-4 text-[var(--text-secondary)]" />
+          </button>
+        )}
+
+        <div className="flex-1 flex items-center justify-center px-4 py-20 overflow-y-auto">
+          <AnimatePresence mode="wait" custom={direction}>
+            <Suspense
+              fallback={
+                <div className="w-8 h-8 border-2 border-noska-blue border-t-transparent rounded-full animate-spin" />
+              }
+            >
+              <StepComponent key={`step-${step}`} />
+            </Suspense>
+          </AnimatePresence>
+        </div>
       </div>
     </motion.div>
   );

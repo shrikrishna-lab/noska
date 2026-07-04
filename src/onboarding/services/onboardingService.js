@@ -111,3 +111,27 @@ export function createPageTree(starterPagesArray) {
   }
   return root;
 }
+
+/**
+ * Lightweight preview of what handleFinalize (src/App.jsx) will actually
+ * create, so the live sidebar preview shown during onboarding never drifts
+ * from the real result. Returns just { title, icon } pairs — cheap to
+ * recompute on every keystroke/selection, no ids/blocks needed for display.
+ */
+export function previewPagesFor(form) {
+  if (form.useCase) {
+    return starterPagesFor(form.useCase).map((p) => ({ title: p.title, icon: p.icon }));
+  }
+  const pages = [];
+  if (form.pageTitle) {
+    pages.push({ title: form.pageTitle, icon: "📄" });
+  }
+  if (form.template) {
+    const templatePage = starterPageForTemplate(form.template);
+    pages.push({ title: templatePage.title, icon: templatePage.icon });
+  }
+  if (pages.length === 0) {
+    pages.push({ title: "Getting Started", icon: "🚀" });
+  }
+  return pages;
+}
