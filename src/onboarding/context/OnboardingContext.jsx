@@ -1,33 +1,31 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from "react";
 import { saveOnboardingState, loadOnboardingState, clearOnboardingState } from "../services/onboardingService";
 
+const TOTAL_STEPS = 6;
+
 const initialState = {
   step: 0,
   direction: 1,
   completed: false,
   skipped: false,
   form: {
-    useCase: "",
-    workspaceName: "My Workspace",
-    startMethod: "",
-    aiProvider: "openai",
-    apiKey: "",
-    aiEnabled: false,
-    template: null,
-    pageTitle: "",
-    density: "comfortable",
-    fontSize: "medium"
+    workspaceName: "",
+    workspaceIcon: "🏢",
+    role: "",
+    useCase: [],
+    teammates: [],
+    template: ""
   }
 };
 
 function reducer(state, action) {
   switch (action.type) {
     case "GO_TO": {
-      const target = Math.max(0, Math.min(action.step, 10));
+      const target = Math.max(0, Math.min(action.step, TOTAL_STEPS - 1));
       return { ...state, step: target, direction: target > state.step ? 1 : -1 };
     }
     case "NEXT": {
-      const next = Math.min(state.step + 1, 10);
+      const next = Math.min(state.step + 1, TOTAL_STEPS - 1);
       return { ...state, step: next, direction: 1 };
     }
     case "BACK": {
@@ -39,7 +37,7 @@ function reducer(state, action) {
     case "SET_FORM_FIELD":
       return { ...state, form: { ...state.form, [action.field]: action.value } };
     case "COMPLETE":
-      return { ...state, completed: true, step: 10 };
+      return { ...state, completed: true, step: TOTAL_STEPS - 1 };
     case "SKIP":
       return { ...state, skipped: true, completed: true };
     case "RESET":
@@ -56,7 +54,7 @@ const OnboardingContext = createContext(null);
 export function OnboardingProvider({ children, initialWorkspaceName, onFinalize, onComplete }) {
   const [state, dispatch] = useReducer(reducer, initialState, (init) => ({
     ...init,
-    form: { ...init.form, workspaceName: initialWorkspaceName || "My Workspace" }
+    form: { ...init.form, workspaceName: initialWorkspaceName || "" }
   }));
 
   const restored = useRef(false);
@@ -106,7 +104,7 @@ export function OnboardingProvider({ children, initialWorkspaceName, onFinalize,
   const value = {
     ...state,
     goTo, next, back, setForm, setFormField, complete, skip, reset,
-    totalSteps: 10
+    totalSteps: TOTAL_STEPS
   };
 
   return (

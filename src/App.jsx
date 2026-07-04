@@ -8,7 +8,7 @@ import { WorkspaceView, NewPageOverlay } from "./components/WorkspaceViews";
 import LoadingScreen from "./components/auth/LoadingScreen";
 import AuthPage from "./components/auth/AuthPage";
 import OnboardingPage from "./onboarding/pages/OnboardingPage";
-import { starterPagesFor, starterPageForTemplate } from "./onboarding/services/onboardingService";
+import { starterPageForTemplate } from "./onboarding/services/onboardingService";
 import AIPanel from "./components/AIPanel";
 import AIRightPanel from "./components/AIRightPanel";
 import CommandPalette from "./components/CommandPalette";
@@ -619,23 +619,13 @@ function App() {
     }
   }, []);
 
-  // Build starter pages (local state, no DB dependency)
+  // Build starter pages (local state, no DB dependency). The onboarding
+  // flow lets the user pick one starter template — build that page, falling
+  // back to a default "Getting Started" page if none was picked.
   const handleFinalize = useCallback(async (formData) => {
     const result = [];
-    if (formData.useCase) {
-      result.push(...starterPagesFor(formData.useCase));
-    } else {
-      if (formData.pageTitle) {
-        result.push({
-          id: uid(), title: formData.pageTitle, icon: "📄",
-          favorite: false, trashed: false, tags: [], parentId: null,
-          lineage: [{ action: "created", timestamp: now(), detail: "First page from onboarding" }],
-          blocks: textToBlocks(`# ${formData.pageTitle}\n\nWelcome to your first page!`)
-        });
-      }
-      if (formData.template) {
-        result.push(starterPageForTemplate(formData.template));
-      }
+    if (formData.template) {
+      result.push(starterPageForTemplate(formData.template));
     }
     if (result.length === 0) {
       result.push({
@@ -667,7 +657,8 @@ function App() {
         try { await savePage(page, userId); } catch (e) {}
       }
       try {
-        await setOnboardingComplete(userId, formData.useCase, formData.workspaceName);
+        const useCaseValue = Array.isArray(formData.useCase) ? formData.useCase.join(",") : formData.useCase;
+        await setOnboardingComplete(userId, useCaseValue, formData.workspaceName);
       } catch (e) {}
     }
     setAppFlowState("workspace");

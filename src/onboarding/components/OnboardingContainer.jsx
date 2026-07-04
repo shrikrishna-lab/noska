@@ -1,81 +1,87 @@
 import React, { Suspense, lazy } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { C } from "../theme";
 import { OnboardingProvider, useOnboardingContext } from "../context/OnboardingContext";
-import StepIndicator from "./StepIndicator";
 import LivePreviewSidebar from "./LivePreviewSidebar";
-import { containerVariants } from "../animations/variants";
+import StepDots from "./StepDots";
+import OnboardingKeyframes from "./OnboardingKeyframes";
+
+const NoskaLogo = "/logo.png";
 
 const WelcomeStep = lazy(() => import("./steps/WelcomeStep"));
-const PersonalizeStep = lazy(() => import("./steps/PersonalizeStep"));
-const CreateFirstPage = lazy(() => import("./steps/CreateFirstPage"));
-const SidebarIntro = lazy(() => import("./steps/SidebarIntro"));
-const BlocksIntro = lazy(() => import("./steps/BlocksIntro"));
-const DatabaseIntro = lazy(() => import("./steps/DatabaseIntro"));
-const CollaborationIntro = lazy(() => import("./steps/CollaborationIntro"));
-const TemplatesStep = lazy(() => import("./steps/TemplatesStep"));
-const ShortcutsStep = lazy(() => import("./steps/ShortcutsStep"));
-const FinalStep = lazy(() => import("./steps/FinalStep"));
+const WorkspaceStep = lazy(() => import("./steps/WorkspaceStep"));
+const RoleStep = lazy(() => import("./steps/RoleStep"));
+const InviteStep = lazy(() => import("./steps/InviteStep"));
+const OnboardingTemplateStep = lazy(() => import("./steps/OnboardingTemplateStep"));
+const DoneStep = lazy(() => import("./steps/DoneStep"));
 
-const stepMap = [
-  WelcomeStep,
-  PersonalizeStep,
-  CreateFirstPage,
-  SidebarIntro,
-  BlocksIntro,
-  DatabaseIntro,
-  CollaborationIntro,
-  TemplatesStep,
-  ShortcutsStep,
-  FinalStep
-];
+const stepMap = [WelcomeStep, WorkspaceStep, RoleStep, InviteStep, OnboardingTemplateStep, DoneStep];
 
 function OnboardingInner({ overlay = false }) {
   const { step, direction, totalSteps, skip } = useOnboardingContext();
   const StepComponent = stepMap[step] || stepMap[0];
+  const isFirstOrLast = step === 0 || step === totalSteps - 1;
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      className={`fixed inset-0 z-50 flex bg-[var(--bg)] text-[var(--text)] overflow-hidden ${overlay ? "backdrop-blur-sm" : ""}`}
+    <div
+      className="onboarding-scope fixed inset-0 z-50 flex"
+      style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}
     >
-      {/* Live preview of the real Sidebar — updates as the user makes
-          choices, so what they see here is exactly what they land in. */}
-      <LivePreviewSidebar />
+      <LivePreviewSidebar step={step} />
 
-      <div className="relative flex flex-1 flex-col overflow-hidden">
-        {step < totalSteps - 1 && (
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3">
-            <StepIndicator current={step} total={totalSteps} showLabels />
+      <div className="flex-1 flex flex-col h-full overflow-y-auto" style={{ background: C.bg }}>
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-8 py-5 shrink-0" style={{ borderBottom: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-2.5 lg:hidden">
+            <img src={NoskaLogo} alt="Noska" className="w-7 h-7 rounded-lg object-contain" />
+            <span className="text-sm font-semibold" style={{ color: C.text }}>Noska</span>
           </div>
-        )}
-
-        {overlay && (
-          <button
-            onClick={skip}
-            className="absolute top-6 right-6 z-10 w-8 h-8 rounded-lg bg-[var(--hover)] border border-[var(--border)] flex items-center justify-center hover:bg-[var(--active)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--noska-blue)]"
-            aria-label="Close onboarding"
-          >
-            <X className="w-4 h-4 text-[var(--text-secondary)]" />
-          </button>
-        )}
-
-        <div className="flex-1 flex items-center justify-center px-4 py-20 overflow-y-auto">
-          <AnimatePresence mode="wait" custom={direction}>
-            <Suspense
-              fallback={
-                <div className="w-8 h-8 border-2 border-noska-blue border-t-transparent rounded-full animate-spin" />
-              }
+          <div className="hidden lg:block" />
+          {!isFirstOrLast && (
+            <div className="flex items-center gap-3 ml-auto">
+              <span className="text-xs" style={{ color: C.muted }}>Step {step} of {totalSteps - 2}</span>
+              <StepDots current={step - 1} total={totalSteps - 2} />
+            </div>
+          )}
+          {isFirstOrLast && overlay && (
+            <button
+              onClick={skip}
+              className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center hover:bg-black/5 transition-colors"
+              aria-label="Close onboarding"
             >
-              <StepComponent key={`step-${step}`} />
-            </Suspense>
-          </AnimatePresence>
+              <X className="w-4 h-4" style={{ color: C.muted }} />
+            </button>
+          )}
+          {isFirstOrLast && !overlay && <div className="ml-auto" />}
+        </div>
+
+        {/* Step content */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-[460px]">
+            <div
+              key={step}
+              style={{ animation: `${direction === 1 ? "slideInRight" : "slideInLeft"} 0.25s ease both` }}
+            >
+              <Suspense fallback={<div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: C.purple, borderTopColor: "transparent" }} />}>
+                <StepComponent />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-8 py-5 flex items-center justify-between shrink-0" style={{ borderTop: `1px solid ${C.border}` }}>
+          <p className="text-xs" style={{ color: C.muted }}>© 2026 Noska Labs, Inc.</p>
+          <div className="flex items-center gap-5">
+            {["Privacy", "Terms"].map((t) => (
+              <button key={t} className="text-xs transition-colors hover:opacity-70" style={{ color: C.muted }}>{t}</button>
+            ))}
+          </div>
         </div>
       </div>
-    </motion.div>
+
+      <OnboardingKeyframes />
+    </div>
   );
 }
 
