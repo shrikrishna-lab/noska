@@ -3,12 +3,12 @@
   top: 0;
   left: 0;
   width: 100%;
-  background-color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background-color: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(16px) saturate(1.05);
+  -webkit-backdrop-filter: blur(16px) saturate(1.05);
   border-bottom: 1px solid var(--mkt-border-color);
   z-index: 1000;
-  height: 64px;
+  height: 66px;
   display: flex;
   align-items: center;
 }
@@ -29,21 +29,22 @@
 .marketing .navbar-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: 19px;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 18px;
   color: var(--mkt-text-primary);
 }
 
 .marketing .navbar-brand-logo {
-  height: 28px;
-  width: 28px;
+  height: 24px;
+  width: 24px;
   object-fit: contain;
+  border-radius: 6px;
 }
 
 .marketing .logo-text {
   font-family: var(--mkt-font-heading);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 
 .marketing .navbar-links {
@@ -149,7 +150,7 @@
 }
 
 .marketing .item-icon.tint-purple {
-  background-color: rgba(144, 101, 253, 0.1);
+  background-color: var(--mkt-accent-purple-tint);
   color: var(--mkt-accent-purple);
 }
 
@@ -159,13 +160,13 @@
 }
 
 .marketing .item-icon.tint-red {
-  background-color: rgba(235, 87, 87, 0.1);
+  background-color: var(--mkt-accent-red-tint);
   color: var(--mkt-accent-red);
 }
 
 .marketing .item-icon.tint-yellow {
-  background-color: rgba(242, 201, 76, 0.1);
-  color: var(--mkt-accent-yellow);
+  background-color: var(--mkt-accent-orange-tint);
+  color: var(--mkt-accent-orange);
 }
 
 .marketing .item-content {
@@ -211,7 +212,7 @@
 }
 
 .marketing .btn-nav-cta {
-  padding: 6px 12px;
+  padding: 8px 16px;
   font-size: 13.5px;
 }
 
@@ -226,10 +227,10 @@
 /* Mobile Drawer styles */
 .marketing .mobile-drawer {
   position: fixed;
-  top: 64px;
+  top: 66px;
   left: 0;
   width: 100%;
-  height: calc(100vh - 64px);
+  height: calc(100vh - 66px);
   background-color: var(--mkt-bg-primary);
   z-index: 999;
   overflow-y: auto;

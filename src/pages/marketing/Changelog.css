@@ -17,7 +17,7 @@
   font-size: 12.5px;
   font-weight: 700;
   color: var(--mkt-accent-purple);
-  background-color: rgba(144, 101, 253, 0.1);
+  background-color: var(--mkt-accent-purple-tint);
   padding: 6px 12px;
   border-radius: 30px;
   margin-bottom: 20px;
@@ -73,12 +73,12 @@
   letter-spacing: 0.03em;
 }
 
-.marketing .changelog-tag.tag-security { background-color: rgba(39, 174, 96, 0.14); color: #27ae60; }
+.marketing .changelog-tag.tag-security { background-color: var(--mkt-accent-sage-tint); color: var(--mkt-accent-sage); }
 .marketing .changelog-tag.tag-editor { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
-.marketing .changelog-tag.tag-databases { background-color: rgba(242, 201, 76, 0.18); color: #b8860b; }
-.marketing .changelog-tag.tag-core { background-color: rgba(144, 101, 253, 0.12); color: var(--mkt-accent-purple); }
-.marketing .changelog-tag.tag-ai { background-color: rgba(144, 101, 253, 0.12); color: var(--mkt-accent-purple); }
-.marketing .changelog-tag.tag-study { background-color: rgba(235, 87, 87, 0.12); color: var(--mkt-accent-red); }
+.marketing .changelog-tag.tag-databases { background-color: var(--mkt-accent-orange-tint); color: var(--mkt-accent-orange); }
+.marketing .changelog-tag.tag-core { background-color: var(--mkt-accent-purple-tint); color: var(--mkt-accent-purple); }
+.marketing .changelog-tag.tag-ai { background-color: var(--mkt-accent-purple-tint); color: var(--mkt-accent-purple); }
+.marketing .changelog-tag.tag-study { background-color: var(--mkt-accent-red-tint); color: var(--mkt-accent-red); }
 
 .marketing .changelog-entry h3 {
   font-size: 18px;

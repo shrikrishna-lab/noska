@@ -1,17 +1,32 @@
-/* Home Page Styling — scoped under .marketing, see marketing-theme.css */
+/* Home Page Styling — scoped under .marketing, see marketing-theme.css
+   Design direction: editorial, paper-toned, generous whitespace. Motion is
+   slow and deliberate — floating layers, soft blur reveals, word-by-word
+   headline entrances. Nothing bounces or flashes. */
 
 .marketing .home-wrapper {
   padding-bottom: 40px;
-  overflow: hidden;
+  /* No overflow:hidden/clip here — an ancestor with overflow other than
+     visible establishes its own clipping box, which breaks position:sticky
+     for descendants trying to stick relative to the real scroll container
+     (.marketing, see marketing-theme.css). Decorative elements that could
+     overflow horizontally (mkt-blobs pseudo-elements, floating hero cards)
+     are each bounded within their own relatively-positioned parent instead
+     of relying on a page-level clip. */
 }
 
-/* 1. Hero */
+/* ---------------------------------------------------------------- */
+/* 1. Hero                                                           */
+/* ---------------------------------------------------------------- */
 .marketing .hero-section {
+  padding: 64px 0 40px 0;
+}
+
+.marketing .hero-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 56px;
   align-items: center;
-  padding: 96px 24px 80px 24px;
+  padding-top: 48px;
 }
 
 .marketing .hero-eyebrow {
@@ -19,228 +34,269 @@
   align-items: center;
   gap: 6px;
   font-size: 12.5px;
-  font-weight: 700;
-  color: var(--mkt-accent-purple);
-  background-color: rgba(144, 101, 253, 0.1);
-  padding: 6px 12px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 6px 13px;
   border-radius: 30px;
-  margin-bottom: 20px;
+  margin-bottom: 26px;
 }
 
 .marketing .hero-title {
-  font-size: 52px;
+  font-size: 58px;
   letter-spacing: -0.03em;
-  line-height: 1.08;
-  margin-bottom: 20px;
+  line-height: 1.06;
+  margin-bottom: 24px;
+  font-weight: 600;
+  overflow: visible;
 }
 
-.marketing .highlight-text {
-  position: relative;
+.marketing .hero-title-italic {
+  font-family: var(--mkt-font-serif);
+  font-style: italic;
+  font-weight: 500;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .word-reveal {
   display: inline-block;
 }
 
-.marketing .highlight-text::after {
-  content: '';
-  position: absolute;
-  bottom: 2px;
-  left: 0;
-  width: 100%;
-  height: 10px;
-  background-color: var(--mkt-accent-yellow);
-  z-index: -1;
-  opacity: 0.55;
+.marketing .word-reveal-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.marketing .word-reveal-word {
+  display: inline-block;
+  will-change: transform;
 }
 
 .marketing .hero-subtitle {
-  font-size: 17px;
+  font-size: 18px;
   color: var(--mkt-text-secondary);
   max-width: 46ch;
-  margin-bottom: 28px;
-  line-height: 1.55;
+  margin-bottom: 32px;
+  line-height: 1.6;
 }
 
 .marketing .hero-cta-group {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
+  margin-bottom: 20px;
 }
 
 .marketing .btn-lg {
-  padding: 12px 24px;
-  font-size: 16.5px;
+  padding: 14px 27px;
+  font-size: 15.5px;
 }
 
-/* Live demo mockup — real interactive recreation, cursor-tilt on hover */
-.marketing .demo-perspective {
-  perspective: 1400px;
-}
-
-.marketing .demo-window {
-  position: relative;
-  width: 100%;
-  max-width: 520px;
-  margin: 0 auto;
-  border: 1px solid var(--mkt-border-color);
-  border-radius: 14px;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-  background-color: var(--mkt-bg-primary);
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-
-.marketing .demo-glow {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 5;
-}
-
-.marketing .demo-topbar {
-  background-color: var(--mkt-bg-secondary);
-  border-bottom: 1px solid var(--mkt-border-color);
-  height: 38px;
+.marketing .hero-kbd-hint {
   display: flex;
   align-items: center;
-  padding: 0 14px;
-  position: relative;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--mkt-text-muted);
 }
 
-.marketing .demo-dots {
+.marketing .hero-kbd-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 6px;
+}
+
+/* Scroll cue beneath the hero */
+.marketing .scroll-cue {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0 8px 0;
+}
+
+.marketing .scroll-cue-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--mkt-text-muted);
+  opacity: 0.6;
+}
+
+/* ---------------------------------------------------------------- */
+/* Mac Window primitive                                              */
+/* ---------------------------------------------------------------- */
+.marketing .mac-window {
+  border-radius: var(--mkt-radius-md);
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  box-shadow: var(--mkt-card-shadow-hover);
+  overflow: hidden;
+}
+
+.marketing .mac-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background-color: var(--mkt-bg-secondary);
+  border-bottom: 1px solid var(--mkt-border-color);
+}
+
+.marketing .mac-window-dots {
   display: flex;
   gap: 6px;
 }
 
-.marketing .demo-dot {
+.marketing .mac-window-dots .dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
+  opacity: 0.55;
 }
 
-.marketing .demo-dot.red { background-color: var(--mkt-accent-red); }
-.marketing .demo-dot.yellow { background-color: var(--mkt-accent-yellow); }
-.marketing .demo-dot.green { background-color: #27ae60; }
+.marketing .dot-red { background-color: #C1694F; }
+.marketing .dot-yellow { background-color: #C1793C; }
+.marketing .dot-green { background-color: #6E8A6C; }
 
-.marketing .demo-address {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11.5px;
-  color: var(--mkt-text-secondary);
-  font-weight: 500;
-}
-
-.marketing .demo-body {
-  display: grid;
-  grid-template-columns: 150px 1fr;
-  min-height: 320px;
-}
-
-.marketing .demo-sidebar {
-  background-color: var(--mkt-bg-secondary);
-  border-right: 1px solid var(--mkt-border-color);
-  padding: 16px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.marketing .demo-sidebar-title {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--mkt-text-muted);
-  letter-spacing: 0.05em;
-  margin-bottom: 8px;
-  padding-left: 6px;
-}
-
-.marketing .demo-sidebar-item {
+.marketing .mac-window-title {
   font-size: 12px;
-  font-weight: 500;
-  color: var(--mkt-text-secondary);
-  padding: 6px 8px;
-  border-radius: 6px;
-}
-
-.marketing .demo-sidebar-item.active {
-  background-color: var(--mkt-border-color);
-  color: var(--mkt-text-primary);
-  font-weight: 600;
-}
-
-.marketing .demo-content {
-  padding: 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.marketing .demo-heading {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.marketing .demo-todos {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.marketing .demo-todo {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-  font-size: 13px;
-  color: var(--mkt-text-primary);
-}
-
-.marketing .demo-checkbox {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  border: 2px solid var(--mkt-text-muted);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.marketing .demo-checkbox.checked {
-  background-color: var(--mkt-brand-color);
-  border-color: var(--mkt-brand-color);
-  color: white;
-}
-
-.marketing .demo-todo-done {
-  text-decoration: line-through;
   color: var(--mkt-text-muted);
+  font-weight: 500;
+  margin: 0 auto;
+  transform: translateX(-15px);
 }
 
-.marketing .demo-ai-row {
+.marketing .mac-window-body {
+  padding: 20px;
+}
+
+/* ---------------------------------------------------------------- */
+/* Hero Scene — real dashboard chrome, layered + floating             */
+/* ---------------------------------------------------------------- */
+.marketing .hero-scene {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  height: 440px;
+}
+
+.marketing .hero-scene-main {
+  position: absolute;
+  top: 3%;
+  left: 0%;
+  width: 96%;
+}
+
+.marketing .hero-scene-window {
+  box-shadow: var(--mkt-card-shadow-hover), 0 30px 60px -20px rgba(23, 22, 27, 0.18);
+}
+
+.marketing .hero-scene-dash-stage {
+  height: 280px;
+  margin: -20px;
+}
+
+.marketing .hero-scene-float {
+  position: absolute;
+  border-radius: var(--mkt-radius-md);
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  box-shadow: var(--mkt-card-shadow-hover);
+  padding: 14px 16px;
+}
+
+.marketing .hero-scene-palette {
+  top: 2%;
+  right: 0%;
+  width: 62%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .hs-palette-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
-  color: var(--mkt-text-muted);
-  border: 1px dashed var(--mkt-border-color);
-  border-radius: 8px;
-  padding: 9px 12px;
-  margin-top: 4px;
+  font-size: 13px;
+  color: var(--mkt-text-secondary);
+  font-weight: 500;
 }
 
-/* 2. Real-stats strip (replaces vanity metrics) */
+.marketing .hs-palette-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--mkt-accent-purple);
+  background-color: var(--mkt-accent-purple-tint);
+  padding: 6px 9px;
+  border-radius: 7px;
+  width: max-content;
+}
+
+.marketing .hero-scene-graph {
+  bottom: 4%;
+  left: 4%;
+  width: 54%;
+}
+
+.marketing .hs-graph-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+
+.marketing .hs-graph-nodes {
+  position: relative;
+  height: 56px;
+}
+
+.marketing .hs-node {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.marketing .hs-node.n1 { top: 4px; left: 6px; background-color: var(--mkt-accent-blue); }
+.marketing .hs-node.n2 { top: 30px; left: 46px; background-color: var(--mkt-accent-sage); }
+.marketing .hs-node.n3 { top: 8px; left: 86px; background-color: var(--mkt-accent-orange); }
+
+.marketing .hs-edge {
+  position: absolute;
+  height: 1px;
+  background-color: var(--mkt-border-strong);
+}
+
+.marketing .hs-edge.e1 { top: 12px; left: 14px; width: 40px; transform: rotate(24deg); }
+.marketing .hs-edge.e2 { top: 18px; left: 54px; width: 42px; transform: rotate(-20deg); }
+
+/* ---------------------------------------------------------------- */
+/* 2. Real-stats strip                                               */
+/* ---------------------------------------------------------------- */
 .marketing .stats-strip-section {
   background-color: var(--mkt-bg-secondary);
   border-top: 1px solid var(--mkt-border-color);
   border-bottom: 1px solid var(--mkt-border-color);
-  padding: 44px 0;
+  padding: 52px 0;
 }
 
 .marketing .stats-strip {
@@ -253,19 +309,20 @@
 .marketing .stats-strip-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .marketing .stats-strip-num {
-  font-size: 40px;
-  font-weight: 800;
+  font-size: 42px;
+  font-weight: 600;
   font-family: var(--mkt-font-heading);
   letter-spacing: -0.02em;
+  color: var(--mkt-text-primary);
 }
 
 .marketing .stats-strip-label {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--mkt-text-primary);
 }
 
@@ -274,9 +331,213 @@
   color: var(--mkt-text-muted);
 }
 
-/* 3. Features Section */
+/* ---------------------------------------------------------------- */
+/* 3. Storytelling sections                                          */
+/* ---------------------------------------------------------------- */
+.marketing .story-sections {
+  padding: 64px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 128px;
+}
+
+.marketing .story-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 72px;
+  align-items: center;
+}
+
+.marketing .story-section.reverse {
+  direction: rtl;
+}
+
+.marketing .story-section.reverse .story-text,
+.marketing .story-section.reverse .story-visual {
+  direction: ltr;
+}
+
+.marketing .story-text {
+  max-width: 440px;
+}
+
+.marketing .story-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 18px;
+  padding: 5px 12px;
+  border-radius: 20px;
+}
+
+.marketing .story-eyebrow.tint-sage { color: var(--mkt-accent-sage); background-color: var(--mkt-accent-sage-tint); }
+.marketing .story-eyebrow.tint-blue { color: var(--mkt-accent-blue); background-color: var(--mkt-accent-blue-tint); }
+.marketing .story-eyebrow.tint-purple { color: var(--mkt-accent-purple); background-color: var(--mkt-accent-purple-tint); }
+.marketing .story-eyebrow.tint-orange { color: var(--mkt-accent-orange); background-color: var(--mkt-accent-orange-tint); }
+
+.marketing .story-text h3 {
+  font-size: 30px;
+  line-height: 1.22;
+  margin-bottom: 14px;
+}
+
+.marketing .story-text p {
+  font-size: 16px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.65;
+}
+
+.marketing .story-visual {
+  display: flex;
+  justify-content: center;
+}
+
+.marketing .story-illustration {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--mkt-radius-lg);
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 36px;
+}
+
+.marketing .story-illustration-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .story-illustration-lines span {
+  height: 9px;
+  border-radius: 5px;
+  background-color: var(--mkt-bg-tertiary);
+}
+
+.marketing .story-illustration-badge {
+  position: absolute;
+  bottom: -18px;
+  right: -18px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  box-shadow: var(--mkt-card-shadow-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.marketing .story-illustration.tint-sage .story-illustration-badge { color: var(--mkt-accent-sage); }
+.marketing .story-illustration.tint-blue .story-illustration-badge { color: var(--mkt-accent-blue); }
+.marketing .story-illustration.tint-purple .story-illustration-badge { color: var(--mkt-accent-purple); }
+.marketing .story-illustration.tint-orange .story-illustration-badge { color: var(--mkt-accent-orange); }
+
+/* ---------------------------------------------------------------- */
+/* Sticky scroll showcase                                            */
+/* ---------------------------------------------------------------- */
+.marketing .scroll-showcase {
+  position: relative;
+  padding: 40px 24px;
+}
+
+.marketing .scroll-showcase-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+}
+
+.marketing .scroll-showcase-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 45vh;
+  padding: 20vh 0;
+}
+
+.marketing .scroll-showcase-step {
+  display: flex;
+  gap: 20px;
+  max-width: 440px;
+}
+
+.marketing .scroll-showcase-step-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.marketing .scroll-showcase-tick {
+  width: 2px;
+  height: 34px;
+  background-color: var(--mkt-text-primary);
+  transform-origin: top;
+  border-radius: 2px;
+}
+
+.marketing .scroll-showcase-step-num {
+  font-family: var(--mkt-font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+}
+
+.marketing .scroll-showcase-step-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mkt-accent-sage);
+  margin-bottom: 12px;
+}
+
+.marketing .scroll-showcase-step h3 {
+  font-size: 29px;
+  line-height: 1.22;
+  margin-bottom: 12px;
+}
+
+.marketing .scroll-showcase-step p {
+  font-size: 15.5px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+}
+
+.marketing .scroll-showcase-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+}
+
+.marketing .scroll-showcase-window {
+  width: 100%;
+  box-shadow: var(--mkt-card-shadow-hover), 0 40px 70px -24px rgba(23, 22, 27, 0.2);
+}
+
+.marketing .scroll-showcase-dash-stage {
+  height: 380px;
+  margin: -20px;
+}
+
+/* ---------------------------------------------------------------- */
+/* 5. Features Section                                                */
+/* ---------------------------------------------------------------- */
 .marketing .features-section {
-  padding: 100px 24px;
+  padding: 110px 24px;
 }
 
 .marketing .section-header {
@@ -285,21 +546,35 @@
   margin: 0 auto 48px auto;
 }
 
+.marketing .section-eyebrow-pill {
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mkt-text-secondary);
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 5px 12px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+
 .marketing .section-header h2 {
-  font-size: 40px;
-  margin-bottom: 12px;
+  font-size: 38px;
+  margin-bottom: 14px;
 }
 
 .marketing .section-header p {
-  font-size: 18px;
+  font-size: 17.5px;
   color: var(--mkt-text-secondary);
 }
 
 .marketing .features-tab-group {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 32px;
+  gap: 10px;
+  margin-bottom: 36px;
   flex-wrap: wrap;
 }
 
@@ -308,7 +583,7 @@
   border: 1px solid var(--mkt-border-color);
   padding: 10px 20px;
   border-radius: 30px;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--mkt-text-secondary);
   cursor: pointer;
@@ -325,9 +600,8 @@
 
 .marketing .tab-btn.active {
   background-color: var(--mkt-brand-color);
-  color: #ffffff;
+  color: var(--mkt-bg-primary);
   border-color: var(--mkt-brand-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .marketing .features-showcase-panel {
@@ -336,8 +610,8 @@
   gap: 48px;
   background-color: var(--mkt-bg-secondary);
   border: 1px solid var(--mkt-border-color);
-  border-radius: 20px;
-  padding: 48px;
+  border-radius: var(--mkt-radius-lg);
+  padding: 52px;
   align-items: center;
   min-height: 420px;
 }
@@ -350,33 +624,35 @@
 
 .marketing .category-label {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.marketing .category-label.text-blue { color: var(--mkt-accent-blue); }
+.marketing .category-label.text-sage { color: var(--mkt-accent-sage); }
 .marketing .category-label.text-red { color: var(--mkt-accent-red); }
-.marketing .category-label.text-yellow { color: #d4a017; }
+.marketing .category-label.text-orange { color: var(--mkt-accent-orange); }
 .marketing .category-label.text-purple { color: var(--mkt-accent-purple); }
+.marketing .category-label.text-blue { color: var(--mkt-accent-blue); }
 
 .marketing .showcase-info h3 {
-  font-size: 30px;
-  line-height: 1.2;
+  font-size: 29px;
+  line-height: 1.25;
 }
 
 .marketing .showcase-info p {
-  font-size: 16px;
+  font-size: 15.5px;
   color: var(--mkt-text-secondary);
+  line-height: 1.6;
 }
 
 .marketing .interactive-hint {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--mkt-text-muted);
   background-color: var(--mkt-bg-primary);
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
   width: max-content;
   border: 1px dashed var(--mkt-border-color);
 }
@@ -391,17 +667,17 @@
 
 .marketing .tab-icon-display {
   color: var(--mkt-text-muted);
-  opacity: 0.5;
+  opacity: 0.35;
 }
 
 .marketing .interactive-ai-mockup {
   width: 100%;
   background-color: var(--mkt-bg-primary);
   border: 1px solid var(--mkt-border-color);
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.04);
+  border-radius: var(--mkt-radius-md);
+  box-shadow: var(--mkt-card-shadow);
   overflow: hidden;
-  padding: 20px;
+  padding: 22px;
 }
 
 .marketing .ai-chat-header {
@@ -409,9 +685,9 @@
   align-items: center;
   gap: 8px;
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--mkt-accent-purple);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .marketing .ai-chat-body {
@@ -429,7 +705,7 @@
 
 .marketing .prompt-label {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--mkt-text-muted);
   text-transform: uppercase;
   margin-bottom: 2px;
@@ -442,8 +718,8 @@
 }
 
 .marketing .ai-response-box {
-  background-color: rgba(144, 101, 253, 0.04);
-  border: 1px solid rgba(144, 101, 253, 0.15);
+  background-color: var(--mkt-accent-purple-tint);
+  border: 1px solid var(--mkt-border-color);
   padding: 12px;
   border-radius: 8px;
   min-height: 70px;
@@ -456,7 +732,7 @@
 }
 
 .marketing .typing-cursor {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--mkt-accent-purple);
   animation: mkt-blink 0.8s infinite;
 }
@@ -467,13 +743,112 @@
 
 .marketing .ai-action-btn {
   align-self: flex-start;
-  padding: 8px 16px;
+  padding: 9px 16px;
   font-size: 13px;
 }
 
-/* 4. Capabilities grid (real, shipped features) */
+/* ---------------------------------------------------------------- */
+/* 6. Command palette showcase                                       */
+/* ---------------------------------------------------------------- */
+.marketing .palette-section {
+  padding: 60px 24px 110px 24px;
+}
+
+.marketing .palette-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+
+.marketing .palette-grid h2 {
+  font-size: 34px;
+  margin-bottom: 16px;
+}
+
+.marketing .palette-grid p {
+  font-size: 15.5px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.65;
+}
+
+.marketing .palette-window {
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.marketing .palette-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--mkt-text-primary);
+  font-weight: 500;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--mkt-border-color);
+  margin-bottom: 10px;
+}
+
+.marketing .palette-search-row svg {
+  color: var(--mkt-text-muted);
+}
+
+.marketing .palette-caret {
+  width: 1.5px;
+  height: 15px;
+  background-color: var(--mkt-text-primary);
+  animation: mkt-blink 1s infinite;
+}
+
+.marketing .palette-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marketing .palette-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .palette-result svg {
+  color: var(--mkt-text-muted);
+  flex-shrink: 0;
+}
+
+.marketing .palette-result span {
+  flex: 1;
+}
+
+.marketing .palette-result kbd {
+  font-size: 11px;
+  color: var(--mkt-text-muted);
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.marketing .palette-result.active {
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+  font-weight: 500;
+}
+
+.marketing .palette-result.active svg {
+  color: var(--mkt-text-primary);
+}
+
+/* ---------------------------------------------------------------- */
+/* 7. Capabilities grid                                              */
+/* ---------------------------------------------------------------- */
 .marketing .capabilities-section {
-  padding: 80px 24px;
+  padding: 84px 24px;
 }
 
 .marketing .capabilities-grid {
@@ -484,35 +859,30 @@
 
 .marketing .capability-card {
   border: 1px solid var(--mkt-border-color);
-  border-radius: 14px;
-  padding: 26px;
+  border-radius: var(--mkt-radius-md);
+  padding: 28px;
   background-color: var(--mkt-bg-primary);
   box-shadow: var(--mkt-card-shadow);
-  transition: all var(--mkt-transition-normal);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.marketing .capability-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--mkt-card-shadow-hover);
+  gap: 14px;
+  transform-style: preserve-3d;
 }
 
 .marketing .capability-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .marketing .capability-icon.tint-blue { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
-.marketing .capability-icon.tint-purple { background-color: rgba(144, 101, 253, 0.12); color: var(--mkt-accent-purple); }
-.marketing .capability-icon.tint-red { background-color: rgba(235, 87, 87, 0.12); color: var(--mkt-accent-red); }
-.marketing .capability-icon.tint-yellow { background-color: rgba(242, 201, 76, 0.18); color: #b8860b; }
-.marketing .capability-icon.tint-green { background-color: rgba(39, 174, 96, 0.12); color: #27ae60; }
+.marketing .capability-icon.tint-purple { background-color: var(--mkt-accent-purple-tint); color: var(--mkt-accent-purple); }
+.marketing .capability-icon.tint-red { background-color: var(--mkt-accent-red-tint); color: var(--mkt-accent-red); }
+.marketing .capability-icon.tint-orange { background-color: var(--mkt-accent-orange-tint); color: var(--mkt-accent-orange); }
+.marketing .capability-icon.tint-sage { background-color: var(--mkt-accent-sage-tint); color: var(--mkt-accent-sage); }
 
 .marketing .capability-card h3 {
   font-size: 17px;
@@ -521,45 +891,40 @@
 .marketing .capability-card p {
   font-size: 13.5px;
   color: var(--mkt-text-secondary);
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
-/* 5. Security section (real practices, no fabricated certs) */
+/* Tilt card base (shared with capability cards + story illustration) */
+.marketing .tilt-card {
+  will-change: transform;
+}
+
+/* ---------------------------------------------------------------- */
+/* 8. Security section                                                */
+/* ---------------------------------------------------------------- */
 .marketing .security-section {
   background-color: var(--mkt-bg-secondary);
   border-top: 1px solid var(--mkt-border-color);
   border-bottom: 1px solid var(--mkt-border-color);
-  padding: 90px 24px;
+  padding: 96px 24px;
 }
 
 .marketing .security-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  gap: 64px;
   align-items: center;
-}
-
-.marketing .section-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--mkt-accent-blue);
-  margin-bottom: 14px;
 }
 
 .marketing .security-grid h2 {
-  font-size: 34px;
-  margin-bottom: 14px;
+  font-size: 33px;
+  margin-bottom: 16px;
 }
 
 .marketing .security-grid p {
   font-size: 15.5px;
   color: var(--mkt-text-secondary);
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .marketing .security-checklist {
@@ -571,31 +936,97 @@
 .marketing .security-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 11px;
   background-color: var(--mkt-bg-primary);
   border: 1px solid var(--mkt-border-color);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-radius: var(--mkt-radius-md);
+  padding: 15px 18px;
   font-size: 14px;
   font-weight: 500;
 }
 
 .marketing .security-item .check-icon {
-  color: #27ae60;
+  color: var(--mkt-accent-sage);
   flex-shrink: 0;
   margin-top: 1px;
 }
 
-/* 6. Final CTA Section */
+/* ---------------------------------------------------------------- */
+/* 9. FAQ                                                             */
+/* ---------------------------------------------------------------- */
+.marketing .faq-home-section {
+  padding: 96px 24px;
+  max-width: 760px !important;
+}
+
+.marketing .faq-home-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .faq-home-item {
+  border: 1px solid var(--mkt-border-color);
+  border-radius: var(--mkt-radius-md);
+  background-color: var(--mkt-bg-primary);
+  overflow: hidden;
+}
+
+.marketing .faq-home-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 18px 20px;
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--mkt-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.marketing .faq-home-chevron {
+  flex-shrink: 0;
+  color: var(--mkt-text-muted);
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .faq-home-chevron.open {
+  transform: rotate(180deg);
+}
+
+.marketing .faq-home-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--mkt-transition-normal);
+}
+
+.marketing .faq-home-answer.open {
+  max-height: 240px;
+}
+
+.marketing .faq-home-answer p {
+  padding: 0 20px 18px 20px;
+  font-size: 14.5px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------- */
+/* 10. Final CTA                                                      */
+/* ---------------------------------------------------------------- */
 .marketing .final-cta-section {
-  padding: 40px 24px 100px 24px;
+  padding: 48px 24px 110px 24px;
 }
 
 .marketing .cta-banner {
   background-color: var(--mkt-bg-secondary);
   border: 1px solid var(--mkt-border-color);
-  border-radius: 20px;
-  padding: 64px 24px;
+  border-radius: var(--mkt-radius-lg);
+  padding: 76px 24px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -604,14 +1035,14 @@
 }
 
 .marketing .cta-banner h2 {
-  font-size: 40px;
-  margin-bottom: 12px;
+  font-size: 38px;
+  margin-bottom: 14px;
 }
 
 .marketing .cta-banner p {
-  font-size: 17px;
+  font-size: 16.5px;
   color: var(--mkt-text-secondary);
-  margin-bottom: 32px;
+  margin-bottom: 36px;
   max-width: 500px;
 }
 
@@ -621,21 +1052,39 @@
   justify-content: center;
 }
 
-/* Responsive Overrides */
+/* Magnetic wrapper — inline-flex so it hugs the button it wraps */
+.marketing .magnetic-wrap {
+  display: inline-flex;
+}
+
+/* ---------------------------------------------------------------- */
+/* Responsive Overrides                                              */
+/* ---------------------------------------------------------------- */
 @media (max-width: 992px) {
-  .marketing .hero-section {
+  .marketing .hero-grid {
     grid-template-columns: 1fr;
     gap: 48px;
-    padding: 56px 24px 48px 24px;
+    padding-top: 24px;
     text-align: center;
   }
 
-  .marketing .hero-cta-group {
+  .marketing .hero-cta-group,
+  .marketing .hero-kbd-hint {
     justify-content: center;
   }
 
   .marketing .hero-title {
-    font-size: 38px;
+    font-size: 40px;
+  }
+
+  .marketing .hero-subtitle {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .marketing .hero-scene {
+    height: 340px;
+    max-width: 380px;
   }
 
   .marketing .stats-strip,
@@ -644,14 +1093,58 @@
     gap: 16px;
   }
 
+  .marketing .story-section,
+  .marketing .story-section.reverse {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    direction: ltr;
+    text-align: center;
+  }
+
+  .marketing .story-section.reverse {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+
+  .marketing .story-text {
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .marketing .story-sections {
+    gap: 72px;
+    padding: 32px 24px;
+  }
+
+  .marketing .scroll-showcase-grid,
+  .marketing .palette-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .marketing .scroll-showcase-steps {
+    gap: 24px;
+    padding: 0;
+  }
+
+  .marketing .scroll-showcase-sticky {
+    position: relative;
+    height: auto;
+    top: auto;
+  }
+
+  .marketing .scroll-showcase-visual-stage {
+    height: 260px;
+  }
+
+  .marketing .palette-grid {
+    text-align: center;
+  }
+
   .marketing .features-showcase-panel,
   .marketing .security-grid {
     grid-template-columns: 1fr;
     gap: 32px;
     padding: 32px;
-  }
-
-  .marketing .demo-body {
-    grid-template-columns: 110px 1fr;
   }
 }

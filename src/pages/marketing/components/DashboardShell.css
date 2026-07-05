@@ -1,0 +1,710 @@
+/* DashboardShell — a hand-built recreation of Noska's real workspace
+   chrome (see src/components/Sidebar.jsx + Topbar.jsx) for use in the
+   marketing site's hero and scroll showcase. Colors below are the app's
+   actual light-theme tokens (src/index.css `.light`), copied as local
+   variables so this component never depends on the authenticated app's
+   theme runtime or class toggles. */
+
+.marketing .dash-shell {
+  --d-bg: #F0FAFF;
+  --d-surface-1: #F5F7FA;
+  --d-surface-2: #FFFFFF;
+  --d-surface-3: #E8E8E8;
+  --d-border: rgba(0, 0, 0, 0.08);
+  --d-text: #1A1A1A;
+  --d-text-secondary: #5A5A5A;
+  --d-text-muted: #8A8A8A;
+  --d-accent: #E3CFB3;
+  --d-blue: #0066FF;
+  --d-success: #1E8E3E;
+
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background-color: var(--d-bg);
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+/* ---------------------------------------------------------------- */
+/* Sidebar                                                            */
+/* ---------------------------------------------------------------- */
+.marketing .dash-sidebar {
+  width: 168px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--d-surface-1);
+  border-right: 1px solid var(--d-border);
+  font-size: 11px;
+  color: var(--d-text-secondary);
+}
+
+.marketing .dash-sidebar-header {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--d-border);
+  flex-shrink: 0;
+}
+
+.marketing .dash-ws-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 3px 4px;
+  border-radius: 6px;
+  cursor: default;
+  color: var(--d-text-muted);
+}
+
+.marketing .dash-logo-box {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background-color: var(--d-surface-2);
+  border: 1px solid var(--d-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.marketing .dash-logo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.marketing .dash-ws-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.marketing .dash-ws-name {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--d-text);
+}
+
+.marketing .dash-ws-sub {
+  font-size: 8px;
+  color: var(--d-text-muted);
+}
+
+.marketing .dash-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px;
+  padding: 6px 8px;
+  background-color: var(--d-surface-2);
+  border: 1px solid var(--d-border);
+  border-radius: 7px;
+  color: var(--d-text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.marketing .dash-search span {
+  flex: 1;
+}
+
+.marketing .dash-search kbd {
+  font-size: 7.5px;
+  background-color: var(--d-surface-1);
+  border: 1px solid var(--d-border);
+  border-radius: 4px;
+  padding: 1px 3px;
+  color: var(--d-text-muted);
+}
+
+.marketing .dash-scroll {
+  flex: 1;
+  overflow: hidden;
+  padding-bottom: 4px;
+}
+
+.marketing .dash-section {
+  margin-top: 10px;
+}
+
+.marketing .dash-section:first-child {
+  margin-top: 2px;
+}
+
+.marketing .dash-section-title {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--d-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 12px 4px 12px;
+}
+
+.marketing .dash-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 6px;
+}
+
+.marketing .dash-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  color: var(--d-text-secondary);
+}
+
+.marketing .dash-nav-item.compact {
+  font-size: 10px;
+  padding: 3px 6px;
+}
+
+.marketing .dash-nav-item.active {
+  background-color: var(--d-surface-3);
+  color: var(--d-text);
+  font-weight: 600;
+}
+
+.marketing .dash-star {
+  color: #E37400;
+  fill: #E37400;
+}
+
+.marketing .dash-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.marketing .dash-recent-icon {
+  font-size: 10px;
+}
+
+.marketing .dash-recent-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.marketing .dash-recent-title {
+  font-size: 10px;
+  color: var(--d-text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marketing .dash-recent-meta {
+  font-size: 8px;
+  color: var(--d-text-muted);
+}
+
+.marketing .dash-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  color: var(--d-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marketing .dash-tree-item.active {
+  background-color: var(--d-surface-3);
+  color: var(--d-text);
+  font-weight: 600;
+}
+
+.marketing .dash-sidebar-footer {
+  padding: 8px;
+  border-top: 1px solid var(--d-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.marketing .dash-toolbar-row {
+  display: flex;
+  justify-content: space-between;
+  color: var(--d-text-muted);
+  padding: 0 2px;
+}
+
+.marketing .dash-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: var(--d-accent);
+  border: 1px solid var(--d-border);
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.marketing .dash-new-btn span {
+  flex: 1;
+  text-align: left;
+  color: #fff;
+}
+
+.marketing .dash-new-btn kbd {
+  font-size: 7px;
+  background-color: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  padding: 1px 3px;
+  color: #fff;
+}
+
+.marketing .dash-user-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--d-border);
+  flex-shrink: 0;
+}
+
+.marketing .dash-user-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: var(--d-surface-2);
+  border: 1px solid var(--d-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.marketing .dash-user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.marketing .dash-user-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--d-text);
+}
+
+.marketing .dash-user-email {
+  font-size: 8px;
+  color: var(--d-text-muted);
+}
+
+/* ---------------------------------------------------------------- */
+/* Main / Topbar                                                     */
+/* ---------------------------------------------------------------- */
+.marketing .dash-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--d-bg);
+}
+
+.marketing .dash-topbar {
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--d-border);
+}
+
+.marketing .dash-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--d-text-secondary);
+  min-width: 0;
+  flex: 1;
+}
+
+.marketing .dash-topbar-page-title {
+  color: var(--d-text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marketing .dash-private-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 8px;
+  color: var(--d-text-muted);
+  flex-shrink: 0;
+}
+
+.marketing .dash-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  background-color: var(--d-surface-3);
+  border: 1px solid var(--d-border);
+  border-radius: 7px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.marketing .dash-mode-btn {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 3px 8px;
+  font-size: 9.5px;
+  color: var(--d-text-secondary);
+  border-radius: 5px;
+  cursor: default;
+}
+
+.marketing .dash-mode-btn.active {
+  color: var(--d-text);
+  font-weight: 600;
+}
+
+.marketing .dash-mode-pill {
+  position: absolute;
+  inset: 0;
+  background-color: var(--d-surface-2);
+  border: 1px solid var(--d-border);
+  border-radius: 5px;
+  z-index: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.marketing .dash-mode-label {
+  position: relative;
+  z-index: 1;
+}
+
+.marketing .dash-save-state {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 8.5px;
+  color: var(--d-text-muted);
+  flex-shrink: 0;
+}
+
+.marketing .dash-save-state svg {
+  color: var(--d-success);
+}
+
+.marketing .dash-share-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  font-size: 9.5px;
+  color: var(--d-text-secondary);
+  padding: 3px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.marketing .dash-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--d-text-secondary);
+  flex-shrink: 0;
+}
+
+.marketing .dash-ai-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--d-surface-2);
+  border: 1px solid var(--d-border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--d-text);
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.marketing .dash-ai-btn svg {
+  color: var(--d-accent);
+}
+
+.marketing .dash-ai-btn.active {
+  background-color: var(--d-text);
+  color: #fff;
+}
+
+.marketing .dash-ai-btn.active svg {
+  color: var(--d-accent);
+}
+
+/* ---------------------------------------------------------------- */
+/* Content panes                                                     */
+/* ---------------------------------------------------------------- */
+.marketing .dash-content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  padding: 18px 22px;
+  overflow: hidden;
+}
+
+.marketing .dash-doc h4 {
+  font-family: var(--mkt-font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 12px;
+}
+
+.marketing .dash-doc-line {
+  height: 6px;
+  border-radius: 4px;
+  background-color: #E8E8E8;
+  margin-bottom: 8px;
+}
+
+.marketing .dash-doc-todo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #5A5A5A;
+  font-weight: 500;
+}
+
+.marketing .dash-doc-todo.muted {
+  color: #8A8A8A;
+}
+
+.marketing .dash-check {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  background-color: #1E8E3E;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.marketing .dash-check.empty {
+  background-color: transparent;
+  border: 1.4px solid #D0D0D0;
+}
+
+/* Board / kanban pane */
+.marketing .dash-board {
+  display: flex;
+  gap: 12px;
+  height: 100%;
+}
+
+.marketing .dash-board-col {
+  width: 130px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.marketing .dash-board-col-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #5A5A5A;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.marketing .dash-board-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.marketing .dash-board-count {
+  color: #8A8A8A;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.marketing .dash-board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.marketing .dash-board-card {
+  background-color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 7px 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.marketing .dash-board-card-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #1A1A1A;
+}
+
+.marketing .dash-board-card-tag {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 8.5px;
+  color: #8A8A8A;
+  background-color: #F0F0F0;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Graph pane */
+.marketing .dash-graph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 10px;
+}
+
+.marketing .dash-graph-svg {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+}
+
+.marketing .dash-graph-edge {
+  stroke: rgba(0, 0, 0, 0.14);
+  stroke-width: 1;
+}
+
+.marketing .dash-graph-node {
+  fill: #5B7FA6;
+}
+
+.marketing .dash-graph-node.primary {
+  fill: #1A1A1A;
+}
+
+.marketing .dash-graph-caption {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: #5A5A5A;
+  font-weight: 500;
+}
+
+/* AI pane */
+.marketing .dash-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .dash-ai-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8874A8;
+}
+
+.marketing .dash-ai-prompt {
+  background-color: #F0F0F0;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.marketing .dash-ai-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: #8A8A8A;
+  text-transform: uppercase;
+}
+
+.marketing .dash-ai-prompt p {
+  font-size: 11px;
+  color: #1A1A1A;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.marketing .dash-ai-response {
+  background-color: rgba(136, 116, 168, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.marketing .dash-ai-response p {
+  font-size: 11px;
+  color: #1A1A1A;
+  line-height: 1.55;
+}
+
+/* Compact viewport variant — used inside smaller floating cards where
+   sidebar text would otherwise be illegible. */
+.marketing .dash-shell.dash-compact .dash-sidebar {
+  width: 118px;
+}
+
+.marketing .dash-shell.dash-compact .dash-section-title,
+.marketing .dash-shell.dash-compact .dash-recent-meta {
+  display: none;
+}
+
+@media (max-width: 992px) {
+  .marketing .dash-sidebar {
+    width: 128px;
+  }
+}

@@ -86,10 +86,10 @@
   background-color: var(--mkt-bg-secondary);
 }
 
-.marketing .control-icon.purple { background-color: rgba(144, 101, 253, 0.1); color: var(--mkt-accent-purple); }
+.marketing .control-icon.purple { background-color: var(--mkt-accent-purple-tint); color: var(--mkt-accent-purple); }
 .marketing .control-icon.blue { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
-.marketing .control-icon.red { background-color: rgba(235, 87, 87, 0.1); color: var(--mkt-accent-red); }
-.marketing .control-icon.yellow { background-color: rgba(242, 201, 76, 0.15); color: #d4a017; }
+.marketing .control-icon.red { background-color: var(--mkt-accent-red-tint); color: var(--mkt-accent-red); }
+.marketing .control-icon.yellow { background-color: var(--mkt-accent-orange-tint); color: var(--mkt-accent-orange); }
 
 .marketing .control-card h4 {
   font-size: 15px;
@@ -131,10 +131,10 @@
   gap: 6px;
 }
 
-.marketing .panel-badge.ai { background-color: rgba(144, 101, 253, 0.15); color: var(--mkt-accent-purple); }
+.marketing .panel-badge.ai { background-color: var(--mkt-accent-purple-tint); color: var(--mkt-accent-purple); }
 .marketing .panel-badge.docs { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
-.marketing .panel-badge.wikis { background-color: rgba(235, 87, 87, 0.15); color: var(--mkt-accent-red); }
-.marketing .panel-badge.projects { background-color: rgba(242, 201, 76, 0.2); color: #b8860b; }
+.marketing .panel-badge.wikis { background-color: var(--mkt-accent-red-tint); color: var(--mkt-accent-red); }
+.marketing .panel-badge.projects { background-color: var(--mkt-accent-orange-tint); color: var(--mkt-accent-orange); }
 
 .marketing .panel-info h2 {
   font-size: 32px;
@@ -227,7 +227,7 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--mkt-accent-purple);
-  background-color: rgba(144, 101, 253, 0.05);
+  background-color: var(--mkt-accent-purple-tint);
   border-left: 2px solid var(--mkt-accent-purple);
   padding: 8px;
   border-radius: 0 4px 4px 0;
@@ -268,8 +268,8 @@
 .marketing .badge-verified {
   font-size: 10px;
   font-weight: 700;
-  background-color: rgba(39, 174, 96, 0.12);
-  color: #27ae60;
+  background-color: var(--mkt-accent-sage-tint);
+  color: var(--mkt-accent-sage);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -307,7 +307,7 @@
 }
 
 .marketing .p-high {
-  background-color: rgba(235, 87, 87, 0.12);
+  background-color: var(--mkt-accent-red-tint);
   color: var(--mkt-accent-red);
   padding: 2px 6px;
   border-radius: 4px;
@@ -316,8 +316,8 @@
 }
 
 .marketing .p-status {
-  background-color: rgba(242, 201, 76, 0.15);
-  color: #b8860b;
+  background-color: var(--mkt-accent-orange-tint);
+  color: var(--mkt-accent-orange);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 10px;

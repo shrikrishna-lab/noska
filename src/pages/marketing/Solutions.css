@@ -64,9 +64,9 @@
 }
 
 .marketing .solution-icon-badge.tint-blue { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
-.marketing .solution-icon-badge.tint-purple { background-color: rgba(144, 101, 253, 0.12); color: var(--mkt-accent-purple); }
-.marketing .solution-icon-badge.tint-red { background-color: rgba(235, 87, 87, 0.12); color: var(--mkt-accent-red); }
-.marketing .solution-icon-badge.tint-yellow { background-color: rgba(242, 201, 76, 0.18); color: #b8860b; }
+.marketing .solution-icon-badge.tint-purple { background-color: var(--mkt-accent-purple-tint); color: var(--mkt-accent-purple); }
+.marketing .solution-icon-badge.tint-red { background-color: var(--mkt-accent-red-tint); color: var(--mkt-accent-red); }
+.marketing .solution-icon-badge.tint-yellow { background-color: var(--mkt-accent-orange-tint); color: var(--mkt-accent-orange); }
 
 .marketing .solution-eyebrow {
   font-size: 12px;
@@ -106,7 +106,7 @@
 }
 
 .marketing .solution-point .check-icon {
-  color: #27ae60;
+  color: var(--mkt-accent-sage);
   flex-shrink: 0;
   margin-top: 2px;
 }

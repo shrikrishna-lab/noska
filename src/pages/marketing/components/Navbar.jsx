@@ -1,10 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import {
-  ChevronDown, Menu, X, Sparkles, BookOpen,
-  Database, CheckSquare, FileText, Building2,
-  Users, Briefcase, GraduationCap, LifeBuoy, ArrowRight
-} from 'lucide-react';
+import { ChevronDown, Menu, X, ArrowRight } from 'lucide-react';
 import './Navbar.css';
 
 export default function Navbar() {
@@ -43,28 +39,28 @@ export default function Navbar() {
                   <div className="dropdown-section">
                     <div className="dropdown-grid">
                       <Link to="/product" className="dropdown-item">
-                        <div className="item-icon tint-purple"><Sparkles size={18} /></div>
+                        <div className="mkt-avatar tint-purple">✨</div>
                         <div className="item-content">
                           <p className="item-title">Noska AI</p>
                           <p className="item-desc">Integrated AI assistant</p>
                         </div>
                       </Link>
                       <Link to="/product" className="dropdown-item">
-                        <div className="item-icon tint-blue"><FileText size={18} /></div>
+                        <div className="mkt-avatar tint-blue">📝</div>
                         <div className="item-content">
                           <p className="item-title">Docs</p>
                           <p className="item-desc">Simple, beautiful documents</p>
                         </div>
                       </Link>
                       <Link to="/product" className="dropdown-item">
-                        <div className="item-icon tint-red"><Database size={18} /></div>
+                        <div className="mkt-avatar tint-red">📚</div>
                         <div className="item-content">
                           <p className="item-title">Wikis</p>
                           <p className="item-desc">Centralize team knowledge</p>
                         </div>
                       </Link>
                       <Link to="/product" className="dropdown-item">
-                        <div className="item-icon tint-yellow"><CheckSquare size={18} /></div>
+                        <div className="mkt-avatar tint-yellow">✅</div>
                         <div className="item-content">
                           <p className="item-title">Projects</p>
                           <p className="item-desc">Connected tasks & roadmaps</p>
@@ -89,21 +85,21 @@ export default function Navbar() {
                 <div className="dropdown-panel">
                   <div className="dropdown-grid single-col">
                     <Link to="/solutions" className="dropdown-item">
-                      <div className="item-icon"><Users size={18} /></div>
+                      <div className="mkt-avatar tint-sage">🤝</div>
                       <div className="item-content">
                         <p className="item-title">All solutions</p>
                         <p className="item-desc">Personal, students, teams & writers</p>
                       </div>
                     </Link>
                     <Link to="/enterprise" className="dropdown-item">
-                      <div className="item-icon"><Building2 size={18} /></div>
+                      <div className="mkt-avatar tint-blue">🏢</div>
                       <div className="item-content">
                         <p className="item-title">Enterprise</p>
                         <p className="item-desc">What's built, what's on the roadmap</p>
                       </div>
                     </Link>
                     <Link to="/solutions" className="dropdown-item">
-                      <div className="item-icon"><Briefcase size={18} /></div>
+                      <div className="mkt-avatar tint-pink">💼</div>
                       <div className="item-content">
                         <p className="item-title">Personal use</p>
                         <p className="item-desc">Organize your life & notes</p>
@@ -127,21 +123,21 @@ export default function Navbar() {
                 <div className="dropdown-panel">
                   <div className="dropdown-grid single-col">
                     <Link to="/resources" className="dropdown-item">
-                      <div className="item-icon"><GraduationCap size={18} /></div>
+                      <div className="mkt-avatar tint-orange">🎓</div>
                       <div className="item-content">
                         <p className="item-title">Guides & shortcuts</p>
                         <p className="item-desc">Real keyboard shortcuts & feature guides</p>
                       </div>
                     </Link>
                     <Link to="/changelog" className="dropdown-item">
-                      <div className="item-icon"><BookOpen size={18} /></div>
+                      <div className="mkt-avatar tint-purple">📖</div>
                       <div className="item-content">
                         <p className="item-title">Changelog</p>
                         <p className="item-desc">What's actually shipped, dated</p>
                       </div>
                     </Link>
                     <Link to="/login" className="dropdown-item">
-                      <div className="item-icon"><LifeBuoy size={18} /></div>
+                      <div className="mkt-avatar tint-red">🛟</div>
                       <div className="item-content">
                         <p className="item-title">Help center</p>
                         <p className="item-desc">In-app once you sign in</p>
@@ -161,10 +157,10 @@ export default function Navbar() {
         <div className="navbar-right-actions">
           <Link to="/enterprise" className="nav-action-text hide-mobile">Request a demo</Link>
           <div className="divider-vertical hide-mobile"></div>
-          <Link to="/login" className="nav-action-text">Log in</Link>
-          <Link to="/login" className="btn btn-primary btn-nav-cta">Get Noska free</Link>
+          <Link to="/login" className="nav-action-text hide-mobile">Log in</Link>
+          <Link to="/login" className="btn btn-primary btn-nav-cta hide-mobile">Get Noska free</Link>
           <button className="mobile-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
       </div>

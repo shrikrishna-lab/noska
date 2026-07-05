@@ -6,6 +6,7 @@ import Topbar from "./components/Topbar";
 import Editor from "./components/Editor";
 import { WorkspaceView, NewPageOverlay } from "./components/WorkspaceViews";
 import LoadingScreen from "./components/auth/LoadingScreen";
+import RingLoader from "./components/auth/RingLoader";
 import AuthPage from "./components/auth/AuthPage";
 import OnboardingPage from "./onboarding/pages/OnboardingPage";
 import { starterPageForTemplate } from "./onboarding/services/onboardingService";
@@ -1746,7 +1747,7 @@ function App() {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--bg)] text-[var(--muted)]">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--accent)]" />
+          <RingLoader size={32} />
           <span className="text-sm">Loading Noska...</span>
         </div>
       </div>
