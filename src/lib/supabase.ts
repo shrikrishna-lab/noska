@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { Database } from "../../types/supabase";
 
 // Credentials MUST come from environment variables (set in .env locally and in
 // the Vercel project settings for production). No hardcoded project fallback —
@@ -15,6 +16,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "", {
+export const supabase = createClient<Database>(supabaseUrl || "", supabaseAnonKey || "", {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
