@@ -1,5 +1,6 @@
-import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles, ChevronDown } from 'lucide-react';
 import { Reveal } from './components/Reveal';
 import './Changelog.css';
 
@@ -55,6 +56,8 @@ const ENTRIES = [
 ];
 
 export default function Changelog() {
+  const [openIndex, setOpenIndex] = useState(0);
+
   return (
     <div className="changelog-wrapper">
       <section className="changelog-hero mkt-container">
@@ -69,17 +72,41 @@ export default function Changelog() {
         </motion.div>
       </section>
 
+      {/* Each entry is an expandable drawer — title/tag always visible,
+          description reveals on click via an animated height (native
+          reimplementation of the referenced Framer "Expandable-Drawers"
+          component, which is Framer canvas-only). */}
       <section className="changelog-list mkt-container">
-        {ENTRIES.map((entry, i) => (
-          <Reveal key={entry.title} delay={Math.min(i * 0.05, 0.3)} className="changelog-entry">
-            <div className="changelog-meta">
-              {entry.date && <span className="changelog-date">{entry.date}</span>}
-              <span className={`changelog-tag tag-${entry.tag.toLowerCase()}`}>{entry.tag}</span>
-            </div>
-            <h3>{entry.title}</h3>
-            <p>{entry.desc}</p>
-          </Reveal>
-        ))}
+        {ENTRIES.map((entry, i) => {
+          const isOpen = openIndex === i;
+          return (
+            <Reveal key={entry.title} delay={Math.min(i * 0.05, 0.3)} className={`changelog-entry ${isOpen ? 'open' : ''}`}>
+              <button className="changelog-entry-header" onClick={() => setOpenIndex(isOpen ? -1 : i)}>
+                <div className="changelog-entry-header-text">
+                  <div className="changelog-meta">
+                    {entry.date && <span className="changelog-date">{entry.date}</span>}
+                    <span className={`changelog-tag tag-${entry.tag.toLowerCase()}`}>{entry.tag}</span>
+                  </div>
+                  <h3>{entry.title}</h3>
+                </div>
+                <ChevronDown size={16} className={`changelog-chevron ${isOpen ? 'open' : ''}`} />
+              </button>
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    className="changelog-entry-body"
+                    initial={{ height: 0 }}
+                    animate={{ height: 'auto' }}
+                    exit={{ height: 0 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <p>{entry.desc}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </Reveal>
+          );
+        })}
       </section>
     </div>
   );

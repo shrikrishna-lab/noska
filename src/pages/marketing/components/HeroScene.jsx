@@ -17,10 +17,13 @@ export function HeroScene() {
   const ref = useRef(null);
   const px = useSpring(useMotionValue(0.5), { stiffness: 55, damping: 22 });
   const py = useSpring(useMotionValue(0.5), { stiffness: 55, damping: 22 });
-  const [mode, setMode] = useState('doc');
+  // Opens on Graph — the most visually distinctive of the three views — so
+  // the first paint reads as a bigger, roomier connected-workspace shot,
+  // then keeps cycling through the other real views for delight.
+  const [mode, setMode] = useState('graph');
 
   useEffect(() => {
-    const order = ['doc', 'canvas', 'graph'];
+    const order = ['graph', 'doc', 'canvas'];
     let i = 0;
     const id = setInterval(() => {
       i = (i + 1) % order.length;

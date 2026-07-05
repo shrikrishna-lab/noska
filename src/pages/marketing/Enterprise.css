@@ -45,6 +45,10 @@
   line-height: 1.5;
 }
 
+.marketing .enterprise-hero-slideshow {
+  max-width: 420px;
+}
+
 /* Isometric Mockup Graphic */
 .marketing .enterprise-isometric-card {
   background-color: var(--mkt-bg-primary);

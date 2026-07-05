@@ -1,10 +1,16 @@
 import { useState } from 'react';
-import { Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check } from 'lucide-react';
+import { PriceSwitch } from './components/PriceSwitch';
+import { FaqAccordion } from './components/FaqAccordion';
 import './Pricing.css';
+
+const BILLING_OPTIONS = [
+  { value: 'monthly', label: 'Billed monthly' },
+  { value: 'yearly', label: 'Billed yearly', badge: 'Save 20%' },
+];
 
 export default function Pricing() {
   const [billingCycle, setBillingCycle] = useState('yearly');
-  const [expandedFaq, setExpandedFaq] = useState(null);
 
   const plans = [
     {
@@ -90,10 +96,6 @@ export default function Pricing() {
     }
   ];
 
-  const toggleFaq = (id) => {
-    setExpandedFaq(expandedFaq === id ? null : id);
-  };
-
   return (
     <div className="pricing-wrapper">
       {/* Pricing Header */}
@@ -102,21 +104,7 @@ export default function Pricing() {
         <p>Go free with your notes, or upgrade to add team collaboration, advanced security, and unlimited history.</p>
 
         {/* Toggle Switch */}
-        <div className="billing-toggle-container">
-          <button
-            className={`toggle-btn ${billingCycle === 'monthly' ? 'active' : ''}`}
-            onClick={() => setBillingCycle('monthly')}
-          >
-            Billed monthly
-          </button>
-          <button
-            className={`toggle-btn ${billingCycle === 'yearly' ? 'active' : ''}`}
-            onClick={() => setBillingCycle('yearly')}
-          >
-            Billed yearly
-            <span className="save-badge">Save 20%</span>
-          </button>
-        </div>
+        <PriceSwitch value={billingCycle} onChange={setBillingCycle} options={BILLING_OPTIONS} />
       </section>
 
       {/* Pricing Plan Cards Grid */}
@@ -238,19 +226,7 @@ export default function Pricing() {
       {/* FAQs Section */}
       <section className="faq-section mkt-container">
         <h2 className="faq-title">Frequently asked questions</h2>
-        <div className="faq-list">
-          {faqs.map(faq => (
-            <div key={faq.id} className="faq-item">
-              <button className="faq-question" onClick={() => toggleFaq(faq.id)}>
-                <span>{faq.q}</span>
-                {expandedFaq === faq.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
-              <div className={`faq-answer ${expandedFaq === faq.id ? 'open' : ''}`}>
-                <p>{faq.a}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <FaqAccordion items={faqs.map((f) => ({ q: f.q, a: f.a }))} className="faq-list" />
       </section>
     </div>
   );

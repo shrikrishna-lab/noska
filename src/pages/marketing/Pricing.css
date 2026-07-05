@@ -27,8 +27,10 @@
   margin-bottom: 32px;
 }
 
-.marketing .billing-toggle-container {
+/* Animated sliding-pill switch (replaces the old plain toggle-btn pair) */
+.marketing .mkt-price-switch {
   display: flex;
+  position: relative;
   background-color: var(--mkt-bg-secondary);
   border: 1px solid var(--mkt-border-color);
   padding: 4px;
@@ -36,7 +38,8 @@
   width: max-content;
 }
 
-.marketing .toggle-btn {
+.marketing .mkt-price-switch-btn {
+  position: relative;
   background: none;
   border: none;
   padding: 8px 18px;
@@ -45,19 +48,31 @@
   border-radius: 20px;
   cursor: pointer;
   color: var(--mkt-text-secondary);
+  transition: color var(--mkt-transition-fast);
+  z-index: 1;
+}
+
+.marketing .mkt-price-switch-btn.active {
+  color: var(--mkt-text-primary);
+}
+
+.marketing .mkt-price-switch-pill {
+  position: absolute;
+  inset: 0;
+  background-color: var(--mkt-bg-primary);
+  border-radius: 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  z-index: -1;
+}
+
+.marketing .mkt-price-switch-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all var(--mkt-transition-fast);
+  position: relative;
 }
 
-.marketing .toggle-btn.active {
-  background-color: var(--mkt-bg-primary);
-  color: var(--mkt-text-primary);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-}
-
-.marketing .save-badge {
+.marketing .mkt-price-switch-badge {
   font-size: 11px;
   font-weight: 700;
   background-color: var(--mkt-accent-sage-tint);
@@ -284,13 +299,13 @@
   margin-bottom: 32px;
 }
 
-.marketing .faq-list {
+.marketing .mkt-faq-accordion {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.marketing .faq-item {
+.marketing .mkt-faq-accordion-item {
   border: 1px solid var(--mkt-border-color);
   border-radius: 8px;
   overflow: hidden;
@@ -298,11 +313,15 @@
   transition: border-color var(--mkt-transition-fast);
 }
 
-.marketing .faq-item:hover {
+.marketing .mkt-faq-accordion-item:hover {
   border-color: var(--mkt-text-muted);
 }
 
-.marketing .faq-question {
+.marketing .mkt-faq-accordion-item.open {
+  border-color: var(--mkt-text-primary);
+}
+
+.marketing .mkt-faq-accordion-question {
   width: 100%;
   background: none;
   border: none;
@@ -317,19 +336,22 @@
   color: var(--mkt-text-primary);
 }
 
-.marketing .faq-answer {
-  max-height: 0;
+.marketing .mkt-faq-accordion-chevron {
+  flex-shrink: 0;
+  color: var(--mkt-text-muted);
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .mkt-faq-accordion-chevron.open {
+  transform: rotate(180deg);
+}
+
+.marketing .mkt-faq-accordion-answer-wrap {
   overflow: hidden;
-  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s;
-  padding: 0 24px;
 }
 
-.marketing .faq-answer.open {
-  max-height: 200px;
+.marketing .mkt-faq-accordion-answer-wrap p {
   padding: 0 24px 20px 24px;
-}
-
-.marketing .faq-answer p {
   font-size: 14px;
   color: var(--mkt-text-secondary);
   line-height: 1.5;
