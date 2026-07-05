@@ -1,7 +1,14 @@
-import React from "react";
+import React, { type MouseEventHandler, type ReactNode } from "react";
 import { C } from "../theme";
 
-export function PrimaryBtn({ onClick, disabled, children, fullWidth }) {
+interface PrimaryBtnProps {
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  disabled?: boolean;
+  children: ReactNode;
+  fullWidth?: boolean;
+}
+
+export function PrimaryBtn({ onClick, disabled, children, fullWidth }: PrimaryBtnProps) {
   return (
     <button
       onClick={onClick}
@@ -18,7 +25,12 @@ export function PrimaryBtn({ onClick, disabled, children, fullWidth }) {
   );
 }
 
-export function SecondaryBtn({ onClick, children }) {
+interface SecondaryBtnProps {
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  children: ReactNode;
+}
+
+export function SecondaryBtn({ onClick, children }: SecondaryBtnProps) {
   return (
     <button
       onClick={onClick}

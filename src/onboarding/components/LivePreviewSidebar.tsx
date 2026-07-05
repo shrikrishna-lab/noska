@@ -16,7 +16,7 @@ const SIDEBAR_STEPS = ["Workspace", "Your role", "Invite team", "Template"];
  * preview logic so the "Private Documents" list always matches what
  * App.jsx's handleFinalize will actually create.
  */
-export default function LivePreviewSidebar({ step }) {
+export default function LivePreviewSidebar({ step }: { step: number }) {
   const { form } = useOnboarding();
   const pages = previewPagesFor(form);
   const wsName = form.workspaceName?.trim() || "My Workspace";
@@ -187,7 +187,7 @@ export default function LivePreviewSidebar({ step }) {
   );
 }
 
-function SideSection({ label }) {
+function SideSection({ label }: { label: string }) {
   return (
     <div className="px-3 pt-4 pb-1">
       <span className="text-[12px] font-normal" style={{ color: C.muted }}>{label}</span>
@@ -195,7 +195,14 @@ function SideSection({ label }) {
   );
 }
 
-function SideItem({ icon, label, active, style }) {
+interface SideItemProps {
+  icon: string;
+  label: string;
+  active?: boolean;
+  style?: React.CSSProperties;
+}
+
+function SideItem({ icon, label, active, style }: SideItemProps) {
   return (
     <div
       className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg mx-0 cursor-pointer transition-all duration-200"

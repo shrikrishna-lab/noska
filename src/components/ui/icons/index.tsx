@@ -1,16 +1,42 @@
-import React from "react";
-import { motion } from "framer-motion";
+import React, { type MouseEventHandler, type ReactNode } from "react";
+import { motion, type TargetAndTransition } from "framer-motion";
 
 // Reusable Spring Configs
 const softSpring = { type: "spring", stiffness: 350, damping: 28 };
 const stiffSpring = { type: "spring", stiffness: 500, damping: 30 };
 const bouncySpring = { type: "spring", stiffness: 450, damping: 18 };
 
-const hoverScale = { scale: 1.08, transition: stiffSpring };
-const pressScale = { scale: 0.94, transition: stiffSpring };
+const hoverScale: TargetAndTransition = { scale: 1.08, transition: stiffSpring };
+const pressScale: TargetAndTransition = { scale: 0.94, transition: stiffSpring };
+
+interface IconWrapperProps {
+  children: ReactNode;
+  hoverAnim?: TargetAndTransition;
+  pressAnim?: TargetAndTransition;
+  disabled?: boolean;
+  className?: string;
+  onClick?: MouseEventHandler;
+  onMouseEnter?: MouseEventHandler;
+  onMouseLeave?: MouseEventHandler;
+}
+
+// Shared prop shape for every AnimatedX icon below — size/color/className
+// are common to all, active/loading are only read by the handful of icons
+// that render a toggled state, and ...props (onClick, onMouseEnter, etc.)
+// pass straight through to IconWrapper/motion.span.
+interface AnimatedIconProps {
+  size?: number;
+  color?: string;
+  className?: string;
+  active?: boolean;
+  loading?: boolean;
+  onClick?: MouseEventHandler;
+  onMouseEnter?: MouseEventHandler;
+  onMouseLeave?: MouseEventHandler;
+}
 
 // Common Wrapper to handle disabled, active, hover, and press states
-function IconWrapper({ children, hoverAnim = hoverScale, pressAnim = pressScale, disabled = false, className = "", onClick, ...props }) {
+function IconWrapper({ children, hoverAnim = hoverScale, pressAnim = pressScale, disabled = false, className = "", onClick, ...props }: IconWrapperProps) {
   return (
     <motion.span
       whileHover={disabled ? {} : hoverAnim}
@@ -25,7 +51,7 @@ function IconWrapper({ children, hoverAnim = hoverScale, pressAnim = pressScale,
 }
 
 // 1. AnimatedBack
-export function AnimatedBack({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedBack({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ x: -2, scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +62,7 @@ export function AnimatedBack({ size = 16, color = "currentColor", className = ""
 }
 
 // 3. AnimatedForward
-export function AnimatedForward({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedForward({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ x: 2, scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -47,7 +73,7 @@ export function AnimatedForward({ size = 16, color = "currentColor", className =
 }
 
 // 4. AnimatedSearch
-export function AnimatedSearch({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedSearch({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.1, rotate: 5 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -59,7 +85,7 @@ export function AnimatedSearch({ size = 16, color = "currentColor", className = 
 }
 
 // 5. AnimatedMenu
-export function AnimatedMenu({ size = 16, color = "currentColor", active = false, className = "", ...props }) {
+export function AnimatedMenu({ size = 16, color = "currentColor", active = false, className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round">
@@ -87,7 +113,7 @@ export function AnimatedMenu({ size = 16, color = "currentColor", active = false
 }
 
 // 6. AnimatedTheme
-export function AnimatedTheme({ size = 16, color = "currentColor", active = false, className = "", ...props }) {
+export function AnimatedTheme({ size = 16, color = "currentColor", active = false, className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.1, rotate: 30 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -119,7 +145,7 @@ export function AnimatedTheme({ size = 16, color = "currentColor", active = fals
 }
 
 // 8. AnimatedVolume
-export function AnimatedVolume({ size = 16, color = "currentColor", active = false, className = "", ...props }) {
+export function AnimatedVolume({ size = 16, color = "currentColor", active = false, className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.08 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -140,7 +166,7 @@ export function AnimatedVolume({ size = 16, color = "currentColor", active = fal
 }
 
 // 9. AnimatedBookmark
-export function AnimatedBookmark({ size = 16, color = "currentColor", active = false, className = "", ...props }) {
+export function AnimatedBookmark({ size = 16, color = "currentColor", active = false, className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ y: -1.5, scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -155,7 +181,7 @@ export function AnimatedBookmark({ size = 16, color = "currentColor", active = f
 }
 
 // 10. AnimatedTrash
-export function AnimatedTrash({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedTrash({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   const [hovered, setHovered] = React.useState(false);
   return (
     <IconWrapper 
@@ -181,7 +207,7 @@ export function AnimatedTrash({ size = 16, color = "currentColor", className = "
 }
 
 // 12. AnimatedSettings
-export function AnimatedSettings({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedSettings({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.06, rotate: 60 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -193,7 +219,7 @@ export function AnimatedSettings({ size = 16, color = "currentColor", className 
 }
 
 // 14. AnimatedFolder
-export function AnimatedFolder({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedFolder({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -204,7 +230,7 @@ export function AnimatedFolder({ size = 16, color = "currentColor", className = 
 }
 
 // 15. AnimatedPlus
-export function AnimatedPlus({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedPlus({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ rotate: 90, scale: 1.08 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -216,7 +242,7 @@ export function AnimatedPlus({ size = 16, color = "currentColor", className = ""
 }
 
 // 17. AnimatedCheck
-export function AnimatedCheck({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedCheck({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -232,7 +258,7 @@ export function AnimatedCheck({ size = 16, color = "currentColor", className = "
 }
 
 // 18. AnimatedBell
-export function AnimatedBell({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedBell({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ rotate: [0, -12, 12, -8, 8, 0], scale: 1.06 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -244,7 +270,7 @@ export function AnimatedBell({ size = 16, color = "currentColor", className = ""
 }
 
 // 20. AnimatedRefresh
-export function AnimatedRefresh({ size = 16, color = "currentColor", loading = false, className = "", ...props }) {
+export function AnimatedRefresh({ size = 16, color = "currentColor", loading = false, className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.06 }} className={className} {...props}>
       <motion.svg 
@@ -268,7 +294,7 @@ export function AnimatedRefresh({ size = 16, color = "currentColor", loading = f
 }
 
 // 21. AnimatedUpload
-export function AnimatedUpload({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedUpload({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ y: -2, scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -281,7 +307,7 @@ export function AnimatedUpload({ size = 16, color = "currentColor", className = 
 }
 
 // 22. AnimatedDownload
-export function AnimatedDownload({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedDownload({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ y: 2, scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -294,7 +320,7 @@ export function AnimatedDownload({ size = 16, color = "currentColor", className 
 }
 
 // 23. AnimatedAI
-export function AnimatedAI({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedAI({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.08, rotate: [0, -10, 10, 0] }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -307,7 +333,7 @@ export function AnimatedAI({ size = 16, color = "currentColor", className = "", 
 }
 
 // 24. AnimatedSparkle
-export function AnimatedSparkle({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedSparkle({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.12, rotate: 45 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -318,7 +344,7 @@ export function AnimatedSparkle({ size = 16, color = "currentColor", className =
 }
 
 // 25. AnimatedCanvas
-export function AnimatedCanvas({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedCanvas({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.08 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -333,7 +359,7 @@ export function AnimatedCanvas({ size = 16, color = "currentColor", className = 
 }
 
 // 27. AnimatedSidebar
-export function AnimatedSidebar({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedSidebar({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.05, x: -1 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -345,7 +371,7 @@ export function AnimatedSidebar({ size = 16, color = "currentColor", className =
 }
 
 // 28. AnimatedVoice
-export function AnimatedVoice({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedVoice({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.08 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -359,7 +385,7 @@ export function AnimatedVoice({ size = 16, color = "currentColor", className = "
 }
 
 // 29. AnimatedSend
-export function AnimatedSend({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedSend({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.08, rotate: -15, x: 1 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -371,7 +397,7 @@ export function AnimatedSend({ size = 16, color = "currentColor", className = ""
 }
 
 // 32. AnimatedExpand
-export function AnimatedExpand({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedExpand({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.1 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -385,7 +411,7 @@ export function AnimatedExpand({ size = 16, color = "currentColor", className = 
 }
 
 // 30. AnimatedLock
-export function AnimatedLock({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedLock({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -397,7 +423,7 @@ export function AnimatedLock({ size = 16, color = "currentColor", className = ""
 }
 
 // 35. AnimatedUnlock
-export function AnimatedUnlock({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedUnlock({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.05 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -409,7 +435,7 @@ export function AnimatedUnlock({ size = 16, color = "currentColor", className = 
 }
 
 // 36. AnimatedHistory
-export function AnimatedHistory({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedHistory({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.06, rotate: -15 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -423,7 +449,7 @@ export function AnimatedHistory({ size = 16, color = "currentColor", className =
 }
 
 // 37. AnimatedUndo
-export function AnimatedUndo({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedUndo({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.08, rotate: -25 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -435,7 +461,7 @@ export function AnimatedUndo({ size = 16, color = "currentColor", className = ""
 }
 
 // 38. AnimatedRedo
-export function AnimatedRedo({ size = 16, color = "currentColor", className = "", ...props }) {
+export function AnimatedRedo({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
   return (
     <IconWrapper hoverAnim={{ scale: 1.08, rotate: 25 }} className={className} {...props}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

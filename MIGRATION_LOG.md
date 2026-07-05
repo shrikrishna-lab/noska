@@ -82,3 +82,86 @@ Added `src/vite-env.d.ts` for `import.meta.env` typing.
 ### Heartbeat
 - Phase 2B fixes applied and verified clean. Ready to commit as
   "Convert Supabase data layer to TypeScript" on branch `chore/typescript-migration`.
+
+### Commit
+- Committed `d42e286` — "Convert Supabase data layer to TypeScript" on
+  `chore/typescript-migration` (14 files changed: 5 data-layer renames,
+  3 new `types/` files, `vite-env.d.ts`, this log).
+
+---
+
+## Phase 3 — Leaf UI components (batch)
+
+Converted 36 presentational/leaf files to `.ts`/`.tsx`, covering three
+cohesive low-risk areas: the auth screen UI (`src/components/auth/*`), a
+handful of standalone `src/components/ui/*` primitives (IconButton, Toast,
+FloatingMenu, Modal helpers, TextArea, PearlButton, MotionCards, the
+animated icon set), and the entire onboarding flow
+(`src/onboarding/**` — context, service, theme/data, steps, sidebar
+preview). None of these touch RLS-sensitive tables or the data layer from
+Phase 2B.
+
+Renamed via `smart_relocate` (no import updates were needed — none of the
+existing imports specify file extensions).
+
+### Fixes made during the loop
+- `src/components/ui/icons/index.tsx`: `IconWrapper`'s `hoverAnim`/`pressAnim`
+  props were implicitly typed from two specific literal defaults, which
+  rejected every other AnimatedX icon's differently-shaped hover animation
+  object (`x`, `y`, `rotate`, array keyframes, etc.). Fixed by typing them as
+  framer-motion's `TargetAndTransition` and introducing a shared
+  `AnimatedIconProps` interface for all ~30 `AnimatedX` icon components.
+- `src/components/ui/index.tsx`: added explicit prop interfaces for
+  `IconButton`, `Toast`, `FloatingMenu` (including a `FloatingMenuAlign`
+  union for `preferredAlign`), `Modal`, `ModalHeader`, `Field`, and a fully
+  typed `TextArea` (was a bare `forwardRef` with untyped destructured
+  params — now `forwardRef<HTMLTextAreaElement, TextAreaProps>`). Also
+  generified `useOutsideDismiss<T>` so its ref type matches whatever
+  element the caller attaches it to (was `HTMLElement`-only via `any`
+  inference before).
+- `src/onboarding/components/Buttons.tsx`: `PrimaryBtn`/`SecondaryBtn` had
+  no prop types, which surfaced as "missing property" errors at every call
+  site once neighboring files got stricter inference from typed imports.
+  Added `PrimaryBtnProps`/`SecondaryBtnProps` with `disabled`/`fullWidth`
+  correctly marked optional (not every call site passes them).
+- `src/onboarding/components/LivePreviewSidebar.tsx`: `SideItem`'s `active`
+  prop was required by inference but not always passed at the call site
+  (only shown for the currently active page preview) — made optional and
+  added an explicit `SideItemProps`/`SideSection` label type.
+- Created `src/onboarding/types.ts` (`OnboardingFormData`,
+  `OnboardingTeammate`, `OnboardingPagePreview`) — inferred directly from
+  the reducer's `initialState` in `OnboardingContext.tsx` and the return
+  shape of `previewPagesFor`/`starterPageForTemplate` in
+  `onboardingService.ts`. Used this to properly type
+  `OnboardingContext`'s reducer/action union (`OnboardingAction`,
+  `OnboardingState`, `OnboardingContextValue`), `useOnboarding.ts`'s return
+  type, and `onboardingService.ts`'s exported functions. The
+  localStorage-persisted state blob itself is intentionally kept as a loose
+  `Record<string, unknown>` (`PersistedOnboardingState`) since it's only
+  ever JSON round-tripped, never read field-by-field, by that service — one
+  documented `as unknown as Record<string, unknown>` cast at the single
+  `saveOnboardingState(state)` call site bridges the typed `OnboardingState`
+  to that loose persisted shape.
+
+No `any`, `@ts-ignore`, or undocumented casts introduced — verified via
+grep across all 36 files.
+
+### Security check — Phase 3
+- Grepped all new/changed files for hardcoded credentials/keys/tokens:
+  none found.
+- No RLS/permission/auth logic touched — these are presentational
+  components and onboarding UI state only; the onboarding flow's actual
+  page-creation call (`handleFinalize` in `src/App.jsx`) is untouched.
+- Confirmed no `.git`, CI, or deploy config files touched — `git status
+  --short` shows exactly the 36 renamed files (as `.jsx`/`.js` deletions +
+  `.tsx`/`.ts` additions) plus this log.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: succeeded (`vite build`, exit code 0).
+
+### Heartbeat
+- Phase 3 batch converted and verified clean. Ready to commit as
+  "Convert leaf UI and onboarding components to TypeScript" on branch
+  `chore/typescript-migration`.

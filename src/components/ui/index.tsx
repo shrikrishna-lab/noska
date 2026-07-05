@@ -1,15 +1,30 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type FocusEvent,
+  type KeyboardEvent,
+  type ClipboardEvent,
+  type MouseEventHandler,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { X, type LucideIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AnimatedModal, SPRING_PRESETS } from "../../features/motion/MotionSystem";
 
-export function useOutsideDismiss(open, onClose) {
-  const ref = useRef(null);
+export function useOutsideDismiss<T extends HTMLElement = HTMLElement>(
+  open: boolean,
+  onClose?: () => void
+): RefObject<T | null> {
+  const ref = useRef<T>(null);
   useEffect(() => {
     if (!open) return undefined;
-    const onPointerDown = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) onClose?.();
+    const onPointerDown = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) onClose?.();
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
@@ -17,7 +32,18 @@ export function useOutsideDismiss(open, onClose) {
   return ref;
 }
 
-export function IconButton({ icon: Icon, label, onClick, disabled, tone }) {
+interface IconButtonProps {
+  icon: LucideIcon;
+  label: string;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  disabled?: boolean;
+  // Accepted for call-site compatibility (e.g. a "danger" tone) but not
+  // currently read here — no styling branches on it exist yet in this
+  // component today, only in call sites that pass it through.
+  tone?: string;
+}
+
+export function IconButton({ icon: Icon, label, onClick, disabled, tone }: IconButtonProps) {
   return (
     <motion.button
       disabled={disabled}
@@ -33,7 +59,12 @@ export function IconButton({ icon: Icon, label, onClick, disabled, tone }) {
   );
 }
 
-export function Toast({ message, onDone }) {
+interface ToastProps {
+  message: string | null | undefined;
+  onDone: () => void;
+}
+
+export function Toast({ message, onDone }: ToastProps) {
   useEffect(() => {
     const t = setTimeout(onDone, 2200);
     return () => clearTimeout(t);
@@ -56,21 +87,31 @@ export function Toast({ message, onDone }) {
   );
 }
 
-export function FloatingMenu({ open, anchorRef, onClose, children, width = 320, preferredAlign = "right" }) {
-  const menuRef = useOutsideDismiss(open, onClose);
+type FloatingMenuAlign = "left" | "right" | "center" | "bottom";
+
+interface FloatingMenuProps {
+  open: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
+  onClose?: () => void;
+  children: ReactNode;
+  width?: number;
+  preferredAlign?: FloatingMenuAlign;
+}
+
+export function FloatingMenu({ open, anchorRef, onClose, children, width = 320, preferredAlign = "right" }: FloatingMenuProps) {
+  const menuRef = useOutsideDismiss<HTMLDivElement>(open, onClose);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [maxHeight, setMaxHeight] = useState(480);
-  const contentRef = useRef(null);
 
   useEffect(() => {
     if (!open || !anchorRef.current) return undefined;
     const update = () => {
-      const rect = anchorRef.current.getBoundingClientRect();
+      const rect = anchorRef.current!.getBoundingClientRect();
       const margin = 12;
       const winW = window.innerWidth;
       const winH = window.innerHeight;
 
-      let left, top;
+      let left: number, top: number;
 
       if (preferredAlign === "right") {
         left = rect.right + 4;
@@ -163,7 +204,13 @@ export function FloatingMenu({ open, anchorRef, onClose, children, width = 320, 
 }
 
 
-export function Modal({ children, onClose, wide }) {
+interface ModalProps {
+  children: ReactNode;
+  onClose?: () => void;
+  wide?: boolean;
+}
+
+export function Modal({ children, onClose, wide }: ModalProps) {
   return (
     <AnimatedModal onClose={onClose} wide={wide}>
       {children}
@@ -171,7 +218,13 @@ export function Modal({ children, onClose, wide }) {
   );
 }
 
-export function ModalHeader({ icon: Icon, title, onClose }) {
+interface ModalHeaderProps {
+  icon: LucideIcon;
+  title: ReactNode;
+  onClose?: () => void;
+}
+
+export function ModalHeader({ icon: Icon, title, onClose }: ModalHeaderProps) {
   return (
     <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
       <Icon size={18} />
@@ -181,7 +234,12 @@ export function ModalHeader({ icon: Icon, title, onClose }) {
   );
 }
 
-export function Field({ label, children }) {
+interface FieldProps {
+  label: ReactNode;
+  children: ReactNode;
+}
+
+export function Field({ label, children }: FieldProps) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block font-medium text-[var(--secondary)]">{label}</span>
@@ -203,10 +261,27 @@ export function Confetti() {
   );
 }
 
-export const TextArea = React.forwardRef(function TextArea({ value, onChange, onKeyDown, onPaste, onFocus, onBlur, className = "", placeholder, readOnly, disabled, style }, ref) {
-  const localRef = useRef(null);
+interface TextAreaProps {
+  value?: string;
+  onChange: (value: string) => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onPaste?: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
+  onFocus?: (e: FocusEvent<HTMLTextAreaElement>) => void;
+  onBlur?: (e: FocusEvent<HTMLTextAreaElement>) => void;
+  className?: string;
+  placeholder?: string;
+  readOnly?: boolean;
+  disabled?: boolean;
+  style?: CSSProperties;
+}
 
-  const setRef = (node) => {
+export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea(
+  { value, onChange, onKeyDown, onPaste, onFocus, onBlur, className = "", placeholder, readOnly, disabled, style },
+  ref
+) {
+  const localRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const setRef = (node: HTMLTextAreaElement | null) => {
     localRef.current = node;
     if (typeof ref === "function") ref(node);
     else if (ref) ref.current = node;
@@ -223,7 +298,7 @@ export const TextArea = React.forwardRef(function TextArea({ value, onChange, on
     <textarea
       ref={setRef}
       value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
       onFocus={(e) => {

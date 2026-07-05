@@ -1,8 +1,15 @@
 import { uid, now, textToBlocks } from "../../utils/helpers";
+import type { OnboardingFormData, OnboardingPagePreview } from "../types";
 
 const STORAGE_KEY = "noska_onboarding";
 
-export function saveOnboardingState(state) {
+// Persisted shape is whatever the reducer's state object looks like at
+// save time (see OnboardingContext.tsx) — kept loose here since this
+// service only round-trips it through localStorage/JSON without reading
+// individual fields itself.
+type PersistedOnboardingState = Record<string, unknown>;
+
+export function saveOnboardingState(state: PersistedOnboardingState): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -10,7 +17,7 @@ export function saveOnboardingState(state) {
   }
 }
 
-export function loadOnboardingState() {
+export function loadOnboardingState(): PersistedOnboardingState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -20,13 +27,21 @@ export function loadOnboardingState() {
   }
 }
 
-export function clearOnboardingState() {
+export function clearOnboardingState(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch (e) {}
 }
 
-function basePage() {
+interface BasePageFields {
+  favorite: false;
+  trashed: false;
+  tags: never[];
+  parentId: null;
+  lineage: { action: string; timestamp: string; detail: string }[];
+}
+
+function basePage(): BasePageFields {
   return {
     favorite: false,
     trashed: false,
@@ -67,13 +82,26 @@ const TEMPLATE_CONTENT = {
   }
 };
 
-export function starterPageForTemplate(templateId) {
-  const t = TEMPLATE_CONTENT[templateId] || TEMPLATE_CONTENT["getting-started"];
+export function starterPageForTemplate(templateId: string) {
+  const t = TEMPLATE_CONTENT[templateId as keyof typeof TEMPLATE_CONTENT] || TEMPLATE_CONTENT["getting-started"];
   return { ...basePage(), id: uid(), title: t.title, icon: t.icon, blocks: textToBlocks(t.blocks) };
 }
 
-export function createPageTree(starterPagesArray) {
-  const root = { id: "root", children: [] };
+interface StarterPage {
+  id: string;
+  title: string;
+  icon: string;
+}
+
+interface PageTreeNode {
+  id: string;
+  title?: string;
+  icon?: string;
+  children: PageTreeNode[];
+}
+
+export function createPageTree(starterPagesArray: StarterPage[]): PageTreeNode {
+  const root: PageTreeNode = { id: "root", children: [] };
   for (const page of starterPagesArray) {
     root.children.push({ id: page.id, title: page.title, icon: page.icon, children: [] });
   }
@@ -86,9 +114,9 @@ export function createPageTree(starterPagesArray) {
  * from the real result. Returns just { title, icon } pairs — cheap to
  * recompute on every keystroke/selection, no ids/blocks needed for display.
  */
-export function previewPagesFor(form) {
+export function previewPagesFor(form: OnboardingFormData): OnboardingPagePreview[] {
   if (form.template) {
-    const t = TEMPLATE_CONTENT[form.template] || TEMPLATE_CONTENT["getting-started"];
+    const t = TEMPLATE_CONTENT[form.template as keyof typeof TEMPLATE_CONTENT] || TEMPLATE_CONTENT["getting-started"];
     return [{ title: t.title, icon: t.icon }];
   }
   return [{ title: "Getting Started", icon: "✦" }];
