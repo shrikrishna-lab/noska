@@ -10,6 +10,7 @@ import MarketingProduct from "./pages/marketing/Product.jsx";
 import MarketingSolutions from "./pages/marketing/Solutions.jsx";
 import MarketingResources from "./pages/marketing/Resources.jsx";
 import MarketingChangelog from "./pages/marketing/Changelog.jsx";
+import Launch from "./pages/marketing/launch/Launch.jsx";
 import "./index.css";
 
 createRoot(document.getElementById("root")).render(
@@ -25,6 +26,10 @@ createRoot(document.getElementById("root")).render(
         <Route path="/solutions" element={<MarketingLayout><MarketingSolutions /></MarketingLayout>} />
         <Route path="/resources" element={<MarketingLayout><MarketingResources /></MarketingLayout>} />
         <Route path="/changelog" element={<MarketingLayout><MarketingChangelog /></MarketingLayout>} />
+        {/* Standalone pre-launch waitlist page — ships its own navbar,
+            footer, and smooth-scroll setup, so it deliberately skips
+            MarketingLayout (which would double up both). */}
+        <Route path="/launch" element={<Launch />} />
         {/* Everything else (login, onboarding, and the workspace itself) is
             handled by App, which reads the current route to decide what to
             show and keeps the URL in sync as auth/onboarding state resolves. */}

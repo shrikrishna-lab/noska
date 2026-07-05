@@ -275,16 +275,23 @@ function DashBoard() {
   );
 }
 
+// Root node sits top-center with children spreading downward — a bigger,
+// airier layout that reads clearly even at hero size (reference: a single
+// bold dark root with lighter blue leaves branching below it).
 const GRAPH_NODES = [
-  { x: 30, y: 46 }, { x: 104, y: 22 }, { x: 168, y: 58 },
-  { x: 92, y: 104 }, { x: 196, y: 112 }, { x: 46, y: 132 },
+  { x: 130, y: 30 },  // 0 root (primary/dark)
+  { x: 62, y: 78 },   // 1
+  { x: 148, y: 92 },  // 2
+  { x: 200, y: 76 },  // 3
+  { x: 96, y: 138 },  // 4
+  { x: 168, y: 148 }, // 5
 ];
-const GRAPH_EDGES = [[0, 1], [1, 2], [1, 3], [2, 4], [3, 5]];
+const GRAPH_EDGES = [[0, 1], [0, 2], [0, 3], [1, 4], [2, 5]];
 
 function DashGraph() {
   return (
     <motion.div className="dash-graph" {...fadeProps}>
-      <svg viewBox="0 0 220 150" className="dash-graph-svg">
+      <svg viewBox="0 0 260 170" className="dash-graph-svg">
         {GRAPH_EDGES.map(([a, b], i) => (
           <line
             key={i}
@@ -297,9 +304,9 @@ function DashGraph() {
           <motion.circle
             key={i}
             cx={n.x}
-            r={i === 1 ? 7 : 5}
-            className={`dash-graph-node ${i === 1 ? 'primary' : ''}`}
-            animate={{ cy: [n.y, n.y - 4, n.y] }}
+            r={i === 0 ? 9 : 6}
+            className={`dash-graph-node ${i === 0 ? 'primary' : ''}`}
+            animate={{ cy: [n.y, n.y - 5, n.y] }}
             transition={{ duration: 4 + i * 0.3, repeat: Infinity, ease: 'easeInOut' }}
             initial={{ cy: n.y }}
           />

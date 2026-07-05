@@ -301,3 +301,289 @@ body:has(.marketing),
     --mkt-max-width: 100%;
   }
 }
+
+/* ---------------------------------------------------------------- */
+/* XOrbit — center node with orbiting icon satellites                */
+/* ---------------------------------------------------------------- */
+.marketing .mkt-xorbit {
+  position: relative;
+  margin: 0 auto;
+}
+
+.marketing .mkt-xorbit-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.marketing .mkt-xorbit-line {
+  stroke: var(--mkt-border-strong);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 5;
+}
+
+.marketing .mkt-xorbit-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.marketing .mkt-xorbit-node-inner {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  box-shadow: var(--mkt-card-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mkt-accent-purple);
+}
+
+.marketing .mkt-xorbit-node-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+  white-space: nowrap;
+}
+
+.marketing .mkt-xorbit-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 96px;
+  height: 96px;
+  border-radius: 26px;
+  background-color: var(--mkt-brand-color);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: var(--mkt-card-shadow-hover);
+  z-index: 2;
+}
+
+.marketing .mkt-xorbit-center span {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- */
+/* Glass showcase — frosted card surface                             */
+/* ---------------------------------------------------------------- */
+.marketing .mkt-glass-showcase {
+  border-radius: var(--mkt-radius-lg);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.7), rgba(247, 245, 241, 0.5));
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--mkt-card-shadow-hover);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  padding: 4px;
+  overflow: hidden;
+}
+
+.marketing .mkt-glass-showcase-inner {
+  border-radius: calc(var(--mkt-radius-lg) - 4px);
+  background-color: rgba(255, 255, 255, 0.55);
+  padding: 32px;
+}
+
+/* ---------------------------------------------------------------- */
+/* Hero wipe slideshow                                                */
+/* ---------------------------------------------------------------- */
+.marketing .mkt-wipe-slideshow {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mkt-radius-md);
+}
+
+.marketing .mkt-wipe-slide {
+  width: 100%;
+}
+
+.marketing .mkt-wipe-dots {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.marketing .mkt-wipe-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: none;
+  background-color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 0;
+}
+
+.marketing .mkt-wipe-dot.active {
+  background-color: #ffffff;
+  width: 18px;
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------- */
+/* Horiscroll — vertical scroll drives horizontal pan                */
+/* ---------------------------------------------------------------- */
+.marketing .mkt-horiscroll {
+  position: relative;
+}
+
+.marketing .mkt-horiscroll-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.marketing .mkt-horiscroll-track {
+  display: flex;
+  gap: 24px;
+  will-change: transform;
+}
+
+/* ---------------------------------------------------------------- */
+/* Drawing canvas                                                     */
+/* ---------------------------------------------------------------- */
+.marketing .mkt-drawing-canvas {
+  position: relative;
+  border: 1px solid var(--mkt-border-color);
+  border-radius: var(--mkt-radius-md);
+  background-color: var(--mkt-bg-primary);
+  overflow: hidden;
+  box-shadow: var(--mkt-card-shadow);
+}
+
+.marketing .mkt-drawing-canvas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mkt-border-color);
+  background-color: var(--mkt-bg-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .mkt-drawing-canvas-toolbar span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.marketing .mkt-drawing-canvas-toolbar button {
+  background: none;
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 6px;
+  padding: 4px 7px;
+  cursor: pointer;
+  color: var(--mkt-text-secondary);
+  transition: all var(--mkt-transition-fast);
+}
+
+.marketing .mkt-drawing-canvas-toolbar button:hover:not(:disabled) {
+  background-color: var(--mkt-bg-primary);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .mkt-drawing-canvas-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.marketing .mkt-drawing-canvas canvas {
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.marketing .mkt-drawing-canvas-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11.5px;
+  color: var(--mkt-text-muted);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- */
+/* Shared FAQ accordion default styling (Pricing.css overrides its   */
+/* own .faq-list wrapper on top of this for that page specifically)  */
+/* ---------------------------------------------------------------- */
+.marketing .mkt-faq-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .mkt-faq-accordion-narrow {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.marketing .mkt-faq-accordion-item {
+  border: 1px solid var(--mkt-border-color);
+  border-radius: var(--mkt-radius-md);
+  background-color: var(--mkt-bg-primary);
+  overflow: hidden;
+  transition: border-color var(--mkt-transition-fast);
+}
+
+.marketing .mkt-faq-accordion-item.open {
+  border-color: var(--mkt-text-primary);
+}
+
+.marketing .mkt-faq-accordion-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 18px 20px;
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--mkt-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.marketing .mkt-faq-accordion-chevron {
+  flex-shrink: 0;
+  color: var(--mkt-text-muted);
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .mkt-faq-accordion-chevron.open {
+  transform: rotate(180deg);
+}
+
+.marketing .mkt-faq-accordion-answer-wrap {
+  overflow: hidden;
+}
+
+.marketing .mkt-faq-accordion-answer-wrap p {
+  padding: 0 20px 18px 20px;
+  font-size: 14.5px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+}

@@ -45,8 +45,60 @@
 .marketing .changelog-entry {
   border: 1px solid var(--mkt-border-color);
   border-radius: 14px;
-  padding: 24px 26px;
   background-color: var(--mkt-bg-primary);
+  overflow: hidden;
+  transition: border-color var(--mkt-transition-fast);
+}
+
+.marketing .changelog-entry.open {
+  border-color: var(--mkt-text-primary);
+}
+
+.marketing .changelog-entry-header {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  background: none;
+  border: none;
+  padding: 22px 26px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.marketing .changelog-entry-header-text {
+  flex: 1;
+}
+
+.marketing .changelog-entry-header .changelog-meta {
+  margin-bottom: 8px;
+}
+
+.marketing .changelog-entry-header h3 {
+  margin-bottom: 0;
+}
+
+.marketing .changelog-chevron {
+  margin-top: 4px;
+}
+
+.marketing .changelog-chevron {
+  flex-shrink: 0;
+  color: var(--mkt-text-muted);
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .changelog-chevron.open {
+  transform: rotate(180deg);
+}
+
+.marketing .changelog-entry-body {
+  overflow: hidden;
+}
+
+.marketing .changelog-entry-body p {
+  padding: 0 26px 22px 26px;
 }
 
 .marketing .changelog-meta {

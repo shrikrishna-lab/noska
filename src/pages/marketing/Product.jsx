@@ -1,9 +1,32 @@
 import { useState } from 'react';
 import {
-  Sparkles, FileText, Database, CheckSquare,
-  Zap, Code, ShieldCheck
+  Sparkles, FileText, Database, CheckSquare, LayoutGrid,
+  Zap, Code, ShieldCheck, Users, MousePointer2, MessageSquare,
+  Table2, Kanban, CalendarDays, GanttChartSquare, GalleryHorizontal, List, GitBranch, Network,
 } from 'lucide-react';
+import { GlassShowcase } from './components/GlassShowcase';
+import { Horiscroll } from './components/Horiscroll';
+import { DrawingCanvas } from './components/DrawingCanvas';
+import { FaqAccordion } from './components/FaqAccordion';
 import './Product.css';
+
+const PRODUCT_FAQS = [
+  { q: 'Do all four views share the same data?', a: 'Docs, Wikis, Projects, and Canvas all read from the same underlying pages and blocks — switching views never duplicates or migrates data.' },
+  { q: 'Is the AI assistant included on the free plan?', a: 'Yes — bring your own API key from any of 8 supported providers, including local options like Ollama for fully offline use.' },
+  { q: 'Can I use Canvas and Graph on mobile?', a: 'Canvas and Graph are optimized for pointer + trackpad interactions primarily; on touch devices you can pan and tap nodes, with full zoom gesture support on tablets.' },
+  { q: 'Does real-time collaboration require a paid plan?', a: 'No — live presence and cursors work on every plan. Comment threads and page history retention scale with your plan tier.' },
+];
+
+const DB_VIEWS = [
+  { icon: Table2, label: 'Table' },
+  { icon: Kanban, label: 'Board' },
+  { icon: CalendarDays, label: 'Calendar' },
+  { icon: GanttChartSquare, label: 'Timeline' },
+  { icon: GalleryHorizontal, label: 'Gallery' },
+  { icon: List, label: 'List' },
+  { icon: GitBranch, label: 'Graph' },
+  { icon: Network, label: 'Mind map' },
+];
 
 export default function Product() {
   const [selectedFeature, setSelectedFeature] = useState('ai');
@@ -47,6 +70,16 @@ export default function Product() {
         'Custom views: Pivot between Kanban board, List, or Timeline.',
         'Properties: Tag assignees, due dates, state, or priority.',
         'Relations: Link tasks directly to meeting minutes or specifications.'
+      ]
+    },
+    canvas: {
+      title: 'Canvas: Spread ideas out spatially.',
+      subtitle: 'When a linear page stops being the right shape.',
+      desc: 'Any page can drop into a zoomable, pannable infinite canvas — blocks become draggable cards with a live mini-map, and positions persist between visits.',
+      points: [
+        'Zoom & pan: 25%–200% zoom range with a fit-to-screen button.',
+        'Mini-map: A live thumbnail of the whole canvas in the corner.',
+        'Persisted layout: Card positions are saved per page, not reset on reload.'
       ]
     }
   };
@@ -95,6 +128,14 @@ export default function Product() {
             <h4>Projects</h4>
             <p>Roadmaps & sprint tasks</p>
           </button>
+          <button
+            className={`control-card ${selectedFeature === 'canvas' ? 'active' : ''}`}
+            onClick={() => setSelectedFeature('canvas')}
+          >
+            <div className="control-icon blue"><LayoutGrid size={20} /></div>
+            <h4>Canvas</h4>
+            <p>Zoomable spatial workspace</p>
+          </button>
         </div>
 
         {/* Selected Feature Deep Dive Panel */}
@@ -105,6 +146,7 @@ export default function Product() {
               {selectedFeature === 'docs' && <FileText size={12} />}
               {selectedFeature === 'wikis' && <Database size={12} />}
               {selectedFeature === 'projects' && <CheckSquare size={12} />}
+              {selectedFeature === 'canvas' && <LayoutGrid size={12} />}
               {selectedFeature.toUpperCase()}
             </span>
             <h2>{featureDetails[selectedFeature].title}</h2>
@@ -140,6 +182,8 @@ export default function Product() {
                     <div className="selector-item">☑️ Add Todo Checklist</div>
                     <div className="selector-item">📊 Add Database Table</div>
                   </div>
+                  <hr />
+                  <DrawingCanvas width={300} height={140} />
                 </div>
               )}
               {selectedFeature === 'wikis' && (
@@ -167,8 +211,74 @@ export default function Product() {
                   </div>
                 </div>
               )}
+              {selectedFeature === 'canvas' && (
+                <div className="product-mini-mockup canvas-card">
+                  <div className="mock-title">🗺️ Infinite Canvas</div>
+                  <hr />
+                  <div className="canvas-mockup-stage">
+                    <span className="canvas-card-chip c1">📄 Notes</span>
+                    <span className="canvas-card-chip c2">📊 Roadmap</span>
+                    <span className="canvas-card-chip c3">✅ Tasks</span>
+                    <span className="canvas-minimap" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Database views — horizontal scroll driven by vertical page scroll */}
+      <section className="product-db-views mkt-container">
+        <div className="specs-header">
+          <h2>8 database views, one dataset.</h2>
+          <p>Scroll to pan through every view type — table, board, calendar, timeline, gallery, list, graph, and mind map.</p>
+        </div>
+      </section>
+      <Horiscroll heightVh={180}>
+        {DB_VIEWS.map(({ icon: Icon, label }) => (
+          <div key={label} className="db-view-card">
+            <Icon size={30} strokeWidth={1.5} />
+            <span>{label}</span>
+          </div>
+        ))}
+      </Horiscroll>
+
+      {/* Team collaboration — real-time presence via Supabase channels */}
+      <section className="product-collab mkt-container">
+        <div className="collab-grid">
+          <div className="collab-text">
+            <span className="product-badge">Team collaboration</span>
+            <h2>Work on the same page, at the same time.</h2>
+            <p>
+              Presence and live cursors run over real Supabase realtime channels — not a
+              simulated demo. See who else is viewing or editing a page, watch their cursor
+              move, and leave comments right where the discussion is happening.
+            </p>
+            <ul className="panel-bullets">
+              <li><span className="bullet-indicator"></span><span>Live presence: see exactly who's on a page right now.</span></li>
+              <li><span className="bullet-indicator"></span><span>Cursor tracking: watch collaborators move and select in real time.</span></li>
+              <li><span className="bullet-indicator"></span><span>Threaded comments: discuss a block without leaving the page.</span></li>
+            </ul>
+          </div>
+          <GlassShowcase className="collab-glass">
+            <div className="collab-mock-header">
+              <Users size={14} /> 3 people viewing
+            </div>
+            <div className="collab-mock-avatars">
+              <span className="collab-avatar" style={{ background: '#7c3aed' }}>A</span>
+              <span className="collab-avatar" style={{ background: '#ec4899' }}>M</span>
+              <span className="collab-avatar" style={{ background: '#06b6d4' }}>J</span>
+            </div>
+            <div className="collab-mock-cursor-row">
+              <MousePointer2 size={13} style={{ color: '#7c3aed' }} />
+              <span>Alex is editing "Roadmap Q3"</span>
+            </div>
+            <div className="collab-mock-comment">
+              <MessageSquare size={13} />
+              <span>"Should we push this to next sprint?"</span>
+            </div>
+          </GlassShowcase>
         </div>
       </section>
 
@@ -195,6 +305,14 @@ export default function Product() {
             <p>Lock pages with client-side AES-GCM encryption, and rely on Postgres row-level security scoped to your account on every table — not a shared policy.</p>
           </div>
         </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="product-faq mkt-container">
+        <div className="specs-header">
+          <h2>Product questions</h2>
+        </div>
+        <FaqAccordion items={PRODUCT_FAQS} className="mkt-faq-accordion-narrow" />
       </section>
     </div>
   );

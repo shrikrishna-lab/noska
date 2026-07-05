@@ -86,6 +86,29 @@
   font-weight: 600;
 }
 
+/* Animated SVG underline — draws in on hover/active */
+.marketing .mkt-underline-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.marketing .mkt-underline-svg {
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 4px;
+  overflow: visible;
+}
+
+.marketing .mkt-underline-svg path {
+  fill: none;
+  stroke: var(--mkt-text-primary);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
 .marketing .nav-btn svg {
   transition: transform var(--mkt-transition-fast);
 }
@@ -110,8 +133,15 @@
 }
 
 @keyframes mkt-fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .marketing .dropdown-grid {
@@ -240,8 +270,15 @@
 }
 
 @keyframes mkt-slideIn {
-  from { transform: translateY(-10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .marketing .mobile-drawer-links {
@@ -298,6 +335,7 @@
 
 /* Responsive Overrides */
 @media (max-width: 992px) {
+
   .marketing .navbar-links,
   .marketing .hide-mobile,
   .marketing .divider-vertical {

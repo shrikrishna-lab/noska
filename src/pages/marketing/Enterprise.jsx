@@ -1,9 +1,18 @@
 import { useState } from 'react';
 import {
   Building2, Shield, Key, CheckCircle,
-  ArrowRight, Lock, Globe2, Send
+  ArrowRight, Lock, Globe2, Send, Terminal, History, UserCog, FileClock,
 } from 'lucide-react';
+import { HeroWipeSlideshow } from './components/HeroWipeSlideshow';
+import { XOrbit } from './components/XOrbit';
 import './Enterprise.css';
+
+const ADMIN_ORBIT_ITEMS = [
+  { icon: Terminal, label: 'API console' },
+  { icon: FileClock, label: 'Page history' },
+  { icon: UserCog, label: 'Guest limits' },
+  { icon: History, label: 'Note lineage' },
+];
 
 export default function Enterprise() {
   const [activeSubTab, setActiveSubTab] = useState('security');
@@ -47,30 +56,75 @@ export default function Enterprise() {
           </div>
         </div>
         <div className="hero-visual">
-          <div className="enterprise-isometric-card">
-            <div className="card-top-bar">
-              <Shield size={16} className="text-purple" />
-              <span>Access & Data Controls</span>
-            </div>
-            <div className="isometric-content">
-              <div className="iso-row">
-                <span className="iso-label">Google / GitHub OAuth</span>
-                <span className="iso-status active">Active</span>
-              </div>
-              <div className="iso-row">
-                <span className="iso-label">Owner-scoped row-level security</span>
-                <span className="iso-status active">Active</span>
-              </div>
-              <div className="iso-row">
-                <span className="iso-label">Client-side page encryption</span>
-                <span className="iso-status active">Active</span>
-              </div>
-              <div className="iso-row">
-                <span className="iso-label">SAML SSO / SCIM</span>
-                <span className="iso-status idle">Roadmap</span>
-              </div>
-            </div>
-          </div>
+          <HeroWipeSlideshow
+            className="enterprise-hero-slideshow"
+            slides={[
+              <div className="enterprise-isometric-card" key="access">
+                <div className="card-top-bar">
+                  <Shield size={16} className="text-purple" />
+                  <span>Access & Data Controls</span>
+                </div>
+                <div className="isometric-content">
+                  <div className="iso-row">
+                    <span className="iso-label">Google / GitHub OAuth</span>
+                    <span className="iso-status active">Active</span>
+                  </div>
+                  <div className="iso-row">
+                    <span className="iso-label">Owner-scoped row-level security</span>
+                    <span className="iso-status active">Active</span>
+                  </div>
+                  <div className="iso-row">
+                    <span className="iso-label">Client-side page encryption</span>
+                    <span className="iso-status active">Active</span>
+                  </div>
+                  <div className="iso-row">
+                    <span className="iso-label">SAML SSO / SCIM</span>
+                    <span className="iso-status idle">Roadmap</span>
+                  </div>
+                </div>
+              </div>,
+              <div className="enterprise-isometric-card" key="workspace">
+                <div className="card-top-bar">
+                  <Globe2 size={16} className="text-blue" />
+                  <span>Workspace Scale</span>
+                </div>
+                <div className="isometric-content">
+                  <div className="iso-row">
+                    <span className="iso-label">Deep page nesting</span>
+                    <span className="iso-status active">No practical limit</span>
+                  </div>
+                  <div className="iso-row">
+                    <span className="iso-label">Thought Graph navigation</span>
+                    <span className="iso-status active">Active</span>
+                  </div>
+                  <div className="iso-row">
+                    <span className="iso-label">Multi-workspace & team roles</span>
+                    <span className="iso-status idle">Roadmap</span>
+                  </div>
+                </div>
+              </div>,
+              <div className="enterprise-isometric-card" key="admin">
+                <div className="card-top-bar">
+                  <Key size={16} className="text-purple" />
+                  <span>Admin Control</span>
+                </div>
+                <div className="isometric-content">
+                  <div className="iso-row">
+                    <span className="iso-label">In-app API console</span>
+                    <span className="iso-status active">Active</span>
+                  </div>
+                  <div className="iso-row">
+                    <span className="iso-label">Page history & note lineage</span>
+                    <span className="iso-status active">Active</span>
+                  </div>
+                  <div className="iso-row">
+                    <span className="iso-label">SCIM provisioning & SIEM export</span>
+                    <span className="iso-status idle">Roadmap</span>
+                  </div>
+                </div>
+              </div>,
+            ]}
+          />
         </div>
       </section>
 
@@ -178,13 +232,7 @@ export default function Enterprise() {
               </div>
             )}
             {activeSubTab === 'admin' && (
-              <div className="showcase-graphic admin-graphic">
-                <div className="log-rows">
-                  <div className="log-row"><span>GET</span> <span>/api/pages</span> <span>200</span></div>
-                  <div className="log-row"><span>POST</span> <span>/api/pages/:id/blocks</span> <span>201</span></div>
-                  <div className="log-row"><span>PUT</span> <span>/api/blocks/:id</span> <span>200</span></div>
-                </div>
-              </div>
+              <XOrbit centerIcon={Key} centerLabel="Admin" items={ADMIN_ORBIT_ITEMS} radius={100} size={260} />
             )}
           </div>
         </div>

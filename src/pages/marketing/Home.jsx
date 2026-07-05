@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowRight, Check, ArrowUpRight, LayoutGrid, GitBranch, Mic, Lock,
   BrainCircuit, Blocks, PenLine, Sparkles, FileText, Database, CheckSquare,
@@ -13,7 +13,20 @@ import { Counter } from './components/Counter';
 import { TiltCard } from './components/TiltCard';
 import { Magnetic } from './components/Magnetic';
 import { MacWindow } from './components/MacWindow';
+import { Preloader } from './components/Preloader';
+import { LiquidBackground } from './components/LiquidBackground';
+import { ShinyText } from './components/ShinyText';
+import { Typewriter } from './components/Typewriter';
+import { PaintReveal } from './components/PaintReveal';
+import { WavyTicker } from './components/WavyTicker';
+import { ScrollZoomReveal } from './components/ScrollZoomReveal';
+import { ScrollFadeText } from './components/ScrollFadeText';
+import { CaptureMockup, OrganizeMockup, ConnectMockup, RememberMockup } from './components/StoryMockups';
 import './Home.css';
+
+const TYPEWRITER_WORDS = [
+  'Notes', 'Documents', 'Projects', 'Knowledge Base', 'Wikis', 'Tasks',
+];
 
 const STATS = [
   { num: 33, suffix: '', label: 'block types', sub: 'text, tables, code, embeds, and more' },
@@ -29,6 +42,7 @@ const STORY_SECTIONS = [
     title: 'Get the thought down before it slips away.',
     desc: 'A blank page opens instantly. Type "/" for any of 33 block types — or just write. Nothing about capturing an idea should feel like setup.',
     tint: 'sage',
+    Mockup: CaptureMockup,
   },
   {
     id: 'organize',
@@ -37,6 +51,7 @@ const STORY_SECTIONS = [
     title: 'Let structure emerge, don\'t force it upfront.',
     desc: 'The same page can become a table, a board, or a calendar — same rows, different lens. Reorganize as understanding changes, not before it does.',
     tint: 'blue',
+    Mockup: OrganizeMockup,
   },
   {
     id: 'connect',
@@ -45,6 +60,7 @@ const STORY_SECTIONS = [
     title: 'See how your ideas relate to each other.',
     desc: 'The Thought Graph draws real connections between pages — not a static sitemap, but a living map of what you actually linked and why.',
     tint: 'purple',
+    Mockup: ConnectMockup,
   },
   {
     id: 'remember',
@@ -53,6 +69,7 @@ const STORY_SECTIONS = [
     title: 'Knowledge that resurfaces itself.',
     desc: 'Turn any note into a flashcard reviewed on a spaced-repetition schedule — so what you write down actually stays with you.',
     tint: 'orange',
+    Mockup: RememberMockup,
   },
 ];
 
@@ -97,8 +114,11 @@ export default function Home() {
 
   return (
     <div className="home-wrapper">
+      <Preloader />
+
       {/* 1. Hero */}
-      <section className="hero-section mkt-blobs">
+      <section className="hero-section mkt-blobs" id="hero-top">
+        <LiquidBackground />
         <div className="mkt-container hero-grid">
           <div>
             <motion.span
@@ -113,18 +133,15 @@ export default function Home() {
             <h1 className="hero-title">
               <WordReveal text="The smartest place" delay={0.1} />
               <br />
-              <WordReveal text="to think." delay={0.4} className="hero-title-italic" />
+              <ShinyText className="hero-title-italic">to think.</ShinyText>
             </h1>
 
-            <motion.p
-              className="hero-subtitle"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.55, ease: [0.16, 1, 0.3, 1] }}
-            >
-              Noska is a notes workspace built for clear thinking — capture ideas, let them take
-              shape as tables or boards, and see how everything connects. No clutter, no ceremony.
-            </motion.p>
+            <div className="hero-typewriter-row">
+              <span>Built for your</span>
+              <Typewriter words={TYPEWRITER_WORDS} />
+            </div>
+
+            <PaintReveal text="Your team's second brain, powered by AI." className="hero-paint-reveal" />
 
             <motion.div
               className="hero-cta-group"
@@ -170,6 +187,14 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Trust strip — capability marquee */}
+      <WavyTicker />
+
+      {/* Apple-style scroll-scrubbed narrative, right after the hero —
+          reveals as the visitor scrolls, before anything else competes
+          for attention. */}
+      <ScrollZoomReveal />
+
       {/* 2. Real stats, not vanity metrics */}
       <section className="stats-strip-section">
         <div className="mkt-container stats-strip">
@@ -193,6 +218,9 @@ export default function Home() {
 
       {/* 4. Sticky scroll-scrubbed product walkthrough */}
       <ScrollShowcase />
+
+      {/* Scroll-triggered line-by-line poetry */}
+      <ScrollFadeText />
 
       {/* 5. Interactive feature tabs — real product behavior */}
       <section className="features-section mkt-container">
@@ -394,17 +422,30 @@ export default function Home() {
           <h2>Good to know before you start.</h2>
         </Reveal>
         <div className="faq-home-list">
-          {FAQS.map((faq, i) => (
-            <Reveal key={faq.q} delay={i * 0.05} className="faq-home-item">
-              <button className="faq-home-question" onClick={() => setOpenFaq(openFaq === i ? -1 : i)}>
-                <span>{faq.q}</span>
-                <ChevronDown size={16} className={`faq-home-chevron ${openFaq === i ? 'open' : ''}`} />
-              </button>
-              <div className={`faq-home-answer ${openFaq === i ? 'open' : ''}`}>
-                <p>{faq.a}</p>
-              </div>
-            </Reveal>
-          ))}
+          {FAQS.map((faq, i) => {
+            const isOpen = openFaq === i;
+            return (
+              <Reveal key={faq.q} delay={i * 0.05} className={`faq-home-item ${isOpen ? 'open' : ''}`}>
+                <button className="faq-home-question" onClick={() => setOpenFaq(isOpen ? -1 : i)}>
+                  <span>{faq.q}</span>
+                  <ChevronDown size={16} className={`faq-home-chevron ${isOpen ? 'open' : ''}`} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      className="faq-home-answer-wrap"
+                      initial={{ height: 0 }}
+                      animate={{ height: 'auto' }}
+                      exit={{ height: 0 }}
+                      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      <p>{faq.a}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </Reveal>
+            );
+          })}
         </div>
       </section>
 
@@ -431,6 +472,7 @@ export default function Home() {
 
 function StorySection({ section, reverse }) {
   const Icon = section.icon;
+  const Mockup = section.Mockup;
   return (
     <div className={`story-section ${reverse ? 'reverse' : ''}`}>
       <Reveal className="story-text" x={reverse ? 24 : -24}>
@@ -441,25 +483,8 @@ function StorySection({ section, reverse }) {
         <p>{section.desc}</p>
       </Reveal>
       <Reveal delay={0.1} blur className="story-visual">
-        <StoryIllustration tint={section.tint} icon={Icon} />
+        <Mockup />
       </Reveal>
     </div>
-  );
-}
-
-/** A minimal, hand-drawn-feeling illustration built from soft shapes and
- * thin strokes — no stock imagery, no 3D renders. */
-function StoryIllustration({ tint, icon: Icon }) {
-  return (
-    <TiltCard className={`story-illustration tint-${tint}`}>
-      <div className="story-illustration-lines">
-        <span style={{ width: '70%' }} />
-        <span style={{ width: '45%' }} />
-        <span style={{ width: '58%' }} />
-      </div>
-      <div className="story-illustration-badge">
-        <Icon size={22} strokeWidth={1.6} />
-      </div>
-    </TiltCard>
   );
 }

@@ -1,0 +1,1518 @@
+/* ============================================================
+   Noska Launch — warm, editorial, product-first waitlist page.
+   Fully self-contained design system, scoped under .noska-launch
+   so it never touches marketing-theme.css (the paper/charcoal
+   theme used by the rest of the marketing site) or the app's own
+   src/index.css. Palette follows the brief exactly: warm white
+   canvas, near-black ink, one purple accent used sparingly.
+   ============================================================ */
+
+.noska-launch {
+  --nl-bg: #FAFAF8;
+  --nl-bg-alt: #FFFFFF;
+  --nl-card: #FFFFFF;
+  --nl-border: #ECECEC;
+  --nl-border-strong: #E2E2DE;
+  --nl-text: #111111;
+  --nl-text-secondary: #6B7280;
+  --nl-text-muted: #9A9A94;
+  --nl-accent: #6D5CFF;
+  --nl-accent-ink: #4B3DDB;
+  --nl-accent-tint: rgba(109, 92, 255, 0.08);
+  --nl-accent-tint-strong: rgba(109, 92, 255, 0.14);
+  --nl-success: #3FA66B;
+  --nl-success-tint: rgba(63, 166, 107, 0.12);
+  --nl-shadow-sm: 0 1px 2px rgba(17, 17, 17, 0.03), 0 4px 12px rgba(17, 17, 17, 0.04);
+  --nl-shadow-md: 0 4px 10px rgba(17, 17, 17, 0.05), 0 20px 44px rgba(17, 17, 17, 0.08);
+  --nl-shadow-lg: 0 8px 24px rgba(17, 17, 17, 0.08), 0 40px 80px -20px rgba(109, 92, 255, 0.18);
+  --nl-radius-sm: 10px;
+  --nl-radius-md: 16px;
+  --nl-radius-lg: 26px;
+  --nl-max: 1180px;
+  --nl-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --nl-font: 'Inter', system-ui, -apple-system, sans-serif;
+  --nl-font-heading: 'General Sans', 'Inter', system-ui, sans-serif;
+
+  font-family: var(--nl-font);
+  background-color: var(--nl-bg);
+  color: var(--nl-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  position: relative;
+  min-height: 100vh;
+  overflow-x: clip;
+}
+
+.noska-launch * {
+  box-sizing: border-box;
+}
+
+.noska-launch a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.noska-launch button,
+.noska-launch input {
+  font-family: inherit;
+}
+
+.noska-launch h1,
+.noska-launch h2,
+.noska-launch h3,
+.noska-launch h4 {
+  font-family: var(--nl-font-heading);
+  font-weight: 600;
+  color: var(--nl-text);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.noska-launch p {
+  margin: 0;
+}
+
+.noska-launch .nl-container {
+  width: 100%;
+  max-width: var(--nl-max);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .noska-launch *,
+  .noska-launch *::before,
+  .noska-launch *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* Buttons                                                            */
+/* ---------------------------------------------------------------- */
+.noska-launch .nl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 26px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.2s var(--nl-ease), background-color 0.2s var(--nl-ease), box-shadow 0.2s var(--nl-ease), border-color 0.2s var(--nl-ease);
+  white-space: nowrap;
+}
+
+.noska-launch .nl-btn:active {
+  transform: scale(0.96);
+}
+
+.noska-launch .nl-btn-primary {
+  background: linear-gradient(180deg, var(--nl-accent) 0%, var(--nl-accent-ink) 100%);
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), 0 10px 24px rgba(109, 92, 255, 0.32);
+}
+
+.noska-launch .nl-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1), 0 16px 32px rgba(109, 92, 255, 0.4);
+}
+
+.noska-launch .nl-btn-secondary {
+  background-color: var(--nl-bg-alt);
+  color: var(--nl-text);
+  border-color: var(--nl-border-strong);
+}
+
+.noska-launch .nl-btn-secondary:hover {
+  background-color: var(--nl-bg);
+  border-color: var(--nl-text-muted);
+  transform: translateY(-2px);
+}
+
+.noska-launch .nl-btn-sm {
+  padding: 10px 18px;
+  font-size: 13px;
+}
+
+.noska-launch .nl-btn-lg {
+  padding: 16px 30px;
+  font-size: 15.5px;
+}
+
+/* ---------------------------------------------------------------- */
+/* Section header (shared)                                           */
+/* ---------------------------------------------------------------- */
+.noska-launch .nl-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nl-accent-ink);
+  background-color: var(--nl-accent-tint);
+  border: 1px solid rgba(109, 92, 255, 0.16);
+  padding: 6px 13px;
+  border-radius: 30px;
+  margin-bottom: 18px;
+}
+
+.noska-launch .nl-section-header {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto 52px auto;
+}
+
+.noska-launch .nl-section-header h2 {
+  font-size: 38px;
+  margin-bottom: 14px;
+}
+
+.noska-launch .nl-section-header p {
+  font-size: 17px;
+  color: var(--nl-text-secondary);
+  line-height: 1.6;
+}
+
+/* ============================================================
+   Preloader
+   ============================================================ */
+.noska-launch .nl-preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: var(--nl-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.noska-launch .nl-preloader-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.noska-launch .nl-preloader-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: var(--nl-shadow-md);
+}
+
+.noska-launch .nl-preloader-bar {
+  width: 120px;
+  height: 3px;
+  border-radius: 3px;
+  background-color: var(--nl-border);
+  overflow: hidden;
+}
+
+.noska-launch .nl-preloader-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--nl-accent), var(--nl-accent-ink));
+}
+
+/* ============================================================
+   Navbar
+   ============================================================ */
+.noska-launch .nl-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 500;
+  width: 100%;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  background-color: rgba(250, 250, 248, 0.7);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s var(--nl-ease), background-color 0.3s var(--nl-ease);
+}
+
+.noska-launch .nl-navbar.nl-scrolled {
+  border-bottom-color: var(--nl-border);
+  background-color: rgba(250, 250, 248, 0.92);
+}
+
+.noska-launch .nl-navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.noska-launch .nl-navbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 16.5px;
+  font-family: var(--nl-font-heading);
+}
+
+.noska-launch .nl-navbar-logo img {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.noska-launch .nl-navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.noska-launch .nl-navbar-links a {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--nl-text-secondary);
+  padding: 8px 13px;
+  border-radius: 8px;
+  transition: background-color 0.2s var(--nl-ease), color 0.2s var(--nl-ease);
+}
+
+.noska-launch .nl-navbar-links a:hover {
+  color: var(--nl-text);
+  background-color: var(--nl-accent-tint);
+}
+
+.noska-launch .nl-navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.noska-launch .nl-navbar-mobile-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--nl-text);
+  cursor: pointer;
+  padding: 6px;
+}
+
+.noska-launch .nl-mobile-drawer {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  width: 100%;
+  height: calc(100vh - 64px);
+  background-color: var(--nl-bg);
+  z-index: 490;
+  padding: 28px 24px;
+  border-top: 1px solid var(--nl-border);
+}
+
+.noska-launch .nl-mobile-drawer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.noska-launch .nl-mobile-drawer-links a {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .noska-launch .nl-navbar-links,
+  .noska-launch .nl-hide-mobile {
+    display: none !important;
+  }
+
+  .noska-launch .nl-navbar-mobile-toggle {
+    display: block;
+  }
+}
+
+/* ============================================================
+   Liquid background (hero)
+   ============================================================ */
+.noska-launch .nl-liquid-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.noska-launch .nl-liquid-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.5;
+  will-change: transform;
+}
+
+.noska-launch .nl-liquid-blob.b1 {
+  width: 480px;
+  height: 480px;
+  top: -160px;
+  left: -120px;
+  background: radial-gradient(circle, rgba(109, 92, 255, 0.16), transparent 70%);
+}
+
+.noska-launch .nl-liquid-blob.b2 {
+  width: 420px;
+  height: 420px;
+  top: -80px;
+  right: -100px;
+  background: radial-gradient(circle, rgba(63, 166, 107, 0.10), transparent 70%);
+}
+
+.noska-launch .nl-liquid-blob.b3 {
+  width: 360px;
+  height: 360px;
+  bottom: -140px;
+  left: 30%;
+  background: radial-gradient(circle, rgba(109, 92, 255, 0.10), transparent 70%);
+}
+
+/* ============================================================
+   Hero
+   ============================================================ */
+.noska-launch .nl-hero {
+  position: relative;
+  padding: 96px 0 40px 0;
+  isolation: isolate;
+}
+
+.noska-launch .nl-hero-inner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.noska-launch .nl-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--nl-text-secondary);
+  background-color: var(--nl-bg-alt);
+  border: 1px solid var(--nl-border);
+  padding: 6px 13px;
+  border-radius: 30px;
+  margin-bottom: 28px;
+  box-shadow: var(--nl-shadow-sm);
+}
+
+.noska-launch .nl-hero-title {
+  font-size: 60px;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
+.noska-launch .nl-shiny-text {
+  display: inline-block;
+  background: linear-gradient(
+    100deg,
+    var(--nl-text) 30%,
+    var(--nl-accent) 42%,
+    #ffffff 50%,
+    var(--nl-accent) 58%,
+    var(--nl-text) 70%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: nl-shine 5s linear infinite;
+}
+
+@keyframes nl-shine {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.noska-launch .nl-hero-typewriter-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--nl-text-secondary);
+  margin: 22px 0 26px 0;
+  min-height: 30px;
+}
+
+.noska-launch .nl-typewriter-word {
+  color: var(--nl-accent-ink);
+  font-weight: 600;
+  min-width: 8ch;
+  text-align: left;
+}
+
+.noska-launch .nl-typewriter-caret {
+  display: inline-block;
+  width: 2px;
+  height: 22px;
+  background-color: var(--nl-accent);
+  animation: nl-blink 0.9s step-end infinite;
+}
+
+@keyframes nl-blink {
+  50% { opacity: 0; }
+}
+
+.noska-launch .nl-paint-reveal {
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--nl-text-secondary);
+  max-width: 42ch;
+  margin: 0 auto 36px auto;
+  line-height: 1.5;
+}
+
+.noska-launch .nl-paint-reveal-mask {
+  background-image: linear-gradient(90deg, var(--nl-text) 0%, var(--nl-text) 100%);
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: var(--nl-border-strong);
+  -webkit-text-fill-color: var(--nl-border-strong);
+}
+
+.noska-launch .nl-hero-ctas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.noska-launch .nl-hero-note {
+  font-size: 13px;
+  color: var(--nl-text-muted);
+}
+
+/* ============================================================
+   Hero product preview
+   ============================================================ */
+.noska-launch .nl-preview-stage {
+  position: relative;
+  max-width: 880px;
+  margin: 64px auto 0 auto;
+  height: 460px;
+}
+
+.noska-launch .nl-preview-main {
+  position: absolute;
+  top: 0;
+  left: 8%;
+  width: 84%;
+  border-radius: var(--nl-radius-md);
+  background-color: var(--nl-card);
+  border: 1px solid var(--nl-border);
+  box-shadow: var(--nl-shadow-lg);
+  overflow: hidden;
+}
+
+.noska-launch .nl-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--nl-border);
+  background-color: #FCFCFB;
+}
+
+.noska-launch .nl-preview-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0.5;
+}
+
+.noska-launch .nl-preview-dot.red { background-color: #E27D60; }
+.noska-launch .nl-preview-dot.yellow { background-color: #D9A94E; }
+.noska-launch .nl-preview-dot.green { background-color: var(--nl-success); }
+
+.noska-launch .nl-preview-bar-title {
+  font-size: 11.5px;
+  color: var(--nl-text-muted);
+  margin: 0 auto;
+  transform: translateX(-16px);
+}
+
+.noska-launch .nl-preview-body {
+  display: flex;
+  height: 340px;
+}
+
+.noska-launch .nl-preview-sidebar {
+  width: 170px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--nl-border);
+  background-color: #FBFBFA;
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.noska-launch .nl-preview-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: var(--nl-text-secondary);
+}
+
+.noska-launch .nl-preview-sidebar-item.active {
+  background-color: var(--nl-accent-tint);
+  color: var(--nl-accent-ink);
+  font-weight: 600;
+}
+
+.noska-launch .nl-preview-sidebar-item svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.noska-launch .nl-preview-content {
+  flex: 1;
+  padding: 26px 30px;
+  position: relative;
+}
+
+.noska-launch .nl-preview-content-line {
+  height: 9px;
+  border-radius: 5px;
+  background-color: var(--nl-border);
+  margin-bottom: 12px;
+}
+
+.noska-launch .nl-preview-todo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--nl-text-secondary);
+  margin-bottom: 8px;
+}
+
+.noska-launch .nl-preview-check {
+  width: 15px;
+  height: 15px;
+  border-radius: 5px;
+  border: 1.5px solid var(--nl-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.noska-launch .nl-preview-check.done {
+  background-color: var(--nl-success);
+  border-color: var(--nl-success);
+  color: #fff;
+}
+
+.noska-launch .nl-preview-kanban {
+  display: flex;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.noska-launch .nl-preview-kanban-col {
+  flex: 1;
+  background-color: var(--nl-bg);
+  border: 1px solid var(--nl-border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 10.5px;
+  color: var(--nl-text-muted);
+}
+
+.noska-launch .nl-preview-kanban-card {
+  background-color: var(--nl-card);
+  border: 1px solid var(--nl-border);
+  border-radius: 7px;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--nl-text-secondary);
+  box-shadow: var(--nl-shadow-sm);
+}
+
+/* Floating cards around the main preview */
+.noska-launch .nl-preview-float {
+  position: absolute;
+  background-color: var(--nl-card);
+  border: 1px solid var(--nl-border);
+  border-radius: var(--nl-radius-sm);
+  box-shadow: var(--nl-shadow-md);
+  padding: 13px 15px;
+  z-index: 2;
+}
+
+.noska-launch .nl-preview-float-ai {
+  top: -18px;
+  right: -4%;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.noska-launch .nl-float-ai-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nl-accent-ink);
+}
+
+.noska-launch .nl-float-ai-line {
+  height: 7px;
+  border-radius: 4px;
+  background-color: var(--nl-border);
+}
+
+.noska-launch .nl-preview-float-graph {
+  bottom: -6%;
+  left: -3%;
+  width: 190px;
+}
+
+.noska-launch .nl-float-graph-header {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--nl-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+}
+
+.noska-launch .nl-preview-float-calendar {
+  top: 32%;
+  right: -8%;
+  width: 130px;
+}
+
+.noska-launch .nl-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.noska-launch .nl-cal-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background-color: var(--nl-bg);
+}
+
+.noska-launch .nl-cal-cell.filled {
+  background-color: var(--nl-accent-tint-strong);
+}
+
+.noska-launch .nl-cal-cell.today {
+  background-color: var(--nl-accent);
+}
+
+/* ============================================================
+   Trust strip / wavy ticker
+   ============================================================ */
+.noska-launch .nl-trust-strip {
+  border-top: 1px solid var(--nl-border);
+  border-bottom: 1px solid var(--nl-border);
+  background-color: var(--nl-bg-alt);
+  padding: 26px 0;
+  overflow: hidden;
+}
+
+.noska-launch .nl-ticker-track {
+  display: flex;
+  gap: 48px;
+  width: max-content;
+  animation: nl-ticker-scroll 32s linear infinite;
+}
+
+@keyframes nl-ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.noska-launch .nl-ticker-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--nl-text-secondary);
+  white-space: nowrap;
+}
+
+.noska-launch .nl-ticker-item svg {
+  color: var(--nl-accent);
+}
+
+.noska-launch .nl-ticker-item.wavy {
+  animation: nl-wavy 3.2s ease-in-out infinite;
+}
+
+@keyframes nl-wavy {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.noska-launch .nl-ticker-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--nl-border-strong);
+}
+
+/* ============================================================
+   Features grid
+   ============================================================ */
+.noska-launch .nl-features {
+  padding: 110px 0;
+}
+
+.noska-launch .nl-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.noska-launch .nl-feature-card {
+  position: relative;
+  background-color: var(--nl-card);
+  border: 1px solid var(--nl-border);
+  border-radius: var(--nl-radius-md);
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  cursor: default;
+}
+
+.noska-launch .nl-feature-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--nl-accent), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s var(--nl-ease);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.noska-launch .nl-feature-card:hover::before {
+  opacity: 1;
+}
+
+.noska-launch .nl-feature-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--nl-accent-tint);
+  color: var(--nl-accent-ink);
+  transition: transform 0.3s var(--nl-ease);
+}
+
+.noska-launch .nl-feature-card:hover .nl-feature-icon {
+  transform: scale(1.1) rotate(-4deg);
+}
+
+.noska-launch .nl-feature-card h3 {
+  font-size: 15.5px;
+}
+
+.noska-launch .nl-feature-card p {
+  font-size: 13.5px;
+  color: var(--nl-text-secondary);
+  line-height: 1.55;
+}
+
+/* ============================================================
+   Product story (scroll-zoom reveal)
+   ============================================================ */
+.noska-launch .nl-story {
+  position: relative;
+  padding: 40px 0;
+}
+
+.noska-launch .nl-story-sticky {
+  position: sticky;
+  top: 64px;
+  height: calc(100vh - 64px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.noska-launch .nl-story-header {
+  text-align: center;
+  margin-bottom: 44px;
+}
+
+.noska-launch .nl-story-steps {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  height: 320px;
+  margin: 0 auto;
+}
+
+.noska-launch .nl-story-step {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 18px;
+}
+
+.noska-launch .nl-story-step-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background-color: var(--nl-accent-tint);
+  color: var(--nl-accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--nl-shadow-sm);
+}
+
+.noska-launch .nl-story-step h3 {
+  font-size: 26px;
+}
+
+.noska-launch .nl-story-step p {
+  font-size: 15px;
+  color: var(--nl-text-secondary);
+  max-width: 40ch;
+}
+
+.noska-launch .nl-story-step-num {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--nl-text-muted);
+  letter-spacing: 0.06em;
+}
+
+.noska-launch .nl-story-progress {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 28px;
+}
+
+.noska-launch .nl-story-progress-dot {
+  width: 22px;
+  height: 3px;
+  border-radius: 3px;
+  background-color: var(--nl-border-strong);
+  overflow: hidden;
+}
+
+.noska-launch .nl-story-progress-fill {
+  height: 100%;
+  background-color: var(--nl-accent);
+}
+
+.noska-launch .nl-story-spacer {
+  height: 400vh;
+}
+
+/* ============================================================
+   Scroll fade text
+   ============================================================ */
+.noska-launch .nl-fade-text-section {
+  position: relative;
+  padding: 140px 0;
+  text-align: center;
+}
+
+.noska-launch .nl-fade-text-line {
+  position: relative;
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--nl-border-strong);
+  margin: 0 auto;
+  max-width: 720px;
+}
+
+.noska-launch .nl-fade-text-line.active {
+  color: var(--nl-text);
+}
+
+.noska-launch .nl-fade-text-line .accent {
+  color: var(--nl-accent-ink);
+}
+
+/* ============================================================
+   How Noska works
+   ============================================================ */
+.noska-launch .nl-how {
+  padding: 90px 0;
+}
+
+.noska-launch .nl-how-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.noska-launch .nl-how-card {
+  flex: 1;
+  background-color: var(--nl-card);
+  border: 1px solid var(--nl-border);
+  border-radius: var(--nl-radius-md);
+  padding: 32px 24px;
+  text-align: center;
+  box-shadow: var(--nl-shadow-sm);
+  position: relative;
+  z-index: 1;
+}
+
+.noska-launch .nl-how-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background-color: var(--nl-accent-tint);
+  color: var(--nl-accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px auto;
+}
+
+.noska-launch .nl-how-card h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.noska-launch .nl-how-card p {
+  font-size: 13.5px;
+  color: var(--nl-text-secondary);
+  line-height: 1.5;
+}
+
+.noska-launch .nl-how-connector {
+  width: 64px;
+  height: 2px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.noska-launch .nl-how-connector svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.noska-launch .nl-how-connector path {
+  stroke: var(--nl-border-strong);
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+  fill: none;
+}
+
+/* ============================================================
+   Use cases grid
+   ============================================================ */
+.noska-launch .nl-usecases {
+  padding: 90px 0;
+  background-color: var(--nl-bg-alt);
+  border-top: 1px solid var(--nl-border);
+  border-bottom: 1px solid var(--nl-border);
+}
+
+.noska-launch .nl-usecases-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.noska-launch .nl-usecase-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  background-color: var(--nl-bg);
+  border: 1px solid var(--nl-border);
+  border-radius: var(--nl-radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--nl-text);
+  transition: border-color 0.2s var(--nl-ease), transform 0.2s var(--nl-ease), background-color 0.2s var(--nl-ease);
+}
+
+.noska-launch .nl-usecase-pill:hover {
+  border-color: var(--nl-accent);
+  background-color: var(--nl-accent-tint);
+  transform: translateY(-2px);
+}
+
+.noska-launch .nl-usecase-pill svg {
+  color: var(--nl-accent);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   FAQ drawers
+   ============================================================ */
+.noska-launch .nl-faq {
+  padding: 100px 0;
+  max-width: 760px !important;
+}
+
+.noska-launch .nl-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.noska-launch .nl-faq-item {
+  border: 1px solid var(--nl-border);
+  border-radius: var(--nl-radius-sm);
+  background-color: var(--nl-card);
+  overflow: hidden;
+}
+
+.noska-launch .nl-faq-item.open {
+  border-color: var(--nl-accent);
+  box-shadow: 0 0 0 3px var(--nl-accent-tint);
+}
+
+.noska-launch .nl-faq-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 18px 22px;
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--nl-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.noska-launch .nl-faq-chevron {
+  flex-shrink: 0;
+  color: var(--nl-text-muted);
+  transition: transform 0.3s var(--nl-ease);
+}
+
+.noska-launch .nl-faq-chevron.open {
+  transform: rotate(180deg);
+  color: var(--nl-accent);
+}
+
+.noska-launch .nl-faq-answer-wrap {
+  overflow: hidden;
+}
+
+.noska-launch .nl-faq-answer-wrap p {
+  padding: 0 22px 20px 22px;
+  font-size: 14.5px;
+  color: var(--nl-text-secondary);
+  line-height: 1.6;
+}
+
+/* ============================================================
+   Scratch reveal
+   ============================================================ */
+.noska-launch .nl-scratch-section {
+  padding: 90px 0 60px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.noska-launch .nl-scratch-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  border-radius: var(--nl-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--nl-shadow-lg);
+  border: 1px solid var(--nl-border);
+  background-color: var(--nl-card);
+}
+
+.noska-launch .nl-scratch-reveal-content {
+  position: relative;
+  padding: 64px 40px;
+  text-align: center;
+  background: linear-gradient(160deg, var(--nl-accent-tint) 0%, var(--nl-bg-alt) 60%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.noska-launch .nl-scratch-reveal-emoji {
+  font-size: 40px;
+}
+
+.noska-launch .nl-scratch-reveal-content h3 {
+  font-size: 26px;
+}
+
+.noska-launch .nl-scratch-reveal-content p {
+  font-size: 15px;
+  color: var(--nl-text-secondary);
+  max-width: 34ch;
+}
+
+.noska-launch .nl-scratch-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.noska-launch .nl-scratch-canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.noska-launch .nl-scratch-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+  color: var(--nl-text-secondary);
+  font-weight: 600;
+  font-size: 15px;
+  text-align: center;
+}
+
+.noska-launch .nl-scratch-hint .sparkle {
+  font-size: 26px;
+}
+
+.noska-launch .nl-scratch-progress {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nl-text-muted);
+  background-color: var(--nl-bg-alt);
+  border: 1px solid var(--nl-border);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+/* ============================================================
+   Final CTA
+   ============================================================ */
+.noska-launch .nl-final-cta {
+  padding: 60px 0 120px 0;
+}
+
+.noska-launch .nl-cta-banner {
+  position: relative;
+  border-radius: var(--nl-radius-lg);
+  padding: 84px 24px;
+  text-align: center;
+  background-color: var(--nl-bg-alt);
+  border: 1px solid var(--nl-border);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.noska-launch .nl-cta-banner-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse 700px 400px at 50% 0%, var(--nl-accent-tint-strong), transparent 70%);
+}
+
+.noska-launch .nl-cta-banner h2 {
+  font-size: 42px;
+  margin-bottom: 16px;
+}
+
+.noska-launch .nl-cta-banner p {
+  font-size: 16.5px;
+  color: var(--nl-text-secondary);
+  max-width: 520px;
+  margin: 0 auto 36px auto;
+}
+
+.noska-launch .nl-cta-btn-group {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.noska-launch .nl-waitlist-form {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  max-width: 420px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+}
+
+.noska-launch .nl-waitlist-input {
+  flex: 1;
+  min-width: 220px;
+  padding: 13px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--nl-border-strong);
+  background-color: var(--nl-bg);
+  font-size: 14px;
+  color: var(--nl-text);
+  outline: none;
+  transition: border-color 0.2s var(--nl-ease), box-shadow 0.2s var(--nl-ease);
+}
+
+.noska-launch .nl-waitlist-input:focus {
+  border-color: var(--nl-accent);
+  box-shadow: 0 0 0 3px var(--nl-accent-tint);
+}
+
+.noska-launch .nl-waitlist-success {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--nl-success);
+  background-color: var(--nl-success-tint);
+  padding: 12px 20px;
+  border-radius: 12px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+/* ============================================================
+   Footer
+   ============================================================ */
+.noska-launch .nl-footer {
+  border-top: 1px solid var(--nl-border);
+  padding: 48px 0 28px 0;
+  background-color: var(--nl-bg-alt);
+}
+
+.noska-launch .nl-footer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--nl-border);
+  margin-bottom: 20px;
+}
+
+.noska-launch .nl-footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.noska-launch .nl-footer-logo img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.noska-launch .nl-footer-links {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.noska-launch .nl-footer-links a {
+  font-size: 13.5px;
+  color: var(--nl-text-secondary);
+  font-weight: 500;
+  transition: color 0.2s var(--nl-ease);
+}
+
+.noska-launch .nl-footer-links a:hover {
+  color: var(--nl-text);
+}
+
+.noska-launch .nl-footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.noska-launch .nl-footer-copyright {
+  font-size: 12px;
+  color: var(--nl-text-muted);
+}
+
+.noska-launch .nl-footer-social {
+  display: flex;
+  gap: 14px;
+}
+
+.noska-launch .nl-footer-social a {
+  color: var(--nl-text-muted);
+  transition: color 0.2s var(--nl-ease);
+}
+
+.noska-launch .nl-footer-social a:hover {
+  color: var(--nl-accent);
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 992px) {
+  .noska-launch .nl-hero-title {
+    font-size: 38px;
+  }
+
+  .noska-launch .nl-hero-typewriter-row {
+    font-size: 17px;
+  }
+
+  .noska-launch .nl-paint-reveal {
+    font-size: 16px;
+  }
+
+  .noska-launch .nl-preview-stage {
+    height: 320px;
+  }
+
+  .noska-launch .nl-preview-main {
+    left: 0;
+    width: 100%;
+  }
+
+  .noska-launch .nl-preview-body {
+    height: 220px;
+  }
+
+  .noska-launch .nl-preview-sidebar {
+    width: 100px;
+  }
+
+  .noska-launch .nl-preview-float {
+    display: none;
+  }
+
+  .noska-launch .nl-features-grid,
+  .noska-launch .nl-usecases-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .noska-launch .nl-how-row {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .noska-launch .nl-how-connector {
+    width: 2px;
+    height: 32px;
+  }
+
+  .noska-launch .nl-story-sticky {
+    position: relative;
+    height: auto;
+    top: auto;
+    padding: 40px 0;
+  }
+
+  .noska-launch .nl-story-spacer {
+    height: auto;
+  }
+
+  .noska-launch .nl-story-steps {
+    position: static;
+    height: auto;
+  }
+
+  .noska-launch .nl-story-step {
+    position: static;
+    padding: 20px 0;
+  }
+
+  .noska-launch .nl-fade-text-line {
+    font-size: 26px;
+  }
+
+  .noska-launch .nl-cta-banner h2 {
+    font-size: 30px;
+  }
+}
+
+@media (max-width: 560px) {
+  .noska-launch .nl-hero-title {
+    font-size: 32px;
+  }
+
+  .noska-launch .nl-features-grid,
+  .noska-launch .nl-usecases-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .noska-launch .nl-hero-ctas {
+    flex-direction: column;
+  }
+
+  .noska-launch .nl-hero-ctas .nl-btn {
+    width: 100%;
+  }
+}
