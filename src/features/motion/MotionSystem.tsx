@@ -23,10 +23,17 @@ export function useReducedMotion() {
   return reduced;
 }
 
+interface MotionInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange"> {
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  error?: string;
+  success?: boolean;
+}
+
 // ----------------------------------------------------
 // 1. Premium Motion Input (Custom Caret, Floating Placeholder)
 // ----------------------------------------------------
-export const MotionInput = React.forwardRef(function MotionInput(
+export const MotionInput = React.forwardRef<HTMLInputElement, MotionInputProps>(function MotionInput(
   {
     value = "",
     onChange,
@@ -233,7 +240,14 @@ export const MotionInput = React.forwardRef(function MotionInput(
 // ----------------------------------------------------
 // 2. Premium Auto-Grow Motion TextArea
 // ----------------------------------------------------
-export const MotionTextArea = React.forwardRef(function MotionTextArea(
+interface MotionTextAreaProps extends Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange"> {
+  value?: string;
+  // Called with the raw string value, not the event — matches the actual
+  // call convention below (onChange?.(e.target.value)).
+  onChange?: (value: string) => void;
+}
+
+export const MotionTextArea = React.forwardRef<HTMLTextAreaElement, MotionTextAreaProps>(function MotionTextArea(
   { value, onChange, placeholder, className = "", ...props },
   ref
 ) {

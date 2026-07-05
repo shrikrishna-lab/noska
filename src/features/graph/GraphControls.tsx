@@ -28,6 +28,7 @@ export default function GraphControls({
   onToggleAnimation,
   onExport,
   onToggleSearch,
+  onNodeSelect,
   linkFilters,
   onLinkFilterChange,
   tagFilter,

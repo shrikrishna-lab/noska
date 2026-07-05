@@ -12,6 +12,14 @@ import { IconButton } from "../../components/ui";
 
 // Synthesized sound helper using Web Audio API
 class AudioSynth {
+  ctx: AudioContext | null;
+  source: AudioBufferSourceNode | null;
+  gainNode: GainNode | null;
+  isPlaying: boolean;
+  volume: number;
+  type: string; // brown, pink, lofi
+  lofiAudio: HTMLAudioElement | null;
+
   constructor() {
     this.ctx = null;
     this.source = null;
@@ -24,11 +32,15 @@ class AudioSynth {
 
   initContext() {
     if (!this.ctx) {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // Safari-only legacy prefix — not in standard lib.dom types, so
+      // narrowly cast the window lookup rather than widening the whole
+      // class to `any`.
+      const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      this.ctx = new AudioContextCtor!();
     }
   }
 
-  start(type) {
+  start(type: string) {
     this.initContext();
     this.stop();
     this.type = type;
@@ -210,7 +222,8 @@ export default function FocusZoom({ block, onClose, onPatch }) {
     } else if (pomoSeconds === 0) {
       // Bell/Alarm notification
       try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        const audioCtx = new AudioContextCtor!();
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);

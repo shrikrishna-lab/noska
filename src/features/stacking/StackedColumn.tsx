@@ -76,7 +76,7 @@ export default function StackedColumn({
       } ${isResizable ? "shrink-0" : "flex-1 min-w-[360px]"}`}
       style={isResizable ? { width: `${width}px` } : { flex: "1 1 0%", minWidth: "360px" }}
       onMouseDown={(e) => {
-        if (e.target.closest('button, a, input, select, textarea, [role="button"], [contenteditable]')) return;
+        if ((e.target as HTMLElement).closest('button, a, input, select, textarea, [role="button"], [contenteditable]')) return;
         onSelect?.(page.id, { altKey: e.altKey });
       }}
     >
@@ -86,7 +86,7 @@ export default function StackedColumn({
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           <span className="text-xs shrink-0">{page.icon || "📄"}</span>
-          <PagePeek page={page} pages={pages} onNavigate={onSelect}>
+          <PagePeek page={page} pages={pages} onNavigate={onSelect} onOpenFull={undefined}>
             <span className="truncate text-xs font-medium text-[var(--text)]">
               {page.title || "Untitled"}
             </span>

@@ -112,7 +112,7 @@ export default function ApiConsole({ pages, activePageId, addPage, updatePage, o
     await new Promise((r) => setTimeout(r, 600));
 
     try {
-      let bodyData = {};
+      let bodyData: Record<string, any> = {};
       if (selectedRoute.hasBody && reqBody) {
         bodyData = JSON.parse(reqBody);
       }

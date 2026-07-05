@@ -72,7 +72,7 @@ export default function NoteLineage({ page, pages, onClose }) {
       return inferred;
     }
 
-    return [...events].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    return [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [page]);
 
   // Find parent chain

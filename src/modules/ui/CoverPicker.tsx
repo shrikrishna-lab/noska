@@ -34,7 +34,7 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
     input.type = "file";
     input.accept = "image/*";
     input.onchange = (e) => {
-      const file = e.target.files?.[0];
+      const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
@@ -137,8 +137,9 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
                 type="text"
                 placeholder="https://example.com/image.jpg"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && e.target.value) {
-                    handleSelect({ type: "image", value: e.target.value, label: "Custom URL" });
+                  const target = e.target as HTMLInputElement;
+                  if (e.key === "Enter" && target.value) {
+                    handleSelect({ type: "image", value: target.value, label: "Custom URL" });
                   }
                 }}
                 className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)] placeholder:text-[var(--muted)]"

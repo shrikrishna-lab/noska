@@ -3,15 +3,34 @@
 // Handles paste and copy with support for future extensions.
 // ═══════════════════════════════════════════════════════════════
 
+interface ClipboardPipelineOptions {
+  onPasteUrl?: ((url: string) => void) | null;
+  onRichPaste?: ((html: string, helpers: { insertHtml: (html: string) => void }) => void) | null;
+  onPlainPaste?: ((text: string, helpers: { insertText: (text: string) => void }) => void) | null;
+  onHtmlPaste?: ((html: string, helpers: { insertHtml: (html: string) => void }) => void) | null;
+}
+
+interface HandlePasteHelpers {
+  insertHtml: (html: string) => void;
+  insertText: (text: string) => void;
+  insertRichText?: (rich: unknown) => void;
+}
+
 export class ClipboardPipeline {
-  constructor(options = {}) {
+  onPasteUrl: ClipboardPipelineOptions["onPasteUrl"];
+  onRichPaste: ClipboardPipelineOptions["onRichPaste"];
+  onPlainPaste: ClipboardPipelineOptions["onPlainPaste"];
+  onHtmlPaste: ClipboardPipelineOptions["onHtmlPaste"];
+  onCopy?: (() => void) | null;
+
+  constructor(options: ClipboardPipelineOptions = {}) {
     this.onPasteUrl = options.onPasteUrl || null;
     this.onRichPaste = options.onRichPaste || null;
     this.onPlainPaste = options.onPlainPaste || null;
     this.onHtmlPaste = options.onHtmlPaste || null;
   }
   
-  handlePaste(e, { insertHtml, insertText, insertRichText }) {
+  handlePaste(e: ClipboardEvent, { insertHtml, insertText, insertRichText }: HandlePasteHelpers) {
     const clipboardData = e.clipboardData;
     if (!clipboardData) return false;
     
@@ -57,7 +76,11 @@ export class ClipboardPipeline {
     return false;
   }
   
-  handleCopy(e, { getSelectedHtml, getSelectedText, getRichText }) {
+  handleCopy(e: ClipboardEvent, { getSelectedHtml, getSelectedText, getRichText }: {
+    getSelectedHtml?: () => string;
+    getSelectedText?: () => string;
+    getRichText?: () => unknown;
+  }) {
     const clipboardData = e.clipboardData;
     if (!clipboardData) return false;
     
@@ -81,17 +104,17 @@ export class ClipboardPipeline {
   }
 }
 
-export function createClipboardPipeline(options) {
+export function createClipboardPipeline(options: ClipboardPipelineOptions) {
   return new ClipboardPipeline(options);
 }
 
-export function extractPlainText(html) {
+export function extractPlainText(html: string) {
   const temp = document.createElement('div');
   temp.innerHTML = html || '';
   return temp.textContent || temp.innerText || '';
 }
 
-export function cleanHtml(html) {
+export function cleanHtml(html: string) {
   if (!html) return '';
   return html
     .replace(/<meta[^>]*>/gi, '')
@@ -101,7 +124,7 @@ export function cleanHtml(html) {
     .trim();
 }
 
-export function htmlToClipboard(html) {
+export function htmlToClipboard(html: string) {
   const temp = document.createElement('div');
   temp.innerHTML = html || '';
   return temp.textContent || '';

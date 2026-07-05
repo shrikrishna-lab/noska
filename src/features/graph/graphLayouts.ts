@@ -152,8 +152,8 @@ export function computeLayout(id, pages, cx = 500, cy = 380) {
 }
 
 // ── Degree map (for node sizing by connection count) ─────────────────────────────
-export function computeDegrees(pages, links) {
-  const deg = {};
+export function computeDegrees(pages: any[], links: any[]): Record<string, number> {
+  const deg: Record<string, number> = {};
   visible(pages).forEach((p) => { deg[p.id] = 0; });
   links.forEach((l) => {
     // link ids look like "<a>-<b>"; also support source/target fields

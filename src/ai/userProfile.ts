@@ -77,7 +77,7 @@ export function learnUserInteraction(text, pageTitle) {
   styleSignals.push({ signals, pageTitle, timestamp: Date.now() });
   const recent = styleSignals.slice(-50);
 
-  const dominant = {};
+  const dominant: Record<string, number> = {};
   for (const s of recent) {
     for (const sig of s.signals) {
       dominant[sig] = (dominant[sig] || 0) + 1;

@@ -1,6 +1,6 @@
-let _recentIcons = [];
-let _favoriteIcons = [];
-let _listeners = new Set();
+let _recentIcons: string[] = [];
+let _favoriteIcons: string[] = [];
+let _listeners = new Set<() => void>();
 
 const RECENT_MAX = 24;
 const STORAGE_KEY_FAVORITES = "noska_favorite_icons";
@@ -346,9 +346,9 @@ export function isFavoriteIcon(icon) {
   return _favoriteIcons.includes(icon);
 }
 
-export function subscribe(fn) {
+export function subscribe(fn: () => void) {
   _listeners.add(fn);
-  return () => _listeners.delete(fn);
+  return () => { _listeners.delete(fn); };
 }
 
 function notifyListeners() {
@@ -388,7 +388,7 @@ export const emojiDescriptions = {
   "🥁": "drum","🎷": "saxophone","🎺": "trumpet","🎸": "guitar","🎻": "violin",
   "🧠": "brain","👁️": "eye","👀": "eyes","🗣️": "speaking head","💬": "speech balloon",
   "💭": "thought balloon","📢": "loudspeaker","🔔": "bell","🔕": "bell with slash",
-  "⏰": "alarm clock","⌛": "hourglass done","⏳": "hourglass not done","🕰️": "mantelpiece clock",
+  "⏰": "alarm clock","🕰️": "mantelpiece clock",
   "🌐": "globe with meridians","🗺️": "world map","🧭": "compass","🏔️": "snow capped mountain",
   "⛰️": "mountain","🌋": "volcano","🏕️": "camping","🏖️": "beach","🏜️": "desert",
   "🏝️": "desert island","🏞️": "national park","🏟️": "stadium","🏛️": "classical building",

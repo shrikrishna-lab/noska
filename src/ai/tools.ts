@@ -1,5 +1,5 @@
 import { uid, textToBlocks, now, plainText } from '../utils/helpers';
-import { setMemory, getMemory } from './memory.js';
+import { setMemory, getMemory, type MemoryEntry } from './memory.js';
 import { saveUserPreference, saveUserFact } from './userProfile.js';
 import { getBacklinks, getOutgoingLinks } from '../utils/pageLinks';
 
@@ -550,7 +550,7 @@ async function executeTool(name, params, context) {
 
     case "get_workspace_stats": {
       const active = pages.filter(p => !p.trashed);
-      const tagCounts = {};
+      const tagCounts: Record<string, number> = {};
       for (const p of active) {
         for (const tag of (p.tags || [])) {
           tagCounts[tag] = (tagCounts[tag] || 0) + 1;
@@ -726,9 +726,9 @@ async function executeTool(name, params, context) {
 
     case "get_user_profile": {
       const mem = getMemory() || {};
-      const prefs = {};
-      const facts = [];
-      for (const [key, val] of Object.entries(mem)) {
+      const prefs: Record<string, string> = {};
+      const facts: string[] = [];
+      for (const [key, val] of Object.entries(mem) as [string, MemoryEntry][]) {
         if (key.startsWith("pref:") || val._category === "preference") {
           prefs[key.replace("pref:", "")] = val.text || val.content || JSON.stringify(val);
         }

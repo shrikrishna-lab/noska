@@ -7,7 +7,7 @@ import {
   BookOpen, CalendarDays, MoreHorizontal, Share2,
   SlidersHorizontal, Loader2, X, Bot,
   Volume2, Copy, Download, Star, Zap, Activity, Search,
-  Plus, GripVertical, Lock, Unlock
+  Plus, GripVertical, Lock, Unlock, type LucideIcon
 } from "lucide-react";
 import { aiManager } from "../../ai/AIManager";
 import { uid } from "../../utils/helpers";
@@ -487,7 +487,7 @@ export default function MeetingWorkspace({ onNew, onAI, onToast, apiKey, aiProvi
                   exit={{ opacity: 0, y: -4, scale: 0.95 }}
                   className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-floating overflow-hidden z-50 py-0.5"
                 >
-                  {[["Share meeting", Share2], ["Connect Calendar", CalendarDays], ["Meeting settings", SlidersHorizontal]].map(([label, Icon]) => (
+                  {([["Share meeting", Share2], ["Connect Calendar", CalendarDays], ["Meeting settings", SlidersHorizontal]] as [string, LucideIcon][]).map(([label, Icon]) => (
                     <button key={label} onClick={() => { setShowMoreMenu(false); onToast?.(label); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] text-[var(--text-secondary)] hover:bg-[var(--hover)] text-left transition">
                       <Icon size={10} className="text-[var(--muted)]" />
                       {label}

@@ -222,7 +222,7 @@ function TemplateDetail({ template: t, onAdd, onBuy, onBack, purchased, onToast 
   );
 }
 
-function MyAdditionsView({ additions, onToast }) {
+function MyAdditionsView({ additions, pages, onToast, onClose }) {
   return (
     <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin">
       <h3 className="text-sm font-semibold text-[var(--text)] mb-4">My Added Templates</h3>

@@ -182,7 +182,7 @@ export function getAgentList() {
   }));
 }
 
-export function buildAgentPrompt(agentId, contextString = "", options = {}) {
+export function buildAgentPrompt(agentId: string, contextString = "", options: { tools?: boolean } = {}) {
   const agent = getAgent(agentId);
   let prompt = agent.system;
   if (contextString) {

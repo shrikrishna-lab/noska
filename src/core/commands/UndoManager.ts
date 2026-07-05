@@ -1,12 +1,26 @@
 const MAX_HISTORY = 50;
 
-let _undoStack = [];
-let _redoStack = [];
-let _listeners = new Set();
-let _batchDepth = 0;
-let _pendingEntry = null;
+interface HistoryEntry {
+  snapshot: unknown;
+  timestamp: number;
+}
 
-export function subscribe(fn) {
+interface UndoState {
+  canUndo: boolean;
+  canRedo: boolean;
+  undoCount: number;
+  redoCount: number;
+}
+
+type UndoListener = (state: UndoState) => void;
+
+let _undoStack: HistoryEntry[] = [];
+let _redoStack: HistoryEntry[] = [];
+let _listeners = new Set<UndoListener>();
+let _batchDepth = 0;
+let _pendingEntry: HistoryEntry | null = null;
+
+export function subscribe(fn: UndoListener) {
   _listeners.add(fn);
   return () => _listeners.delete(fn);
 }
@@ -20,8 +34,8 @@ function notify() {
   }));
 }
 
-export function pushSnapshot(snapshot) {
-  const entry = { snapshot, timestamp: Date.now() };
+export function pushSnapshot(snapshot: unknown) {
+  const entry: HistoryEntry = { snapshot, timestamp: Date.now() };
   if (_batchDepth > 0) {
     _pendingEntry = entry;
     return;
@@ -44,20 +58,20 @@ export function endBatch() {
   }
 }
 
-export function undo(getCurrent) {
+export function undo(getCurrent?: () => unknown) {
   if (_undoStack.length === 0) return null;
   const current = getCurrent?.();
   if (current) _redoStack.push({ snapshot: current, timestamp: Date.now() });
-  const entry = _undoStack.pop();
+  const entry = _undoStack.pop()!;
   notify();
   return entry.snapshot;
 }
 
-export function redo(getCurrent) {
+export function redo(getCurrent?: () => unknown) {
   if (_redoStack.length === 0) return null;
   const current = getCurrent?.();
   if (current) _undoStack.push({ snapshot: current, timestamp: Date.now() });
-  const entry = _redoStack.pop();
+  const entry = _redoStack.pop()!;
   notify();
   return entry.snapshot;
 }

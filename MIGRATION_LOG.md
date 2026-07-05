@@ -187,3 +187,119 @@ needed).
 - Security check: no credentials, no undocumented casts, no `.git`/CI files
   touched. PASS.
 - Committed as "Convert marketing site to TypeScript".
+
+---
+
+## Phase 3 — Remaining leaf/simple batch (features, ai, editor, core, registry, hooks, lib)
+
+Converted 60 files via `git mv` bulk rename across `src/ai/**`, `src/core/commands/*`
+(excluding `CommandRegistry.js`/`CommandRegistry.property.test.js`, which stay
+`.js` — Phase 4, block-registry-coupled), `src/editor/*`, `src/features/**`
+(all feature modules except the ones flagged block-coupled by the earlier
+inventory), `src/hooks/*`, `src/lib/*` + tests, `src/modules/ui/*`,
+`src/registry/**` (excluding `BlockRegistry.jsx` — Phase 4).
+
+**Note on scope-mistake caught before commit**: the first bulk-rename pass
+accidentally globbed `CommandRegistry.js`, `CommandRegistry.property.test.js`,
+and `BlockRegistry.jsx` (all Category B / Phase 4 per the earlier inventory,
+since they define/test the block-type registry). Caught immediately via
+`git status --short` review before any tsc/build run, reverted with
+`git mv` back to original extensions. Final diff contains none of the three.
+
+### Fixes made during the loop
+Since these files were previously `.js`/`.jsx` with `checkJs: false`, this
+was the first time they were actually type-checked. tsc surfaced ~220
+errors across ~25 files. All were real gaps, not migration mistakes:
+
+- **Missing class field declarations** (TS2339 "Property does not exist"):
+  `AIManager` (`config`/`_listeners`/`_initialized`/`_healthCache`/
+  `_healthTimers`), `ClipboardPipeline` (`onPasteUrl`/`onRichPaste`/
+  `onPlainPaste`/`onHtmlPaste`/`onCopy`), `EditorCommands` (`el`),
+  `EditorHistory`/`SimpleUndoManager` (`el`/`enabled`/`stack`/`index`/etc.),
+  `AudioSynth` in FocusZoom.tsx (`ctx`/`source`/`gainNode`/etc.). Fixed by
+  declaring typed fields on each class rather than relying on constructor
+  inference, which TS doesn't do for plain JS classes once type-checked.
+- **Untyped `{}` accumulator objects** causing "Property does not exist on
+  type '{}'" (TS2339) when indexed: `tagCounts` in `ContextBuilder.ts`,
+  `ai/tools.ts`, `ai/userProfile.ts`, `graphLayouts.ts`'s `computeDegrees`.
+  Fixed with explicit `Record<string, number>` annotations.
+- **Untyped `Set`/`Map` module state** causing "not callable" (TS2349) when
+  iterated: `KeyboardManager.ts`, `UndoManager.ts`, `IconRegistry.ts`'s
+  `_listeners`. Fixed by typing the Set/Map generics at declaration.
+- **Real bug caught by the type checker**: `EditorCommands.ts` had
+  `range.commonAncestContainer` (typo — not a real DOM API; the correct
+  property is `commonAncestorContainer`). This was silently returning
+  `undefined` at runtime before. Fixed the typo, not just the type.
+- **Real bug caught by the type checker**: `NoteLineage.tsx` had
+  `new Date(a.timestamp) - new Date(b.timestamp)` in a sort comparator —
+  subtracting Date objects directly relies on implicit `valueOf()`
+  coercion; fixed to `.getTime() - .getTime()` for a real numeric diff
+  (behavior was very likely already correct via JS coercion, but this is
+  no longer implicit/accidental).
+- **Duplicate object keys** (TS1117, a real correctness issue, not just a
+  type gap): `IconRegistry.ts`'s `emojiDescriptions` had `⌛`/`⏳` defined
+  twice with different values. JS object literals silently let the later
+  key win, so the first (now-dead) pair was removed — zero behavior change,
+  confirmed by keeping the second (winning) definitions intact.
+- **Global `SpeechRecognition`/`webkitSpeechRecognition` typing**: not in
+  lib.dom.d.ts (non-standard API). Added a minimal `SpeechRecognitionLike`
+  interface + `Window` augmentation to `src/vite-env.d.ts` since the exact
+  same `window.SpeechRecognition || window.webkitSpeechRecognition` pattern
+  is used identically in both `MeetingWorkspace.tsx` and `VoiceCapture.tsx`
+  — one shared declaration instead of duplicating a cast in each file.
+- **`window.webkitAudioContext`** (Safari-only legacy prefix, also not in
+  lib.dom.d.ts): narrowly cast at the two call sites in `FocusZoom.tsx`
+  rather than widening `Window` globally, since this one is truly
+  one-off/local instead of shared across files.
+- **Dead/unused props passed but never destructured** (TS2741 "missing
+  property", caught because the *caller* passes more props than the
+  component destructures): `GraphControls` (`onNodeSelect`),
+  `MyAdditionsView` in MarketplacePage.tsx (`pages`, `onClose`),
+  `AgentBuilder`/`TabButton` in AgentWorkspace.tsx (`count`, `agents`).
+  Added the missing prop names to each destructure (as unused-but-typed
+  params) rather than removing them from call sites — this is a
+  documentation-only fix, not a logic change, since the original runtime
+  behavior already silently ignored these extra props.
+- **`PagePeek` (still `.jsx`, Phase 4 scope) missing `onOpenFull` at a
+  Phase-3 call site** in `StackedColumn.tsx`: rather than touching the
+  untouched Phase-4 file, passed `onOpenFull={undefined}` explicitly at
+  the call site to satisfy the inferred required-prop shape.
+- **Test fixtures deliberately testing invalid input** (`writeGuards.test.ts`):
+  the test intentionally passes bad owner values (`undefined`, `null`, `""`,
+  `0`, `false`) and incomplete objects to verify `requireOwner()` rejects
+  them. Added `as any` casts at each call site with an inline comment
+  explaining these are deliberately-wrong fixtures under test, not silent
+  type escapes.
+- **Provider registry typing** (`ai/providers.ts`): added `AIProvider`/
+  `AIModel`/`AIMessage`/`ProviderSendOpts` interfaces inferred from the
+  provider object literals (every provider implements `send()`, most
+  implement `stream()`, only `ollama`/`lmstudio` implement
+  `discoverModels()`). This is what let `AIManager.ts`'s cascading
+  "provider.stream doesn't exist" errors resolve automatically.
+- **`AIManager.send/sendConversation/stream` params**: added `AISendOpts`/
+  `AISendConversationOpts`/`AIStreamOpts` interfaces with every field
+  correctly optional (call sites like `MeetingWorkspace.tsx`'s
+  `generateSummary` only ever pass `{ prompt }`).
+- **Shared `MemoryEntry`/`MemoryCache` types**: defined once in
+  `ai/memory.ts` (the canonical owner of the AI-memory shape) and imported
+  into `ai/ContextBuilder.ts` and `ai/tools.ts` rather than duplicating the
+  interface three times.
+
+No `any` used as a silent escape — every `as any`/implicit-loose spot above
+is either a deliberately-invalid test fixture (documented) or a
+dead/unused prop being named for documentation purposes only.
+
+### Security check
+- Grepped all 60 changed files + `vite-env.d.ts` for hardcoded
+  credentials/keys/tokens: none found.
+- No RLS/permission/auth logic touched — this batch is AI plumbing, editor
+  command infra, graph/feature UI, and simple pickers; none of it touches
+  Supabase RLS-adjacent tables directly (that's Phase 2B, already done).
+- Confirmed no `.git`/CI/deploy files touched — `git status --short` shows
+  exactly the 60 renamed files + `vite-env.d.ts` (SpeechRecognition types).
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean (after fixing ~220 real errors surfaced by
+  enabling type-checking on these files for the first time).
+- `npm run build`: clean (`vite build`, "✓ built").

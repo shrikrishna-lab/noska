@@ -5,7 +5,10 @@
 // ═══════════════════════════════════════════════════════════════
 
 export class EditorHistory {
-  constructor(element) {
+  el: HTMLElement | null;
+  enabled: boolean;
+
+  constructor(element: HTMLElement | null) {
     this.el = element;
     this.enabled = true;
   }
@@ -58,8 +61,14 @@ export class EditorHistory {
 // Simple undo manager for a single editor instance
 // Tracks rich text changes for programmatic undo/redo
 
-export class SimpleUndoManager {
-  constructor(getState, setState, maxSize = 100) {
+export class SimpleUndoManager<T = unknown> {
+  getState: () => T;
+  setState: (state: T) => void;
+  maxSize: number;
+  stack: T[];
+  index: number;
+
+  constructor(getState: () => T, setState: (state: T) => void, maxSize = 100) {
     this.getState = getState;
     this.setState = setState;
     this.maxSize = maxSize;
@@ -67,7 +76,7 @@ export class SimpleUndoManager {
     this.index = -1;
   }
   
-  push(state) {
+  push(state: T) {
     if (this.index < this.stack.length - 1) {
       this.stack = this.stack.slice(0, this.index + 1);
     }

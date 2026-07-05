@@ -57,11 +57,11 @@ export default function IconPicker({ open, onClose, onSelect, currentIcon, posit
     input.type = "file";
     input.accept = "image/*,.svg";
     input.onchange = (e) => {
-      const file = e.target.files?.[0];
+      const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
-        const url = ev.target.result;
+        const url = ev.target?.result as string;
         addRecentIcon(url);
         onSelect?.(url);
         onClose?.();

@@ -6,9 +6,48 @@
  * All providers gracefully handle missing keys by returning mock responses.
  */
 
+// ─── Types ──────────────────────────────────────────────────────────────────
+// Inferred from the provider object literals below — every provider here
+// implements send() and most implement stream(); only the local providers
+// (ollama, lmstudio) implement discoverModels(), so it's optional.
+
+export interface AIModel {
+  id: string;
+  name: string;
+  context: number;
+}
+
+export interface AIMessage {
+  role: string;
+  content: string;
+}
+
+export interface ProviderSendOpts {
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+  system?: string;
+  messages: AIMessage[];
+  maxTokens?: number;
+}
+
+export interface AIProvider {
+  id: string;
+  name: string;
+  type: string;
+  requiresKey: boolean;
+  baseUrl: string;
+  keyPlaceholder: string;
+  models: AIModel[];
+  defaultModel: string;
+  send(opts: ProviderSendOpts): Promise<string>;
+  stream?(opts: ProviderSendOpts): AsyncGenerator<string>;
+  discoverModels?(baseUrl?: string): Promise<AIModel[]>;
+}
+
 // ─── Provider Definitions ───────────────────────────────────────────────────
 
-const PROVIDERS = {
+const PROVIDERS: Record<string, AIProvider> = {
   openrouter: {
     id: "openrouter",
     name: "OpenRouter",
@@ -123,7 +162,11 @@ const PROVIDERS = {
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }]
         }));
-        const body = {
+        const body: {
+          contents: typeof contents;
+          generationConfig: { maxOutputTokens: number; temperature: number };
+          systemInstruction?: { parts: { text: string }[] };
+        } = {
           contents,
           generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
         };

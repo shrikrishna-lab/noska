@@ -10,15 +10,79 @@
  *   const response = await aiManager.send({ system: '...', prompt: '...' });
  */
 
-import { getProvider, getAllProviders, mockResponse, testProviderConnection } from './providers.js';
+import { getProvider, getAllProviders, mockResponse, testProviderConnection, type AIProvider } from './providers.js';
 import { buildContext, buildMinimalContext } from './ContextBuilder.js';
 import { buildAgentPrompt, getAgent } from './agents.js';
 import { initializeMemory, getMemory } from './memory.js';
 import { buildUserProfileContext } from './userProfile.js';
 
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface ProviderConfigEntry {
+  apiKey?: string;
+  baseUrl?: string;
+  enabled?: boolean;
+}
+
+interface ContextSettings {
+  includeCurrentPage: boolean;
+  includeRecentPages: boolean;
+  includeConnections: boolean;
+  includeTags: boolean;
+  includeMemory: boolean;
+  tokenBudget: number;
+}
+
+interface AIManagerConfig {
+  providers: Record<string, ProviderConfigEntry>;
+  activeProvider: string | null;
+  activeModel: string | null;
+  activeAgent: string;
+  context: ContextSettings;
+  maxTokens: number;
+  streaming: boolean;
+}
+
+interface HealthEntry {
+  status: string;
+  timestamp: number;
+}
+
+// Shared param shape for send/sendConversation/stream — every field here
+// is genuinely optional at call sites (e.g. MeetingWorkspace.jsx's
+// generateSummary only ever passes `prompt`).
+interface AISendOpts {
+  system?: string;
+  prompt?: string;
+  page?: any;
+  pages?: any[];
+  agent?: string;
+  maxTokens?: number;
+}
+
+interface AIConversationMessage {
+  role: string;
+  text?: string;
+  content?: string;
+}
+
+interface AISendConversationOpts {
+  system?: string;
+  messages: AIConversationMessage[];
+  page?: any;
+  pages?: any[];
+  agent?: string;
+  maxTokens?: number;
+}
+
+interface AIStreamOpts extends AISendOpts {
+  messages?: AIConversationMessage[];
+  onChunk?: (partial: string) => void;
+}
+
 // ─── Default Config ─────────────────────────────────────────────────────────
 
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: AIManagerConfig = {
   // Provider configs: { [providerId]: { apiKey?, baseUrl?, enabled? } }
   providers: {},
   // Active provider + model
@@ -45,6 +109,12 @@ const STORAGE_KEY = "noska_ai_config";
 // ─── AI Manager Class ───────────────────────────────────────────────────────
 
 class AIManager {
+  config: AIManagerConfig;
+  _listeners: Set<(config: AIManagerConfig) => void>;
+  _initialized: boolean;
+  _healthCache: Map<string, HealthEntry>;
+  _healthTimers: Map<string, ReturnType<typeof setTimeout>>;
+
   constructor() {
     this.config = { ...DEFAULT_CONFIG };
     this._listeners = new Set();
@@ -334,7 +404,7 @@ class AIManager {
    * @param {Object} opts - { system?, prompt, page?, pages?, agent?, maxTokens? }
    * @returns {Promise<string>}
    */
-  async send({ system, prompt, page, pages, agent, maxTokens }) {
+  async send({ system, prompt, page, pages, agent, maxTokens }: AISendOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
@@ -383,7 +453,7 @@ class AIManager {
    * @param {Object} opts - { system?, messages, page?, pages?, agent?, maxTokens? }
    * @returns {Promise<string>}
    */
-  async sendConversation({ system, messages, page, pages, agent, maxTokens }) {
+  async sendConversation({ system, messages, page, pages, agent, maxTokens }: AISendConversationOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
@@ -430,7 +500,7 @@ class AIManager {
    * @param {Object} opts - { system?, prompt, page?, pages?, agent?, maxTokens?, onChunk }
    * @returns {Promise<string>} - Full accumulated response
    */
-  async stream({ system, prompt, messages, page, pages, agent, maxTokens, onChunk }) {
+  async stream({ system, prompt, messages, page, pages, agent, maxTokens, onChunk }: AIStreamOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
@@ -511,8 +581,8 @@ class AIManager {
   /**
    * Migrate from old config format (apiKey, aiProvider, nvidiaKey)
    */
-  migrateFromLegacy({ apiKey, aiProvider, nvidiaKey }) {
-    const updates = {};
+  migrateFromLegacy({ apiKey, aiProvider, nvidiaKey }: { apiKey?: string; aiProvider?: string; nvidiaKey?: string }) {
+    const updates: Record<string, ProviderConfigEntry> = {};
     if (nvidiaKey) {
       updates.nvidia = { apiKey: nvidiaKey, enabled: true };
     }

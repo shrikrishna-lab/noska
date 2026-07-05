@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Sparkles, User, Settings, Play, Pause, Plus, MessageCircle, FileText, Zap, Clock, ChevronRight, Globe, Sliders, Cpu, Shield, BookOpen, Pen, Trash2, Copy, ToggleLeft, ToggleRight } from "lucide-react";
+import { Bot, Sparkles, User, Settings, Play, Pause, Plus, MessageCircle, FileText, Zap, Clock, ChevronRight, Globe, Sliders, Cpu, Shield, BookOpen, Pen, Trash2, Copy, ToggleLeft, ToggleRight, type LucideIcon } from "lucide-react";
 import { uid } from "../../utils/helpers";
 
 export default function AgentWorkspace({ pages, onToast, onDuplicate }) {
@@ -46,7 +46,15 @@ export default function AgentWorkspace({ pages, onToast, onDuplicate }) {
   );
 }
 
-function TabButton({ icon: Icon, label, active, onClick, count }) {
+interface TabButtonProps {
+  icon: LucideIcon;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  count?: number;
+}
+
+function TabButton({ icon: Icon, label, active, onClick, count }: TabButtonProps) {
   return (
     <button onClick={onClick} className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs font-medium transition ${active ? 'bg-[var(--accent)]/10 text-[var(--accent)]' : 'text-[var(--secondary)] hover:bg-[var(--hover)]'}`}>
       <Icon size={14} /> {label} {count !== undefined && <span className="ml-auto text-[10px] text-[var(--muted)]">{count}</span>}
@@ -160,7 +168,7 @@ function CustomAgentsView({ agents, onToast, onNew, onToggle, onDelete, onDuplic
   );
 }
 
-function AgentBuilder({ pages, onSave, onCancel }) {
+function AgentBuilder({ pages, onSave, onCancel }: { pages: unknown; onSave: (a: any) => void; onCancel: () => void; agents?: unknown[] }) {
   const [form, setForm] = useState({
     name: '', description: '', icon: '🤖', instructions: '', model: 'default',
     triggers: [], accessGrants: [], creditCapPerRun: 100, creditCapPerMonth: 10000, type: 'custom'

@@ -1,13 +1,15 @@
-// Maps keyboard shortcuts to command IDs
-const _shortcutMap = new Map();
-const _listeners = new Set();
+type ShortcutListener = (commandId: string, e: KeyboardEvent) => void;
 
-export function bindShortcut(shortcut, commandId) {
+// Maps keyboard shortcuts to command IDs
+const _shortcutMap = new Map<string, string>();
+const _listeners = new Set<ShortcutListener>();
+
+export function bindShortcut(shortcut: string, commandId: string) {
   if (!shortcut) return;
   _shortcutMap.set(normalize(shortcut), commandId);
 }
 
-export function getCommandForShortcut(shortcut) {
+export function getCommandForShortcut(shortcut: string) {
   return _shortcutMap.get(normalize(shortcut));
 }
 
@@ -18,17 +20,17 @@ export function getAllShortcuts() {
   }));
 }
 
-export function onShortcutMatch(fn) {
+export function onShortcutMatch(fn: ShortcutListener) {
   _listeners.add(fn);
   return () => _listeners.delete(fn);
 }
 
-function notify(commandId, e) {
+function notify(commandId: string, e: KeyboardEvent) {
   _listeners.forEach((fn) => fn(commandId, e));
 }
 
 // Normalize: "Ctrl+K" → "mod+k"
-function normalize(s) {
+function normalize(s: string) {
   return s
     .toLowerCase()
     .replace(/ctrl\+/g, "mod+")
@@ -39,12 +41,12 @@ function normalize(s) {
     .replace(/–/g, "-");
 }
 
-function denormalize(s) {
+function denormalize(s: string) {
   return s.replace(/mod\+/g, "Ctrl+");
 }
 
-export function handleKeyEvent(e) {
-  const parts = [];
+export function handleKeyEvent(e: KeyboardEvent) {
+  const parts: string[] = [];
   if (e.ctrlKey || e.metaKey) parts.push("mod");
   if (e.altKey) parts.push("alt");
   if (e.shiftKey) parts.push("shift");

@@ -1,14 +1,43 @@
 import { fetchAIMemory, saveAIMemory, saveAIMemoryEntry, deleteAIMemory } from '../lib/supabaseService';
 
-const STORAGE_KEY = "noska_ai_memory";
-let cache = null;
-let loadPromise = null;
+// A memory entry always carries the bookkeeping fields set in
+// setMemory/setMemoryBatch below (_category/_importance/_updated), plus
+// whatever value shape the caller originally passed in (text/content, or
+// arbitrary other fields — see setMemoryBatch/setMemory's object spread).
+export interface MemoryEntry {
+  _category?: string;
+  _importance?: number;
+  _updated?: number;
+  text?: string;
+  content?: string;
+  [key: string]: unknown;
+}
 
-function getDefaultMemory() {
+export type MemoryCache = Record<string, MemoryEntry>;
+
+interface SetMemoryOptions {
+  category?: string;
+  importance?: number;
+  ttlHours?: number | null;
+}
+
+interface MemoryBatchEntry {
+  key: string;
+  value: unknown;
+  category?: string;
+  importance?: number;
+  ttlHours?: number | null;
+}
+
+const STORAGE_KEY = "noska_ai_memory";
+let cache: MemoryCache | null = null;
+let loadPromise: Promise<MemoryCache> | null = null;
+
+function getDefaultMemory(): MemoryCache {
   return {};
 }
 
-async function loadFromStorage() {
+async function loadFromStorage(): Promise<MemoryCache> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
@@ -16,21 +45,21 @@ async function loadFromStorage() {
   return getDefaultMemory();
 }
 
-function saveToStorage(data) {
+function saveToStorage(data: MemoryCache) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch { console.warn("memory: failed to save to localStorage"); }
 }
 
-export async function initializeMemory() {
+export async function initializeMemory(): Promise<MemoryCache> {
   if (cache) return cache;
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
     // Try loading from Supabase first, fall back to localStorage
-    let data = null;
+    let data: MemoryCache | null = null;
     try {
-      data = await fetchAIMemory();
+      data = (await fetchAIMemory()) as MemoryCache;
     } catch {
       // Supabase not available, fall through to localStorage
     }
@@ -46,17 +75,17 @@ export async function initializeMemory() {
   return loadPromise;
 }
 
-export function getMemory() {
+export function getMemory(): MemoryCache {
   return cache || getDefaultMemory();
 }
 
-export function getMemoryValue(key) {
+export function getMemoryValue(key: string): MemoryEntry | null {
   return cache?.[key] ?? null;
 }
 
-export function getMemoryByCategory(category) {
+export function getMemoryByCategory(category: string) {
   if (!cache) return [];
-  const results = [];
+  const results: { key: string; value: MemoryEntry }[] = [];
   for (const [key, value] of Object.entries(cache)) {
     if (value._category === category || key.startsWith(category + ':')) {
       results.push({ key, value });
@@ -65,12 +94,12 @@ export function getMemoryByCategory(category) {
   return results;
 }
 
-export async function setMemory(key, value, options = {}) {
+export async function setMemory(key: string, value: unknown, options: SetMemoryOptions = {}) {
   const { category = "general", importance = 0.5, ttlHours = null } = options;
 
   if (!cache) cache = {};
-  const entry = {
-    ...(typeof value === "object" ? value : { text: value }),
+  const entry: MemoryEntry = {
+    ...(typeof value === "object" && value !== null ? value : { text: value }),
     _category: category,
     _importance: importance,
     _updated: Date.now()
@@ -83,12 +112,12 @@ export async function setMemory(key, value, options = {}) {
   } catch (e) { console.warn("memory: save failed", e); }
 }
 
-export async function setMemoryBatch(entries) {
+export async function setMemoryBatch(entries: MemoryBatchEntry[]) {
   if (!cache) cache = {};
-  const dbEntries = [];
+  const dbEntries: { key: string; value: unknown; category: string; importance: number; ttlHours?: number | null }[] = [];
   for (const { key, value, category, importance, ttlHours } of entries) {
-    const entry = {
-      ...(typeof value === "object" ? value : { text: value }),
+    const entry: MemoryEntry = {
+      ...(typeof value === "object" && value !== null ? value : { text: value }),
       _category: category || "general",
       _importance: importance ?? 0.5,
       _updated: Date.now()
@@ -102,7 +131,7 @@ export async function setMemoryBatch(entries) {
   } catch (e) { console.warn("memory: batch save failed", e); }
 }
 
-export async function forgetMemory(key) {
+export async function forgetMemory(key: string) {
   if (cache) delete cache[key];
   saveToStorage(cache || {});
   try {
@@ -131,7 +160,7 @@ export function buildMemoryContext(maxEntries = 10) {
 
   if (entries.length === 0) return "";
 
-  const sections = [];
+  const sections: string[] = [];
   for (const [key, value] of entries) {
     const text = value.text || value.content || JSON.stringify(value);
     if (text && text.length < 500) {
@@ -143,16 +172,16 @@ export function buildMemoryContext(maxEntries = 10) {
   return `## AI Memory\n${sections.join("\n")}`;
 }
 
-export async function saveUserFact(fact) {
+export async function saveUserFact(fact: string) {
   const key = `fact:${fact.toLowerCase().slice(0, 40).replace(/\s+/g, '_')}`;
   await setMemory(key, { text: fact }, { category: "fact", importance: 0.7 });
 }
 
-export async function saveUserPreference(key, value) {
+export async function saveUserPreference(key: string, value: unknown) {
   await setMemory(`pref:${key}`, value, { category: "preference", importance: 0.9, ttlHours: null });
 }
 
-export async function getPreference(key) {
+export async function getPreference(key: string) {
   const val = getMemoryValue(`pref:${key}`);
   return val?.text ?? val ?? null;
 }

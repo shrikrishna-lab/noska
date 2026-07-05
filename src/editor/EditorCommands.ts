@@ -41,7 +41,9 @@ function splitTextNode(textNode, offset) {
 }
 
 export class EditorCommands {
-  constructor(element) {
+  el: HTMLElement | null;
+
+  constructor(element: HTMLElement | null) {
     this.el = element;
   }
   
@@ -182,8 +184,8 @@ export class EditorCommands {
     const selectedText = range.toString();
     if (!selectedText) return false;
     
-    const parent = range.commonAncestContainer;
-    const container = parent.nodeType === Node.TEXT_NODE ? parent.parentElement : parent;
+    const parent = range.commonAncestorContainer;
+    const container = parent.nodeType === Node.TEXT_NODE ? parent.parentElement! : (parent as Element);
     
     const formats = ['strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'code'];
     formats.forEach(tag => {

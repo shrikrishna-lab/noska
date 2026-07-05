@@ -35,7 +35,7 @@ export default function useMultiBlockSelect(blocks) {
     setSelectedBlockIds(ids);
   }, [blocks]);
 
-  const selectBlock = useCallback((blockId, index, options = {}) => {
+  const selectBlock = useCallback((blockId: string, index: number, options: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean } = {}) => {
     if (options.shiftKey && lastSelectedIndex !== null) {
       selectRange(lastSelectedIndex, index);
     } else if (options.metaKey || options.ctrlKey) {
