@@ -165,3 +165,25 @@ grep across all 36 files.
 - Phase 3 batch converted and verified clean. Ready to commit as
   "Convert leaf UI and onboarding components to TypeScript" on branch
   `chore/typescript-migration`.
+
+### Commit
+- Committed `1b01588` — "Convert leaf UI and onboarding components to
+  TypeScript" on `chore/typescript-migration` (39 files changed: 36
+  renames, 2 new files in `src/onboarding/hooks`/`types.ts`, this log).
+
+---
+
+## Phase 3 — Marketing site batch
+
+Converted all 47 files under `src/pages/marketing/**` (Home/Product/Pricing/
+Enterprise/Changelog/Resources/Solutions pages + all shared marketing motion
+components + the standalone `/launch` page and its components). Fully static/
+presentational, zero block or data-layer coupling. Renamed in bulk via
+`git mv` (no extension-qualified imports existed, so no import fixups
+needed).
+
+- `tsc --noEmit`: clean on first pass, no fixes needed.
+- `npm run build`: clean.
+- Security check: no credentials, no undocumented casts, no `.git`/CI files
+  touched. PASS.
+- Committed as "Convert marketing site to TypeScript".
