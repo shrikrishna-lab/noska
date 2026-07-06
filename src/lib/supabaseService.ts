@@ -61,6 +61,60 @@ export interface Page {
    * sends it to the DB. Optional because a freshly-fetched `Page` (via
    * `mapPageFromDb`) won't have it until `normalizePages()` runs. */
   content?: string[];
+
+  /** The following fields are all real, actively-read/written page
+   * customization/state fields (confirmed via grep across
+   * src/components/Editor.tsx, CustomizePanel.jsx, PageOptionsMenu.jsx,
+   * CoverContextMenu.tsx, SelectionAIBar.jsx, CommandRegistry.ts) — but,
+   * same as `content` above, NONE of them are `pages` table columns
+   * (confirmed against types/supabase.ts) and `mapPageToDb` above never
+   * sends them to the DB. `App.jsx`'s `updatePage()` merges `patch`
+   * fields directly onto the in-memory `Page` object
+   * (`{ ...p, ...patch }`) with no schema check, so any of these
+   * survive only in local/session state and are lost on reload unless
+   * a future migration adds real columns for them. Documenting the full
+   * real set here (rather than leaving each consumer to keep re-casting
+   * around a missing field) is not a behavior change — it's the same
+   * gap `content` had, just for page-styling/comment/wiki fields instead
+   * of tree structure. */
+  fontStyle?: "default" | "serif" | "mono";
+  fullWidth?: boolean;
+  smallText?: boolean;
+  pageBg?: string | null;
+  coverHeight?: number;
+  coverPosition?: string;
+  coverSize?: "small" | "standard" | "wide" | "full";
+  coverParallax?: boolean;
+  coverBlur?: number;
+  coverOverlay?: boolean;
+  coverBrightness?: number;
+  /** Distinct from the RLS-relevant `page_permissions` table — this is a
+   * simple client-side "view"/"edit" toggle read by
+   * `getPagePermission()`/`resolvePermission()` (blockModel.ts) and
+   * written by CustomizePanel.jsx/PageOptionsMenu.jsx/CommandRegistry.ts's
+   * "read-only" toggle command. */
+  permission?: "view" | "edit";
+  lastEditedBy?: string;
+  lastEditedAt?: string;
+  /** Page-anchored comment threads — distinct from any DB table; see
+   * src/components/comments/CommentThread.tsx for the real shape
+   * produced/consumed (id/blockId/pageId/text/userId/userName/
+   * createdAt/updatedAt/resolvedAt/resolvedBy). Kept as a loose record
+   * array here rather than importing that component's inline shape,
+   * since no dedicated Comment type exists anywhere in the codebase yet. */
+  comments?: Array<Record<string, unknown>>;
+  /** The full-page database feature (distinct from a `database`-type
+   * *block* — see DatabaseBlock in types/blocks.ts) that
+   * `handleWikiConversion()` in Editor.tsx and VersionHistoryPanel's
+   * "restore database view" both read/write directly on the page. Kept
+   * as `DatabaseSchema` (types/blocks.ts) since it's the exact same
+   * shape. */
+  database?: import("../../types/blocks").DatabaseSchema;
+  wikiEnabled?: boolean;
+  wikiTags?: unknown[];
+  wikiOwner?: string;
+  wikiStatus?: string;
+  wikiVerification?: string;
 }
 
 /** Loose partial input accepted by savePage/savePages/mapPageToDb — pages

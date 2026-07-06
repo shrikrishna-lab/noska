@@ -1056,3 +1056,126 @@ the analogous casts in Tier 1's `FormsBlock.tsx`/`DatabaseBlock.tsx`.
 - Sub-loop A converted and verified clean. Ready to commit as "Convert
   blockModel, pageTreeOps, and helpers to TypeScript" on branch
   `chore/typescript-migration`.
+
+---
+
+## Phase 4 — Tier 2, File 4: Editor.jsx → .tsx
+
+Converted the largest file so far (2363 lines): the `Editor` component,
+its inner `Block` component (~1000 lines), `EmptyState`, and ~10
+module-level tree-manipulation helper functions.
+
+### Explicit instruction followed: no consolidation
+Per explicit instruction, this file's own independent tree-helper
+implementations (`flattenEditorBlocks`, `childIdsFor`, `moveArrayItemAfter`,
+`removeFromParentContent`, `appendChildBlock`, `insertChildBlockAfter`,
+`indentBlockTree`, `outdentBlockTree`, `insertBlockAfterTree`,
+`insertBlockBeforeTree`, `duplicateBlockTree`) were typed in place and
+NOT consolidated onto the structurally-similar versions in
+`blockModel.ts`/`pageTreeOps.ts` from Tier 2 sub-loop A, even though they
+overlap significantly. Stayed strictly behavior-identical — this is a
+pre-existing duplication, not something introduced or fixed here.
+
+### `types/lib/supabaseService.ts` — `Page` interface additions (real gap, same pattern as `content`)
+Grepping every field this file reads/writes on `page` surfaced a large
+set of real, actively-used page customization/state fields entirely
+missing from `Page`: `fontStyle`, `fullWidth`, `smallText`, `pageBg`,
+`coverHeight`/`coverPosition`/`coverSize`/`coverParallax`/`coverBlur`/
+`coverOverlay`/`coverBrightness`, `permission`, `lastEditedBy`/
+`lastEditedAt`, `comments`, `database` (the full-page database feature,
+distinct from a database-type *block*), and the `wiki*` fields written by
+`handleWikiConversion()`. Confirmed via grep across `CustomizePanel.jsx`,
+`PageOptionsMenu.jsx`, `CoverContextMenu.tsx`, `SelectionAIBar.jsx`,
+`CommandRegistry.ts`, `CommentThread.tsx` that these are real,
+cross-file-consumed fields, not Editor-local inventions. Also confirmed
+(same method as the earlier `content` fix) that NONE of these are actual
+`pages` table columns (checked `types/supabase.ts`) and `mapPageToDb`
+never persists them — `App.jsx`'s `updatePage()` merges `patch` fields
+directly onto the in-memory `Page` with no schema check, so all of these
+survive only in local/session state and are lost on reload. Documented
+this clearly on the `Page` interface (one comment block covering the
+whole group) rather than leaving every consumer to keep casting around
+missing fields — same treatment as `content` got in Tier 2 sub-loop A,
+extended to cover page-styling/comment/wiki fields.
+
+### Fixes made during the loop
+- `EditorBlock` type alias (`Block & { _depth?: number }`) used
+  throughout — `_depth` is a render-only field added by
+  `flattenEditorBlocks`, not part of the real stored block shape.
+- `EditorProps`/`BlockProps`/`EmptyStateProps` interfaces added with
+  every field typed against real call-site usage (matching the Tier 1
+  rigor — prop interfaces, not just "compiles clean").
+- `SelectionState` interface for the `selection`/`setSelection` state
+  (text/rect/blockId/selStart/selEnd).
+- Real, pre-existing behavior quirk found (not introduced, not "fixed" —
+  documented and preserved): `BlockContextMenu`'s "move-to" action calls
+  `onMove?.()` with zero arguments, while every other call site (Ctrl+
+  Shift+Arrow) passes a real `dir: number`. Typed `onMove`/`onMoveBlock`'s
+  `dir` parameter as optional to match reality rather than picking one
+  call site as "correct" and casting around the other.
+- `softDelete`/`turnInto` (blockModel.ts) operate on the generic
+  `TreeBlock` shape (parentId required, `properties: Record<string,
+  unknown>`), while this file's local `EditorBlock` is the real `Block`
+  union (parentId optional via `BaseBlock`, no generic properties bag on
+  most members). Bridged with two documented `as unknown as TreeBlock`/
+  `as unknown as EditorBlock[]` casts at the two call sites, rather than
+  changing either shared type — this is a type-only seam between two
+  independently-scoped type systems (utils primitives vs. app-facing
+  Block union), not a real risk.
+- `SlashCommandMenu.jsx` (still untyped `.jsx`, correctly out of Phase 4's
+  block-editor scope) uses a bare `forwardRef` with no type parameters,
+  so TS infers its export as `RefAttributes<any>` with no other declared
+  props. One documented cast to a minimal typed wrapper
+  (`TypedSlashCommandMenu`) at the single call site, instead of `any`
+  inline.
+- `useOutsideDismiss<T>`'s generic needed an explicit `<HTMLDivElement>`
+  for `mentionRef` (defaults to `HTMLElement`, but the ref attaches to a
+  `motion.div`).
+- Various DOM API type gaps consistent with every prior batch's pattern:
+  `EventTarget` → `HTMLElement`/`HTMLTextAreaElement`/`Node` casts in
+  `onKeyDown`/`handlePaste`/the space-key inline-AI trigger;
+  `ChildNode` → `Element` casts for `nextSibling`/`previousSibling`
+  `querySelector` chains; `FileReader`'s `result: string | ArrayBuffer`
+  narrowed to `string` (guaranteed by `readAsText`, not `readAsArrayBuffer`).
+- `crypto.randomUUID()`'s branded template-literal return type needed an
+  explicit `Map<string, string>` annotation in `duplicateBlockTree`'s
+  `idMap` (otherwise a `.filter((v): v is string => ...)` type predicate
+  downstream didn't satisfy its parameter type).
+- **Dead-code cleanup** (safe, zero behavior change): 7 unused imports
+  removed — `EmbedBlock`, `ImageBlock`, `PagePeek`, `FormsBlock`,
+  `DatabaseBlock`, `SimpleTable`, `ColumnsBlock`, `MediaUploadPlaceholder`
+  were all imported at the top of this file but never actually rendered
+  in JSX anywhere (confirmed via grep for `<ComponentName` — zero
+  matches for each). All real block rendering goes through the single
+  `renderBlockEditor(...)` call, which imports these itself. Flagged in
+  the pre-Editor.jsx checkpoint report as a known dead-import cleanup
+  opportunity; removed here since it's unambiguous and risk-free.
+  `ImagePicker` and `DatabaseBlock`'s sibling imports were double-checked
+  and kept where still genuinely used (`ImagePicker` — real dialog;
+  `blockFor`/`getPagePermission`/etc. from `helpers.ts` — real).
+
+No `any`, silent `unknown`, `@ts-ignore`, or `@ts-nocheck` used as a
+silencing escape. Every cast documented with an inline comment.
+
+### Security check
+- Grepped the full diff for hardcoded credentials/keys/tokens: none
+  found.
+- No RLS/permission/auth logic touched: `getPagePermission()` is called
+  (a client-side "view"/"edit" page toggle, unrelated to the RLS-relevant
+  `page_permissions` table) with unchanged behavior, only typed.
+  `auditEngine`/`requireOwner` are not referenced in this file at all.
+- No `.git`/CI/deploy files touched — `git status --short` shows exactly
+  `Editor.jsx` → `Editor.tsx` + `supabaseService.ts`'s `Page` interface
+  additions + this log.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean (full project).
+- `npm run build`: succeeded (`vite build`, exit code 0; only
+  pre-existing chunk-size warnings).
+- `npx vitest run`: **140/140 tests pass** (full suite).
+
+### Heartbeat
+- Editor.tsx converted and verified clean. Per the tiered plan, STOPPING
+  here before App.jsx — do not chain automatically. Waiting for
+  App.jsx-specific go-ahead.

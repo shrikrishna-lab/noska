@@ -5,8 +5,24 @@ import { SPRING_PRESETS } from "../features/motion/MotionSystem";
 import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import type { Block as BlockType } from "../../types/blocks";
+import type { Page } from "../lib/supabaseService";
+import type { TreeBlock } from "../utils/blockModel";
 
-const DragGhostBlock = React.memo(function DragGhostBlock({ block }) {
+/** Editor.tsx's own local tree-manipulation shape — deliberately a
+ * minimal structural type (id/parentId/content, matching every block
+ * this file's local helpers actually touch) rather than importing
+ * blockModel.ts's `TreeBlock` or pageTreeOps.ts's `FlatBlock`. This file
+ * has its OWN independent implementations of the same tree operations
+ * (flattenEditorBlocks, insertBlockAfterTree, duplicateBlockTree, etc.)
+ * that pre-date and duplicate blockModel.ts/pageTreeOps.ts's versions —
+ * per explicit instruction, this migration pass types them in place
+ * without consolidating onto the utils versions, to stay strictly
+ * behavior-identical. `_depth` is a render-only field added by
+ * flattenEditorBlocks, not part of the real stored block shape. */
+type EditorBlock = BlockType & { _depth?: number };
+
+const DragGhostBlock = React.memo(function DragGhostBlock({ block }: { block: EditorBlock }) {
   return (
     <motion.div
       initial={{ scale: 0.95, opacity: 0 }}
@@ -21,11 +37,7 @@ const DragGhostBlock = React.memo(function DragGhostBlock({ block }) {
 });
 import { useGhostWriter } from "../features/ghostwriter/GhostWriter";
 import { BlockRegistry } from "../registry/BlockRegistry";
-import EmbedBlock from "./editor/EmbedBlock";
 import ImagePicker from "./editor/ImagePicker";
-import ImageBlock from "./editor/ImageBlock";
-import PagePeek from "./editor/PagePeek";
-import FormsBlock from "./FormsBlock";
 
 import InPageFind from "./InPageFind";
 import useMultiBlockSelect from "../hooks/useMultiBlockSelect";
@@ -40,7 +52,6 @@ import { AnimatedSparkle } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss, TextArea } from "./ui";
 import { emojis, covers, blockFor, getPagePermission, renderInlineMarkdown, softDelete, getDescendants, turnInto } from "../utils/helpers";
 import { richTextToPlainText } from "../utils/richText";
-import DatabaseBlock from "./DatabaseBlock";
 
 // Searchable emoji catalog for the /emoji picker (keyword-indexed).
 const EMOJI_CATALOG = [
@@ -67,6 +78,19 @@ const EMOJI_CATALOG = [
 ];
 import BlockContextMenu from "./editor/BlockContextMenu";
 import SlashCommandMenu from "./editor/SlashCommandMenu";
+// SlashCommandMenu.jsx (still untyped .jsx, out of Phase 4's scope) uses a
+// bare `forwardRef(function SlashCommandMenu(props, ref) {...})` with no
+// type annotations, so TS infers its ref-forwarding export as
+// `RefAttributes<any>` with no other props. One documented cast to a
+// minimal typed shape here, instead of an inline `any` per prop at the
+// single call site below.
+const TypedSlashCommandMenu = SlashCommandMenu as unknown as React.ForwardRefExoticComponent<{
+  open: boolean;
+  onClose: () => void;
+  onSelect: (type: string) => void;
+  position: { top: number; left: number } | null;
+  initialSearch?: string;
+} & React.RefAttributes<HTMLElement>>;
 import PageOptionsMenu from "./editor/PageOptionsMenu";
 import CustomizePanel from "./editor/CustomizePanel";
 import IconPicker from "../modules/ui/IconPicker";
@@ -81,14 +105,11 @@ import CommandPalette from "./CommandPalette";
 import BacklinksPanel from "./editor/BacklinksPanel";
 import SelectionAIBar from "./editor/SelectionAIBar";
 import VersionHistoryPanel from "./editor/VersionHistoryPanel";
-import SimpleTable from "./editor/SimpleTable";
-import ColumnsBlock from "./editor/ColumnsBlock";
-import MediaUploadPlaceholder from "./editor/MediaUploadPlaceholder";
 import InlineAIBar from "./editor/InlineAIBar";
 import renderBlockEditor from "./editor/renderBlockEditor";
 import FloatingFormatToolbar from "./editor/FloatingFormatToolbar";
 
-function childIdsFor(blocks, parentId) {
+function childIdsFor(blocks: EditorBlock[], parentId: string | null): string[] {
   const ids = new Set(blocks.map((block) => block.id));
   if (!parentId) {
     return blocks
@@ -105,10 +126,10 @@ function childIdsFor(blocks, parentId) {
   return [...explicit, ...implicit];
 }
 
-function flattenEditorBlocks(blocks, parentId = null, depth = 0, seen = new Set()) {
+function flattenEditorBlocks(blocks: EditorBlock[], parentId: string | null = null, depth: number = 0, seen: Set<string> = new Set()): EditorBlock[] {
   const active = blocks.filter(b => !b.isDeleted);
   const byId = new Map(active.map((block) => [block.id, block]));
-  const result = [];
+  const result: EditorBlock[] = [];
 
   for (const id of childIdsFor(active, parentId)) {
     if (seen.has(id)) continue;
@@ -130,7 +151,7 @@ function flattenEditorBlocks(blocks, parentId = null, depth = 0, seen = new Set(
   return result;
 }
 
-function moveArrayItemAfter(items, itemId, afterId) {
+function moveArrayItemAfter<T extends { id: string }>(items: T[], itemId: string, afterId: string): T[] {
   const next = [...items];
   const from = next.findIndex((block) => block.id === itemId);
   const after = next.findIndex((block) => block.id === afterId);
@@ -141,14 +162,14 @@ function moveArrayItemAfter(items, itemId, afterId) {
   return next;
 }
 
-function removeFromParentContent(blocks, blockId) {
+function removeFromParentContent(blocks: EditorBlock[], blockId: string): EditorBlock[] {
   return blocks.map((block) => {
     if (!Array.isArray(block.content) || !block.content.includes(blockId)) return block;
     return { ...block, content: block.content.filter((id) => id !== blockId) };
   });
 }
 
-function appendChildBlock(blocks, parentId, childId) {
+function appendChildBlock(blocks: EditorBlock[], parentId: string, childId: string): EditorBlock[] {
   return blocks.map((block) => {
     if (block.id !== parentId) return block;
     const content = Array.isArray(block.content) ? block.content : [];
@@ -156,7 +177,7 @@ function appendChildBlock(blocks, parentId, childId) {
   });
 }
 
-function insertChildBlockAfter(blocks, parentId, childId, afterId) {
+function insertChildBlockAfter(blocks: EditorBlock[], parentId: string, childId: string, afterId: string): EditorBlock[] {
   return blocks.map((block) => {
     if (block.id !== parentId) return block;
     const content = (Array.isArray(block.content) ? block.content : []).filter((id) => id !== childId);
@@ -167,7 +188,7 @@ function insertChildBlockAfter(blocks, parentId, childId, afterId) {
   });
 }
 
-function indentBlockTree(blocks, blockId) {
+function indentBlockTree(blocks: EditorBlock[], blockId: string): EditorBlock[] {
   const flat = flattenEditorBlocks(blocks);
   const index = flat.findIndex((block) => block.id === blockId);
   if (index <= 0) return blocks;
@@ -179,7 +200,7 @@ function indentBlockTree(blocks, blockId) {
   return next;
 }
 
-function outdentBlockTree(blocks, blockId) {
+function outdentBlockTree(blocks: EditorBlock[], blockId: string): EditorBlock[] {
   const current = blocks.find((block) => block.id === blockId);
   if (!current?.parentId) return blocks;
   const parent = blocks.find((block) => block.id === current.parentId);
@@ -194,20 +215,20 @@ function outdentBlockTree(blocks, blockId) {
   return moveArrayItemAfter(next, blockId, parent.id);
 }
 
-function insertBlockAfterTree(blocks, afterId, newBlock) {
+function insertBlockAfterTree(blocks: EditorBlock[], afterId: string, newBlock: EditorBlock): EditorBlock[] {
   const anchor = blocks.find((block) => block.id === afterId);
   if (!anchor) return [...blocks, newBlock];
   const parentId = anchor.parentId || null;
-  const blockToInsert = { ...newBlock, parentId, content: newBlock.content || [] };
+  const blockToInsert: EditorBlock = { ...newBlock, parentId, content: newBlock.content || [] };
   const withInserted = moveArrayItemAfter([...blocks, blockToInsert], blockToInsert.id, afterId);
   return parentId ? insertChildBlockAfter(withInserted, parentId, blockToInsert.id, afterId) : withInserted;
 }
 
-function insertBlockBeforeTree(blocks, beforeId, newBlock) {
+function insertBlockBeforeTree(blocks: EditorBlock[], beforeId: string, newBlock: EditorBlock): EditorBlock[] {
   const anchor = blocks.find((block) => block.id === beforeId);
   if (!anchor) return [newBlock, ...blocks];
   const parentId = anchor.parentId || null;
-  const blockToInsert = { ...newBlock, parentId, content: newBlock.content || [] };
+  const blockToInsert: EditorBlock = { ...newBlock, parentId, content: newBlock.content || [] };
   const beforeIndex = blocks.findIndex((block) => block.id === beforeId);
   const withInserted = [...blocks];
   withInserted.splice(Math.max(beforeIndex, 0), 0, blockToInsert);
@@ -222,11 +243,11 @@ function insertBlockBeforeTree(blocks, beforeId, newBlock) {
   });
 }
 
-function duplicateBlockTree(blocks, blockId) {
+function duplicateBlockTree(blocks: EditorBlock[], blockId: string): EditorBlock[] {
   const source = blocks.find((block) => block.id === blockId);
   if (!source) return blocks;
-  const idsToClone = [];
-  const collect = (id) => {
+  const idsToClone: string[] = [];
+  const collect = (id: string) => {
     if (idsToClone.includes(id)) return;
     idsToClone.push(id);
     const block = blocks.find((candidate) => candidate.id === id);
@@ -235,22 +256,22 @@ function duplicateBlockTree(blocks, blockId) {
   };
   collect(blockId);
 
-  const idMap = new Map(idsToClone.map((id) => [id, crypto.randomUUID()]));
-  const clones = idsToClone.map((id) => {
-    const original = blocks.find((block) => block.id === id);
-    const clonedParentId = id === blockId ? original.parentId : idMap.get(original.parentId) || original.parentId;
+  const idMap = new Map<string, string>(idsToClone.map((id) => [id, crypto.randomUUID()]));
+  const clones: EditorBlock[] = idsToClone.map((id) => {
+    const original = blocks.find((block) => block.id === id)!;
+    const clonedParentId = id === blockId ? original.parentId : idMap.get(original.parentId || "") || original.parentId;
     return {
       ...JSON.parse(JSON.stringify(original)),
       id: idMap.get(id),
       parentId: clonedParentId || null,
-      content: (original.content || []).map((childId) => idMap.get(childId)).filter(Boolean)
+      content: (original.content || []).map((childId) => idMap.get(childId)).filter((v): v is string => Boolean(v))
     };
   });
 
   return insertBlockAfterTree(blocks, blockId, clones[0]).concat(clones.slice(1));
 }
 
-function blockForTreeConversion(block, type, text = block.text || "") {
+function blockForTreeConversion(block: EditorBlock, type: string, text: string = block.text || ""): EditorBlock {
   const next = blockFor(type, text);
   return {
     ...next,
@@ -260,12 +281,12 @@ function blockForTreeConversion(block, type, text = block.text || "") {
   };
 }
 
-function filterCollapsedChildren(blocks) {
-  const collapsedIds = new Set();
-  const walk = (blockId) => {
+function filterCollapsedChildren(blocks: EditorBlock[]): EditorBlock[] {
+  const collapsedIds = new Set<string>();
+  const walk = (blockId: string) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block) return;
-    const collapsed = block.properties?.collapsed !== undefined ? block.properties.collapsed : !block.open;
+    const collapsed = block.properties?.collapsed !== undefined ? block.properties.collapsed : !(block as unknown as { open?: boolean }).open;
     if (collapsed) {
       collapsedIds.add(blockId);
     }
@@ -274,7 +295,7 @@ function filterCollapsedChildren(blocks) {
     }
   };
   for (const block of blocks) {
-    const collapsed = block.properties?.collapsed !== undefined ? block.properties.collapsed : !block.open;
+    const collapsed = block.properties?.collapsed !== undefined ? block.properties.collapsed : !(block as unknown as { open?: boolean }).open;
     if (block.type === "toggle" && collapsed) {
       for (const childId of (block.content || [])) {
         collapsedIds.add(childId);
@@ -282,6 +303,33 @@ function filterCollapsedChildren(blocks) {
     }
   }
   return blocks.filter(b => !collapsedIds.has(b.id));
+}
+
+interface EditorProps {
+  page: Page;
+  pages: Page[];
+  renameFocusId?: string | null;
+  onRenameFocusDone?: () => void;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+  onBlockPatch: (blockId: string, patch: Record<string, unknown>) => void;
+  onAddBlock: (blockId: string, type: string, text: string) => void;
+  onDeleteBlock?: (blockId: string) => void;
+  onDuplicateBlock?: (blockId: string) => void;
+  onMoveBlock: (blockId: string, dir?: number) => void;
+  onBlocks: (blocks: EditorBlock[]) => void;
+  onAskAI?: () => void;
+  onFocusBlock?: (blockId: string) => void;
+  onVoiceCapture?: () => void;
+  ghostWriterEnabled?: boolean;
+  apiKey?: string;
+  aiProvider?: string;
+  nvidiaKey?: string;
+  onToast?: (message: string) => void;
+  onScrollPercent?: (pct: number) => void;
+  onUpdatePage?: (pageId: string, patch: Record<string, unknown>) => void;
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+  onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
+  onTrashPage?: (pageId: string) => void;
 }
 
 export default function Editor({
@@ -309,12 +357,19 @@ export default function Editor({
   onNavigate,
   onCreateSubpage,
   onTrashPage
-}) {
+}: EditorProps) {
   const titleRef = useRef(null);
   const editorContainerRef = useRef(null);
-  const pageOptionsRef = useRef(null);
-  
-  const [selection, setSelection] = useState({ text: "", rect: null, blockId: null, selStart: 0, selEnd: 0 });
+  const pageOptionsRef = useRef<HTMLDivElement>(null);
+
+  interface SelectionState {
+    text: string;
+    rect: { top: number; left: number; width: number; height: number } | null;
+    blockId: string | null;
+    selStart?: number;
+    selEnd?: number;
+  }
+  const [selection, setSelection] = useState<SelectionState>({ text: "", rect: null, blockId: null, selStart: 0, selEnd: 0 });
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
   const [pageMenuPos, setPageMenuPos] = useState({ top: 0, left: 0 });
   const [openSlashForBlockId, setOpenSlashForBlockId] = useState(null);
@@ -431,13 +486,14 @@ export default function Editor({
     onToast?.("Converted to wiki with Tags, Owner, Status, Verification properties and Home/All/Mine views");
   };
 
-  const handleFileImport = (e) => {
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target.result;
-      const blocks = [];
+      // readAsText below guarantees a string result, never ArrayBuffer.
+      const text = ev.target?.result as string;
+      const blocks: EditorBlock[] = [];
       const lines = text.split("\n").filter(l => l.trim());
       for (const line of lines) {
         const type = line.startsWith("# ") ? "h1" : line.startsWith("## ") ? "h2" : line.startsWith("### ") ? "h3" : line.startsWith("- ") ? "bullet" : line.match(/^\d+\. /) ? "number" : line.startsWith("> ") ? "quote" : "text";
@@ -541,11 +597,11 @@ export default function Editor({
       const scrollTop = editorContainerRef.current.scrollTop;
       const scrollLeft = editorContainerRef.current.scrollLeft;
 
-      const blockEl = sel.anchorNode?.parentElement?.closest(".noska-block") 
-        || document.activeElement?.closest?.(".noska-block");
+      const blockEl = (sel.anchorNode?.parentElement?.closest(".noska-block")
+        || document.activeElement?.closest?.(".noska-block")) as HTMLElement | null;
       const blockId = blockEl?.dataset?.blockId;
       if (blockId) {
-        const ta = document.activeElement?.tagName === 'TEXTAREA' ? document.activeElement : null;
+        const ta = document.activeElement?.tagName === 'TEXTAREA' ? (document.activeElement as HTMLTextAreaElement) : null;
         const selStart = ta ? ta.selectionStart : text.length;
         const selEnd = ta ? ta.selectionEnd : text.length;
         setSelection({
@@ -571,7 +627,7 @@ export default function Editor({
       ref={editorContainerRef}
       onMouseUp={handleMouseUp}
       onScroll={(e) => {
-        const target = e.target;
+        const target = e.currentTarget;
         const total = target.scrollHeight - target.clientHeight;
         if (total <= 0) return;
         const pct = Math.round((target.scrollTop / total) * 100);
@@ -957,7 +1013,13 @@ export default function Editor({
                 if (customId) nextBlock.id = customId;
                 onBlocks(insertBlockBeforeTree(page.blocks || [], block.id, nextBlock));
               }}
-              onDelete={() => onBlocks(softDelete(page.blocks || [], block.id))}
+              // softDelete (blockModel.ts) expects TreeBlock[] (parentId
+              // required); Block (types/blocks.ts) declares parentId
+              // optional via BaseBlock. Every real block always has a
+              // parentId (possibly null) at runtime — this is a type-only
+              // gap between the two independently-evolved shapes, not a
+              // real missing-field risk.
+              onDelete={() => onBlocks(softDelete((page.blocks || []) as unknown as TreeBlock[], block.id) as unknown as EditorBlock[])}
               onDuplicate={() => onBlocks(duplicateBlockTree(page.blocks || [], block.id))}
               onMove={(dir) => onMoveBlock(block.id, dir)}
               onSwapBlocks={(fromId, toId) => {
@@ -1154,7 +1216,7 @@ export default function Editor({
                 {block.type === "h3" && <h3 className="text-xl font-semibold mt-4 mb-1">{block.text}</h3>}
                 {block.type === "bullet" && <li className="ml-6 list-disc">{block.text}</li>}
                 {block.type === "number" && <li className="ml-6 list-decimal">{block.text}</li>}
-                {block.type === "todo" && <div className="flex items-center gap-2"><input type="checkbox" checked={block.checked} readOnly className="accent-[var(--accent)]" /><span className={block.checked ? "line-through opacity-60" : ""}>{block.text}</span></div>}
+                {block.type === "todo" && <div className="flex items-center gap-2"><input type="checkbox" checked={Boolean(block.checked)} readOnly className="accent-[var(--accent)]" /><span className={block.checked ? "line-through opacity-60" : ""}>{block.text}</span></div>}
                 {block.type === "quote" && <blockquote className="border-l-4 border-[var(--accent)] pl-4 italic opacity-80">{block.text}</blockquote>}
                 {block.type === "divider" && <hr className="border-[var(--border)]" />}
                 {(block.type === "text" || !block.type) && <p>{block.text}</p>}
@@ -1341,6 +1403,48 @@ export default function Editor({
   );
 }
 
+interface BlockProps {
+  block: EditorBlock;
+  index: number;
+  page: Page;
+  pages: Page[];
+  onPatch: (patch: Record<string, unknown>) => void;
+  onAdd: (type: string, text: string, customId?: string) => void;
+  onAddAbove: (type: string, text: string, customId?: string) => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  // `dir` is optional: most call sites (Ctrl+Shift+Arrow) pass a real
+  // direction, but BlockContextMenu's "move-to" action (line ~2346)
+  // calls `onMove?.()` with no argument at all — a pre-existing quirk,
+  // not something this migration changes. `onMoveBlock` (Editor's own
+  // prop, called as `(dir) => onMoveBlock(block.id, dir)`) receives
+  // `undefined` in that case.
+  onMove: (dir?: number) => void;
+  onSwapBlocks: (fromId: string, toId: string) => void;
+  onAskAI?: () => void;
+  onFocusBlock?: (blockId: string) => void;
+  ghostWriterEnabled?: boolean;
+  apiKey?: string;
+  aiProvider?: string;
+  nvidiaKey?: string;
+  onToast?: (message: string) => void;
+  onUpdatePage?: (pageId: string, patch: Record<string, unknown>) => void;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+  onBlocks: (blocks: EditorBlock[]) => void;
+  openSlash: boolean;
+  onClearOpenSlash: () => void;
+  onSetOpenSlashBlockId: (blockId: string | null) => void;
+  onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+  activeCommentBlockId: string | null;
+  setActiveCommentBlockId: (blockId: string | null) => void;
+  pageComments: Array<Record<string, unknown>>;
+  handleAddComment: (comment: Record<string, unknown>) => void;
+  handleResolveComment: (commentId: string) => void;
+  isSelected: boolean;
+  onSelectBlock: (e: React.PointerEvent) => void;
+}
+
 function Block({
   block,
   index,
@@ -1375,28 +1479,29 @@ function Block({
   handleResolveComment,
   isSelected,
   onSelectBlock
-}) {
+}: BlockProps) {
+  interface CaretRectLike { top: number; bottom: number; left: number; }
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
-  const [slashPos, setSlashPos] = useState(null);
+  const [slashPos, setSlashPos] = useState<{ top: number; left: number } | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [emojiPickerPos, setEmojiPickerPos] = useState(null);
+  const [emojiPickerPos, setEmojiPickerPos] = useState<CaretRectLike | null>(null);
   const [emojiSearch, setEmojiSearch] = useState("");
   const [mentionQuery, setMentionQuery] = useState("");
-  const [mentionPos, setMentionPos] = useState(null);
+  const [mentionPos, setMentionPos] = useState<CaretRectLike | null>(null);
   const [isFocused, setIsFocused] = useState(false);
-  const [inlineAI, setInlineAI] = useState(null);
-  const inlineAIBlockRef = useRef(null);
-  const menuButtonRef = useRef(null);
+  const [inlineAI, setInlineAI] = useState<{ top: number; left: number; text: string } | null>(null);
+  const inlineAIBlockRef = useRef<string | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   // Set true only when the user actually presses the "/" key, so the slash
   // menu opens on a real keystroke — not when clicking into / focusing a block
   // whose text already contains "/".
   const slashKeyPressedRef = useRef(false);
   
   const slashRef = useOutsideDismiss(slashOpen, () => setSlashOpen(false));
-  const mentionRef = useOutsideDismiss(mentionOpen, () => setMentionOpen(false));
-  const inputRef = useRef(null);
+  const mentionRef = useOutsideDismiss<HTMLDivElement>(mentionOpen, () => setMentionOpen(false));
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [blockContextOpen, setBlockContextOpen] = useState(false);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
 
@@ -1468,7 +1573,7 @@ function Block({
     }
   }, [openSlash, positionSlashMenu, getCaretRect]);
 
-  const applyFormat = (formatType) => {
+  const applyFormat = (formatType: string) => {
     const ta = inputRef.current;
     if (!ta) return;
     const { selectionStart, selectionEnd } = ta;
@@ -1509,7 +1614,7 @@ function Block({
     }, 0);
   };
 
-  const handlePaste = (e) => {
+  const handlePaste = (e: React.ClipboardEvent) => {
     if (page.isLocked) return;
     // Close slash menu on paste (spec §11)
     if (slashOpen) {
@@ -1518,7 +1623,7 @@ function Block({
     const pasted = e.clipboardData?.getData("text") || "";
     const urlMatch = pasted.match(/^https?:\/\/[^\s]+$/);
     if (!urlMatch) return;
-    const targetBlock = e.target?.closest?.("[data-block-id]");
+    const targetBlock = (e.target as HTMLElement)?.closest?.("[data-block-id]");
     if (!targetBlock) return;
     const blockId = targetBlock.getAttribute("data-block-id");
     const block = (page.blocks || []).find(b => b.id === blockId);
@@ -1544,14 +1649,14 @@ function Block({
     }
   };
 
-  const detectEmbedType = (url) => {
+  const detectEmbedType = (url: string): string | null => {
     if (/youtube\.com|youtu\.be/i.test(url)) return "video";
     if (/twitter\.com|x\.com/i.test(url)) return "tweet";
     if (/vimeo\.com/i.test(url)) return "video";
     return null;
   };
 
-  const onKeyDown = (e) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (page.isLocked || blockPermission === 'view') return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); applyFormat('bold'); return; }
     if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); applyFormat('italic'); return; }
@@ -1613,7 +1718,7 @@ function Block({
       }
       // Open inline AI bar when pressing space on empty block or after "/"
       const trimmed = (block.text || "").trim();
-      const ta = e.target;
+      const ta = e.target as Node;
       const sel = window.getSelection();
       let cursorPos = 0;
       if (sel && sel.rangeCount > 0) {
@@ -1626,8 +1731,8 @@ function Block({
       const atEnd = cursorPos === (block.text || "").length;
       if (!inlineAI && atEnd && (trimmed === "" || trimmed === "/")) {
         e.preventDefault();
-        const blockEl = e.target.closest(".noska-block");
-        inlineAIBlockRef.current = blockEl?.getAttribute("data-block-id");
+        const blockEl = (e.target as HTMLElement).closest(".noska-block");
+        inlineAIBlockRef.current = blockEl?.getAttribute("data-block-id") ?? null;
         const rect = blockEl?.getBoundingClientRect();
         setInlineAI({ top: (rect?.bottom || 0) + 4, left: (rect?.left || 0), text: trimmed });
       }
@@ -1645,7 +1750,7 @@ function Block({
     // ── Slash command trigger (spec §5.1 / §17) ──
     // Skip inside code and math blocks (spec §11)
     if (e.key === "/" && block.type !== "code" && block.type !== "inline-equation") {
-      const ta = e.target;
+      const ta = e.target as HTMLTextAreaElement;
       const cursorPos = ta.selectionStart ?? (block.text || "").length;
       const textBefore = (block.text || "").slice(0, cursorPos);
       // The "/" hasn't been inserted yet on keydown. It's a valid trigger if the
@@ -1674,7 +1779,7 @@ function Block({
         return;
       }
       if (e.key === "Backspace") {
-        const ta = e.target;
+        const ta = e.target as HTMLTextAreaElement;
         const cursorPos = ta.selectionStart ?? (block.text || "").length;
         const textBefore = (block.text || "").slice(0, cursorPos);
         // If backspace would delete the leading /, close the menu
@@ -1688,7 +1793,7 @@ function Block({
       e.preventDefault();
       onAdd("text", "");
       setTimeout(
-        () => inputRef.current?.closest(".noska-block")?.nextSibling?.querySelector("textarea,input")?.focus(),
+        () => (inputRef.current?.closest(".noska-block")?.nextSibling as Element | null)?.querySelector<HTMLElement>("textarea,input")?.focus(),
         0
       );
     }
@@ -1711,7 +1816,7 @@ function Block({
         e.preventDefault();
         const targetEl = document.querySelector(`[data-block-id="${flat[targetIdx].id}"]`);
         if (targetEl) {
-          const input = targetEl.querySelector("textarea, input");
+          const input = targetEl.querySelector<HTMLTextAreaElement | HTMLInputElement>("textarea, input");
           if (input) {
             input.focus();
             const len = input.value?.length || 0;
@@ -1736,13 +1841,13 @@ function Block({
       e.preventDefault();
       onAddAbove("text", "");
       setTimeout(
-        () => inputRef.current?.closest(".noska-block")?.previousSibling?.querySelector("textarea,input")?.focus(),
+        () => (inputRef.current?.closest(".noska-block")?.previousSibling as Element | null)?.querySelector<HTMLElement>("textarea,input")?.focus(),
         0
       );
     }
   };
 
-  const applySlash = (type) => {
+  const applySlash = (type: string) => {
     const text = block.text ? block.text.replace(/^\/\w*\s*/, "") : "";
     const ctx = {
       block,
@@ -1774,7 +1879,7 @@ function Block({
     setSlashOpen(false);
   };
 
-  const detectMention = (text) => {
+  const detectMention = (text: unknown): boolean => {
     if (typeof text !== "string") return false;
     const bracketMatch = text.match(/\[\[([^\]]*)$/);
     const atMatch = text.match(/@(\w*)$/);
@@ -1796,7 +1901,7 @@ function Block({
     return mentionOpen;
   };
 
-  const patchWithSlashDetection = (patch) => {
+  const patchWithSlashDetection = (patch: Record<string, unknown>) => {
     if (page.isLocked || blockPermission === 'view') return;
     if (typeof patch.text === "string") {
       const m = patch.text.match(/(?:^|\s)\/([a-zA-Z0-9-]*)$/);
@@ -1820,7 +1925,7 @@ function Block({
     onPatch(patch);
   };
 
-  const selectPageMention = (page) => {
+  const selectPageMention = (page: Page) => {
     const text = block.text || "";
     const bracketMatch = text.match(/\[\[([^\]]*)$/);
     const atMatch = text.match(/@(\w*)$/);
@@ -1996,7 +2101,7 @@ function Block({
         
         <FloatingFormatToolbar blockId={block.id} inputRef={inputRef} onFormat={applyFormat} />
 
-        <SlashCommandMenu
+        <TypedSlashCommandMenu
           ref={slashRef}
           open={slashOpen}
           onClose={() => setSlashOpen(false)}
@@ -2180,7 +2285,7 @@ function Block({
                   inlineAIBlockRef.current = null;
                   if (id) {
                     const el = document.querySelector(`[data-block-id="${id}"]`);
-                    const input = el?.querySelector("[contenteditable], textarea, input");
+                    const input = el?.querySelector<HTMLElement>("[contenteditable], textarea, input");
                     requestAnimationFrame(() => input?.focus());
                   }
                 }}
@@ -2191,7 +2296,7 @@ function Block({
                   inlineAIBlockRef.current = null;
                   if (id) {
                     const el = document.querySelector(`[data-block-id="${id}"]`);
-                    const input = el?.querySelector("[contenteditable], textarea, input");
+                    const input = el?.querySelector<HTMLElement>("[contenteditable], textarea, input");
                     requestAnimationFrame(() => input?.focus());
                   }
                 }}
@@ -2240,19 +2345,25 @@ function Block({
                 case "move-to": onMove?.(); break;
                 case "ask-ai": onAskAI?.(); break;
                 case "convert": {
-                  const newBlock = turnInto(block, payload === "todo" ? "to_do" : payload === "toggle" ? "toggle" : payload === "bullet" ? "bulleted_list_item" : payload === "number" ? "numbered_list_item" : payload === "h1" ? "heading_1" : payload === "h2" ? "heading_2" : payload === "h3" ? "heading_3" : payload === "h4" ? "heading_4" : payload === "text" ? "paragraph" : payload === "callout" ? "callout" : payload === "quote" ? "quote" : payload === "code" ? "code" : payload);
-                  if (payload === "todo") newBlock.properties.checked = false;
-                  if (payload === "toggle") newBlock.properties.collapsed = false;
-                  if (payload === "callout") { newBlock.properties.icon = newBlock.properties.icon || "💡"; newBlock.properties.tone = "info"; }
+                  // turnInto (blockModel.ts) operates on the generic
+                  // TreeBlock shape; `properties` is `Record<string,
+                  // unknown>` there, so its fields need casts at each
+                  // access below — same type-only gap as the softDelete
+                  // cast above, not a real behavior change.
+                  const newBlock = turnInto(block as unknown as TreeBlock, payload === "todo" ? "to_do" : payload === "toggle" ? "toggle" : payload === "bullet" ? "bulleted_list_item" : payload === "number" ? "numbered_list_item" : payload === "h1" ? "heading_1" : payload === "h2" ? "heading_2" : payload === "h3" ? "heading_3" : payload === "h4" ? "heading_4" : payload === "text" ? "paragraph" : payload === "callout" ? "callout" : payload === "quote" ? "quote" : payload === "code" ? "code" : payload);
+                  const props = newBlock.properties as { checked?: boolean; collapsed?: boolean; icon?: string; tone?: string; richText?: Array<{ text?: string }>; text?: string };
+                  if (payload === "todo") props.checked = false;
+                  if (payload === "toggle") props.collapsed = false;
+                  if (payload === "callout") { props.icon = props.icon || "💡"; props.tone = "info"; }
                   if (payload === "code") {
-                    newBlock.properties = { text: richTextToPlainText(newBlock.properties.richText || []), language: "plain" };
-                    delete newBlock.properties.richText;
+                    newBlock.properties = { text: richTextToPlainText(props.richText as import("../utils/richText").RichTextSpan[] | undefined), language: "plain" };
+                    delete props.richText;
                   }
                   if (block.type === "code") {
-                    newBlock.properties.richText = [{ text: block.text || "" }];
-                    delete newBlock.properties.text;
+                    props.richText = [{ text: block.text || "" }];
+                    delete props.text;
                   }
-                  onPatch(newBlock);
+                  onPatch(newBlock as unknown as Record<string, unknown>);
                   break;
                 }
                 case "color": onPatch({ color: payload }); break;
@@ -2326,7 +2437,13 @@ const QUICK_BLOCKS = [
   { type: "database", icon: Database, label: "Database" },
 ];
 
-export function EmptyState({ onAdd, onBlocks, disabled }) {
+interface EmptyStateProps {
+  onAdd: () => void;
+  onBlocks?: (blocks: EditorBlock[]) => void;
+  disabled?: boolean;
+}
+
+export function EmptyState({ onAdd, onBlocks, disabled }: EmptyStateProps) {
   return (
     <div className="rounded border border-dashed border-[var(--border)] py-8 px-6 text-center">
       <AnimatedSparkle size={24} className="mb-3 mx-auto text-[var(--accent)]" />
