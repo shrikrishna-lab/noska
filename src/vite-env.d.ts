@@ -37,4 +37,13 @@ interface SpeechRecognitionLike extends EventTarget {
 interface Window {
   SpeechRecognition?: { new (): SpeechRecognitionLike };
   webkitSpeechRecognition?: { new (): SpeechRecognitionLike };
+  // The app also assigns the same `realtimeCollab` singleton (see
+  // src/lib/realtimeCollab.ts) onto `window` somewhere in app bootstrap so
+  // components deep in the tree can read presence without prop-drilling
+  // it everywhere. Declared as `unknown` here (not the real
+  // `RealtimeCollab` class type) since importing that class type here
+  // would create a circular type dependency between this ambient
+  // declaration file and the module — callers narrow it with `?.` and
+  // `as` at each read site, matching how it's used today.
+  realtimeCollab?: unknown;
 }

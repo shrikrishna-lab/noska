@@ -398,3 +398,89 @@ documented host-global cast, consistent with prior batches.
 ### Verification
 - `npx tsc --noEmit`: clean.
 - `npm run build`: clean (`vite build`, "✓ built").
+
+### Commit
+- Committed `c8208d5` — "Convert canvas, export, spaced repetition,
+  comments to TypeScript" on `chore/typescript-migration` (17 files: 14
+  renames, `useCursor.ts` type fix, this log).
+
+---
+
+## Phase 3 — Final leaf/simple batch (ai panels, collab UI, PageInspector, entry point)
+
+Converted 16 files: `src/components/ai/*` (8 files), `src/components/collab/*`
+(3 files), `src/components/PageInspector.tsx`, `src/main.tsx` (app entry
+point), `src/onboarding/pages/OnboardingPage.tsx`, `src/utils/ai.ts`, and the
+two test-support files `src/test/{normalizePreview.test,setup}.ts`. Also
+updated `index.html` (`/src/main.jsx` → `/src/main.tsx`) since it's the one
+place a bare file path is referenced outside the module graph.
+
+### Fixes made during the loop
+- **`src/main.tsx`**: imports of the marketing pages used explicit `.jsx`
+  extensions pointing at files renamed to `.tsx` in an earlier batch —
+  updated to extensionless imports (matching the rest of the codebase's
+  convention) instead of hardcoding the new extension, so future
+  renames don't re-break this file. Also added a non-null assertion on
+  `document.getElementById("root")` (typed `HTMLElement | null`).
+- **Date arithmetic bugs caught by the type checker** (same pattern as
+  prior batches): `ChatSidebar.tsx`'s `timeGroup()` did `now - d` directly
+  on two `Date` objects; `PageInspector.tsx`'s `ActivityTab` merge-sort did
+  `new Date(b.timestamp) - new Date(a.timestamp)`. Both fixed to
+  `.getTime() - .getTime()`.
+- **Real bug fixed, not just typed**: `PageInspector.tsx`'s
+  `computePageStats()` never included a `blocks` count in its return
+  object, but `OverviewTab` already read `stats.blocks` in its JSX (`{stats.chars}
+  chars · {stats.blocks} blocks · ...`) — this was rendering `undefined`
+  at runtime. Added `blocks: blocks.length` to the returned `PageStats`
+  interface, which is a genuine bug fix surfaced by strict typing, not a
+  behavior change I introduced.
+- **`ContextPanel.tsx` / `PageInspector.tsx`**: both had a local
+  `CollapsibleSection`/`SectionHeader` component whose `icon` prop was
+  inferred too loosely to accept Lucide icon components at every call
+  site — typed against `LucideIcon` from `lucide-react` (consistent with
+  the pattern established in earlier batches) instead of a custom
+  `ComponentType<{...}>` shape.
+- **`window.realtimeCollab` global**: grepped for an assignment onto
+  `window` anywhere in the codebase — found none. This means every
+  `window.realtimeCollab?.on?.(...)` call across the app (this file,
+  `Sidebar.jsx`, `WorkspaceViews.jsx`, `Modals.jsx`, `CoThinking.jsx` — the
+  latter four still `.jsx`, untouched) has always been dead code at
+  runtime, silently masked by optional chaining. Declared
+  `Window.realtimeCollab?: unknown` in `vite-env.d.ts` (deliberately not
+  the real `RealtimeCollab` class type, to avoid a circular type
+  dependency from the ambient declaration file back into the module) and
+  cast narrowly at the one read site in this batch. Flagged as
+  pre-existing dead code, not something to "fix" as part of a type
+  migration.
+- **`PageInspector.tsx`'s audit filter `<select>`**: has `create`/`restore`
+  options that are not members of the real `AuditAction` union
+  (`types/enums.ts`, Phase 2B — built strictly from grepped
+  `auditEngine.log()` call sites). Selecting either will always return
+  zero results since no code path ever logs those actions. This looks
+  like a pre-existing dead-filter UI bug, not a migration-introduced
+  issue — documented with an inline comment and cast the filter state
+  through `as any` at the one call site rather than guessing which side
+  (the UI options or the `AuditAction` union) is "wrong."
+
+No `any` used as a silent escape — the two `as any`/`unknown` casts above
+are both documented with multi-line comments explaining the specific
+pre-existing gap they bridge.
+
+### Security check
+- Grepped all 16 changed files + `index.html` for hardcoded
+  credentials/keys/tokens: none found (`utils/ai.ts` reads `apiKey` from
+  a parameter, no hardcoded fallback).
+- No RLS/permission logic touched.
+- No `.git`/CI/deploy files touched — `index.html` is a build entry
+  reference, not a deploy config file.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: clean (`vite build`, "✓ built").
+
+**This closes out Phase 3** — every remaining `.jsx`/`.js` file in `src/`
+either belongs to Phase 4 (editor/block components, `BlockRegistry.jsx`,
+`CommandRegistry.js`, `blockModel.js`, `helpers.js`, `pageTreeOps.js`,
+`Editor.jsx`, `App.jsx`) or Category C (canvas/database-adjacent files
+flagged for individual review before Phase 4 starts).

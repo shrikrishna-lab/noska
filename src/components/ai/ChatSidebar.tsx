@@ -5,13 +5,13 @@ import {
   MoreHorizontal, Trash2, Copy, Users, Check, X, Edit3, ChevronDown, ChevronRight
 } from 'lucide-react';
 
-function timeGroup(dateStr) {
+function timeGroup(dateStr: string) {
   const d = new Date(dateStr);
   const now = new Date();
-  const diff = now - d;
+  const diff = now.getTime() - d.getTime();
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startYesterday = new Date(startToday - 86400000);
-  const startWeek = new Date(startToday - now.getDay() * 86400000);
+  const startYesterday = new Date(startToday.getTime() - 86400000);
+  const startWeek = new Date(startToday.getTime() - now.getDay() * 86400000);
 
   if (d >= startToday) return 'Today';
   if (d >= startYesterday) return 'Yesterday';

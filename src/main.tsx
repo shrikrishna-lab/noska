@@ -2,18 +2,18 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.jsx";
-import MarketingLayout from "./pages/marketing/MarketingLayout.jsx";
-import MarketingHome from "./pages/marketing/Home.jsx";
-import MarketingPricing from "./pages/marketing/Pricing.jsx";
-import MarketingEnterprise from "./pages/marketing/Enterprise.jsx";
-import MarketingProduct from "./pages/marketing/Product.jsx";
-import MarketingSolutions from "./pages/marketing/Solutions.jsx";
-import MarketingResources from "./pages/marketing/Resources.jsx";
-import MarketingChangelog from "./pages/marketing/Changelog.jsx";
-import Launch from "./pages/marketing/launch/Launch.jsx";
+import MarketingLayout from "./pages/marketing/MarketingLayout";
+import MarketingHome from "./pages/marketing/Home";
+import MarketingPricing from "./pages/marketing/Pricing";
+import MarketingEnterprise from "./pages/marketing/Enterprise";
+import MarketingProduct from "./pages/marketing/Product";
+import MarketingSolutions from "./pages/marketing/Solutions";
+import MarketingResources from "./pages/marketing/Resources";
+import MarketingChangelog from "./pages/marketing/Changelog";
+import Launch from "./pages/marketing/launch/Launch";
 import "./index.css";
 
-createRoot(document.getElementById("root")).render(
+createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>

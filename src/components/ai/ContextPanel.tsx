@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ChevronLeft, FileText, Clock, Brain, BarChart3 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, FileText, Clock, Brain, BarChart3, type LucideIcon } from 'lucide-react';
 
-function CollapsibleSection({ icon: Icon, label, defaultOpen = true, children, count }) {
+interface CollapsibleSectionProps {
+  icon: LucideIcon;
+  label: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+  count?: number;
+}
+
+function CollapsibleSection({ icon: Icon, label, defaultOpen = true, children, count }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border-b border-[var(--border)] last:border-0">

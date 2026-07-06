@@ -10,6 +10,7 @@ import {
 import { timeAgo, plainText } from '../utils/helpers';
 import { getAllRelations } from '../utils/pageLinks';
 import { auditEngine } from '../lib/auditEngine';
+import type { LucideIcon } from 'lucide-react';
 
 const TABS = [
   { id: 'overview', icon: Info, label: 'Overview' },
@@ -46,7 +47,7 @@ function TabBar({ activeTab, onTabChange }) {
   );
 }
 
-function StatRow({ icon: Icon, label, value }) {
+function StatRow({ icon: Icon, label, value }: { icon: LucideIcon; label: React.ReactNode; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between py-1 text-[11px]">
       <span className="flex items-center gap-1.5 text-[var(--muted)]">
@@ -58,7 +59,7 @@ function StatRow({ icon: Icon, label, value }) {
   );
 }
 
-function EmptyState({ icon: Icon, message }) {
+function EmptyState({ icon: Icon, message }: { icon: LucideIcon; message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-6 text-center">
       <Icon size={24} className="text-[var(--muted)] mb-2 opacity-40" />
@@ -67,7 +68,21 @@ function EmptyState({ icon: Icon, message }) {
   );
 }
 
-function computePageStats(page) {
+interface PageStats {
+  words: number;
+  chars: number;
+  paragraphs: number;
+  headings: number;
+  readingTime: number;
+  images: number;
+  codeBlocks: number;
+  tables: number;
+  todos: number;
+  checkedTodos: number;
+  blocks: number;
+}
+
+function computePageStats(page: any): PageStats | Record<string, undefined> {
   if (!page) return {};
   const blocks = page.blocks || [];
   const text = plainText(page);
@@ -81,7 +96,7 @@ function computePageStats(page) {
   const tables = blocks.filter(b => b.type === 'table').length;
   const todos = blocks.filter(b => b.type === 'todo');
   const checkedTodos = todos.filter(b => b.checked).length;
-  return { words, chars, paragraphs, headings, readingTime, images, codeBlocks, tables, todos: todos.length, checkedTodos };
+  return { words, chars, paragraphs, headings, readingTime, images, codeBlocks, tables, todos: todos.length, checkedTodos, blocks: blocks.length };
 }
 
 function computeKnowledgeScore(page, pages, relations, versionsCount, auditCount, aiEvents, stats) {
@@ -148,7 +163,13 @@ function computeKnowledgeScore(page, pages, relations, versionsCount, auditCount
   return { score: Math.min(100, total), metrics };
 }
 
-function SectionHeader({ icon: Icon, label, count }) {
+interface SectionHeaderProps {
+  icon: LucideIcon;
+  label: string;
+  count?: number | string;
+}
+
+function SectionHeader({ icon: Icon, label, count }: SectionHeaderProps) {
   return (
     <div className="flex items-center justify-between px-1 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">
       <span className="flex items-center gap-1.5">
@@ -535,7 +556,7 @@ function ActivityTab({ page, pageId }) {
       action: e.action,
     }));
     const all = [...lineage, ...audit];
-    all.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     return all.slice(0, 50);
   }, [page, auditActivities]);
 
@@ -578,16 +599,22 @@ function CollaborationTab({ pageId, page }) {
 
   useEffect(() => {
     if (!pageId) return;
-    const unsubSync = window.realtimeCollab?.on?.('presence:sync', ({ pageId: pid, users }) => {
+    // window.realtimeCollab is declared `unknown` (src/vite-env.d.ts) since
+    // no assignment onto `window` exists anywhere in the codebase (grepped)
+    // — this call has always been dead code at runtime, masked by the `?.`
+    // chains below. Cast narrowly here rather than fixing/removing what
+    // looks like pre-existing dead code outside this migration's scope.
+    const collab = window.realtimeCollab as { on?: (event: string, cb: (payload: any) => void) => (() => void) } | undefined;
+    const unsubSync = collab?.on?.('presence:sync', ({ pageId: pid, users }) => {
       if (pid === pageId) setPresence(users || []);
     });
-    const unsubJoin = window.realtimeCollab?.on?.('presence:join', ({ pageId: pid, user }) => {
+    const unsubJoin = collab?.on?.('presence:join', ({ pageId: pid, user }) => {
       if (pid === pageId) setPresence(prev => {
         if (prev.find(u => u.id === user.id)) return prev;
         return [...prev, user];
       });
     });
-    const unsubLeave = window.realtimeCollab?.on?.('presence:leave', ({ pageId: pid, userId }) => {
+    const unsubLeave = collab?.on?.('presence:leave', ({ pageId: pid, userId }) => {
       if (pid === pageId) setPresence(prev => prev.filter(u => u.id !== userId));
     });
     return () => {
@@ -744,15 +771,22 @@ function VersionsTab({ page, pageId, onRestoreVersion }) {
   );
 }
 
-function AuditTab({ pageId }) {
-  const [events, setEvents] = useState([]);
+function AuditTab({ pageId }: { pageId: string }) {
+  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  // NOTE: the <select> below includes 'create' and 'restore' options that
+  // are NOT members of the real AuditAction union (types/enums.ts, grepped
+  // from every actual auditEngine.log() call site) — no code anywhere logs
+  // those two actions, so selecting them will always return zero results.
+  // This looks like a pre-existing dead-filter bug in the UI, not
+  // something introduced by this migration; flagging rather than
+  // "fixing" by guessing whether the union or the UI is wrong.
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     if (!pageId) return;
     setLoading(true);
-    const opts = filter !== 'all' ? { action: filter } : {};
+    const opts = filter !== 'all' ? { action: filter as any } : {};
     auditEngine.getPageAudit(pageId, opts).then(data => {
       setEvents(data || []);
       setLoading(false);
