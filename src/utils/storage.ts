@@ -75,5 +75,5 @@ export function storageApi() {
       return { ok: true };
     }
   };
-  return window.storage || fallback;
+  return (window as unknown as { storage?: typeof fallback }).storage || fallback;
 }

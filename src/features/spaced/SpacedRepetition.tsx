@@ -16,7 +16,16 @@ import {
 
 /* ─── SM-2 Algorithm ─── */
 
-function sm2(quality, review = {}) {
+interface ReviewState {
+  easeFactor?: number;
+  interval?: number;
+  repetition?: number;
+  nextReview?: string;
+  lastReview?: string;
+  quality?: number;
+}
+
+function sm2(quality: number, review: ReviewState = {}): Required<ReviewState> {
   let { easeFactor = 2.5, interval = 0, repetition = 0 } = review;
 
   if (quality >= 3) {

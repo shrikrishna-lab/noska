@@ -303,3 +303,98 @@ dead/unused prop being named for documentation purposes only.
 - `npx tsc --noEmit`: clean (after fixing ~220 real errors surfaced by
   enabling type-checking on these files for the first time).
 - `npm run build`: clean (`vite build`, "✓ built").
+
+### Commit
+- Committed `a3c026c` — "Convert remaining Phase 3 leaf/simple modules to
+  TypeScript" on `chore/typescript-migration` (61 files: 60 renames +
+  `vite-env.d.ts` update).
+
+---
+
+## Phase 3 — Canvas, export, spaced repetition, comments, permissions batch
+
+Converted 15 files: `src/features/canvas/**` (all 8 files, incl. `canvasStore.js`
+→ `.ts`), `src/features/export/ExportPanel.tsx`,
+`src/features/spaced/SpacedRepetition.tsx`, `src/components/comments/CommentThread.tsx`,
+`src/components/permissions/PermissionPanel.tsx`, and `src/utils/{colors,pageLinks,richText,storage}.ts`.
+All verified against the block-coupling inventory: these read `block.type`/
+`.review`/`.blocks` only as loose serialization input (markdown/HTML export,
+spaced-repetition scheduling, comment anchoring) — none dispatch through the
+`Block` union or `BlockRegistry`, so they stayed in Phase 3.
+
+### Fixes made during the loop
+- **`src/utils/richText.ts`**: the biggest fix in this batch. Defined a
+  `RichTextSpan` interface (text + optional bold/italic/underline/
+  strikethrough/code/link/color/bgColor/highlight/tag) used consistently
+  across every function in the file — `richTextToHtml`, `htmlToRichText`,
+  `normalizeRichText`, `compareRichText`, `cloneRichText`,
+  `plainTextToRichText`, the markdown tokenizer/parser. Also typed the
+  internal `WalkState`/`WalkOptions` (DOM-walking accumulator) and
+  `MarkdownToken` shapes. This was the largest single-file error count in
+  the whole migration so far (~65 errors), entirely from one missing
+  shared type definition cascading through every function signature.
+- **`src/features/canvas/canvasStore.ts`**: added `CanvasRect`,
+  `CanvasElementData`, `CanvasData`, and `Connector` interfaces (inferred
+  from `makeElement`'s per-kind return shapes and `loadCanvasData`'s
+  parsed-JSON shape). This is the canonical canvas data shape now imported
+  by `CanvasView.tsx`/`CanvasElement.tsx`/`CanvasConnectors.tsx` instead of
+  each file re-inferring loose objects.
+- **`src/hooks/useCursor.ts`**: added `CursorEntry`/`CursorMap` types
+  (this file was renamed in the previous batch but left loosely typed
+  since nothing consumed it strictly yet — `CanvasCollabLayer.tsx` in this
+  batch is the first strict consumer, which surfaced the gap).
+- **`src/features/canvas/CanvasCollabLayer.tsx`**: typed `cursors` prop as
+  `CursorMap`, `canvasWidth`/`canvasHeight` marked optional (call site in
+  `CanvasView.tsx` only ever passes `cursors`).
+- **`src/features/canvas/CanvasElement.tsx`**: `commonStyle` object needed
+  an explicit `React.CSSProperties` annotation — `position: "absolute"`
+  was widening to plain `string` without it, which doesn't satisfy CSS's
+  `Position` union.
+- **`src/features/canvas/CanvasToolbar.tsx`**: `ToolButton`'s `active`/
+  `disabled` props were being read as required from inference (some call
+  sites omit one or the other) — added an explicit `ToolButtonProps`
+  interface with both optional.
+- **`src/features/canvas/CanvasView.tsx`**: `document.activeElement` is
+  typed `Element | null`, which lacks `isContentEditable` (an `HTMLElement`
+  property) — narrowly cast at that one check.
+- **`src/features/spaced/SpacedRepetition.tsx`**: added a `ReviewState`
+  interface for the SM-2 spaced-repetition state shape (`easeFactor`/
+  `interval`/`repetition`/etc.), typed as `Required<ReviewState>` on the
+  `sm2()` return since every field is always populated on output even
+  though input fields are optional (first-time review has no prior state).
+- **`src/components/comments/CommentThread.tsx`**: `e.target.closest(...)`
+  needed a cast to `HTMLElement` (same `EventTarget` gap seen in earlier
+  batches).
+- **`src/components/permissions/PermissionPanel.tsx`**: `newRole` state
+  and `handleRoleChange`'s `role` param were inferred as plain `string`,
+  which doesn't satisfy `auditEngine.setPermission`'s `PageRole` parameter
+  (from `types/enums.ts`, Phase 2B). Imported `PageRole` and typed the
+  state/param/`<select>` `onChange` casts against it — this is a real
+  correctness improvement, since it means switching this panel's role
+  values out of sync with `PageRole`'s five-value union will now be a
+  compile error instead of a silent runtime string.
+- **`src/utils/storage.ts`**: `window.storage` is a host-injected global
+  with no declaration anywhere in the codebase (grepped — no
+  `window.storage = ...` assignment exists). Cast narrowly at the one
+  read site rather than adding another ambient global declaration, since
+  this one is genuinely local/one-off unlike the shared `SpeechRecognition`
+  case from the previous batch.
+
+No `any` used as a silent escape; all casts above are either DOM-API type
+gaps (`EventTarget`→`HTMLElement`, `Element`→`HTMLElement`) or one
+documented host-global cast, consistent with prior batches.
+
+### Security check
+- Grepped all 15 changed files for hardcoded credentials/keys/tokens: none
+  found.
+- No RLS/permission logic weakened — `PermissionPanel.tsx`'s role typing
+  change is strictly additive (compile-time enforcement of the same
+  `PageRole` union `auditEngine.ts` already enforced at runtime via
+  `ROLE_DEFAULTS` fallback); `auditEngine.ts` itself untouched.
+- No `.git`/CI/deploy files touched — `git status --short` shows exactly
+  the 15 renamed/modified files + this log.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: clean (`vite build`, "✓ built").

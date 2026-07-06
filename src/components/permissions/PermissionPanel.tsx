@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, UserPlus, X, Check } from 'lucide-react';
 import { auditEngine } from '../../lib/auditEngine';
+import type { PageRole } from '../../../types/enums';
 
 const ROLE_OPTIONS = [
   { value: 'owner', label: 'Owner', desc: 'Full access, can manage everything' },
@@ -25,12 +26,12 @@ function RoleBadge({ role }) {
   );
 }
 
-export default function PermissionPanel({ pageId, onClose }) {
-  const [permissions, setPermissions] = useState([]);
+export default function PermissionPanel({ pageId, onClose }: { pageId: string; onClose?: () => void }) {
+  const [permissions, setPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newUserId, setNewUserId] = useState('');
   const [newUserName, setNewUserName] = useState('');
-  const [newRole, setNewRole] = useState('editor');
+  const [newRole, setNewRole] = useState<PageRole>('editor');
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function PermissionPanel({ pageId, onClose }) {
     setPermissions(prev => prev.filter(p => p.user_id !== userId));
   };
 
-  const handleRoleChange = async (userId, userName, role) => {
+  const handleRoleChange = async (userId: string, userName: string, role: PageRole) => {
     await auditEngine.setPermission(pageId, userId, userName, role);
     setPermissions(prev => prev.map(p => p.user_id === userId ? { ...p, role } : p));
   };
@@ -105,7 +106,7 @@ export default function PermissionPanel({ pageId, onClose }) {
         <div className="flex gap-1">
           <select
             value={newRole}
-            onChange={(e) => setNewRole(e.target.value)}
+            onChange={(e) => setNewRole(e.target.value as PageRole)}
             className="rounded bg-[var(--surface-3)] border border-[var(--border)] px-1.5 py-1 text-[10px] text-[var(--text)] outline-none"
           >
             {ROLE_OPTIONS.map(r => (
@@ -147,7 +148,7 @@ export default function PermissionPanel({ pageId, onClose }) {
               </div>
               <select
                 value={perm.role}
-                onChange={(e) => handleRoleChange(perm.user_id, perm.user_name, e.target.value)}
+                onChange={(e) => handleRoleChange(perm.user_id, perm.user_name, e.target.value as PageRole)}
                 className="rounded bg-[var(--surface-3)] border border-[var(--border)] px-1 py-0.5 text-[9px] text-[var(--text)] outline-none"
               >
                 {ROLE_OPTIONS.map(r => (

@@ -1,7 +1,17 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import type { CursorMap } from '../../hooks/useCursor';
 
-function CollabCursor({ userId, x, y, userName, userColor, userAvatar }) {
+interface CollabCursorProps {
+  userId: string;
+  x: number;
+  y: number;
+  userName?: string;
+  userColor?: string;
+  userAvatar?: string;
+}
+
+function CollabCursor({ userId, x, y, userName, userColor, userAvatar }: CollabCursorProps) {
   return (
     <motion.div
       className="absolute pointer-events-none z-10"
@@ -22,7 +32,13 @@ function CollabCursor({ userId, x, y, userName, userColor, userAvatar }) {
   );
 }
 
-export default function CanvasCollabLayer({ cursors, canvasWidth, canvasHeight }) {
+interface CanvasCollabLayerProps {
+  cursors: CursorMap;
+  canvasWidth?: number | string;
+  canvasHeight?: number | string;
+}
+
+export default function CanvasCollabLayer({ cursors, canvasWidth, canvasHeight }: CanvasCollabLayerProps) {
   const entries = Object.entries(cursors).filter(([, c]) => c.x !== undefined && c.y !== undefined);
 
   if (entries.length === 0) return null;

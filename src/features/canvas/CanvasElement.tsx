@@ -33,7 +33,7 @@ export default function CanvasElement({
   const isText = el.kind === "text";
   const isSticky = el.kind === "sticky";
 
-  const commonStyle = {
+  const commonStyle: React.CSSProperties = {
     position: "absolute",
     left: el.x,
     top: el.y,

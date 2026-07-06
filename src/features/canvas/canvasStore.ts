@@ -25,7 +25,7 @@ export const CANVAS_COLORS = [
   { id: "red", label: "Red", fill: "#fecaca66", stroke: "#ef4444", text: "#7f1d1d" },
 ];
 
-export function colorById(id) {
+export function colorById(id: string) {
   return CANVAS_COLORS.find((c) => c.id === id) || CANVAS_COLORS[0];
 }
 
@@ -33,13 +33,13 @@ export function uid(prefix = "el") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function snap(value, enabled, grid = GRID) {
+export function snap(value: number, enabled: boolean, grid = GRID) {
   if (!enabled) return value;
   return Math.round(value / grid) * grid;
 }
 
 // ── Positions (legacy key) ────────────────────────────────────────────────
-export function loadPositions(pageId) {
+export function loadPositions(pageId: string): Record<string, { x: number; y: number }> {
   try {
     return JSON.parse(localStorage.getItem(`noska-canvas-pos-${pageId}`) || "{}");
   } catch {
@@ -47,7 +47,7 @@ export function loadPositions(pageId) {
   }
 }
 
-export function savePositions(pageId, positions) {
+export function savePositions(pageId: string, positions: Record<string, { x: number; y: number }>) {
   try {
     localStorage.setItem(`noska-canvas-pos-${pageId}`, JSON.stringify(positions));
   } catch {
@@ -55,12 +55,39 @@ export function savePositions(pageId, positions) {
   }
 }
 
+export interface CanvasElementData {
+  id: string;
+  kind: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+  color: string;
+  text?: string;
+  fontSize?: number;
+}
+
+export interface Connector {
+  id: string;
+  from: string;
+  to: string;
+  color?: string;
+}
+
+export interface CanvasData {
+  version: number;
+  elements: Record<string, CanvasElementData>;
+  connectors: Connector[];
+  blockMeta: Record<string, unknown>;
+}
+
 // ── Canvas data (elements / connectors / block meta) ──────────────────────
-export function emptyData() {
+export function emptyData(): CanvasData {
   return { version: CANVAS_VERSION, elements: {}, connectors: [], blockMeta: {} };
 }
 
-export function loadCanvasData(pageId) {
+export function loadCanvasData(pageId: string): CanvasData {
   try {
     const raw = JSON.parse(localStorage.getItem(`noska-canvas-data-${pageId}`) || "null");
     if (!raw || typeof raw !== "object") return emptyData();
@@ -75,7 +102,7 @@ export function loadCanvasData(pageId) {
   }
 }
 
-export function saveCanvasData(pageId, data) {
+export function saveCanvasData(pageId: string, data: CanvasData) {
   try {
     localStorage.setItem(`noska-canvas-data-${pageId}`, JSON.stringify(data));
   } catch {
@@ -84,7 +111,7 @@ export function saveCanvasData(pageId, data) {
 }
 
 // Default geometry for a freshly created element of a given kind.
-export function makeElement(kind, x, y) {
+export function makeElement(kind: string, x: number, y: number): CanvasElementData {
   const base = { id: uid(kind), kind, x, y, rotation: 0, color: "default" };
   switch (kind) {
     case "sticky":
@@ -102,22 +129,35 @@ export function makeElement(kind, x, y) {
   }
 }
 
+export interface CanvasRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface CanvasItem {
+  type: string;
+  id?: string;
+  el?: { x: number; y: number; w: number; h: number };
+}
+
 // Bounding box of an item (block card or element) in canvas coordinates.
-export function itemRect(item, positions) {
+export function itemRect(item: CanvasItem, positions: Record<string, { x: number; y: number }>): CanvasRect {
   if (item.type === "block") {
-    const p = positions[item.id] || { x: 0, y: 0 };
+    const p = positions[item.id!] || { x: 0, y: 0 };
     return { x: p.x, y: p.y, w: CARD_W, h: CARD_H };
   }
-  const el = item.el;
+  const el = item.el!;
   return { x: el.x, y: el.y, w: el.w, h: el.h };
 }
 
-export function rectCenter(r) {
+export function rectCenter(r: CanvasRect) {
   return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
 }
 
 // Anchor point on rect edge toward a target point (for tidy connector ends).
-export function edgeAnchor(rect, toward) {
+export function edgeAnchor(rect: CanvasRect, toward: { x: number; y: number }) {
   const c = rectCenter(rect);
   const dx = toward.x - c.x;
   const dy = toward.y - c.y;

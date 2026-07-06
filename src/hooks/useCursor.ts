@@ -1,20 +1,41 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type MouseEvent } from 'react';
 import { realtimeCollab } from '../lib/realtimeCollab';
 
 const CURSOR_EXPIRY = 5000;
 const THROTTLE_MS = 50;
 
-export function useCursor(pageId) {
-  const [cursors, setCursors] = useState({});
-  const cursorsRef = useRef({});
-  const animFrames = useRef({});
+export interface CursorEntry {
+  x: number;
+  y: number;
+  userName?: string;
+  userAvatar?: string;
+  userColor?: string;
+  targetBlockId?: string | null;
+  lastSeen: number;
+}
+
+export type CursorMap = Record<string, CursorEntry>;
+
+interface CursorMoveTarget {
+  x: number;
+  y: number;
+  userName?: string;
+  userAvatar?: string;
+  userColor?: string;
+  targetBlockId?: string | null;
+}
+
+export function useCursor(pageId: string | null | undefined) {
+  const [cursors, setCursors] = useState<CursorMap>({});
+  const cursorsRef = useRef<CursorMap>({});
+  const animFrames = useRef<Record<string, number>>({});
   const lastSend = useRef(0);
   const pageRef = useRef(pageId);
   pageRef.current = pageId;
 
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-  const animateCursor = (userId, target) => {
+  const animateCursor = (userId: string, target: CursorMoveTarget) => {
     if (animFrames.current[userId]) {
       cancelAnimationFrame(animFrames.current[userId]);
     }
@@ -22,7 +43,7 @@ export function useCursor(pageId) {
     const startTime = performance.now();
     const duration = 120;
 
-    const step = (now) => {
+    const step = (now: number) => {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / duration, 1);
       const ease = 1 - Math.pow(1 - t, 3);
@@ -59,7 +80,7 @@ export function useCursor(pageId) {
   useEffect(() => {
     if (!pageId || !realtimeCollab.isJoined()) return;
 
-    const cleanup = realtimeCollab.on('cursor:move', ({ pageId: pid, ...data }) => {
+    const cleanup = realtimeCollab.on('cursor:move', ({ pageId: pid, ...data }: { pageId: string; userId?: string } & CursorMoveTarget) => {
       if (pid !== pageRef.current) return;
       const { userId, x, y, userName, userAvatar, userColor, targetBlockId } = data;
       if (!userId) return;
@@ -89,7 +110,7 @@ export function useCursor(pageId) {
     };
   }, [pageId]);
 
-  const handleMouseMove = useCallback((e) => {
+  const handleMouseMove = useCallback((e: MouseEvent<HTMLElement>) => {
     const now = Date.now();
     if (now - lastSend.current < THROTTLE_MS) return;
     lastSend.current = now;

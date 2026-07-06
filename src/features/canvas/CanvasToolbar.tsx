@@ -16,7 +16,15 @@ const TOOLS = [
   { id: "connector", icon: Spline, label: "Connector (C)" },
 ];
 
-function ToolButton({ active, label, onClick, children, disabled }) {
+interface ToolButtonProps {
+  active?: boolean;
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+}
+
+function ToolButton({ active, label, onClick, children, disabled }: ToolButtonProps) {
   return (
     <button
       onClick={onClick}

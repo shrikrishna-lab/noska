@@ -3,7 +3,24 @@
 // Bidirectional conversion between rich text arrays and HTML.
 // ═══════════════════════════════════════════════════════════════
 
-export function escapeHtml(text) {
+// A single formatted text run — every field is optional except `text`,
+// inferred from every property read/written across this file
+// (richTextToHtml, getFormatFromElement, normalizeRichText, etc.).
+export interface RichTextSpan {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+  code?: boolean;
+  link?: string;
+  color?: string;
+  bgColor?: string;
+  highlight?: string;
+  tag?: string;
+}
+
+export function escapeHtml(text: string) {
   return text
     .replace(/&/g, '&')
     .replace(/</g, '<')
@@ -12,7 +29,7 @@ export function escapeHtml(text) {
     .replace(/'/g, "'");
 }
 
-export function unescapeHtml(text) {
+export function unescapeHtml(text: string) {
   return text
     .replace(/&/g, '&')
     .replace(/</g, '<')
@@ -21,17 +38,17 @@ export function unescapeHtml(text) {
     .replace(/'/g, "'");
 }
 
-export function isEmptyRichText(richText) {
+export function isEmptyRichText(richText: RichTextSpan[] | null | undefined) {
   if (!richText || !Array.isArray(richText)) return true;
   return richText.length === 0 || richText.every(s => !s.text);
 }
 
-export function richTextToPlainText(richText) {
+export function richTextToPlainText(richText: RichTextSpan[] | null | undefined) {
   if (!richText || !Array.isArray(richText)) return '';
   return richText.map(s => s.text || '').join('');
 }
 
-export function richTextToHtml(richText) {
+export function richTextToHtml(richText: RichTextSpan[] | null | undefined) {
   if (!richText || !Array.isArray(richText)) return '';
   
   return richText.map(span => {
@@ -82,7 +99,15 @@ export function richTextToHtml(richText) {
   }).join('');
 }
 
-function createWalkState() {
+type SpanFormat = Omit<RichTextSpan, "text">;
+
+interface WalkState {
+  spans: RichTextSpan[];
+  currentFormats: SpanFormat;
+  skipNextBreak: boolean;
+}
+
+function createWalkState(): WalkState {
   return {
     spans: [],
     currentFormats: {},
@@ -90,8 +115,8 @@ function createWalkState() {
   };
 }
 
-function getFormatFromElement(el) {
-  const formats = {};
+function getFormatFromElement(el: Element): SpanFormat {
+  const formats: SpanFormat = {};
   const tag = el.tagName?.toLowerCase();
   
   if (tag === 'strong' || tag === 'b') formats.bold = true;
@@ -102,7 +127,7 @@ function getFormatFromElement(el) {
   if (tag === 'a') formats.link = el.getAttribute('href') || undefined;
   
   if (tag === 'span' || tag === 'mark') {
-    const style = el.style;
+    const style = (el as HTMLElement).style;
     if (style.color) formats.color = style.color;
     if (style.backgroundColor) formats.bgColor = style.backgroundColor;
     if (el.classList) {
@@ -127,7 +152,11 @@ function getFormatFromElement(el) {
   return formats;
 }
 
-function walkDOM(node, state, options = {}) {
+interface WalkOptions {
+  onTextNode?: (text: string, formats: SpanFormat) => void;
+}
+
+function walkDOM(node: Node | null, state: WalkState, options: WalkOptions = {}) {
   if (!node) return;
   
   const { onTextNode = () => {} } = options;
@@ -142,7 +171,7 @@ function walkDOM(node, state, options = {}) {
   
   if (node.nodeType !== Node.ELEMENT_NODE) return;
   
-  const el = node;
+  const el = node as Element;
   const tag = el.tagName?.toLowerCase();
   
   if (tag === 'br') {
@@ -171,7 +200,7 @@ function walkDOM(node, state, options = {}) {
   state.currentFormats = savedFormats;
 }
 
-function walkDOMChildren(node, state, options) {
+function walkDOMChildren(node: Node, state: WalkState, options: WalkOptions) {
   if (!node) return;
   const childNodes = node.childNodes;
   for (let i = 0; i < childNodes.length; i++) {
@@ -179,7 +208,7 @@ function walkDOMChildren(node, state, options) {
   }
 }
 
-export function htmlToRichText(html) {
+export function htmlToRichText(html: string): RichTextSpan[] {
   if (!html || typeof html !== 'string') return [];
   
   const trimmed = html.trim();
@@ -201,7 +230,7 @@ export function htmlToRichText(html) {
     }
   });
   
-  const merged = [];
+  const merged: RichTextSpan[] = [];
   for (const span of state.spans) {
     if (span.text === '\n') continue;
     
@@ -216,7 +245,7 @@ export function htmlToRichText(html) {
   return merged.filter(s => s.text && s.text.length > 0);
 }
 
-function canMergeSpans(a, b) {
+function canMergeSpans(a: RichTextSpan, b: RichTextSpan) {
   return (
     a.bold === b.bold &&
     a.italic === b.italic &&
@@ -230,15 +259,15 @@ function canMergeSpans(a, b) {
   );
 }
 
-export function normalizeRichText(richText) {
+export function normalizeRichText(richText: RichTextSpan[] | null | undefined): RichTextSpan[] {
   if (!richText || !Array.isArray(richText)) return [];
   
-  const result = [];
+  const result: RichTextSpan[] = [];
   for (const span of richText) {
     if (!span || typeof span.text !== 'string') continue;
     if (!span.text) continue;
     
-    const normalized = { text: span.text };
+    const normalized: RichTextSpan = { text: span.text };
     if (span.bold) normalized.bold = true;
     if (span.italic) normalized.italic = true;
     if (span.underline) normalized.underline = true;
@@ -255,7 +284,7 @@ export function normalizeRichText(richText) {
   return result;
 }
 
-export function compareRichText(a, b) {
+export function compareRichText(a: RichTextSpan[] | null | undefined, b: RichTextSpan[] | null | undefined) {
   if (a === b) return true;
   if (!a || !b) return false;
   if (!Array.isArray(a) || !Array.isArray(b)) return false;
@@ -279,23 +308,31 @@ export function compareRichText(a, b) {
   return true;
 }
 
-export function cloneRichText(richText) {
+export function cloneRichText(richText: RichTextSpan[] | null | undefined): RichTextSpan[] {
   if (!richText || !Array.isArray(richText)) return [];
   return richText.map(span => ({ ...span }));
 }
 
-export function plainTextToRichText(text) {
+export function plainTextToRichText(text: string): RichTextSpan[] {
   if (!text) return [];
   return [{ text }];
 }
 
-function createToken(type, start, end, content, extra) {
+interface MarkdownToken {
+  type: string;
+  start: number;
+  end: number;
+  content: string;
+  url: string | null;
+}
+
+function createToken(type: string, start: number, end: number, content: string, extra?: { url?: string }): MarkdownToken {
   extra = extra || {};
   return { type, start, end, content, url: extra.url || null };
 }
 
-function tokenizeMarkdown(text) {
-  const tokens = [];
+function tokenizeMarkdown(text: string): MarkdownToken[] {
+  const tokens: MarkdownToken[] = [];
   let i = 0;
   const len = text.length;
 
@@ -481,14 +518,14 @@ function tokenizeMarkdown(text) {
   return tokens;
 }
 
-function hasAnyFormat(span) {
+function hasAnyFormat(span: RichTextSpan) {
   return span.bold || span.italic || span.underline || span.strikethrough || span.code || span.link;
 }
 
-function mergeAdjacentSpans(spans) {
+function mergeAdjacentSpans(spans: RichTextSpan[]): RichTextSpan[] {
   if (!spans || spans.length === 0) return [];
 
-  const merged = [];
+  const merged: RichTextSpan[] = [];
   for (const span of spans) {
     if (!span.text || span.text.length === 0) continue;
 
@@ -502,7 +539,7 @@ function mergeAdjacentSpans(spans) {
   return merged;
 }
 
-export function markdownToRichText(markdown) {
+export function markdownToRichText(markdown: string): RichTextSpan[] {
   if (!markdown || typeof markdown !== 'string') return [];
 
   const tokens = tokenizeMarkdown(markdown);
@@ -511,7 +548,7 @@ export function markdownToRichText(markdown) {
     return markdown.trim() ? [{ text: markdown }] : [];
   }
 
-  const spans = [];
+  const spans: RichTextSpan[] = [];
   let pos = 0;
 
   for (const token of tokens) {
@@ -520,7 +557,7 @@ export function markdownToRichText(markdown) {
       if (plain) spans.push({ text: plain });
     }
 
-    const formats = {};
+    const formats: SpanFormat = {};
 
     switch (token.type) {
       case 'bold-italic':

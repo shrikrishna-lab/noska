@@ -175,7 +175,7 @@ function renderText(text, pages, onNavigate) {
   });
   return <span dangerouslySetInnerHTML={{ __html: html }} onClick={(e) => {
     e.stopPropagation();
-    const mention = e.target.closest('[data-mention]');
+    const mention = (e.target as HTMLElement).closest('[data-mention]') as HTMLElement | null;
     if (mention && onNavigate) onNavigate(mention.dataset.mention, { altKey: e.altKey });
   }} />;
 }
