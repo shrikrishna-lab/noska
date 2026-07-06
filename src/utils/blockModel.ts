@@ -8,15 +8,49 @@
 //   parentId   → permission chain (single upward pointer)
 // ═══════════════════════════════════════════════════════════════
 
-export const uid = () => crypto.randomUUID();
-export const now = () => new Date().toISOString();
+/** Generic tree-node shape every function in this file actually operates
+ * on. This is deliberately NOT the real `Block` union from
+ * types/blocks.ts — that union describes the richer, helpers.js-authored
+ * runtime shape (see that file's header comment). Every function here
+ * only ever touches id/parentId/content/position/properties/isDeleted/
+ * permissionOverride, so a minimal structural shape is more honest than
+ * importing `Block` and letting extra fields silently pass through
+ * unchecked. `createBlock()`'s return satisfies this shape exactly. */
+export interface TreeBlock {
+  id: string;
+  type: string;
+  parentId: string | null;
+  content: string[];
+  position: string;
+  properties: Record<string, unknown>;
+  createdTime: string;
+  lastEditedTime: string;
+  createdBy: string | null;
+  lastEditedBy: string | null;
+  isDeleted: boolean;
+  permissionOverride: PermissionOverride | null;
+  // Every real block also carries top-level fields beyond this base shape
+  // (text, database, table, columns, ...) added by helpers.js's
+  // blockFor() — irrelevant to this file's tree/factory operations, so
+  // covered by an index signature rather than duplicating types/blocks.ts.
+  [key: string]: unknown;
+}
+
+export interface PermissionOverride {
+  type: "grant" | "public" | "workspace";
+  level: string;
+  users?: string[];
+}
+
+export const uid = (): string => crypto.randomUUID();
+export const now = (): string => new Date().toISOString();
 
 // ── Fractional indexing ──────────────────────────────────────
 // Generates a position string between `before` and `after`.
 // Example: insertBetween('a0', 'a1') → 'a05'
-export function insertBetween(before, after) {
+export function insertBetween(before: string | null | undefined, after: string | null | undefined): string {
   if (!before && !after) return 'a0';
-  if (!before) return after[0] + '0' + after.slice(1);
+  if (!before) return after![0] + '0' + after!.slice(1);
   if (!after) return before + '0';
   let i = 0;
   while (i < before.length && i < after.length && before[i] === after[i]) i++;
@@ -29,9 +63,22 @@ export function insertBetween(before, after) {
   return before + '0';
 }
 
+/** Loose partial input accepted by createBlock — callers (helpers.js's
+ * blockFor, mainly) only ever supply a subset of these fields. */
+export interface CreateBlockProps {
+  parentId?: string | null;
+  content?: string[];
+  position?: string;
+  properties?: Record<string, unknown>;
+  createdBy?: string | null;
+  lastEditedBy?: string | null;
+  isDeleted?: boolean;
+  permissionOverride?: PermissionOverride | null;
+}
+
 // ── Block factory ─────────────────────────────────────────────
 // Every block shares the same shape — only `type` differs.
-export function createBlock(type, props = {}) {
+export function createBlock(type: string, props: CreateBlockProps = {}): TreeBlock {
   return {
     id: uid(),
     type,
@@ -48,9 +95,20 @@ export function createBlock(type, props = {}) {
   };
 }
 
+interface BlockTypeDef {
+  label: string;
+  icon: string;
+  // Heterogeneous by design — every block type's default properties bag
+  // has a completely different shape (richText vs. table vs. formConfig
+  // etc.), same rationale as BaseBlock.properties in types/blocks.ts.
+  // Forcing a narrower type here would just mean casting it away at every
+  // one of the ~40 entries below for no real safety gain.
+  props: Record<string, unknown>;
+}
+
 // ── Block type definitions ────────────────────────────────────
 // Each type's default properties and compatible transforms.
-export const BLOCK_TYPES = {
+export const BLOCK_TYPES: Record<string, BlockTypeDef> = {
   page:          { label: 'Page',          icon: '📄', props: { title: '', icon: '📄', cover: null } },
   paragraph:     { label: 'Text',          icon: 'Aa', props: { richText: [] } },
   heading_1:     { label: 'Heading 1',     icon: 'H1', props: { richText: [] } },
@@ -96,21 +154,21 @@ export const BLOCK_TYPES = {
 export const BLOCK_TYPE_LIST = Object.keys(BLOCK_TYPES);
 
 // ── Tree navigation ───────────────────────────────────────────
-export function getBlock(blocks, id) {
+export function getBlock(blocks: TreeBlock[], id: string | null | undefined): TreeBlock | null {
   return blocks.find(b => b.id === id) || null;
 }
 
-export function getChildren(blocks, parentId) {
+export function getChildren(blocks: TreeBlock[], parentId: string): TreeBlock[] {
   const parent = getBlock(blocks, parentId);
   if (!parent) return [];
   return parent.content
     .map(id => getBlock(blocks, id))
-    .filter(Boolean)
+    .filter((b): b is TreeBlock => b !== null)
     .sort((a, b) => (a.position || '').localeCompare(b.position || ''));
 }
 
-export function getAncestors(blocks, blockId) {
-  const result = [];
+export function getAncestors(blocks: TreeBlock[], blockId: string): TreeBlock[] {
+  const result: TreeBlock[] = [];
   let current = getBlock(blocks, blockId);
   while (current && current.parentId) {
     const parent = getBlock(blocks, current.parentId);
@@ -120,11 +178,11 @@ export function getAncestors(blocks, blockId) {
   return result;
 }
 
-export function getDescendants(blocks, blockId) {
-  const result = [];
-  const stack = [blockId];
+export function getDescendants(blocks: TreeBlock[], blockId: string): string[] {
+  const result: string[] = [];
+  const stack: string[] = [blockId];
   while (stack.length) {
-    const id = stack.pop();
+    const id = stack.pop()!;
     const block = getBlock(blocks, id);
     if (block && block.content) {
       for (const childId of block.content) {
@@ -136,14 +194,20 @@ export function getDescendants(blocks, blockId) {
   return result;
 }
 
-export function getRootPages(blocks) {
+// Not called anywhere in the current codebase (grepped) — kept typed as
+// part of this module's public re-export surface (helpers.js re-exports
+// it) rather than removed, since removing exports is out of scope for a
+// type-only migration pass.
+export function getRootPages(blocks: TreeBlock[]): TreeBlock[] {
   return blocks
     .filter(b => b.type === 'page' && !b.parentId && !b.isDeleted)
     .sort((a, b) => (a.position || '').localeCompare(b.position || ''));
 }
 
 // ── Tree mutations (immutable) ────────────────────────────────
-export function addChild(blocks, parentId, childBlock, position) {
+// Not called anywhere in the current codebase (grepped, same as
+// getRootPages above) — typed for the same reason.
+export function addChild(blocks: TreeBlock[], parentId: string, childBlock: TreeBlock, position?: string): TreeBlock[] {
   const parent = getBlock(blocks, parentId);
   if (!parent) return blocks;
   const siblings = getChildren(blocks, parentId);
@@ -151,7 +215,7 @@ export function addChild(blocks, parentId, childBlock, position) {
     siblings.length > 0 ? siblings[siblings.length - 1].position : null,
     null
   );
-  const newBlock = { ...childBlock, parentId, position: pos };
+  const newBlock: TreeBlock = { ...childBlock, parentId, position: pos };
   const newContent = [...parent.content, newBlock.id];
   return blocks.map(b =>
     b.id === parentId ? { ...b, content: newContent } :
@@ -159,7 +223,7 @@ export function addChild(blocks, parentId, childBlock, position) {
   );
 }
 
-export function insertChildAt(blocks, parentId, childBlock, beforeId) {
+export function insertChildAt(blocks: TreeBlock[], parentId: string, childBlock: TreeBlock, beforeId?: string | null): TreeBlock[] {
   const parent = getBlock(blocks, parentId);
   if (!parent) return blocks;
   const siblings = getChildren(blocks, parentId);
@@ -167,7 +231,7 @@ export function insertChildAt(blocks, parentId, childBlock, beforeId) {
   const before = idx > 0 ? siblings[idx - 1].position : null;
   const after = idx < siblings.length ? siblings[idx].position : null;
   const pos = insertBetween(before, after);
-  const newBlock = { ...childBlock, parentId, position: pos };
+  const newBlock: TreeBlock = { ...childBlock, parentId, position: pos };
   const newContent = [...parent.content];
   const insertIdx = beforeId ? newContent.indexOf(beforeId) : newContent.length;
   if (insertIdx >= 0) newContent.splice(insertIdx, 0, newBlock.id);
@@ -178,7 +242,7 @@ export function insertChildAt(blocks, parentId, childBlock, beforeId) {
   );
 }
 
-export function removeChild(blocks, parentId, childId) {
+export function removeChild(blocks: TreeBlock[], parentId: string, childId: string): TreeBlock[] {
   const parent = getBlock(blocks, parentId);
   if (!parent) return blocks;
   return blocks.map(b =>
@@ -186,7 +250,7 @@ export function removeChild(blocks, parentId, childId) {
   );
 }
 
-export function moveBlock(blocks, blockId, newParentId, beforeId) {
+export function moveBlock(blocks: TreeBlock[], blockId: string, newParentId: string, beforeId?: string | null): TreeBlock[] {
   const block = getBlock(blocks, blockId);
   if (!block) return blocks;
   let result = blocks;
@@ -208,12 +272,12 @@ export function moveBlock(blocks, blockId, newParentId, beforeId) {
   );
 }
 
-export function duplicateSubtree(blocks, rootId) {
+export function duplicateSubtree(blocks: TreeBlock[], rootId: string): TreeBlock[] {
   const origBlock = getBlock(blocks, rootId);
   if (!origBlock) return blocks;
-  const idMap = {};
+  const idMap: Record<string, string> = {};
   const oldIds = [rootId, ...getDescendants(blocks, rootId)];
-  const newBlocks = [];
+  const newBlocks: TreeBlock[] = [];
   for (const oldId of oldIds) {
     const newId = uid();
     idMap[oldId] = newId;
@@ -221,7 +285,7 @@ export function duplicateSubtree(blocks, rootId) {
   for (const oldId of oldIds) {
     const orig = getBlock(blocks, oldId);
     if (!orig) continue;
-    const copy = JSON.parse(JSON.stringify(orig));
+    const copy: TreeBlock = JSON.parse(JSON.stringify(orig));
     copy.id = idMap[oldId];
     copy.content = (orig.content || []).map(cid => idMap[cid] || cid);
     copy.createdTime = now();
@@ -231,37 +295,44 @@ export function duplicateSubtree(blocks, rootId) {
   return [...blocks, ...newBlocks];
 }
 
-export function softDelete(blocks, blockId) {
+export function softDelete(blocks: TreeBlock[], blockId: string): TreeBlock[] {
   const descIds = getDescendants(blocks, blockId);
   const allIds = [blockId, ...descIds];
   return blocks.map(b => allIds.includes(b.id) ? { ...b, isDeleted: true } : b);
 }
 
-export function restore(blocks, blockId) {
+export function restore(blocks: TreeBlock[], blockId: string): TreeBlock[] {
   const descIds = getDescendants(blocks, blockId);
   const allIds = [blockId, ...descIds];
   return blocks.map(b => allIds.includes(b.id) ? { ...b, isDeleted: false } : b);
 }
 
 // ── Permission resolution ─────────────────────────────────────
-export function resolvePermission(blocks, blockId, userId) {
-  const inheritMap = {};
+// Not called anywhere in the current codebase (grepped) — typed for the
+// same reason as getRootPages/addChild/etc. above.
+export function resolvePermission(blocks: TreeBlock[], blockId: string, userId: string | null | undefined): string | null {
   let current = getBlock(blocks, blockId);
   while (current) {
     if (current.permissionOverride) {
       const override = current.permissionOverride;
-      if (override.type === 'grant' && override.users?.includes(userId)) return override.level;
+      if (override.type === 'grant' && userId && override.users?.includes(userId)) return override.level;
       if (override.type === 'public') return override.level;
       if (override.type === 'workspace') return 'view';
     }
-    inheritMap[current.id] = true;
     if (!current.parentId) break;
     current = getBlock(blocks, current.parentId);
   }
   return null;
 }
 
-export function getEffectivePermission(blocks, blockId) {
+export interface EffectivePermission {
+  blockId: string;
+  permission: PermissionOverride;
+}
+
+// Not called anywhere in the current codebase (grepped) — typed for the
+// same reason as the functions above.
+export function getEffectivePermission(blocks: TreeBlock[], blockId: string): EffectivePermission | null {
   let current = getBlock(blocks, blockId);
   while (current) {
     if (current.permissionOverride) return { blockId: current.id, permission: current.permissionOverride };
@@ -271,9 +342,24 @@ export function getEffectivePermission(blocks, blockId) {
   return null;
 }
 
+/** Loose shape for the `page`/`pages` params below — this file predates
+ * (and is more permissive than) the real `Page` interface in
+ * src/lib/supabaseService.ts. Only `id`/`parentId`/`permission` are ever
+ * read here, so a minimal structural shape (rather than importing `Page`
+ * and creating a cross-layer dependency from this low-level utils file
+ * into the data layer) keeps this function usable with either a real
+ * `Page` or a bare block-shaped object, matching how it's actually called
+ * (`getPagePermission(page, pages)` in src/components/Editor.jsx passes
+ * real `Page` objects, which satisfy this structurally). */
+interface PermissionCheckable {
+  id: string;
+  parentId?: string | null;
+  permission?: string;
+}
+
 // Walk parentId chain to determine if a page is read-only.
 // Returns 'edit' or 'view'.
-export function getPagePermission(page, pages) {
+export function getPagePermission(page: PermissionCheckable | null | undefined, pages: PermissionCheckable[]): "edit" | "view" {
   if (!page) return 'edit';
   if (page.permission === 'view') return 'view';
   if (page.parentId) {
@@ -284,10 +370,10 @@ export function getPagePermission(page, pages) {
 }
 
 // ── Block type transformation ─────────────────────────────────
-export function turnInto(block, newType) {
+export function turnInto(block: TreeBlock, newType: string): TreeBlock {
   const typeDef = BLOCK_TYPES[newType];
   if (!typeDef) return block;
-  const compatibleProps = {};
+  const compatibleProps: Record<string, unknown> = {};
   const oldProps = block.properties || {};
   const newDefaults = typeDef.props;
   for (const key of Object.keys(newDefaults)) {
@@ -300,21 +386,47 @@ export function turnInto(block, newType) {
   return { ...block, type: newType, properties: compatibleProps };
 }
 
+/** Loose shape for the block param below — this predates types/blocks.ts
+ * and only ever reads `type`/`properties`, same rationale as
+ * PermissionCheckable above. */
+interface TitleReadable {
+  type: string;
+  properties?: { title?: string; richText?: Array<{ text?: string }> };
+}
+
 // ── Block title helper ────────────────────────────────────────
-export function getBlockTitle(block) {
+export function getBlockTitle(block: TitleReadable | null | undefined): string {
   if (!block) return '';
   if (block.type === 'page') return block.properties?.title || '';
   const richText = block.properties?.richText || [];
   return richText.map(r => r.text || '').join('');
 }
 
-export function setBlockTitle(block, title) {
+export function setBlockTitle<T extends TitleReadable>(block: T, title: string): T {
   if (block.type === 'page') return { ...block, properties: { ...block.properties, title } };
   return { ...block, properties: { ...block.properties, richText: [{ text: title }] } };
 }
 
+/** Return shape of makeEmptyDatabase() — matches the `DatabaseSchema`
+ * interface in types/blocks.ts field-for-field (this is in fact the sole
+ * runtime producer of that shape), but re-declared locally rather than
+ * imported to avoid this low-level utils file depending on the
+ * block-shape type module for a single return-type annotation. Callers
+ * that need the real `DatabaseSchema` type (e.g. DatabaseBlock.tsx)
+ * already cast this call site's result — see that file's comment. */
+export interface EmptyDatabase {
+  view: string;
+  groupBy: string;
+  filter: string;
+  sort: string;
+  properties: Array<{ id: string; name: string; type: string }>;
+  rows: unknown[];
+  views: Array<{ id: string; name: string; type: string }>;
+  activeViewId: string;
+}
+
 // ── Utils ─────────────────────────────────────────────────────
-export function makeEmptyDatabase() {
+export function makeEmptyDatabase(): EmptyDatabase {
   // Minimal empty structure: a single "Name" title column and zero rows.
   // No pre-seeded sample columns/rows — the user builds their own schema.
   // Additional properties (Status, Date, etc.) are added on demand via the UI.

@@ -904,3 +904,155 @@ silencing escape anywhere in this batch. Every cast (`DatabaseSchema`,
 ### Heartbeat
 - Tier 1 batch converted and verified clean. Ready to commit as "Convert
   leaf block renderers to TypeScript" on branch `chore/typescript-migration`.
+
+---
+
+## Phase 4 — Tier 2 Sub-loop A: blockModel.js → pageTreeOps.js → helpers.js
+
+Converted the three utils files that Editor.jsx/App.jsx (Tier 2's
+remaining two files) depend on, run as one autonomous sub-loop per plan.
+
+### `blockModel.ts`
+- Added `TreeBlock` (the minimal id/parentId/content/position/properties/
+  timestamps shape every function in this file actually operates on —
+  deliberately not the real `Block` union, see inline comment) and typed
+  every tree-navigation/mutation/permission function against it.
+- `BLOCK_TYPES` typed as `Record<string, { label, icon, props:
+  Record<string, unknown> }>` per the pre-approved plan — the props bag
+  stays heterogeneous by design.
+- `makeEmptyDatabase()` given a real `EmptyDatabase` return interface
+  (re-declared locally rather than importing `DatabaseSchema` from
+  types/blocks.ts, to avoid a cross-layer import for one return type —
+  see inline comment).
+- **Confirmed dead code, not touched**: grepped every export from this
+  file — `getRootPages`, `addChild`, `insertChildAt` (wait, `insertChildAt`
+  IS imported/re-exported but has no call sites either), `removeChild`,
+  `moveBlock` (the blockModel.ts one, distinct from App.jsx's own local
+  `moveBlock` function), `resolvePermission`, `getEffectivePermission` —
+  none have any real call site anywhere in the codebase. Typed them
+  anyway (they're part of the public re-export surface) but flagged with
+  a one-line "not called anywhere" comment each rather than silently
+  guessing they're safe to change behaviorally.
+- `tsc --noEmit` scoped to this file: clean, no fixes needed.
+
+### `pageTreeOps.ts`
+- Typed `isPageEntity`/`ensurePageEntity` against a loose
+  `PageEntityCandidate` shape (called on both real `Page`s and raw
+  block-shaped records elsewhere, per the pre-approved plan).
+- Typed `normalizePages`, `getPageSubtreeIds`, `getAncestorPath` against
+  the real `Page` type from `supabaseService.ts`.
+- **Real gap fixed in `types/lib/supabaseService.ts`'s `Page` interface**:
+  `content` (ordered child-page-id array) is read/written pervasively
+  (`PageTree.jsx`, `InPageChildren.jsx`, `TreeEngine.js`, `App.jsx`, and
+  this file) but was entirely absent from `Page`. Confirmed via grep of
+  `types/supabase.ts`'s `pages` table Row/Insert/Update that `content` is
+  NOT a DB column — it's a purely client-side, session-computed field
+  that `normalizePages()` rebuilds from `parentId` (+ order hints) on
+  every load and `mapPageToDb` never persists. Added as `content?:
+  string[]` on `Page` with a comment documenting exactly why it's
+  optional and non-persisted, rather than leaving every consumer to keep
+  guessing/casting around a missing field.
+- The lower-level block-list helpers (`flattenBlockIds`,
+  `computeContentInsertIndex`, `insertBlockAfterTree`, etc.) typed
+  against a local `FlatBlock` shape (id/parentId/content/linkedPageId) —
+  distinct from blockModel.ts's `TreeBlock` since these also read
+  `linkedPageId`, not worth importing across utils files for one field.
+- Verified known consumers still resolve after this file's conversion:
+  `TreeEngine.js`, `App.jsx`, `PageTree.jsx`, `InPageChildren.jsx`,
+  `Breadcrumbs.tsx` — all clean, no new errors introduced in any of them.
+- `tsc --noEmit` scoped to this file + consumers: clean.
+
+### `helpers.ts`
+- `blockFor()`'s return type: **narrowed per-branch to the real `Block`
+  union member for every reachable branch** (`DatabaseBlock`,
+  `TableBlock`, `CodeBlockData`, `ColumnsBlock`, `TabsBlock`, `FormBlock`,
+  `TemplateButtonBlock`, `PageListBlock`), not a broad fallback — this was
+  achievable for every branch since the function is a single flat
+  if/else-if chain keyed on the same `type` string used both for the
+  BLOCK_TYPES lookup and the post-construction field-hoisting further
+  down, so each branch's real output shape is knowable at the call site.
+  The one true fallback (`GenericBlock`) legitimately covers ~20+ types
+  that all share the identical `text`/`properties`-only shape (divider,
+  video, audio, mermaid, chart types, embed types, etc.) — one shared
+  branch for a shared shape is correct per-branch narrowing, not "giving
+  up broad" for those types.
+- Confirmed this narrowing against every real call site of `blockFor()`
+  across the codebase (helpers.ts's own `textToBlocks`/`parseTableLines`,
+  `VoiceCapture.tsx`, `WebClipper.tsx`, `Editor.jsx`,
+  `SelectionAIBar.jsx`, `CommandRegistry.ts`'s `blockForTree`/
+  `blockForDatabaseView`) — no call site needed a type incompatible with
+  the new narrowed return.
+- **Real bug fix #1**: the `type === 'database'` check that decides
+  whether to merge in `makeEmptyDatabase()`'s seeded view compared the
+  raw `type` argument literally, which never matches `'database-inline'`/
+  `'database-full'` (only the *mapped* `propsType` equals `'database'`
+  for those two — see `TYPE_TO_PROPS`). Confirmed via grep that nothing
+  else fills the gap; `DatabasePage.jsx` silently patches around it with
+  its own `db.views = db.views || []` defensive defaults, which masked
+  the missing seeded "Table" view rather than surfacing it. Fixed by
+  checking `propsType` instead of `type`.
+- **Real bug fix #2**: the `form` branch seeds `props.submissions = []`
+  but only ever hoisted `formConfig` to the top-level block field, never
+  `submissions` — so a freshly created form block had `block.submissions`
+  entirely absent rather than `[]`. Low real-world impact (`FormsBlock.tsx`
+  already defaults with `block.submissions || []`), but a genuine
+  inconsistency between what the function seeds and what it returns.
+  Fixed to hoist both fields consistently.
+- **Real bug fix #3** (`types/blocks.ts`, surfaced while fixing the
+  `blockForDatabaseView` ripple below): `DatabaseViewDefinition.type` was
+  missing `"feed"`, `"dashboard"`, and `"map"` — all three are real
+  runtime view types (`src/modules/database/components/DatabaseView.jsx`'s
+  `VIEW_MAP` renders `FeedView`/`DashboardView` for them, and
+  `CommandRegistry.ts`'s "feed-view"/"dashboard-view"/"map-view" slash
+  commands construct blocks with these exact literal view-type strings).
+  Added to the union.
+- `window.__blocks` in `plainText()`: confirmed via grep (same as the
+  earlier `window.realtimeCollab` finding from a prior Phase-3 batch) that
+  nothing anywhere assigns `window.__blocks` — this branch has always been
+  dead code, always falling through to `page.blocks || []`. Left as-is
+  (not in scope to remove dead branches during a type migration) but
+  typed and documented.
+- `migrateLegacyIds` typed against minimal `LegacyPage`/`LegacyChat`
+  shapes (runs once over raw fetched records before they're normalized
+  into real `Page`/chat shapes).
+- Ripple fix in `src/core/commands/CommandRegistry.ts`: `blockForTree`/
+  `blockForDatabaseView` previously received `blockFor()`'s untyped
+  (effectively `any`) return and worked around it silently.
+  `blockForDatabaseView` now narrows `blockFor("database", ...)`'s result
+  to `DatabaseBlock` (aliased `DatabaseBlockData` to avoid the
+  component/type name collision) and its `viewType` param is typed
+  against `DatabaseViewDefinition["type"]` instead of a bare `string`.
+- `tsc --noEmit` scoped to this file + full project: clean after the
+  `CommandRegistry.ts` ripple fix above.
+
+No `any`, silent `unknown`, `@ts-ignore`, or `@ts-nocheck` used as a
+silencing escape anywhere in this sub-loop. Every cast in `blockFor()`'s
+per-branch return narrowing (`as ColumnsBlock`, `as unknown as
+DatabaseBlock`, etc.) is a standard "I built this object to satisfy this
+exact shape, tell TS to trust the branch logic above it" pattern, same as
+the analogous casts in Tier 1's `FormsBlock.tsx`/`DatabaseBlock.tsx`.
+
+### Security check
+- Grepped `blockModel.ts`/`pageTreeOps.ts`/`helpers.ts` for hardcoded
+  credentials/keys/tokens: none found.
+- No RLS/permission/auth logic weakened: `getPagePermission`/
+  `resolvePermission`/`getEffectivePermission` behavior is unchanged
+  (typed only); the three real bugs fixed above are all data-shape gaps
+  (missing default views, missing hoisted field, missing type-union
+  member), not permission/security logic.
+- No `.git`/CI/deploy files touched — `git status --short` shows exactly
+  the 3 converted utils files + `CommandRegistry.ts` (ripple fix) +
+  `supabaseService.ts` (`Page.content` addition) + `types/blocks.ts`
+  (`ColumnsBlock`/`DatabaseViewDefinition` fixes) + this log.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean (full project).
+- `npm run build`: succeeded (`vite build`, exit code 0; only pre-existing
+  chunk-size warnings).
+- `npx vitest run`: **140/140 tests pass** (full suite).
+
+### Heartbeat
+- Sub-loop A converted and verified clean. Ready to commit as "Convert
+  blockModel, pageTreeOps, and helpers to TypeScript" on branch
+  `chore/typescript-migration`.

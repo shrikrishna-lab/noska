@@ -52,6 +52,15 @@ export interface Page {
   lineage: LineageEntry[];
   updatedAt: string | null;
   createdAt: string | null;
+  /** Ordered list of child page ids — NOT a `pages` table column (grepped
+   * types/supabase.ts's `pages` Row/Insert/Update: no `content` field
+   * exists there). This is a purely client-side, session-computed field:
+   * src/utils/pageTreeOps.ts's `normalizePages()` rebuilds it from each
+   * page's `parentId` (plus optional order hints) every time pages are
+   * loaded (src/App.jsx, on every fetch), and mapPageToDb below never
+   * sends it to the DB. Optional because a freshly-fetched `Page` (via
+   * `mapPageFromDb`) won't have it until `normalizePages()` runs. */
+  content?: string[];
 }
 
 /** Loose partial input accepted by savePage/savePages/mapPageToDb — pages

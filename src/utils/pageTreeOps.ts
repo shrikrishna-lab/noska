@@ -1,22 +1,35 @@
 // Page tree operations — render tree (content[]) + permission tree (parentId)
+import type { Page } from "../lib/supabaseService";
 
-export function isPageEntity(block) {
+/** Loose shape covering both a full `Page` and a bare block-shaped object
+ * — `isPageEntity`/`ensurePageEntity` are called on both real pages and
+ * raw block records elsewhere in the app (e.g. TreeEngine.js passes
+ * items from a flattened block list), so this can't be narrowed to
+ * `Page` alone without breaking those call sites. */
+interface PageEntityCandidate {
+  type?: string;
+  title?: string;
+  blocks?: unknown;
+  properties?: unknown;
+}
+
+export function isPageEntity(block: PageEntityCandidate | null | undefined): boolean {
   if (!block) return false;
   if (block.type === 'page') return true;
   return block.title !== undefined && Array.isArray(block.blocks) && !block.properties;
 }
 
-export function ensurePageEntity(page) {
+export function ensurePageEntity<T extends PageEntityCandidate>(page: T): T {
   if (!page) return page;
   if (page.type === 'page') return page;
   if (page.title !== undefined && Array.isArray(page.blocks)) return { ...page, type: 'page' };
   return page;
 }
 
-export function normalizePages(sourcePages, orderHints = new Map()) {
+export function normalizePages(sourcePages: Page[], orderHints: Map<string, string[]> = new Map()): Page[] {
   const pages = sourcePages.map(ensurePageEntity);
   const validIds = new Set(pages.map((p) => p.id));
-  const childrenByParent = new Map();
+  const childrenByParent = new Map<string, string[]>();
 
   const normalizedParents = pages.map((page) => {
     const parentId = page.parentId && validIds.has(page.parentId) && page.parentId !== page.id
@@ -32,8 +45,8 @@ export function normalizePages(sourcePages, orderHints = new Map()) {
 
   return normalizedParents.map((page) => {
     const childIds = childrenByParent.get(page.id) || [];
-    const ordered = [];
-    const addChild = (id) => {
+    const ordered: string[] = [];
+    const addChild = (id: string) => {
       if (childIds.includes(id) && !ordered.includes(id)) ordered.push(id);
     };
     (orderHints.get(page.id) || []).forEach(addChild);
@@ -43,7 +56,23 @@ export function normalizePages(sourcePages, orderHints = new Map()) {
   });
 }
 
-function childBlockIds(blocks, parentId) {
+/** Loose shape for the `blocks` param of the functions below — these
+ * operate on a flattened array of block-shaped records (each carrying
+ * `id`/`parentId`/`content`, same minimal shape as blockModel.ts's
+ * `TreeBlock`) rather than the `Page[]` array `normalizePages` above
+ * works with. Kept structurally minimal instead of importing `TreeBlock`
+ * from blockModel.ts, since these functions also read `linkedPageId`
+ * (not part of that shape) and importing across utils files for a single
+ * shared field isn't worth the coupling. */
+interface FlatBlock {
+  id: string;
+  parentId?: string | null;
+  content?: string[];
+  linkedPageId?: string;
+  [key: string]: unknown;
+}
+
+function childBlockIds(blocks: FlatBlock[], parentId: string | null): string[] {
   const ids = new Set(blocks.map((b) => b.id));
   if (!parentId) {
     return blocks
@@ -59,8 +88,8 @@ function childBlockIds(blocks, parentId) {
   return [...explicit, ...implicit];
 }
 
-export function flattenBlockIds(blocks, parentId = null, seen = new Set()) {
-  const result = [];
+export function flattenBlockIds(blocks: FlatBlock[], parentId: string | null = null, seen: Set<string> = new Set()): string[] {
+  const result: string[] = [];
   for (const id of childBlockIds(blocks, parentId)) {
     if (seen.has(id)) continue;
     seen.add(id);
@@ -78,14 +107,21 @@ export function flattenBlockIds(blocks, parentId = null, seen = new Set()) {
   return result;
 }
 
-function pageBlockIndex(blocks, flatIds, pageId) {
+function pageBlockIndex(blocks: FlatBlock[], flatIds: string[], pageId: string): number {
   const direct = flatIds.indexOf(pageId);
   if (direct >= 0) return direct;
   const linked = blocks.find((b) => b.linkedPageId === pageId);
   return linked ? flatIds.indexOf(linked.id) : -1;
 }
 
-export function computeContentInsertIndex(parentPage, afterBlockId) {
+/** Loose shape for the `parentPage` param — only `blocks`/`content` are
+ * read here, structurally satisfied by a real `Page`. */
+interface ContentInsertTarget {
+  blocks?: FlatBlock[];
+  content?: string[];
+}
+
+export function computeContentInsertIndex(parentPage: ContentInsertTarget, afterBlockId: string): number {
   const blocks = parentPage.blocks || [];
   const flatIds = flattenBlockIds(blocks);
   const afterIdx = flatIds.indexOf(afterBlockId);
@@ -100,46 +136,46 @@ export function computeContentInsertIndex(parentPage, afterBlockId) {
   return insertAt;
 }
 
-export function getPageSubtreeIds(pageId, sourcePages) {
+export function getPageSubtreeIds(pageId: string, sourcePages: Page[]): Set<string> {
   const byId = new Map(sourcePages.map((page) => [page.id, page]));
-  const result = new Set();
+  const result = new Set<string>();
 
-  const visit = (id) => {
+  const visit = (id: string) => {
     if (!byId.has(id) || result.has(id)) return;
     result.add(id);
     const page = byId.get(id);
     sourcePages.forEach((candidate) => {
       if (candidate.parentId === id) visit(candidate.id);
     });
-    (page.content || []).forEach(visit);
+    (page?.content || []).forEach(visit);
   };
 
   visit(pageId);
   return result;
 }
 
-export function getAncestorPath(pageId, allPages) {
+export function getAncestorPath(pageId: string, allPages: Page[]): Page[] {
   const byId = new Map(allPages.map(p => [p.id, p]));
-  const path = [];
+  const path: Page[] = [];
   let cursor = byId.get(pageId);
   while (cursor) {
     path.unshift(cursor);
-    cursor = cursor.parentId ? byId.get(cursor.parentId) : null;
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
   }
   return path;
 }
 
-export function insertBlockAfterTree(blocks, afterId, newBlock) {
+export function insertBlockAfterTree(blocks: FlatBlock[], afterId: string, newBlock: FlatBlock): FlatBlock[] {
   const anchor = blocks.find((block) => block.id === afterId);
   if (!anchor) return [...blocks, newBlock];
   const parentId = anchor.parentId || null;
-  const blockToInsert = { ...newBlock, parentId, content: newBlock.content || [] };
+  const blockToInsert: FlatBlock = { ...newBlock, parentId, content: newBlock.content || [] };
   const next = moveArrayItemAfter([...blocks, blockToInsert], blockToInsert.id, afterId);
   if (!parentId) return next;
   return insertChildBlockAfter(next, parentId, blockToInsert.id, afterId);
 }
 
-function moveArrayItemAfter(items, itemId, afterId) {
+function moveArrayItemAfter(items: FlatBlock[], itemId: string, afterId: string): FlatBlock[] {
   const next = [...items];
   const from = next.findIndex((block) => block.id === itemId);
   const after = next.findIndex((block) => block.id === afterId);
@@ -150,7 +186,7 @@ function moveArrayItemAfter(items, itemId, afterId) {
   return next;
 }
 
-function insertChildBlockAfter(blocks, parentId, childId, afterId) {
+function insertChildBlockAfter(blocks: FlatBlock[], parentId: string, childId: string, afterId: string): FlatBlock[] {
   return blocks.map((block) => {
     if (block.id !== parentId) return block;
     const content = (Array.isArray(block.content) ? block.content : []).filter((id) => id !== childId);
@@ -161,7 +197,7 @@ function insertChildBlockAfter(blocks, parentId, childId, afterId) {
   });
 }
 
-export function insertSubpageInTree(pages, parentPageId, afterBlockId, subpage, pageBlock) {
+export function insertSubpageInTree(pages: Page[], parentPageId: string, afterBlockId: string, subpage: Page, pageBlock: FlatBlock): Page[] {
   const parent = pages.find((p) => p.id === parentPageId);
   if (!parent) return pages;
 
@@ -169,10 +205,10 @@ export function insertSubpageInTree(pages, parentPageId, afterBlockId, subpage, 
   const insertAt = computeContentInsertIndex(parent, afterBlockId);
   content.splice(insertAt, 0, subpage.id);
 
-  const nextBlocks = insertBlockAfterTree(parent.blocks || [], afterBlockId, pageBlock);
+  const nextBlocks = insertBlockAfterTree((parent.blocks as unknown as FlatBlock[]) || [], afterBlockId, pageBlock);
 
   const withSubpage = pages.map((p) => {
-    if (p.id === parentPageId) return { ...p, content, blocks: nextBlocks };
+    if (p.id === parentPageId) return { ...p, content, blocks: nextBlocks as unknown as Page["blocks"] };
     return p;
   });
 

@@ -1,5 +1,9 @@
 import { blockFor } from "../../utils/helpers";
 import type { Page } from "../../lib/supabaseService";
+// Aliased to avoid colliding with this file's own local usage patterns
+// (same pattern as the DatabaseBlock component/type collision resolved
+// in earlier Phase-4 batches).
+import type { DatabaseBlock as DatabaseBlockData, DatabaseViewDefinition } from "../../../types/blocks";
 
 // ── Command Definition ─────────────────────────────────────────
 // Each command: { id, title, aliases, icon, category, description,
@@ -1103,8 +1107,12 @@ function blockForTree(block: any, type: string, text: string = block.text || "")
   };
 }
 
-function blockForDatabaseView(block: any, viewType: string, text: string = block.text || "") {
-  const next = blockFor("database", text);
+function blockForDatabaseView(block: any, viewType: DatabaseViewDefinition["type"], text: string = block.text || "") {
+  // blockFor("database", ...) always returns a DatabaseBlock (see
+  // helpers.ts's per-branch narrowing) — narrow the broader Block return
+  // here since this function specifically only ever calls it with
+  // "database".
+  const next = blockFor("database", text) as DatabaseBlockData;
   const defaultViews = [...(next.database?.views || [])];
   if (defaultViews.length > 0) defaultViews[0] = { ...defaultViews[0], type: viewType, name: viewType.charAt(0).toUpperCase() + viewType.slice(1) };
   return {
@@ -1113,7 +1121,7 @@ function blockForDatabaseView(block: any, viewType: string, text: string = block
     parentId: block.parentId || null,
     content: block.content || [],
     text,
-    properties: { ...next.properties, view: viewType },
+    properties: { ...(next as unknown as { properties?: Record<string, unknown> }).properties, view: viewType },
     database: { ...next.database, view: viewType, views: defaultViews },
   };
 }

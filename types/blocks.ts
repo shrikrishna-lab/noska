@@ -88,7 +88,14 @@ export interface DatabasePropertyDefinition {
 
 export interface DatabaseViewDefinition {
   id: string;
-  type: "table" | "board" | "calendar" | "timeline" | "gallery" | "list" | "graph" | "mind-map";
+  // "feed"/"dashboard"/"map" added (real bug fix, Phase 4 Tier 2 sub-loop
+  // A): confirmed against src/modules/database/components/DatabaseView.jsx's
+  // VIEW_MAP (which renders all three via lazy-loaded FeedView/
+  // DashboardView + a "coming soon" placeholder for any unmapped type)
+  // and src/core/commands/CommandRegistry.ts's "feed-view"/"dashboard-view"/
+  // "map-view" slash commands, which all call blockForDatabaseView with
+  // these exact literal strings. Previously missing from this union.
+  type: "table" | "board" | "calendar" | "timeline" | "gallery" | "list" | "graph" | "mind-map" | "feed" | "dashboard" | "map";
   name: string;
   sort?: string;
   sortAsc?: boolean;
