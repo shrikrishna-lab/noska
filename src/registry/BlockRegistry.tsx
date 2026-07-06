@@ -5,10 +5,31 @@ import {
   LayoutDashboard, Calendar, Clock, MapPin, BarChart3, LineChart, PieChart,
   Hash, FormInput, Database, BookOpen, Edit3, Square, Route, Copy, ToggleLeft,
   Columns2, Columns3, Sparkles, Users, Smile, FolderOpen, ExternalLink,
-  GitFork, MapPinned, Pen, FilePlus, Eye, Monitor, Grid3X3, VideoIcon, Workflow, FileArchive
+  GitFork, MapPinned, Pen, FilePlus, Eye, Monitor, Grid3X3, VideoIcon, Workflow, FileArchive,
+  type LucideIcon
 } from "lucide-react";
 
-export const BlockType = {
+// Metadata describing every block type offered in the slash-command /
+// insert-block UI. This is a separate taxonomy from `types/blocks.ts`'s
+// `Block` union: `Block` models the actual runtime shape a block takes
+// once created (discriminated by `type`, with type-specific fields like
+// `database`/`table`/`tabs`), whereas this registry is purely UI-facing
+// metadata (label/icon/category/shortcut/badge) for every insertable
+// block "kind" the editor exposes — including ~30 embed provider ids
+// (figma, loom, tweet, etc.) that all collapse to the single
+// `embed-generic`-shaped runtime block, and view-only ids (table-view,
+// board-view, etc.) that are UI variants of a `database` block, not
+// distinct `Block` union members themselves.
+export interface BlockRegistryEntry {
+  type: string;
+  label: string;
+  icon: LucideIcon;
+  category: string;
+  shortcut?: string;
+  badge?: string;
+}
+
+export const BlockType: Record<string, string> = {
   AI_MEETING_NOTES: "ai-meeting-notes",
   TEXT: "text",
   H1: "h1",
@@ -101,7 +122,7 @@ export const BlockType = {
   ZIP: "zip",
 };
 
-export const BlockRegistry = [
+export const BlockRegistry: BlockRegistryEntry[] = [
   // 1. Suggested
   { type: "ai-meeting-notes", label: "AI Meeting Notes", icon: Sparkles, category: "Suggested", badge: "Beta" },
 

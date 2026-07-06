@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import * as fc from "fast-check";
-import { getCommand, getFilteredCommands, getAllCommands } from "../CommandRegistry";
+import { getCommand, getFilteredCommands, getAllCommands, type CommandContext } from "../CommandRegistry";
 import { BlockRegistry } from "../../../registry/BlockRegistry";
 
 /**
@@ -256,19 +256,23 @@ describe("Property 6: Page toggle commands invert boolean state", () => {
           const cmd = getCommand(commandId);
           expect(cmd).toBeTruthy();
 
-          let pagePatch = null;
-          const ctx = {
-            page: { [property]: currentValue },
+          let pagePatch: Record<string, unknown> | null = null;
+          // Deliberately a partial fake Page — this test only exercises a
+          // single toggled property, not a real page shape. Cast through
+          // `as any` at the ctx boundary rather than constructing a full
+          // Page fixture that's irrelevant to what's under test.
+          const ctx: CommandContext = {
+            page: { [property]: currentValue } as any,
             block: { id: "test-block", parentId: null, content: [], text: "" },
             text: "",
-            onPagePatch(patch) { pagePatch = patch; },
+            onPagePatch(patch: Record<string, unknown>) { pagePatch = patch; },
           };
 
-          cmd.execute(ctx);
+          cmd!.execute(ctx);
 
           // onPagePatch must be called with the negated value
           expect(pagePatch).not.toBeNull();
-          expect(pagePatch[property]).toBe(!currentValue);
+          expect(pagePatch![property]).toBe(!currentValue);
         }),
         { numRuns: 100 }
       );
@@ -656,19 +660,23 @@ describe("Feature: notion-command-parity, Property 9: Registry bidirectional com
  */
 describe("Feature: notion-command-parity, Property 10: All execute functions produce side effects", () => {
 
-  // Mock navigator.clipboard globally for commands like copy-link, copy-contents
+  // Mock navigator.clipboard globally for commands like copy-link, copy-contents.
+  // Deliberately partial stand-ins for Navigator/Window/Location — this test
+  // only needs `clipboard.writeText` and `location.href` to exist, not a
+  // full jsdom-shaped global, so each assignment is cast through `as any`
+  // rather than constructing complete fake globals.
   beforeAll(() => {
     if (typeof globalThis.navigator === "undefined") {
-      globalThis.navigator = {};
+      (globalThis as any).navigator = {};
     }
-    globalThis.navigator.clipboard = {
+    (globalThis.navigator as any).clipboard = {
       writeText: () => Promise.resolve(),
       readText: () => Promise.resolve(""),
     };
     if (typeof globalThis.window === "undefined") {
-      globalThis.window = {};
+      (globalThis as any).window = {};
     }
-    globalThis.window.location = { href: "http://localhost/test-page" };
+    (globalThis.window as any).location = { href: "http://localhost/test-page" };
   });
 
   it("every registered command invokes at least one context callback when executed", () => {
@@ -707,9 +715,12 @@ describe("Feature: notion-command-parity, Property 10: All execute functions pro
         ],
       };
 
-      // Build mocked context with all standard callbacks as tracking functions
-      const ctx = {
-        page,
+      // Build mocked context with all standard callbacks as tracking functions.
+      // `page` here is a deliberately partial fake (missing several real
+      // Page fields not relevant to this side-effect test) — cast at the
+      // ctx boundary rather than completing an irrelevant fixture.
+      const ctx: CommandContext = {
+        page: page as any,
         pages: [page],
         block,
         blocks: [block],

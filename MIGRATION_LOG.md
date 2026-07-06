@@ -484,3 +484,111 @@ either belongs to Phase 4 (editor/block components, `BlockRegistry.jsx`,
 `CommandRegistry.js`, `blockModel.js`, `helpers.js`, `pageTreeOps.js`,
 `Editor.jsx`, `App.jsx`) or Category C (canvas/database-adjacent files
 flagged for individual review before Phase 4 starts).
+
+### Commit
+- Committed `017b42a` — "Convert ai panels, collab UI, PageInspector, entry
+  point to TypeScript" on `chore/typescript-migration` (20 files: 16
+  renames, `index.html` + `vite-env.d.ts` updates, this log).
+- **Phase 3 complete.**
+
+---
+
+## Phase 4 — Pre-work: fixing the `block.language` gap in types/blocks.ts
+
+Before starting Phase 4 conversions, resolved the `block.language` gap
+flagged at the end of Phase 3 (CodeBlock.jsx reads `block.language`, which
+wasn't in any `Block` union member).
+
+### Investigation
+- Grepped every block renderer (`src/components/editor/*.jsx`,
+  `src/components/*.jsx`) for `language` usage: only
+  `src/components/editor/CodeBlock.jsx` reads/writes a top-level
+  `block.language` (via `onPatch({ language: langId })`, a generic
+  merge-patch — confirmed `onBlockPatch`/`updateBlock` in `src/App.jsx` do
+  `{ ...b, ...patch }`, so any field can land on any block).
+- Confirmed the field is real and intentional, not a typo: both
+  `src/utils/helpers.js`'s `blockFor('code', ...)`
+  (`props.language = 'plain'`) and `src/utils/blockModel.js`'s
+  `BLOCK_TYPES.code` default (`props: { richText: [], language: 'plain' }`)
+  set it, and `src/components/Editor.jsx`'s "turn into code" slash-command
+  handler writes `language: "plain"` at the top level too.
+- Confirmed scope: no other block type reads a top-level `language`
+  field anywhere in the codebase — this is exclusively a `code`-block
+  field, not a `BaseBlock`-wide concern.
+
+### Fix
+- Added `CodeBlockData` interface to `types/blocks.ts`
+  (`type: "code"; language: string`, extending `BaseBlock`), with an
+  inline comment documenting exactly where the field comes from and why
+  it's scoped to `code` only. Named `CodeBlockData` rather than
+  `CodeBlock` to avoid colliding with the existing
+  `src/components/editor/CodeBlock.jsx` component's default export name.
+- Added `CodeBlockData` to the `Block` union.
+- `npx tsc --noEmit`: clean (this is a types-only file, no runtime files
+  changed yet).
+
+This was a documentation-only fix to the type definition — no `.jsx`→`.tsx`
+conversion happened here. Phase 4 file-by-file conversions start next.
+
+---
+
+## Phase 4 — BlockRegistry.jsx + CommandRegistry.js (registry/taxonomy layer)
+
+Converted the two registry files that define the block-type taxonomy,
+lower risk than the actual block renderers since they're metadata/dispatch
+tables rather than components reading live block data.
+
+### src/registry/BlockRegistry.jsx → .tsx
+- Added `BlockRegistryEntry` interface (`type`, `label`, `icon: LucideIcon`,
+  `category`, optional `shortcut`/`badge`) and typed `BlockType` as
+  `Record<string, string>`, `BlockRegistry` as `BlockRegistryEntry[]`.
+- Documented inline that this registry is a separate taxonomy from
+  `types/blocks.ts`'s `Block` union: `BlockRegistry` is UI-facing slash-menu
+  metadata (including ~30 embed-provider ids that all collapse to the
+  single `embed-generic` `Block` shape, and view-only ids like
+  `table-view`/`board-view` that are UI variants of a `database` block) —
+  not a 1:1 mirror of `Block`'s discriminated members.
+- Zero errors on first pass — this file had no runtime logic, just data.
+
+### src/core/commands/CommandRegistry.js → .ts (+ its property test)
+- Added `Command`, `CommandContext`, `CommandPreview`, `NormalizedCommand`
+  types. `CommandContext` was built by grepping every `ctx.<field>` access
+  across all ~150 command definitions in the file (basic/media/database/
+  advanced/layout/inline/embeds/pageActions categories) — every field is
+  optional since different call sites (SlashCommandMenu, PageOptionsMenu,
+  CommandPalette — all still `.jsx`, not yet converted) each supply only
+  the subset of handlers relevant to their own context.
+- `normalizePreview` converted to an overloaded function
+  (`Command → NormalizedCommand`, `undefined → undefined`) so
+  `getCommand`/`getAllCommands`/`getFilteredCommands` all return properly
+  narrowed `NormalizedCommand`/`NormalizedCommand[]` instead of a
+  `T | undefined` union leaking through `.map()`.
+- `blockForTree`/`blockForDatabaseView` helpers deliberately left with
+  `block: any` and an untyped return: they call `blockFor()` from
+  `src/utils/helpers.js`, which is still untyped (a separate Phase 4 file
+  not yet converted). Documented inline that typing only the call site
+  against `Block` here would be an unchecked assertion, not real safety,
+  until `helpers.js` itself is converted — deferred rather than guessed.
+- Test file (`CommandRegistry.property.test.ts`) needed 3 fixes, all
+  documented inline as deliberately-partial test fixtures (not silent
+  `any` escapes): (1) two `ctx.page` fixtures that are partial fake pages
+  testing single toggled properties or side-effect tracking, not real
+  `Page` shapes — cast `as any` at the ctx boundary; (2) `globalThis.navigator`/
+  `globalThis.window`/`location` test mocks that only need `clipboard.writeText`
+  and `location.href` to exist, not full jsdom-shaped globals — cast
+  `as any` at each assignment.
+
+### Security check
+- Grepped both converted files + the test file for hardcoded
+  credentials/keys/tokens: none found.
+- No RLS/permission logic touched (these are UI metadata + command
+  dispatch, no Supabase calls).
+- No `.git`/CI/deploy files touched.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: clean (`vite build`, "✓ built").
+- `npx vitest run`: **140/140 tests pass** (full suite, not just the
+  affected files) — confirms the property-test fixture type casts didn't
+  change runtime behavior, only satisfied the type checker.

@@ -134,6 +134,19 @@ export interface TableBlock extends BaseBlock {
   table: string[][];
 }
 
+/** Code block — src/utils/helpers.js blockFor('code', ...) sets
+ * `props.language = 'plain'` (mirrored onto blockModel.js's BLOCK_TYPES.code
+ * default too), and src/components/editor/CodeBlock.jsx reads/writes
+ * `block.language` directly (not `block.properties.language`) via the
+ * generic onPatch merge-patch. src/components/Editor.jsx's "turn into"
+ * slash-command handler for code blocks also writes `language: "plain"`
+ * at the top level. Found via grep across every block renderer — no other
+ * block type reads a top-level `language` field. */
+export interface CodeBlockData extends BaseBlock {
+  type: "code";
+  language: string;
+}
+
 /** N-column layout block — src/utils/helpers.js blockFor('2-columns' |
  * '3-columns' | '4-columns' | '5-columns', ...). Each column is itself an
  * array of rich-text runs (matching the single-paragraph seed value); the
@@ -202,6 +215,7 @@ export interface GenericBlock extends BaseBlock {
 export type Block =
   | DatabaseBlock
   | TableBlock
+  | CodeBlockData
   | ColumnsBlock
   | TabsBlock
   | FormBlock

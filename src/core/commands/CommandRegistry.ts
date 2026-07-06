@@ -1,48 +1,106 @@
 import { blockFor } from "../../utils/helpers";
+import type { Page } from "../../lib/supabaseService";
 
 // ── Command Definition ─────────────────────────────────────────
 // Each command: { id, title, aliases, icon, category, description,
 //                 shortcut, available(ctx), execute(ctx), preview(ctx) }
 
-// ── Context passed to every command ─────────────────────────────
-// { page, pages, block, blocks, onPatch, onAdd, onDelete, onNavigate,
-//   onDuplicate, onBlocks, onPagePatch, onTrash, onToast, onAskAI,
-//   onCreateSubpage, onSetOpenSlashBlockId, setSlashOpen }
+// Context passed to every command's available()/execute() — this is the
+// union of every `ctx.<field>` access grepped across every command
+// definition in this file (basic/media/database/advanced/layout/inline/
+// embeds/pageActions). Every field is optional because different call
+// sites (SlashCommandMenu, PageOptionsMenu, CommandPalette) each supply
+// only the subset of handlers relevant to their context — no single call
+// site provides all of them.
+export interface CommandContext {
+  block?: any;
+  page?: Page | null;
+  text?: string;
+  onAdd?: (type: string, text: string) => void;
+  onAnalytics?: () => void;
+  onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
+  onDatePicker?: () => void;
+  onDelete?: () => void;
+  onDuplicatePage?: () => void;
+  onEmojiPicker?: () => void;
+  onExport?: () => void;
+  onHistory?: () => void;
+  onImport?: () => void;
+  onMoveTo?: () => void;
+  onNavigate?: (pageId: string) => void;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+  onPatch?: (patch: any) => void;
+  onPresent?: () => void;
+  onToast?: (message: string) => void;
+  onToggleSuggest?: () => void;
+  onTrash?: () => void;
+  onWiki?: () => void;
+  setCustomizeOpen?: (open: boolean) => void;
+  [key: string]: unknown;
+}
 
-let _commands = new Map();
-let _listeners = new Set();
+/** Preview shown in the slash-command menu — either a plain description
+ * string (legacy shape, normalized at read time by normalizePreview) or
+ * an object with an optional illustration image. */
+export type CommandPreview = string | { description: string; image?: string };
+
+export interface Command {
+  id: string;
+  title: string;
+  aliases?: string[];
+  icon: string;
+  category: string;
+  description?: string;
+  shortcut?: string;
+  toggle?: boolean;
+  preview?: CommandPreview;
+  available?: (ctx: CommandContext) => boolean;
+  execute: (ctx: CommandContext) => void;
+}
+
+/** Command as returned by getCommand/getAllCommands/getFilteredCommands —
+ * always has a normalized `{ description, image? }` preview object,
+ * regardless of what shape it was registered with. */
+export type NormalizedCommand = Omit<Command, "preview"> & {
+  preview: { description: string; image?: string };
+};
+
+let _commands = new Map<string, Command>();
+let _listeners = new Set<(id: string, cmd: Command) => void>();
 
 // ── Preview Normalization Shim ─────────────────────────────────
 // Converts old `preview: "string"` to `preview: { description, image? }`
 // at read time, so all consumers see a consistent shape.
-function normalizePreview(cmd) {
-  if (!cmd) return cmd;
+function normalizePreview(cmd: Command): NormalizedCommand;
+function normalizePreview(cmd: undefined): undefined;
+function normalizePreview(cmd: Command | undefined): NormalizedCommand | undefined {
+  if (!cmd) return undefined;
   const raw = cmd.preview;
   if (typeof raw === "string") {
     return { ...cmd, preview: { description: raw } };
   }
   if (raw && typeof raw === "object" && typeof raw.description === "string") {
-    return cmd; // Already correct shape
+    return cmd as NormalizedCommand; // Already correct shape
   }
   // Fallback: no preview field or unexpected type
   return { ...cmd, preview: { description: cmd.description || "" } };
 }
 
-export function registerCommand(cmd) {
+export function registerCommand(cmd: Command) {
   _commands.set(cmd.id, cmd);
   _listeners.forEach((fn) => fn(cmd.id, cmd));
   return cmd;
 }
 
-export function getCommand(id) {
+export function getCommand(id: string): NormalizedCommand | undefined {
   return normalizePreview(_commands.get(id));
 }
 
-export function getAllCommands() {
-  return Array.from(_commands.values()).map(normalizePreview);
+export function getAllCommands(): NormalizedCommand[] {
+  return Array.from(_commands.values()).map((c) => normalizePreview(c));
 }
 
-export function getFilteredCommands(query, ctx = {}) {
+export function getFilteredCommands(query: string, ctx: CommandContext = {}): NormalizedCommand[] {
   const q = (query || "").toLowerCase();
   return Array.from(_commands.values())
     .filter((c) => {
@@ -59,16 +117,16 @@ export function getFilteredCommands(query, ctx = {}) {
       const bTitle = b.title.toLowerCase().startsWith(q) ? 0 : 1;
       return aTitle - bTitle;
     })
-    .map(normalizePreview);
+    .map((c) => normalizePreview(c));
 }
 
-export function getCommandsByCategory(category) {
+export function getCommandsByCategory(category: string): NormalizedCommand[] {
   return getAllCommands().filter((c) => c.category === category);
 }
 
-export function onCommandRegister(fn) {
+export function onCommandRegister(fn: (id: string, cmd: Command) => void) {
   _listeners.add(fn);
-  return () => _listeners.delete(fn);
+  return () => { _listeners.delete(fn); };
 }
 
 // ── Commands grouped by category ────────────────────────────────
@@ -1028,7 +1086,13 @@ export function initRegistry() {
 initRegistry();
 
 // ── Helper: blockForTreeConversion ─────────────────────────────
-function blockForTree(block, type, text = block.text || "") {
+// `block`/return value are left as `any` here rather than `Block` from
+// types/blocks.ts: blockFor() itself lives in src/utils/helpers.js, which
+// is still untyped (a separate Phase 4 file) and returns a plain object
+// inferred as `any` — typing only this call site against `Block` would
+// just be an unchecked assertion, not real type safety, until helpers.js
+// itself is converted.
+function blockForTree(block: any, type: string, text: string = block.text || "") {
   const next = blockFor(type, text);
   return {
     ...next,
@@ -1039,7 +1103,7 @@ function blockForTree(block, type, text = block.text || "") {
   };
 }
 
-function blockForDatabaseView(block, viewType, text = block.text || "") {
+function blockForDatabaseView(block: any, viewType: string, text: string = block.text || "") {
   const next = blockFor("database", text);
   const defaultViews = [...(next.database?.views || [])];
   if (defaultViews.length > 0) defaultViews[0] = { ...defaultViews[0], type: viewType, name: viewType.charAt(0).toUpperCase() + viewType.slice(1) };
