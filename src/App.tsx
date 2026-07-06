@@ -198,7 +198,19 @@ function App() {
   const [readingPage, setReadingPage] = useState<Page | null>(null);
   const hydrated = useRef(false);
 
-  const activePage = pages.find((p) => p.id === activeId) || pages.find((p) => !p.trashed) || pages[0];
+  // Real bug, fixed: this used to match `activeId` against ANY page
+  // regardless of trashed status, so trashing the active page (with no
+  // sibling to fall back to — trashPageSubtree only reassigns activeId
+  // when it finds a non-trashed replacement) left activeId pointed at a
+  // now-trashed page. The topbar/editor kept showing it as if nothing
+  // happened, and reloading "restored" it — really it was never
+  // deactivated, just still sitting in `pages` with `trashed: true`.
+  // Every fallback here must exclude trashed pages — including the last
+  // one, which used to be a bare `pages[0]` that could itself be trashed
+  // if every page in the workspace was. When no non-trashed page exists
+  // at all, activePage is correctly undefined, which renders the
+  // (now-fixed, recoverable) empty-pages screen instead of a trashed page.
+  const activePage = pages.find((p) => p.id === activeId && !p.trashed) || pages.find((p) => !p.trashed);
   const visiblePages = pages.filter((p) => !p.trashed);
   const trashPages = pages.filter((p) => p.trashed);
   const pageText = activePage ? plainText(activePage) : "";

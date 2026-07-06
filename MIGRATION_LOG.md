@@ -1646,3 +1646,62 @@ instead of `"New Items"`.
 ### Commit
 - Committed as "Fix empty-pages dead end, epoch-date display, and
   marketplace heading formatting" on `chore/typescript-migration`.
+
+---
+
+## Follow-up — real trash bug found by user, fixed
+
+User re-tested the exact "trash your only page" scenario after the prior
+fix and correctly caught that it was still broken: after trashing the
+active page, the topbar/editor kept showing it, and reloading appeared to
+"restore" it. My prior report had wrongly concluded this specific scenario
+was never broken — it was, and the actual bug was one line away from what
+I'd already fixed.
+
+### Root cause
+`activePage`'s derivation (`App.tsx`) matched `activeId` against **any**
+page regardless of `trashed` status:
+```
+pages.find((p) => p.id === activeId) || pages.find((p) => !p.trashed) || pages[0]
+```
+`trashPageSubtree()` only reassigns `activeId` to a new page when it finds
+a non-trashed replacement (`nextPages.find(p => !p.trashed && ...)`) — if
+there isn't one (trashing your only page), `activeId` stays pointed at the
+page that was just trashed. Since the first `find` above doesn't check
+`trashed`, `activePage` kept resolving to it anyway, so the UI never
+reflected the trash action. This also meant `pages[0]` (the final
+fallback) could itself be a trashed page if every page in the workspace
+was trashed.
+
+### Fix
+Excluded trashed pages from every fallback in the chain:
+```
+pages.find((p) => p.id === activeId && !p.trashed) || pages.find((p) => !p.trashed)
+```
+Dropped the bare `pages[0]` fallback entirely — with both remaining
+fallbacks already excluding trashed pages, a bare `pages[0]` could only
+ever matter if it were itself trashed, which is exactly the case being
+fixed. When no non-trashed page exists, `activePage` is now correctly
+`undefined`, which renders the empty-pages screen fixed in the previous
+entry (working "New page" button) instead of a stale trashed page.
+
+### Verified live
+Exact repro (create one page → trash it via Page options → Move to
+Trash): topbar/editor now immediately falls through to the empty-pages
+screen, no reload required. Confirmed data safety — created a second
+page, opened Sidebar → Support → Trash (1), clicked Restore, and the
+original page came back correctly alongside the new one.
+
+### Security check
+Diff limited to one derived-value expression in `App.tsx`; grepped for
+`requireOwner|RLS|.eq(|.from(|user_id|owner|role|permission|session|auth\.|signIn|signOut|apiKey|secret|token|password`:
+zero matches. No auth/RLS/session logic touched.
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: succeeded.
+- `npx vitest run`: **140/140 tests pass**.
+
+### Commit
+- Committed as "Fix activePage resolving to a trashed page" on
+  `chore/typescript-migration`.
