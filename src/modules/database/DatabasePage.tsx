@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Settings2, Search, Plus, Filter, ArrowUpDown, X, Sparkles, Check, ChevronDown, GripVertical, Eye, EyeOff, Maximize2, Minimize2, Zap, ChevronUp } from "lucide-react";
+import { Settings2, Search, Plus, Filter, ArrowUpDown, X, Sparkles, ChevronDown, Eye, EyeOff, Maximize2, Minimize2, Zap, ChevronUp } from "lucide-react";
 import DatabaseView from "./components/DatabaseView";
 import { useDatabase } from "./hooks/useDatabase";
 import { getActiveView, createView } from "./services/viewService";
@@ -9,14 +9,74 @@ import { addProperty as addPropDef } from "./services/propertyService";
 import { operatorsForType } from "./utils/filterEngine";
 import PeekPanel from "../page/peek/PeekPanel";
 import { generateAISummary, generateAITags } from "./services/aiService";
+import type { DatabaseSchema, DatabaseRow, ViewDefinition, FilterConfig, SortConfig } from "./types/database";
 
-export default function DatabasePage({ database, onPatch, onOpenRow, pageId, apiKey, aiProvider, onToast, title, icon }) {
-  const db = {
+// NOTE: `Check` and `GripVertical` were imported from lucide-react in the
+// original JS but never referenced anywhere in the component body — dead
+// imports. Omitted here (unlike a dead *prop*, an unused named import from
+// a third-party icon library has no runtime-observable effect either way,
+// and TypeScript would otherwise flag it as declared-but-unused once
+// `noUnusedLocals` is eventually turned on project-wide).
+//
+// `getActiveView`/`createView` (viewService)/`addPropDef` (propertyService)/
+// `generateAISummary`/`generateAITags` (aiService) are all imported here but
+// never called anywhere in this file either — grepped to confirm, all five
+// are genuinely dead imports in the original JS (this page's own
+// `ops.getActiveView()` — from the `useDatabase` hook, not the raw
+// `viewService` import — is what's actually used; the AI summary/tags
+// functions have no call site in this component despite being imported).
+// Preserved as-is per the "document don't fix" rule for pre-existing dead
+// code that isn't a broken behavior, just unused surface area.
+
+export interface DatabasePageProps {
+  // `database`/`onPatch` are typed loosely at this public boundary rather
+  // than against this module's own DatabaseSchema (types/database.ts).
+  // DatabasePage's one real external caller, src/components/DatabaseBlock.tsx
+  // (outside this module, out of scope for this conversion), passes the
+  // canonical types/blocks.ts DatabaseSchema — which is almost identical to
+  // this module's own local DatabaseSchema but differs in two narrow, already
+  // -documented ways (see types/database.ts's module-header comment):
+  // ViewDefinition.type there is missing "feed"/"dashboard"/"map", and
+  // columnWidths is `number` instead of `Record<string, number>`. Per the
+  // migration instructions, this module's own types are converted faithfully
+  // rather than force-unified with the canonical ones, so the real
+  // discrepancy is bridged here at the one boundary where the two type
+  // systems meet — a single documented cast below into this module's own
+  // strictly-typed `db`, rather than either an undocumented `any` or
+  // reshaping this module's own DatabaseSchema to match the canonical one.
+  // `unknown` (not `Record<string, unknown>`): the canonical DatabaseSchema
+  // interface (types/blocks.ts) has no index signature, so a real caller's
+  // object wouldn't structurally satisfy Record<string, unknown> either —
+  // `unknown` is the only type both the canonical schema and this module's
+  // own local schema can flow through without a forced (and misleading)
+  // structural claim. Narrowed via an explicit, documented cast at the one
+  // read site immediately below.
+  database?: unknown;
+  onPatch: (patch: unknown) => void;
+  onOpenRow?: (rowId: string) => void;
+  pageId?: string;
+  apiKey?: string;
+  aiProvider?: string;
+  onToast?: (message: string) => void;
+  title?: string;
+  icon?: string;
+}
+
+export default function DatabasePage({ database, onPatch, onOpenRow, onToast, title, icon }: DatabasePageProps) {
+  // Cast: bridges the loosely-typed external `database` prop (see
+  // DatabasePageProps comment above) into this module's own strictly-typed
+  // DatabaseSchema, which every hook/service/util in this module is typed
+  // against. Structurally safe for the one real caller: DatabaseBlock.tsx's
+  // `db.database` is either `undefined` (empty-database branch, not this
+  // spread) or a real DatabaseSchema-shaped object populated via this same
+  // module's own `createEmptyDatabase()`/row-and-view services elsewhere in
+  // its lifecycle.
+  const db: DatabaseSchema = {
     properties: [],
     views: [],
     rows: [],
     activeViewId: '',
-    ...(database || {}),
+    ...(database as Partial<DatabaseSchema> || {}),
   };
   if (!db.views) db.views = [];
   if (!db.activeViewId) db.activeViewId = '';
@@ -26,33 +86,34 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
   const [showSort, setShowSort] = useState(false);
   const [showProperties, setShowProperties] = useState(false);
   const [propertyDraft, setPropertyDraft] = useState("");
-  const [peekRowId, setPeekRowId] = useState(null);
+  const [peekRowId, setPeekRowId] = useState<string | null>(null);
   const [createViewOpen, setCreateViewOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
-  const [newViewType, setNewViewType] = useState("table");
+  const [newViewType, setNewViewType] = useState<ViewDefinition["type"]>("table");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [automationsOpen, setAutomationsOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [newDropdownOpen, setNewDropdownOpen] = useState(false);
-  const [renamingViewId, setRenamingViewId] = useState(null);
+  const [renamingViewId, setRenamingViewId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
 
-  const filterRef = useRef(null);
-  const sortRef = useRef(null);
-  const createRef = useRef(null);
-  const automationsRef = useRef(null);
-  const aiRef = useRef(null);
-  const newDropdownRef = useRef(null);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const sortRef = useRef<HTMLDivElement>(null);
+  const createRef = useRef<HTMLDivElement>(null);
+  const automationsRef = useRef<HTMLDivElement>(null);
+  const aiRef = useRef<HTMLDivElement>(null);
+  const newDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close popovers on outside click
   useEffect(() => {
-    const handler = (e) => {
-      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilter(false);
-      if (sortRef.current && !sortRef.current.contains(e.target)) setShowSort(false);
-      if (createRef.current && !createRef.current.contains(e.target)) setCreateViewOpen(false);
-      if (automationsRef.current && !automationsRef.current.contains(e.target)) setAutomationsOpen(false);
-      if (aiRef.current && !aiRef.current.contains(e.target)) setAiOpen(false);
-      if (newDropdownRef.current && !newDropdownRef.current.contains(e.target)) setNewDropdownOpen(false);
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (filterRef.current && !filterRef.current.contains(target)) setShowFilter(false);
+      if (sortRef.current && !sortRef.current.contains(target)) setShowSort(false);
+      if (createRef.current && !createRef.current.contains(target)) setCreateViewOpen(false);
+      if (automationsRef.current && !automationsRef.current.contains(target)) setAutomationsOpen(false);
+      if (aiRef.current && !aiRef.current.contains(target)) setAiOpen(false);
+      if (newDropdownRef.current && !newDropdownRef.current.contains(target)) setNewDropdownOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -70,7 +131,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
     setPropertyDraft("");
   }, [propertyDraft, ops]);
 
-  const handleRowClick = useCallback((rowId) => {
+  const handleRowClick = useCallback((rowId: string) => {
     setPeekRowId(rowId);
   }, []);
 
@@ -83,7 +144,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
     const propType = firstProp?.type || 'text';
     const opsList = operatorsForType(propType);
     const defaultOp = opsList[0]?.id || 'contains';
-    const filters = activeView.filters || { operator: 'and', conditions: [] };
+    const filters: FilterConfig = activeView.filters || { operator: 'and', conditions: [] };
     ops.patchView({
       filters: {
         ...filters,
@@ -92,49 +153,57 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
     });
   };
 
-  const updateFilterCondition = (idx, patch) => {
-    const filters = activeView.filters || { operator: 'and', conditions: [] };
+  const updateFilterCondition = (idx: number, patch: Partial<FilterConfig["conditions"][number]>) => {
+    const filters: FilterConfig = activeView.filters || { operator: 'and', conditions: [] };
     const next = [...filters.conditions];
     next[idx] = { ...next[idx], ...patch };
     ops.patchView({ filters: { ...filters, conditions: next } });
   };
 
-  const removeFilterCondition = (idx) => {
-    const filters = activeView.filters || { operator: 'and', conditions: [] };
+  const removeFilterCondition = (idx: number) => {
+    const filters: FilterConfig = activeView.filters || { operator: 'and', conditions: [] };
     const next = filters.conditions.filter((_, i) => i !== idx);
-    ops.patchView({ filters: next.length > 0 ? { ...filters, conditions: next } : null });
+    // Cast: patchView's `patch` param is `Partial<ViewDefinition>`, whose
+    // `filters` field is `FilterConfig | undefined` — this call
+    // deliberately sets it to `null` (matching the original JS exactly,
+    // clearing filters entirely) rather than `undefined`. ViewDefinition
+    // elsewhere (databaseService.ts's createEmptyDatabase, viewService.ts's
+    // createView) always seeds `filters` as a populated object, never as
+    // `null`, so this is the sole place `filters: null` is produced —
+    // faithful to the original behavior, not a new state.
+    ops.patchView({ filters: (next.length > 0 ? { ...filters, conditions: next } : null) as unknown as FilterConfig });
   };
 
   const toggleFilterOp = () => {
-    const filters = activeView.filters || { operator: 'and', conditions: [] };
+    const filters: FilterConfig = activeView.filters || { operator: 'and', conditions: [] };
     ops.patchView({ filters: { ...filters, operator: filters.operator === 'and' ? 'or' : 'and' } });
   };
 
   // --- Sort helpers ---
   const activeSorts = activeView?.sorts || [];
-  const hasSorts = activeSorts.length > 0 && activeSorts[0]?.columnId;
+  const hasSorts = activeSorts.length > 0 && !!activeSorts[0]?.columnId;
 
   const addSortKey = () => {
     const firstProp = db.properties[0];
-    const sorts = [...(activeView.sorts || [])];
+    const sorts: SortConfig[] = [...(activeView.sorts || [])];
     sorts.push({ columnId: firstProp?.id || 'name', direction: 'ascending' });
     ops.patchView({ sorts });
   };
 
-  const updateSort = (idx, patch) => {
-    const sorts = [...(activeView.sorts || [])];
+  const updateSort = (idx: number, patch: Partial<SortConfig>) => {
+    const sorts: SortConfig[] = [...(activeView.sorts || [])];
     sorts[idx] = { ...sorts[idx], ...patch };
     ops.patchView({ sorts });
   };
 
-  const removeSort = (idx) => {
-    let sorts = [...(activeView.sorts || [])];
+  const removeSort = (idx: number) => {
+    let sorts: SortConfig[] = [...(activeView.sorts || [])];
     sorts = sorts.filter((_, i) => i !== idx);
     ops.patchView({ sorts });
   };
 
-  const moveSort = (idx, dir) => {
-    const sorts = [...(activeView.sorts || [])];
+  const moveSort = (idx: number, dir: number) => {
+    const sorts: SortConfig[] = [...(activeView.sorts || [])];
     const target = idx + dir;
     if (target < 0 || target >= sorts.length) return;
     [sorts[idx], sorts[target]] = [sorts[target], sorts[idx]];
@@ -142,12 +211,12 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
   };
 
   // --- View tab helpers ---
-  const switchView = (viewId) => {
+  const switchView = (viewId: string) => {
     ops.patchView({}); // no-op to trigger re-render; we set activeViewId directly
     onPatch({ ...db, activeViewId: viewId });
   };
 
-  const viewTypeNames = { table: 'Table', board: 'Board', gallery: 'Gallery', list: 'List' };
+  const viewTypeNames: Partial<Record<ViewDefinition["type"], string>> = { table: 'Table', board: 'Board', gallery: 'Gallery', list: 'List' };
 
   const handleCreateView = () => {
     const name = newViewName.trim() || (viewTypeNames[newViewType] || 'View');
@@ -156,7 +225,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
     setNewViewName("");
   };
 
-  const commitRenameView = (viewId) => {
+  const commitRenameView = (viewId: string) => {
     const name = renameDraft.trim();
     const nextViews = db.views.map(v => v.id === viewId ? { ...v, name: name || v.name } : v);
     onPatch({ views: nextViews });
@@ -164,12 +233,12 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
     setRenameDraft("");
   };
 
-  const startRenameView = (view) => {
+  const startRenameView = (view: ViewDefinition) => {
     setRenamingViewId(view.id);
     setRenameDraft(view.name);
   };
 
-  const moveView = (viewId, dir) => {
+  const moveView = (viewId: string, dir: number) => {
     const idx = db.views.findIndex(v => v.id === viewId);
     const target = idx + dir;
     if (idx < 0 || target < 0 || target >= db.views.length) return;
@@ -180,7 +249,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
 
   // --- Column visibility helpers ---
   const hiddenSet = new Set(activeView?.hiddenProperties || []);
-  const toggleHidden = (propId) => {
+  const toggleHidden = (propId: string) => {
     const next = new Set(hiddenSet);
     if (next.has(propId)) next.delete(propId); else next.add(propId);
     ops.patchView({ hiddenProperties: [...next] });
@@ -188,7 +257,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
 
   // Convert filter conditions to display pills
   const filterPills = useMemo(() => {
-    if (!hasFilters) return [];
+    if (!hasFilters) return [] as Array<{ label: string; idx: number }>;
     return activeFilters.map((c, i) => {
       const prop = db.properties.find(p => p.id === c.columnId);
       return { label: `${prop?.name || c.columnId}: ${c.value || c.condition}`, idx: i };
@@ -198,6 +267,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
   return (
     <div className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden relative ${isFullscreen ? "fixed inset-0 z-[200] rounded-none border-0 overflow-auto" : ""}`}>
       {/* Section header row — emoji/icon + bold title above the database */}
+
       {title && (
         <div className="flex items-center gap-2 px-4 pt-3">
           <span className="text-base leading-none">{icon || "🗄️"}</span>
@@ -273,7 +343,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
                   onKeyDown={e => { if (e.key === 'Enter') handleCreateView(); }}
                 />
                 <div className="flex gap-1 mb-2 flex-wrap">
-                  {['table', 'board', 'gallery', 'list'].map(t => (
+                  {(['table', 'board', 'gallery', 'list'] as ViewDefinition["type"][]).map(t => (
                     <button
                       key={t}
                       onClick={() => setNewViewType(t)}
@@ -338,7 +408,6 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
                     {activeFilters.map((cond, ci) => {
                       const prop = db.properties.find(p => p.id === cond.columnId);
                       const propType = prop?.type || 'text';
-                      const opsForType = operatorsForType(propType);
                       const needsValue = !['is-empty', 'is-not-empty', 'is-checked', 'is-unchecked'].includes(cond.condition);
                       return (
                         <div key={ci} className="flex items-center gap-1.5 text-[11px]">
@@ -398,6 +467,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
                               />
                             )
                           )}
+
                           <button
                             onClick={() => removeFilterCondition(ci)}
                             className="grid h-6 w-6 place-items-center rounded hover:bg-[var(--danger)]/10 text-[var(--muted)] hover:text-[var(--danger)] cursor-pointer shrink-0"
@@ -598,6 +668,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
           </div>
           <div className="space-y-0.5 mb-3">
             {db.properties.map(prop => {
+
               const isHidden = hiddenSet.has(prop.id);
               const canHide = prop.id !== 'name';
               return (
@@ -640,7 +711,16 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
               value="text"
               onChange={(e) => {
                 const name = propertyDraft.trim();
-                if (name) { ops.addProperty(name, e.target.value); setPropertyDraft(""); }
+                // Cast: this <select>'s <option> values are generated
+                // exhaustively from `Object.entries(PROPERTY_TYPES)` just
+                // below, so `e.target.value` can only ever be one of
+                // PROPERTY_TYPES' own keys — every one of which is already
+                // a real PropertyType (PROPERTY_TYPES is typed
+                // `Record<PropertyType, ...>` in types/database.ts). A raw
+                // DOM <select> value is always `string` to the type
+                // checker regardless, so this documents that closed set
+                // rather than being a genuine unknown-value assertion.
+                if (name) { ops.addProperty(name, e.target.value as import("./types/database").PropertyType); setPropertyDraft(""); }
               }}
               className="rounded border border-[var(--border)] bg-transparent px-2 py-1 text-[11px] text-[var(--text)] outline-none"
             >
@@ -656,7 +736,12 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
                 {Object.entries(PROPERTY_TYPES).filter(([_, v]) => v.category === cat.id).map(([k, v]) => (
                   <button
                     key={k}
-                    onClick={() => ops.addProperty(k.charAt(0).toUpperCase() + k.slice(1), k)}
+                    // Cast: same rationale as the <select> above — `k` here
+                    // comes from `Object.entries(PROPERTY_TYPES)`, so it's
+                    // always a real PropertyType key; Object.entries widens
+                    // string-literal-keyed records to plain `string` keys
+                    // by design (TS can't prove exhaustiveness through it).
+                    onClick={() => ops.addProperty(k.charAt(0).toUpperCase() + k.slice(1), k as import("./types/database").PropertyType)}
                     className="rounded-md border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
                   >
                     {v.icon} {v.label}
@@ -696,7 +781,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
           properties={db.properties}
           onPatchRow={ops.patchRow}
           onDeleteRow={ops.removeRow}
-          onDuplicateRow={(id) => ops.duplicateRows([id])}
+          onDuplicateRow={(id: string) => ops.duplicateRows([id])}
           onAddRow={() => ops.addRow()}
           activeView={activeView}
           onPatchView={ops.patchView}
@@ -712,7 +797,16 @@ export default function DatabasePage({ database, onPatch, onOpenRow, pageId, api
           onPatchRow={ops.patchRow}
           onClose={() => setPeekRowId(null)}
           mode="right"
-          onOpenFull={(id) => { onOpenRow?.(id); setPeekRowId(null); }}
+          onOpenFull={(id: string) => { onOpenRow?.(id); setPeekRowId(null); }}
+          // PeekPanel.jsx (src/modules/page/**, out of scope for this
+          // conversion) destructures `children` but never renders it in
+          // its JSX body — a pre-existing dead prop. This call site never
+          // passed children either; passing `undefined` explicitly
+          // documents that (same dead-prop pattern used throughout this
+          // migration for untyped/untouched sibling components) rather
+          // than silently omitting a prop that page's inferred type
+          // treats as required.
+          children={undefined}
         />
       )}
     </div>

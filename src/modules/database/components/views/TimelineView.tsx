@@ -1,22 +1,46 @@
 import React, { useMemo, useState } from "react";
 import { Plus, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
-export default function TimelineView({ rows, properties, onPatchRow, onAddRow, onRowClick, activeView }) {
+export interface TimelineViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onPatchRow: (rowId: string, patch: Partial<DatabaseRow>) => void;
+  onAddRow: () => void;
+  onRowClick?: (rowId: string) => void;
+  activeView?: ViewDefinition;
+}
+
+export default function TimelineView({ rows, properties, onAddRow, onRowClick }: TimelineViewProps) {
   const [zoom, setZoom] = useState(1);
   const dateProp = properties.find(p => p.type === 'date' && p.id !== 'created-time' && p.id !== 'updated-time');
 
-  const dated = useMemo(() => rows.filter(r => r[dateProp?.id]), [rows, dateProp]);
-  const startDate = useMemo(() => dated.length ? dated.reduce((a, b) => new Date(a[dateProp.id]) < new Date(b[dateProp.id]) ? a : b) : null, [dated, dateProp]);
-  const endDate = useMemo(() => dated.length ? dated.reduce((a, b) => new Date(a[dateProp.id]) > new Date(b[dateProp.id]) ? a : b) : null, [dated, dateProp]);
+  const dated = useMemo(() => rows.filter(r => dateProp && r[dateProp.id]), [rows, dateProp]);
+  // Casts through this file (`r[dateProp.id] as string`, etc.) narrow
+  // DatabaseRow's per-property index-signature access (`unknown`) to
+  // `string` — `dateProp` is always filtered to `p.type === 'date'`, and
+  // every date-property value in this module is an ISO date string
+  // (same rationale as CalendarView.tsx's identical cast). Matches the
+  // original JS's untyped `new Date(row[dateProp.id])` exactly.
+  const startDate = useMemo(
+    () => (dated.length && dateProp) ? dated.reduce((a, b) => new Date(a[dateProp.id] as string).getTime() < new Date(b[dateProp.id] as string).getTime() ? a : b) : null,
+    [dated, dateProp]
+  );
+  const endDate = useMemo(
+    () => (dated.length && dateProp) ? dated.reduce((a, b) => new Date(a[dateProp.id] as string).getTime() > new Date(b[dateProp.id] as string).getTime() ? a : b) : null,
+    [dated, dateProp]
+  );
 
   const dayWidth = 20 * zoom;
-  const totalDays = startDate && endDate ? Math.ceil((new Date(endDate[dateProp.id]) - new Date(startDate[dateProp.id])) / (1000 * 60 * 60 * 24)) + 1 : 30;
+  const totalDays = (startDate && endDate && dateProp)
+    ? Math.ceil((new Date(endDate[dateProp.id] as string).getTime() - new Date(startDate[dateProp.id] as string).getTime()) / (1000 * 60 * 60 * 24)) + 1
+    : 30;
 
   // Date-scale ticks and the "today" marker offset (in px from the track start).
-  const rangeStart = startDate ? new Date(startDate[dateProp.id]) : null;
+  const rangeStart = (startDate && dateProp) ? new Date(startDate[dateProp.id] as string) : null;
   const scaleTicks = useMemo(() => {
-    if (!rangeStart) return [];
-    const ticks = [];
+    if (!rangeStart) return [] as Array<{ offset: number; label: string }>;
+    const ticks: Array<{ offset: number; label: string }> = [];
     // One tick per ~week (or per day when zoomed in enough).
     const step = dayWidth >= 40 ? 1 : 7;
     for (let d = 0; d < totalDays; d += step) {
@@ -30,7 +54,7 @@ export default function TimelineView({ rows, properties, onPatchRow, onAddRow, o
   const todayOffset = useMemo(() => {
     if (!rangeStart) return null;
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const diffDays = Math.round((today - rangeStart) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round((today.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays < 0 || diffDays > totalDays) return null; // today outside range
     return diffDays * dayWidth;
   }, [rangeStart, totalDays, dayWidth]);
@@ -88,9 +112,11 @@ export default function TimelineView({ rows, properties, onPatchRow, onAddRow, o
                     style={{ left: LABEL_COL + 12 + todayOffset }}
                   />
                 )}
-                {rows.map((row, idx) => {
-                  const dt = row[dateProp?.id];
-                  const dayOffset = dt && startDate ? Math.round((new Date(dt) - new Date(startDate[dateProp.id])) / (1000 * 60 * 60 * 24)) : 0;
+                {rows.map((row) => {
+                  const dt = dateProp ? row[dateProp.id] : undefined;
+                  const dayOffset = (dt && startDate && dateProp)
+                    ? Math.round((new Date(dt as string).getTime() - new Date(startDate[dateProp.id] as string).getTime()) / (1000 * 60 * 60 * 24))
+                    : 0;
                   return (
                     <div key={row.id} onClick={() => onRowClick?.(row.id)} className="flex items-center gap-3 py-1.5 group">
                       <div className="w-36 shrink-0 text-xs text-[var(--text)] truncate font-medium">{row.name || 'Untitled'}</div>
@@ -103,7 +129,7 @@ export default function TimelineView({ rows, properties, onPatchRow, onAddRow, o
                           {row.name || 'Untitled'}
                         </div>
                       </div>
-                      <span className="w-24 shrink-0 text-[10px] text-[var(--muted)] text-right">{dt || ''}</span>
+                      <span className="w-24 shrink-0 text-[10px] text-[var(--muted)] text-right">{(dt as string) || ''}</span>
                     </div>
                   );
                 })}

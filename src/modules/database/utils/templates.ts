@@ -2,7 +2,16 @@
  * Database templates — pre-built property and view configurations.
  */
 
-const TEMPLATES = {
+import type { DatabaseSchema, PropertyDefinition, ViewDefinition } from "../types/database";
+
+interface Template {
+  name: string;
+  icon: string;
+  properties: PropertyDefinition[];
+  views: ViewDefinition[];
+}
+
+const TEMPLATES: Record<string, Template> = {
   task: {
     name: 'Task',
     icon: '✅',
@@ -107,19 +116,23 @@ const TEMPLATES = {
   },
 };
 
-export function getTemplates() {
+export interface TemplateWithId extends Template {
+  id: string;
+}
+
+export function getTemplates(): TemplateWithId[] {
   return Object.entries(TEMPLATES).map(([id, t]) => ({ id, ...t }));
 }
 
-export function getTemplate(id) {
+export function getTemplate(id: string): Template | null {
   return TEMPLATES[id] || null;
 }
 
-export function applyTemplate(templateId, existingDb = null) {
+export function applyTemplate(templateId: string, existingDb: DatabaseSchema | null = null): DatabaseSchema | null {
   const tmpl = TEMPLATES[templateId];
   if (!tmpl) return existingDb;
 
-  const db = existingDb || { properties: [], views: [], rows: [], activeViewId: '' };
+  const db: DatabaseSchema = existingDb || { properties: [], views: [], rows: [], activeViewId: '' };
   return {
     ...db,
     properties: [...tmpl.properties],

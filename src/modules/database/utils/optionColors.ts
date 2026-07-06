@@ -1,8 +1,15 @@
-// optionColors.js — deterministic, theme-aware colors for select/status/priority
+// optionColors.ts — deterministic, theme-aware colors for select/status/priority
 // option values, matching Notion's colored-pill treatment. Colors are assigned
 // stably from the option string so the same value always gets the same color.
 
-const PALETTE = [
+export interface OptionColor {
+  name: string;
+  dot: string;
+  fill: string;
+  text: string;
+}
+
+const PALETTE: OptionColor[] = [
   { name: "gray",   dot: "#9b9a97", fill: "color-mix(in srgb, #9b9a97 20%, var(--surface))", text: "var(--text)" },
   { name: "brown",  dot: "#a1785a", fill: "color-mix(in srgb, #a1785a 20%, var(--surface))", text: "var(--text)" },
   { name: "orange", dot: "#f97316", fill: "color-mix(in srgb, #f97316 20%, var(--surface))", text: "var(--text)" },
@@ -15,7 +22,7 @@ const PALETTE = [
 ];
 
 // Common status/priority words get intuitive fixed colors (like Notion).
-const SEMANTIC = {
+const SEMANTIC: Record<string, string> = {
   "not started": "gray", "todo": "gray", "backlog": "gray", "none": "gray",
   "in progress": "blue", "doing": "blue", "active": "blue", "next": "blue",
   "done": "green", "completed": "green", "complete": "green", "closed won": "green", "published": "green",
@@ -24,13 +31,13 @@ const SEMANTIC = {
   "review": "purple", "planning": "purple", "on hold": "yellow",
 };
 
-function hashString(s) {
+function hashString(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; }
   return Math.abs(h);
 }
 
-export function colorForOption(value) {
+export function colorForOption(value: unknown): OptionColor {
   if (value == null || value === "") return PALETTE[0];
   const key = String(value).trim().toLowerCase();
   const semantic = SEMANTIC[key];

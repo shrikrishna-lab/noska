@@ -1,15 +1,28 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, type RefObject } from "react";
+
+export interface VirtualItem<T> {
+  index: number;
+  item: T;
+  style: { position: "absolute"; top: number; left: number; right: number; height: number };
+}
+
+export interface VirtualScrollResult<T> {
+  containerRef: RefObject<HTMLDivElement | null>;
+  virtualItems: VirtualItem<T>[];
+  totalHeight: number;
+  scrollTop: number;
+  onScroll: () => void;
+}
 
 /**
  * Virtual scrolling hook for rendering large lists efficiently.
  *
- * @param {Array} items - all items
- * @param {number} itemHeight - height of each row in px
- * @param {number} [overScan=5] - extra items to render outside viewport
- * @returns {{ containerRef, virtualItems, totalHeight, scrollTop }}
+ * @param items - all items
+ * @param itemHeight - height of each row in px
+ * @param overScan - extra items to render outside viewport
  */
-export function useVirtualScroll(items, itemHeight, overScan = 5) {
-  const containerRef = useRef(null);
+export function useVirtualScroll<T>(items: T[], itemHeight: number, overScan = 5): VirtualScrollResult<T> {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
 
@@ -34,7 +47,7 @@ export function useVirtualScroll(items, itemHeight, overScan = 5) {
   const virtualItems = useMemo(() => {
     const startIdx = Math.max(0, Math.floor(scrollTop / itemHeight) - overScan);
     const endIdx = Math.min(items.length, Math.ceil((scrollTop + containerHeight) / itemHeight) + overScan);
-    const visible = [];
+    const visible: VirtualItem<T>[] = [];
     for (let i = startIdx; i < endIdx; i++) {
       visible.push({
         index: i,
@@ -55,28 +68,23 @@ export function useVirtualScroll(items, itemHeight, overScan = 5) {
 }
 
 /**
- * Memoize expensive computations.
- * @param {Function} fn
- * @param {number} [timeout=300]
- * @returns {Function}
+ * Debounce a function call.
  */
-export function debounce(fn, timeout = 300) {
-  let timer;
-  return (...args) => {
+export function debounce<A extends unknown[]>(fn: (...args: A) => void, timeout = 300): (...args: A) => void {
+  let timer: ReturnType<typeof setTimeout>;
+  return (...args: A) => {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), timeout);
   };
 }
 
 /**
- * Batch updates for performance.
- * @param {Function} fn
- * @returns {Function}
+ * Batch updates for performance (coalesces calls to once per animation frame).
  */
-export function batch(fn) {
+export function batch<A extends unknown[]>(fn: (...args: A) => void): (...args: A) => void {
   let queued = false;
-  let lastArgs;
-  return (...args) => {
+  let lastArgs: A;
+  return (...args: A) => {
     lastArgs = args;
     if (!queued) {
       queued = true;

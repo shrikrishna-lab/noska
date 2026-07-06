@@ -1,8 +1,18 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { Plus } from "lucide-react";
 import { colorForOption } from "../../utils/optionColors";
+import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
-export default function GalleryView({ rows, properties, onPatchRow, onAddRow, activeView, onRowClick }) {
+export interface GalleryViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onPatchRow: (rowId: string, patch: Partial<DatabaseRow>) => void;
+  onAddRow: () => void;
+  activeView?: ViewDefinition;
+  onRowClick?: (rowId: string) => void;
+}
+
+export default function GalleryView({ rows, properties, onAddRow, activeView, onRowClick }: GalleryViewProps) {
   const hiddenSet = new Set(activeView?.hiddenProperties || []);
   const visibleProps = properties.filter(p => !hiddenSet.has(p.id));
 

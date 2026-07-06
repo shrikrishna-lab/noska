@@ -3,15 +3,29 @@
  * Functions: count, sum, avg, min, max, percent
  */
 
+export type RollupFunction = "count" | "sum" | "avg" | "min" | "max" | "percent";
+
+export interface RollupOptions {
+  /** for percent, count rows where {done: true} / all */
+  filterDone?: boolean;
+}
+
 /**
- * @param {Object[]} relatedRows — rows linked via relation
- * @param {string} targetPropId — property id to aggregate
- * @param {"count"|"sum"|"avg"|"min"|"max"|"percent"} fn
- * @param {Object} [options]
- * @param {boolean} [options.filterDone] — for percent, count rows where {done: true} / all
- * @returns {number|string}
+ * @param relatedRows — rows linked via relation
+ * @param targetPropId — property id to aggregate
+ * @param fn
  */
-export function computeRollup(relatedRows, targetPropId, fn, options = {}) {
+export function computeRollup(
+  relatedRows: Array<Record<string, unknown>> | null | undefined,
+  targetPropId: string,
+  fn: RollupFunction,
+  // `options` is accepted (matching the original signature) but never
+  // actually read inside the function body in the original JS either —
+  // `options.filterDone` is documented but dead, same pattern as other
+  // "documented but dead" fields found elsewhere in this module. Kept as
+  // an accepted-but-unused parameter for faithful conversion.
+  options: RollupOptions = {}
+): number | string {
   if (!relatedRows || relatedRows.length === 0) return fn === "count" ? 0 : "—";
 
   switch (fn) {

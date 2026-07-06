@@ -1,9 +1,14 @@
+import type { DatabaseRow, FilterCondition, FilterGroup, FilterConfig } from "../types/database";
+
+export interface OperatorOption {
+  id: string;
+  label: string;
+}
+
 /**
  * Returns the set of allowed operators for a given property type.
- * @param {string} propertyType
- * @returns {{ id: string, label: string }[]}
  */
-export function operatorsForType(propertyType) {
+export function operatorsForType(propertyType: string): OperatorOption[] {
   switch (propertyType) {
     case 'select':
     case 'status':
@@ -62,11 +67,8 @@ export function operatorsForType(propertyType) {
 
 /**
  * Evaluates a single condition against a row.
- * @param {Object} row
- * @param {import("../types/database").FilterCondition} condition
- * @returns {boolean}
  */
-function evaluateCondition(row, condition) {
+function evaluateCondition(row: DatabaseRow, condition: FilterCondition): boolean {
   const cell = row[condition.property];
   const val = condition.value;
 
@@ -102,22 +104,29 @@ function evaluateCondition(row, condition) {
       return String(cell) === String(val);
     case 'is-before':
       if (cell === null || cell === undefined) return false;
-      return new Date(cell) < new Date(val);
+      // Cast: `cell` is `unknown` (DatabaseRow's index signature) but the
+      // null/undefined check just above narrows out the only two values
+      // the Date constructor can't accept as a first arg without throwing
+      // or producing Invalid Date differently than the original JS's
+      // untyped `new Date(cell)` did — matches the exact runtime behavior
+      // (Date() coerces any other value via its own rules either way).
+      return new Date(cell as string).getTime() < new Date(val).getTime();
     case 'is-after':
       if (cell === null || cell === undefined) return false;
-      return new Date(cell) > new Date(val);
+      return new Date(cell as string).getTime() > new Date(val).getTime();
     default:
+      // Includes "between"/"before"/"after" — see types/database.ts's
+      // module-header comment: these are documented-but-unimplemented
+      // operators, preserved as a pre-existing quirk (silently matches
+      // every row via this default branch), not fixed here.
       return true;
   }
 }
 
 /**
  * Evaluates a filter group (recursive) against a row.
- * @param {Object} row
- * @param {import("../types/database").FilterGroup|null} group
- * @returns {boolean}
  */
-export function evaluateFilterGroup(row, group) {
+export function evaluateFilterGroup(row: DatabaseRow, group: FilterGroup | null | undefined): boolean {
   if (!group) return true;
   const { op = 'and', conditions = [], groups = [] } = group;
   const conditionResults = conditions.map(c => evaluateCondition(row, c));
@@ -131,30 +140,30 @@ export function evaluateFilterGroup(row, group) {
 
 /**
  * Evaluates a flat filters config (spec-style) against a row.
- * @param {Object} row
- * @param {{ operator: "and"|"or", conditions: Array<{ columnId: string, condition: string, value?: string }> }|null} filters
- * @returns {boolean}
  */
-export function evaluateFilters(row, filters) {
+export function evaluateFilters(row: DatabaseRow, filters: FilterConfig | null | undefined): boolean {
   if (!filters || !filters.conditions || filters.conditions.length === 0) return true;
   const op = filters.operator || 'and';
-  const results = filters.conditions.map(c => {
-    condition: return evaluateCondition(row, {
+  const results = filters.conditions.map(c =>
+    evaluateCondition(row, {
       property: c.columnId,
-      operator: c.condition,
+      // Cast: FilterConfig.conditions[].condition is a loose `string` (see
+      // types/database.ts FilterConfig — spec-style conditions aren't
+      // constrained to the FilterOperator union at the type level), but
+      // evaluateCondition's switch is written against FilterOperator and
+      // falls through safely to `default: return true` for any value not
+      // in the union — matches original JS behavior exactly.
+      operator: c.condition as FilterCondition["operator"],
       value: c.value ?? '',
-    });
-  });
+    })
+  );
   return op === 'and' ? results.every(Boolean) : results.some(Boolean);
 }
 
 /**
  * Filters rows by a text search string (matches all property values).
- * @param {import("../types/database").DatabaseRow[]} rows
- * @param {string} query
- * @returns {import("../types/database").DatabaseRow[]}
  */
-export function textSearch(rows, query) {
+export function textSearch(rows: DatabaseRow[], query: string): DatabaseRow[] {
   if (!query.trim()) return rows;
   const q = query.toLowerCase();
   return rows.filter(r =>

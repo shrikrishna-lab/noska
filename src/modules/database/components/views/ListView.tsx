@@ -1,8 +1,18 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { colorForOption } from "../../utils/optionColors";
+import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
-export default function ListView({ rows, properties, onPatchRow, onAddRow, activeView, onRowClick }) {
+export interface ListViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onPatchRow: (rowId: string, patch: Partial<DatabaseRow>) => void;
+  onAddRow: () => void;
+  activeView?: ViewDefinition;
+  onRowClick?: (rowId: string) => void;
+}
+
+export default function ListView({ rows, properties, onAddRow, activeView, onRowClick }: ListViewProps) {
   const hiddenSet = new Set(activeView?.hiddenProperties || []);
   const visibleProps = properties.filter(p => !hiddenSet.has(p.id));
 

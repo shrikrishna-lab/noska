@@ -1,25 +1,37 @@
-import React, { useState, useCallback } from "react";
-import { Plus, GripVertical, Trash2, Copy, ChevronDown, ChevronUp, ArrowUpDown } from "lucide-react";
+import React, { useState } from "react";
+import { Plus, Trash2, Copy, ChevronDown, ChevronUp, ArrowUpDown } from "lucide-react";
 import { PROPERTY_TYPES } from "../../types/database";
+import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 import { colorForOption } from "../../utils/optionColors";
 
-/** @param {{ rows: import("../../types/database").DatabaseRow[], properties: import("../../types/database").PropertyDefinition[], onPatchRow, onDeleteRow, onDuplicateRow, onAddRow, activeView: import("../../types/database").ViewDefinition, onPatchView }} p */
-export default function TableView({ rows, properties, onPatchRow, onDeleteRow, onDuplicateRow, onAddRow, activeView, onPatchView, onRowClick }) {
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [editingCell, setEditingCell] = useState(null);
-  const [columnWidths, setColumnWidths] = useState({});
+export interface TableViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onPatchRow: (rowId: string, patch: Partial<DatabaseRow>) => void;
+  onDeleteRow?: (rowId: string) => void;
+  onDuplicateRow?: (rowId: string | string[]) => void;
+  onAddRow: () => void;
+  activeView: ViewDefinition;
+  onPatchView?: (patch: Partial<ViewDefinition>) => void;
+  onRowClick?: (rowId: string) => void;
+}
+
+export default function TableView({ rows, properties, onPatchRow, onDeleteRow, onDuplicateRow, onAddRow, activeView, onPatchView, onRowClick }: TableViewProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [editingCell, setEditingCell] = useState<{ rowId: string; propId: string } | null>(null);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
   const sortDir = activeView.sortAsc === false ? 'desc' : 'asc';
 
-  const handleSort = (propId) => {
+  const handleSort = (propId: string) => {
     if (activeView.sort === propId) {
-      onPatchView({ sortAsc: activeView.sortAsc === false });
+      onPatchView?.({ sortAsc: activeView.sortAsc === false });
     } else {
-      onPatchView({ sort: propId, sortAsc: true });
+      onPatchView?.({ sort: propId, sortAsc: true });
     }
   };
 
-  const toggleSelect = (id) => {
+  const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -69,7 +81,7 @@ export default function TableView({ rows, properties, onPatchRow, onDeleteRow, o
                     e.preventDefault();
                     const startX = e.clientX;
                     const startW = columnWidths[prop.id] || 150;
-                    const onMove = (ev) => {
+                    const onMove = (ev: MouseEvent) => {
                       const w = Math.max(60, startW + ev.clientX - startX);
                       setColumnWidths(p => ({ ...p, [prop.id]: w }));
                     };
@@ -115,8 +127,8 @@ export default function TableView({ rows, properties, onPatchRow, onDeleteRow, o
               ))}
               <td className="px-2 py-1.5">
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-                  <button onClick={() => onDuplicateRow(row.id)} className="grid h-6 w-6 place-items-center rounded hover:bg-[var(--hover)] text-[var(--muted)] cursor-pointer" title="Duplicate"><Copy size={12} /></button>
-                  <button onClick={() => onDeleteRow(row.id)} className="grid h-6 w-6 place-items-center rounded hover:bg-[var(--danger)]/10 text-[var(--muted)] hover:text-[var(--danger)] cursor-pointer" title="Delete"><Trash2 size={12} /></button>
+                  <button onClick={() => onDuplicateRow?.(row.id)} className="grid h-6 w-6 place-items-center rounded hover:bg-[var(--hover)] text-[var(--muted)] cursor-pointer" title="Duplicate"><Copy size={12} /></button>
+                  <button onClick={() => onDeleteRow?.(row.id)} className="grid h-6 w-6 place-items-center rounded hover:bg-[var(--danger)]/10 text-[var(--muted)] hover:text-[var(--danger)] cursor-pointer" title="Delete"><Trash2 size={12} /></button>
                 </div>
               </td>
             </tr>
@@ -131,8 +143,8 @@ export default function TableView({ rows, properties, onPatchRow, onDeleteRow, o
         {selectedIds.size > 1 && (
           <div className="flex items-center gap-1 text-[10px] text-[var(--muted)]">
             <span>{selectedIds.size} selected</span>
-            <button onClick={() => { onDuplicateRow([...selectedIds]); setSelectedIds(new Set()); }} className="text-[var(--accent)] hover:underline cursor-pointer">Duplicate</button>
-            <button onClick={() => { [...selectedIds].forEach(id => onDeleteRow(id)); setSelectedIds(new Set()); }} className="text-[var(--danger)] hover:underline cursor-pointer">Delete</button>
+            <button onClick={() => { onDuplicateRow?.([...selectedIds]); setSelectedIds(new Set()); }} className="text-[var(--accent)] hover:underline cursor-pointer">Duplicate</button>
+            <button onClick={() => { [...selectedIds].forEach(id => onDeleteRow?.(id)); setSelectedIds(new Set()); }} className="text-[var(--danger)] hover:underline cursor-pointer">Delete</button>
           </div>
         )}
       </div>
@@ -140,7 +152,16 @@ export default function TableView({ rows, properties, onPatchRow, onDeleteRow, o
   );
 }
 
-function CellRenderer({ row, prop, editing, onStartEdit, onCommit, onCancel }) {
+interface CellRendererProps {
+  row: DatabaseRow;
+  prop: PropertyDefinition;
+  editing: boolean;
+  onStartEdit: () => void;
+  onCommit: (value: unknown) => void;
+  onCancel: () => void;
+}
+
+function CellRenderer({ row, prop, editing, onStartEdit, onCommit, onCancel }: CellRendererProps) {
   const val = row[prop.id];
 
   switch (prop.type) {
@@ -158,39 +179,61 @@ function CellRenderer({ row, prop, editing, onStartEdit, onCommit, onCancel }) {
     case 'select':
     case 'status':
     case 'priority':
-      return <SelectCell value={val} options={prop.options || []} onChange={onCommit} />;
+      // Casts through this switch (`val as string`/`val as number`,
+      // `e.target as HTMLInputElement`) all narrow `val`/`e.target` — typed
+      // `unknown`/`EventTarget` respectively since DatabaseRow's index
+      // signature and DOM event typings can't know the per-property-type
+      // shape — down to what each specific `prop.type` branch guarantees
+      // (select/status/priority values are always strings written by
+      // propertyService.ts's option-backed properties; number properties
+      // are always numbers per databaseService.ts's getDefaultValue; a
+      // text <input>'s onKeyDown target is always the same
+      // HTMLInputElement the onBlur handler right next to it already
+      // narrows). Matches the original JS's implicit untyped access
+      // exactly — no behavior change, just documenting the same
+      // per-branch assumption the JSX already relied on.
+      return <SelectCell value={val as string} options={prop.options || []} onChange={onCommit} />;
     case 'multi-select':
+      // onCommit passed as onChange for parity with the original call site,
+      // even though MultiSelectCell never reads it (see the component's
+      // own note below — preserved dead prop, not removed).
       return <MultiSelectCell value={val} onChange={onCommit} />;
     case 'date':
-      return <input type="date" value={val || ''} onChange={(e) => onCommit(e.target.value)} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none cursor-pointer" />;
+      return <input type="date" value={(val as string) || ''} onChange={(e) => onCommit(e.target.value)} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none cursor-pointer" />;
     case 'number':
       return editing ? (
-        <input type="number" defaultValue={val} autoFocus onBlur={(e) => onCommit(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') onCommit(e.target.value); if (e.key === 'Escape') onCancel(); }} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none" />
+        <input type="number" defaultValue={val as number} autoFocus onBlur={(e) => onCommit(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') onCommit((e.target as HTMLInputElement).value); if (e.key === 'Escape') onCancel(); }} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none" />
       ) : (
-        <span onClick={onStartEdit} className="cursor-text">{val ?? ''}</span>
+        <span onClick={onStartEdit} className="cursor-text">{(val as number) ?? ''}</span>
       );
     case 'url':
       return (
-        <a href={val} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline truncate block" onClick={(e) => { if (!val) e.preventDefault(); }}>
-          {val || ''}
+        <a href={val as string} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline truncate block" onClick={(e) => { if (!val) e.preventDefault(); }}>
+          {(val as string) || ''}
         </a>
       );
     case 'email':
       return (
-        <a href={`mailto:${val}`} className="text-[var(--accent)] hover:underline truncate block">{val || ''}</a>
+        <a href={`mailto:${val as string}`} className="text-[var(--accent)] hover:underline truncate block">{(val as string) || ''}</a>
       );
     default:
       return editing ? (
-        <input type="text" defaultValue={val} autoFocus onBlur={(e) => onCommit(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') onCommit(e.target.value); if (e.key === 'Escape') onCancel(); }} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none" />
+        <input type="text" defaultValue={val as string} autoFocus onBlur={(e) => onCommit(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') onCommit((e.target as HTMLInputElement).value); if (e.key === 'Escape') onCancel(); }} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none" />
       ) : (
-        <span onClick={onStartEdit} className="cursor-text truncate block">{val || ''}</span>
+        <span onClick={onStartEdit} className="cursor-text truncate block">{(val as string) || ''}</span>
       );
   }
 }
 
-function SelectCell({ value, options, onChange }) {
+interface SelectCellProps {
+  value: string | undefined;
+  options: string[];
+  onChange: (value: string) => void;
+}
+
+function SelectCell({ value, options, onChange }: SelectCellProps) {
   const [open, setOpen] = useState(false);
-  const pill = (v) => {
+  const pill = (v: string) => {
     const c = colorForOption(v);
     return (
       <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium max-w-full truncate"
@@ -230,8 +273,17 @@ function SelectCell({ value, options, onChange }) {
   );
 }
 
-function MultiSelectCell({ value, onChange }) {
-  const tags = Array.isArray(value) ? value : (value ? String(value).split(',').map(s => s.trim()).filter(Boolean) : []);
+interface MultiSelectCellProps {
+  value: unknown;
+  /** Accepted for parity with the call site but never read in the original
+   * JS body either — this cell renders read-only pills with no tag-editing
+   * UI wired up yet (the trailing "+ add" input has no onChange handler).
+   * Preserved as a documented dead prop rather than invented functionality. */
+  onChange?: (value: unknown) => void;
+}
+
+function MultiSelectCell({ value }: MultiSelectCellProps) {
+  const tags: string[] = Array.isArray(value) ? value : (value ? String(value).split(',').map(s => s.trim()).filter(Boolean) : []);
   return (
     <div className="flex flex-wrap gap-1">
       {tags.map(t => {

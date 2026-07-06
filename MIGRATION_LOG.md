@@ -1705,3 +1705,182 @@ zero matches. No auth/RLS/session logic touched.
 ### Commit
 - Committed as "Fix activePage resolving to a trashed page" on
   `chore/typescript-migration`.
+
+---
+
+## Task A — `src/modules/database/**` converted to TypeScript
+
+Converted all 28 files in the database module: `types/database.ts`,
+`utils/*` (8 files: filterEngine, formulaEngine, optionColors, performance,
+rollupEngine, sortEngine, templates, index), `services/*` (5 files:
+aiService, databaseService, propertyService, viewService, index),
+`hooks/*` (2 files: useDatabase, index), `components/*` (11 files: 9 view
+renderers under `components/views/`, `DatabaseView.tsx`, `index.ts`),
+`DatabasePage.tsx`, and the module's own `index.ts`. Renamed via `git mv`
+bottom-up per the established dependency order (types → utils → services →
+hooks → view components → DatabaseView/components-index → DatabasePage →
+module index). `src/modules/index.js` (the shared top-level barrel importing
+from both `database` and `page`) was explicitly left untouched, per scope.
+
+### This module's own local types vs. types/blocks.ts — documented, not unified
+`types/database.ts` has its own `DatabaseSchema`/`ViewDefinition`/
+`PropertyDefinition`/`DatabaseRow`, pre-dating and overlapping with (but not
+identical to) the canonical `DatabaseSchema`/`DatabaseViewDefinition`/
+`DatabasePropertyDefinition`/`DatabaseRow` in `types/blocks.ts`. Per the
+established standard, converted this module's own types faithfully against
+its actual runtime shapes rather than force-unifying the two. Two real
+discrepancies found and documented as preserved quirks (not "fixed" by
+picking a side):
+- `ViewDefinition.type` here is missing `"feed"`/`"dashboard"`/`"map"`,
+  which `types/blocks.ts`'s `DatabaseViewDefinition.type` already includes
+  (added in an earlier Phase 4 fix). This module's own
+  `DatabaseView.tsx`'s `VIEW_MAP` does dispatch to `FeedView`/`DashboardView`
+  for those view types at runtime, so this local type under-describes real
+  usage — but widening it is a product decision (unify the two type systems?)
+  out of scope for a type-only pass.
+- `ViewDefinition.columnWidths` is typed `number` (singular) here, matching
+  the original JSDoc, vs. `Record<string, number>` in `types/blocks.ts` (a
+  real per-property map). Grepped every file in this module: nothing reads
+  or writes `view.columnWidths` at all — it's a documented-but-dead field,
+  kept faithful to the original (wrong-looking but unused) type rather than
+  guessing at the never-implemented real shape.
+- `FilterCondition.operator`'s union includes `"between"` (also `"before"`/
+  `"after"` outside the `is-`-prefixed pair), none of which have a case in
+  `filterEngine.ts`'s `evaluateCondition` — they silently fall through to
+  `default: return true`, matching every row. Pre-existing, unimplemented
+  operator; preserved in the union (faithful conversion) and called out
+  inline as a known dead/no-op operator rather than removed or implemented.
+
+### Real bug found and fixed — `useDatabase.ts`'s `removeProperty` (severe)
+The original `useDatabase.js` imported `propertyService.removeProperty`
+aliased as `removePropDef` and called `onPatch(removePropDef(db, propId))`.
+But `propertyService.removeProperty`'s real signature is
+`(properties: PropertyDefinition[], propId: string) => PropertyDefinition[]`
+— it takes a properties *array*, not the whole `db` object, and returns a
+properties array, not a patched `DatabaseSchema`. Passing the whole `db`
+where an array was expected would call `.filter()` on a `DatabaseSchema`
+object (no such method) — a `TypeError` at runtime, reachable any time a
+user clicks the "remove property" (X) button in `DatabasePage.tsx`'s
+properties panel for any non-`"name"` property. There's a separate,
+correctly-shaped `databaseService.removeProperty(db, propId): DatabaseSchema`
+(filters properties AND scrubs the removed property id out of every
+row/view) that is clearly the function this call site actually needed.
+Fixed by importing and calling `databaseService.removeProperty` instead.
+TypeScript's structural typing (`TS2559`/`TS2345`) caught this immediately;
+it was silently uncaught in the original untyped JS. This is a genuine,
+single-correct-behavior bug fix, not a preserved quirk.
+
+### Real bug found and fixed — `formulaEngine.ts`'s `if()` builtin (unreachable, no call sites)
+The original `evaluateFormula`'s `if(cond, x, y)` builtin called
+`evaluate(args[0] ? args[1] : args[2], row, props)` — but `args` at that
+point are already the *evaluated results* of every argument (computed one
+line above via `ast.args.map(a => evaluate(a, ...))`), not AST nodes.
+Calling `evaluate()` a second time on an already-evaluated plain value hits
+`ast.type` on that value (a number/string/boolean), which is always
+`undefined`, falling through to `default: return ''` unconditionally — so
+`if()` always evaluated to `''` regardless of the condition. Fixed to
+`(args[0] ? args[1] : args[2]) ?? ''` (use the already-computed values
+directly). Grepped every consumer of `evaluateFormula`/the formula engine
+across the codebase: none exist yet (no UI wires a formula string into this
+function), so there's no observed "intentional" behavior being changed —
+straightforward bug fix, not a quirk.
+
+### Quirks found and preserved (not fixed)
+- `databaseService.ts`'s `getDefaultValue()` had a `case 'done':` sharing
+  the `'checkbox'` branch in the original JS. `'done'` has never been a
+  member of `PropertyType` (grepped every property-creation call site:
+  `propertyService.ts`, `templates.ts`, `DatabasePage.tsx` — none construct
+  a `'done'`-typed property). Pre-existing dead/unreachable code; omitted
+  from the typed switch rather than force-kept as a TS-unreachable case,
+  documented inline.
+- `TableView.tsx`'s `MultiSelectCell` accepts an `onChange` prop (passed at
+  its one call site, matching the original) but never reads it in the
+  component body — the multi-select cell only renders read-only pills, no
+  tag-editing UI is wired up. Preserved as a documented dead prop, not
+  invented functionality.
+- `DatabasePage.tsx` imports `getActiveView`/`createView` (from
+  `viewService`), `addPropDef` (from `propertyService`), and
+  `generateAISummary`/`generateAITags` (from `aiService`) but never calls
+  any of the five anywhere in the file (this page's own `ops.getActiveView()`
+  comes from the `useDatabase` hook, a different function of the same
+  name). Pre-existing dead imports, left as-is; only the genuinely-unused
+  `Check`/`GripVertical` icon imports from `lucide-react` were dropped
+  (zero runtime effect either way, and would otherwise trip
+  `noUnusedLocals` once that's enabled project-wide).
+- `GraphView.tsx`/`TimelineView.tsx` both destructure `properties`/
+  `onPatchRow` (GraphView) or `properties`/`onPatchRow` (TimelineView) in
+  their prop signatures without ever reading them in the component body —
+  matches the original JS exactly; not removed since removing an unused
+  destructured prop from a signature that callers still pass named
+  arguments against would be a cosmetic-only change outside this task's
+  scope.
+
+### Type boundary with `DatabaseBlock.tsx` (outside this module)
+`DatabasePage`'s one real external caller, `src/components/DatabaseBlock.tsx`
+(Phase 4, already converted, out of scope here), passes the canonical
+`types/blocks.ts` `DatabaseSchema`, which differs from this module's own
+`types/database.ts` `DatabaseSchema` in exactly the two ways documented
+above (`ViewDefinition.type`'s missing view types, `columnWidths`'s shape).
+Typing `DatabasePageProps.database`/`onPatch` strictly against this module's
+own `DatabaseSchema` broke that real call site (`TS2322` on both the
+`database` and `onPatch` props). Rather than reshape either type to force
+compatibility, widened the public prop boundary to `unknown` (documented
+inline in `DatabasePageProps`) and narrowed with one documented cast at the
+single internal read site (`db: DatabaseSchema = { ...defaults, ...(database
+as Partial<DatabaseSchema> || {}) }`) — the same "cast at the one real
+boundary" pattern used elsewhere in this migration (e.g. `DatabaseBlock.tsx`
+casting `makeEmptyDatabase()`'s return through `DatabaseSchema`) rather than
+an undocumented `any` or forcing the two independently-evolved type
+definitions into one.
+
+### Other prop-passing fixes at module boundaries
+- `PeekPanel.jsx` (`src/modules/page/**`, Task B's scope, untouched here)
+  destructures a `children` prop but never renders it in its JSX body — a
+  pre-existing dead prop, same pattern documented for several `.jsx`
+  components in earlier phases. `DatabasePage.tsx`'s one call site never
+  passed it either; added `children={undefined}` explicitly (dead-prop
+  documentation, not new behavior) to satisfy the inferred-required shape
+  from that untyped file.
+
+### Casts
+Every `as` cast introduced during this conversion has an inline one-line
+(or short block) comment. All are either: (1) DOM/event-typing gaps already
+established as a pattern in earlier phases (`EventTarget`→`HTMLElement` for
+`.closest()`/`e.target` narrowing in `BoardView.tsx`/`TableView.tsx`);
+(2) narrowing `DatabaseRow`'s `unknown`-typed index-signature property
+access down to the type a given `PropertyDefinition.type`/view guarantees
+(date-property strings in `CalendarView.tsx`/`TimelineView.tsx`, select-type
+strings in `TableView.tsx`); (3) narrowing a closed-set-by-construction
+value that TS can't structurally verify came from that closed set (the two
+`PropertyType` casts in `DatabasePage.tsx`'s property-creation UI, both
+generated from `Object.entries(PROPERTY_TYPES)`); or (4) the one documented
+type-system boundary cast described above. No `any`, silent `unknown`,
+`@ts-ignore`, or `@ts-nocheck` used anywhere in this batch — verified via
+grep across all 28 files.
+
+### Security check
+- Grepped all 28 changed files for
+  `supabase|fetch\(|import\.meta\.env|apiKey\s*=\s*['"]|secret|token\s*=\s*['"]|password`:
+  zero matches. Confirms this module never touches Supabase, makes no
+  network calls, and holds no hardcoded credentials — `apiKey`/`aiProvider`
+  flow through only as parameters (`DatabasePage`/`aiService`), never
+  hardcoded or defaulted to a real value.
+- No RLS/permission/auth logic in scope — this module has no Supabase
+  coupling at all (confirmed above), so there's nothing of that kind to
+  weaken or preserve.
+- No `.git`/CI/deploy files touched — `git status --short` shows exactly
+  the 28 renamed files (as `.jsx`/`.js`→`.tsx`/`.ts` renames-with-
+  modifications) plus this log entry. `src/modules/index.js` (shared
+  barrel, explicitly out of scope) is untouched.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean (full project — no errors in this module's
+  files, and no pre-existing errors surfaced elsewhere by this batch).
+- `npm run build`: succeeded (`vite build`, exit code 0; only the
+  pre-existing chunk-size warning, unrelated to this batch).
+- `npx vitest run`: **140/140 tests pass** (full suite).
+
+### Commit
+28 files converted (renames + type additions), plus this log entry. No
+files outside `src/modules/database/**` were modified except this log.

@@ -1,5 +1,13 @@
 import React, { useMemo } from "react";
 import { Hash, PieChart, CheckSquare, Plus } from "lucide-react";
+import type { DatabaseRow, PropertyDefinition } from "../../types/database";
+
+export interface DashboardViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onAddRow: () => void;
+  onRowClick?: (rowId: string) => void;
+}
 
 /**
  * DashboardView — summary widgets computed live from the database rows.
@@ -8,15 +16,15 @@ import { Hash, PieChart, CheckSquare, Plus } from "lucide-react";
  * - Breakdown by each select/status/priority property
  * - Completion % for each checkbox property
  */
-export default function DashboardView({ rows, properties, onAddRow, onRowClick }) {
+export default function DashboardView({ rows, properties, onAddRow }: DashboardViewProps) {
   const selectProps = useMemo(
     () => properties.filter((p) => p.type === "select" || p.type === "status" || p.type === "priority"),
     [properties]
   );
   const checkboxProps = useMemo(() => properties.filter((p) => p.type === "checkbox"), [properties]);
 
-  const breakdown = (prop) => {
-    const counts = {};
+  const breakdown = (prop: PropertyDefinition): Array<[string, number]> => {
+    const counts: Record<string, number> = {};
     for (const row of rows) {
       const raw = row[prop.id];
       const key = raw === undefined || raw === null || String(raw).trim() === "" ? "—" : String(raw);
@@ -25,7 +33,7 @@ export default function DashboardView({ rows, properties, onAddRow, onRowClick }
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   };
 
-  const completion = (prop) => {
+  const completion = (prop: PropertyDefinition): number => {
     if (rows.length === 0) return 0;
     const done = rows.filter((r) => r[prop.id] === true || r[prop.id] === "true").length;
     return Math.round((done / rows.length) * 100);

@@ -2,20 +2,30 @@ import React, { useMemo, useState, useRef, useCallback } from "react";
 import { Plus } from "lucide-react";
 import { sortRowsByMultiple } from "../../utils/sortEngine";
 import { colorForOption } from "../../utils/optionColors";
+import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
-export default function BoardView({ rows, properties, onPatchRow, onAddRow, activeView, onRowClick }) {
-  const [dragOverCol, setDragOverCol] = useState(null);
-  const dragRowRef = useRef(null);
+export interface BoardViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onPatchRow: (rowId: string, patch: Partial<DatabaseRow>) => void;
+  onAddRow: () => void;
+  activeView: ViewDefinition;
+  onRowClick?: (rowId: string) => void;
+}
+
+export default function BoardView({ rows, properties, onPatchRow, onAddRow, activeView, onRowClick }: BoardViewProps) {
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const dragRowRef = useRef<{ rowId: string; sourceCol: string } | null>(null);
 
   const groupBy = activeView.groupBy || 'status';
   const groupProp = properties.find(p => p.id === groupBy);
   const isSelectType = groupProp?.type === 'select' || groupProp?.type === 'status' || groupProp?.type === 'priority';
 
   // Apply within-group sorting using view's sorts config
-  const sortConfig = (activeView.sorts?.length > 0) ? activeView.sorts : null;
+  const sortConfig = (activeView.sorts && activeView.sorts.length > 0) ? activeView.sorts : null;
 
   const groups = useMemo(() => {
-    const map = {};
+    const map: Record<string, DatabaseRow[]> = {};
     for (const row of rows) {
       const raw = row[groupBy];
       const key = (raw === undefined || raw === null || String(raw).trim() === '') ? '__no_status__' : String(raw);
@@ -41,23 +51,31 @@ export default function BoardView({ rows, properties, onPatchRow, onAddRow, acti
   }, [definedOptions, groups]);
 
   // HTML5 drag handlers
-  const handleDragStart = useCallback((e, rowId, sourceCol) => {
+  const handleDragStart = useCallback((e: React.DragEvent, rowId: string, sourceCol: string) => {
     dragRowRef.current = { rowId, sourceCol };
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', rowId);
     // Add a small delay class for visual feedback
     setTimeout(() => {
-      e.target.closest('.board-card')?.classList.add('opacity-40');
+      // Cast: React.DragEvent's `target` is typed `EventTarget`, which
+      // lacks DOM traversal methods like `.closest()` — same DOM-typing
+      // gap documented in earlier migration phases (Element→HTMLElement
+      // casts in CommentThread.tsx/PageInspector.tsx). The board card's
+      // onDragStart is only ever attached to a real HTMLElement (the card
+      // div rendered below), so this narrows to what's already true at
+      // runtime.
+      (e.target as HTMLElement).closest('.board-card')?.classList.add('opacity-40');
     }, 0);
   }, []);
 
-  const handleDragEnd = useCallback((e) => {
-    e.target.closest('.board-card')?.classList.remove('opacity-40');
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    // Same DOM-typing gap as handleDragStart above.
+    (e.target as HTMLElement).closest('.board-card')?.classList.remove('opacity-40');
     setDragOverCol(null);
     dragRowRef.current = null;
   }, []);
 
-  const handleDragOver = useCallback((e, colKey) => {
+  const handleDragOver = useCallback((e: React.DragEvent, colKey: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverCol(colKey);
@@ -67,7 +85,7 @@ export default function BoardView({ rows, properties, onPatchRow, onAddRow, acti
     setDragOverCol(null);
   }, []);
 
-  const handleDrop = useCallback((e, targetColKey) => {
+  const handleDrop = useCallback((e: React.DragEvent, targetColKey: string) => {
     e.preventDefault();
     setDragOverCol(null);
     const rowId = e.dataTransfer.getData('text/plain');
@@ -78,7 +96,7 @@ export default function BoardView({ rows, properties, onPatchRow, onAddRow, acti
     dragRowRef.current = null;
   }, [groupBy, onPatchRow]);
 
-  const columnLabel = (key) => {
+  const columnLabel = (key: string) => {
     if (key === '__no_status__') return 'No status';
     return key;
   };
@@ -106,7 +124,6 @@ export default function BoardView({ rows, properties, onPatchRow, onAddRow, acti
     <div className="flex gap-3 overflow-x-auto pb-4 min-h-[200px]">
       {groupKeys.map(key => {
         const colRows = groups[key] || [];
-        const colValue = key === '__no_status__' ? '' : key;
         const isOver = dragOverCol === key;
         return (
           <div

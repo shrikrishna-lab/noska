@@ -1,32 +1,48 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-export default function CalendarView({ rows, properties, onPatchRow, onAddRow, onRowClick, activeView }) {
+export interface CalendarViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onPatchRow: (rowId: string, patch: Partial<DatabaseRow>) => void;
+  onAddRow: () => void;
+  onRowClick?: (rowId: string) => void;
+  activeView: ViewDefinition;
+}
+
+export default function CalendarView({ rows, properties, onAddRow, onRowClick }: CalendarViewProps) {
   const dateProp = properties.find(p => p.type === 'date' && p.id !== 'created-time' && p.id !== 'updated-time');
-  const [currentMonth, setCurrentMonth] = React.useState(() => new Date().getMonth());
-  const [currentYear, setCurrentYear] = React.useState(() => new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
 
   const days = useMemo(() => {
     const first = new Date(currentYear, currentMonth, 1);
     const last = new Date(currentYear, currentMonth + 1, 0);
     const startPad = first.getDay();
     const daysInMonth = last.getDate();
-    const result = [];
+    const result: Array<number | null> = [];
     for (let i = 0; i < startPad; i++) result.push(null);
     for (let d = 1; d <= daysInMonth; d++) result.push(d);
     return result;
   }, [currentMonth, currentYear]);
 
   const rowMap = useMemo(() => {
-    if (!dateProp) return {};
-    const map = {};
+    if (!dateProp) return {} as Record<number, DatabaseRow[]>;
+    const map: Record<number, DatabaseRow[]> = {};
     for (const row of rows) {
       const dt = row[dateProp.id];
       if (!dt) continue;
-      const d = new Date(dt);
+      // Cast: `dt` comes through DatabaseRow's index signature (`unknown`)
+      // — `dateProp` is filtered to `p.type === 'date'` just above, and
+      // every date-property value in this module is written as an ISO
+      // date string (TableView.tsx's date `<input>`, PeekPanel.jsx's date
+      // field, databaseService.ts's getDefaultValue for 'date'). Matches
+      // the original JS's untyped `new Date(dt)` exactly.
+      const d = new Date(dt as string);
       if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
         const day = d.getDate();
         if (!map[day]) map[day] = [];

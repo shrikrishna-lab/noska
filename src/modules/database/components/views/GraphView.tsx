@@ -1,12 +1,41 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { Search, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import type { DatabaseRow, PropertyDefinition } from "../../types/database";
 
-export default function GraphView({ rows, properties, onAddRow, onRowClick }) {
+export interface GraphViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onAddRow: () => void;
+  onRowClick?: (rowId: string) => void;
+}
+
+interface GraphNode {
+  id: string;
+  label: string;
+  icon: string;
+  x: number;
+  y: number;
+}
+
+interface GraphEdge {
+  from: string;
+  to: string;
+}
+
+interface DragState {
+  id: string;
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+}
+
+export default function GraphView({ rows, onRowClick }: GraphViewProps) {
   const [search, setSearch] = useState("");
   const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(null);
-  const svgRef = useRef(null);
+  const [pan] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState<DragState | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return rows;
@@ -14,7 +43,7 @@ export default function GraphView({ rows, properties, onAddRow, onRowClick }) {
     return rows.filter(r => (r.name || '').toLowerCase().includes(q));
   }, [rows, search]);
 
-  const nodes = useMemo(() => filtered.map((r, i) => ({
+  const nodes: GraphNode[] = useMemo(() => filtered.map((r, i) => ({
     id: r.id,
     label: r.name || 'Untitled',
     icon: r.icon || '📄',
@@ -22,21 +51,21 @@ export default function GraphView({ rows, properties, onAddRow, onRowClick }) {
     y: 80 + Math.floor(i / 6) * 120,
   })), [filtered]);
 
-  const edges = useMemo(() => {
-    const result = [];
+  const edges: GraphEdge[] = useMemo(() => {
+    const result: GraphEdge[] = [];
     for (let i = 1; i < nodes.length; i++) {
       result.push({ from: nodes[i - 1].id, to: nodes[i].id });
     }
     return result;
   }, [nodes]);
 
-  const handleMouseDown = useCallback((nodeId, e) => {
+  const handleMouseDown = useCallback((nodeId: string, e: React.MouseEvent) => {
     setDragging({ id: nodeId, startX: e.clientX, startY: e.clientY, origX: nodes.find(n => n.id === nodeId)?.x || 0, origY: nodes.find(n => n.id === nodeId)?.y || 0 });
   }, [nodes]);
 
   useEffect(() => {
     if (!dragging) return;
-    const onMove = (e) => {
+    const onMove = (e: MouseEvent) => {
       const dx = (e.clientX - dragging.startX) / zoom;
       const dy = (e.clientY - dragging.startY) / zoom;
       const el = svgRef.current?.querySelector(`[data-node-id="${dragging.id}"]`);

@@ -3,13 +3,16 @@
  * These call the configured AI provider to generate summaries, tags, etc.
  */
 
+import type { DatabaseRow, PropertyDefinition } from "../types/database";
+
+export interface AiApi {
+  query: (prompt: string) => Promise<string>;
+}
+
 /**
  * Generate an AI summary of a row's content.
- * @param {Object} row
- * @param {Object} [aiApi] - { query: (prompt) => Promise<string> }
- * @returns {Promise<string>}
  */
-export async function generateAISummary(row, aiApi) {
+export async function generateAISummary(row: DatabaseRow, aiApi?: AiApi | null): Promise<string> {
   if (!aiApi?.query) return '(AI not configured)';
   try {
     const content = [row.name, ...(row.pageBlocks || []).map(b => b.text)].filter(Boolean).join('\n');
@@ -23,9 +26,8 @@ export async function generateAISummary(row, aiApi) {
 
 /**
  * Generate AI tags from row content.
- * @returns {Promise<string[]>}
  */
-export async function generateAITags(row, aiApi) {
+export async function generateAITags(row: DatabaseRow, aiApi?: AiApi | null): Promise<string[]> {
   if (!aiApi?.query) return [];
   try {
     const content = [row.name, ...(row.pageBlocks || []).map(b => b.text)].filter(Boolean).join('\n');
@@ -40,9 +42,8 @@ export async function generateAITags(row, aiApi) {
 
 /**
  * Suggest priority level based on content analysis.
- * @returns {Promise<string>}
  */
-export async function suggestPriority(row, aiApi) {
+export async function suggestPriority(row: DatabaseRow, aiApi?: AiApi | null): Promise<string> {
   if (!aiApi?.query) return 'Medium';
   try {
     const content = [row.name, ...(row.pageBlocks || []).map(b => b.text)].filter(Boolean).join('\n').slice(0, 500);
@@ -57,9 +58,8 @@ export async function suggestPriority(row, aiApi) {
 
 /**
  * Estimate time (in hours) for a task based on content.
- * @returns {Promise<number>}
  */
-export async function estimateTime(row, aiApi) {
+export async function estimateTime(row: DatabaseRow, aiApi?: AiApi | null): Promise<number> {
   if (!aiApi?.query) return 1;
   try {
     const content = [row.name, ...(row.pageBlocks || []).map(b => b.text)].filter(Boolean).join('\n').slice(0, 500);
@@ -74,9 +74,8 @@ export async function estimateTime(row, aiApi) {
 
 /**
  * Compute a risk score (0-10) for a row.
- * @returns {Promise<number>}
  */
-export async function computeRiskScore(row, aiApi) {
+export async function computeRiskScore(row: DatabaseRow, aiApi?: AiApi | null): Promise<number> {
   if (!aiApi?.query) return 5;
   try {
     const content = [row.name, ...(row.pageBlocks || []).map(b => b.text)].filter(Boolean).join('\n').slice(0, 500);
@@ -89,23 +88,34 @@ export async function computeRiskScore(row, aiApi) {
   }
 }
 
+interface NlqFilter {
+  propertyId: string;
+  operator: string;
+  value?: string;
+}
+
 /**
  * Execute a natural language query against rows.
  * Example: "Show overdue tasks", "Tasks due this week"
- * @param {string} query
- * @param {Object[]} rows
- * @param {Object[]} properties
- * @returns {Promise<Object[]>} filtered/sorted rows
  */
-export async function naturalLanguageQuery(query, rows, properties, aiApi) {
+export async function naturalLanguageQuery(
+  query: string,
+  rows: DatabaseRow[],
+  properties: PropertyDefinition[],
+  aiApi?: AiApi | null
+): Promise<DatabaseRow[]> {
   if (!aiApi?.query) return rows;
   try {
     const propList = properties.map(p => `${p.name} (${p.id}, ${p.type})`).join(', ');
     const prompt = `Given these properties: ${propList}\n\nConvert this natural language query into a filter condition:\n"${query}"\n\nReturn only a JSON object with { propertyId, operator, value } or "ALL" if no filter applies.\nOperators: contains, equals, not-equals, greater-than, less-than, before, after, is-empty, is-not-empty`;
 
     const result = await aiApi.query(prompt);
-    let filter;
-    try { filter = JSON.parse(result); } catch { return rows; }
+    let filter: NlqFilter | "ALL";
+    try {
+      filter = JSON.parse(result);
+    } catch {
+      return rows;
+    }
 
     if (filter === 'ALL' || !filter.propertyId) return rows;
 
@@ -116,8 +126,14 @@ export async function naturalLanguageQuery(query, rows, properties, aiApi) {
         case 'contains': return cell.toLowerCase().includes((filter.value || '').toLowerCase());
         case 'greater-than': return Number(cell) > Number(filter.value);
         case 'less-than': return Number(cell) < Number(filter.value);
-        case 'before': return new Date(cell) < new Date(filter.value);
-        case 'after': return new Date(cell) > new Date(filter.value);
+        // Cast: NlqFilter.value is optional (`string | undefined`) since
+        // some operators (is-empty/is-not-empty) never need one — the
+        // Date constructor accepts `undefined` too (producing Invalid
+        // Date, same as the original untyped JS would for a missing
+        // value on these two date operators), so this only documents the
+        // type, it doesn't change what value flows in at runtime.
+        case 'before': return new Date(cell).getTime() < new Date(filter.value as string).getTime();
+        case 'after': return new Date(cell).getTime() > new Date(filter.value as string).getTime();
         case 'is-empty': return !cell.trim();
         case 'is-not-empty': return !!cell.trim();
         default: return true;

@@ -1,12 +1,21 @@
 import React from "react";
 import { Plus } from "lucide-react";
+import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
+
+export interface FeedViewProps {
+  rows: DatabaseRow[];
+  properties: PropertyDefinition[];
+  onAddRow: () => void;
+  activeView?: ViewDefinition;
+  onRowClick?: (rowId: string) => void;
+}
 
 /**
  * FeedView — a newest-first vertical stream of database rows, styled like an
  * activity/RSS feed. Uses the same row data as every other view; no fake data.
  * Empty state shows only the "New" affordance.
  */
-export default function FeedView({ rows, properties, onAddRow, activeView, onRowClick }) {
+export default function FeedView({ rows, properties, onAddRow, activeView, onRowClick }: FeedViewProps) {
   const hiddenSet = new Set(activeView?.hiddenProperties || []);
   const visibleProps = properties.filter((p) => !hiddenSet.has(p.id));
 
