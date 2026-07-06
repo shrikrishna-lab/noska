@@ -101,7 +101,13 @@ export const emojis = ["📝", "📌", "💡", "✅", "🧠", "🚀", "📚", "�
 export const COLUMN_TINTS = ["green", "blue", "orange", "purple", "yellow"];
 
 export function timeAgo(iso: string | null | undefined): string {
-  const diff = Date.now() - new Date(iso || 0).getTime();
+  // Real bug, fixed: a missing/empty `iso` used to fall through to
+  // `new Date(0)` (the Unix epoch), producing a nonsensical "~20640d ago"
+  // for any page whose updatedAt was never set — every onboarding starter
+  // page hit this on the very first render. Treat a missing timestamp as
+  // "just now" instead of pretending it's ~56 years old.
+  if (!iso) return "just now";
+  const diff = Date.now() - new Date(iso).getTime();
   if (diff < 60000) return "just now";
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;

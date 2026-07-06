@@ -1398,3 +1398,251 @@ inline comment explaining the specific gap it bridges.
   `chore/typescript-migration`.
 
 **This closes Phase 4.**
+
+---
+
+## Phase 5 — Project-wide verify (tsc/build/test, credential scan, logic-diff audit, `.jsx`/`.js` scope boundary)
+
+No code was converted in this phase — it is a verification/reporting pass
+only, per explicit scope. No commit accompanies this entry beyond the log
+update itself (see note at the end).
+
+### ITEM 1 (highest priority, restated per explicit instruction — not a routine finding)
+**`CommandPalette` is a live, user-facing broken feature in production**,
+not a preserved quirk. Restating in full since this must not get buried:
+two independent `CommandPalette` instances exist — one rendered by
+`App.tsx` (broken: no `context` prop, so page search returns zero results
+and non-"page action" commands silently no-op) and one rendered by
+`Editor.tsx` via `StackedColumn` for every open page (correctly wired).
+Both listen to independent, non-deduplicated `Ctrl+K` handlers that fire
+simultaneously. Only Editor.tsx's instance is ever visible, and only by
+accident — App.tsx's call site happens to never pass an `open` prop, so
+its own broken instance stays invisible. This means the palette users
+actually see and use works, but there is a second, fully dead, broken
+instance sitting in App.tsx today. This was NOT fixed (per the
+document-and-preserve rule — there's no unambiguous "correct" side to
+restore to without guessing product intent on whether App.tsx's instance
+should be removed, merged, or rewired), but it is flagged here again, at
+the top, as the single highest-priority open item from this entire
+migration. Live browser verification remains blocked by `envGuard.ts`'s
+legitimate refusal to run test-mode auth against the production Supabase
+project; the finding is based on precise static tracing of both call
+sites, both listeners, and the render guard (see the Tier 2 File 5 entry
+above for the full trace). Recommend either OAuth-based manual
+verification or a disposable Supabase dev branch to confirm live, and a
+real product decision on whether to delete App.tsx's dead instance or
+consolidate to one.
+
+### ITEM 2 (critical, independently surfaced — outside migration scope but too severe to hold back)
+**Every RLS policy in the live production Supabase database is
+`USING (true) WITH CHECK (true)` for `ALL` operations.** Surfaced by
+`mcp_supabase_get_advisors` (security) while checking for anything the
+migration might have touched. Confirmed present on nearly the entire
+schema: `pages`, `page_permissions`, `ai_chats`, `ai_memory`, `agents`,
+`agent_access_grants`, `agent_run_logs`, `agent_triggers`, `audit_events`,
+`block_locks`, `collaboration_sessions`, `creator_profiles`,
+`marketplace_templates`, `page_versions`, `template_additions`,
+`template_refunds`, `user_profiles`, `workspace_settings`. In practice
+this means RLS provides no real access control at the database level —
+the app-level `requireOwner()`/`user_id`-filtering in
+`supabaseService.ts` is the *only* thing standing between the anon key
+and full read/write access to every user's data via the Supabase
+REST/client API directly (bypassing the app entirely). This is **not**
+caused by the TypeScript migration — no SQL or migrations were touched on
+this branch, confirmed via `git diff master...HEAD --name-only` (229
+files, all `.ts`/`.tsx`/`.jsx`/`.js`/config, zero `.sql` or
+`supabase/migrations/**`). Surfacing it now because it's independently
+critical and outside scope of "wait for Phase 6" — Phase 6 was already
+planned as a dedicated read-only RLS audit, but this specific finding
+(policies literally always evaluating true) is severe enough to flag
+immediately rather than let it ride until Phase 6 starts.
+
+Lower-severity findings from the same advisor call, included for
+completeness:
+- `function_search_path_mutable` on 4 functions: `update_updated_at`,
+  `release_expired_locks`, `clean_stale_sessions`,
+  `update_updated_at_column`.
+- `pg_trgm` extension installed in the `public` schema (should typically
+  live in a dedicated extensions schema).
+- `auth_leaked_password_protection` disabled.
+
+### Full project verify
+- `npx tsc --noEmit`: clean (full project, run twice to confirm stability).
+- `npm run build`: succeeded (`vite build`, exit code 0; only the
+  pre-existing chunk-size warning on `index-*.js`, no errors).
+- `npx vitest run`: **140/140 tests pass**, 5/5 test files, no flakes
+  across repeated runs this session.
+
+### Credential scan
+- Scanned the full 229-file diff (`git diff master...HEAD --name-only`)
+  for API-key-like patterns, JWT-like patterns, `service_role`, and
+  private-key headers. Found only the already-documented pre-existing
+  Unsplash/GIPHY public client keys in `ImageBlock.tsx` (flagged during
+  Tier 1, not a new leak — both are public, client-side, rate-limited
+  demo keys by design of those APIs). No `.env`/`.env.*` files appear
+  anywhere in the diff.
+- Result: **PASS**.
+
+### Logic-diff audit against `master`
+- Branch diverged from `master`/`origin/master` at `15f8314`, currently
+  14 commits ahead.
+- Searched every **removed** line (`git diff master...HEAD` filtered to
+  `^-` lines) across the full diff for
+  `requireOwner|RLS|.eq(|.from(|user_id|owner|role|permission|ROLE_DEFAULTS|session|auth\.|signIn|signOut|login|logout`.
+  152 matches, all confirmed to be the untyped originals of lines that
+  reappear (typed, unchanged in logic) as `+` lines in the same diff —
+  i.e., every one is a "replace with typed version," not a deletion of
+  logic. Cross-checked directly against the current files: every
+  `.from()`/`.eq()` call in `auditEngine.ts` and every `requireOwner()`
+  call in `supabaseService.ts` (savePage, savePages, saveAIChat,
+  saveAIChats, upsertUserProfile, the onboarding-complete profile write,
+  upsertCreatorProfile, saveMarketplaceTemplate, saveAgent) is present
+  and unchanged in behavior.
+- Extended beyond the data layer (per Phase 5 scope) to `App.tsx`: no
+  `supabase.auth.*`/`session.*` line was removed without an identical
+  typed replacement — confirmed during the Tier 2 File 5 security check
+  already logged above, reconfirmed here against the full-branch diff
+  rather than just that file's own diff.
+- Result: **PASS** — no auth/RLS/permission logic was dropped, weakened,
+  or altered anywhere in the branch; all changes in these areas are
+  type-annotation-only or the explicitly-logged bug fixes (duplicatePage,
+  onboarding replay, CoThinking) already called out by name in earlier
+  entries.
+
+### `.jsx`/`.js` scope boundary confirmation
+64 files remain `.jsx`/`.js` in `src/`, all confirmed to fall outside this
+migration's Phase 1-4 scope (never listed in any tier's file list):
+
+- Editor-chrome components excluded from Tier 1: `AuthPage.jsx`,
+  `BacklinksPanel.jsx`, `BlockContextMenu.jsx`,
+  `BlockPreviewIllustration.jsx`, `CodeBlock.jsx`, `CustomizePanel.jsx`,
+  `FloatingFormatToolbar.jsx`, `ImagePicker.jsx`, `InlineAIBar.jsx`,
+  `PageOptionsMenu.jsx`, `RichTextEditor.jsx`, `SelectionAIBar.jsx`,
+  `SlashCommandMenu.jsx`, `SlashCommandPreviewPanel.jsx`,
+  `VersionHistoryPanel.jsx`.
+- Top-level app-shell/panel components never in the Phase 4 file list:
+  `AIPanel.jsx`, `AIRightPanel.jsx`, `CommandPalette.jsx`,
+  `InPageChildren.jsx`, `InPageFind.jsx`, `Modals.jsx`, `PageTree.jsx`,
+  `Sidebar.jsx`, `Topbar.jsx`, `WorkspaceViews.jsx`, `CoThinking.jsx`,
+  `ReadingMode.jsx`.
+- `src/core/tree/TreeEngine.js` — small, only consumed by still-`.jsx`
+  `PageTree.jsx`.
+- The entire `src/modules/database/**` subtree (24 files: views
+  Board/Calendar/Dashboard/Feed/Gallery/Graph/List/Table/Timeline,
+  `DatabaseView.jsx`, `DatabasePage.jsx`, services, hooks, utils, types)
+  — self-contained module, never flagged for Phase 1-4.
+- The entire `src/modules/page/**` subtree (5 files: `PeekPanel.jsx`,
+  `PropertyEngine.js`, `RelationEngine.js`, module index files) — same,
+  never flagged.
+- `src/modules/index.js` — module barrel file.
+
+No file outside this list remains untyped. This matches the boundary
+stated at the close of Phase 4 exactly — no drift, no file was missed or
+newly discovered as out-of-place.
+
+### Result
+Phase 5 verification is clean across all four checks (tsc/build/test,
+credential scan, logic-diff audit, scope boundary). The two items above
+(CommandPalette dead/broken instance, RLS-always-true policies) are the
+substantive findings of this phase and require product/security
+decisions outside the scope of this log — both already reported to the
+user in full, with the CommandPalette finding restated at the top per
+explicit instruction.
+
+**Waiting for go-ahead before Phase 6 (dedicated read-only RLS audit) —
+not started automatically.**
+
+---
+
+## Post-Phase-5 — Live QA bug fixes (empty-pages dead end, epoch-date display, marketplace heading)
+
+Following the Phase 5 report, ran a full manual QA pass using the existing
+`TEST_MODE`/`envGuard.ts` bypass (pointed a local-only, uncommitted
+`.env.development.local` at a fake non-production URL — legitimate per
+envGuard's own rule that test mode only activates against a non-prod
+project; no network calls succeed against the fake URL, matching
+`TEST_MODE`'s designed behavior of skipping Supabase entirely). Found and
+fixed 3 real, unambiguous bugs (single correct fix, not a preserved quirk):
+
+### Bug 1 — empty-pages dead end (real, severe, fixed)
+`App.tsx`'s `appFlowState === "workspace" && !activePage` branch rendered a
+static "No pages yet. Create one with Ctrl+N" message with no sidebar and
+no buttons. Root-caused precisely: `activePage` falls back through
+`pages.find(!trashed) || pages[0]`, so it's only ever falsy when `pages`
+is genuinely empty — trashing your only page does NOT trigger this branch,
+since the trashed page is still found by id and stays active (confirmed
+live: `pages` retains trashed pages with `trashed: true`, never removes
+them). An empty `pages` array is still reachable in production (a failed/
+partial load, or `purgeExpiredTrash` clearing the active page's 30-day
+window). In that state, Ctrl+N doesn't reliably reach the app's keydown
+handler (some browsers intercept it as "new window" before it bubbles),
+and even when it did fire, `openNewPage()`'s `NewPageOverlay` was mounted
+later in the tree, past this early return — so nothing ever appeared, and
+reloading left the user permanently stuck.
+- **Fix**: added a working "New page" button to this branch, wired to the
+  same `openNewPage()`/`NewPageOverlay` already used everywhere else, plus
+  the overlay itself (previously absent from this branch).
+- **Correction made before finalizing**: an initial version of this fix
+  also added a "View Trash" button gated on `trashPages.length > 0`.
+  Tracing the fallback chain showed this is unreachable dead code —
+  `trashPages` is derived from the same `pages` array, so it's always
+  empty exactly when `activePage` is falsy (empty `pages` means zero
+  trashed pages too). Removed before commit rather than shipping an
+  always-hidden button.
+- **Verified live**: `localStorage.clear()` → dead-end screen renders →
+  "New page" button opens the overlay → page created → full sidebar/
+  workspace restored. Confirmed the old repro (clearing storage) now
+  recovers correctly instead of getting stuck after reload.
+
+### Bug 2 — onboarding starter pages show "~20640d ago" (real, fixed)
+`timeAgo()` (`src/utils/helpers.ts`) did `new Date(iso || 0)`, falling back
+to the Unix epoch for a missing timestamp — producing a ~56-year-old
+display for any page with no `updatedAt`. Root cause: `basePage()` in
+`src/onboarding/services/onboardingService.ts` (used by every template's
+starter page) and both "Getting Started" fallback objects in `App.tsx`'s
+`handleFinalize`/`handleOnboardingComplete` never set `createdAt`/
+`updatedAt` — meaning every brand-new user saw this on their very first
+page, immediately after onboarding.
+- **Fix**: `basePage()` now sets `createdAt`/`updatedAt` via the same
+  `now()` helper already used for its `lineage` timestamp. Both fallback
+  objects in `App.tsx` do the same. Additionally hardened `timeAgo()`
+  itself to return `"just now"` for a missing/empty `iso` instead of
+  computing from the epoch — a defense-in-depth fix in case any other
+  un-timestamped page object exists elsewhere in the codebase.
+- **Verified live**: fresh onboarding (`Product Roadmap` template) and a
+  page created via the empty-pages "New page" button both show "just now"
+  immediately, not "20640d ago".
+
+### Bug 3 — Marketplace rail headings show raw camelCase keys (cosmetic, fixed)
+`MarketplacePage.tsx`'s `BrowseView` rendered `Object.entries(rails)`
+section headings with CSS `capitalize`, which only capitalizes the first
+letter of the whole string — `"newItems"` displayed as `"Newitems"`
+instead of `"New Items"`.
+- **Fix**: added a `railLabel()` helper that splits on the camelCase
+  boundary (`([a-z])([A-Z])` → space) before title-casing, applied to all
+  four rail keys (`recommended`, `popular`, `newItems`, `free`).
+- **Verified live**: Marketplace now shows "Recommended", "Popular",
+  "New Items", "Free" correctly.
+
+### Security check
+- Grepped the full diff (`App.tsx`, `MarketplacePage.tsx`,
+  `onboardingService.ts`, `helpers.ts`) for
+  `requireOwner|RLS|.eq(|.from(|user_id|owner|role|permission|session|auth\.|signIn|signOut|apiKey|secret|token|password`:
+  zero matches. No auth/RLS/session/credential logic touched — these are
+  UI-state and timestamp fixes only.
+- No `.env`/credential files committed — the QA bypass env file
+  (`.env.development.local`) was created locally for live verification and
+  deleted before this commit; it's also covered by `.gitignore`'s `*.local`
+  pattern as a backstop.
+- No `any`, silent `unknown`, `@ts-ignore`, or `@ts-nocheck` introduced.
+
+### Verification
+- `npx tsc --noEmit`: clean (full project).
+- `npm run build`: succeeded (only the pre-existing chunk-size warning).
+- `npx vitest run`: **140/140 tests pass**.
+- All three fixes additionally confirmed live via the `TEST_MODE` browser
+  session described above, not just statically.
+
+### Commit
+- Committed as "Fix empty-pages dead end, epoch-date display, and
+  marketplace heading formatting" on `chore/typescript-migration`.

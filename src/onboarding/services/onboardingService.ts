@@ -38,16 +38,27 @@ interface BasePageFields {
   trashed: false;
   tags: never[];
   parentId: null;
+  createdAt: string;
+  updatedAt: string;
   lineage: { action: string; timestamp: string; detail: string }[];
 }
 
 function basePage(): BasePageFields {
+  // Real bug, fixed: this never set createdAt/updatedAt, so every
+  // onboarding starter page (including the "Getting Started" default)
+  // had no real timestamp. timeAgo() (src/utils/helpers.ts) fell back to
+  // the Unix epoch for a missing value, showing "~20640d ago" on a page
+  // that was created seconds earlier — visible to every new user
+  // immediately after onboarding finishes.
+  const timestamp = now();
   return {
     favorite: false,
     trashed: false,
     tags: [],
     parentId: null,
-    lineage: [{ action: "created", timestamp: now(), detail: "Starter page from onboarding" }]
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    lineage: [{ action: "created", timestamp, detail: "Starter page from onboarding" }]
   };
 }
 

@@ -92,6 +92,13 @@ export default function MarketplacePage({ pages, onDuplicate, onToast }) {
   );
 }
 
+// Converts a camelCase rail key (e.g. "newItems") into a readable, title-cased
+// label ("New Items") for display — see the fix note at its call site below.
+function railLabel(key) {
+  const spaced = key.replace(/([a-z])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 function BrowseView({ categories, activeCategory, onCategoryChange, templates, onSelect, purchasedIds }) {
   const rails = useMemo(() => {
     const popular = [...templates].sort((a, b) => b.addCount - a.addCount).slice(0, 6);
@@ -115,7 +122,11 @@ function BrowseView({ categories, activeCategory, onCategoryChange, templates, o
       {/* Rails */}
       {Object.entries(rails).map(([key, items]) => (
         <div key={key} className="mb-8">
-          <h3 className="text-sm font-semibold text-[var(--text)] mb-3 capitalize">{key}</h3>
+          {/* Real bug, fixed: CSS `capitalize` only capitalizes the first
+              letter of the whole string, so the camelCase key "newItems"
+              rendered as "Newitems" instead of "New Items". Split on the
+              camelCase boundary before display. */}
+          <h3 className="text-sm font-semibold text-[var(--text)] mb-3">{railLabel(key)}</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
             {items.map(t => (
               <TemplateCard key={t.id} template={t} onClick={() => onSelect(t)} purchased={purchasedIds.has(t.id)} />

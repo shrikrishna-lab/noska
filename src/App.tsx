@@ -660,10 +660,15 @@ function App() {
       result.push(starterPageForTemplate(formData.template) as unknown as Page);
     }
     if (result.length === 0) {
+      // Real bug, fixed: this fallback page never set createdAt/updatedAt
+      // (same gap as onboardingService.ts's basePage()), so it hit the
+      // same "~20640d ago" epoch-fallback display bug in timeAgo().
+      const timestamp = now();
       result.push({
         id: uid(), title: "Getting Started", icon: "🚀",
         favorite: false, trashed: false, tags: [], parentId: null,
-        lineage: [{ action: "created" as const, timestamp: now(), detail: "Default starter page" }],
+        createdAt: timestamp, updatedAt: timestamp,
+        lineage: [{ action: "created" as const, timestamp, detail: "Default starter page" }],
         blocks: textToBlocks("# Getting Started\n\nWelcome to Noska!")
       });
     }
@@ -677,10 +682,15 @@ function App() {
     // OnboardingPagePreview[] but is really the Page[] built by
     // handleFinalize; cast back to what this function actually needs.
     const realStarterPages = starterPages as unknown as Page[];
+    // Real bug, fixed: same missing createdAt/updatedAt gap as
+    // handleFinalize's fallback above — this is the last-resort path when
+    // starterPages itself is empty.
+    const fallbackTimestamp = now();
     const pages: Page[] = realStarterPages && realStarterPages.length > 0 ? realStarterPages : [{
       id: uid(), title: "Getting Started", icon: "🚀",
       favorite: false, trashed: false, tags: [], parentId: null,
-      lineage: [{ action: "created" as const, timestamp: now(), detail: "Fallback starter page" }],
+      createdAt: fallbackTimestamp, updatedAt: fallbackTimestamp,
+      lineage: [{ action: "created" as const, timestamp: fallbackTimestamp, detail: "Fallback starter page" }],
       blocks: textToBlocks("# Getting Started\n\nWelcome to Noska!")
     }];
     setPages(pages);
@@ -1823,12 +1833,44 @@ function App() {
     );
   }
   if (appFlowState === "workspace" && !activePage) {
+    // Real dead-end bug, fixed: `activePage` falls back through
+    // `pages.find(!trashed) || pages[0]`, so it's only ever falsy when
+    // `pages` is genuinely empty (not merely "all trashed" — a trashed
+    // page is still found by id and stays active). An empty `pages` array
+    // is reachable in production (e.g. a failed/partial load, or
+    // `purgeExpiredTrash` clearing out a page whose 30-day window lapsed
+    // while it was still the active page). This branch previously rendered
+    // a static message with no sidebar and no buttons; Ctrl+N doesn't
+    // reliably reach the app's keydown handler here (some browsers
+    // intercept it as "new window" before it bubbles), and even when it
+    // did fire, openNewPage()'s NewPageOverlay was mounted further down
+    // the tree past this early return, so nothing ever appeared. Since
+    // `pages` being empty means `trashPages` is empty too, there's nothing
+    // to recover here — the fix is just a working "New page" button.
     return (
       <div className="flex h-full items-center justify-center bg-[var(--bg)] text-[var(--muted)]">
         <div className="flex flex-col items-center gap-3">
           <span className="text-4xl">📝</span>
-          <span className="text-sm">No pages yet. Create one with Ctrl+N</span>
+          <span className="text-sm">No pages yet. Create one to get started.</span>
+          <button
+            onClick={openNewPage}
+            className="mt-1 px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--accent)] text-white hover:opacity-90 transition"
+          >
+            New page
+          </button>
         </div>
+        {newPageOpen && newPageDraft && (
+          <NewPageOverlay
+            page={newPageDraft}
+            onClose={() => finishNewPage("close")}
+            onPagePatch={(patch) => setNewPageDraft((prev) => (prev ? { ...prev, ...patch } : prev))}
+            onShare={() => setShareOpen(true)}
+            onFavorite={() => setNewPageDraft((prev) => (prev ? { ...prev, favorite: !prev.favorite } : prev))}
+            onMore={() => handleOpenSettings("General")}
+            onAction={finishNewPage}
+            onToast={showToast}
+          />
+        )}
       </div>
     );
   }
