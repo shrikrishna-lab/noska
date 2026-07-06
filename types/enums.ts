@@ -113,4 +113,11 @@ export type LineageAction =
   | "restored"
   | "template"
   | "duplicated"
-  | "ai-created";
+  | "ai-created"
+  // "ai_generated" (underscore, distinct from "ai-created" above) is a
+  // real second literal — src/App.tsx's updatePage() pushes it when a
+  // page's block count increases via a patch (used for both real AI
+  // edits and any bulk block-add through the same code path). Found via
+  // grep during Phase 4 Tier 2 (App.tsx conversion); missing from the
+  // original enum sweep.
+  | "ai_generated";

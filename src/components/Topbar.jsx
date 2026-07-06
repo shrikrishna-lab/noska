@@ -40,7 +40,18 @@ export default function Topbar({
   onReadingModeToggle,
   pageMode = "doc",
   onPageModeChange,
-  appView = "page"
+  appView = "page",
+  // The following are passed by src/App.tsx but not currently read here —
+  // added to the destructure only to document that they're intentionally
+  // unused by this component (same dead-prop pattern applied to other
+  // still-.jsx components during the TypeScript migration), not a
+  // behavior change.
+  onExport,
+  onClipper,
+  onLineage,
+  onCollab,
+  onLockPage,
+  onRemoveEncryption
 }) {
 
   return (

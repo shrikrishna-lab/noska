@@ -6,7 +6,35 @@ import { getFilteredCommands } from "../core/commands/CommandRegistry";
 import { executeCommand } from "../core/commands/ActionExecutor";
 import { blockFor } from "../utils/helpers";
 
-export default function CommandPalette({ open, onClose, context = {} }) {
+// NOTE (found during TypeScript migration, Phase 4 Tier 2 — App.tsx):
+// src/App.tsx's call site passes `pages`/`query`/`setQuery`/`onSelect`/
+// `onNew`/`onTheme`/`onTrash`/`onExport`/`onClipper`/`onVoice`/`onReview`/
+// `onLineage`/`onAPI`/`onSettings`/`onCollab`/`onToast` as individual
+// top-level props, but this component only ever reads `context` (a
+// single bundled object) — App.tsx never actually passes a `context`
+// prop. This means `context` is always `{}` here in practice, so
+// `context.pages`/`context.page`/`context.onBlocks`/`context.onNavigate`
+// (used below) are always undefined: page search always returns zero
+// results, and any non-"Page actions" command silently no-ops via the
+// `if (!page || !onBlocks)` early return. This is a genuine, pre-existing
+// functional gap between this component and its real call site — flagged
+// here rather than silently rewired, since fixing it is a real behavior
+// change (wiring the palette to actually work) outside a type-only
+// migration pass. The extra props are destructured below purely so the
+// call site type-checks; they are NOT used.
+export default function CommandPalette({
+  open, onClose, context = {},
+  // All of the below are unused dead props from App.tsx's call site (see
+  // note above) — defaulted to undefined (explicit `= undefined`, so TS
+  // infers each as optional) since Editor.tsx's call site (the one that
+  // actually works, via `context={{...}}`) doesn't pass any of them.
+  pages: _unusedPages = undefined, query: _unusedQuery = undefined, setQuery: _unusedSetQuery = undefined,
+  onSelect: _unusedOnSelect = undefined, onNew: _unusedOnNew = undefined, onTheme: _unusedOnTheme = undefined,
+  onTrash: _unusedOnTrash = undefined, onExport: _unusedOnExport = undefined, onClipper: _unusedOnClipper = undefined,
+  onVoice: _unusedOnVoice = undefined, onReview: _unusedOnReview = undefined, onLineage: _unusedOnLineage = undefined,
+  onAPI: _unusedOnAPI = undefined, onSettings: _unusedOnSettings = undefined, onCollab: _unusedOnCollab = undefined,
+  onToast: _unusedOnToast = undefined
+}) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("commands"); // "commands" | "pages"
   const [highlightedIndex, setHighlightedIndex] = useState(0);

@@ -46,4 +46,12 @@ interface Window {
   // declaration file and the module — callers narrow it with `?.` and
   // `as` at each read site, matching how it's used today.
   realtimeCollab?: unknown;
+  // Custom global prompt/confirm dialogs — assigned once in src/App.tsx's
+  // bootstrap effect (backed by the app's own CustomDialog component
+  // instead of the native browser prompt()/confirm(), which don't fit the
+  // app's UI). Called from many still-untyped .jsx files
+  // (WorkspaceViews.jsx, Sidebar.jsx, Modals.jsx) via `await
+  // window.noskaPrompt(...)`/`await window.noskaConfirm(...)`.
+  noskaPrompt?: (title: string, defaultValue?: string, placeholder?: string) => Promise<string | null>;
+  noskaConfirm?: (title: string) => Promise<boolean>;
 }

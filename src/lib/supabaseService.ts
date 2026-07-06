@@ -36,22 +36,37 @@ export interface Page {
   id: string;
   title: string;
   icon: string;
-  cover: string | null;
+  // Optional for the same reason as the group below (App.tsx constructs
+  // many pages without ever setting `cover`) — every real consumer
+  // (Editor.tsx, PagePeek.tsx, CustomizePanel.jsx, ReadingMode.jsx) reads
+  // it with `||`/`??`/truthy checks and falls back to a default gradient.
+  cover?: string | null;
   parentId: string | null;
   favorite: boolean;
   trashed: boolean;
   tags: unknown[];
-  hiddenFromRecents: boolean;
-  offline: boolean;
-  isEncrypted: boolean;
-  encryptedBlocks: string | null | undefined;
-  iv: string | null | undefined;
-  salt: string | null | undefined;
-  isLocked: boolean;
+  // These 7 fields are always present (defaulted via `|| false`/etc.) on
+  // pages that round-trip through mapPageFromDb, but App.tsx constructs
+  // many ad-hoc page objects directly (new/duplicated/templated pages)
+  // that omit them, relying on every real consumer's `page.x || false`/
+  // `?.` fallback (confirmed via grep — PageTree.jsx, Sidebar.jsx,
+  // Editor.tsx, StackedColumn.tsx, WorkspaceViews.jsx, etc. all read
+  // these defensively, never assuming presence). Marked optional to
+  // match how they're actually used, rather than forcing every page
+  // literal across the app to redundantly spell out `false`/`undefined`
+  // for fields whose absence already means the same thing at every call
+  // site.
+  hiddenFromRecents?: boolean;
+  offline?: boolean;
+  isEncrypted?: boolean;
+  encryptedBlocks?: string | null | undefined;
+  iv?: string | null | undefined;
+  salt?: string | null | undefined;
+  isLocked?: boolean;
   blocks: Block[];
   lineage: LineageEntry[];
-  updatedAt: string | null;
-  createdAt: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
   /** Ordered list of child page ids — NOT a `pages` table column (grepped
    * types/supabase.ts's `pages` Row/Insert/Update: no `content` field
    * exists there). This is a purely client-side, session-computed field:
@@ -115,6 +130,20 @@ export interface Page {
   wikiOwner?: string;
   wikiStatus?: string;
   wikiVerification?: string;
+
+  /** Trash lifecycle fields — same non-persisted pattern as the groups
+   * above (confirmed absent from `pages` table in types/supabase.ts).
+   * `trashPageSubtree()` (src/App.tsx) sets `trashedAt` + `purgeAfter`
+   * (now + 30 days) when a page is trashed; `purgeExpiredTrash()` reads
+   * `purgeAfter || deleteAfter` to decide what to hard-delete on load.
+   * `deleteAfter` is read but NEVER written anywhere in the current
+   * codebase (grepped) — likely a renamed-but-not-fully-migrated field
+   * name from an earlier version of the trash feature. Kept as a
+   * documented dead fallback rather than removed, since removing a
+   * read path is a behavior change outside this migration's scope. */
+  trashedAt?: string;
+  purgeAfter?: string;
+  deleteAfter?: string;
 }
 
 /** Loose partial input accepted by savePage/savePages/mapPageToDb — pages

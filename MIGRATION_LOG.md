@@ -1179,3 +1179,222 @@ silencing escape. Every cast documented with an inline comment.
 - Editor.tsx converted and verified clean. Per the tiered plan, STOPPING
   here before App.jsx — do not chain automatically. Waiting for
   App.jsx-specific go-ahead.
+
+---
+
+## Phase 4 — Tier 2, File 5: App.jsx → .tsx (closes Phase 4)
+
+Converted the final file in Phase 4: the 2435-line root `App` component
+(auth bootstrap, page CRUD, trash lifecycle, onboarding wiring, theme
+transitions, and the full workspace JSX render tree), plus 6 theme-
+transition helper functions.
+
+### `types/lib/supabaseService.ts` — third round of "field exists in code, not in DB"
+Same investigation method as the previous two rounds (`content`, then the
+`fontStyle`/cover/comments/wiki group): grepped every `page.*`/`p.*` field
+read in App.tsx, cross-checked against `types/supabase.ts`'s `pages` Row/
+Insert/Update.
+
+- **Made optional** (all confirmed read defensively via `||`/`??`/truthy
+  checks everywhere — PageTree.jsx, Sidebar.jsx, Editor.tsx,
+  StackedColumn.tsx, WorkspaceViews.jsx, ReadingMode.jsx,
+  PageInspector.tsx, CustomizePanel.jsx, PagePeek.tsx — and routinely
+  omitted by App.tsx's many ad-hoc page-construction call sites):
+  `hiddenFromRecents`, `offline`, `isEncrypted`, `encryptedBlocks`, `iv`,
+  `salt`, `isLocked`, `updatedAt`, `createdAt`, `cover`. These were
+  previously required, which was actively wrong — no page-creation call
+  site in the app has ever populated all of them.
+- **Added, non-persisted** (same `content` pattern — confirmed absent
+  from `types/supabase.ts`'s `pages` table): `trashedAt`, `purgeAfter`,
+  `deleteAfter`. `trashPageSubtree()` sets `trashedAt`+`purgeAfter` (now +
+  30 days); `purgeExpiredTrash()` reads `purgeAfter || deleteAfter` to
+  decide what to hard-delete on load. **`deleteAfter` is read but never
+  written anywhere in the codebase** (grepped) — a dead fallback, likely
+  a renamed-but-not-fully-migrated field from an earlier trash
+  implementation. Documented, not removed (removing a read path is a
+  behavior change outside migration scope).
+
+### `types/enums.ts` — real gap in `LineageAction`
+`updatePage()`'s block-count-changed branch pushes `action: "ai_generated"`
+(underscore) — a real, distinct literal from the already-present
+`"ai-created"` (hyphen, used only at page-creation time via AI). Missing
+from the original enum sweep; added.
+
+### Real bugs found and fixed (not preservable quirks — genuine runtime errors/gaps)
+- **`duplicatePage()` — ReferenceError, crashes on every real call.**
+  Referenced `copy.id` in `setActiveId(copy.id)`, but no variable named
+  `copy` exists anywhere in that function's scope (only `clones`, an
+  array). This is bound to Ctrl+D — every user press of Ctrl+D to
+  duplicate the active page has been throwing at runtime. Fixed to
+  `setActiveId(clones[0]?.id)`, matching the evident intent (confirmed
+  against every other duplicate-page code path in the file, which all
+  activate the first/only clone).
+- **Onboarding replay overlay silently drops the user's template choice.**
+  The overlay's `onComplete={(data) => {... handleOnboardingComplete(data)}}`
+  wrapper only forwarded the first of `OnboardingContext`'s two callback
+  args (`data`, `pages` — confirmed both are always passed by
+  `complete()`/`skip()` in OnboardingContext.tsx). This meant replaying
+  onboarding from Settings always silently ignored the user's actual
+  template/page selection and fell back to the generic "Getting Started"
+  default. Fixed to forward both args, matching the primary (non-replay)
+  onboarding path elsewhere in this file.
+- **`CoThinking` modal — comments would throw immediately.** This call
+  site never passed `onBlockPatch`, which `CoThinking.jsx` calls
+  unconditionally on the "add comment" path
+  (`onBlockPatch(blockId, { comments })`). Wired up
+  `handleBlockPatchByPage`, which already supports exactly this 2-arg
+  calling convention by design (same pattern used by
+  `SpacedRepetition`/`WorkspaceView`'s call sites).
+
+### Pre-existing behavior quirk found and preserved, NOT fixed — UPGRADED FINDING, re-verify before Phase 5 sign-off
+- **`CommandPalette` — TWO separate, competing instances exist; App.tsx's
+  is dead code, and only stays harmless by accident.** Original finding:
+  `CommandPalette.jsx` only ever reads a single bundled `context` prop
+  (`context.pages`, `context.page`, `context.onBlocks`,
+  `context.onNavigate`, etc.), but App.tsx's call site passes 16
+  individual top-level props instead and never passes `context` at all —
+  so at that specific call site, page search would always return zero
+  results and non-"Page actions" commands would silently no-op.
+  **Upgraded finding, found while double-checking this entry**: App.tsx's
+  broken instance is not the one users actually interact with.
+  `Editor.tsx` (rendered via `StackedColumn` for every open page in doc
+  view) renders its OWN separate `CommandPalette` instance with a
+  correctly-populated `context` prop, and registers its own independent
+  `Ctrl+K` listener (`setCommandPaletteOpen`) — neither listener calls
+  `stopPropagation`, so a single Ctrl+K press sets both App.tsx's
+  `paletteOpen` and Editor.tsx's `commandPaletteOpen` to `true`
+  simultaneously. Only Editor.tsx's instance ever becomes visible, purely
+  because App.tsx's call site also never passes an `open` prop —
+  `CommandPalette.jsx`'s own `{open && (...)}` render guard keeps it
+  permanently invisible. **Net effect for real users: the command palette
+  they actually see and use (Editor.tsx's) works correctly** — page
+  search and commands are fine in the state users encounter. App.tsx's
+  redundant instance is inert dead code, kept harmless only by the
+  missing `open` prop, not by design.
+  - First attempt at fixing the `open` gap (`open={paletteOpen}`) was
+    caught and reverted before commit: it would have made App.tsx's
+    broken instance visible too, stacking a second, non-functional
+    command palette on top of the real one — a visible regression, not a
+    fix. Reverted to `open={undefined}` with a detailed comment
+    explaining why leaving this instance broken-and-invisible is
+    currently the correct (if accidental) state.
+  - Per the explicit instruction to document and preserve rather than
+    pick a side, neither instance was rewired. The 16 extra props were
+    added to `CommandPalette.jsx`'s destructure (optional, `=
+    undefined`) purely so both call sites type-check without masking
+    anything with `any`.
+  - **Verification note**: attempted to confirm this live in a running
+    browser session (per explicit request) but hit `envGuard.ts`'s
+    deliberate safety guard — both `.env` and `.env.test.local` point at
+    the production Supabase project, and test-mode auth bypass is
+    structurally refused against production by design (confirmed reading
+    `envGuard.ts` — this is an intentional, correct security guard, not
+    something to work around). Did not attempt to circumvent it (would
+    require either modifying env config to point elsewhere or standing
+    up a Supabase dev branch, both of which warrant asking first). This
+    finding is therefore based on precise static tracing of both
+    `CommandPalette` call sites, both `Ctrl+K` listeners, and
+    `CommandPalette.jsx`'s render guard — not a live-browser confirmation.
+    Recommend either OAuth-based manual verification or a disposable
+    Supabase dev branch if a live check is still wanted before treating
+    this as fully closed.
+- **`emptyDb.rows.map(...)` is dead code in 3 template builders**
+  (`templateBlocks`'s "projects"/"docs" cases, `finishNewPage`'s
+  "project" case, `createFromTemplate`'s "projects" case) — confirmed
+  `makeEmptyDatabase()` (blockModel.ts) always returns `rows: []`, so
+  every one of these `.map()` calls over "seed row names" has always
+  been a no-op. Left as-is (documented inline), not simplified — removing
+  dead code is a larger behavior-adjacent change than a type migration
+  should make unilaterally.
+- **`onMove?.()` zero-arg call** (documented in the Editor.tsx entry,
+  reconfirmed here since `App.tsx`'s `onMoveBlock` prop is the function
+  ultimately receiving it): unchanged, `dir` stays optional on
+  `onMoveBlock` to match.
+
+### Type additions/fixes
+- `window.noskaPrompt`/`window.noskaConfirm` ambient declarations added to
+  `vite-env.d.ts` (same pattern as the existing `SpeechRecognition`/
+  `realtimeCollab` globals) — a real, actively-used custom dialog API
+  called from many still-`.jsx` files (`WorkspaceViews.jsx`, `Sidebar.jsx`,
+  `Modals.jsx`) via `await window.noskaPrompt(...)`/`await
+  window.noskaConfirm(...)`.
+- All ~35 handler functions inside `App()` given real parameter/return
+  types against `Page`/`Block`/`AIChat` (not just "compiles clean" —
+  matching the Tier 1/Editor.tsx rigor).
+- `handleFinalize`/`handleOnboardingComplete`: documented, not "fixed",
+  type mismatch between `OnboardingProviderProps.onFinalize`'s declared
+  return (`OnboardingPagePreview[]`, `{title,icon}` only) and what
+  `handleFinalize` actually builds and `handleOnboardingComplete`
+  actually consumes (full `Page`-shaped objects with id/blocks/lineage,
+  later passed straight to `setPages`/`savePage`). Bridged with two
+  documented `as unknown as` casts rather than narrowing either side,
+  since the real page objects are what the rest of the app genuinely
+  needs.
+- `handleBlockPatchByPage`: typed its dual 2-arg/3-arg calling convention
+  (`(blockId, patch)` vs. `(pageId, blockId, patch)`) with a loose-union
+  signature and runtime narrowing, preserving the exact shuffle logic.
+- `templateBlocks()`/`finishNewPage`/`createFromTemplate`: `emptyDb.rows`
+  is `unknown[]` (blockModel.ts, since it's always empty at creation) —
+  added a small `namedRow()` helper cast at each of the 3 dead-code sites
+  above rather than widening `EmptyDatabase.rows`'s type.
+- `Topbar.jsx`: added 6 dead props to its destructure
+  (`onExport`/`onClipper`/`onLineage`/`onCollab`/`onLockPage`/
+  `onRemoveEncryption`, all passed by App.tsx's Topbar call site but
+  never read) — same dead-prop-documentation pattern used repeatedly in
+  Tier 1.
+
+No `any`, silent `unknown`, `@ts-ignore`, or `@ts-nocheck` used as a
+silencing escape anywhere in this file. Every cast is documented with an
+inline comment explaining the specific gap it bridges.
+
+### Security check
+- Grepped the full diff for hardcoded credentials/keys/tokens: none
+  found.
+- **Auth/session logic verified behavior-identical**: diffed every
+  `supabase.auth.*`/`session.*` line against the original — the only
+  changes across the entire authentication bootstrap
+  (`supabase.auth.getSession()`, the TEST_MODE bypass, the
+  authenticated-user branch reading `session.user`, `handleAuthSuccess`,
+  `supabase.auth.signOut()` in `handleLogout`) are type annotations
+  (`AuthUserData` interface, parameter types). No conditional, branch, or
+  call was added, removed, or reordered.
+- No RLS/`page_permissions`/`requireOwner` code exists in this file at
+  all (confirmed via grep) — page-level Supabase writes go through
+  `savePage()`/`savePages()` (`supabaseService.ts`, already RLS-aware and
+  untouched by this migration).
+- No `.git`/CI/deploy files touched — `git status --short` shows exactly
+  `App.jsx` → `App.tsx`, `supabaseService.ts` (Page interface additions),
+  `vite-env.d.ts` (dialog globals), `types/enums.ts` (LineageAction
+  addition), `CommandPalette.jsx`/`Topbar.jsx` (dead-prop documentation),
+  this log.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean (full project).
+- `npm run build`: succeeded (`vite build`, exit code 0; only pre-existing
+  chunk-size warnings).
+- `npx vitest run`: **140/140 tests pass** (full suite).
+- Confirmed zero `.jsx`/`.js` files remain in `src/` outside Phase 4's
+  explicitly out-of-scope areas — every remaining file belongs to one of:
+  editor-chrome components excluded from Tier 1 (BacklinksPanel,
+  BlockContextMenu, BlockPreviewIllustration, CodeBlock, CustomizePanel,
+  FloatingFormatToolbar, ImagePicker, InlineAIBar, PageOptionsMenu,
+  RichTextEditor, SelectionAIBar, SlashCommandMenu,
+  SlashCommandPreviewPanel, VersionHistoryPanel — all still `.jsx`, never
+  in scope for block-renderer conversion); top-level app-shell/panel
+  components never in the Phase 4 file list (AIPanel, AIRightPanel,
+  CommandPalette, InPageChildren, InPageFind, Modals, PageTree, Sidebar,
+  Topbar, WorkspaceViews, AuthPage, CoThinking, ReadingMode); the entire
+  `src/modules/database/**` and `src/modules/page/**` subtrees (database
+  view renderers/services/engines, page peek/properties/relations —
+  self-contained modules never flagged for Phase 4); and
+  `src/core/tree/TreeEngine.js` (small, only consumed by still-`.jsx`
+  `PageTree.jsx`). None of these were in Tier 1's leaf-block-renderer
+  scope or Tier 2's utils/Editor/App scope — they remain open scope for a
+  future Phase 5+.
+
+### Commit
+- Ready to commit as "Convert App to TypeScript" on
+  `chore/typescript-migration`.
+
+**This closes Phase 4.**

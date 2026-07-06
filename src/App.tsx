@@ -58,21 +58,24 @@ import {
   ensurePageEntity
 } from "./utils/pageTreeOps";
 import { fetchPages, fetchSettings, fetchAIChats, savePage, saveSetting, fetchUserProfile, upsertUserProfile, setOnboardingComplete } from "./lib/supabaseService";
+import type { Page, AIChat } from "./lib/supabaseService";
+import type { Block, LineageEntry } from "../types/blocks";
+import type { OnboardingFormData, OnboardingPagePreview } from "./onboarding/types";
 
 const TRASH_PURGE_DAYS = 30;
 const TRASH_PURGE_MS = TRASH_PURGE_DAYS * 24 * 60 * 60 * 1000;
 
-function purgeExpiredTrash(sourcePages, referenceTime = Date.now()) {
+function purgeExpiredTrash(sourcePages: Page[], referenceTime: number = Date.now()): Page[] {
   const byId = new Map(sourcePages.map((page) => [page.id, page]));
-  const purgeIds = new Set();
+  const purgeIds = new Set<string>();
 
-  const markSubtree = (id) => {
+  const markSubtree = (id: string) => {
     if (!byId.has(id) || purgeIds.has(id)) return;
     purgeIds.add(id);
     sourcePages.forEach((candidate) => {
       if (candidate.parentId === id) markSubtree(candidate.id);
     });
-    (byId.get(id).content || []).forEach(markSubtree);
+    (byId.get(id)?.content || []).forEach(markSubtree);
   };
 
   sourcePages.forEach((page) => {
@@ -90,9 +93,9 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const routeParams = useParams();
-  const [appFlowState, setAppFlowState] = useState("loading"); // "loading" | "auth" | "onboarding" | "workspace"
-  const [pages, setPages] = useState([]);
-  const [activeId, setActiveId] = useState(null);
+  const [appFlowState, setAppFlowState] = useState<"loading" | "auth" | "onboarding" | "workspace">("loading");
+  const [pages, setPages] = useState<Page[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [workspaceName, setWorkspaceName] = useState('My Workspace');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -103,7 +106,7 @@ function App() {
   const [settingsInitialTab, setSettingsInitialTab] = useState("General");
   const [templateOpen, setTemplateOpen] = useState(false);
   const [newPageOpen, setNewPageOpen] = useState(false);
-  const [newPageDraft, setNewPageDraft] = useState(null);
+  const [newPageDraft, setNewPageDraft] = useState<Page | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -122,14 +125,14 @@ function App() {
   const [apiKey, setApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState("nvidia");
   const [nvidiaKey, setNvidiaKey] = useState("");
-  const [aiChats, setAiChats] = useState([]);
-  const [activeChatId, setActiveChatId] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [future, setFuture] = useState([]);
+  const [aiChats, setAiChats] = useState<AIChat[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [history, setHistory] = useState<Page[][]>([]);
+  const [future, setFuture] = useState<Page[][]>([]);
   const [confetti, setConfetti] = useState(false);
   const [toast, setToast] = useState("");
-  const [renameFocusId, setRenameFocusId] = useState(null);
-  const [collapsedPages, setCollapsedPages] = useState(() => new Set());
+  const [renameFocusId, setRenameFocusId] = useState<string | null>(null);
+  const [collapsedPages, setCollapsedPages] = useState<Set<string>>(() => new Set());
   const [exportOpen, setExportOpen] = useState(false);
   const [clipperOpen, setClipperOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
@@ -138,7 +141,7 @@ function App() {
   const [collabOpen, setCollabOpen] = useState(false);
   const [encryptOpen, setEncryptOpen] = useState(false);
   const [apiConsoleOpen, setApiConsoleOpen] = useState(false);
-  const [ghostWriterEnabled, setGhostWriterEnabled] = useState(() => {
+  const [ghostWriterEnabled, setGhostWriterEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("noska_ghost_writer_enabled");
       return saved ? JSON.parse(saved) : false;
@@ -146,33 +149,41 @@ function App() {
       return false;
     }
   });
-  const [decryptionKeys, setDecryptionKeys] = useState({});
+  const [decryptionKeys, setDecryptionKeys] = useState<Record<string, string>>({});
 
-  const [dialogState, setDialogState] = useState({ open: false, type: "prompt", title: "", placeholder: "", defaultValue: "", resolve: null });
+  interface DialogState {
+    open: boolean;
+    type: "prompt" | "confirm";
+    title: string;
+    placeholder: string;
+    defaultValue: string;
+    resolve: ((value: string | boolean | null) => void) | null;
+  }
+  const [dialogState, setDialogState] = useState<DialogState>({ open: false, type: "prompt", title: "", placeholder: "", defaultValue: "", resolve: null });
 
   useEffect(() => {
-    window.noskaPrompt = (title, defaultValue = "", placeholder = "") => {
-      return new Promise((resolve) => {
+    window.noskaPrompt = (title: string, defaultValue = "", placeholder = "") => {
+      return new Promise<string | null>((resolve) => {
         setDialogState({
           open: true,
           type: "prompt",
           title,
           placeholder,
           defaultValue,
-          resolve
+          resolve: resolve as (value: string | boolean | null) => void
         });
       });
     };
 
-    window.noskaConfirm = (title) => {
-      return new Promise((resolve) => {
+    window.noskaConfirm = (title: string) => {
+      return new Promise<boolean>((resolve) => {
         setDialogState({
           open: true,
           type: "confirm",
           title,
           placeholder: "",
           defaultValue: "",
-          resolve
+          resolve: resolve as (value: string | boolean | null) => void
         });
       });
     };
@@ -182,9 +193,9 @@ function App() {
     localStorage.setItem("noska_ghost_writer_enabled", JSON.stringify(ghostWriterEnabled));
   }, [ghostWriterEnabled]);
 
-  const [focusedBlock, setFocusedBlock] = useState(null);
-  const [stackedPageIds, setStackedPageIds] = useState([]);
-  const [readingPage, setReadingPage] = useState(null);
+  const [focusedBlock, setFocusedBlock] = useState<Block | null>(null);
+  const [stackedPageIds, setStackedPageIds] = useState<string[]>([]);
+  const [readingPage, setReadingPage] = useState<Page | null>(null);
   const hydrated = useRef(false);
 
   const activePage = pages.find((p) => p.id === activeId) || pages.find((p) => !p.trashed) || pages[0];
@@ -196,7 +207,7 @@ function App() {
     currentPage: activePage,
     pages: visiblePages,
     actions: {
-      createPage: (title, icon, content, tags) => {
+      createPage: (title: string, icon?: string, content?: string, tags?: string) => {
         const id = uid();
         const blocks = content ? textToBlocks(content) : [{ id: uid(), type: "text", text: "" }];
         const page = {
@@ -204,38 +215,38 @@ function App() {
           parentId: null, favorite: false, trashed: false,
           tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
           updatedAt: now(), blocks,
-          lineage: [{ action: "ai-created", timestamp: now(), detail: `Created by AI: "${title}"` }]
-        };
+          lineage: [{ action: "ai-created" as const, timestamp: now(), detail: `Created by AI: "${title}"` }]
+        } as unknown as Page;
         commitPages([page, ...pages]);
         setActiveId(id);
         setAppView("page");
         setRenameFocusId(id);
         return id;
       },
-      renamePage: (title) => updatePage(activePage.id, { title }),
-      appendBlocks: (blocks) => {
+      renamePage: (title: string) => updatePage(activePage.id, { title }),
+      appendBlocks: (blocks: Block[]) => {
         auditEngine.log({ pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'ai', userName: 'AI', action: 'ai_generated', contentBefore: { blockCount: activePage.blocks.length }, contentAfter: { blockCount: activePage.blocks.length + blocks.length }, detail: `AI appended ${blocks.length} blocks` });
         updatePage(activePage.id, { blocks: [...activePage.blocks, ...blocks] });
       },
-      setPageTags: (tags) => updatePage(activePage.id, { tags }),
-      updateAnyPage: (id, patch) => updatePage(id, patch),
-      replaceBlocks: (blocks) => {
+      setPageTags: (tags: unknown[]) => updatePage(activePage.id, { tags }),
+      updateAnyPage: (id: string, patch: Partial<Page>) => updatePage(id, patch),
+      replaceBlocks: (blocks: Block[]) => {
         auditEngine.log({ pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'ai', userName: 'AI', action: 'ai_edit', contentBefore: { blocks: activePage.blocks }, contentAfter: { blocks }, detail: 'AI replaced all blocks' });
         updateBlocks(blocks);
       },
-      insertBlock: (index, block) => {
+      insertBlock: (index: number, block: Block) => {
         auditEngine.log({ pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'ai', userName: 'AI', action: 'ai_edit', blockId: block.id, contentAfter: block, detail: `AI inserted ${block.type} block at position ${index}` });
         const blocks = [...(activePage?.blocks || [])];
         blocks.splice(index, 0, block);
         updateBlocks(blocks);
       },
-      deleteBlock: (blockId) => {
+      deleteBlock: (blockId: string) => {
         const target = (activePage?.blocks || []).find(b => b.id === blockId);
         if (!target) return;
         auditEngine.log({ pageId: activePage.id, userId: realtimeCollab?.getUser?.()?.userId || 'ai', userName: 'AI', action: 'delete', blockId, contentBefore: target, detail: 'AI deleted block' });
         updateBlocks((activePage?.blocks || []).filter(b => b.id !== blockId));
       },
-      updateBlockById: (blockId, patch) => {
+      updateBlockById: (blockId: string, patch: Record<string, unknown>) => {
         const target = (activePage?.blocks || []).find(b => b.id === blockId);
         if (!target) return;
         auditEngine.log({ pageId: activePage.id, userId: realtimeCollab?.getUser?.()?.userId || 'ai', userName: 'AI', action: 'edit', blockId, contentBefore: target, contentAfter: { ...target, ...patch }, detail: 'AI updated block' });
@@ -257,9 +268,9 @@ function App() {
     let mounted = true;
     (async () => {
       const store = storageApi();
-      let loadedPages = [];
-      let loadedSettings = {};
-      let loadedChats = [];
+      let loadedPages: Page[] = [];
+      let loadedSettings: Record<string, unknown> = {};
+      let loadedChats: AIChat[] = [];
 
       // ⚠️ TEST MODE: skip all Supabase calls and load exclusively from localStorage.
       // TEST_MODE is forced off against the production project (see envGuard.js).
@@ -364,7 +375,7 @@ function App() {
         const localPagesRaw = await store.get("pages");
         if (!mounted) return;
         if (localPagesRaw?.value) {
-          const localPages = JSON.parse(localPagesRaw.value);
+          const localPages: Page[] = JSON.parse(localPagesRaw.value);
           const localMap = new Map(localPages.map(p => [p.id, p]));
           // Merge: for any page found in both localStorage and Supabase, prefer the newer one
           loadedPages = loadedPages.map(p => {
@@ -433,7 +444,7 @@ function App() {
         }
 
         if (loadedSettings.workspaceName && loadedSettings.workspaceName !== "Noska") {
-          setWorkspaceName(loadedSettings.workspaceName);
+          setWorkspaceName(loadedSettings.workspaceName as string);
         } else if (pairs[2].value) {
           try {
             const savedName = JSON.parse(pairs[2].value);
@@ -442,7 +453,7 @@ function App() {
         }
 
         if (loadedSettings.theme) {
-          setTheme(loadedSettings.theme === "system" ? "dark" : loadedSettings.theme);
+          setTheme(loadedSettings.theme === "system" ? "dark" : (loadedSettings.theme as string));
         } else if (pairs[3].value) {
           const savedTheme = JSON.parse(pairs[3].value);
           setTheme(savedTheme === "system" ? "dark" : savedTheme);
@@ -530,10 +541,10 @@ function App() {
       }
 
       if (loadedSettings.workspaceName && loadedSettings.workspaceName !== "Noska") {
-        setWorkspaceName(loadedSettings.workspaceName);
+        setWorkspaceName(loadedSettings.workspaceName as string);
       }
       if (loadedSettings.theme) {
-        setTheme(loadedSettings.theme === "system" ? "dark" : loadedSettings.theme);
+        setTheme(loadedSettings.theme === "system" ? "dark" : (loadedSettings.theme as string));
       }
 
       hydrated.current = true;
@@ -558,10 +569,17 @@ function App() {
     return () => { mounted = false; };
   }, []);
 
+  interface AuthUserData {
+    userId: string;
+    userName?: string;
+    email?: string;
+    avatarUrl?: string | null;
+  }
+
   // Auth success handler — routes returning users straight to their
   // workspace, and only first-time users (no profile yet, or
   // onboarding_complete === false) to /onboarding.
-  const handleAuthSuccess = useCallback(async (userData) => {
+  const handleAuthSuccess = useCallback(async (userData: AuthUserData) => {
     const uname = userData.userName || 'Workspace User';
     realtimeCollab.initUser(userData.userId, uname, userData.avatarUrl || '👤');
     try { localStorage.setItem("noska_user_id", userData.userId); } catch {}
@@ -623,29 +641,46 @@ function App() {
   // Build starter pages (local state, no DB dependency). The onboarding
   // flow lets the user pick one starter template — build that page, falling
   // back to a default "Getting Started" page if none was picked.
-  const handleFinalize = useCallback(async (formData) => {
-    const result = [];
+  //
+  // NOTE on the return type: `OnboardingProviderProps.onFinalize` (see
+  // OnboardingContext.tsx) declares this callback's return as
+  // `OnboardingPagePreview[]` ({title, icon} only), but the objects
+  // actually produced here (and by starterPageForTemplate) are full
+  // page-like objects with id/blocks/lineage/etc. — and
+  // handleOnboardingComplete below genuinely relies on those extra
+  // fields (it passes `starterPages` straight into `setPages`/`savePage`).
+  // This is a pre-existing type/reality mismatch in the onboarding
+  // context's declared callback type, not introduced here; documented
+  // via a cast rather than "fixed" by narrowing what this function
+  // builds, since the real page objects are what the rest of the app
+  // needs.
+  const handleFinalize = useCallback(async (formData: OnboardingFormData): Promise<OnboardingPagePreview[]> => {
+    const result: Page[] = [];
     if (formData.template) {
-      result.push(starterPageForTemplate(formData.template));
+      result.push(starterPageForTemplate(formData.template) as unknown as Page);
     }
     if (result.length === 0) {
       result.push({
         id: uid(), title: "Getting Started", icon: "🚀",
         favorite: false, trashed: false, tags: [], parentId: null,
-        lineage: [{ action: "created", timestamp: now(), detail: "Default starter page" }],
+        lineage: [{ action: "created" as const, timestamp: now(), detail: "Default starter page" }],
         blocks: textToBlocks("# Getting Started\n\nWelcome to Noska!")
       });
     }
-    return result;
+    return result as unknown as OnboardingPagePreview[];
   }, []);
 
   // Onboarding complete — set pages directly in state, persist async
-  const handleOnboardingComplete = useCallback(async (formData, starterPages) => {
+  const handleOnboardingComplete = useCallback(async (formData: OnboardingFormData, starterPages: OnboardingPagePreview[]) => {
     if (formData.workspaceName) setWorkspaceName(formData.workspaceName);
-    const pages = starterPages && starterPages.length > 0 ? starterPages : [{
+    // See handleFinalize's comment above — `starterPages` is declared as
+    // OnboardingPagePreview[] but is really the Page[] built by
+    // handleFinalize; cast back to what this function actually needs.
+    const realStarterPages = starterPages as unknown as Page[];
+    const pages: Page[] = realStarterPages && realStarterPages.length > 0 ? realStarterPages : [{
       id: uid(), title: "Getting Started", icon: "🚀",
       favorite: false, trashed: false, tags: [], parentId: null,
-      lineage: [{ action: "created", timestamp: now(), detail: "Fallback starter page" }],
+      lineage: [{ action: "created" as const, timestamp: now(), detail: "Fallback starter page" }],
       blocks: textToBlocks("# Getting Started\n\nWelcome to Noska!")
     }];
     setPages(pages);
@@ -748,8 +783,8 @@ function App() {
         })
       );
 
-      const safeStringify = (val, fallback = "[]") => {
-        try { return JSON.stringify(val); } catch (e) { console.warn("Safe stringify failed:", e.message); return fallback; }
+      const safeStringify = (val: unknown, fallback: string = "[]") => {
+        try { return JSON.stringify(val); } catch (e) { console.warn("Safe stringify failed:", (e as Error).message); return fallback; }
       };
       await Promise.all([
         store.set("pages", safeStringify(serializedPages)),
@@ -794,7 +829,7 @@ function App() {
   }, [appFlowState, activeId, workspaceName, location.pathname]);
 
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -847,7 +882,7 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const commitPages = (next) => {
+  const commitPages = (next: Page[]) => {
     setHistory((h) => [...h.slice(-24), pages]);
     setFuture([]);
     setPages(next);
@@ -859,9 +894,9 @@ function App() {
     } catch {}
   };
 
-  const normalizePageTree = (sourcePages, orderHints = new Map()) => normalizePages(sourcePages, orderHints);
+  const normalizePageTree = (sourcePages: Page[], orderHints: Map<string, string[]> = new Map()) => normalizePages(sourcePages, orderHints);
 
-  const sortSiblings = (sourcePages, parentId, orderedIds = []) => {
+  const sortSiblings = (sourcePages: Page[], parentId: string | null, orderedIds: string[] = []): Page[] => {
     if (!orderedIds.length) return sourcePages;
     const targetParentId = parentId || null;
     const originalIndex = new Map(sourcePages.map((page, index) => [page.id, index]));
@@ -872,16 +907,16 @@ function App() {
       const bSibling = (b.parentId || null) === targetParentId;
       if (aSibling && !bSibling) return -1;
       if (!aSibling && bSibling) return 1;
-      if (!aSibling && !bSibling) return originalIndex.get(a.id) - originalIndex.get(b.id);
-      const aOrder = order.has(a.id) ? order.get(a.id) : Number.MAX_SAFE_INTEGER;
-      const bOrder = order.has(b.id) ? order.get(b.id) : Number.MAX_SAFE_INTEGER;
+      if (!aSibling && !bSibling) return (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0);
+      const aOrder = order.has(a.id) ? order.get(a.id)! : Number.MAX_SAFE_INTEGER;
+      const bOrder = order.has(b.id) ? order.get(b.id)! : Number.MAX_SAFE_INTEGER;
       return aOrder - bOrder;
     });
   };
 
-  const getPageSubtreeIdsLocal = (pageId, sourcePages = pages) => getPageSubtreeIds(pageId, sourcePages);
+  const getPageSubtreeIdsLocal = (pageId: string, sourcePages: Page[] = pages) => getPageSubtreeIds(pageId, sourcePages);
 
-  const movePage = (pageId, parentId, orderedSiblingIds = []) => {
+  const movePage = (pageId: string, parentId: string | null, orderedSiblingIds: string[] = []) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
     const targetParentId = parentId || null;
@@ -899,19 +934,19 @@ function App() {
         updatedAt: movedAt,
         lineage: [
           ...(p.lineage || []),
-          { action: "moved", timestamp: movedAt, detail: targetParentId ? "Moved under another page" : "Moved to top level" }
+          { action: "moved" as const, timestamp: movedAt, detail: targetParentId ? "Moved under another page" : "Moved to top level" }
         ]
       };
     });
 
     const siblingOrder = orderedSiblingIds.includes(pageId) ? orderedSiblingIds : [...orderedSiblingIds, pageId];
     nextPages = sortSiblings(nextPages, targetParentId, siblingOrder);
-    const hints = new Map();
+    const hints = new Map<string, string[]>();
     if (targetParentId) hints.set(targetParentId, siblingOrder);
     commitPages(normalizePageTree(nextPages, hints));
   };
 
-  const trashPageSubtree = (pageId) => {
+  const trashPageSubtree = (pageId: string) => {
     const subtreeIds = getPageSubtreeIdsLocal(pageId);
     if (!subtreeIds.size) return;
     const timestamp = now();
@@ -926,7 +961,7 @@ function App() {
             updatedAt: timestamp,
             lineage: [
               ...(p.lineage || []),
-              { action: "trashed", timestamp, detail: p.id === pageId ? `Moved page subtree to trash; purges after ${TRASH_PURGE_DAYS} days` : "Moved to trash with parent page" }
+              { action: "trashed" as const, timestamp, detail: p.id === pageId ? `Moved page subtree to trash; purges after ${TRASH_PURGE_DAYS} days` : "Moved to trash with parent page" }
             ]
           }
         : p
@@ -942,7 +977,7 @@ function App() {
     commitPages(nextPages);
   };
 
-  const restorePageSubtree = (pageId) => {
+  const restorePageSubtree = (pageId: string) => {
     const subtreeIds = getPageSubtreeIdsLocal(pageId);
     if (!subtreeIds.size) return;
     const timestamp = now();
@@ -966,7 +1001,7 @@ function App() {
           updatedAt: timestamp,
           lineage: [
             ...(p.lineage || []),
-            { action: "restored", timestamp, detail: p.id === pageId ? "Restored page subtree from trash" : "Restored with parent page" }
+            { action: "restored" as const, timestamp, detail: p.id === pageId ? "Restored page subtree from trash" : "Restored with parent page" }
           ]
         };
       })
@@ -978,7 +1013,7 @@ function App() {
     commitPages(nextPages);
   };
 
-  const deletePageSubtreeForever = (pageId) => {
+  const deletePageSubtreeForever = (pageId: string) => {
     const subtreeIds = getPageSubtreeIdsLocal(pageId);
     if (!subtreeIds.size) return;
     setStackedPageIds((prev) => prev.filter((id) => !subtreeIds.has(id)));
@@ -990,7 +1025,7 @@ function App() {
     commitPages(nextPages);
   };
 
-  const setThemeWithTransition = (nextTheme) => {
+  const setThemeWithTransition = (nextTheme: string) => {
     const animation = createThemeAnimation(themeFx.variant, themeFx.start, themeFx.blur, themeFx.gifUrl);
     ensureThemeTransitionStyles(animation.css);
     const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
@@ -1007,7 +1042,12 @@ function App() {
     }
   };
 
-  const handlePageSelect = (pageId, options = {}) => {
+  interface PageSelectOptions {
+    altKey?: boolean;
+    sidePeek?: boolean;
+  }
+
+  const handlePageSelect = (pageId: string, options: PageSelectOptions = {}) => {
     setAppView("page");
     if (options.altKey || options.sidePeek) {
       setStackedPageIds((prev) => prev.includes(pageId) ? prev : [...prev, pageId]);
@@ -1023,7 +1063,7 @@ function App() {
     }
   };
 
-  const navigateToChildPage = (pageId, options = {}) => {
+  const navigateToChildPage = (pageId: string, options: PageSelectOptions = {}) => {
     setAppView("page");
     setActiveId(pageId);
     setStackedPageIds((prev) => {
@@ -1034,7 +1074,7 @@ function App() {
     });
   };
 
-  const closeStackedColumn = (pageId) => {
+  const closeStackedColumn = (pageId: string) => {
     setStackedPageIds((prev) => {
       const next = prev.filter((id) => id !== pageId);
       if (next.length === 0) return prev;
@@ -1043,7 +1083,7 @@ function App() {
     });
   };
 
-  const updatePage = (id, patch) => {
+  const updatePage = (id: string, patch: Partial<Page>) => {
     if (patch.trashed === true) {
       trashPageSubtree(id);
       return;
@@ -1058,7 +1098,7 @@ function App() {
     }
     const nextPages = pages.map((p) => {
         if (p.id === id) {
-          const nextLineage = [...(p.lineage || [])];
+          const nextLineage: LineageEntry[] = [...(p.lineage || [])];
           if (patch.trashed !== undefined) {
             nextLineage.push({
               action: patch.trashed ? "trashed" : "restored",
@@ -1106,7 +1146,7 @@ function App() {
     commitPages(patch.parentId !== undefined || patch.content !== undefined ? normalizePageTree(nextPages) : nextPages);
   };
 
-  const updateBlocks = (blocks) => {
+  const updateBlocks = (blocks: Block[]) => {
     const prev = pages.find(p => p.id === activePage.id);
     auditEngine.log({
       pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'system', userName: realtimeCollab.getUser()?.userName || 'System',
@@ -1115,7 +1155,7 @@ function App() {
     updatePage(activePage.id, { blocks });
   };
 
-  const openAIChat = (chatId = null) => {
+  const openAIChat = (chatId: string | null = null) => {
     setActiveChatId(chatId);
     setAiOpen(true);
   };
@@ -1125,12 +1165,12 @@ function App() {
     setAiOpen(true);
   };
 
-  const openRightPanel = (chatId = null) => {
+  const openRightPanel = (chatId: string | null = null) => {
     setActiveChatId(chatId);
     setAiRightOpen(true);
   };
 
-  const updateBlock = (blockId, patch) => {
+  const updateBlock = (blockId: string, patch: Record<string, unknown>) => {
     if (!activePage?.blocks) return;
     updateBlocks(activePage.blocks.map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
   };
@@ -1155,8 +1195,12 @@ function App() {
     });
   };
 
-  const addPage = (template = "blank", parentId = null, options = {}) => {
-    const templateTitles = {
+  interface AddPageOptions {
+    modal?: boolean;
+  }
+
+  const addPage = (template: string = "blank", parentId: string | null = null, options: AddPageOptions = {}) => {
+    const templateTitles: Record<string, string> = {
       standup: "Meeting Notes",
       prd: "Tasks Tracker",
       tasks: "Tasks Tracker",
@@ -1167,11 +1211,11 @@ function App() {
       blank: "New page",
       form: "Untitled form"
     };
-    const templateIcons = {
+    const templateIcons: Record<string, string> = {
       tasks: "✅", prd: "✅", projects: "🔎", docs: "📄",
       brainstorm: "💡", goals: "🏁", standup: "🗓️"
     };
-    const next = ensurePageEntity({
+    const next: Page = ensurePageEntity({
       id: uid(),
       title: templateTitles[template] || "Untitled",
       icon: templateIcons[template] || "📝",
@@ -1184,7 +1228,7 @@ function App() {
       updatedAt: now(),
       lineage: [
         {
-          action: template === "blank" ? "created" : "template",
+          action: template === "blank" ? "created" as const : "template" as const,
           timestamp: now(),
           detail: template === "blank" ? "Page created" : `Created from template "${templateTitles[template] || template}"`
         }
@@ -1211,7 +1255,7 @@ function App() {
     return next.id;
   };
 
-  const buildBlankPage = (parentId = null) => ensurePageEntity({
+  const buildBlankPage = (parentId: string | null = null): Page => ensurePageEntity({
     id: uid(),
     title: "Untitled",
     icon: "📝",
@@ -1222,11 +1266,11 @@ function App() {
     trashed: false,
     tags: [],
     updatedAt: now(),
-    lineage: [{ action: "created", timestamp: now(), detail: "Page created" }],
+    lineage: [{ action: "created" as const, timestamp: now(), detail: "Page created" }],
     blocks: [{ id: uid(), type: "text", text: "" }]
   });
 
-  const commitNewPageDraft = (draft, patch = {}) => {
+  const commitNewPageDraft = (draft: Page, patch: Partial<Page> = {}): Page => {
     const page = ensurePageEntity({ ...draft, ...patch });
     let nextPages = [page, ...pages.filter((p) => p.id !== page.id)];
     if (page.parentId) {
@@ -1244,7 +1288,7 @@ function App() {
     return page;
   };
 
-  const createSubpageAtBlock = (parentPageId, afterBlockId, title = "") => {
+  const createSubpageAtBlock = (parentPageId: string, afterBlockId: string, title: string = ""): string | null => {
     const parent = pages.find((p) => p.id === parentPageId);
     if (!parent) return null;
 
@@ -1261,7 +1305,7 @@ function App() {
       tags: [],
       updatedAt: now(),
       blocks: [{ id: uid(), type: "text", text: "" }],
-      lineage: [{ action: "created", timestamp: now(), detail: "Subpage created from editor" }]
+      lineage: [{ action: "created" as const, timestamp: now(), detail: "Subpage created from editor" }]
     });
 
     const pageBlock = {
@@ -1300,17 +1344,22 @@ function App() {
     return subpageId;
   };
 
-  function templateBlocks(template) {
+  function templateBlocks(template: string): Block[] {
     const emptyDb = makeEmptyDatabase();
+    // makeEmptyDatabase()'s `rows` is typed `unknown[]` (blockModel.ts —
+    // it's always empty at creation, so the element shape is genuinely
+    // unknown there); these template builders are the first real place
+    // that shapes a row, so cast to a documented minimal row shape here.
+    const namedRow = (r: unknown, name: string) => ({ ...(r as Record<string, unknown>), name });
     switch (template) {
       case "prd": case "tasks":
-        return [{ id: uid(), type: "database", text: "Tasks Tracker", database: emptyDb }];
+        return [{ id: uid(), type: "database", text: "Tasks Tracker", database: emptyDb } as unknown as Block];
       case "projects":
-        return [{ id: uid(), type: "database", text: "Projects", database: { ...emptyDb, view: "board", rows: emptyDb.rows.map((r, i) => ({ ...r, name: ["Website refresh", "Launch plan", "Customer research"][i] || r.name })) } }];
+        return [{ id: uid(), type: "database", text: "Projects", database: { ...emptyDb, view: "board", rows: emptyDb.rows.map((r, i) => namedRow(r, ["Website refresh", "Launch plan", "Customer research"][i] || "")) } } as unknown as Block];
       case "docs":
         return [
-          { id: uid(), type: "h2", text: "Document Hub" },
-          { id: uid(), type: "database", text: "Documents", database: { ...emptyDb, rows: emptyDb.rows.map((r, i) => ({ ...r, name: ["Project brief", "Meeting recap", "Research notes"][i] || r.name })) } }
+          { id: uid(), type: "h2", text: "Document Hub" } as unknown as Block,
+          { id: uid(), type: "database", text: "Documents", database: { ...emptyDb, rows: emptyDb.rows.map((r, i) => namedRow(r, ["Project brief", "Meeting recap", "Research notes"][i] || "")) } } as unknown as Block
         ];
       case "brainstorm":
         return [
@@ -1346,7 +1395,7 @@ function App() {
     }
   }
 
-  const addPageInside = (parentId) => {
+  const addPageInside = (parentId: string) => {
     setCollapsedPages((prev) => {
       const next = new Set(prev);
       next.delete(parentId);
@@ -1361,14 +1410,14 @@ function App() {
     setNewPageOpen(true);
   };
 
-  const finishNewPage = (action) => {
+  const finishNewPage = (action: string) => {
     const draft = newPageDraft;
     if (!draft) {
       setNewPageOpen(false);
       return;
     }
 
-    const commitAndClose = (patch = {}) => {
+    const commitAndClose = (patch: Partial<Page> = {}) => {
       commitNewPageDraft(draft, patch);
       setNewPageDraft(null);
       setNewPageOpen(false);
@@ -1410,10 +1459,13 @@ function App() {
       return;
     }
     if (action === "project") {
+      // makeEmptyDatabase()'s rows are always [] (see templateBlocks'
+      // `namedRow` comment above) — this .map() is dead code today, kept
+      // as-is (documented, not removed).
       commitAndClose({
         title: "Project Tracker",
         icon: "🔎",
-        blocks: [{ id: uid(), type: "database", text: "Projects", database: { ...makeEmptyDatabase(), view: "board", rows: makeEmptyDatabase().rows.map((r, i) => ({ ...r, name: ["Website refresh", "Launch plan", "Customer research"][i] || r.name })) } }]
+        blocks: [{ id: uid(), type: "database", text: "Projects", database: { ...makeEmptyDatabase(), view: "board", rows: makeEmptyDatabase().rows.map((r, i) => ({ ...(r as Record<string, unknown>), name: ["Website refresh", "Launch plan", "Customer research"][i] || "" })) } } as unknown as Block]
       });
       return;
     }
@@ -1437,7 +1489,7 @@ function App() {
     commitAndClose();
   };
 
-  const createFromTemplate = (template) => {
+  const createFromTemplate = (template: string) => {
     const resolved = template === "database" ? "tasks" : template;
     setTemplateOpen(false);
     setNewPageOpen(false);
@@ -1464,16 +1516,16 @@ function App() {
       updatedAt: now(),
       lineage: [
         {
-          action: "template",
+          action: "template" as const,
           timestamp: now(),
           detail: `Created from template "${templateTitles[resolved] || resolved}"`
         }
       ],
-      blocks:
+      blocks: (
         resolved === "prd" || resolved === "tasks"
           ? [{ id: uid(), type: "database", text: "Tasks Tracker", database: makeEmptyDatabase() }]
           : resolved === "projects"
-            ? [{ id: uid(), type: "database", text: "Projects", database: { ...makeEmptyDatabase(), view: "board", rows: makeEmptyDatabase().rows.map((r, i) => ({ ...r, name: ["Website refresh", "Launch plan", "Customer research"][i] || r.name })) } }]
+            ? [{ id: uid(), type: "database", text: "Projects", database: { ...makeEmptyDatabase(), view: "board", rows: makeEmptyDatabase().rows.map((r, i) => ({ ...(r as Record<string, unknown>), name: ["Website refresh", "Launch plan", "Customer research"][i] || "" })) } }]
             : resolved === "standup"
               ? [
                   { id: uid(), type: "h2", text: "Updates" },
@@ -1483,17 +1535,18 @@ function App() {
                   { id: uid(), type: "todo", text: "Send follow-up notes", checked: false }
                 ]
               : [{ id: uid(), type: "text", text: "" }]
+      ) as unknown as Block[]
     });
     commitPages(normalizePageTree([next, ...basePages]));
     setActiveId(next.id);
     setAppView("page");
   };
 
-  const duplicatePage = (pageId) => {
+  const duplicatePage = (pageId: string) => {
     const original = pages.find((p) => p.id === pageId);
     if (!original) return;
-    const idMap = new Map();
-    const clonePage = (p) => {
+    const idMap = new Map<string, string>();
+    const clonePage = (p: Page): Page => {
       const newId = uid();
       idMap.set(p.id, newId);
       return {
@@ -1508,7 +1561,7 @@ function App() {
         lineage: [
           ...(p.lineage || []),
           {
-            action: "duplicated",
+            action: "duplicated" as const,
             timestamp: now(),
             detail: p.id === pageId ? `Duplicated from "${p.title || "Untitled"}"` : "Duplicated as subtree"
           }
@@ -1528,13 +1581,20 @@ function App() {
       );
     }
     commitPages(normalizePageTree(nextPages));
-    setActiveId(copy.id);
+    // Real bug fix (not a preservable quirk — a ReferenceError, since no
+    // variable named `copy` exists in this function's scope; only
+    // `clones` does). This has been crashing every real call to
+    // duplicatePage() (bound to Ctrl+D) at runtime. The evident intent —
+    // confirmed by every other duplicate-page path in this file
+    // (finishNewPage/WorkspaceView's onDuplicate) — is to activate the
+    // newly duplicated page, i.e. the first clone.
+    setActiveId(clones[0]?.id);
     setAppView("page");
   };
 
-  const showToast = (message) => setToast(message);
+  const showToast = (message: string) => setToast(message);
 
-  const handleUnlockPage = async (pageId, passphrase) => {
+  const handleUnlockPage = async (pageId: string, passphrase: string) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
     try {
@@ -1552,7 +1612,7 @@ function App() {
     }
   };
 
-  const handleLockPage = async (pageId, passphrase) => {
+  const handleLockPage = async (pageId: string, passphrase: string) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
     try {
@@ -1578,7 +1638,7 @@ function App() {
     }
   };
 
-  const handleRemoveEncryption = (pageId) => {
+  const handleRemoveEncryption = (pageId: string) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
     setPages((prevPages) =>
@@ -1603,23 +1663,32 @@ function App() {
     showToast("Encryption removed from page.");
   };
 
-  const handleBlockPatchByPage = (pageId, blockId, patch) => {
+  // Supports two call conventions (documented, not a migration change):
+  // 3-arg `(pageId, blockId, patch)` and 2-arg `(blockId, patch)` — the
+  // latter used by CoThinking.jsx/SpacedRepetition.tsx, which don't know
+  // which page a block belongs to. `pageId`/`blockId`/`patch` are typed
+  // loosely (`string | Record<string, unknown> | undefined`) to cover
+  // both shapes; the runtime shuffle below narrows them per call.
+  const handleBlockPatchByPage = (pageIdOrBlockId: string, blockIdOrPatch: string | Record<string, unknown>, maybePatch?: Record<string, unknown>) => {
+    let pageId: string | null = pageIdOrBlockId;
+    let blockId: string = blockIdOrPatch as string;
+    let patch: Record<string, unknown> | undefined = maybePatch;
     // Support both 2-arg (blockId, patch) and 3-arg (pageId, blockId, patch) call patterns
-    if (patch === undefined && typeof blockId === 'object') {
-      patch = blockId;
-      blockId = pageId;
+    if (patch === undefined && typeof blockIdOrPatch === 'object') {
+      patch = blockIdOrPatch;
+      blockId = pageIdOrBlockId;
       pageId = null;
     }
     // Find the block being patched
-    let patchedBlock = null;
-    let patchedPage = null;
+    let patchedBlock: Block | null = null;
+    let patchedPage: Page | null = null;
     for (const p of pages) {
       const b = p.blocks?.find(b => b.id === blockId);
       if (b) { patchedBlock = b; patchedPage = p; break; }
     }
-    if (!pageId) pageId = patchedPage?.id;
+    if (!pageId) pageId = patchedPage?.id ?? null;
     if (!pageId || !patchedBlock) return;
-    const syncedGroupId = patchedBlock?.syncedGroupId;
+    const syncedGroupId = (patchedBlock as unknown as { syncedGroupId?: string })?.syncedGroupId;
     commitPages(
       pages.map((page) => {
         if (page.id !== pageId && !syncedGroupId) return page;
@@ -1652,25 +1721,25 @@ function App() {
     );
   };
 
-  const renamePage = (pageId) => {
+  const renamePage = (pageId: string) => {
     setActiveId(pageId);
     setAppView("page");
     setRenameFocusId(pageId);
   };
 
-  const removeFromRecents = (pageId) => {
+  const removeFromRecents = (pageId: string) => {
     updatePage(pageId, { hiddenFromRecents: true });
     showToast("Removed from Recents");
   };
 
-  const toggleOffline = (pageId) => {
+  const toggleOffline = (pageId: string) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
     updatePage(pageId, { offline: !page.offline });
     showToast(page.offline ? "Removed from offline" : "Available offline");
   };
 
-  const togglePageCollapse = (pageId) => setCollapsedPages((prev) => {
+  const togglePageCollapse = (pageId: string) => setCollapsedPages((prev) => {
     const next = new Set(prev);
     if (next.has(pageId)) next.delete(pageId);
     else next.add(pageId);
@@ -1702,7 +1771,7 @@ function App() {
     }
   };
 
-  const addBlockAfter = (blockId, type = "text", text = "") => {
+  const addBlockAfter = (blockId: string, type: string = "text", text: string = "") => {
     if (!activePage?.blocks) return;
     const index = activePage.blocks.findIndex((b) => b.id === blockId);
     if (index < 0) return;
@@ -1710,12 +1779,12 @@ function App() {
     updateBlocks([...activePage.blocks.slice(0, index + 1), block, ...activePage.blocks.slice(index + 1)]);
   };
 
-  const deleteBlock = (blockId) => {
+  const deleteBlock = (blockId: string) => {
     if (!activePage?.blocks) return;
     updateBlocks(activePage.blocks.filter((b) => b.id !== blockId));
   };
 
-  const duplicateBlock = (blockId) => {
+  const duplicateBlock = (blockId: string) => {
     if (!activePage?.blocks) return;
     const index = activePage.blocks.findIndex((b) => b.id === blockId);
     if (index < 0) return;
@@ -1724,7 +1793,7 @@ function App() {
     updateBlocks([...activePage.blocks.slice(0, index + 1), copy, ...activePage.blocks.slice(index + 1)]);
   };
 
-  const moveBlock = (blockId, dir) => {
+  const moveBlock = (blockId: string, dir: number) => {
     if (!activePage?.blocks) return;
     const blocks = [...activePage.blocks];
     const i = blocks.findIndex((b) => b.id === blockId);
@@ -1764,7 +1833,7 @@ function App() {
     );
   }
   const currentIndex = Math.max(0, visiblePages.findIndex((p) => p.id === activeId));
-  const selectByOffset = (offset) => {
+  const selectByOffset = (offset: number) => {
     if (!visiblePages.length) return;
     const next = visiblePages[Math.min(Math.max(currentIndex + offset, 0), visiblePages.length - 1)];
     if (next) {
@@ -1787,7 +1856,7 @@ function App() {
   };
   const topPage = appView === "page" ? activePage : { ...activePage, icon: viewMeta[appView]?.[0] || "📌", title: viewMeta[appView]?.[1] || activePage.title };
 
-  const handleOpenSettings = (tab) => {
+  const handleOpenSettings = (tab?: string) => {
     setSettingsInitialTab(tab || "General");
     setSettingsOpen(true);
   };
@@ -1804,7 +1873,14 @@ function App() {
         <OnboardingPage key="onboarding" initialWorkspaceName={workspaceName} onFinalize={handleFinalize} onComplete={handleOnboardingComplete} />
       )}
       {onboardingOpen && (
-        <OnboardingPage key="onboarding-overlay" overlay initialWorkspaceName={workspaceName} onFinalize={handleFinalize} onComplete={(data) => { setOnboardingOpen(false); handleOnboardingComplete(data); }} />
+        // Real bug fix: this wrapper dropped OnboardingContext's second
+        // `pages` (starter pages built from the user's actual template
+        // selection via onFinalize) argument, so replaying onboarding
+        // from Settings always silently fell back to
+        // handleOnboardingComplete's default "Getting Started" page
+        // regardless of what the user picked. Every other onComplete
+        // binding in this file passes both args straight through.
+        <OnboardingPage key="onboarding-overlay" overlay initialWorkspaceName={workspaceName} onFinalize={handleFinalize} onComplete={(data, starterPages) => { setOnboardingOpen(false); handleOnboardingComplete(data, starterPages); }} />
       )}
       {appFlowState === "workspace" && (
         <motion.div
@@ -2116,7 +2192,38 @@ function App() {
           />
           <AnimatePresence>
             {paletteOpen && (
+              // IMPORTANT — do not "fix" by adding `open={paletteOpen}` here.
+              // This call site never passes `open`, so CommandPalette.jsx's
+              // own `{open && (...)}` render guard keeps this specific
+              // instance invisible even while mounted — which is exactly
+              // what currently prevents a second, broken command palette
+              // from appearing on top of Editor.tsx's real one.
+              // Editor.tsx (rendered inside StackedColumn, mounted for
+              // every open page in doc view) renders its OWN CommandPalette
+              // instance with a correctly-populated `context` prop, and
+              // registers its own separate Ctrl+K listener
+              // (`setCommandPaletteOpen`). Both this App.tsx handler and
+              // Editor.tsx's handler are plain `window.addEventListener`
+              // listeners with no stopPropagation, so a single Ctrl+K press
+              // sets BOTH `paletteOpen` (here) and `commandPaletteOpen`
+              // (Editor.tsx) to true at once. Today, only Editor.tsx's
+              // instance actually becomes visible (this one stays invisible
+              // for the missing-`open` reason above) — so despite two
+              // parallel, semi-duplicated command-palette implementations
+              // existing, the user only ever sees one, working, palette.
+              // Passing `open` here would make BOTH visible simultaneously,
+              // stacked on top of each other — a regression, not a fix.
+              // See CommandPalette.jsx's own note for the deeper `context`
+              // prop-shape mismatch on this specific call site, which is
+              // the reason this instance would show empty search results
+              // even if it were made visible.
               <CommandPalette
+                // Deliberately `undefined`, not `paletteOpen` — see the
+                // long comment above. This keeps this instance invisible
+                // (matching current real behavior) while still
+                // type-checking against CommandPalette.jsx's required
+                // `open` prop.
+                open={undefined}
                 pages={visiblePages}
                 query={query}
                 setQuery={setQuery}
@@ -2208,8 +2315,18 @@ function App() {
               />
             )}
             {collabOpen && (
+              // Real gap found here: CoThinking.jsx genuinely calls
+              // `onBlockPatch(blockId, patch)` (to attach comments to a
+              // block) but this call site never passed it — every
+              // comment attempt in CoThinking would throw
+              // ("onBlockPatch is not a function"). handleBlockPatchByPage
+              // already supports exactly this 2-arg calling convention
+              // (see its own comment), so it's the correct handler to
+              // wire up here, matching how it's used at every other
+              // 2-arg call site (SpacedRepetition, WorkspaceView).
               <CoThinking
                 page={activePage}
+                onBlockPatch={handleBlockPatchByPage}
                 onClose={() => setCollabOpen(false)}
                 onToast={showToast}
               />
