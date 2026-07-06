@@ -3,7 +3,7 @@ import type { Page } from "../../lib/supabaseService";
 // Aliased to avoid colliding with this file's own local usage patterns
 // (same pattern as the DatabaseBlock component/type collision resolved
 // in earlier Phase-4 batches).
-import type { DatabaseBlock as DatabaseBlockData, DatabaseViewDefinition } from "../../../types/blocks";
+import type { Block, DatabaseBlock as DatabaseBlockData, DatabaseViewDefinition } from "../../../types/blocks";
 
 // ── Command Definition ─────────────────────────────────────────
 // Each command: { id, title, aliases, icon, category, description,
@@ -1090,13 +1090,17 @@ export function initRegistry() {
 initRegistry();
 
 // ── Helper: blockForTreeConversion ─────────────────────────────
-// `block`/return value are left as `any` here rather than `Block` from
-// types/blocks.ts: blockFor() itself lives in src/utils/helpers.js, which
-// is still untyped (a separate Phase 4 file) and returns a plain object
-// inferred as `any` — typing only this call site against `Block` would
-// just be an unchecked assertion, not real type safety, until helpers.js
-// itself is converted.
-function blockForTree(block: any, type: string, text: string = block.text || "") {
+// `block` stays `any` here — it's `CommandContext.block`, which is `any`
+// throughout this whole file (documented at that interface: dozens of
+// commands read/write type-specific fields dynamically, same rationale
+// as renderBlockEditor.tsx's dispatcher param). But the RETURN value is
+// no longer forced broad: now that helpers.ts's `blockFor()` has a real
+// per-branch-narrowed return type (Phase 4 Tier 2 sub-loop A), this
+// function's return is `Block` — every command call site below spreads
+// `blockFor(type, text)`'s real result and only overrides
+// id/parentId/content/text, all of which exist on every `Block` member
+// via `BaseBlock`.
+function blockForTree(block: any, type: string, text: string = block.text || ""): Block {
   const next = blockFor(type, text);
   return {
     ...next,
