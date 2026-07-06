@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Plus, Minus, Palette, Check } from "lucide-react";
 import { COLUMN_TINTS } from "../../utils/helpers";
+// Aliased to avoid colliding with this file's own `ColumnsBlock` component
+// name (same pattern as CodeBlockData vs. the CodeBlock component).
+import type { ColumnsBlock as ColumnsBlockData } from "../../../types/blocks";
 
 const GRID_MAP = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4", 5: "grid-cols-5" };
 
@@ -8,24 +11,24 @@ const GRID_MAP = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4", 5: "gri
 // against theme tokens so it stays correct in both modes. "none" = transparent.
 const TINT_NAMES = ["none", "green", "blue", "orange", "purple", "yellow", "pink", "red", "gray"];
 
-function tintStyle(name) {
+function tintStyle(name?: string): { background: string; borderColor: string } {
   if (!name || name === "none") {
     return { background: "transparent", borderColor: "var(--border)" };
   }
-  const base = {
+  const base = ({
     green: "#22c55e", blue: "#3b82f6", orange: "#f97316", purple: "#a855f7",
     yellow: "#eab308", pink: "#ec4899", red: "#ef4444", gray: "#8b8b8b",
-  }[name] || "#8b8b8b";
+  } as Record<string, string>)[name] || "#8b8b8b";
   return {
     background: `color-mix(in srgb, ${base} 12%, var(--surface))`,
     borderColor: `color-mix(in srgb, ${base} 32%, var(--border))`,
   };
 }
 
-function swatchColor(name) {
+function swatchColor(name: string): string {
   if (name === "none") return "var(--surface-3, #ccc)";
-  return { green: "#22c55e", blue: "#3b82f6", orange: "#f97316", purple: "#a855f7",
-    yellow: "#eab308", pink: "#ec4899", red: "#ef4444", gray: "#8b8b8b" }[name] || "#8b8b8b";
+  return ({ green: "#22c55e", blue: "#3b82f6", orange: "#f97316", purple: "#a855f7",
+    yellow: "#eab308", pink: "#ec4899", red: "#ef4444", gray: "#8b8b8b" } as Record<string, string>)[name] || "#8b8b8b";
 }
 
 /**
@@ -33,23 +36,29 @@ function swatchColor(name) {
  * tinted column cards (green/blue/… from the shared palette) with empty-state
  * placeholders (no fake text), immediate editing, and a per-column color picker.
  */
-export default function ColumnsBlock({ block, onPatch, isLocked }) {
+interface ColumnsBlockProps {
+  block: ColumnsBlockData;
+  onPatch: (patch: Partial<ColumnsBlockData>) => void;
+  isLocked?: boolean;
+}
+
+export default function ColumnsBlock({ block, onPatch, isLocked }: ColumnsBlockProps) {
   const columns = block.columns || [[""], [""]];
   const count = columns.length;
-  const gridClass = GRID_MAP[count] || "grid-cols-2";
+  const gridClass = (GRID_MAP as Record<number, string>)[count] || "grid-cols-2";
   const colors = block.columnColors || columns.map((_, i) => COLUMN_TINTS[i % COLUMN_TINTS.length]);
 
-  const [pickerFor, setPickerFor] = useState(null);
-  const pickerRef = useRef(null);
+  const [pickerFor, setPickerFor] = useState<number | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (pickerFor === null) return;
-    const handler = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerFor(null); };
+    const handler = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerFor(null); };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [pickerFor]);
 
-  const setColColor = (i, name) => {
+  const setColColor = (i: number, name: string) => {
     const next = columns.map((_, ci) => colors[ci] || COLUMN_TINTS[ci % COLUMN_TINTS.length]);
     next[i] = name;
     onPatch({ columnColors: next });

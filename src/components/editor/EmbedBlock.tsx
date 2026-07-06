@@ -1,8 +1,15 @@
 import React, { useState } from "react";
-import { Link, Globe, FolderOpen, ExternalLink, GitFork, MapPinned, Pen, FilePlus, Eye, BarChart3, Monitor, Grid3X3, VideoIcon, FormInput, Code, Hash, Database, Layout, Trash2, Edit2, Play, Music, FileText, BookOpen, MessageSquare } from "lucide-react";
+import { Link, Globe, FolderOpen, ExternalLink, GitFork, MapPinned, Pen, FilePlus, Eye, BarChart3, Monitor, Grid3X3, VideoIcon, FormInput, Code, Hash, Database, Layout, Trash2, Edit2, Play, Music, FileText, BookOpen, MessageSquare, LucideIcon } from "lucide-react";
 import { Workflow, FileArchive } from "lucide-react";
+import type { GenericBlock } from "../../../types/blocks";
 
-const PROVIDERS = {
+interface ProviderInfo {
+  name: string;
+  icon: LucideIcon | (() => React.ReactElement);
+  placeholder: string;
+}
+
+const PROVIDERS: Record<string, ProviderInfo> = {
   "embed-generic": { name: "Embed", icon: Globe, placeholder: "Paste any secure web URL..." },
   "google-drive": { name: "Google Drive", icon: FolderOpen, placeholder: "Paste a Google Drive share link..." },
   "google-docs": { name: "Google Docs", icon: FileText, placeholder: "Paste a Google Docs link..." },
@@ -43,7 +50,7 @@ const PROVIDERS = {
   "apple-music": { name: "Apple Music", icon: Music, placeholder: "Paste an Apple Music link..." },
 };
 
-function detectProvider(url) {
+function detectProvider(url: string): string {
   if (!url) return "embed-generic";
   if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
   if (url.includes("vimeo.com")) return "vimeo";
@@ -76,7 +83,7 @@ function detectProvider(url) {
   return "embed-generic";
 }
 
-function getEmbedUrl(url, type) {
+function getEmbedUrl(url: string, type: string): string {
   if (!url) return "";
 
   if (type === "youtube" || (!type && (url.includes("youtube.com") || url.includes("youtu.be")))) {
@@ -155,13 +162,13 @@ function getEmbedUrl(url, type) {
   return url;
 }
 
-function extractGoogleId(url, type) {
+function extractGoogleId(url: string, type: string): string {
   const regex = new RegExp(`${type}/d/([a-zA-Z0-9_-]+)`);
   const match = url.match(regex);
   return match ? match[1] : "";
 }
 
-function extractNotionPageId(url) {
+function extractNotionPageId(url: string): string {
   const match = url.match(/([a-f0-9]{32})/);
   if (match) return match[1];
   const parts = url.split("/").pop()?.split("-");
@@ -170,7 +177,14 @@ function extractNotionPageId(url) {
   return encodeURIComponent(url);
 }
 
-export default function EmbedBlock({ block, onPatch, onKeyDown, onDelete }) {
+interface EmbedBlockProps {
+  block: GenericBlock;
+  onPatch: (patch: Partial<GenericBlock>) => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  onDelete?: () => void;
+}
+
+export default function EmbedBlock({ block, onPatch, onKeyDown, onDelete }: EmbedBlockProps) {
   const type = block.type || "embed-generic";
   const provider = PROVIDERS[type] || PROVIDERS["embed-generic"];
   const ProviderIcon = provider.icon;
@@ -180,7 +194,7 @@ export default function EmbedBlock({ block, onPatch, onKeyDown, onDelete }) {
   const hasUrl = !!block.text;
   const detectedType = hasUrl ? detectProvider(block.text) : type;
 
-  const handleEmbed = (e) => {
+  const handleEmbed = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (inputUrl.trim()) {
       const detected = detectProvider(inputUrl.trim());

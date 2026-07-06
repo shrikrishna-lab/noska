@@ -743,3 +743,164 @@ confirmed all 37 branches correspond to a real `Block` union member (with
 - `npx vitest run`: **140/140 tests pass** (full suite) — confirms the
   dead-prop/ref-type fixes and the `GripHorizontal` import addition don't
   change any tested runtime behavior.
+
+### Commit
+- Committed `a312d13` — "Convert renderBlockEditor to TypeScript, fix
+  Block union mismatches" on `chore/typescript-migration` (4 files:
+  renderBlockEditor.jsx→.tsx, DatabaseBlock.jsx dead-prop fix,
+  types/blocks.ts corrections, this log).
+
+---
+
+## Phase 4 — Tier 1: leaf block renderers
+
+Converted the 11 individual block-type renderer components that
+`renderBlockEditor.tsx` dispatches to: `ChartBlock.jsx`, `EmbedBlock.jsx`,
+`ImageBlock.jsx`, `ColumnsBlock.jsx`, `SimpleTable.jsx`, `MermaidBlock.jsx`,
+`LinkedViewBlock.jsx`, `src/components/FormsBlock.jsx`,
+`src/components/DatabaseBlock.jsx`, `MediaUploadPlaceholder.jsx`,
+`PagePeek.jsx`. Looped fully autonomously per the batch instructions.
+
+### types/blocks.ts additions/fixes (pre-work, before any file conversion)
+- **`ImageBlockData`** (new): `caption`, `imageSize` (4-value union),
+  `imageAlign` (3-value union), `imageWidth`. Grepped — exclusive to
+  `ImageBlock.jsx`, no gap/ambiguity.
+- **`LinkedViewBlockData`** (new): `sourcePageId`, `sourceBlockId`.
+  Grepped — exclusive to `LinkedViewBlock.jsx`; the "linked-view" command
+  (`CommandRegistry.ts`) seeds no initial fields, so both are optional.
+- **`TableBlock.colWidths`** (added field, optional `string[]`): grepped —
+  written only by `SimpleTable.jsx`'s resize handler, absent until first
+  manual resize.
+- **Real bug caught**: `ColumnsBlock.columns` was typed `RichTextRun[][]`,
+  but grep of `helpers.js`'s seed (`Array.from({length:n}, () => [''])`)
+  and `ColumnsBlock.jsx`'s actual read/write (`col.join("\n")` /
+  `value.split("\n")`) showed the real runtime shape is `string[][]`
+  (newline-joined lines), never rich-text run objects. Fixed the type to
+  match reality — this was a type-definition bug from the earlier
+  match-table pass, not a runtime behavior change (the .jsx file always
+  worked correctly; only its type description was wrong).
+
+### Naming collisions (component vs. type interface)
+Same pattern as `CodeBlockData`/`CodeBlock` from earlier in Phase 4:
+- `ColumnsBlock.tsx` imports the `ColumnsBlock` type as `ColumnsBlockData`.
+- `DatabaseBlock.tsx` imports the `DatabaseBlock` type as `DatabaseBlockData`.
+- `LinkedViewBlock.tsx` also imports `DatabaseBlock as DatabaseBlockData`
+  (reads a linked database's shape read-only).
+
+### Fixes made during the loop
+- **`ChartBlock.tsx`**: straightforward, typed `block` as `ChartBlockData`,
+  `SAMPLES`/series helpers against `ChartSeriesPoint`. No gaps.
+- **`EmbedBlock.tsx`**: typed `block` as `GenericBlock` (the ~30 provider
+  ids don't warrant a dedicated interface — no distinguishing fields
+  beyond `type`/`text`, matching `types/blocks.ts`'s existing rationale
+  for `GenericBlock`). Added a `ProviderInfo`/`LucideIcon` union for the
+  provider metadata table.
+- **`ColumnsBlock.tsx`**: typed against the corrected `ColumnsBlock` type
+  (see bug above). `GRID_MAP`/tint-color lookup objects needed
+  `Record<string, string>` casts (plain object literals used as
+  dictionaries).
+- **`SimpleTable.tsx`**: typed `block` as `TableBlock` (with the new
+  `colWidths` field). `querySelectorAll` calls typed with the
+  `HTMLTableColElement` generic instead of untyped `Element`.
+- **`MermaidBlock.tsx`**: typed `block` as `GenericBlock`. The lazy-loaded
+  `mermaid` module's `m.default || m` runtime fallback (some
+  bundler/interop configs expose the module itself rather than
+  `.default`) isn't representable in the module namespace type as-is —
+  first attempt dropped the `|| m` fallback and relied on `m.default`
+  always existing, which is an undocumented behavior change; caught before
+  verification and replaced with a one-line documented cast that preserves
+  the original fallback exactly.
+- **`LinkedViewBlock.tsx`**: typed `block` as `LinkedViewBlockData`,
+  `pages`/`page` as `Page[]`/`Page` (`src/lib/supabaseService.ts`).
+  Discovered database blocks via a documented `as DatabaseBlockData` cast
+  (iterating `Page.blocks: Block[]`, narrowing to the one variant with a
+  `.database` field). `DatabaseBlock` render call site needed
+  `isLocked`/`onToast` passed as `undefined` — `DatabaseBlock.jsx`
+  (converted to `.tsx` in this same batch, but its own destructure has no
+  defaults for either) infers both as required; this call site never
+  passed them before either — dead-prop documentation, not a behavior
+  change.
+- **`FormsBlock.tsx`**: typed `block` as `FormBlock`, `config.fields` as
+  `FormField[]`. `formData` state typed as `Record<string, string |
+  boolean>` (every real value is either a text/select/date string or a
+  checkbox boolean, confirmed by reading every `setFormData` call site).
+  `FormField.visibleWhen` stays `unknown` in `types/blocks.ts` (no settled
+  shape, per that file's existing comment) — narrowly cast at the two read
+  sites (`isFieldVisible`, the "Show when" `<select>`) rather than
+  widening the shared field type. `FormBlock.submissions` is
+  `Array<Record<string, unknown>>` in `types/blocks.ts` (loose, since the
+  form builder constructs it dynamically); this component is the sole
+  real producer/consumer of the concrete `FormSubmission` shape, so
+  narrowed via one documented `as unknown as` cast each at read and write.
+- **`DatabaseBlock.tsx`**: typed `block` as `DatabaseBlockData`, `db` as
+  `DatabaseSchema`. `makeEmptyDatabase()` (re-exported from still-untyped
+  `blockModel.js`, Tier 2 scope) needed one documented cast to
+  `DatabaseSchema` at its single call site. `DatabasePage.jsx` (untouched)
+  call site needed `icon={undefined}` — same dead-prop pattern as `isLocked`
+  above.
+- **`MediaUploadPlaceholder.tsx`**: typed `type` as a 3-value union,
+  `fileName` as `string | boolean` (grepped every call site in
+  `renderBlockEditor.tsx`: two pass `false`, one passes `true` — the prop
+  is never read in the component body, confirmed dead, so the type spans
+  every value actually passed rather than picking one arbitrarily).
+- **`PagePeek.tsx`**: added `PagePeekProps` (`page`/`pages` as `Page`/
+  `Page[]`, `children: React.ReactNode`, `onNavigate`/`onOpenFull`
+  callbacks) — this file had no prior type coverage despite being called
+  from 5 different sites across earlier Phase-3/4 batches with
+  `onOpenFull={undefined}` dead-prop workarounds; those call sites are now
+  satisfied by a real optional prop instead of an inference-driven
+  required one.
+- **`ImageBlock.tsx`** (largest file in this batch): typed `block` as
+  `ImageBlockData` (per the new type above), `resizing` state as a 3-value
+  union, `naturalSize` as a `{width,height}` interface. Sub-components
+  (`ToolbarButton`, `EmptyImagePlaceholder`, `ImagePickerContent`,
+  `LinkTab`, `UnsplashTab`, `GiphyTab`) each got dedicated prop interfaces.
+  Two real gaps fixed along the way:
+  - `img.onLoad`'s `e.target.naturalWidth/naturalHeight` doesn't exist on
+    the generic `EventTarget` type — switched to `e.currentTarget`
+    (correctly typed `HTMLImageElement` by React's JSX typings), a type-only
+    fix with identical runtime behavior.
+  - The tabs arrays mix real `LucideIcon` components with one inline
+    zero-arg component (GIPHY's text badge, no matching lucide icon
+    exists) — added a small shared `renderTabIcon()` helper instead of
+    inlining a `typeof x === "function"` check with an unsafe JSX spread,
+    used identically at both of this file's two tab-bar render sites
+    (`EmptyImagePlaceholder`, `ImagePickerContent`).
+  - Added loose `UnsplashPhoto`/`GiphyGif` interfaces covering only the
+    fields actually read from each API's response (not full API types).
+
+No `any`, silent `unknown`, `@ts-ignore`, or `@ts-nocheck` used as a
+silencing escape anywhere in this batch. Every cast (`DatabaseSchema`,
+`DatabaseBlockData`, `FormSubmission` x2, the mermaid module fallback, the
+`visibleWhen` narrowing x2) has an inline one-line comment.
+
+### Security check
+- Grepped all 11 changed files for hardcoded credentials/keys/tokens:
+  found `UNSPLASH_ACCESS_KEY`/`GIPHY_API_KEY` hardcoded in `ImageBlock.tsx`
+  — **pre-existing** in the original `.jsx` file (confirmed via `git diff`,
+  unchanged by this conversion), not something introduced here. Flagging
+  for a follow-up outside this migration's scope: both are public-facing
+  client API keys (Unsplash "Demo"/dev-tier and GIPHY public beta keys are
+  commonly shipped client-side by design for these two specific APIs), but
+  hardcoding them in source instead of `import.meta.env` is still not
+  ideal practice and should be revisited separately from this type
+  migration.
+- No RLS/permission/auth logic touched — grepped all 11 files for
+  RLS/permission/role/auth: no matches. None of these components read
+  `page_permissions`, `auditEngine`, or any RLS-adjacent table/field.
+  `DatabaseBlock.tsx`/`LinkedViewBlock.tsx` only read/write the `database`
+  JSON blob on a block, which has no RLS policy of its own (inherits the
+  parent `pages` row's policy, untouched).
+- No `.git`/CI/deploy files touched — `git status --short` shows exactly
+  the 11 renamed files + `types/blocks.ts` + this log.
+- Result: **PASS** (with the pre-existing hardcoded-key note above).
+
+### Verification
+- `npx tsc --noEmit`: clean (full project, not just these 11 files).
+- `npm run build`: succeeded (`vite build`, exit code 0; only pre-existing
+  chunk-size warnings, unrelated to this batch).
+- `npx vitest run`: **140/140 tests pass** (full suite).
+
+### Heartbeat
+- Tier 1 batch converted and verified clean. Ready to commit as "Convert
+  leaf block renderers to TypeScript" on branch `chore/typescript-migration`.

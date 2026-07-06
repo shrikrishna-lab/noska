@@ -1,16 +1,24 @@
 import React, { useState, useEffect, useRef, useId } from "react";
 import { TextArea } from "../ui";
+import type { GenericBlock } from "../../../types/blocks";
 
 /**
  * MermaidBlock — renders an actual Mermaid diagram from the block's text.
  * The library is lazy-loaded so it never bloats the initial bundle.
  * Empty on insert (no fake data); shows a hint + editor until the user types.
  */
-let _mermaidPromise = null;
-function loadMermaid() {
+type MermaidApi = typeof import("mermaid")["default"];
+
+let _mermaidPromise: Promise<MermaidApi> | null = null;
+function loadMermaid(): Promise<MermaidApi> {
   if (!_mermaidPromise) {
     _mermaidPromise = import("mermaid").then((m) => {
-      const mermaid = m.default || m;
+      // Preserves the original .jsx's `m.default || m` fallback (some
+      // bundler/interop configs expose the module itself rather than a
+      // `.default`). The module namespace type doesn't statically include
+      // `.initialize` on the fallback branch, hence the cast — behavior
+      // unchanged from the original.
+      const mermaid = (m.default || m) as MermaidApi;
       mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "neutral" });
       return mermaid;
     });
@@ -18,10 +26,20 @@ function loadMermaid() {
   return _mermaidPromise;
 }
 
-export default function MermaidBlock({ block, onPatch, onKeyDown, onFocus, onBlur, isLocked, innerRef }) {
+interface MermaidBlockProps {
+  block: GenericBlock;
+  onPatch: (patch: Partial<GenericBlock>) => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  isLocked?: boolean;
+  innerRef?: React.Ref<HTMLTextAreaElement>;
+}
+
+export default function MermaidBlock({ block, onPatch, onKeyDown, onFocus, onBlur, isLocked, innerRef }: MermaidBlockProps) {
   const [editing, setEditing] = useState(!block.text);
   const [svg, setSvg] = useState("");
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const idBase = useId().replace(/:/g, "");
   const renderSeq = useRef(0);
 

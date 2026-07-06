@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { BarChart3, Plus, Trash2, Settings2 } from "lucide-react";
+import type { ChartBlockData, ChartSeriesPoint } from "../../../types/blocks";
 
 /**
  * ChartBlock — editable, data-driven chart (bar-v, bar-h, line, donut, number).
@@ -10,7 +11,13 @@ import { BarChart3, Plus, Trash2, Settings2 } from "lucide-react";
 
 const PALETTE = ["var(--accent)", "#3b82f6", "#22c55e", "#f59e0b", "#a855f7", "#ec4899", "#14b8a6", "#ef4444"];
 
-const SAMPLES = {
+interface ChartSampleData {
+  title: string;
+  unit: string;
+  series: ChartSeriesPoint[];
+}
+
+const SAMPLES: Record<string, ChartSampleData> = {
   "bar-chart-v": { title: "Quarterly revenue", unit: "", series: [
     { label: "Q1", value: 42 }, { label: "Q2", value: 68 }, { label: "Q3", value: 51 }, { label: "Q4", value: 90 },
   ] },
@@ -27,29 +34,35 @@ const SAMPLES = {
   "number-chart": { title: "Page interactions", unit: "", series: [{ label: "Total", value: 1248 }] },
 };
 
-function withColors(series) {
+function withColors(series: ChartSeriesPoint[]): ChartSeriesPoint[] {
   return series.map((s, i) => ({ ...s, color: s.color || PALETTE[i % PALETTE.length] }));
 }
 
-function getChartData(block) {
+function getChartData(block: ChartBlockData): ChartSampleData {
   if (block.chart && Array.isArray(block.chart.series) && block.chart.series.length) {
-    return { ...block.chart, series: withColors(block.chart.series) };
+    return { title: block.chart.title ?? "", unit: block.chart.unit ?? "", series: withColors(block.chart.series) };
   }
   const sample = SAMPLES[block.type] || SAMPLES["bar-chart-v"];
   return { ...sample, title: block.text || sample.title, series: withColors(sample.series) };
 }
 
-export default function ChartBlock({ block, onPatch, isLocked }) {
+interface ChartBlockProps {
+  block: ChartBlockData;
+  onPatch: (patch: Partial<ChartBlockData>) => void;
+  isLocked?: boolean;
+}
+
+export default function ChartBlock({ block, onPatch, isLocked }: ChartBlockProps) {
   const data = useMemo(() => getChartData(block), [block]);
   const [editing, setEditing] = useState(false);
   const max = Math.max(1, ...data.series.map((s) => Number(s.value) || 0));
 
-  const commit = (next) => onPatch({ chart: { title: next.title, unit: next.unit || "", series: next.series }, text: next.title });
+  const commit = (next: ChartSampleData) => onPatch({ chart: { title: next.title, unit: next.unit || "", series: next.series }, text: next.title });
 
-  const updateTitle = (title) => commit({ ...data, title });
-  const updateRow = (idx, patch) => commit({ ...data, series: data.series.map((s, i) => i === idx ? { ...s, ...patch } : s) });
+  const updateTitle = (title: string) => commit({ ...data, title });
+  const updateRow = (idx: number, patch: Partial<ChartSeriesPoint>) => commit({ ...data, series: data.series.map((s, i) => i === idx ? { ...s, ...patch } : s) });
   const addRow = () => commit({ ...data, series: [...data.series, { label: `Item ${data.series.length + 1}`, value: 20, color: PALETTE[data.series.length % PALETTE.length] }] });
-  const removeRow = (idx) => commit({ ...data, series: data.series.filter((_, i) => i !== idx) });
+  const removeRow = (idx: number) => commit({ ...data, series: data.series.filter((_, i) => i !== idx) });
 
   const kind = block.type;
 
@@ -135,14 +148,20 @@ export default function ChartBlock({ block, onPatch, isLocked }) {
 }
 
 // Normalizes CSS var / hex to a hex value for the native color input.
-function toHex(color) {
+function toHex(color?: string): string {
   if (typeof color === "string" && color.startsWith("#")) return color.length === 4
     ? "#" + color.slice(1).split("").map((c) => c + c).join("")
     : color.slice(0, 7);
   return "#6b7cff"; // fallback for var()-based colors
 }
 
-function ChartCanvas({ kind, data, max }) {
+interface ChartCanvasProps {
+  kind: ChartBlockData["type"];
+  data: ChartSampleData;
+  max: number;
+}
+
+function ChartCanvas({ kind, data, max }: ChartCanvasProps) {
   const series = data.series;
 
   if (kind === "number-chart") {
@@ -204,7 +223,13 @@ function ChartCanvas({ kind, data, max }) {
   return null;
 }
 
-function LineChart({ series, max, unit }) {
+interface LineChartProps {
+  series: ChartSeriesPoint[];
+  max: number;
+  unit?: string;
+}
+
+function LineChart({ series, max, unit }: LineChartProps) {
   const W = 320, H = 150, PAD = 20;
   const n = series.length;
   const stepX = n > 1 ? (W - PAD * 2) / (n - 1) : 0;
@@ -241,7 +266,11 @@ function LineChart({ series, max, unit }) {
   );
 }
 
-function DonutChart({ series }) {
+interface DonutChartProps {
+  series: ChartSeriesPoint[];
+}
+
+function DonutChart({ series }: DonutChartProps) {
   const total = series.reduce((sum, s) => sum + (Number(s.value) || 0), 0) || 1;
   const R = 54, STROKE = 22, C = 2 * Math.PI * R;
   let offset = 0;

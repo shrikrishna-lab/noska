@@ -1,12 +1,27 @@
 import React, { useState, useRef } from "react";
 import { Upload } from "lucide-react";
 
-export default function MediaUploadPlaceholder({ type, onSelect, onDelete, isLocked, accept = "*/*", fileName }) {
-  const fileInputRef = useRef(null);
-  const [urlInput, setUrlInput] = useState("");
-  const [tab, setTab] = useState("upload");
+// `fileName` is accepted but never read in this component's body — a
+// caller (renderBlockEditor.tsx's MediaUploadPlaceholder call sites, per
+// the Phase-4 renderBlockEditor.tsx conversion) passes it explicitly
+// as documentation for a dead prop rather than a real behavior. Keeping
+// it in the props interface (optional, unused) matches that established
+// dead-prop-documentation pattern instead of silently dropping it.
+interface MediaUploadPlaceholderProps {
+  type: "video" | "audio" | "file";
+  onSelect: (url: string) => void;
+  onDelete?: () => void;
+  isLocked?: boolean;
+  accept?: string;
+  fileName?: string | boolean;
+}
 
-  const handleFile = (file) => {
+export default function MediaUploadPlaceholder({ type, onSelect, onDelete, isLocked, accept = "*/*", fileName }: MediaUploadPlaceholderProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [urlInput, setUrlInput] = useState("");
+  const [tab, setTab] = useState<"upload" | "link">("upload");
+
+  const handleFile = (file: File | null | undefined) => {
     if (!file) return;
     const url = URL.createObjectURL(file);
     onSelect(url);

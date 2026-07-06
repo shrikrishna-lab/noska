@@ -3,13 +3,22 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ExternalLink, Clock, FileText } from "lucide-react";
 import { timeAgo, plainText } from "../../utils/helpers";
+import type { Page } from "../../lib/supabaseService";
 
-export default function PagePeek({ page, pages, children, onNavigate, onOpenFull }) {
+interface PagePeekProps {
+  page: Page | null | undefined;
+  pages?: Page[];
+  children: React.ReactNode;
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+  onOpenFull?: (pageId: string) => void;
+}
+
+export default function PagePeek({ page, pages, children, onNavigate, onOpenFull }: PagePeekProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
-  const triggerRef = useRef(null);
-  const hoverTimer = useRef(null);
-  const panelRef = useRef(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const handleMouseEnter = useCallback(() => {
     clearTimeout(hoverTimer.current);

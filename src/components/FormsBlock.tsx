@@ -2,18 +2,40 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Eye, EyeOff, Lock, Plus, Trash2, GripVertical, ChevronDown, Table2 } from "lucide-react";
 import { uid } from "../utils/helpers";
+import type { FormBlock, FormField } from "../../types/blocks";
 
-export default function FormsBlock({ block, onPatch, isLocked }) {
+interface FormsBlockProps {
+  block: FormBlock;
+  onPatch: (patch: Partial<FormBlock>) => void;
+  isLocked?: boolean;
+}
+
+interface FormSubmission {
+  id: string;
+  data: Record<string, string | boolean>;
+  createdAt: string;
+  userId: string | null;
+  userName: string;
+}
+
+export default function FormsBlock({ block, onPatch, isLocked }: FormsBlockProps) {
   const config = block.formConfig || {
     fields: [],
     submitButtonText: "Submit",
     anonymous: false,
     showResults: false
   };
-  const submissions = block.submissions || [];
-  const [formData, setFormData] = useState({});
+  // FormBlock.submissions is typed loosely (Array<Record<string, unknown>>)
+  // in types/blocks.ts since the form builder constructs submission data
+  // dynamically; this component is the sole real consumer and always
+  // produces/reads the FormSubmission shape below, so narrow it here.
+  const submissions = (block.submissions || []) as unknown as FormSubmission[];
+  // Field values are strings for text/textarea/select/email/number/date
+  // inputs and booleans for checkbox inputs — confirmed against every
+  // setFormData call site below.
+  const [formData, setFormData] = useState<Record<string, string | boolean>>({});
   const [submitted, setSubmitted] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [editing, setEditing] = useState(false);
 
   const fieldTypes = ["text", "textarea", "email", "number", "select", "checkbox", "date"];
@@ -23,29 +45,35 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
     onPatch({ formConfig: { ...config, fields } });
   };
 
-  const updateField = (id, patch) => {
+  const updateField = (id: string, patch: Partial<FormField>) => {
     const fields = (config.fields || []).map(f => f.id === id ? { ...f, ...patch } : f);
     onPatch({ formConfig: { ...config, fields } });
   };
 
-  const removeField = (id) => {
+  const removeField = (id: string) => {
     const fields = (config.fields || []).filter(f => f.id !== id);
     onPatch({ formConfig: { ...config, fields } });
   };
 
-  const isFieldVisible = (field) => {
-    if (!field.visibleWhen) return true;
-    return formData[field.visibleWhen.fieldId] === field.visibleWhen.value;
+  const isFieldVisible = (field: FormField) => {
+    // `visibleWhen` isn't in FormField's declared shape (types/blocks.ts
+    // leaves it `unknown` since no settled shape exists yet — see that
+    // file's comment); narrowly cast here at the one read site rather
+    // than widening the shared type.
+    const cond = field.visibleWhen as { fieldId: string; value: string } | null;
+    if (!cond) return true;
+    return formData[cond.fieldId] === cond.value;
   };
 
   const validate = () => {
-    const newErrors = {};
+    const newErrors: Record<string, string> = {};
     for (const f of config.fields) {
       if (!isFieldVisible(f)) continue;
-      if (f.required && !formData[f.id]?.trim()) {
+      const value = formData[f.id];
+      if (f.required && !(typeof value === "string" ? value.trim() : value)) {
         newErrors[f.id] = `${f.label} is required`;
       }
-      if (f.type === "email" && formData[f.id] && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData[f.id])) {
+      if (f.type === "email" && typeof value === "string" && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
         newErrors[f.id] = "Invalid email";
       }
     }
@@ -55,14 +83,14 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
 
   const handleSubmit = () => {
     if (!validate()) return;
-    const submission = {
+    const submission: FormSubmission = {
       id: uid(),
       data: { ...formData },
       createdAt: new Date().toISOString(),
       userId: config.anonymous ? null : "local",
       userName: config.anonymous ? "Anonymous" : "You"
     };
-    onPatch({ submissions: [...submissions, submission], formConfig: { ...config, showResults: true } });
+    onPatch({ submissions: [...submissions, submission] as unknown as Array<Record<string, unknown>>, formConfig: { ...config, showResults: true } });
     setFormData({});
     setSubmitted(true);
     setErrors({});
@@ -144,7 +172,7 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
               <div className="flex items-center gap-1 text-[10px] text-[var(--muted)]">
                 <span>Show when:</span>
                 <select
-                  value={f.visibleWhen?.fieldId || ""}
+                  value={(f.visibleWhen as { fieldId: string } | null)?.fieldId || ""}
                   onChange={(e) => updateField(f.id, { visibleWhen: e.target.value ? { fieldId: e.target.value, value: formData[e.target.value] || "" } : null })}
                   className="bg-transparent outline-none border border-[var(--border)] rounded px-1 py-0.5"
                 >
@@ -230,7 +258,7 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
             </label>
             {f.type === "textarea" ? (
               <textarea
-                value={formData[f.id] || ""}
+                value={(formData[f.id] as string) || ""}
                 onChange={(e) => { setFormData({ ...formData, [f.id]: e.target.value }); setErrors({ ...errors, [f.id]: null }); }}
                 className={`w-full rounded border ${errors[f.id] ? "border-[var(--danger)]" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)] resize-none`}
                 rows={3}
@@ -238,7 +266,7 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
               />
             ) : f.type === "select" ? (
               <select
-                value={formData[f.id] || ""}
+                value={(formData[f.id] as string) || ""}
                 onChange={(e) => { setFormData({ ...formData, [f.id]: e.target.value }); setErrors({ ...errors, [f.id]: null }); }}
                 className={`w-full rounded border ${errors[f.id] ? "border-[var(--danger)]" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]`}
               >
@@ -258,7 +286,7 @@ export default function FormsBlock({ block, onPatch, isLocked }) {
             ) : (
               <input
                 type={f.type === "number" ? "number" : f.type === "email" ? "email" : "text"}
-                value={formData[f.id] || ""}
+                value={(formData[f.id] as string) || ""}
                 onChange={(e) => { setFormData({ ...formData, [f.id]: e.target.value }); setErrors({ ...errors, [f.id]: null }); }}
                 className={`w-full rounded border ${errors[f.id] ? "border-[var(--danger)]" : "border-[var(--border-strong)]"} bg-[var(--bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]`}
                 placeholder={`Enter ${f.label.toLowerCase()}...`}

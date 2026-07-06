@@ -1,33 +1,41 @@
 import React, { useState, useRef, useCallback } from "react";
+import type { TableBlock } from "../../../types/blocks";
 
-export default function SimpleTable({ block, onPatch, isLocked }) {
+interface SimpleTableProps {
+  block: TableBlock;
+  onPatch: (patch: Partial<TableBlock>) => void;
+  isLocked?: boolean;
+}
+
+export default function SimpleTable({ block, onPatch, isLocked }: SimpleTableProps) {
   const table = block.table || [[""]];
   const colWidths = block.colWidths || [];
-  const [resizing, setResizing] = useState(null);
-  const tableRef = useRef(null);
+  const [resizing, setResizing] = useState<number | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
 
-  const setCell = (r, c, value) =>
+  const setCell = (r: number, c: number, value: string) =>
     onPatch({
       table: table.map((row, ri) => (ri === r ? row.map((cell, ci) => (ci === c ? value : cell)) : row))
     });
 
-  const handleColResizeStart = useCallback((colIdx) => (e) => {
+  const handleColResizeStart = useCallback((colIdx: number) => (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setResizing(colIdx);
     const startX = e.clientX;
-    const startW = tableRef.current?.querySelectorAll("colgroup col")[colIdx]?.offsetWidth || 120;
+    const startCol = tableRef.current?.querySelectorAll<HTMLTableColElement>("colgroup col")[colIdx];
+    const startW = startCol?.offsetWidth || 120;
 
-    const onMove = (ev) => {
+    const onMove = (ev: MouseEvent) => {
       const delta = ev.clientX - startX;
       const newW = Math.max(40, Math.min(600, startW + delta));
-      const cols = tableRef.current?.querySelectorAll("colgroup col");
+      const cols = tableRef.current?.querySelectorAll<HTMLTableColElement>("colgroup col");
       if (cols && cols[colIdx]) cols[colIdx].style.width = `${newW}px`;
     };
 
     const onUp = () => {
       setResizing(null);
-      const cols = tableRef.current?.querySelectorAll("colgroup col");
+      const cols = tableRef.current?.querySelectorAll<HTMLTableColElement>("colgroup col");
       const widths = Array.from(cols || []).map(col => col.style.width || `${col.offsetWidth}px`);
       onPatch({ colWidths: widths });
       document.removeEventListener("mousemove", onMove);

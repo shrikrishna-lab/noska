@@ -4,47 +4,81 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload, Link, Image as ImageIcon, X, Loader2, Search, ExternalLink,
   Trash2, Download, Copy, RefreshCw, AlignLeft, AlignCenter, AlignRight,
-  Maximize2, Minimize2, GripHorizontal, ChevronDown, GripVertical
+  Maximize2, Minimize2, GripHorizontal, ChevronDown, GripVertical, LucideIcon
 } from "lucide-react";
 import { uploadImage, ensureImagesBucket } from "../../lib/supabaseService";
+import type { ImageBlockData } from "../../../types/blocks";
+import type { Page } from "../../lib/supabaseService";
 
 const UNSPLASH_ACCESS_KEY = "BkXiwJRFV3x6R8NsbRcph1U8qRcx0tQ5B60QFKQoWcQ";
 const GIPHY_API_KEY = "GlVGYHkrCfdKC7pFeOhE4b5MkM4foSKU";
 
-const ALIGNMENT_OPTIONS = [
+interface AlignmentOption {
+  id: "small" | "medium" | "large" | "full";
+  label: string;
+  maxW: number | null;
+}
+
+const ALIGNMENT_OPTIONS: AlignmentOption[] = [
   { id: "small", label: "Small", maxW: 180 },
   { id: "medium", label: "Medium", maxW: 320 },
   { id: "large", label: "Large", maxW: 520 },
   { id: "full", label: "Full Width", maxW: null },
 ];
 
+interface NaturalSize {
+  width: number;
+  height: number;
+}
+
+// Shared by both tab bars below (EmptyImagePlaceholder / ImagePickerContent):
+// each tab's `icon` is either a real LucideIcon (rendered with a fixed
+// size) or an inline zero-arg component (the GIPHY text badge, which has
+// no `size` prop to pass).
+function renderTabIcon(Icon: LucideIcon | (() => React.ReactElement)): React.ReactElement {
+  return typeof Icon === "function" && Icon.length === 0
+    ? (Icon as () => React.ReactElement)()
+    : React.createElement(Icon as LucideIcon, { size: 14 });
+}
+
+interface ImageBlockProps {
+  block: ImageBlockData;
+  onPatch: (patch: Partial<ImageBlockData>) => void;
+  onDelete?: () => void;
+  isLocked?: boolean;
+  pageId?: string;
+  pages?: Page[];
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+  onToast?: (message: string) => void;
+}
+
 export default function ImageBlock({
   block, onPatch, onDelete, isLocked, pageId, pages, onNavigate, onToast
-}) {
+}: ImageBlockProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [size, setSize] = useState(block.imageSize || "large");
   const [align, setAlign] = useState(block.imageAlign || "center");
-  const [resizing, setResizing] = useState(null);
-  const [naturalSize, setNaturalSize] = useState(null);
-  const [customWidth, setCustomWidth] = useState(block.imageWidth || null);
-  const imgRef = useRef(null);
-  const containerRef = useRef(null);
+  const [resizing, setResizing] = useState<"left" | "right" | "corner" | null>(null);
+  const [naturalSize, setNaturalSize] = useState<NaturalSize | null>(null);
+  const [customWidth, setCustomWidth] = useState<number | null>(block.imageWidth || null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const alignment = ALIGNMENT_OPTIONS.find(a => a.id === size) || ALIGNMENT_OPTIONS[2];
 
-  const handleResizeStart = useCallback((dir) => (e) => {
+  const handleResizeStart = useCallback((dir: "left" | "right" | "corner") => (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setResizing(dir);
     const startX = e.clientX;
     const startW = containerRef.current?.offsetWidth || 300;
 
-    const onMove = (ev) => {
+    const onMove = (ev: MouseEvent) => {
       const delta = ev.clientX - startX;
-      let newW;
+      let newW: number;
       if (dir === "left") newW = startW - delta;
       else if (dir === "right") newW = startW + delta;
-      else if (dir === "corner") newW = startW + delta;
+      else newW = startW + delta; // "corner"
       newW = Math.max(100, Math.min(1200, newW));
       setCustomWidth(newW);
       if (naturalSize) {
@@ -126,7 +160,8 @@ export default function ImageBlock({
                 style={{ display: "block" }}
                 loading="lazy"
                 onLoad={(e) => {
-                  setNaturalSize({ width: e.target.naturalWidth, height: e.target.naturalHeight });
+                  const img = e.currentTarget;
+                  setNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
                 }}
               />
 
@@ -177,7 +212,7 @@ export default function ImageBlock({
                 </button>
               ))}
               <div className="w-px h-3 bg-[var(--border)] mx-1" />
-              {["left", "center", "right"].map((a) => (
+              {(["left", "center", "right"] as const).map((a) => (
                 <button
                   key={a}
                   onClick={() => onPatch({ imageAlign: a, imageSize: currentSize })}
@@ -242,7 +277,16 @@ export default function ImageBlock({
   );
 }
 
-function ToolbarButton({ icon: Icon, size, tooltip, onClick, danger, label }) {
+interface ToolbarButtonProps {
+  icon: LucideIcon;
+  size?: number;
+  tooltip?: string;
+  onClick?: () => void;
+  danger?: boolean;
+  label?: string;
+}
+
+function ToolbarButton({ icon: Icon, size, tooltip, onClick, danger, label }: ToolbarButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -257,20 +301,30 @@ function ToolbarButton({ icon: Icon, size, tooltip, onClick, danger, label }) {
   );
 }
 
-function EmptyImagePlaceholder({ onOpenPicker, pageId, onPatch, onToast }) {
+interface EmptyImagePlaceholderProps {
+  onOpenPicker: () => void;
+  pageId?: string;
+  onPatch: (patch: Partial<ImageBlockData>) => void;
+  onToast?: (message: string) => void;
+}
+
+function EmptyImagePlaceholder({ onOpenPicker, pageId, onPatch, onToast }: EmptyImagePlaceholderProps) {
   const [tab, setTab] = useState("upload");
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const tabs = [
+  // Mixed icon set: three real LucideIcons plus one inline text badge for
+  // GIPHY (no matching lucide icon exists). `renderTabIcon` below handles
+  // both without a per-usage type-narrowing dance.
+  const tabs: Array<{ id: string; label: string; icon: LucideIcon | (() => React.ReactElement) }> = [
     { id: "upload", label: "Upload", icon: Upload },
     { id: "link", label: "Link", icon: Link },
     { id: "unsplash", label: "Unsplash", icon: ImageIcon },
     { id: "giphy", label: "GIPHY", icon: () => <span className="text-[11px] font-bold">GIPHY</span> },
   ];
 
-  const handleFileUpload = async (file) => {
+  const handleFileUpload = async (file: File | null | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
     setUploading(true);
     setUploadProgress(0);
@@ -303,7 +357,7 @@ function EmptyImagePlaceholder({ onOpenPicker, pageId, onPatch, onToast }) {
                 : "text-[var(--muted)] border-transparent hover:text-[var(--text)] hover:border-[var(--border)]"
             }`}
           >
-            {typeof t.icon === "function" ? <t.icon /> : <t.icon size={14} />}
+            {renderTabIcon(t.icon)}
             {t.label}
           </button>
         ))}
@@ -363,20 +417,27 @@ function EmptyImagePlaceholder({ onOpenPicker, pageId, onPatch, onToast }) {
   );
 }
 
-function ImagePickerContent({ onSelect, onClose, pageId, onToast }) {
+interface ImagePickerContentProps {
+  onSelect: (url: string) => void;
+  onClose: () => void;
+  pageId?: string;
+  onToast?: (message: string) => void;
+}
+
+function ImagePickerContent({ onSelect, onClose, pageId, onToast }: ImagePickerContentProps) {
   const [tab, setTab] = useState("upload");
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const tabs = [
+  const tabs: Array<{ id: string; label: string; icon: LucideIcon | (() => React.ReactElement) }> = [
     { id: "upload", label: "Upload", icon: Upload },
     { id: "link", label: "Link", icon: Link },
     { id: "unsplash", label: "Unsplash", icon: ImageIcon },
     { id: "giphy", label: "GIPHY", icon: () => <span className="text-[11px] font-bold">GIPHY</span> },
   ];
 
-  const handleFileUpload = async (file) => {
+  const handleFileUpload = async (file: File | null | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
     setUploading(true);
     setUploadProgress(0);
@@ -398,7 +459,7 @@ function ImagePickerContent({ onSelect, onClose, pageId, onToast }) {
     }
   };
 
-  const handlePaste = useCallback(async (e) => {
+  const handlePaste = useCallback(async (e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
@@ -430,7 +491,7 @@ function ImagePickerContent({ onSelect, onClose, pageId, onToast }) {
                 : "text-[var(--muted)] border-transparent hover:text-[var(--text)] hover:border-[var(--border)]"
             }`}
           >
-            {typeof t.icon === "function" ? <t.icon /> : <t.icon size={14} />}
+            {renderTabIcon(t.icon)}
             {t.label}
           </button>
         ))}
@@ -494,11 +555,15 @@ function ImagePickerContent({ onSelect, onClose, pageId, onToast }) {
   );
 }
 
-function LinkTab({ onSelect }) {
-  const [url, setUrl] = useState("");
-  const [preview, setPreview] = useState(null);
+interface LinkTabProps {
+  onSelect: (url: string) => void;
+}
 
-  const handleUrlChange = (value) => {
+function LinkTab({ onSelect }: LinkTabProps) {
+  const [url, setUrl] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const handleUrlChange = (value: string) => {
     setUrl(value);
     if (value && /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(value)) {
       setPreview(value);
@@ -553,14 +618,29 @@ function LinkTab({ onSelect }) {
   );
 }
 
-function UnsplashTab({ onSelect, onToast }) {
+// Loose shape covering only the fields this component actually reads from
+// the Unsplash API response (id, urls.regular/small, alt_description,
+// user.name) — not a full API type, which isn't needed here.
+interface UnsplashPhoto {
+  id: string;
+  urls: { regular: string; small: string };
+  alt_description?: string | null;
+  user: { name: string };
+}
+
+interface UnsplashTabProps {
+  onSelect: (url: string) => void;
+  onToast?: (message: string) => void;
+}
+
+function UnsplashTab({ onSelect, onToast }: UnsplashTabProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<UnsplashPhoto[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [searching, setSearching] = useState(false);
-  const [popular, setPopular] = useState([]);
-  const inputRef = useRef(null);
+  const [popular, setPopular] = useState<UnsplashPhoto[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -586,13 +666,13 @@ function UnsplashTab({ onSelect, onToast }) {
       setHasMore(data.results?.length === 20);
       setPage(p);
     } catch (e) {
-      onToast?.(e.message);
+      onToast?.(e instanceof Error ? e.message : String(e));
     } finally {
       setSearching(false);
     }
   }, [query, onToast]);
 
-  const handleSearch = (e) => { e.preventDefault(); search(1); };
+  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); search(1); };
 
   const photos = query ? results : popular;
 
@@ -654,12 +734,28 @@ function UnsplashTab({ onSelect, onToast }) {
   );
 }
 
-function GiphyTab({ onSelect, onToast }) {
+// Loose shape covering only the fields this component reads from the
+// GIPHY API response.
+interface GiphyGif {
+  id: string;
+  title?: string;
+  images?: {
+    original?: { url: string };
+    fixed_height?: { url: string };
+  };
+}
+
+interface GiphyTabProps {
+  onSelect: (url: string) => void;
+  onToast?: (message: string) => void;
+}
+
+function GiphyTab({ onSelect, onToast }: GiphyTabProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
-  const [trending, setTrending] = useState([]);
+  const [results, setResults] = useState<GiphyGif[]>([]);
+  const [trending, setTrending] = useState<GiphyGif[]>([]);
   const [searching, setSearching] = useState(false);
-  const inputRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -685,7 +781,7 @@ function GiphyTab({ onSelect, onToast }) {
     }
   }, [query, onToast]);
 
-  const handleSearch = (e) => { e.preventDefault(); search(); };
+  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); search(); };
 
   const gifs = query ? results : trending;
 

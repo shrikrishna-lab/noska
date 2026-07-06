@@ -128,10 +128,16 @@ export interface DatabaseBlock extends BaseBlock {
 }
 
 /** Table block — src/utils/helpers.js blockFor('table', ...) stores a
- * plain 2D array of cell strings, first row treated as the header. */
+ * plain 2D array of cell strings, first row treated as the header.
+ * `colWidths` (per-column pixel widths, e.g. "120px") is written only by
+ * src/components/editor/SimpleTable.jsx's column-resize handler — not
+ * seeded by helpers.js/blockModel.js, so it's absent until the user drags
+ * a column border at least once. Confirmed via grep: no other file reads
+ * or writes it. */
 export interface TableBlock extends BaseBlock {
   type: "table";
   table: string[][];
+  colWidths?: string[];
 }
 
 /** Code block — src/utils/helpers.js blockFor('code', ...) sets
@@ -148,9 +154,16 @@ export interface CodeBlockData extends BaseBlock {
 }
 
 /** N-column layout block — src/utils/helpers.js blockFor('2-columns' |
- * '3-columns' | '4-columns' | '5-columns', ...). Each column is itself an
- * array of rich-text runs (matching the single-paragraph seed value); the
- * column CSS tint is a named token from COLUMN_TINTS.
+ * '3-columns' | '4-columns' | '5-columns', ...). Each column is a plain
+ * array of newline-joined text lines, NOT rich-text runs — confirmed
+ * against helpers.js's seed (`Array.from({ length: n }, () => [''])`, a
+ * one-element array containing an empty string) and
+ * src/components/editor/ColumnsBlock.jsx's actual read/write
+ * (`col.join("\n")` to render the textarea value, `value.split("\n")` to
+ * write it back). An earlier version of this file incorrectly typed this
+ * as `RichTextRun[][]`, which doesn't match either the seed shape or how
+ * the only real consumer reads/writes it. The column CSS tint is a named
+ * token from COLUMN_TINTS.
  *
  * NOTE: `type` is the four `-columns` variants, NOT the literal string
  * "columns" — `helpers.js`'s TYPE_TO_PROPS maps all four to the lookup key
@@ -162,7 +175,7 @@ export interface CodeBlockData extends BaseBlock {
  * `=== "columns"` half never actually matches anything at runtime). */
 export interface ColumnsBlock extends BaseBlock {
   type: "2-columns" | "3-columns" | "4-columns" | "5-columns";
-  columns: RichTextRun[][];
+  columns: string[][];
   columnColors: string[];
 }
 
@@ -267,6 +280,35 @@ export interface ChartBlockData extends BaseBlock {
   };
 }
 
+/** Image block — src/components/editor/ImageBlock.jsx reads/writes
+ * `caption` (below-image text input), `imageSize` (one of the four
+ * ALIGNMENT_OPTIONS ids driving max-width), `imageAlign` (horizontal
+ * alignment of the image within its container), and `imageWidth` (an
+ * explicit pixel width set only after a manual drag-resize, overriding
+ * the size-preset max-width). Confirmed via grep: these four fields are
+ * exclusive to ImageBlock.jsx — no other block type reads them. */
+export interface ImageBlockData extends BaseBlock {
+  type: "image";
+  caption?: string;
+  imageSize?: "small" | "medium" | "large" | "full";
+  imageAlign?: "left" | "center" | "right";
+  imageWidth?: number;
+}
+
+/** Linked-view block — src/components/editor/LinkedViewBlock.jsx.
+ * References (does not copy) an existing database block elsewhere in the
+ * workspace: `sourcePageId`/`sourceBlockId` identify that database until
+ * picked, both fields are simply absent (the component treats a missing
+ * `sourceBlockId` as "show the picker UI"). Created via the "linked-view"
+ * slash command (src/core/commands/CommandRegistry.ts), which seeds no
+ * initial fields beyond the base block — confirmed via grep, no other
+ * file reads/writes these two fields. */
+export interface LinkedViewBlockData extends BaseBlock {
+  type: "linked-view";
+  sourcePageId?: string | null;
+  sourceBlockId?: string | null;
+}
+
 /** Anything not covered by a more specific interface above — the large
  * majority of block types (paragraph, headings, lists, to_do, toggle,
  * callout, quote, divider, image, code, link_to_page, mention, video,
@@ -288,6 +330,8 @@ export type Block =
   | PageListBlock
   | MentionBlock
   | ChartBlockData
+  | ImageBlockData
+  | LinkedViewBlockData
   | GenericBlock;
 
 /** The `pages.lineage` JSON column — an append-only history of actions

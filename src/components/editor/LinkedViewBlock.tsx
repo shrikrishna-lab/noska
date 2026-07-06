@@ -1,6 +1,8 @@
 import React, { useMemo } from "react";
 import { Link2, Database, ExternalLink, X } from "lucide-react";
 import DatabaseBlock from "../DatabaseBlock";
+import type { LinkedViewBlockData, DatabaseBlock as DatabaseBlockData } from "../../../types/blocks";
+import type { Page } from "../../lib/supabaseService";
 
 /**
  * LinkedViewBlock — references an existing database elsewhere in the workspace
@@ -9,22 +11,44 @@ import DatabaseBlock from "../DatabaseBlock";
  * block.sourcePageId / block.sourceBlockId identify the linked database.
  * Until a source is chosen, shows a picker of available databases (no fake data).
  */
-export default function LinkedViewBlock({ block, onPatch, isLocked, pages = [], page, apiKey, aiProvider, onNavigate }) {
+interface LinkedViewSource {
+  pageId: string;
+  pageTitle: string;
+  pageIcon: string;
+  blockId: string;
+  label: string;
+  propCount: number;
+  rowCount: number;
+}
+
+interface LinkedViewBlockProps {
+  block: LinkedViewBlockData;
+  onPatch: (patch: Partial<LinkedViewBlockData>) => void;
+  isLocked?: boolean;
+  pages?: Page[];
+  page?: Page;
+  apiKey?: string;
+  aiProvider?: string;
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+}
+
+export default function LinkedViewBlock({ block, onPatch, isLocked, pages = [], page, apiKey, aiProvider, onNavigate }: LinkedViewBlockProps) {
   // Discover every database block across all pages.
   const sources = useMemo(() => {
-    const found = [];
+    const found: LinkedViewSource[] = [];
     for (const p of pages) {
       if (p.trashed) continue;
       for (const b of (p.blocks || [])) {
-        if (b.database && Array.isArray(b.database.properties)) {
+        const db = b as DatabaseBlockData;
+        if (db.database && Array.isArray(db.database.properties)) {
           found.push({
             pageId: p.id,
             pageTitle: p.title || "Untitled",
             pageIcon: p.icon || "📄",
-            blockId: b.id,
-            label: b.text || p.title || "Untitled database",
-            propCount: b.database.properties.length,
-            rowCount: b.database.rows?.length || 0,
+            blockId: db.id,
+            label: db.text || p.title || "Untitled database",
+            propCount: db.database.properties.length,
+            rowCount: db.database.rows?.length || 0,
           });
         }
       }
@@ -36,7 +60,7 @@ export default function LinkedViewBlock({ block, onPatch, isLocked, pages = [], 
     if (!block.sourceBlockId) return null;
     for (const p of pages) {
       const b = (p.blocks || []).find((x) => x.id === block.sourceBlockId);
-      if (b) return { page: p, block: b };
+      if (b) return { page: p, block: b as DatabaseBlockData };
     }
     return null;
   }, [pages, block.sourceBlockId]);
@@ -109,12 +133,20 @@ export default function LinkedViewBlock({ block, onPatch, isLocked, pages = [], 
       {/* Render the linked database read-only. Editing happens at the source
           (cross-page write-back isn't wired yet — see "open source" link above). */}
       <div className="p-2">
+        {/* isLocked/onToast: DatabaseBlock.jsx (untouched, still .jsx)
+            destructures both with no default, so its inferred prop type
+            requires them. Matches the dead-prop documentation pattern used
+            for MediaUploadPlaceholder/PagePeek in earlier batches — this
+            call site never previously passed them either; passing
+            `undefined` here is documentation, not a behavior change. */}
         <DatabaseBlock
           block={source.block}
           onPatch={() => { /* read-only: edits are made on the source page */ }}
           apiKey={apiKey}
           aiProvider={aiProvider}
           page={source.page}
+          isLocked={undefined}
+          onToast={undefined}
         />
         <div className="px-2 pb-1 pt-2 text-[10px] text-[var(--muted)] italic">
           Read-only mirror — open the source page to edit rows or properties.
