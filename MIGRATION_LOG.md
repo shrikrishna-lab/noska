@@ -592,3 +592,154 @@ tables rather than components reading live block data.
 - `npx vitest run`: **140/140 tests pass** (full suite, not just the
   affected files) — confirms the property-test fixture type casts didn't
   change runtime behavior, only satisfied the type checker.
+
+### Commit
+- Committed `cd4bfa1` — "Convert BlockRegistry and CommandRegistry to
+  TypeScript" on `chore/typescript-migration` (5 files: 3 renames,
+  `types/blocks.ts` CodeBlockData addition, this log).
+
+---
+
+## Phase 4 — Block union match table + types/blocks.ts corrections
+
+Before converting `renderBlockEditor.jsx` (the actual block dispatcher),
+built a full match table of every `block.type` branch in that file against
+`types/blocks.ts`'s `Block` union members, per the user's explicit request.
+37 branches checked. Found 3 real type-definition bugs and 2 undocumented-
+but-structurally-covered gaps — all backed by grepped runtime evidence, none
+guessed.
+
+### Bugs found and fixed in types/blocks.ts
+1. **`ColumnsBlock.type`** was the literal `"columns"`, which never actually
+   occurs as a `block.type` value — `helpers.js`'s `blockFor()` stores the
+   original `2-columns`/`3-columns`/`4-columns`/`5-columns` argument
+   verbatim via `createBlock(type, ...)`; the `'columns'` string is only
+   used internally as a `BLOCK_TYPES` lookup key for shared defaults, never
+   assigned to `block.type` itself. Fixed to
+   `"2-columns" | "3-columns" | "4-columns" | "5-columns"`.
+2. **`PageListBlock.type`** had `"table_of_contents"` (underscore) but the
+   real value everywhere (helpers.js, BlockRegistry.tsx, CommandRegistry.ts,
+   renderBlockEditor.jsx) is `"table-of-contents"` (hyphen) — these never
+   matched. Fixed to the hyphenated form.
+3. **`TemplateButtonBlock.type`** only had `"template_button"`, but two
+   distinct commands ("button" and "template-button" in
+   CommandRegistry.ts) both produce this same field shape with different
+   `block.type` values (`"button"` and `"template_button"` respectively) —
+   confirmed both reach the same combined dispatch branch in
+   renderBlockEditor.jsx. Fixed to `"button" | "template_button"`.
+
+### Gaps documented (not bugs — previously silently absorbed by
+GenericBlock's index signature, now given dedicated interfaces since they
+have real distinguishing fields)
+4. **`MentionBlock`** (new) — `type: "mention"`, `mentionPageId: string |
+   null`, `isInlineMention?: boolean`. Produced identically by both the
+   "mention-person" and "mention-page" commands.
+5. **`ChartBlockData`** (new) — `type:` one of the 5 chart-command ids,
+   `chart?: { title?, series: ChartSeriesPoint[], unit? }`. Confirmed
+   against `src/components/editor/ChartBlock.jsx`'s `getChartData()`.
+
+Both added to the `Block` union. `npx tsc --noEmit`: clean after all
+changes (this was a types-only change to `types/blocks.ts`, no `.jsx`
+files touched yet in this step).
+
+### Full match table (37 branches)
+
+| Branch | Runtime type(s) | Union member | Status |
+|---|---|---|---|
+| Embeds passthrough | ~30 embed ids | GenericBlock | ✅ |
+| page | page | GenericBlock | ✅ |
+| link-to-page | link-to-page | GenericBlock | ✅ |
+| mention | mention | MentionBlock (new) | ✅ (was gap, now fixed) |
+| divider/todo/toggle/image | (same) | GenericBlock | ✅ |
+| code | code | CodeBlockData | ✅ (fixed earlier this session) |
+| video/audio/file/bookmark | (same) | GenericBlock | ✅ |
+| table | table | TableBlock | ✅ |
+| columns dispatch | 2/3/4/5-columns | ColumnsBlock | ✅ (fixed) |
+| database/database-inline/database-full | (same) | DatabaseBlock | ✅ |
+| linked-view/callout/bullet/number | (same) | GenericBlock | ✅ |
+| table-of-contents | table-of-contents | PageListBlock | ✅ (fixed) |
+| tabs | tabs | TabsBlock | ✅ |
+| chart dispatch | 5 chart ids | ChartBlockData (new) | ✅ (was gap, now fixed) |
+| button/template_button | button, template_button | TemplateButtonBlock | ✅ (fixed) |
+| breadcrumb | breadcrumb | PageListBlock | ✅ |
+| form | form | FormBlock | ✅ |
+| synced-block/block-equation/toggle-h1-3/mermaid/ai-block/ai-meeting/text/quote/h1-4 | (same) | GenericBlock | ✅ |
+| fallback | anything else | GenericBlock | ✅ |
+
+All 37 branches now structurally match a `Block` union member. Full detail
+of the investigation (grep evidence per mismatch) is in the conversation
+record; summarized here for the log.
+
+---
+
+## Phase 4 — renderBlockEditor.jsx → .tsx (the block dispatcher)
+
+Converted the actual block-type dispatcher, after the match table above
+confirmed all 37 branches correspond to a real `Block` union member (with
+3 bugs fixed and 2 gaps documented in `types/blocks.ts` first).
+
+### Approach
+- `block`/`page`/`pages` parameters kept as `any`/`any[]` rather than
+  narrowed to `Block`/`Page`/`Page[]`. Documented inline why: this
+  dispatcher reads dozens of type-specific fields across ~35 if-branches
+  (an if-chain, not a switch), and properly narrowing `block: Block` per
+  branch would require rewriting the dispatch as a discriminated
+  switch/exhaustiveness pattern — a structural rewrite beyond a type-only
+  migration pass. This is a deliberate, documented scope boundary, not a
+  silent gap — the match table proves every branch is real and covered.
+- All other parameters (`index`, `cls`, `ref`, `onPatch`, `onKeyDown`,
+  etc.) are fully typed against their actual call site in `Editor.jsx`
+  (still `.jsx`, so those types are inferred from usage, not enforced
+  both ways yet — will tighten once `Editor.jsx` itself converts).
+- `CalloutBlock` (local sub-component) given a full `CalloutBlockProps`
+  interface.
+
+### Real bugs found and fixed (not just type gaps)
+- **Missing `GripHorizontal` import**: used in the video-resize corner
+  handle JSX but never imported from `lucide-react` — would have thrown
+  `ReferenceError` at runtime if that specific hover state ever rendered
+  (video blocks with an active resize-corner hover). Added the import.
+- **Dead `onPasteUrl` prop on one `TextArea` usage** (tabs branch): the
+  real `TextArea` component (`src/components/ui/index.tsx`, typed in
+  Phase 3) has no `onPasteUrl` prop — every other `TextArea` usage in this
+  file correctly omits it; only the tabs branch had it as inert dead code.
+  Removed with an inline comment rather than adding an unused prop to
+  `TextArea` itself (would be inventing functionality, not migrating).
+- **`ref` param type**: initially typed as `React.Ref<any>` (covers both
+  object-refs and callback-refs), which broke `.current` access in two
+  branches. Traced the actual call site in `Editor.jsx`
+  (`const inputRef = useRef(null)`) — always an object ref — and narrowed
+  to `React.RefObject<any>`, matching real usage.
+
+### Cross-file dead-prop fixes (same pattern as earlier phases)
+- `PagePeek` (still `.jsx`, untouched): 3 call sites in this file pass
+  `page`/`pages`/`onNavigate` but the component requires `onOpenFull` too
+  (inferred-required from other call sites). Passed `onOpenFull={undefined}`
+  explicitly at each of the 3 sites — consistent with the same fix applied
+  to `StackedColumn.tsx` in an earlier Phase 3 batch, not a new pattern.
+- `MediaUploadPlaceholder` (still `.jsx`): `fileName` is destructured with
+  no default, making it inferred-required; the video/audio branches never
+  passed it (only the file branch did, with `fileName={true}`). Added
+  `fileName={false}` at both call sites — matches the always-`undefined`
+  (falsy) value these branches always effectively had.
+- `DatabaseBlock.jsx` (separate file, not otherwise touched this phase):
+  `isLocked` is passed at 2 call sites in `renderBlockEditor.tsx` but
+  wasn't destructured by the component at all — added `isLocked` to its
+  destructure for documentation/pass-through consistency, no behavior
+  change (the prop was previously silently dropped either way).
+
+### Security check
+- Grepped the converted file + `DatabaseBlock.jsx` for hardcoded
+  credentials/keys/tokens: none found (`apiKey`/`aiProvider` are read from
+  parameters, no hardcoded fallback).
+- No RLS/permission logic touched — this is pure block-rendering
+  dispatch, no Supabase calls.
+- No `.git`/CI/deploy files touched.
+- Result: **PASS**.
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: clean (`vite build`, "✓ built").
+- `npx vitest run`: **140/140 tests pass** (full suite) — confirms the
+  dead-prop/ref-type fixes and the `GripHorizontal` import addition don't
+  change any tested runtime behavior.

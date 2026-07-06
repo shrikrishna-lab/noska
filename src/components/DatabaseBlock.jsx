@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import DatabasePage from "../modules/database/DatabasePage";
 import { makeEmptyDatabase } from "../utils/helpers";
 
-export default function DatabaseBlock({ block, onPatch, apiKey, aiProvider, page, onToast }) {
+export default function DatabaseBlock({ block, onPatch, isLocked, apiKey, aiProvider, page, onToast }) {
   const db = block.database || makeEmptyDatabase();
 
   const handlePatch = (patch) => {

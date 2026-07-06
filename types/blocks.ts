@@ -150,9 +150,18 @@ export interface CodeBlockData extends BaseBlock {
 /** N-column layout block — src/utils/helpers.js blockFor('2-columns' |
  * '3-columns' | '4-columns' | '5-columns', ...). Each column is itself an
  * array of rich-text runs (matching the single-paragraph seed value); the
- * column CSS tint is a named token from COLUMN_TINTS. */
+ * column CSS tint is a named token from COLUMN_TINTS.
+ *
+ * NOTE: `type` is the four `-columns` variants, NOT the literal string
+ * "columns" — `helpers.js`'s TYPE_TO_PROPS maps all four to the lookup key
+ * 'columns' only to find shared defaults in blockModel.js's BLOCK_TYPES;
+ * `createBlock(type, ...)` still stores the original `type` argument
+ * verbatim, so `block.type` is always one of the four real values.
+ * Confirmed against src/components/editor/renderBlockEditor.jsx's dispatch
+ * (`block.type === "columns" || block.type.endsWith("-columns")` — the
+ * `=== "columns"` half never actually matches anything at runtime). */
 export interface ColumnsBlock extends BaseBlock {
-  type: "columns";
+  type: "2-columns" | "3-columns" | "4-columns" | "5-columns";
   columns: RichTextRun[][];
   columnColors: string[];
 }
@@ -189,17 +198,73 @@ export interface FormBlock extends BaseBlock {
   submissions: Array<Record<string, unknown>>;
 }
 
-/** Button/template block — src/utils/helpers.js blockFor('button', ...). */
+/** Button/template block — TWO distinct commands both produce this shape:
+ * the "button" command (src/core/commands/CommandRegistry.ts,
+ * blockForTree(ctx.block, "button", ...)) makes a plain action button with
+ * `block.type === "button"`; the "template-button" command
+ * (blockForTree(ctx.block, "template_button", ...)) makes a button that
+ * clones a predefined block set with `block.type === "template_button"`.
+ * Both are real, distinct runtime type values — renderBlockEditor.jsx's
+ * dispatch explicitly handles both
+ * (`block.type === "button" || block.type === "template_button"`) and both
+ * read the same `templateBlocks` field. */
 export interface TemplateButtonBlock extends BaseBlock {
-  type: "template_button";
+  type: "button" | "template_button";
   templateBlocks: Block[];
 }
 
 /** Breadcrumb / table-of-contents blocks both store a flat list of
- * referenced page ids (src/utils/helpers.js blockFor). */
+ * referenced page ids (src/utils/helpers.js blockFor).
+ *
+ * NOTE: the table-of-contents type string uses a HYPHEN
+ * ("table-of-contents"), not an underscore — confirmed against
+ * helpers.js's blockFor (`type === 'table-of-contents'`),
+ * BlockRegistry.tsx, CommandRegistry.ts, and
+ * renderBlockEditor.jsx's dispatch. An earlier version of this file
+ * incorrectly had "table_of_contents" (underscore), which never matches
+ * any real block. */
 export interface PageListBlock extends BaseBlock {
-  type: "breadcrumb" | "table_of_contents";
+  type: "breadcrumb" | "table-of-contents";
   pageIds: string[];
+}
+
+/** Mention block — produced identically by two commands ("mention-person"
+ * and "mention-person"'s sibling "mention-page" in
+ * src/core/commands/CommandRegistry.ts), both via
+ * `ctx.onPatch({ type: "mention", mentionPageId: null, isInlineMention:
+ * true, ... })`. The command ids differ but the runtime `block.type` is
+ * always the single string "mention" — confirmed against
+ * src/components/editor/renderBlockEditor.jsx's dispatch
+ * (`block.type === "mention"`, reading `block.mentionPageId`). Previously
+ * absorbed silently by GenericBlock's index signature with no
+ * documentation; called out explicitly now since it has real
+ * distinguishing fields. */
+export interface MentionBlock extends BaseBlock {
+  type: "mention";
+  mentionPageId: string | null;
+  isInlineMention?: boolean;
+}
+
+/** Chart block — src/components/editor/ChartBlock.jsx reads/writes
+ * `block.chart = { title, series: [{ label, value, color }], unit }`,
+ * falling back to sample data keyed by `block.type` when `block.chart` is
+ * absent (first insert). Covers all five chart command ids
+ * (bar-chart-v, bar-chart-h, line-chart, donut-chart, number-chart) —
+ * renderBlockEditor.jsx dispatches all of them with a single
+ * `block.type.includes("chart")` check rather than listing each type. */
+export interface ChartSeriesPoint {
+  label: string;
+  value: number;
+  color?: string;
+}
+
+export interface ChartBlockData extends BaseBlock {
+  type: "bar-chart-v" | "bar-chart-h" | "line-chart" | "donut-chart" | "number-chart";
+  chart?: {
+    title?: string;
+    series: ChartSeriesPoint[];
+    unit?: string;
+  };
 }
 
 /** Anything not covered by a more specific interface above — the large
@@ -221,6 +286,8 @@ export type Block =
   | FormBlock
   | TemplateButtonBlock
   | PageListBlock
+  | MentionBlock
+  | ChartBlockData
   | GenericBlock;
 
 /** The `pages.lineage` JSON column — an append-only history of actions

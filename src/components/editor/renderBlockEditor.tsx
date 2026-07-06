@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles } from "lucide-react";
+import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles, GripHorizontal } from "lucide-react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import hljs from "highlight.js";
@@ -23,13 +23,49 @@ import DatabaseBlock from "../DatabaseBlock";
 import LinkedViewBlock from "./LinkedViewBlock";
 import FormsBlock from "../FormsBlock";
 
-function placeholderFor(type) {
+function placeholderFor(type: string) {
   if (type === "code") return "Code";
   if (type === "block-equation" || type === "equation") return "E = mc^2";
   return "Press 'space' for AI or '/' for commands";
 }
 
-export default function renderBlockEditor(block, index, cls, ref, onPatch, onKeyDown, onDelete, pages, onFocus, onBlur, isLocked, isFocused, onNavigate, onOpenImagePicker, pageId, onToast, onCreateSubpage, apiKey, aiProvider, page, onBlocks, onPasteUrl) {
+// `block` is typed as `any` here rather than the real `Block` union from
+// types/blocks.ts: this dispatcher reads dozens of type-specific fields
+// (linkedPageId, targetPageId, mentionPageId, videoWidth, templateBlocks,
+// tabs, syncedGroupId, color, bgColor, name, ...) across ~35 branches, and
+// narrowing `block` to `Block` per-branch would require a full discriminated
+// switch/exhaustiveness rewrite of this dispatcher's if-chain — a much
+// larger structural change than a type-only migration pass. The match
+// table above (see MIGRATION_LOG.md, "Phase 4 — Block union match table")
+// confirms every branch here does correspond to a real Block member; this
+// is a documented, deliberate scope boundary, not a silent gap. `pages`/
+// `page` similarly stay loose (Page[] would require importing the app-facing
+// Page type and doesn't change safety here since block/page interplay is
+// read dynamically throughout).
+export default function renderBlockEditor(
+  block: any,
+  index: number,
+  cls: string,
+  ref: React.RefObject<any>,
+  onPatch: (patch: any) => void,
+  onKeyDown?: (e: React.KeyboardEvent) => void,
+  onDelete?: () => void,
+  pages: any[] = [],
+  onFocus?: () => void,
+  onBlur?: () => void,
+  isLocked?: boolean,
+  isFocused?: boolean,
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void,
+  onOpenImagePicker?: () => void,
+  pageId?: string,
+  onToast?: (message: string) => void,
+  onCreateSubpage?: (blockId: string, text: string) => string | null | undefined,
+  apiKey?: string,
+  aiProvider?: string,
+  page?: any,
+  onBlocks?: (blocks: any[]) => void,
+  onPasteUrl?: (url: string) => void
+) {
   const registryItem = BlockRegistry.find(r => r.type === block.type);
   if (registryItem?.category === "Embeds") {
     return <EmbedBlock block={block} onPatch={onPatch} onKeyDown={onKeyDown} onDelete={onDelete} />;
@@ -39,7 +75,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
     const linked = pages.find((p) => p.id === (block.linkedPageId || block.id));
     const previewPage = linked || pages.find((p) => p.id === block.linkedPageId);
     return (
-      <PagePeek page={previewPage} pages={pages} onNavigate={onNavigate}>
+      <PagePeek page={previewPage} pages={pages} onNavigate={onNavigate} onOpenFull={undefined}>
         <button
           type="button"
           onMouseDown={(e) => e.stopPropagation()}
@@ -68,7 +104,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
       <div className="flex items-center gap-2 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
         <Link size={14} className="text-[var(--accent)] shrink-0" />
         {target ? (
-          <PagePeek page={target} pages={pages} onNavigate={onNavigate}>
+          <PagePeek page={target} pages={pages} onNavigate={onNavigate} onOpenFull={undefined}>
               <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => onNavigate?.(target.id, { altKey: e.altKey })} className="truncate font-medium text-[var(--accent)] hover:underline">
               {target.icon} {target.title || "Untitled"}
             </button>
@@ -94,7 +130,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
   if (block.type === "mention") {
     const target = pages.find((p) => p.id === block.mentionPageId);
     return (
-      <PagePeek page={target} pages={pages} onNavigate={onNavigate}>
+      <PagePeek page={target} pages={pages} onNavigate={onNavigate} onOpenFull={undefined}>
         <div className="inline-flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2 py-0.5 text-sm text-[var(--accent)]">
           <span>@</span>
           {target ? (
@@ -286,6 +322,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
             onDelete={onDelete}
             isLocked={isLocked}
             accept="video/*"
+            fileName={false}
           />
         )}
       </div>
@@ -321,6 +358,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
             onDelete={onDelete}
             isLocked={isLocked}
             accept="audio/*"
+            fileName={false}
           />
         )}
       </div>
@@ -400,7 +438,7 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
                 type="text"
                 value={block.text || ""}
                 onChange={(e) => onPatch({ text: e.target.value, url: e.target.value })}
-                onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                 placeholder="Paste any URL..."
                 className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]"
                 disabled={isLocked}
@@ -533,7 +571,11 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
             value={block[`tabContent_${activeTabIdx}`] || ""}
             onChange={(val) => onPatch({ [`tabContent_${activeTabIdx}`]: val })}
             readOnly={isLocked}
-            onPasteUrl={onPasteUrl}
+            // NOTE: `TextArea` (src/components/ui/index.tsx) has no
+            // `onPasteUrl` prop — this was a pre-existing dead prop here
+            // (every other TextArea usage in this file omits it). Removed
+            // rather than adding new functionality to TextArea that
+            // doesn't exist anywhere else in the codebase.
             placeholder="List item"
           />
         </div>
@@ -899,9 +941,20 @@ export default function renderBlockEditor(block, index, cls, ref, onPatch, onKey
   );
 }
 
-function CalloutBlock({ block, cls, isLocked, onPatch, onKeyDown, onFocus, onBlur, onPasteUrl }) {
+interface CalloutBlockProps {
+  block: any;
+  cls: string;
+  isLocked?: boolean;
+  onPatch: (patch: any) => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  onPasteUrl?: (url: string) => void;
+}
+
+function CalloutBlock({ block, cls, isLocked, onPatch, onKeyDown, onFocus, onBlur, onPasteUrl }: CalloutBlockProps) {
   const [emojiOpen, setEmojiOpen] = React.useState(false);
-  const emojiRef = React.useRef(null);
+  const emojiRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (!emojiOpen) return;
     const handler = (e) => { if (emojiRef.current && !emojiRef.current.contains(e.target)) setEmojiOpen(false); };
