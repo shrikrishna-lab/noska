@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
 import {
   Bold, Italic, Underline, Code, Link, MoreHorizontal, Smile, MessageCircle, Highlighter,
   SlidersHorizontal, ChevronDown, ChevronLeft, Star, Heart, ThumbsUp, Flag, Bell, Bookmark,
@@ -9,23 +8,60 @@ import { BlockRegistry } from "../../registry/BlockRegistry";
 import { runAI } from "../../utils/ai";
 import { blockFor, uid } from "../../utils/helpers";
 import { TEXT_COLORS, BG_COLORS } from "../../utils/colors";
+import type { Page } from "../../lib/supabaseService";
+import type { Block } from "../../../types/blocks";
+
+/** Selection state shape produced by Editor.tsx's `handleMouseUp` — the
+ * exact fields that component sets on `selection` (see Editor.tsx's
+ * `SelectionState` interface) and the only fields this bar reads/writes. */
+export interface SelectionAIBarSelection {
+  text: string;
+  // `bottom` is read below (`rect.bottom + 10`) but Editor.tsx's
+  // `SelectionState.rect` never actually sets it — only
+  // top/left/width/height. In practice that read is unreachable anyway
+  // (`Math.max(10, x)` always yields >= 10, so the `if (top < 10)` branch
+  // that reads `.bottom` never runs), but typed as optional here to match
+  // the real caller shape rather than widening it into something that
+  // implies it's always populated.
+  rect: { top: number; left: number; width: number; height: number; bottom?: number } | null;
+  blockId: string | null;
+  selStart?: number;
+  selEnd?: number;
+}
+
+interface SelectionAIBarProps {
+  selection: SelectionAIBarSelection | null | undefined;
+  apiKey?: string;
+  aiProvider?: string;
+  nvidiaKey?: string;
+  onFormat: (format: string) => void;
+  onReplace: (text: string) => void;
+  onInsert: (text: string) => void;
+  onClose?: () => void;
+  onToast?: (message: string) => void;
+  page?: Page | null;
+  onBlockPatch: (blockId: string, patch: Record<string, unknown>) => void;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+}
+
+type SubView = "main" | "more" | "color" | "turn-into";
 
 export default function SelectionAIBar({ selection, apiKey, aiProvider, nvidiaKey, onFormat,
-onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }) {
+onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }: SelectionAIBarProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
-  const [subView, setSubView] = useState("main");
-  const [colorTab, setColorTab] = useState("text");
+  const [subView, setSubView] = useState<SubView>("main");
+  const [colorTab, setColorTab] = useState<"text" | "bg">("text");
   const [customColor, setCustomColor] = useState("#ffffff");
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const barRef = useRef(null);
-  const emojiRef = useRef(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!selection?.text) return;
-    const handler = (e) => {
-      if (barRef.current && !barRef.current.contains(e.target)) onClose?.();
+    const handler = (e: MouseEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) onClose?.();
     };
     document.addEventListener("pointerdown", handler);
     return () => document.removeEventListener("pointerdown", handler);
@@ -33,8 +69,8 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }) {
 
   useEffect(() => {
     if (!emojiOpen) return;
-    const handler = (e) => {
-      if (emojiRef.current && !emojiRef.current.contains(e.target)) setEmojiOpen(false);
+    const handler = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) setEmojiOpen(false);
     };
     document.addEventListener("pointerdown", handler);
     return () => document.removeEventListener("pointerdown", handler);
@@ -42,7 +78,7 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }) {
 
   if (!selection || !selection.text) return null;
 
-  const handleAIAction = async (promptText) => {
+  const handleAIAction = async (promptText: string) => {
     setLoading(true);
     setResult("");
     try {
@@ -54,19 +90,19 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }) {
         prompt: `${promptText}\n\nSelected text:\n"${selection.text}"`
       });
       setResult(response);
-    } catch (e) {
+    } catch (_e) {
       setResult("AI request failed. Confirm your key is added in Settings.");
     } finally {
       setLoading(false);
     }
   };
 
-  const currentBlock = page?.blocks?.find(b => b.id === selection.blockId);
+  const currentBlock: Block | undefined = page?.blocks?.find(b => b.id === selection.blockId);
   const blockTypeLabel = currentBlock
     ? BlockRegistry.find(r => r.type === currentBlock.type)?.label || "Normal Text"
     : "Normal Text";
 
-  const handleBlockConvert = (typeId) => {
+  const handleBlockConvert = (typeId: string) => {
     if (selection.blockId && currentBlock) {
       onBlockPatch(selection.blockId, { ...blockFor(typeId, currentBlock.text), id: selection.blockId });
       onToast?.(`Converted block to ${typeId}`);
@@ -77,9 +113,9 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }) {
   const rect = selection.rect;
   const barWidth = 270;
   const barHeight = 360;
-  let top = Math.max(10, rect.top - barHeight);
-  if (top < 10) top = Math.min(rect.bottom + 10, window.innerHeight - barHeight - 10);
-  let left = Math.min(window.innerWidth - barWidth - 16, Math.max(16, rect.left + rect.width / 2 - barWidth / 2));
+  let top = rect ? Math.max(10, rect.top - barHeight) : 10;
+  if (rect && top < 10) top = Math.min(rect.bottom + 10, window.innerHeight - barHeight - 10);
+  let left = rect ? Math.min(window.innerWidth - barWidth - 16, Math.max(16, rect.left + rect.width / 2 - barWidth / 2)) : 16;
   if (left + barWidth > window.innerWidth - 16) left = window.innerWidth - barWidth - 16;
 
   return (
@@ -367,10 +403,10 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }) {
                     if (selection.blockId) {
                       if (c.name === "Default" || c.name === "None") {
                         if (colorTab === "bg") {
-                          const { bgColor, ...rest } = currentBlock || {};
+                          const { bgColor, ...rest } = (currentBlock || {}) as Block & { bgColor?: unknown };
                           onBlockPatch(selection.blockId, rest);
                         } else {
-                          const { color, ...rest } = currentBlock || {};
+                          const { color, ...rest } = (currentBlock || {}) as Block & { color?: unknown };
                           onBlockPatch(selection.blockId, rest);
                         }
                       } else {

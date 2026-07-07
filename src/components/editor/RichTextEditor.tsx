@@ -1,18 +1,22 @@
 import React, { useRef, useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { renderInlineMarkdown } from "../../utils/helpers";
-import { richTextToHtml, htmlToRichText, richTextToPlainText, normalizeRichText, isEmptyRichText } from "../../utils/richText";
+import { richTextToHtml, htmlToRichText, richTextToPlainText, normalizeRichText, isEmptyRichText, type RichTextSpan } from "../../utils/richText";
 import { EditorCommands } from "../../editor/EditorCommands";
 import { ClipboardPipeline } from "../../editor/ClipboardPipeline";
 
-function markdownToHtml(text) {
+function markdownToHtml(text: string | null | undefined) {
   if (!text) return "";
   return renderInlineMarkdown(text);
 }
 
-function saveCursor(el) {
+interface SavedCursor {
+  offset: number;
+}
+
+function saveCursor(el: HTMLElement | null): SavedCursor | null {
   try {
     const sel = window.getSelection();
-    if (!sel || !sel.rangeCount || !el.contains(sel.anchorNode)) return null;
+    if (!el || !sel || !sel.rangeCount || !el.contains(sel.anchorNode)) return null;
     const range = sel.getRangeAt(0);
     const pre = document.createRange();
     pre.selectNodeContents(el);
@@ -21,16 +25,17 @@ function saveCursor(el) {
   } catch { return null; }
 }
 
-function restoreCursor(el, saved) {
+function restoreCursor(el: HTMLElement | null, saved: SavedCursor | null) {
   if (!saved || !el) return;
   try {
     const sel = window.getSelection();
+    if (!sel) return;
     const range = document.createRange();
     let charCount = 0;
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
-    let node;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    let node: Node | null;
     while ((node = walker.nextNode())) {
-      const len = node.textContent.length;
+      const len = (node.textContent || "").length;
       if (charCount + len >= saved.offset) {
         range.setStart(node, saved.offset - charCount);
         range.collapse(true);
@@ -47,6 +52,19 @@ function restoreCursor(el, saved) {
   } catch {}
 }
 
+interface RichTextModeProps {
+  richText: RichTextSpan[] | null | undefined;
+  onRichTextChange?: (richText: RichTextSpan[], plainText: string) => void;
+  readOnly?: boolean;
+  placeholder?: string;
+  className?: string;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  onFocus?: (e: React.FocusEvent) => void;
+  onBlur?: (e: React.FocusEvent) => void;
+  onPasteUrl?: (url: string) => void;
+  as?: React.ElementType;
+}
+
 function RichTextMode({
   richText,
   onRichTextChange,
@@ -58,13 +76,13 @@ function RichTextMode({
   onBlur,
   onPasteUrl,
   as: WrapperComponent = "div"
-}) {
-  const divRef = useRef(null);
+}: RichTextModeProps) {
+  const divRef = useRef<HTMLElement | null>(null);
   const isInternal = useRef(false);
   const [isComposing, setIsComposing] = useState(false);
   const commands = useMemo(() => new EditorCommands(null), []);
 
-  const syncToRichText = useCallback(() => {
+  const syncToRichText = useCallback((): RichTextSpan[] | null => {
     const el = divRef.current;
     if (!el || isComposing) return null;
     const html = el.innerHTML;
@@ -94,14 +112,14 @@ function RichTextMode({
     isInternal.current = false;
   }, [syncFromRichText, isComposing]);
 
-  const handleCompositionStart = useCallback((e) => {
+  const handleCompositionStart = useCallback((_e: React.CompositionEvent) => {
     setIsComposing(true);
   }, []);
 
-  const handleCompositionUpdate = useCallback((e) => {
+  const handleCompositionUpdate = useCallback((_e: React.CompositionEvent) => {
   }, []);
 
-  const handleCompositionEnd = useCallback((e) => {
+  const handleCompositionEnd = useCallback((_e: React.CompositionEvent) => {
     setIsComposing(false);
     if (!divRef.current || readOnly) return;
     isInternal.current = true;
@@ -118,11 +136,11 @@ function RichTextMode({
     isInternal.current = true;
     const rt = syncToRichText();
     const pt = richTextToPlainText(rt);
-    onRichTextChange?.(rt, pt);
+    onRichTextChange?.(rt || [], pt);
     isInternal.current = false;
-  }, [readOnly, syncToRichText, onRichTextChange]);
+  }, [readOnly, isComposing, syncToRichText, onRichTextChange]);
 
-  const handleKeyDown = useCallback((e) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (readOnly) return;
 
     if (e.key === "Enter" && !e.shiftKey) {
@@ -142,28 +160,28 @@ function RichTextMode({
 
     if ((e.ctrlKey || e.metaKey) && e.key === "b") {
       e.preventDefault();
-      commands.el = divRef.current;
+      commands.el = divRef.current as HTMLElement;
       commands.toggleBold();
       handleInput();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "i") {
       e.preventDefault();
-      commands.el = divRef.current;
+      commands.el = divRef.current as HTMLElement;
       commands.toggleItalic();
       handleInput();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "u") {
       e.preventDefault();
-      commands.el = divRef.current;
+      commands.el = divRef.current as HTMLElement;
       commands.toggleUnderline();
       handleInput();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
       e.preventDefault();
-      commands.el = divRef.current;
+      commands.el = divRef.current as HTMLElement;
       const sel = window.getSelection();
       if (sel && sel.toString()) {
         const url = prompt("Enter URL:", "https://");
@@ -176,14 +194,14 @@ function RichTextMode({
     }
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "S") {
       e.preventDefault();
-      commands.el = divRef.current;
+      commands.el = divRef.current as HTMLElement;
       commands.toggleStrikethrough();
       handleInput();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.code === "Backquote") {
       e.preventDefault();
-      commands.el = divRef.current;
+      commands.el = divRef.current as HTMLElement;
       commands.toggleCode();
       handleInput();
       return;
@@ -192,30 +210,30 @@ function RichTextMode({
     onKeyDown?.(e);
   }, [readOnly, commands, handleInput, onKeyDown]);
 
-  const handlePaste = useCallback((e) => {
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
     if (readOnly) return;
 
     const clipboard = new ClipboardPipeline({
-      onPasteUrl: (url) => {
+      onPasteUrl: (url: string) => {
         onPasteUrl?.(url);
       },
-      onPlainPaste: (text, { insertText }) => {
-        commands.el = divRef.current;
+      onPlainPaste: (text: string, { insertText }: { insertText: (text: string) => void }) => {
+        commands.el = divRef.current as HTMLElement;
         insertText(text);
       },
-      onHtmlPaste: (html, { insertHtml }) => {
-        commands.el = divRef.current;
+      onHtmlPaste: (html: string, { insertHtml }: { insertHtml: (html: string) => void }) => {
+        commands.el = divRef.current as HTMLElement;
         insertHtml(html);
       }
     });
 
-    const handled = clipboard.handlePaste(e, {
-      insertHtml: (html) => {
-        commands.el = divRef.current;
+    const handled = clipboard.handlePaste(e.nativeEvent as ClipboardEvent, {
+      insertHtml: (html: string) => {
+        commands.el = divRef.current as HTMLElement;
         commands.exec('insertHTML', html);
       },
-      insertText: (text) => {
-        commands.el = divRef.current;
+      insertText: (text: string) => {
+        commands.el = divRef.current as HTMLElement;
         commands.exec('insertText', text);
       }
     });
@@ -225,11 +243,11 @@ function RichTextMode({
     }
   }, [readOnly, commands, handleInput, onPasteUrl]);
 
-  const handleFocus = useCallback((e) => {
+  const handleFocus = useCallback((e: React.FocusEvent) => {
     onFocus?.(e);
   }, [onFocus]);
 
-  const handleBlur = useCallback((e) => {
+  const handleBlur = useCallback((e: React.FocusEvent) => {
     handleInput();
     onBlur?.(e);
   }, [handleInput, onBlur]);
@@ -256,6 +274,18 @@ function RichTextMode({
   );
 }
 
+interface MarkdownModeProps {
+  value: string | null | undefined;
+  onChange: (markdown: string) => void;
+  readOnly?: boolean;
+  placeholder?: string;
+  className?: string;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  onFocus?: (e: React.FocusEvent) => void;
+  onBlur?: (e: React.FocusEvent) => void;
+  onPasteUrl?: (url: string) => void;
+}
+
 function MarkdownMode({
   value,
   onChange,
@@ -266,10 +296,10 @@ function MarkdownMode({
   onFocus,
   onBlur,
   onPasteUrl
-}) {
-  const divRef = useRef(null);
+}: MarkdownModeProps) {
+  const divRef = useRef<HTMLDivElement | null>(null);
   const isInternal = useRef(false);
-  
+
   const syncToMarkdown = useCallback(() => {
     const el = divRef.current;
     if (!el) return "";
@@ -295,12 +325,12 @@ function MarkdownMode({
       .replace(/<[^>]*>/g, "");
     return text;
   }, []);
-  
-  const renderHtml = useCallback((text) => {
+
+  const renderHtml = useCallback((text: string | null | undefined) => {
     if (!text) return "";
     return markdownToHtml(text);
   }, []);
-  
+
   useLayoutEffect(() => {
     if (!divRef.current || isInternal.current) {
       isInternal.current = false;
@@ -313,7 +343,7 @@ function MarkdownMode({
       if (saved) setTimeout(() => restoreCursor(divRef.current, saved), 0);
     }
   }, [value, renderHtml]);
-  
+
   const handleInput = useCallback(() => {
     if (readOnly) return;
     isInternal.current = true;
@@ -321,8 +351,8 @@ function MarkdownMode({
     onChange(md);
     isInternal.current = false;
   }, [onChange, syncToMarkdown, readOnly]);
-  
-  const handleKeyDown = useCallback((e) => {
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (readOnly) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -339,25 +369,25 @@ function MarkdownMode({
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "b") {
       e.preventDefault();
-      document.execCommand("bold", false, null);
+      document.execCommand("bold", false);
       handleInput();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "i") {
       e.preventDefault();
-      document.execCommand("italic", false, null);
+      document.execCommand("italic", false);
       handleInput();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "u") {
       e.preventDefault();
-      document.execCommand("underline", false, null);
+      document.execCommand("underline", false);
       handleInput();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "S") {
       e.preventDefault();
-      document.execCommand("strikeThrough", false, null);
+      document.execCommand("strikeThrough", false);
       handleInput();
       return;
     }
@@ -372,8 +402,8 @@ function MarkdownMode({
     }
     onKeyDown?.(e);
   }, [onKeyDown, handleInput, readOnly, value]);
-  
-  const handlePaste = useCallback((e) => {
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
     if (readOnly) return;
     e.preventDefault();
     const text = e.clipboardData.getData("text/plain");
@@ -391,19 +421,19 @@ function MarkdownMode({
     }
     handleInput();
   }, [handleInput, readOnly, onPasteUrl]);
-  
-  const handleFocus = useCallback((e) => {
+
+  const handleFocus = useCallback((e: React.FocusEvent) => {
     onFocus?.(e);
   }, [onFocus]);
-  
-  const handleBlur = useCallback((e) => {
+
+  const handleBlur = useCallback((e: React.FocusEvent) => {
     const md = syncToMarkdown();
     onChange(md);
     onBlur?.(e);
   }, [onBlur, onChange, syncToMarkdown]);
-  
+
   const isEmpty = !divRef.current?.textContent?.trim() && !value;
-  
+
   return (
     <div
       ref={divRef}
@@ -421,14 +451,25 @@ function MarkdownMode({
   );
 }
 
-export default function RichTextEditor(props) {
+// RichTextEditor is a dual-mode component: callers pass EITHER a
+// `richText`-based prop set (RichTextModeProps) OR a `value`/`onChange`
+// markdown-based prop set (MarkdownModeProps) — never a mix of both. This
+// is determined purely at runtime by `'richText' in props`, matching the
+// exact original .jsx dispatch. The union (rather than a single shared
+// interface) documents that these are genuinely two distinct calling
+// conventions used by different call sites in renderBlockEditor.jsx —
+// confirmed as load-bearing per this migration's explicit critical-file
+// instruction, so the runtime branch below is preserved exactly as-is.
+type RichTextEditorProps = RichTextModeProps | MarkdownModeProps;
+
+export default function RichTextEditor(props: RichTextEditorProps) {
   const hasRichText = 'richText' in props && props.richText !== undefined;
-  
+
   if (hasRichText) {
-    return <RichTextMode {...props} />;
+    return <RichTextMode {...(props as RichTextModeProps)} />;
   }
-  
-  return <MarkdownMode {...props} />;
+
+  return <MarkdownMode {...(props as MarkdownModeProps)} />;
 }
 
 export { richTextToHtml, htmlToRichText, richTextToPlainText, normalizeRichText, isEmptyRichText };

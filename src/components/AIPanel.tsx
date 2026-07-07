@@ -10,6 +10,8 @@ import { textToBlocks, uid, now, plainText } from "../utils/helpers";
 import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
 import { realtimeCollab } from "../lib/realtimeCollab";
 import { auditEngine } from "../lib/auditEngine";
+import type { Page, AIChat } from "../lib/supabaseService";
+import type { Block } from "../../types/blocks";
 
 import ChatSidebar from "./ai/ChatSidebar";
 import OnboardingSuggestions from "./ai/OnboardingSuggestions";
@@ -22,30 +24,82 @@ import ChatMessage from "./ai/ChatMessage";
 
 const SPRING = { type: "spring", stiffness: 300, damping: 24 };
 
+/** Single message shape read/written throughout this component and
+ * passed to ChatMessage.tsx — `{ role, text }` is the only shape ever
+ * constructed here (`{ role: "user"|"ai", text }`), with `reactions`
+ * added on top only by `handleReaction`. */
+interface ChatPanelMessage {
+  role: string;
+  text: string;
+  html?: string;
+  reactions?: string[];
+}
+
+/** Result entries produced by `executeAllToolCalls` (src/ai/tools.ts) —
+ * that module has no exported return type (implicit per-branch object),
+ * so this mirrors the exact fields actually read here (`r.ok`, `r.name`,
+ * `r.result?.count`, `r.error`). */
+interface ToolCallResult {
+  name: string;
+  ok: boolean;
+  result?: { count?: number; [key: string]: unknown };
+  error?: string;
+  params: Record<string, unknown>;
+}
+
+interface AIPanelProps {
+  open: boolean;
+  onClose: () => void;
+  page: Page;
+  pages: Page[];
+  apiKey?: string;
+  aiProvider?: string;
+  nvidiaKey?: string;
+  aiChats?: AIChat[];
+  activeChatId?: string | null;
+  onChatsChange?: (next: AIChat[] | ((prev: AIChat[]) => AIChat[])) => void;
+  onActiveChat?: (id: string | null) => void;
+  onNewChat?: () => void;
+  onSelectChat?: (id: string) => void;
+  onDeleteChat?: (id: string) => void;
+  onRenameChat?: (id: string, name: string) => void;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+  onInsert?: (blocks: Block[]) => void;
+  onAppend?: (blocks: Block[]) => void;
+  onReplaceText?: (text: string) => void;
+  onToast?: (message: string) => void;
+  // Opaque pass-through to executeAllToolCalls (src/ai/tools.ts) — that
+  // module's `executeTool(name, params, context)` has no exported
+  // context type, and App.tsx's `toolContext` (currentPage/pages/actions)
+  // is only ever forwarded here verbatim, never read directly by this
+  // component.
+  toolContext?: unknown;
+}
+
 export default function AIPanel({
   open, onClose, page, pages, apiKey, aiProvider, nvidiaKey,
   aiChats = [], activeChatId, onChatsChange, onActiveChat, onNewChat,
   onSelectChat, onDeleteChat, onRenameChat, onPagePatch, onInsert,
   onAppend, onReplaceText, onToast, toolContext
-}) {
+}: AIPanelProps) {
   const [prompt, setPrompt] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<ChatPanelMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [executingTools, setExecutingTools] = useState(false);
-  const [toolResults, setToolResults] = useState([]);
+  const [toolResults, setToolResults] = useState<ToolCallResult[]>([]);
   const [activeAgent, setActiveAgent] = useState("assistant");
   const [showSidebar, setShowSidebar] = useState(true);
   const [showContext, setShowContext] = useState(false);
   const [showActions, setShowActions] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
-  const [auditEvents, setAuditEvents] = useState([]);
+  const [typingUsers, setTypingUsers] = useState<Array<{ userId: string; userName: string }>>([]);
+  const [auditEvents, setAuditEvents] = useState<unknown[]>([]);
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
-  const [presenceUsers, setPresenceUsers] = useState([]);
+  const [presenceUsers, setPresenceUsers] = useState<unknown[]>([]);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [chatFilter, setChatFilter] = useState("all");
 
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const currentAgent = getAgent(activeAgent);
   const agents = getAgentList();
@@ -58,7 +112,7 @@ export default function AIPanel({
     if (activeChatId) {
       const chat = aiChats.find(c => c.id === activeChatId);
       if (chat?.messages?.length) {
-        setMessages(chat.messages);
+        setMessages(chat.messages as ChatPanelMessage[]);
       }
     } else {
       setMessages([]);
@@ -83,7 +137,7 @@ export default function AIPanel({
       if (pageId !== page?.id) return;
       setTypingUsers(prev => {
         if (prev.some(u => u.userId === userId)) return prev;
-        return [...prev, { userId, userName }];
+        return [...prev, { userId, userName: userName as string }];
       });
       setTimeout(() => {
         setTypingUsers(prev => prev.filter(u => u.userId !== userId));
@@ -98,23 +152,23 @@ export default function AIPanel({
     const unsubs = [
       realtimeCollab.on('presence:sync', ({ users }) => setPresenceUsers(users)),
       realtimeCollab.on('presence:join', ({ user }) => setPresenceUsers(prev =>
-        prev.some(u => u.id === user.id) ? prev : [...prev, user]
+        prev.some((u) => (u as { id?: string }).id === user.id) ? prev : [...prev, user]
       )),
       realtimeCollab.on('presence:leave', ({ userId }) => setPresenceUsers(prev =>
-        prev.filter(u => u.userId !== userId && u.id !== userId)
+        prev.filter((u) => (u as { userId?: string; id?: string }).userId !== userId && (u as { userId?: string; id?: string }).id !== userId)
       ))
     ];
     realtimeCollab.joinPage(page.id);
     return () => unsubs.forEach(fn => fn());
   }, [page?.id]);
 
-  const handleSend = useCallback(async (overrideText) => {
+  const handleSend = useCallback(async (overrideText?: string) => {
     const text = (overrideText || prompt).trim();
     if (!text || loading) return;
     setPrompt("");
 
-    const userMsg = { role: "user", text };
-    const updatedMessages = [...messages, userMsg, { role: "ai", text: "..." }];
+    const userMsg: ChatPanelMessage = { role: "user", text };
+    const updatedMessages: ChatPanelMessage[] = [...messages, userMsg, { role: "ai", text: "..." }];
     setMessages(updatedMessages);
     setLoading(true);
     setExecutingTools(true);
@@ -125,9 +179,9 @@ export default function AIPanel({
     if (!activeChatId) onActiveChat?.(chatId);
     const title = text.slice(0, 48);
     const existing = aiChats.find(c => c.id === chatId);
-    const nextChats = existing
+    const nextChats: AIChat[] = existing
       ? aiChats.map(c => c.id === chatId ? { ...c, updatedAt: now() } : c)
-      : [{ id: chatId, title, pinned: false, updatedAt: now(), messages: [{ role: "user", text }], pageId: page?.id, pageTitle: page?.title }, ...aiChats];
+      : [{ id: chatId, name: title, pinned: false, archived: false, chatType: "private", updatedAt: now(), messages: [{ role: "user", text }], pageId: page?.id ?? null, pageTitle: page?.title ?? null, collaborators: [], createdAt: now() } as AIChat, ...aiChats];
     onChatsChange?.(nextChats);
 
     try {
@@ -147,7 +201,7 @@ export default function AIPanel({
         page: page || undefined,
         pages: pages || undefined,
         agent: activeAgent,
-        onChunk: (chunk) => {
+        onChunk: (chunk: string) => {
           setMessages(prev => {
             const next = [...prev];
             const last = next[next.length - 1];
@@ -172,7 +226,7 @@ export default function AIPanel({
 
       // Execute tool calls
       if (hasToolCalls(responseText) && toolContext) {
-        const results = await executeAllToolCalls(responseText, toolContext);
+        const results: ToolCallResult[] = await executeAllToolCalls(responseText, toolContext);
         setToolResults(results);
         const cleaned = stripToolCalls(responseText);
         setMessages(prev => {
@@ -207,7 +261,7 @@ export default function AIPanel({
       setExecutingTools(false);
 
       // Save to chat list
-      const finalMessages = [...messages, userMsg, { role: "ai", text: responseText }];
+      const finalMessages: ChatPanelMessage[] = [...messages, userMsg, { role: "ai", text: responseText }];
       onChatsChange?.(prev => prev.map(c =>
         c.id === (activeChatId || chatId) ? {
           ...c, messages: finalMessages,
@@ -217,12 +271,13 @@ export default function AIPanel({
         } : c
       ));
 
-    } catch (err) {
-      const friendly = err?.message?.includes("not configured") || err?.message?.includes("API key")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const friendly = message?.includes("not configured") || message?.includes("API key")
         ? "AI provider not configured. Add an API key in Settings."
-        : err?.message?.includes("fetch") || err?.message?.includes("network") || err?.message?.includes("Failed to fetch")
+        : message?.includes("fetch") || message?.includes("network") || message?.includes("Failed to fetch")
           ? "Network error. Check your internet connection."
-          : err?.message?.includes("timeout") || err?.message?.includes("timed out")
+          : message?.includes("timeout") || message?.includes("timed out")
             ? "AI request timed out. Try again."
             : "AI request failed. Please try again.";
       setMessages(prev => {
@@ -245,21 +300,21 @@ export default function AIPanel({
     onNewChat?.();
   };
 
-  const handleSelectChat = (id) => {
+  const handleSelectChat = (id: string) => {
     const chat = aiChats.find(c => c.id === id);
     if (chat) {
-      setMessages(chat.messages || []);
+      setMessages((chat.messages as ChatPanelMessage[]) || []);
       onActiveChat?.(id);
       onSelectChat?.(id);
     }
   };
 
-  const handleArchive = (id) => {
+  const handleArchive = (id: string) => {
     onChatsChange?.(prev => prev.map(c => c.id === id ? { ...c, archived: !c.archived } : c));
     onToast?.("Chat archived");
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = (id: string) => {
     onChatsChange?.(prev => prev.filter(c => c.id !== id));
     if (activeChatId === id) {
       setMessages([]);
@@ -268,44 +323,44 @@ export default function AIPanel({
     onToast?.("Chat deleted");
   };
 
-  const handleRename = (id, title) => {
-    onChatsChange?.(prev => prev.map(c => c.id === id ? { ...c, title } : c));
+  const handleRename = (id: string, title: string) => {
+    onChatsChange?.(prev => prev.map(c => c.id === id ? { ...c, title } as AIChat : c));
     onRenameChat?.(id, title);
   };
 
-  const handleDuplicate = (id) => {
+  const handleDuplicate = (id: string) => {
     const orig = aiChats.find(c => c.id === id);
     if (!orig) return;
-    const copy = { ...JSON.parse(JSON.stringify(orig)), id: uid(), title: (orig.title || 'Chat') + ' copy', updatedAt: now() };
+    const copy: AIChat = { ...JSON.parse(JSON.stringify(orig)), id: uid(), name: (orig.name || 'Chat') + ' copy', updatedAt: now() };
     onChatsChange?.(prev => [copy, ...prev]);
     onToast?.("Chat duplicated");
   };
 
-  const handleInsertBelow = (text) => {
+  const handleInsertBelow = (text: string) => {
     const blocks = textToBlocks(text);
     if (blocks.length > 0) { onAppend?.(blocks); onToast?.("Inserted into page"); }
   };
 
-  const handleReplace = (text) => {
+  const handleReplace = (text: string) => {
     onReplaceText?.(text);
     onToast?.("AI draft added to page");
   };
 
-  const handleCopy = async (text) => {
+  const handleCopy = async (text: string) => {
     try { await navigator.clipboard.writeText(text); onToast?.("Copied"); } catch { onToast?.("Could not copy"); }
   };
 
-  const handleBranch = (index) => {
+  const handleBranch = (index: number) => {
     const branchMessages = messages.slice(0, index + 1);
     const id = uid();
     const title = (messages.find(m => m.role === "user")?.text || "Branch").slice(0, 48);
-    onChatsChange?.(prev => [{ id, title, pinned: false, updatedAt: now(), messages: branchMessages }, ...prev]);
+    onChatsChange?.(prev => [{ id, name: title, pinned: false, archived: false, chatType: "private", updatedAt: now(), messages: branchMessages, pageId: null, pageTitle: null, collaborators: [], createdAt: now() } as AIChat, ...prev]);
     setMessages(branchMessages);
     onActiveChat?.(id);
     onToast?.("Branch created");
   };
 
-  const handleReaction = (index, reaction) => {
+  const handleReaction = (index: number, reaction: string) => {
     setMessages(prev => prev.map((m, i) =>
       i === index ? { ...m, reactions: [...(m.reactions || []), reaction] } : m
     ));
@@ -443,8 +498,8 @@ export default function AIPanel({
         <div className="relative flex-1 overflow-y-auto scrollbar-thin">
           {showOnboarding ? (
             <>
-              {page && <PageInsights page={page} pages={pages} onSend={(text) => { setPrompt(text); handleSend(text); }} />}
-              <OnboardingSuggestions onSend={(text) => { setPrompt(text); handleSend(text); }} />
+              {page && <PageInsights page={page} pages={pages} onSend={(text: string) => { setPrompt(text); handleSend(text); }} />}
+              <OnboardingSuggestions onSend={(text: string) => { setPrompt(text); handleSend(text); }} />
             </>
           ) : (
             <div className="space-y-1.5 px-3 py-2">
@@ -525,7 +580,7 @@ export default function AIPanel({
 
         {/* AI Actions */}
         {hasMessages && (
-          <AIActionsCard onSendPrompt={(p) => { setPrompt(p); setTimeout(() => handleSend(), 100); }} />
+          <AIActionsCard onSendPrompt={(p: string) => { setPrompt(p); setTimeout(() => handleSend(), 100); }} />
         )}
 
         {/* Prompt Composer */}

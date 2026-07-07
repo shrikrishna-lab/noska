@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, ChevronRight, Star } from "lucide-react";
-import { getFilteredCommands, getAllCommands } from "../../core/commands/CommandRegistry";
+import { getFilteredCommands, getAllCommands, type NormalizedCommand } from "../../core/commands/CommandRegistry";
 import * as Icons from "lucide-react";
 import SlashCommandPreviewPanel from "./SlashCommandPreviewPanel";
 
@@ -10,7 +10,7 @@ const CATEGORIES_ORDER = [
   "Database", "Advanced blocks", "Inline", "Embeds"
 ];
 
-const CATEGORY_ICONS = {
+const CATEGORY_ICONS: Record<string, string> = {
   "Basic blocks": "Type",
   "Media": "Image",
   "Layout": "Columns2",
@@ -21,7 +21,7 @@ const CATEGORY_ICONS = {
   "Suggested": "Star",
 };
 
-const CATEGORY_LABELS = {
+const CATEGORY_LABELS: Record<string, string> = {
   "Basic blocks": "Basic",
   "Media": "Media",
   "Layout": "Layout",
@@ -34,17 +34,27 @@ const CATEGORY_LABELS = {
 
 const SUGGESTED_IDS = ["text", "h1", "h2", "h3", "bullet", "todo", "image", "divider", "toggle", "callout", "database-inline", "code"];
 
-function RenderIcon({ iconName, size = 14, className = "" }) {
-  const IconComponent = Icons[iconName];
+interface RenderIconProps {
+  iconName: string;
+  size?: number;
+  className?: string;
+}
+
+function RenderIcon({ iconName, size = 14, className = "" }: RenderIconProps) {
+  // Cast: lucide-react's namespace import isn't indexable by an arbitrary
+  // string at the type level, but every icon name we pass here comes from
+  // command.icon, a runtime-validated string key into the same module.
+  // Same pattern as SlashCommandPreviewPanel.tsx's RenderIcon.
+  const IconComponent = (Icons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>)[iconName];
   if (!IconComponent) return null;
   return <IconComponent size={size} className={`shrink-0 ${className}`} />;
 }
 
-function getFavorites() {
+function getFavorites(): string[] {
   try { return JSON.parse(localStorage.getItem("slash-favorites") || "[]"); } catch { return []; }
 }
 
-function addFavorite(id) {
+function addFavorite(id: string) {
   const favs = getFavorites().filter(f => f !== id);
   favs.unshift(id);
   localStorage.setItem("slash-favorites", JSON.stringify(favs.slice(0, 6)));
@@ -52,15 +62,46 @@ function addFavorite(id) {
 
 const MENU_WIDTH = 352;
 
-export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, position, initialSearch = "" }, menuRef) {
+interface SlashCommandMenuProps {
+  open: boolean;
+  onClose?: () => void;
+  onSelect?: (type: string) => void;
+  position: { top: number; left: number } | null;
+  initialSearch?: string;
+}
+
+// Group header entries interleaved with commands in `flatItems`. `_isGroup`
+// is declared optional-false on the command-item branch (rather than
+// omitted entirely) purely so TS can discriminate the union on that field
+// without erroring on `item._isGroup` — it doesn't change the runtime
+// shape of a NormalizedCommand.
+interface FlatGroupHeader {
+  _isGroup: true;
+  _groupName: string;
+  _groupIcon: string;
+}
+type FlatCommandItem = NormalizedCommand & { _isGroup?: false };
+type FlatItem = FlatGroupHeader | FlatCommandItem;
+
+function isGroupHeader(item: FlatItem): item is FlatGroupHeader {
+  return item._isGroup === true;
+}
+
+interface CommandGroup {
+  name: string;
+  items: NormalizedCommand[];
+  icon: string;
+}
+
+export default forwardRef<HTMLDivElement, SlashCommandMenuProps>(function SlashCommandMenu({ open, onClose, onSelect, position, initialSearch = "" }, menuRef) {
   const [search, setSearch] = useState(initialSearch);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [previewCmd, setPreviewCmd] = useState(null);
-  const [activeCategory, setActiveCategory] = useState(null);
+  const [previewCmd, setPreviewCmd] = useState<NormalizedCommand | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
-  const listRef = useRef(null);
-  const searchRef = useRef(null);
-  const innerMenuRef = useRef(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const innerMenuRef = useRef<HTMLDivElement>(null);
 
   const favorites = useMemo(() => getFavorites(), [open]);
 
@@ -72,7 +113,7 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
   }, []);
 
   // Compute panel side based on viewport collision
-  const panelSide = useMemo(() => {
+  const panelSide = useMemo<"left" | "right">(() => {
     if (!position) return "right";
     const PANEL_WIDTH = 260;
     const GAP = 8;
@@ -89,30 +130,36 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
     onClose?.();
   }, [onClose]);
 
-  const handleSelect = useCallback((type) => {
+  const handleSelect = useCallback((type: string) => {
     searchRef.current?.blur();
     onSelect?.(type);
   }, [onSelect]);
 
-  const groups = useMemo(() => {
+  const groups = useMemo<CommandGroup[]>(() => {
     const all = getFilteredCommands(search);
-    const byCategory = {};
+    const byCategory: Record<string, NormalizedCommand[]> = {};
     CATEGORIES_ORDER.forEach(cat => { byCategory[cat] = []; });
 
     all.forEach(cmd => {
       if (cmd.category === "Page actions") return;
-      if (cmd.hideFromSlash) return; // formatting/color commands live in the selection toolbar, not the slash menu
+      // `hideFromSlash` is a real runtime field set on formatting/color
+      // commands in CommandRegistry.ts (e.g. "bold"/"italic"), but isn't
+      // part of the declared `Command`/`NormalizedCommand` shape there
+      // (no index signature) — narrow cast to read it.
+      if ((cmd as NormalizedCommand & { hideFromSlash?: boolean }).hideFromSlash) return; // formatting/color commands live in the selection toolbar, not the slash menu
       const cat = !search ? cmd.category || "Basic blocks" : cmd.category;
       if (!byCategory[cat]) byCategory[cat] = [];
       byCategory[cat].push(cmd);
     });
 
-    let result = CATEGORIES_ORDER
+    let result: CommandGroup[] = CATEGORIES_ORDER
       .map(name => ({ name, items: byCategory[name] || [], icon: CATEGORY_ICONS[name] }))
       .filter(g => g.items.length > 0);
 
     if (!search) {
-      const favItems = favorites.map(id => getAllCommands().find(c => c.id === id)).filter(Boolean);
+      const favItems = favorites
+        .map(id => getAllCommands().find(c => c.id === id))
+        .filter((c): c is NormalizedCommand => Boolean(c));
       if (favItems.length > 0) {
         result = [{ name: "Favorites", items: favItems, icon: "Star" }, ...result];
       }
@@ -130,8 +177,8 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
     return result;
   }, [search, activeCategory, favorites]);
 
-  const flatItems = useMemo(() => {
-    const result = [];
+  const flatItems = useMemo<FlatItem[]>(() => {
+    const result: FlatItem[] = [];
     for (const group of groups) {
       result.push({ _isGroup: true, _groupName: group.name, _groupIcon: group.icon });
       for (const item of group.items) {
@@ -172,7 +219,7 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
     }
   }, [flatItems, open]);
 
-  const handleKeyDown = useCallback((e) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlightedIndex(i => {
@@ -200,9 +247,10 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
       setHighlightedIndex(-1);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (highlightedIndex >= 0 && flatItems[highlightedIndex] && !flatItems[highlightedIndex]._isGroup) {
-        addFavorite(flatItems[highlightedIndex].id);
-        handleSelect(flatItems[highlightedIndex].id);
+      const current = flatItems[highlightedIndex];
+      if (highlightedIndex >= 0 && current && !isGroupHeader(current)) {
+        addFavorite(current.id);
+        handleSelect(current.id);
         wrappedOnClose();
       }
     } else if (e.key === "Escape") {
@@ -214,14 +262,15 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
   useEffect(() => {
     if (highlightedIndex >= 0 && listRef.current) {
       const items = listRef.current.querySelectorAll("[data-slash-item]");
-      const itemIndex = flatItems.slice(0, highlightedIndex + 1).filter(i => !i._isGroup).length - 1;
+      const itemIndex = flatItems.slice(0, highlightedIndex + 1).filter(i => !isGroupHeader(i)).length - 1;
       items[itemIndex]?.scrollIntoView({ block: "nearest" });
     }
   }, [highlightedIndex, flatItems]);
 
   useEffect(() => {
-    if (highlightedIndex >= 0 && flatItems[highlightedIndex] && !flatItems[highlightedIndex]._isGroup) {
-      setPreviewCmd(flatItems[highlightedIndex]);
+    const current = flatItems[highlightedIndex];
+    if (highlightedIndex >= 0 && current && !isGroupHeader(current)) {
+      setPreviewCmd(current);
     } else {
       setPreviewCmd(null);
     }
@@ -294,7 +343,10 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
                   aria-expanded={open}
                   aria-haspopup="listbox"
                   aria-controls="slash-listbox"
-                  aria-activedescendant={highlightedIndex >= 0 && flatItems[highlightedIndex] && !flatItems[highlightedIndex]._isGroup ? `slash-item-${flatItems[highlightedIndex].id}` : undefined}
+                  aria-activedescendant={(() => {
+                    const current = flatItems[highlightedIndex];
+                    return highlightedIndex >= 0 && current && !isGroupHeader(current) ? `slash-item-${current.id}` : undefined;
+                  })()}
                 />
                 {search && (
                   <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)]">
@@ -309,7 +361,7 @@ export default forwardRef(function SlashCommandMenu({ open, onClose, onSelect, p
                   <div className="px-3 py-8 text-center text-xs text-[var(--muted)]">No blocks found</div>
                 ) : (
                   flatItems.map((item, idx) => {
-                    if (item._isGroup) {
+                    if (isGroupHeader(item)) {
                       return (
                         <div key={`group-${item._groupName}`} className="flex items-center gap-1.5 px-3 py-1.5 border-b border-[var(--border)] mb-1" role="presentation">
                           <RenderIcon iconName={item._groupIcon} size={11} className="text-[var(--muted)]" />
