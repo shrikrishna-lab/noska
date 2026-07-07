@@ -98,6 +98,7 @@ import CoverPicker from "../modules/ui/CoverPicker";
 import CoverContextMenu from "../modules/ui/CoverContextMenu";
 import { executeCommand } from "../core/commands/ActionExecutor";
 import CollabPresenceBar from "./collab/CollabPresenceBar";
+import { realtimeCollab } from "../lib/realtimeCollab";
 import CommentThread from "./comments/CommentThread";
 import Breadcrumbs from "./Breadcrumbs";
 import { usePresence } from "../hooks/usePresence";
@@ -473,7 +474,7 @@ export default function Editor({
     onPagePatch?.({
       wikiEnabled: true,
       wikiTags: [],
-      wikiOwner: "Krishna Handibag",
+      wikiOwner: realtimeCollab.getUser()?.userName || "Workspace User",
       wikiStatus: "Draft",
       wikiVerification: "Unreviewed",
       database: {
@@ -840,7 +841,7 @@ export default function Editor({
                       }
                     }}
                     wordCount={wordCount}
-                    lastEditedBy={page?.lastEditedBy || "Krishna Handibagシ"}
+                    lastEditedBy={page?.lastEditedBy || realtimeCollab.getUser()?.userName || "Workspace User"}
                     lastEditedAt={page?.lastEditedAt || page?.updatedAt}
                     onPagePatch={onPagePatch}
                     onToast={onToast}
@@ -2408,7 +2409,7 @@ function Block({
               }
               setBlockContextOpen(false);
             }}
-            lastEditedBy={block?.lastEditedBy || page?.lastEditedBy || "Krishna Handibagシ"}
+            lastEditedBy={block?.lastEditedBy || page?.lastEditedBy || realtimeCollab.getUser()?.userName || "Workspace User"}
             // `lastEditedAt` isn't a declared field on `Block` (only
             // `lastEditedTime` is, in BaseBlock) — it only exists via the
             // catch-all index signature, which types as `unknown`. Same

@@ -9,6 +9,7 @@ export interface OnboardingTeammate {
 }
 
 export interface OnboardingFormData {
+  username: string;
   workspaceName: string;
   workspaceIcon: string;
   role: string;

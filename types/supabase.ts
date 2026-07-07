@@ -825,6 +825,7 @@ export type Database = {
           use_case: string | null
           user_id: string
           user_name: string
+          username: string | null
           workspace_name: string | null
         }
         Insert: {
@@ -838,6 +839,7 @@ export type Database = {
           use_case?: string | null
           user_id: string
           user_name?: string
+          username?: string | null
           workspace_name?: string | null
         }
         Update: {
@@ -851,6 +853,7 @@ export type Database = {
           use_case?: string | null
           user_id?: string
           user_name?: string
+          username?: string | null
           workspace_name?: string | null
         }
         Relationships: []

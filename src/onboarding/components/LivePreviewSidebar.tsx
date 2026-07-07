@@ -8,7 +8,7 @@ import { previewPagesFor } from "../services/onboardingService";
 // (src/components/Sidebar.jsx), not a duplicated asset.
 const NoskaLogo = "/logo.png";
 
-const SIDEBAR_STEPS = ["Workspace", "Your role", "Invite team", "Template"];
+const SIDEBAR_STEPS = ["Username", "Workspace", "Your role", "Invite team", "Template"];
 
 /**
  * A faithful port of the final onboarding design's sidebar (Noska
@@ -135,7 +135,7 @@ export default function LivePreviewSidebar({ step }: { step: number }) {
       </div>
 
       {/* Onboarding step tracker overlay */}
-      {step > 0 && step < 5 && (
+      {step > 0 && step < 6 && (
         <div
           className="absolute bottom-[120px] right-0 left-0 mx-3 p-3 rounded-xl"
           style={{

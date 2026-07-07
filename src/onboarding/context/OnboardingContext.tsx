@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useCallback, useEffect, u
 import { saveOnboardingState, loadOnboardingState, clearOnboardingState } from "../services/onboardingService";
 import type { OnboardingFormData, OnboardingPagePreview, OnboardingTeammate } from "../types";
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 interface OnboardingState {
   step: number;
@@ -18,6 +18,7 @@ const initialState: OnboardingState = {
   completed: false,
   skipped: false,
   form: {
+    username: "",
     workspaceName: "",
     workspaceIcon: "🏢",
     role: "",
@@ -79,6 +80,8 @@ export interface OnboardingContextValue extends OnboardingState {
   skip: () => Promise<void>;
   reset: () => void;
   totalSteps: number;
+  /** See OnboardingProviderProps.currentUserId. */
+  currentUserId?: string;
 }
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
@@ -86,14 +89,24 @@ const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 export interface OnboardingProviderProps {
   children: ReactNode;
   initialWorkspaceName?: string;
+  /** Pre-fills UsernameStep for a user who already has one (e.g. replaying
+   * onboarding from Settings) — see OnboardingContext's currentUserId
+   * below for how this avoids self-blocking the availability check. */
+  initialUsername?: string;
+  /** The signed-in user's id, threaded down to UsernameStep so its
+   * availability check can exclude the user's own existing row (see
+   * `isUsernameAvailable`'s `excludeUserId` param in supabaseService.ts) —
+   * without this, a returning user replaying onboarding would see their
+   * own current username reported as "taken". */
+  currentUserId?: string;
   onFinalize?: (data: OnboardingFormData) => Promise<OnboardingPagePreview[]> | OnboardingPagePreview[];
   onComplete?: (data: OnboardingFormData, pages: OnboardingPagePreview[]) => void;
 }
 
-export function OnboardingProvider({ children, initialWorkspaceName, onFinalize, onComplete }: OnboardingProviderProps) {
+export function OnboardingProvider({ children, initialWorkspaceName, initialUsername, currentUserId, onFinalize, onComplete }: OnboardingProviderProps) {
   const [state, dispatch] = useReducer(reducer, initialState, (init) => ({
     ...init,
-    form: { ...init.form, workspaceName: initialWorkspaceName || "" }
+    form: { ...init.form, workspaceName: initialWorkspaceName || "", username: initialUsername || "" }
   }));
 
   const restored = useRef(false);
@@ -151,7 +164,8 @@ export function OnboardingProvider({ children, initialWorkspaceName, onFinalize,
   const value: OnboardingContextValue = {
     ...state,
     goTo, next, back, setForm, setFormField, complete, skip, reset,
-    totalSteps: TOTAL_STEPS
+    totalSteps: TOTAL_STEPS,
+    currentUserId
   };
 
   return (

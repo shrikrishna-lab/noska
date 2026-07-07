@@ -392,7 +392,7 @@ export default function BlockContextMenu({
 
           {/* Fixed Footer */}
           <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex flex-col gap-0.5 text-[10px] text-[var(--muted)]">
-            <div className="truncate">Last edited by <span className="text-[var(--secondary)] font-medium">{lastEditedBy || "Krishna Handibagシ"}</span></div>
+            <div className="truncate">Last edited by <span className="text-[var(--secondary)] font-medium">{lastEditedBy || "Workspace User"}</span></div>
             <div>{formatTimeAgo(lastEditedAt)}</div>
           </div>
         </motion.div>

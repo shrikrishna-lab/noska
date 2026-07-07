@@ -1,7 +1,7 @@
 import React, { Suspense, lazy } from "react";
 import { X } from "lucide-react";
 import { C } from "../theme";
-import { OnboardingProvider, useOnboardingContext } from "../context/OnboardingContext";
+import { OnboardingProvider, useOnboardingContext, type OnboardingProviderProps } from "../context/OnboardingContext";
 import LivePreviewSidebar from "./LivePreviewSidebar";
 import StepDots from "./StepDots";
 import OnboardingKeyframes from "./OnboardingKeyframes";
@@ -9,15 +9,20 @@ import OnboardingKeyframes from "./OnboardingKeyframes";
 const NoskaLogo = "/logo.png";
 
 const WelcomeStep = lazy(() => import("./steps/WelcomeStep"));
+const UsernameStep = lazy(() => import("./steps/UsernameStep"));
 const WorkspaceStep = lazy(() => import("./steps/WorkspaceStep"));
 const RoleStep = lazy(() => import("./steps/RoleStep"));
 const InviteStep = lazy(() => import("./steps/InviteStep"));
 const OnboardingTemplateStep = lazy(() => import("./steps/OnboardingTemplateStep"));
 const DoneStep = lazy(() => import("./steps/DoneStep"));
 
-const stepMap = [WelcomeStep, WorkspaceStep, RoleStep, InviteStep, OnboardingTemplateStep, DoneStep];
+const stepMap = [WelcomeStep, UsernameStep, WorkspaceStep, RoleStep, InviteStep, OnboardingTemplateStep, DoneStep];
 
-function OnboardingInner({ overlay = false }) {
+interface OnboardingInnerProps {
+  overlay?: boolean;
+}
+
+function OnboardingInner({ overlay = false }: OnboardingInnerProps) {
   const { step, direction, totalSteps, skip } = useOnboardingContext();
   const StepComponent = stepMap[step] || stepMap[0];
   const isFirstOrLast = step === 0 || step === totalSteps - 1;
@@ -85,9 +90,19 @@ function OnboardingInner({ overlay = false }) {
   );
 }
 
-export default function OnboardingContainer({ initialWorkspaceName, onFinalize, onComplete, overlay = false }) {
+interface OnboardingContainerProps extends Omit<OnboardingProviderProps, "children"> {
+  overlay?: boolean;
+}
+
+export default function OnboardingContainer({ initialWorkspaceName, initialUsername, currentUserId, onFinalize, onComplete, overlay = false }: OnboardingContainerProps) {
   return (
-    <OnboardingProvider initialWorkspaceName={initialWorkspaceName} onFinalize={onFinalize} onComplete={onComplete}>
+    <OnboardingProvider
+      initialWorkspaceName={initialWorkspaceName}
+      initialUsername={initialUsername}
+      currentUserId={currentUserId}
+      onFinalize={onFinalize}
+      onComplete={onComplete}
+    >
       <OnboardingInner overlay={overlay} />
     </OnboardingProvider>
   );

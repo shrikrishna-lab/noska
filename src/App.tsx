@@ -8,6 +8,7 @@ import { WorkspaceView, NewPageOverlay } from "./components/WorkspaceViews";
 import LoadingScreen from "./components/auth/LoadingScreen";
 import RingLoader from "./components/auth/RingLoader";
 import AuthPage from "./components/auth/AuthPage";
+import ClaimUsernameModal from "./components/auth/ClaimUsernameModal";
 import OnboardingPage from "./onboarding/pages/OnboardingPage";
 import { starterPageForTemplate } from "./onboarding/services/onboardingService";
 import AIPanel from "./components/AIPanel";
@@ -94,6 +95,17 @@ function App() {
   const location = useLocation();
   const routeParams = useParams();
   const [appFlowState, setAppFlowState] = useState<"loading" | "auth" | "onboarding" | "workspace">("loading");
+  // The signed-in user's id/username — threaded into OnboardingPage so
+  // UsernameStep can (a) pre-fill an already-chosen username when
+  // replaying onboarding from Settings, and (b) exclude the user's own
+  // row from the availability check (see isUsernameAvailable's
+  // excludeUserId param in supabaseService.ts).
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  // True only once we've actually checked the profile and confirmed no
+  // username is set — starts false so the claim modal never flashes
+  // before fetchUserProfile resolves.
+  const [needsUsernameClaim, setNeedsUsernameClaim] = useState(false);
   const [pages, setPages] = useState<Page[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -520,10 +532,17 @@ function App() {
       const uname = u.user_metadata?.full_name || u.email?.split('@')[0] || 'Workspace User';
       realtimeCollab.initUser(u.id, uname, u.user_metadata?.avatar_url || u.user_metadata?.picture || '👤');
       setWorkspaceName(prev => prev === 'My Workspace' ? `${uname}'s Workspace` : prev);
+      setCurrentUserId(u.id);
 
       try {
         const profile = await fetchUserProfile(u.id);
+        setCurrentUsername(profile?.username ?? null);
         if (profile?.onboarding_complete) {
+          // Returning user with no username yet (pre-existing account from
+          // before this feature) — gate them with ClaimUsernameModal once
+          // they land in the workspace, instead of forcing them back
+          // through the full onboarding wizard.
+          setNeedsUsernameClaim(!profile.username);
           // Returning user: set their data
           const normalized = normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })));
           setPages(normalized);
@@ -595,10 +614,12 @@ function App() {
     const uname = userData.userName || 'Workspace User';
     realtimeCollab.initUser(userData.userId, uname, userData.avatarUrl || '👤');
     try { localStorage.setItem("noska_user_id", userData.userId); } catch {}
+    setCurrentUserId(userData.userId);
 
     let existingProfile = null;
     try {
       existingProfile = await fetchUserProfile(userData.userId);
+      setCurrentUsername(existingProfile?.username ?? null);
     } catch (e) {
       console.warn("App: failed to fetch user profile", e);
     }
@@ -621,6 +642,10 @@ function App() {
     }
 
     if (existingProfile?.onboarding_complete) {
+      // Same pre-existing-account gate as the initial-mount bootstrap
+      // above — see its comment for why this can't just be folded into
+      // the onboarding wizard for these users.
+      setNeedsUsernameClaim(!existingProfile.username);
       // Returning user signing in mid-session (the initial mount bootstrap
       // already ran before this sign-in completed) — load their data now.
       try {
@@ -716,11 +741,12 @@ function App() {
       }
       try {
         const useCaseValue = Array.isArray(formData.useCase) ? formData.useCase.join(",") : formData.useCase;
-        await setOnboardingComplete(userId, useCaseValue, formData.workspaceName);
+        await setOnboardingComplete(userId, useCaseValue, formData.workspaceName, formData.username);
+        setCurrentUsername(formData.username || currentUsername);
       } catch (e) {}
     }
     setAppFlowState("workspace");
-  }, []);
+  }, [currentUsername]);
 
   // Replay onboarding from settings
   const handleReplayOnboarding = useCallback(() => {
@@ -1105,6 +1131,33 @@ function App() {
     });
   };
 
+  // Stamps real user attribution (replacing the "Krishna Handibag"
+  // hardcoded fallback in Editor.tsx/BlockContextMenu.tsx) onto any block
+  // that's new or was actually touched in `nextBlocks`, detected via
+  // reference inequality against `prevBlocks`. Every real edit path here
+  // constructs a NEW object only for the block(s) it actually touches
+  // (`{ ...b, ...patch }`) and passes untouched sibling blocks through by
+  // the same reference — so `next !== prev` is a reliable "this one
+  // changed" signal without needing a deep diff. Shared between
+  // updatePage (Editor.tsx's onBlocks path) and handleBlockPatchByPage
+  // (CoThinking/SpacedRepetition/CanvasView's single-block patch path) so
+  // both real editing entry points stamp consistently.
+  const stampBlockAttribution = (prevBlocks: Block[] | undefined, nextBlocks: Block[]): Block[] => {
+    const editorName = realtimeCollab.getUser()?.userName || null;
+    const stampTime = now();
+    const prevById = new Map((prevBlocks || []).map((b) => [b.id, b]));
+    return nextBlocks.map((b) => {
+      const prevBlock = prevById.get(b.id);
+      if (prevBlock === b) return b; // untouched — passed through by reference
+      return {
+        ...b,
+        createdBy: prevBlock ? b.createdBy : (b.createdBy ?? editorName),
+        lastEditedBy: editorName,
+        lastEditedTime: stampTime,
+      };
+    });
+  };
+
   const updatePage = (id: string, patch: Partial<Page>) => {
     if (patch.trashed === true) {
       trashPageSubtree(id);
@@ -1120,6 +1173,21 @@ function App() {
     }
     const nextPages = pages.map((p) => {
         if (p.id === id) {
+          // Stamp real user attribution on any block that's new or was
+          // actually touched by this patch — see stampBlockAttribution's
+          // doc comment above for the full rationale. Every real edit
+          // path (Editor.tsx's onBlocks/onBlockPatch, StackedColumn,
+          // CanvasView, SpacedRepetition, CoThinking) converges on this
+          // function, so stamping happens exactly once here rather than
+          // needing to be duplicated at every call site.
+          if (patch.blocks) {
+            patch = { ...patch, blocks: stampBlockAttribution(p.blocks, patch.blocks) };
+          }
+          // Stamp page-level attribution alongside block-level — read by
+          // PageOptionsMenu.tsx/BlockContextMenu.tsx's "Last edited by"
+          // footer as the fallback when a specific block has no edits of
+          // its own yet.
+          const editorNameForPage = realtimeCollab.getUser()?.userName || p.lastEditedBy;
           const nextLineage: LineageEntry[] = [...(p.lineage || [])];
           if (patch.trashed !== undefined) {
             nextLineage.push({
@@ -1161,7 +1229,7 @@ function App() {
           } else if (patch.icon && patch.icon !== p.icon) {
             auditEngine.log({ pageId: id, userId: realtimeCollab.getUser()?.userId || 'system', userName: realtimeCollab.getUser()?.userName || 'System', action: 'edit', detail: `Changed icon to ${patch.icon}` });
           }
-          return { ...p, ...patch, lineage: nextLineage, updatedAt: now() };
+          return { ...p, ...patch, lineage: nextLineage, updatedAt: now(), lastEditedBy: editorNameForPage };
         }
         return p;
       });
@@ -1715,26 +1783,28 @@ function App() {
       pages.map((page) => {
         if (page.id !== pageId && !syncedGroupId) return page;
         if (page.id === pageId) {
+          const patchedBlocks = (page.blocks || []).map((block) =>
+            block.id === blockId ? { ...block, ...patch } : block
+          );
           return {
             ...page,
             updatedAt: now(),
-            blocks: (page.blocks || []).map((block) =>
-              block.id === blockId ? { ...block, ...patch } : block
-            )
+            blocks: stampBlockAttribution(page.blocks, patchedBlocks)
           };
         }
         // Propagate patch to mirror synced blocks in other pages
         if (syncedGroupId) {
           const hasMirror = (page.blocks || []).some(b => b.syncedGroupId === syncedGroupId);
           if (hasMirror) {
+            const mirroredBlocks = (page.blocks || []).map((block) =>
+              block.syncedGroupId === syncedGroupId && block.id !== blockId
+                ? { ...block, ...patch }
+                : block
+            );
             return {
               ...page,
               updatedAt: now(),
-              blocks: (page.blocks || []).map((block) =>
-                block.syncedGroupId === syncedGroupId && block.id !== blockId
-                  ? { ...block, ...patch }
-                  : block
-              )
+              blocks: stampBlockAttribution(page.blocks, mirroredBlocks)
             };
           }
         }
@@ -1924,7 +1994,14 @@ function App() {
         <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
       )}
       {appFlowState === "onboarding" && !onboardingOpen && (
-        <OnboardingPage key="onboarding" initialWorkspaceName={workspaceName} onFinalize={handleFinalize} onComplete={handleOnboardingComplete} />
+        <OnboardingPage
+          key="onboarding"
+          initialWorkspaceName={workspaceName}
+          initialUsername={currentUsername ?? undefined}
+          currentUserId={currentUserId ?? undefined}
+          onFinalize={handleFinalize}
+          onComplete={handleOnboardingComplete}
+        />
       )}
       {onboardingOpen && (
         // Real bug fix: this wrapper dropped OnboardingContext's second
@@ -1934,7 +2011,15 @@ function App() {
         // handleOnboardingComplete's default "Getting Started" page
         // regardless of what the user picked. Every other onComplete
         // binding in this file passes both args straight through.
-        <OnboardingPage key="onboarding-overlay" overlay initialWorkspaceName={workspaceName} onFinalize={handleFinalize} onComplete={(data, starterPages) => { setOnboardingOpen(false); handleOnboardingComplete(data, starterPages); }} />
+        <OnboardingPage
+          key="onboarding-overlay"
+          overlay
+          initialWorkspaceName={workspaceName}
+          initialUsername={currentUsername ?? undefined}
+          currentUserId={currentUserId ?? undefined}
+          onFinalize={handleFinalize}
+          onComplete={(data, starterPages) => { setOnboardingOpen(false); handleOnboardingComplete(data, starterPages); }}
+        />
       )}
       {appFlowState === "workspace" && (
         <motion.div
@@ -1949,6 +2034,12 @@ function App() {
           <AnimatePresence>
             {toast && <Toast message={toast} onDone={() => setToast("")} />}
           </AnimatePresence>
+          {needsUsernameClaim && currentUserId && (
+            <ClaimUsernameModal
+              userId={currentUserId}
+              onDone={(username) => { setCurrentUsername(username); setNeedsUsernameClaim(false); }}
+            />
+          )}
           <Sidebar
             open={sidebarOpen}
             pages={visiblePages}

@@ -414,6 +414,76 @@ export interface UserProfileInput {
   useCase?: string | null;
   workspaceName?: string | null;
   preferences?: Record<string, unknown>;
+  /** Unique handle chosen during onboarding (see setUsername/isUsernameAvailable
+   * below) — omitted here (rather than defaulted) so callers that don't know
+   * the existing value (e.g. App.tsx's per-login upsert) don't accidentally
+   * clear a previously-set username. */
+  username?: string | null;
+}
+
+/** Matches the DB-level CHECK constraint on user_profiles.username exactly
+ * (see migration `add_username_to_user_profiles`): 3-20 chars, lowercase
+ * letters/digits/underscore, must start with a letter. Validated
+ * client-side first for immediate UX feedback; the DB constraint is the
+ * real enforcement boundary. */
+const USERNAME_PATTERN = /^[a-z][a-z0-9_]{2,19}$/;
+
+export function normalizeUsername(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+export function isValidUsernameFormat(raw: string): boolean {
+  return USERNAME_PATTERN.test(normalizeUsername(raw));
+}
+
+/** Checks whether `username` is free to claim (case-insensitive, matching
+ * the DB's `lower(username)` unique index). Returns `false` for
+ * invalid-format input without hitting the network.
+ *
+ * `excludeUserId` — pass the current user's id when re-checking their own
+ * existing username (e.g. replaying onboarding, or re-focusing the field
+ * without changing it): without this, a user's own row would always make
+ * their current username look "taken" to themselves. */
+export async function isUsernameAvailable(username: string, excludeUserId?: string): Promise<boolean> {
+  const normalized = normalizeUsername(username);
+  if (!USERNAME_PATTERN.test(normalized)) return false;
+  let query = supabase
+    .from("user_profiles")
+    .select("user_id")
+    .ilike("username", normalized);
+  if (excludeUserId) query = query.neq("user_id", excludeUserId);
+  const { data, error } = await query.maybeSingle();
+  if (error && error.code !== "42P01") throw error;
+  return !data;
+}
+
+/** Sets/changes a user's username. Re-validates format and re-checks
+ * availability server-side (not just trusting a prior client-side check)
+ * to close the race window between an availability check and this write —
+ * the DB's unique index is the final backstop if a race still slips through. */
+export async function setUsername(userId: string, username: string): Promise<Tables<"user_profiles"> | null> {
+  requireOwner(userId);
+  const normalized = normalizeUsername(username);
+  if (!USERNAME_PATTERN.test(normalized)) {
+    throw new Error("Username must be 3-20 characters: lowercase letters, numbers, or underscores, starting with a letter.");
+  }
+  const available = await isUsernameAvailable(normalized);
+  if (!available) {
+    throw new Error("That username is already taken.");
+  }
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .update({ username: normalized } as Tables<"user_profiles">)
+    .eq("user_id", userId)
+    .select()
+    .maybeSingle();
+  if (error) {
+    // Unique-violation race: another request claimed the same username
+    // between our availability check and this write.
+    if (error.code === "23505") throw new Error("That username is already taken.");
+    throw error;
+  }
+  return data;
 }
 
 export async function fetchUserProfile(userId: string): Promise<Tables<"user_profiles"> | null> {
@@ -428,21 +498,31 @@ export async function fetchUserProfile(userId: string): Promise<Tables<"user_pro
 
 export async function upsertUserProfile(profile: UserProfileInput): Promise<Tables<"user_profiles"> | null> {
   requireOwner(profile?.userId);
+  const payload: TablesInsert<"user_profiles"> = {
+    user_id: profile.userId,
+    user_name: profile.userName || "Workspace User",
+    email: profile.email || null,
+    avatar_url: profile.avatarUrl || null,
+    onboarding_complete: profile.onboardingComplete ?? false,
+    use_case: profile.useCase || null,
+    workspace_name: profile.workspaceName || "My Workspace",
+    // `preferences` is a plain settings bag (Record<string, unknown>) on
+    // the app side but the generated `Json` type is a stricter recursive
+    // union — every value actually stored here is a plain
+    // string/number/boolean, so this narrow cast is safe rather than
+    // widening the whole payload's type.
+    preferences: (profile.preferences || {}) as TablesInsert<"user_profiles">["preferences"],
+  };
+  // Only include `username` in the upsert when the caller explicitly
+  // passed it — omitting the key here (rather than defaulting to
+  // `null`/undefined) means a plain re-login upsert never clobbers a
+  // username set earlier during onboarding.
+  if (profile.username !== undefined) {
+    payload.username = profile.username;
+  }
   const { data, error } = await supabase
     .from("user_profiles")
-    .upsert(
-      {
-        user_id: profile.userId,
-        user_name: profile.userName || "Workspace User",
-        email: profile.email || null,
-        avatar_url: profile.avatarUrl || null,
-        onboarding_complete: profile.onboardingComplete ?? false,
-        use_case: profile.useCase || null,
-        workspace_name: profile.workspaceName || "My Workspace",
-        preferences: profile.preferences || {},
-      } as TablesInsert<"user_profiles">,
-      { onConflict: "user_id" }
-    )
+    .upsert(payload, { onConflict: "user_id" })
     .select()
     .maybeSingle();
   if (error) throw error;
@@ -452,22 +532,29 @@ export async function upsertUserProfile(profile: UserProfileInput): Promise<Tabl
 export async function setOnboardingComplete(
   userId: string,
   useCase: string | null,
-  workspaceName: string | null
+  workspaceName: string | null,
+  username?: string | null
 ): Promise<void> {
   requireOwner(userId);
+  const payload: TablesInsert<"user_profiles"> = {
+    user_id: userId,
+    onboarding_complete: true,
+    use_case: useCase || null,
+    workspace_name: workspaceName || "My Workspace",
+    updated_at: new Date().toISOString(),
+  };
+  // Same "only include when explicitly provided" rule as upsertUserProfile
+  // above — this function is also called by the onboarding-replay path
+  // (App.tsx's handleReplayOnboarding), which shouldn't be able to clear
+  // an already-set username since UsernameStep isn't shown again there.
+  if (username) payload.username = normalizeUsername(username);
   const { error } = await supabase
     .from("user_profiles")
-    .upsert(
-      {
-        user_id: userId,
-        onboarding_complete: true,
-        use_case: useCase || null,
-        workspace_name: workspaceName || "My Workspace",
-        updated_at: new Date().toISOString(),
-      } as TablesInsert<"user_profiles">,
-      { onConflict: "user_id" }
-    );
-  if (error) throw error;
+    .upsert(payload, { onConflict: "user_id" });
+  if (error) {
+    if (error.code === "23505") throw new Error("That username is already taken.");
+    throw error;
+  }
 }
 
 // ============ CREATOR PROFILES ============
