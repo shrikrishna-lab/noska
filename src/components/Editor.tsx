@@ -2349,6 +2349,19 @@ function Block({
                 onToast?.("Page is locked. Cannot edit blocks.");
                 return;
               }
+              // Real gap, fixed: this switch previously only checked
+              // `page.isLocked`, not `blockPermission` — a viewer/
+              // commenter on a shared page (see `page.sharedRole`/
+              // `permission: 'view'` derivation in App.tsx) could still
+              // open this menu via the grip handle and delete/duplicate/
+              // convert blocks, even though the keyboard-only paths
+              // (onKeyDown/patchWithSlashDetection above) already
+              // correctly block `blockPermission === 'view'`. "copy-link"
+              // is allowed regardless since it's not a mutation.
+              if (blockPermission === 'view' && action !== "copy-link") {
+                onToast?.("You have view-only access to this page.");
+                return;
+              }
               switch (action) {
                 case "delete": onDelete(); break;
                 case "duplicate": onDuplicate(); break;

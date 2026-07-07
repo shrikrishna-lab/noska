@@ -99,6 +99,17 @@ interface PageOptionsMenuProps {
   onAskAI?: () => void;
 }
 
+// Page-management actions that only make sense for the actual owner of a
+// page — hidden (not just disabled) when `page.sharedRole` is set, i.e.
+// this page was opened via a share grant rather than owned. Functionally
+// most of these already no-op for a shared page today (App.tsx's
+// updateSharedPage() explicitly refuses `trashed`/`parentId` patches, and
+// trash/duplicate/move operate on the owner-scoped `pages` array which
+// never contains a shared page's id), but hiding them is what actually
+// communicates that to the person looking at the menu instead of letting
+// them click something that silently does nothing.
+const OWNER_ONLY_ACTION_IDS = new Set(["duplicate", "move-to", "trash", "lock", "readonly", "customize", "wiki"]);
+
 export default function PageOptionsMenu({
   open,
   onClose,
@@ -124,6 +135,8 @@ export default function PageOptionsMenu({
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const isShared = Boolean(page?.sharedRole);
+
   const mainActions: MainAction[] = [
     { id: "copy-link", icon: Link2, label: "Copy link", shortcut: "Ctrl+L" },
     { id: "copy-contents", icon: Copy, label: "Copy page contents", shortcut: "" },
@@ -147,7 +160,7 @@ export default function PageOptionsMenu({
     { id: "history", icon: History, label: "Version history", shortcut: "" },
     { id: "notify", icon: Bell, label: "Notify me › Comments", shortcut: "", submenu: true },
     { id: "connections", icon: Cable, label: "Connections › None", shortcut: "", submenu: true },
-  ];
+  ].filter((action) => !isShared || !OWNER_ONLY_ACTION_IDS.has(action.id));
 
   // Helper fuzzy matching
   const fuzzyMatch = (query: string, text: string): boolean => {
