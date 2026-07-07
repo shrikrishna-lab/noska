@@ -1,55 +1,84 @@
 import React, { useState } from "react";
+import type { ChangeEvent, KeyboardEvent, ReactElement } from "react";
+// NOTE (preserved quirk): `PROPERTY_TYPES` is imported but never referenced
+// anywhere in this file's body — confirmed via grep of the original .js
+// source before this conversion. Pre-existing dead import, kept as-is per
+// migration rules rather than silently removed.
 import { PROPERTY_TYPES } from "../../database/types/database";
+import type { PropertyType, PropertyDefinition } from "../../database/types/database";
 
 /**
  * Property renderer registry.
  * Each entry: { id, render: (value, onChange, options) => JSX, format: (value) => string }
  */
 
-const REGISTRY = {};
+export interface PropertyRenderArgs {
+  value: unknown;
+  onChange: (value: unknown) => void;
+  options?: string[];
+  prop?: PropertyDefinition;
+}
 
-export function registerPropertyType(typeId, config) {
+export interface PropertyTypeConfig {
+  render: (args: PropertyRenderArgs) => ReactElement;
+  format: (value: unknown, options?: string[]) => string;
+}
+
+export interface PropertyRegistryEntry extends PropertyTypeConfig {
+  id: PropertyType;
+}
+
+const REGISTRY: Partial<Record<PropertyType, PropertyRegistryEntry>> = {};
+
+export function registerPropertyType(typeId: PropertyType, config: PropertyTypeConfig): void {
   REGISTRY[typeId] = { ...config, id: typeId };
 }
 
-export function getPropertyRenderer(typeId) {
+export function getPropertyRenderer(typeId: PropertyType): PropertyRegistryEntry | undefined {
   return REGISTRY[typeId];
 }
 
-export function getPropertyValue(typeId, value, options) {
+export function getPropertyValue(typeId: PropertyType, value: unknown, options?: string[]): string {
   const entry = REGISTRY[typeId];
   if (entry?.format) return entry.format(value, options);
   return String(value ?? "");
 }
 
 // --- Individual property renderers ---
+// PropertyRenderArgs.value is typed `unknown` (mirrors DatabaseRow's
+// per-property index-signature access elsewhere in this migration — see
+// TableView.tsx's CellRenderer / TimelineView.tsx). Each renderer below
+// narrows `value` with an inline `as string`/`as number` cast where the
+// original JS implicitly coerced it (e.g. into an <input> value prop),
+// matching the original untyped behavior exactly — no behavior change,
+// just documenting the same per-type assumption the JSX already relied on.
 
 registerPropertyType('text', {
   render: ({ value, onChange }) => (
-    <input type="text" value={value ?? ""} onChange={(e) => onChange(e.target.value)} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none" />
+    <input type="text" value={(value as string) ?? ""} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none" />
   ),
   format: (v) => String(v ?? ""),
 });
 
 registerPropertyType('number', {
   render: ({ value, onChange }) => (
-    <input type="number" value={value ?? 0} onChange={(e) => onChange(Number(e.target.value))} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none" />
+    <input type="number" value={(value as number) ?? 0} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(Number(e.target.value))} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none" />
   ),
   format: (v) => String(v ?? "0"),
 });
 
 registerPropertyType('checkbox', {
   render: ({ value, onChange }) => (
-    <input type="checkbox" checked={value === true || value === 'true'} onChange={(e) => onChange(e.target.checked)} className="accent-[var(--accent)] cursor-pointer" />
+    <input type="checkbox" checked={value === true || value === 'true'} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)} className="accent-[var(--accent)] cursor-pointer" />
   ),
   format: (v) => v ? '☑' : '☐',
 });
 
 registerPropertyType('date', {
   render: ({ value, onChange }) => (
-    <input type="date" value={value ?? ""} onChange={(e) => onChange(e.target.value)} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none cursor-pointer" />
+    <input type="date" value={(value as string) ?? ""} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none cursor-pointer" />
   ),
-  format: (v) => v ? new Date(v).toLocaleDateString() : "",
+  format: (v) => v ? new Date(v as string).toLocaleDateString() : "",
 });
 
 registerPropertyType('select', {
@@ -59,7 +88,7 @@ registerPropertyType('select', {
     return (
       <div className="relative">
         <button onClick={() => setOpen(!open)} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs hover:bg-[var(--hover)] cursor-pointer">
-          {value || <span className="text-[var(--muted)]">—</span>}
+          {(value as string) || <span className="text-[var(--muted)]">—</span>}
         </button>
         {open && (
           <>
@@ -80,11 +109,11 @@ registerPropertyType('select', {
 });
 
 registerPropertyType('multi-select', {
-  render: ({ value, onChange, options }) => {
-    const tags = Array.isArray(value) ? value : (value ? String(value).split(',').map(s => s.trim()).filter(Boolean) : []);
+  render: ({ value, onChange }) => {
+    const tags: string[] = Array.isArray(value) ? (value as string[]) : (value ? String(value).split(',').map(s => s.trim()).filter(Boolean) : []);
     const [input, setInput] = useState("");
-    const addTag = (t) => { if (t && !tags.includes(t)) { onChange([...tags, t]); setInput(""); } };
-    const removeTag = (t) => onChange(tags.filter(x => x !== t));
+    const addTag = (t: string) => { if (t && !tags.includes(t)) { onChange([...tags, t]); setInput(""); } };
+    const removeTag = (t: string) => onChange(tags.filter(x => x !== t));
     return (
       <div className="flex flex-wrap gap-0.5 items-center">
         {tags.map(t => (
@@ -93,7 +122,7 @@ registerPropertyType('multi-select', {
             <button onClick={() => removeTag(t)} className="hover:text-red-400 cursor-pointer">&times;</button>
           </span>
         ))}
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { addTag(input.trim()); } if (e.key === ',' && input.trim()) { addTag(input.trim().replace(/,/g, '')); } }} placeholder="+" className="w-12 bg-transparent text-[11px] text-[var(--text)] outline-none placeholder:text-[var(--muted)]" />
+        <input value={input} onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)} onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') { addTag(input.trim()); } if (e.key === ',' && input.trim()) { addTag(input.trim().replace(/,/g, '')); } }} placeholder="+" className="w-12 bg-transparent text-[11px] text-[var(--text)] outline-none placeholder:text-[var(--muted)]" />
       </div>
     );
   },
@@ -103,9 +132,9 @@ registerPropertyType('multi-select', {
 registerPropertyType('status', {
   render: ({ value, onChange, options }) => {
     const opts = options || ['Not started', 'In progress', 'Done', 'Blocked'];
-    const colors = { 'Not started': 'bg-gray-500/20 text-gray-400', 'In progress': 'bg-blue-500/20 text-blue-400', 'Done': 'bg-green-500/20 text-green-400', 'Blocked': 'bg-red-500/20 text-red-400' };
+    const colors: Record<string, string> = { 'Not started': 'bg-gray-500/20 text-gray-400', 'In progress': 'bg-blue-500/20 text-blue-400', 'Done': 'bg-green-500/20 text-green-400', 'Blocked': 'bg-red-500/20 text-red-400' };
     return (
-      <PropertySelect value={value} options={opts} onChange={onChange} colorMap={colors} />
+      <PropertySelect value={value as string} options={opts} onChange={onChange} colorMap={colors} />
     );
   },
   format: (v) => String(v ?? ""),
@@ -114,9 +143,9 @@ registerPropertyType('status', {
 registerPropertyType('priority', {
   render: ({ value, onChange, options }) => {
     const opts = options || ['None', 'Low', 'Medium', 'High', 'Urgent'];
-    const colors = { 'None': 'bg-gray-500/20 text-gray-400', 'Low': 'bg-blue-500/20 text-blue-400', 'Medium': 'bg-amber-500/20 text-amber-400', 'High': 'bg-orange-500/20 text-orange-400', 'Urgent': 'bg-red-500/20 text-red-400' };
+    const colors: Record<string, string> = { 'None': 'bg-gray-500/20 text-gray-400', 'Low': 'bg-blue-500/20 text-blue-400', 'Medium': 'bg-amber-500/20 text-amber-400', 'High': 'bg-orange-500/20 text-orange-400', 'Urgent': 'bg-red-500/20 text-red-400' };
     return (
-      <PropertySelect value={value} options={opts} onChange={onChange} colorMap={colors} />
+      <PropertySelect value={value as string} options={opts} onChange={onChange} colorMap={colors} />
     );
   },
   format: (v) => String(v ?? ""),
@@ -124,21 +153,21 @@ registerPropertyType('priority', {
 
 registerPropertyType('url', {
   render: ({ value, onChange }) => (
-    <input type="url" value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder="https://..." className="w-full bg-transparent text-[13px] text-[var(--accent)] outline-none placeholder:text-[var(--muted)]" />
+    <input type="url" value={(value as string) ?? ""} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder="https://..." className="w-full bg-transparent text-[13px] text-[var(--accent)] outline-none placeholder:text-[var(--muted)]" />
   ),
   format: (v) => String(v ?? ""),
 });
 
 registerPropertyType('email', {
   render: ({ value, onChange }) => (
-    <input type="email" value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder="name@example.com" className="w-full bg-transparent text-[13px] text-[var(--accent)] outline-none placeholder:text-[var(--muted)]" />
+    <input type="email" value={(value as string) ?? ""} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder="name@example.com" className="w-full bg-transparent text-[13px] text-[var(--accent)] outline-none placeholder:text-[var(--muted)]" />
   ),
   format: (v) => String(v ?? ""),
 });
 
 registerPropertyType('phone', {
   render: ({ value, onChange }) => (
-    <input type="tel" value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder="+1 234 567 890" className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)]" />
+    <input type="tel" value={(value as string) ?? ""} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder="+1 234 567 890" className="w-full bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)]" />
   ),
   format: (v) => String(v ?? ""),
 });
@@ -151,19 +180,21 @@ registerPropertyType('files', {
 });
 
 // Auto types
-['created-time', 'updated-time'].forEach(type => {
+const AUTO_TIME_TYPES: PropertyType[] = ['created-time', 'updated-time'];
+AUTO_TIME_TYPES.forEach(type => {
   registerPropertyType(type, {
     render: ({ value }) => (
-      <span className="text-[11px] text-[var(--muted)]">{value ? new Date(value).toLocaleString() : '—'}</span>
+      <span className="text-[11px] text-[var(--muted)]">{value ? new Date(value as string).toLocaleString() : '—'}</span>
     ),
-    format: (v) => v ? new Date(v).toLocaleString() : "",
+    format: (v) => v ? new Date(v as string).toLocaleString() : "",
   });
 });
 
-['created-by', 'updated-by'].forEach(type => {
+const AUTO_PERSON_TYPES: PropertyType[] = ['created-by', 'updated-by'];
+AUTO_PERSON_TYPES.forEach(type => {
   registerPropertyType(type, {
     render: ({ value }) => (
-      <span className="text-[11px] text-[var(--muted)]">{value || '—'}</span>
+      <span className="text-[11px] text-[var(--muted)]">{(value as string) || '—'}</span>
     ),
     format: (v) => String(v ?? ""),
   });
@@ -186,21 +217,21 @@ registerPropertyType('formula', {
 
 registerPropertyType('person', {
   render: ({ value }) => (
-    <span className="text-[11px] text-[var(--text)]">{value || '—'}</span>
+    <span className="text-[11px] text-[var(--text)]">{(value as string) || '—'}</span>
   ),
   format: (v) => String(v ?? ""),
 });
 
 registerPropertyType('ai-summary', {
   render: ({ value }) => (
-    <span className="text-[11px] italic text-[var(--muted)]">{value || '(AI summary pending)'}</span>
+    <span className="text-[11px] italic text-[var(--muted)]">{(value as string) || '(AI summary pending)'}</span>
   ),
   format: (v) => String(v ?? ""),
 });
 
 registerPropertyType('ai-tags', {
   render: ({ value }) => {
-    const tags = Array.isArray(value) ? value : (value ? String(value).split(',').filter(Boolean) : []);
+    const tags: string[] = Array.isArray(value) ? (value as string[]) : (value ? String(value).split(',').filter(Boolean) : []);
     return (
       <div className="flex flex-wrap gap-0.5">
         {tags.length === 0 && <span className="text-[11px] italic text-[var(--muted)]">(AI tags pending)</span>}
@@ -228,9 +259,16 @@ registerPropertyType('risk-score', {
 });
 
 // --- Shared helper ---
-function PropertySelect({ value, options, onChange, colorMap }) {
+interface PropertySelectProps {
+  value: string | undefined;
+  options: string[];
+  onChange: (value: string) => void;
+  colorMap?: Record<string, string>;
+}
+
+function PropertySelect({ value, options, onChange, colorMap }: PropertySelectProps) {
   const [open, setOpen] = useState(false);
-  const color = colorMap?.[value] || 'bg-[var(--surface-2)] text-[var(--secondary)]';
+  const color = (value !== undefined ? colorMap?.[value] : undefined) || 'bg-[var(--surface-2)] text-[var(--secondary)]';
   return (
     <div className="relative">
       <button onClick={() => setOpen(!open)} className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${color} hover:opacity-80 cursor-pointer`}>
@@ -252,13 +290,13 @@ function PropertySelect({ value, options, onChange, colorMap }) {
   );
 }
 
-export function renderProperty(prop, value, onChange, options) {
+export function renderProperty(prop: PropertyDefinition, value: unknown, onChange: (value: unknown) => void, options?: string[]): ReactElement {
   const entry = REGISTRY[prop.type];
   if (!entry) return <span className="text-[11px] text-[var(--muted)]">{String(value ?? "")}</span>;
   return entry.render({ value, onChange, options: options || prop.options, prop });
 }
 
-export function formatProperty(prop, value) {
+export function formatProperty(prop: PropertyDefinition, value: unknown): string {
   const entry = REGISTRY[prop.type];
   if (!entry) return String(value ?? "");
   return entry.format(value, prop.options);

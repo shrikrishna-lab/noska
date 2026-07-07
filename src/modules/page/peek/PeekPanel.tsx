@@ -1,21 +1,40 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
-import { X, GripVertical, Expand, Minimize2 } from "lucide-react";
+import React, { useState, useRef, useCallback } from "react";
+import type { CSSProperties, ChangeEvent, MouseEvent as ReactMouseEvent } from "react";
+import { X, Expand, Minimize2 } from "lucide-react";
+import type { DatabaseRow, DatabaseSchema, PropertyDefinition } from "../../database/types/database";
+
+type PanelMode = "right" | "bottom" | "floating";
+
+export interface PeekPanelProps {
+  row: DatabaseRow;
+  database: DatabaseSchema;
+  properties: PropertyDefinition[];
+  onPatchRow?: (rowId: string, patch: Partial<DatabaseRow>) => void;
+  onClose: () => void;
+  mode?: PanelMode;
+  onOpenFull?: (rowId: string) => void;
+  /** Destructured by the original .jsx but never rendered in its JSX body —
+   * a pre-existing dead prop (confirmed: DatabasePage.tsx's call site never
+   * passes children either). Preserved as-is per migration rules, not
+   * "fixed" into an actually-rendered slot. */
+  children?: React.ReactNode;
+}
 
 /**
  * PeekPanel displays a page/row without navigating away.
  * Modes: "right" | "bottom" | "floating"
  */
-export default function PeekPanel({ row, database, properties, onPatchRow, onClose, mode = "right", onOpenFull, children }) {
-  const [panelMode, setPanelMode] = useState(mode);
+export default function PeekPanel({ row, database, properties, onPatchRow, onClose, mode = "right", onOpenFull, children }: PeekPanelProps) {
+  const [panelMode, setPanelMode] = useState<PanelMode>(mode);
   const [size, setSize] = useState(mode === "bottom" ? 300 : 420);
   const [tab, setTab] = useState("properties");
-  const resizeRef = useRef(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
 
-  const handleMouseDown = useCallback((e) => {
+  const handleMouseDown = useCallback((e: ReactMouseEvent) => {
     e.preventDefault();
     const start = panelMode === "right" ? e.clientX : e.clientY;
     const startSize = size;
-    const onMove = (ev) => {
+    const onMove = (ev: MouseEvent) => {
       const delta = panelMode === "right" ? start - ev.clientX : start - ev.clientY;
       setSize(Math.max(200, Math.min(800, startSize + delta)));
     };
@@ -32,13 +51,13 @@ export default function PeekPanel({ row, database, properties, onPatchRow, onClo
     { id: "ai", label: "AI" },
   ];
 
-  const positionStyles = {
+  const positionStyles: Record<PanelMode, CSSProperties> = {
     right: { right: 0, top: 0, bottom: 0, width: size, borderLeft: "1px solid var(--border)" },
     bottom: { left: 0, right: 0, bottom: 0, height: size, borderTop: "1px solid var(--border)" },
     floating: { right: 24, bottom: 24, width: 480, height: 520, borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.3)" },
   };
 
-  const resizeHandle = panelMode === "right"
+  const resizeHandle: CSSProperties = panelMode === "right"
     ? { left: 0, top: 0, bottom: 0, width: 4, cursor: "ew-resize" }
     : { top: 0, left: 0, right: 0, height: 4, cursor: "ns-resize" };
 
@@ -54,7 +73,7 @@ export default function PeekPanel({ row, database, properties, onPatchRow, onClo
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
           <button
-            onClick={() => setPanelMode(m => m === "floating" ? "right" : "floating")}
+            onClick={() => setPanelMode((m: PanelMode) => m === "floating" ? "right" : "floating")}
             className="grid h-6 w-6 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer"
             title={panelMode === "floating" ? "Dock" : "Float"}
           >
@@ -88,7 +107,7 @@ export default function PeekPanel({ row, database, properties, onPatchRow, onClo
             {properties.map(prop => (
               <div key={prop.id}>
                 <label className="block text-[10px] font-medium text-[var(--secondary)] mb-0.5 uppercase tracking-wider">{prop.name}</label>
-                <PropertyField prop={prop} value={row?.[prop.id]} onChange={(val) => onPatchRow?.(row.id, { [prop.id]: val })} />
+                <PropertyField prop={prop} value={row?.[prop.id]} onChange={(val: unknown) => onPatchRow?.(row.id, { [prop.id]: val })} />
               </div>
             ))}
           </div>
@@ -131,37 +150,46 @@ export default function PeekPanel({ row, database, properties, onPatchRow, onClo
   );
 }
 
-function PropertyField({ prop, value, onChange }) {
+interface PropertyFieldProps {
+  prop: PropertyDefinition;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}
+
+function PropertyField({ prop, value, onChange }: PropertyFieldProps) {
   switch (prop.type) {
     case 'text':
     case 'url':
     case 'email':
     case 'phone':
+      // Cast: value is DatabaseRow's `unknown` index-signature value narrowed
+      // to string for these text-like input types, matching the original
+      // JS's untyped `value ?? ''` exactly (no behavior change).
       return (
-        <input type={prop.type} value={value ?? ''} onChange={(e) => onChange(e.target.value)} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]" />
+        <input type={prop.type} value={(value as string) ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]" />
       );
     case 'number':
       return (
-        <input type="number" value={value ?? 0} onChange={(e) => onChange(Number(e.target.value))} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]" />
+        <input type="number" value={(value as number) ?? 0} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(Number(e.target.value))} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]" />
       );
     case 'checkbox':
       return (
-        <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} className="accent-[var(--accent)] cursor-pointer" />
+        <input type="checkbox" checked={value === true} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)} className="accent-[var(--accent)] cursor-pointer" />
       );
     case 'date':
       return (
-        <input type="date" value={value ?? ''} onChange={(e) => onChange(e.target.value)} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]" />
+        <input type="date" value={(value as string) ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]" />
       );
     case 'select':
     case 'status':
     case 'priority':
       return (
-        <PeekSelect value={value} options={prop.options || []} onChange={onChange} />
+        <PeekSelect value={value as string} options={prop.options || []} onChange={onChange} />
       );
     case 'multi-select':
       return (
         <div className="flex flex-wrap gap-1">
-          {(Array.isArray(value) ? value : []).map(t => (
+          {(Array.isArray(value) ? value : []).map((t: string) => (
             <span key={t} className="rounded bg-[var(--surface-2)] px-2 py-0.5 text-[10px] text-[var(--secondary)]">{t}</span>
           ))}
           <input placeholder="+ add" className="w-12 bg-transparent text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]" />
@@ -169,14 +197,20 @@ function PropertyField({ prop, value, onChange }) {
       );
     default:
       return (
-        <input type="text" value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]" />
+        <input type="text" value={String(value ?? '')} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]" />
       );
   }
 }
 
-function PeekSelect({ value, options, onChange }) {
+interface PeekSelectProps {
+  value: string | undefined;
+  options: string[];
+  onChange: (value: string) => void;
+}
+
+function PeekSelect({ value, options, onChange }: PeekSelectProps) {
   return (
-    <select value={value ?? ''} onChange={(e) => onChange(e.target.value)} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)] cursor-pointer">
+    <select value={value ?? ''} onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)} className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)] cursor-pointer">
       <option value="" disabled>Select...</option>
       {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
