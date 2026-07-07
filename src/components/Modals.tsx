@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import type { ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MotionInput, SPRING_PRESETS } from "../features/motion/MotionSystem";
 import {
@@ -19,12 +20,58 @@ import {
   ChevronDown,
   CircleHelp,
   Link2,
-  Globe
+  Globe,
+  type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
 import { aiManager } from "../ai/AIManager";
 import { getProviderList, testProviderConnection } from "../ai/providers";
 import { getAgentList } from "../ai/agents";
+import type { Page } from "../lib/supabaseService";
+
+// `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
+// (deliberately, to avoid a circular type dependency — see that file's
+// comment) — narrow it at each read site, matching the established
+// pattern in src/features/collab/CoThinking.tsx / src/components/PageInspector.tsx.
+interface RealtimeCollabLike {
+  getUser?: () => { userId?: string; userName?: string } | undefined;
+}
+
+/** Theme-transition effect settings — mirrors the shape of the `themeFx`
+ * state literal initialized in src/App.tsx (variant/start/blur/gifType/gifUrl). */
+interface ThemeFx {
+  variant: string;
+  start: string;
+  blur: boolean;
+  gifType: string;
+  gifUrl: string;
+}
+
+interface SettingsModalProps {
+  initialTab?: string;
+  workspaceName: string;
+  setWorkspaceName: (name: string) => void;
+  theme: string;
+  setTheme: (theme: string) => void;
+  themeFx: ThemeFx;
+  setThemeFx: (fx: ThemeFx) => void;
+  apiKey: string;
+  setApiKey: (key: string) => void;
+  aiProvider: string;
+  setAIProvider: (provider: string) => void;
+  nvidiaKey: string;
+  setNvidiaKey: (key: string) => void;
+  onReplayOnboarding?: () => void;
+  onLogout?: () => void;
+  onClose: () => void;
+  ghostWriterEnabled: boolean;
+  setGhostWriterEnabled: (enabled: boolean) => void;
+}
+
+interface McpServer {
+  name: string;
+  status: string;
+}
 
 export function SettingsModal({
   initialTab = "General",
@@ -45,18 +92,18 @@ export function SettingsModal({
   onClose,
   ghostWriterEnabled,
   setGhostWriterEnabled
-}) {
-  const getUserName = () => window.realtimeCollab?.getUser?.()?.userName || 'Workspace User';
-  const getUserEmail = () => window.realtimeCollab?.getUser?.()?.userId || 'user@workspace';
+}: SettingsModalProps) {
+  const getUserName = () => (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || 'Workspace User';
+  const getUserEmail = () => (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userId || 'user@workspace';
   const [tab, setTab] = useState(initialTab);
   const [peopleTab, setPeopleTab] = useState("Guests");
-  const [members, setMembers] = useState([`${getUserName()} (Owner)`]);
-  const [guests, setGuests] = useState([]);
-  const [contacts, setContacts] = useState([]);
-  const [groups, setGroups] = useState([]);
+  const [members, setMembers] = useState<string[]>([`${getUserName()} (Owner)`]);
+  const [guests, setGuests] = useState<string[]>([]);
+  const [contacts, setContacts] = useState<string[]>([]);
+  const [groups, setGroups] = useState<string[]>([]);
   const [outlookConnected, setOutlookConnected] = useState(false);
-  const [mcpServers, setMcpServers] = useState([]);
-  const [teamspaces, setTeamspaces] = useState([]);
+  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+  const [teamspaces, setTeamspaces] = useState<string[]>([]);
 
   React.useEffect(() => {
     if (initialTab) {
@@ -74,28 +121,36 @@ export function SettingsModal({
   const [googleCalConnected, setGoogleCalConnected] = useState(false);
   const [githubConnected, setGithubConnected] = useState(false);
   const [slackConnected, setSlackConnected] = useState(false);
-  const [customEmojis, setCustomEmojis] = useState(["🚀", "🔥", "🎉", "💡", "🧠"]);
+  const [customEmojis, setCustomEmojis] = useState<string[]>(["🚀", "🔥", "🎉", "💡", "🧠"]);
   const [newEmoji, setNewEmoji] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
 
   React.useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const updateFx = (patch) => setThemeFx({ ...themeFx, ...patch });
+  const updateFx = (patch: Partial<ThemeFx>) => setThemeFx({ ...themeFx, ...patch });
 
-  const chooseGif = (gifType) => {
-    const urls = {
+  // Dead code, preserved as-is: chooseGif is defined but never invoked
+  // anywhere in this component (no call site references it) — same
+  // untouched-quirk handling as everywhere else in this migration.
+  const chooseGif = (gifType: string) => {
+    const urls: Record<string, string> = {
       "1": "https://media.giphy.com/media/KBbr4hHl9DSahKvInO/giphy.gif?cid=790b76112m5eeeydoe7et0cr3j3ekb1erunxozyshuhxx2vl&ep=v1_stickers_search&rid=giphy.gif&ct=s",
       "2": "https://media.giphy.com/media/5PncuvcXbBuIZcSiQo/giphy.gif?cid=ecf05e47j7vdjtytp3fu84rslaivdun4zvfhej6wlvl6qqsz&ep=v1_stickers_search&rid=giphy.gif&ct=s",
       "3": "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3JwcXdzcHd5MW92NWprZXVpcTBtNXM5cG9obWh0N3I4NzFpaDE3byZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/WgsVx6C4N8tjy/giphy.gif"
     };
     updateFx({ gifType, gifUrl: urls[gifType] || themeFx.gifUrl });
   };
+  // Referenced only to keep the migration behavior-identical (avoids an
+  // "unused variable" lint signal changing observable behavior); the
+  // dead code itself is preserved untouched above, per the migration's
+  // "don't fix pre-existing quirks" rule.
+  void chooseGif;
 
   const starts =
     themeFx.variant === "rectangle"
@@ -105,7 +160,7 @@ export function SettingsModal({
       : ["center", "top-left", "top-right", "bottom-left", "bottom-right", "top-center", "bottom-center"];
 
   const handleAddMember = async () => {
-    const name = await window.noskaPrompt("Enter member name or email:", "", "Member Name/Email");
+    const name = await window.noskaPrompt?.("Enter member name or email:", "", "Member Name/Email");
     if (name) {
       setMembers([...members, name]);
       setSaveStatus(`Added member: ${name}`);
@@ -114,7 +169,7 @@ export function SettingsModal({
   };
 
   const handleImportContacts = async () => {
-    const email = await window.noskaPrompt("Enter email of the contact to import:", "", "user@example.com");
+    const email = await window.noskaPrompt?.("Enter email of the contact to import:", "", "user@example.com");
     if (email) {
       setContacts([...contacts, email]);
       setSaveStatus(`Imported contact: ${email}`);
@@ -231,7 +286,7 @@ export function SettingsModal({
                           <div className="font-bold text-sm">No guests in this space</div>
                           <button
                             onClick={async () => {
-                              const g = await window.noskaPrompt("Enter guest email to invite:", "", "guest@example.com");
+                              const g = await window.noskaPrompt?.("Enter guest email to invite:", "", "guest@example.com");
                               if (g) setGuests([...guests, g]);
                             }}
                             className="mt-3 rounded border border-[var(--border-strong)] px-3 py-1 text-xs hover:bg-[var(--hover)] transition"
@@ -294,7 +349,7 @@ export function SettingsModal({
                       <p className="text-xs text-[var(--muted)]">{groups.length} active user groups</p>
                       <button
                         onClick={async () => {
-                          const g = await window.noskaPrompt("Enter group name:", "", "Group Name");
+                          const g = await window.noskaPrompt?.("Enter group name:", "", "Group Name");
                           if (g && g.trim()) {
                             setGroups(prev => [...prev, g.trim()]);
                             setSaveStatus(`Group "${g.trim()}" created.`);
@@ -590,7 +645,7 @@ export function SettingsModal({
               </div>
               <button
                 onClick={async () => {
-                  const sName = await window.noskaPrompt("Enter new MCP server name:", "", "Server Name");
+                  const sName = await window.noskaPrompt?.("Enter new MCP server name:", "", "Server Name");
                   if (sName) {
                     setMcpServers([...mcpServers, { name: sName, status: "Inactive" }]);
                   }
@@ -690,7 +745,7 @@ export function SettingsModal({
               </div>
               <button
                 onClick={async () => {
-                  const t = await window.noskaPrompt("Enter new teamspace name:", "", "Teamspace Name");
+                  const t = await window.noskaPrompt?.("Enter new teamspace name:", "", "Teamspace Name");
                   if (t) setTeamspaces([...teamspaces, t.trim()]);
                 }}
                 className="bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white text-xs px-3 py-1.5 rounded font-semibold transition"
@@ -773,7 +828,14 @@ export function SettingsModal({
   );
 }
 
-function SettingsNavItem({ icon: Icon, label, active, onClick }) {
+interface SettingsNavItemProps {
+  icon: LucideIcon;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}
+
+function SettingsNavItem({ icon: Icon, label, active, onClick }: SettingsNavItemProps) {
   return (
     <button
       onClick={onClick}
@@ -787,7 +849,14 @@ function SettingsNavItem({ icon: Icon, label, active, onClick }) {
   );
 }
 
-function OptionChips({ label, value, options, onChange }) {
+interface OptionChipsProps {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}
+
+function OptionChips({ label, value, options, onChange }: OptionChipsProps) {
   return (
     <div className="mb-2 flex items-start justify-between gap-3 text-sm">
       <div className="w-20 shrink-0 pt-1 text-[var(--muted)]">{label}</div>
@@ -810,14 +879,31 @@ function OptionChips({ label, value, options, onChange }) {
 
 // ─── Noska AI Settings Component ────────────────────────────────────────────
 
+interface NoskaAISettingsProps {
+  apiKey: string;
+  setApiKey: (key: string) => void;
+  aiProvider: string;
+  setAIProvider: (provider: string) => void;
+  nvidiaKey: string;
+  setNvidiaKey: (key: string) => void;
+  ghostWriterEnabled: boolean;
+  setGhostWriterEnabled: (enabled: boolean) => void;
+}
+
+interface ProviderTestResult {
+  ok: boolean;
+  error?: string;
+  response?: string;
+}
+
 function NoskaAISettings({
   apiKey, setApiKey,
   aiProvider, setAIProvider,
   nvidiaKey, setNvidiaKey,
   ghostWriterEnabled, setGhostWriterEnabled
-}) {
-  const [providerTests, setProviderTests] = React.useState({});
-  const [testingId, setTestingId] = React.useState(null);
+}: NoskaAISettingsProps) {
+  const [providerTests, setProviderTests] = React.useState<Record<string, ProviderTestResult>>({});
+  const [testingId, setTestingId] = React.useState<string | null>(null);
   const providerList = getProviderList();
   const agentList = getAgentList();
   const config = aiManager.getConfig();
@@ -825,7 +911,12 @@ function NoskaAISettings({
 
   // Subscribe to AIManager config changes
   React.useEffect(() => {
-    return aiManager.subscribe(() => forceUpdate(n => n + 1));
+    // aiManager.subscribe returns `() => this._listeners.delete(listener)`
+    // (AIManager.ts), i.e. a `() => boolean`, not the `() => void` React's
+    // effect cleanup type expects — wrap rather than touch AIManager.ts,
+    // which is outside this migration's scope.
+    const unsubscribe = aiManager.subscribe(() => forceUpdate(n => n + 1));
+    return () => { unsubscribe(); };
   }, []);
 
   // Sync legacy states → AIManager when they change
@@ -837,21 +928,21 @@ function NoskaAISettings({
     if (nvidiaKey) aiManager.setProviderConfig("nvidia", { apiKey: nvidiaKey, enabled: true });
   }, [nvidiaKey]);
 
-  const handleKeyChange = (providerId, key) => {
+  const handleKeyChange = (providerId: string, key: string) => {
     aiManager.setProviderConfig(providerId, { apiKey: key, enabled: true });
     // Also sync to legacy states for backward compat
     if (providerId === "anthropic") setApiKey(key);
     if (providerId === "nvidia") setNvidiaKey(key);
   };
 
-  const handleSetActive = (providerId) => {
+  const handleSetActive = (providerId: string) => {
     const provider = providerList.find(p => p.id === providerId);
     aiManager.setActiveProvider(providerId, provider?.defaultModel);
     // Sync to legacy
     setAIProvider(providerId);
   };
 
-  const handleTestConnection = async (providerId) => {
+  const handleTestConnection = async (providerId: string) => {
     setTestingId(providerId);
     const providerConfig = config.providers[providerId] || {};
     const result = await testProviderConnection(providerId, providerConfig);
@@ -1022,7 +1113,7 @@ function NoskaAISettings({
               </div>
               <input
                 type="checkbox"
-                checked={currentConfig.context?.[key] !== false}
+                checked={(currentConfig.context as unknown as Record<string, boolean>)?.[key] !== false}
                 onChange={(e) => aiManager.configure({ context: { [key]: e.target.checked } })}
                 className="h-4 w-4 accent-[var(--accent)] cursor-pointer"
               />
@@ -1068,7 +1159,14 @@ function NoskaAISettings({
   );
 }
 
-export function TrashModal({ pages, onClose, onRestore, onDelete }) {
+interface TrashModalProps {
+  pages: Page[];
+  onClose: () => void;
+  onRestore: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+
+export function TrashModal({ pages, onClose, onRestore, onDelete }: TrashModalProps) {
   return (
     <Modal onClose={onClose}>
       <ModalHeader icon={Trash2} title="Trash" onClose={onClose} />
@@ -1096,25 +1194,38 @@ export function TrashModal({ pages, onClose, onRestore, onDelete }) {
 
 const SHARE_INVITES_KEY = 'noska_share_invites';
 
-function loadInvites() {
+interface ShareInvite {
+  email: string;
+  role: string;
+  invitedAt: string;
+  pageId: string;
+}
+
+function loadInvites(): ShareInvite[] {
   try { return JSON.parse(localStorage.getItem(SHARE_INVITES_KEY) || '[]'); } catch { return []; }
 }
-function saveInvites(invites) {
+function saveInvites(invites: ShareInvite[]) {
   try { localStorage.setItem(SHARE_INVITES_KEY, JSON.stringify(invites)); } catch {}
 }
 
-export function ShareModal({ page, onClose, onToast }) {
+interface ShareModalProps {
+  page: Page;
+  onClose: () => void;
+  onToast?: (message: string) => void;
+}
+
+export function ShareModal({ page, onClose, onToast }: ShareModalProps) {
   const [tab, setTab] = useState("share");
   const [email, setEmail] = useState("");
   const [access, setAccess] = useState("Full access");
-  const [invites, setInvites] = useState(loadInvites);
+  const [invites, setInvites] = useState<ShareInvite[]>(loadInvites);
   const [generalAccess, setGeneralAccess] = useState("Only people invited");
   const [generalAccessOpen, setGeneralAccessOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(true);
   const [copied, setCopied] = useState(false);
 
   React.useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -1123,7 +1234,7 @@ export function ShareModal({ page, onClose, onToast }) {
 
   React.useEffect(() => { saveInvites(invites); }, [invites]);
 
-  const currentUser = window.realtimeCollab?.getUser?.();
+  const currentUser = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
   const userName = currentUser?.userName || 'Workspace User';
   const userEmail = currentUser?.userId || 'local@workspace';
 
@@ -1145,7 +1256,7 @@ export function ShareModal({ page, onClose, onToast }) {
     onToast?.(`Invited ${newInvites.length} user${newInvites.length > 1 ? 's' : ''}`);
   };
 
-  const removeInvite = (idx) => {
+  const removeInvite = (idx: number) => {
     setInvites(prev => prev.filter((_, i) => i !== idx));
   };
 
@@ -1301,7 +1412,11 @@ export function ShareModal({ page, onClose, onToast }) {
   );
 }
 
-export function HelpModal({ onClose }) {
+interface HelpModalProps {
+  onClose: () => void;
+}
+
+export function HelpModal({ onClose }: HelpModalProps) {
   const [tab, setTab] = React.useState("shortcuts");
   const [ticketType, setTicketType] = React.useState("bug");
   const [ticketTitle, setTicketTitle] = React.useState("");
@@ -1309,7 +1424,7 @@ export function HelpModal({ onClose }) {
   const [ticketSubmitted, setTicketSubmitted] = React.useState(false);
 
   React.useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -1578,7 +1693,17 @@ export function HelpModal({ onClose }) {
   );
 }
 
-export function CustomDialog({ open, type, title, placeholder, defaultValue, onClose, onConfirm }) {
+interface CustomDialogProps {
+  open: boolean;
+  type: "prompt" | "confirm";
+  title: string;
+  placeholder?: string;
+  defaultValue?: string;
+  onClose: () => void;
+  onConfirm: (value: string | boolean) => void;
+}
+
+export function CustomDialog({ open, type, title, placeholder, defaultValue, onClose, onConfirm }: CustomDialogProps) {
   const [value, setValue] = useState(defaultValue || "");
 
   if (!open) return null;
@@ -1599,7 +1724,7 @@ export function CustomDialog({ open, type, title, placeholder, defaultValue, onC
             className="w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-3.5 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)] mb-6 transition"
             placeholder={placeholder}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") onConfirm(value);
               if (e.key === "Escape") onClose();
