@@ -98,6 +98,15 @@ export interface Page {
   pageBg?: string | null;
   coverHeight?: number;
   coverPosition?: string;
+
+  /** Reading Mode's saved text-selection highlights and bookmark flag
+   * (src/features/reading/ReadingMode.jsx, confirmed via its App.tsx call
+   * site's onPagePatch). Same non-persisted-field pattern as the group
+   * above — not a `pages` table column, set only through
+   * `updatePage()`'s in-memory `{ ...p, ...patch }` merge, lost on
+   * reload unless a future migration adds real columns. */
+  highlights?: string[];
+  bookmarked?: boolean;
   coverSize?: "small" | "standard" | "wide" | "full";
   coverParallax?: boolean;
   coverBlur?: number;

@@ -1,17 +1,32 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Search, ChevronUp, ChevronDown, X, Replace } from "lucide-react";
+import type { Block } from "../../types/blocks";
 
-export default function InPageFind({ blocks, onClose, onReplace }) {
+interface Match {
+  blockId: string;
+  blockIndex: number;
+  start: number;
+  end: number;
+}
+
+export interface InPageFindProps {
+  blocks: Block[];
+  onClose?: () => void;
+  onReplace?: (blockId: string, start: number, end: number, replacement: string) => void;
+}
+
+export default function InPageFind({ blocks, onClose, onReplace }: InPageFindProps) {
   const [query, setQuery] = useState("");
   const [replaceText, setReplaceText] = useState("");
   const [showReplace, setShowReplace] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const inputRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const matches = useMemo(() => {
+  const matches: Match[] = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
-    const results = [];
+    const results: Match[] = [];
     (blocks || []).forEach((block, idx) => {
       const text = block.text || "";
       let pos = 0;
@@ -30,7 +45,7 @@ export default function InPageFind({ blocks, onClose, onReplace }) {
   useEffect(() => {
     if (matches.length > 0) {
       const match = matches[clamped];
-      const el = document.querySelector(`[data-block-id="${match.blockId}"]`);
+      const el = document.querySelector<HTMLElement>(`[data-block-id="${match.blockId}"]`);
       if (el) {
         el.scrollIntoView({ block: "center" });
         el.style.outline = "2px solid var(--accent)";
@@ -47,14 +62,14 @@ export default function InPageFind({ blocks, onClose, onReplace }) {
 
   useEffect(() => {
     inputRef.current?.focus();
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); onClose?.(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const navigate = useCallback((dir) => {
+  const navigate = useCallback((dir: number) => {
     if (matches.length === 0) return;
     setActiveIndex((prev) => prev + dir);
   }, [matches.length]);
@@ -67,7 +82,7 @@ export default function InPageFind({ blocks, onClose, onReplace }) {
     const block = blocks.find(b => b.id === match.blockId);
     if (block) {
       const text = block.text || "";
-      let pos = replaceText.length > 0 ? match.start + replaceText.length : match.start;
+      const pos = replaceText.length > 0 ? match.start + replaceText.length : match.start;
       let nextFound = text.toLowerCase().indexOf(q, pos);
       if (nextFound === -1) nextFound = text.toLowerCase().indexOf(q, 0);
       if (nextFound >= 0) {
@@ -100,8 +115,8 @@ export default function InPageFind({ blocks, onClose, onReplace }) {
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setActiveIndex(0); }}
-          onKeyDown={(e) => {
+          onChange={(e: ChangeEvent<HTMLInputElement>) => { setQuery(e.target.value); setActiveIndex(0); }}
+          onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter" && e.shiftKey) navigate(-1);
             else if (e.key === "Enter") navigate(1);
           }}
@@ -151,8 +166,8 @@ export default function InPageFind({ blocks, onClose, onReplace }) {
           <input
             type="text"
             value={replaceText}
-            onChange={(e) => setReplaceText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleReplace(); }}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setReplaceText(e.target.value)}
+            onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleReplace(); }}
             placeholder="Replace with..."
             className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
           />

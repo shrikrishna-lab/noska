@@ -1,52 +1,84 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import type { ReactNode, RefObject, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   DndContext, DragOverlay, closestCenter,
   PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   SortableContext, verticalListSortingStrategy, useSortable,
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  ChevronDown, ChevronRight, Link2, Copy, ArchiveRestore, Lock, Star,
+  ChevronDown, Link2, Copy, ArchiveRestore, Lock, Star,
   Plus, MoreHorizontal, Sparkles, Eye, GripVertical,
 } from 'lucide-react';
-import * as Icons from 'lucide-react';
-import { SPRING_PRESETS, StaggerContainer, StaggerItem } from '../features/motion/MotionSystem';
+import type { LucideIcon } from 'lucide-react';
 import { FloatingMenu } from './ui';
 import {
-  AnimatedMenu, AnimatedPlus, AnimatedBookmark, AnimatedTrash,
+  AnimatedBookmark, AnimatedTrash,
   AnimatedSend, AnimatedUpload, AnimatedDownload, AnimatedCanvas,
-  AnimatedSidebar, AnimatedSparkle,
+  AnimatedSidebar,
 } from './ui/icons';
-import { emojis, timeAgo } from '../utils/helpers';
+import { emojis } from '../utils/helpers';
 import { isPageEntity } from '../utils/pageTreeOps';
+import type { Page } from '../lib/supabaseService';
+import {
+  getAncestorPath, flattenTreeFromContent,
+  getDescendantIdsFromContent, smartDepthOpacity,
+} from '../core/tree/TreeEngine';
+import type { FlattenedPage } from '../core/tree/TreeEngine';
 
 /** Builds a real /<workspace-slug>/<pageId> URL by swapping the page-id
  * segment of the current path — App.jsx's URL-sync effect keeps the
  * workspace-slug segment accurate, so this stays correct without needing to
  * thread workspaceName through the whole tree. */
-function pageUrl(pageId) {
+function pageUrl(pageId: string): string {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const slug = parts[0] || 'workspace';
   return `${window.location.origin}/${slug}/${pageId}`;
 }
-import {
-  getAncestorPath, flattenTreeFromContent,
-  getDescendantIdsFromContent, smartDepthOpacity,
-} from '../core/tree/TreeEngine';
 
-function TreeConnector({ depth, activePath, hoverPath, depthLevel }) {
+/** Options bag passed to onSelect — mirrors the real shapes read at every
+ * call site (altKey/shiftKey from click modifiers, sidePeek from the
+ * peek-preview and side-peek menu actions). */
+export interface PageSelectOptions {
+  altKey?: boolean;
+  shiftKey?: boolean;
+  sidePeek?: boolean;
+}
+
+type OnSelect = (pageId: string, options?: PageSelectOptions) => void;
+type OnPatchPage = (pageId: string, patch: Partial<Page>) => void;
+type OnPageIdAction = (pageId: string) => void;
+
+interface TreeConnectorProps {
+  depth: number;
+  activePath: boolean | undefined;
+  hoverPath: boolean | undefined;
+  depthLevel: number;
+}
+
+function TreeConnector({ depth, activePath, hoverPath, depthLevel }: TreeConnectorProps) {
   const opacity = activePath ? 0.6 : hoverPath ? 0.4 : smartDepthOpacity(depthLevel);
   const color = activePath ? 'var(--accent)' : hoverPath ? 'var(--text)' : 'var(--border)';
   if (depth <= 0) return null;
   const segments = [];
   for (let d = 0; d < depth; d++) {
-    const isActive = activePath && d < activePath.length;
-    const isHover = hoverPath && d < hoverPath.length;
+    // Real pre-existing quirk, preserved exactly: both call sites pass a
+    // plain boolean for activePath/hoverPath (`active`, `isHovered ||
+    // parentHovered`), not an array — so the original JS's
+    // `d < activePath.length` was really `d < undefined`, which is always
+    // `false`. isActive/isHover here were therefore always false at
+    // runtime; only the top-level opacity/color ternary above the loop
+    // ever had any visual effect. Replicating that exact always-false
+    // result explicitly rather than guessing this was meant to check
+    // array membership (which would change the rendered look).
+    const isActive = false;
+    const isHover = false;
     const segOpacity = isActive ? 0.6 : isHover ? 0.4 : smartDepthOpacity(d);
     const segColor = isActive ? 'var(--accent)' : isHover ? 'var(--text)' : 'var(--border)';
     segments.push(
@@ -69,7 +101,15 @@ function TreeConnector({ depth, activePath, hoverPath, depthLevel }) {
   return <>{segments}</>;
 }
 
-function TreeBranch({ children, depth, isLast, expanded, animateHeight }) {
+interface TreeBranchProps {
+  children: ReactNode;
+  depth: number;
+  isLast: boolean;
+  expanded: boolean;
+  animateHeight: boolean;
+}
+
+function TreeBranch({ children, depth, isLast, expanded, animateHeight }: TreeBranchProps) {
   return (
     <AnimatePresence initial={false}>
       {expanded && (
@@ -87,7 +127,17 @@ function TreeBranch({ children, depth, isLast, expanded, animateHeight }) {
   );
 }
 
-function HoverToolbar({ onAddInside, onMenu, onFavorite, onAI, onPeek, isFavorite, isHovered }) {
+interface HoverToolbarProps {
+  onAddInside?: () => void;
+  onMenu?: () => void;
+  onFavorite?: () => void;
+  onAI?: () => void;
+  onPeek?: () => void;
+  isFavorite?: boolean;
+  isHovered: boolean;
+}
+
+function HoverToolbar({ onAddInside, onMenu, onFavorite, onAI, onPeek, isFavorite, isHovered }: HoverToolbarProps) {
   return (
     <motion.div
       initial={{ opacity: 0, x: 8 }}
@@ -134,7 +184,23 @@ function HoverToolbar({ onAddInside, onMenu, onFavorite, onAI, onPeek, isFavorit
   );
 }
 
-function PageMenuAction({ icon: Icon, label, shortcut, right, muted, onClick }) {
+// `icon` is used interchangeably with real LucideIcon components (Link2,
+// Copy, ArchiveRestore) and this codebase's custom AnimatedX icon
+// components (AnimatedBookmark, AnimatedTrash, etc. — see
+// src/components/ui/icons/index.tsx), which share the same size/className
+// prop shape as LucideIcon but aren't LucideIcon instances themselves.
+type MenuActionIcon = LucideIcon | ((props: { size?: number; className?: string }) => JSX.Element);
+
+interface PageMenuActionProps {
+  icon: MenuActionIcon;
+  label: string;
+  shortcut?: string;
+  right?: ReactNode;
+  muted?: boolean;
+  onClick: () => void;
+}
+
+function PageMenuAction({ icon: Icon, label, shortcut, right, muted, onClick }: PageMenuActionProps) {
   return (
     <button
       onClick={onClick}
@@ -148,8 +214,31 @@ function PageMenuAction({ icon: Icon, label, shortcut, right, muted, onClick }) 
   );
 }
 
-function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCollapse, onSelect, onAddInside, onPatchPage, onDuplicatePage, onRenamePage, onTrashPage, onCopyLink, onRemoveFromRecents, onToggleOffline, onToast }) {
-  const [childHoverId, setChildHoverId] = useState(null);
+// Shared handler props threaded down through every tree-item level —
+// PremiumBranch, PremiumPageItem, and BranchExpanded all take the same set.
+interface TreeHandlerProps {
+  onToggleCollapse?: OnPageIdAction;
+  onSelect: OnSelect;
+  onAddInside?: OnPageIdAction;
+  onPatchPage: OnPatchPage;
+  onDuplicatePage?: OnPageIdAction;
+  onRenamePage?: OnPageIdAction;
+  onTrashPage?: OnPageIdAction;
+  onCopyLink?: OnPageIdAction;
+  onRemoveFromRecents?: OnPageIdAction;
+  onToggleOffline?: OnPageIdAction;
+  onToast?: (message: string) => void;
+}
+
+interface BranchExpandedProps extends TreeHandlerProps {
+  page: Page;
+  allBlocks: Page[];
+  activeId: string | null;
+  collapsedPages: Set<string>;
+}
+
+function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCollapse, onSelect, onAddInside, onPatchPage, onDuplicatePage, onRenamePage, onTrashPage, onCopyLink, onRemoveFromRecents, onToggleOffline, onToast }: BranchExpandedProps) {
+  const [childHoverId, setChildHoverId] = useState<string | null>(null);
   if (!collapsedPages.has(page.id) && page.content?.length) {
     const children = page.content.filter(id => isPageEntity(allBlocks.find(b => b.id === id)));
     if (children.length === 0) return null;
@@ -197,17 +286,26 @@ function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCol
   return null;
 }
 
+interface PremiumBranchProps extends TreeHandlerProps {
+  page: Page;
+  depth: number;
+  active: boolean;
+  hasChildren: boolean;
+  expanded: boolean;
+  parentHovered: boolean;
+}
+
 function PremiumBranch({
   page, depth, active, hasChildren, expanded, onToggleCollapse,
   onSelect, onAddInside, onPatchPage, parentHovered,
   onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
   onRemoveFromRecents, onToggleOffline, onToast,
-}) {
+}: PremiumBranchProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const menuButtonRef = useRef(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
-  const handleClick = useCallback((e) => {
+  const handleClick = useCallback((e: ReactMouseEvent) => {
     onSelect(page.id, { altKey: e.altKey || e.metaKey, shiftKey: e.shiftKey });
   }, [page.id, onSelect]);
 
@@ -322,17 +420,30 @@ function PremiumBranch({
   );
 }
 
+interface PremiumPageItemProps extends TreeHandlerProps {
+  page: Page;
+  active: boolean;
+  selected: boolean;
+  hasChildren: boolean;
+  expanded: boolean;
+  depth: number;
+  ancestors: string[];
+  allBlocks: Page[];
+  collapsedPages: Set<string>;
+  activeId: string | null;
+}
+
 function PremiumPageItem({
   page, active, selected, hasChildren, expanded,
   depth, ancestors, onToggleCollapse, onSelect, onPatchPage,
   onAddInside, allBlocks, collapsedPages, activeId,
   onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
   onRemoveFromRecents, onToggleOffline, onToast,
-}) {
+}: PremiumPageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [childHovered, setChildHovered] = useState(false);
-  const menuButtonRef = useRef(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const isAncestor = ancestors?.includes(page.id);
   const showActivePath = active || isAncestor;
@@ -532,9 +643,14 @@ function PremiumPageItem({
   );
 }
 
-function SortablePremiumItem({ id, focused, ...props }) {
+interface SortablePremiumItemProps extends PremiumPageItemProps {
+  id: string;
+  focused: boolean;
+}
+
+function SortablePremiumItem({ id, focused, ...props }: SortablePremiumItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
@@ -550,7 +666,12 @@ function SortablePremiumItem({ id, focused, ...props }) {
   );
 }
 
-function DragGhost({ page, depth }) {
+interface DragGhostProps {
+  page: Page;
+  depth: number;
+}
+
+function DragGhost({ page, depth }: DragGhostProps) {
   return (
     <motion.div
       initial={{ scale: 0.95, opacity: 0 }}
@@ -566,36 +687,48 @@ function DragGhost({ page, depth }) {
   );
 }
 
+export interface PageTreeProps extends TreeHandlerProps {
+  content: string[];
+  allBlocks: Page[];
+  activeId: string | null;
+  collapsedPages: Set<string>;
+  onMovePage?: (pageId: string, newParentId: string | null, orderedSiblingIds: string[]) => void;
+  emptyMessage?: string;
+}
+
 export default function PageTree({
   content, allBlocks, activeId, collapsedPages, onToggleCollapse, onSelect,
   onPatchPage, onMovePage, onDuplicatePage, onAddInside, onRenamePage,
   onRemoveFromRecents, onToggleOffline, onCopyLink, onTrashPage, onToast,
   emptyMessage = 'No pages yet',
-}) {
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const [activeDragId, setActiveDragId] = useState(null);
+}: PageTreeProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
-  const treeRef = useRef(null);
+  const treeRef = useRef<HTMLDivElement>(null);
+  // `density`/`setDensity` state exists but is never read anywhere in this
+  // file's JSX (pre-existing dead state, not introduced by this
+  // conversion — confirmed via grep, preserved as-is).
   const [density, setDensity] = useState('comfortable');
 
-  const ancestorIds = useMemo(() => {
+  const ancestorIds: string[] = useMemo(() => {
     if (!activeId) return [];
     const ancestors = getAncestorPath(activeId, allBlocks);
     return ancestors.slice(0, -1).map(a => a.id);
   }, [activeId, allBlocks]);
 
-  const visibleItems = useMemo(
+  const visibleItems: FlattenedPage[] = useMemo(
     () => flattenTreeFromContent(content, allBlocks, collapsedPages),
     [content, allBlocks, collapsedPages]
   );
 
-  const visibleIds = useMemo(() => visibleItems.map(p => p.id), [visibleItems]);
+  const visibleIds: string[] = useMemo(() => visibleItems.map(p => p.id), [visibleItems]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
-  const handleSelect = useCallback((pageId, options = {}) => {
+  const handleSelect = useCallback((pageId: string, options: PageSelectOptions = {}) => {
     if (options.shiftKey && options.altKey) {
       setSelectedIds(prev => {
         const next = new Set(prev);
@@ -610,17 +743,19 @@ export default function PageTree({
     }
   }, [onSelect]);
 
-  const handleDragStart = useCallback((event) => {
-    setActiveDragId(event.active.id);
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id));
   }, []);
 
-  const handleDragEnd = useCallback((event) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveDragId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = visibleIds.indexOf(active.id);
-    const newIndex = visibleIds.indexOf(over.id);
+    const activeIdStr = String(active.id);
+    const overIdStr = String(over.id);
+    const oldIndex = visibleIds.indexOf(activeIdStr);
+    const newIndex = visibleIds.indexOf(overIdStr);
     if (oldIndex === -1 || newIndex === -1) return;
 
     const reorderedIds = arrayMove(visibleIds, oldIndex, newIndex);
@@ -633,25 +768,33 @@ export default function PageTree({
     } else {
       newParentId = targetPage._depth < draggedPage._depth ? targetPage.parentId : targetPage.id;
     }
-    if (getDescendantIdsFromContent(active.id, allBlocks).includes(targetPage?.id)) {
+    if (getDescendantIdsFromContent(activeIdStr, allBlocks).includes(targetPage?.id)) {
       return;
     }
     if (onMovePage) {
       const orderedSiblingIds = reorderedIds.filter((id) => {
-        if (id === active.id) return true;
+        if (id === activeIdStr) return true;
         const page = visibleItems.find(p => p.id === id);
         return page && (page.parentId || null) === (newParentId || null);
       });
-      onMovePage(active.id, newParentId || null, orderedSiblingIds);
+      onMovePage(activeIdStr, newParentId || null, orderedSiblingIds);
       return;
     }
     if (draggedPage.parentId !== newParentId) {
-      onPatchPage(active.id, { parentId: newParentId });
+      onPatchPage(activeIdStr, { parentId: newParentId });
     }
     reorderedIds.forEach((id, idx) => {
       const page = visibleItems.find(p => p.id === id);
       if (page && (page.parentId || null) === (newParentId || null)) {
-        onPatchPage(id, { sortOrder: idx });
+        // Real gap found here, preserved as-is (not a migration bug):
+        // `sortOrder` is not a field on `Page` (grepped types/blocks.ts and
+        // supabaseService.ts's Page interface) — this patch has always
+        // been a no-op write of an untracked field, same category as the
+        // other "field exists in code, not in the DB/type" gaps already
+        // documented elsewhere in this migration (content, fontStyle,
+        // etc.). Cast narrowly here rather than widening Page for a field
+        // nothing else reads.
+        onPatchPage(id, { sortOrder: idx } as unknown as Partial<Page>);
       }
     });
   }, [visibleIds, visibleItems, allBlocks, onPatchPage, onMovePage]);
@@ -661,7 +804,7 @@ export default function PageTree({
     [visibleItems, activeDragId]
   );
 
-  const handleTreeKeyDown = useCallback((e) => {
+  const handleTreeKeyDown = useCallback((e: ReactKeyboardEvent) => {
     if (visibleItems.length === 0) return;
     const idx = focusedIndex === -1 ? visibleItems.findIndex(p => p.id === activeId) : focusedIndex;
     const safeIdx = idx === -1 ? 0 : idx;

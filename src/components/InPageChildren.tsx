@@ -1,15 +1,31 @@
 import React, { useMemo } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { motion } from "framer-motion";
 import { ChevronRight, ArrowUpRight } from "lucide-react";
 import { isPageEntity } from "../utils/pageTreeOps";
+import type { Page } from "../lib/supabaseService";
 
-export default function InPageChildren({ pageId, pages, onNavigate, onAddInside }) {
+interface ChildPage extends Page {
+  childCount: number;
+}
+
+export interface InPageChildrenProps {
+  pageId: string;
+  pages: Page[];
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+  // Destructured by the original .jsx but never called anywhere in its
+  // body — a pre-existing dead prop (confirmed via grep of this file, no
+  // call site for it exists). Preserved as-is, not wired up.
+  onAddInside?: (pageId: string) => void;
+}
+
+export default function InPageChildren({ pageId, pages, onNavigate }: InPageChildrenProps) {
   const page = useMemo(() => pages.find(p => p.id === pageId), [pageId, pages]);
-  const children = useMemo(() => {
+  const children: ChildPage[] = useMemo(() => {
     if (!page?.content) return [];
     return page.content
       .map(id => pages.find(p => p.id === id))
-      .filter(Boolean)
+      .filter((p): p is Page => Boolean(p))
       .filter(p => !p.trashed)
       .map(child => ({
         ...child,
@@ -35,8 +51,8 @@ export default function InPageChildren({ pageId, pages, onNavigate, onAddInside 
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.03, type: "spring", stiffness: 380, damping: 28 }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => onNavigate?.(child.id, { altKey: e.altKey })}
+            onMouseDown={(e: ReactMouseEvent) => e.stopPropagation()}
+            onClick={(e: ReactMouseEvent) => onNavigate?.(child.id, { altKey: e.altKey })}
             className="group flex items-center gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-left hover:border-[var(--accent)] hover:bg-[var(--hover)] transition-all cursor-pointer"
           >
             <span className="text-lg shrink-0">{child.icon || "📄"}</span>
@@ -67,7 +83,7 @@ export default function InPageChildren({ pageId, pages, onNavigate, onAddInside 
   );
 }
 
-function timeAgo(iso) {
+function timeAgo(iso: string): string {
   if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 60000) return "just now";

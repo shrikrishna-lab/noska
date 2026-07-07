@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SPRING_PRESETS } from "../motion/MotionSystem";
 import {
@@ -14,11 +15,27 @@ import {
   WifiOff,
 } from "lucide-react";
 import { uid, now } from "../../utils/helpers";
+import type { Page } from "../../lib/supabaseService";
+
+interface CurrentUser {
+  id: string;
+  name: string;
+  avatar: string;
+  color: string;
+}
 
 /* ─── Real current user ─── */
 
-function getCurrentUser() {
-  const u = window.realtimeCollab?.getUser?.();
+// `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
+// (deliberately, to avoid a circular type dependency — see that file's
+// comment) — narrow it at each read site, as instructed there.
+interface RealtimeCollabLike {
+  getUser?: () => { userId?: string; userName?: string; userAvatar?: string } | undefined;
+}
+
+function getCurrentUser(): CurrentUser {
+  const collab = window.realtimeCollab as RealtimeCollabLike | undefined;
+  const u = collab?.getUser?.();
   return {
     id: u?.userId || 'local',
     name: u?.userName || 'You',
@@ -27,12 +44,27 @@ function getCurrentUser() {
   };
 }
 
+interface Comment {
+  id: string;
+  author: string;
+  avatar: string;
+  text: string;
+  time: string;
+  timestamp: string;
+}
+
 /* ─── Comment thread ─── */
 
-function CommentThread({ comments, onAdd, onClose }) {
+interface CommentThreadProps {
+  comments: Comment[];
+  onAdd: (text: string) => void;
+  onClose: () => void;
+}
+
+function CommentThread({ comments, onAdd, onClose }: CommentThreadProps) {
   const [text, setText] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!text.trim()) return;
     onAdd(text.trim());
@@ -72,7 +104,7 @@ function CommentThread({ comments, onAdd, onClose }) {
       <form onSubmit={handleSubmit} className="flex gap-1.5">
         <input
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setText(e.target.value)}
           placeholder="Add a comment..."
           className="flex-1 rounded-lg bg-[var(--surface)] px-2.5 py-1.5 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
         />
@@ -90,14 +122,25 @@ function CommentThread({ comments, onAdd, onClose }) {
 
 /* ─── main component ─── */
 
+export interface CoThinkingProps {
+  page: Page;
+  // Matches handleBlockPatchByPage's real signature in App.tsx — this
+  // component always uses the 2-arg (blockId, patch) calling convention
+  // (documented at that call site as a pre-existing dual-convention
+  // function, not something introduced here).
+  onBlockPatch: (blockId: string, patch: Record<string, unknown>) => void;
+  onClose: () => void;
+  onToast?: (message: string) => void;
+}
+
 export default function CoThinking({
   page,
   onBlockPatch,
   onClose,
   onToast
-}) {
+}: CoThinkingProps) {
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -106,8 +149,8 @@ export default function CoThinking({
 
   const [sessionActive, setSessionActive] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [activeCollaborators, setActiveCollaborators] = useState([]);
-  const [commentBlockId, setCommentBlockId] = useState(null);
+  const [activeCollaborators, setActiveCollaborators] = useState<CurrentUser[]>([]);
+  const [commentBlockId, setCommentBlockId] = useState<string | null>(null);
 
   const sessionLink = useMemo(() => {
     return `noska://session/${uid()}`;
@@ -137,11 +180,11 @@ export default function CoThinking({
     }
   };
 
-  const addComment = (blockId, text) => {
+  const addComment = (blockId: string, text: string) => {
     const block = page.blocks.find((b) => b.id === blockId);
     if (!block) return;
     const me = getCurrentUser();
-    const comment = {
+    const comment: Comment = {
       id: uid(),
       author: me.name,
       avatar: me.avatar,
@@ -149,7 +192,11 @@ export default function CoThinking({
       time: "now",
       timestamp: now()
     };
-    const comments = [...(block.comments || []), comment];
+    // `comments` isn't a named field on Block, only reachable through
+    // BaseBlock's `[key: string]: unknown` index signature — same
+    // documented gap as the App.tsx CoThinking call site's comment
+    // (comments not persisted to the DB). Cast narrowly here.
+    const comments = [...((block.comments as Comment[] | undefined) || []), comment];
     onBlockPatch(blockId, { comments });
   };
 
@@ -267,29 +314,35 @@ export default function CoThinking({
 
               {/* Block list with comment indicators */}
               <div className="space-y-1">
-                {page?.blocks?.map((block) => (
+                {page?.blocks?.map((block) => {
+                  // `comments`/`checked` aren't named fields on Block, only
+                  // reachable through BaseBlock's index signature — same
+                  // documented gap as addComment above.
+                  const blockComments = (block.comments as Comment[] | undefined) || [];
+                  const blockChecked = block.checked as boolean | undefined;
+                  return (
                   <div key={block.id} className="group relative flex items-start gap-2 rounded-lg px-3 py-2 hover:bg-[var(--surface)]">
                     <div className="flex-1 text-sm text-[var(--text)] leading-6">
                       {block.type === "h1" && <span className="text-lg font-bold">{block.text}</span>}
                       {block.type === "h2" && <span className="text-base font-semibold">{block.text}</span>}
                       {block.type === "h3" && <span className="text-sm font-semibold">{block.text}</span>}
                       {block.type === "bullet" && <span>• {block.text}</span>}
-                      {block.type === "todo" && <span>{block.checked ? "☑" : "☐"} {block.text}</span>}
+                      {block.type === "todo" && <span>{blockChecked ? "☑" : "☐"} {block.text}</span>}
                       {!["h1","h2","h3","bullet","todo"].includes(block.type) && <span>{block.text || "(empty)"}</span>}
                     </div>
                     {/* Comment indicator */}
                     <button
                       onClick={() => setCommentBlockId(commentBlockId === block.id ? null : block.id)}
                       className={`shrink-0 grid h-6 w-6 place-items-center rounded text-xs transition-opacity ${
-                        block.comments?.length
+                        blockComments.length
                           ? "opacity-100 text-[var(--accent)]"
                           : "opacity-0 group-hover:opacity-100 text-[var(--muted)] hover:text-[var(--text)]"
                       }`}
                     >
                       <MessageCircle size={13} />
-                      {block.comments?.length > 0 && (
+                      {blockComments.length > 0 && (
                         <span className="absolute -top-1 -right-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-[var(--accent)] text-[8px] text-white">
-                          {block.comments.length}
+                          {blockComments.length}
                         </span>
                       )}
                     </button>
@@ -299,7 +352,7 @@ export default function CoThinking({
                       {commentBlockId === block.id && (
                         <div className="absolute right-0 top-full z-20 mt-1">
                           <CommentThread
-                            comments={block.comments || []}
+                            comments={blockComments}
                             onAdd={(text) => addComment(block.id, text)}
                             onClose={() => setCommentBlockId(null)}
                           />
@@ -307,7 +360,8 @@ export default function CoThinking({
                       )}
                     </AnimatePresence>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

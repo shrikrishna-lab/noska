@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import type { CSSProperties, ChangeEvent, MouseEvent as ReactMouseEvent } from "react";
 import {
   X,
   Play,
@@ -14,8 +15,26 @@ import {
   Trash2
 } from "lucide-react";
 import { plainText } from "../../utils/helpers";
+import type { Page } from "../../lib/supabaseService";
+import type { Block } from "../../../types/blocks";
 
-const THEMES = {
+interface ReadingTheme {
+  name: string;
+  bg: string;
+  text: string;
+  border: string;
+  hover: string;
+  accent: string;
+  activeBg: string;
+  // CSS custom properties (--reading-*) aren't part of React's typed
+  // CSSProperties, so this needs the standard "index signature for custom
+  // props" escape rather than the plain CSSProperties type used elsewhere.
+  styles: CSSProperties & Record<`--reading-${string}`, string>;
+}
+
+type ThemeKey = "sepia" | "forest" | "night" | "day";
+
+const THEMES: Record<ThemeKey, ReadingTheme> = {
   sepia: {
     name: "Sepia",
     bg: "bg-[#f5f0e6]",
@@ -82,19 +101,25 @@ const THEMES = {
   }
 };
 
-export default function ReadingMode({ page, onClose, onPagePatch }) {
+export interface ReadingModeProps {
+  page: Page;
+  onClose: () => void;
+  onPagePatch: (pageId: string, patch: Partial<Page>) => void;
+}
+
+export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeProps) {
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const [theme, setTheme] = useState("sepia");
+  const [theme, setTheme] = useState<ThemeKey>("sepia");
   const [fontSize, setFontSize] = useState(18); // px font size
   const [lineHeight, setLineHeight] = useState(1.6);
-  const [fontFamily, setFontFamily] = useState("serif"); // "serif" or "sans"
+  const [fontFamily, setFontFamily] = useState<"serif" | "sans">("serif");
   const [scrollProgress, setScrollProgress] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -103,15 +128,15 @@ export default function ReadingMode({ page, onClose, onPagePatch }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [ttsSpeed, setTtsSpeed] = useState(1.0);
-  const [voices, setVoices] = useState([]);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState("");
 
   // Highlights state
-  const [selection, setSelection] = useState(null);
+  const [selection, setSelection] = useState<string | null>(null);
   const [selectionBox, setSelectionBox] = useState({ top: 0, left: 0 });
 
-  const contentRef = useRef(null);
-  const containerRef = useRef(null);
+  const contentRef = useRef<HTMLElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const highlights = page.highlights || [];
   const isBookmarked = page.bookmarked || false;
@@ -191,7 +216,7 @@ export default function ReadingMode({ page, onClose, onPagePatch }) {
     clearSelection();
   };
 
-  const removeHighlight = (textToRemove) => {
+  const removeHighlight = (textToRemove: string) => {
     onPagePatch(page.id, {
       highlights: highlights.filter((h) => h !== textToRemove)
     });
@@ -249,7 +274,7 @@ export default function ReadingMode({ page, onClose, onPagePatch }) {
   };
 
   // Render different block types for styling
-  const renderBlock = (block) => {
+  const renderBlock = (block: Block) => {
     switch (block.type) {
       case "h1":
         return <h1 key={block.id} className="mt-8 mb-4 text-3xl font-bold font-serif leading-tight text-[var(--reading-text)]">{block.text || "Untitled Section"}</h1>;
@@ -269,13 +294,19 @@ export default function ReadingMode({ page, onClose, onPagePatch }) {
             <code>{block.text}</code>
           </pre>
         );
-      case "callout":
+      case "callout": {
+        // `meta` isn't a named field on BaseBlock, only reachable through
+        // its `[key: string]: unknown` index signature — cast narrowly to
+        // read `.icon` off it, matching how callout blocks are actually
+        // built elsewhere (helpers.js's blockFor('callout', ...)).
+        const meta = block.meta as { icon?: string } | undefined;
         return (
           <div key={block.id} className="my-4 flex gap-3 rounded-lg border border-[var(--reading-border)] bg-black/5 dark:bg-white/5 p-4 text-[var(--reading-text)]">
-            {block.meta?.icon && <span className="text-lg select-none">{block.meta.icon}</span>}
+            {meta?.icon && <span className="text-lg select-none">{meta.icon}</span>}
             <div className="flex-1">{block.text}</div>
           </div>
         );
+      }
       case "bullet":
         return (
           <li key={block.id} className="ml-5 list-disc my-1 text-[var(--reading-text)] leading-relaxed">
@@ -293,11 +324,14 @@ export default function ReadingMode({ page, onClose, onPagePatch }) {
           <div key={block.id} className="flex items-center gap-2.5 my-1.5 text-[var(--reading-text)]">
             <input
               type="checkbox"
-              checked={block.checked || false}
+              // `checked` isn't a named field on BaseBlock, only reachable
+              // through its index signature — cast narrowly, matching the
+              // real shape written by helpers.js's blockFor('todo', ...).
+              checked={(block.checked as boolean) || false}
               disabled
               className="h-4.5 w-4.5 rounded border-[var(--reading-border)] text-[var(--reading-accent)] focus:ring-0 focus:ring-offset-0 pointer-events-none"
             />
-            <span className={block.checked ? "line-through opacity-50" : ""}>{block.text}</span>
+            <span className={(block.checked as boolean) ? "line-through opacity-50" : ""}>{block.text}</span>
           </div>
         );
       case "divider":
@@ -413,7 +447,7 @@ export default function ReadingMode({ page, onClose, onPagePatch }) {
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--reading-text)] opacity-60 mb-2">Theme</h4>
               <div className="grid grid-cols-4 gap-1.5">
-                {Object.entries(THEMES).map(([key, value]) => (
+                {(Object.entries(THEMES) as [ThemeKey, ReadingTheme][]).map(([key, value]) => (
                   <button
                     key={key}
                     onClick={() => setTheme(key)}
