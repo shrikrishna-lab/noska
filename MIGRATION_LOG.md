@@ -1884,3 +1884,229 @@ grep across all 28 files.
 ### Commit
 28 files converted (renames + type additions), plus this log entry. No
 files outside `src/modules/database/**` were modified except this log.
+
+---
+
+## Phase 6 — Remaining conversions kickoff (multi-agent split)
+
+User directed: finish converting all remaining `.jsx`/`.js` files before
+starting the RLS work, using multiple agents for real independent work to
+speed this up given the volume (64 files). Split rationale (mine, confirmed
+before dispatching): `src/modules/page/**` (6 files) and
+`src/modules/database/**` were flagged as candidates for parallel sub-agent
+work since they're self-contained subtrees with zero cross-dependencies on
+`App.tsx`/`Editor.tsx` or on each other — confirmed `modules/database/**`
+was *already* fully `.ts`/`.tsx` (converted in an earlier, unlogged pass;
+commit `fa8d47f` "Convert database module to TypeScript" predates this
+session's visibility into it). Only `src/modules/page/**` remained there.
+The 12 top-level app-shell files and 15 editor-chrome files were kept
+sequential (by me), since they constantly reference each other's prop
+shapes and both get consumed by `App.tsx`/`Editor.tsx` — parallelizing
+those risks two agents guessing incompatible shapes for the same shared
+type, which this migration has avoided everywhere else.
+
+### Batch A — `src/modules/page/**` (sub-agent, general-task-execution)
+Converted all 6 files: `peek/PeekPanel.jsx→.tsx`, `properties/PropertyEngine.js→.tsx`
+(had to be `.tsx` not `.ts` — it returns JSX in every renderer, a hard
+constraint under this project's `jsx: "react-jsx"` config, not a style
+choice), `relations/RelationEngine.js→.ts`, and the three `index.js→.ts`
+barrels.
+
+- `PeekPanel`: typed against real call-site usage in
+  `DatabasePage.tsx` (~line 793) — `row`/`database`: `DatabaseRow`/
+  `DatabaseSchema`, `properties: PropertyDefinition[]`. `children` prop
+  confirmed dead (destructured, never rendered, never passed by its only
+  caller) — documented, not wired up or removed.
+- `PropertyEngine`: registry retyped against the real `PropertyType` union
+  from `database/types/database.ts`; each of 20 renderer configs typed
+  with new `PropertyRenderArgs`/`PropertyTypeConfig` interfaces. Its import
+  of `PROPERTY_TYPES` is unused in the file body (confirmed via grep) —
+  kept and documented as dead, not silently removed.
+- `RelationEngine`: added a real `Relation` interface + `RelationType`
+  union (was a bare JSDoc `@typedef`). Confirmed zero consumers anywhere
+  in the codebase (dead code, typed anyway for scope completeness).
+- No `any`/`@ts-ignore`/`@ts-nocheck`; independently re-verified by me
+  (grep for credential/escape patterns: none; `tsc --noEmit`: clean) after
+  the sub-agent's self-report, before trusting it.
+- Verification (sub-agent + independently re-confirmed): `tsc --noEmit`
+  clean, `npm run build` succeeded, `vitest run` 140/140.
+
+### Batch B — App-shell/editor-adjacent sequential files (me)
+Converted 6 files: `src/core/tree/TreeEngine.js→.ts`,
+`src/components/PageTree.jsx→.tsx` (converted together — tightly coupled,
+`PageTree` is `TreeEngine`'s only consumer), `src/components/InPageChildren.jsx→.tsx`,
+`src/components/InPageFind.jsx→.tsx`, `src/features/reading/ReadingMode.jsx→.tsx`,
+`src/features/collab/CoThinking.jsx→.tsx`.
+
+**New "field exists in code, not in the `Page`/`Block` type" gaps found**
+(same established pattern as the content/fontStyle/trashedAt rounds in
+Phase 4 — documented and added, not persisted to the DB):
+- `Page.highlights?: string[]` and `Page.bookmarked?: boolean` —
+  ReadingMode's saved text-selection highlights and bookmark flag,
+  confirmed via its `App.tsx` call site's `onPagePatch`. Added to the
+  `Page` interface in `supabaseService.ts` with the same "not a `pages`
+  column, session-only" documentation as the existing group.
+- `Block.comments` (CoThinking's comment threads) and `Block.checked`/
+  `Block.meta` (ReadingMode's todo/callout rendering) — all three reachable
+  only through `BaseBlock`'s `[key: string]: unknown` index signature, not
+  named fields. Cast narrowly at each read site with inline comments
+  rather than widening `Block` for fields only these two files touch —
+  `comments` in particular is the same gap already flagged in App.tsx's
+  Tier 2 File 5 entry (comments not persisting), now also surfaced here on
+  the read side.
+
+**Real pre-existing quirk found and preserved (not "fixed")**:
+`PageTree.tsx`'s `TreeConnector`: both call sites pass a plain `boolean`
+for `activePath`/`hoverPath` (`active`, `isHovered || parentHovered`), but
+the per-segment loop did `d < activePath.length` — `boolean.length` is
+`undefined`, so `d < undefined` is always `false`. `isActive`/`isHover`
+inside the loop were therefore always `false` at runtime; only the
+top-level opacity/color ternary above the loop ever had any visual effect.
+Replicated this exact always-false result explicitly (`const isActive =
+false`) with a comment explaining why, rather than guessing this meant to
+check array membership (which would change the rendered connector
+color/opacity at each depth level — a real behavior change, not a typing
+fix).
+
+**Other quirks documented, not fixed**: `InPageChildren`'s `onAddInside`
+prop destructured but never called in its body (confirmed dead — and the
+whole component itself has zero importers anywhere in the codebase, so
+this dead prop is doubly moot); `PageTree`'s `density`/`setDensity` state
+declared but never read in JSX (pre-existing dead state); `PageTree`'s
+drag-reorder `sortOrder` patch field — not a real `Page` field (confirmed
+via grep), same non-persisted-field pattern, cast narrowly rather than
+added to `Page` since nothing else reads it.
+
+### Security check (both batches)
+Grepped all 12 changed files across both batches for hardcoded
+credentials/keys/tokens/`any`/`@ts-ignore`/`@ts-nocheck`: zero matches. No
+auth/RLS/permission logic touched in either batch — this is UI rendering,
+tree traversal, reading-mode chrome, and collab/comment UI only.
+
+### Verification (combined, after both batches)
+- `npx tsc --noEmit`: clean (full project).
+- `npm run build`: succeeded (pre-existing chunk-size warning only).
+- `npx vitest run`: **140/140 tests pass**.
+
+### Commits
+- Batch A committed separately: "Convert modules/page to TypeScript".
+- Batch B committed separately: "Convert PageTree, TreeEngine,
+  InPageChildren, InPageFind, ReadingMode, CoThinking to TypeScript".
+
+Remaining after this batch: 12 top-level app-shell files (Sidebar, Topbar,
+CommandPalette, Modals, WorkspaceViews, AIPanel, AIRightPanel — the
+CommandPalette-dead-instance-affecting one — Application menu, etc.) and
+15 editor-chrome files (BlockContextMenu, SlashCommandMenu, RichTextEditor,
+CodeBlock, etc.), all still sequential given their cross-dependencies.
+
+---
+
+## Live browser QA of Batch A + Batch B (user-directed, before continuing conversions)
+
+Per explicit instruction, tested everything converted in the prior entry
+live in a running browser (same `TEST_MODE` bypass method as all prior QA
+passes) before moving on to the next batch. Found and fixed one real,
+previously-undetected bug.
+
+### Verified working correctly (no issues)
+- **`PageTree.tsx`/`TreeEngine.ts`**: page creation, nested child pages,
+  expand/collapse (chevron), keyboard navigation (arrow keys), favorite
+  toggle, full context menu (Duplicate/Rename/Move to Trash/Open in new
+  tab/side peek), drag-and-drop context mounts without error.
+- **`ReadingMode.tsx`**: opens via Topbar button, all 4 themes switch
+  correctly, font size (A-/A+) and line-height controls work, bookmark
+  toggle persists and shows a "Bookmarked" badge, Highlights sidebar shows
+  correct empty state, Settings panel (Theme/Typography/Voice) fully
+  functional, voice dropdown populated with real system TTS voices, close
+  via button and Escape both work. TTS `Play` button doesn't produce audio
+  in this headless test environment (`speechSynthesis.speaking` stayed
+  `false`) — confirmed this is a headless-browser/no-audio-device
+  limitation, not a code defect (`utterance.onend` fires immediately with
+  no real synthesis backend).
+- **`CoThinking.tsx`**: only reachable by temporarily flipping
+  `collabOpen`'s default in a throwaway local edit (both real
+  `onCollab` call sites in `App.tsx` target the already-documented dead
+  CommandPalette instance — consistent with the existing finding, not new).
+  With it forced open: session start/end, live "1 online" collaborator
+  avatar, comment thread popover open/close, and adding a real comment via
+  `onBlockPatch` all worked correctly end-to-end, including the comment
+  count badge updating. Confirmed zero console errors beyond the expected
+  placeholder-URL/WebSocket noise. Temporary edit fully reverted before
+  moving on (confirmed via `git diff` showing no residual change).
+- **`InPageChildren.tsx`**: confirmed via grep to have zero importers
+  anywhere in the codebase — dead code, consistent with what was already
+  flagged during conversion. Not a regression.
+- **`modules/page/peek/PeekPanel.tsx`** (sub-agent's Batch A): tested live
+  by creating a database block, adding a row, and opening its peek view —
+  Properties/Content/Comments/History/AI tabs all switch correctly, the
+  NAME property field renders and is editable, "Comments coming soon"
+  placeholder shows correctly, "Open as full page" button present. Full
+  round-trip through `DatabasePage.tsx` confirmed working.
+- **`PropertyEngine.tsx`/`RelationEngine.ts`** (sub-agent's Batch A):
+  reconfirmed zero consumers anywhere in the codebase — dead code, not
+  reachable to test live, consistent with the conversion-time finding.
+
+### Real bug found and fixed: find-and-replace silently no-opped visually
+**`InPageFind.tsx`'s Replace/Replace All never updated the visible block
+text**, despite correctly writing to `localStorage`. Root cause: every
+real block-editing path in `Editor.tsx` (`renderBlockEditor.tsx`, ~10 call
+sites) writes edits to **both** `block.text` and
+`block.properties.richText` together, because the actual rendered editor
+(`RichTextEditor.jsx`'s `RichTextMode`) displays from `richText`, not
+`text`. `InPageFind`'s `onReplace` callback in `Editor.tsx` (the line
+constructing the replacement) only ever updated `text` — so Replace
+silently wrote to a field nothing renders, while the on-screen block
+content never visibly changed, even surviving a full page reload.
+
+- **Confirmed this is not a migration-introduced regression**: diffed
+  against the original `.jsx` — the buggy callback logic is byte-for-byte
+  identical (`git show HEAD:src/components/InPageFind.jsx` confirms the
+  same `handleReplace`/`handleReplaceAll` existed before this session's
+  conversion). This bug has existed since before the TypeScript migration
+  began; the conversion didn't create it, it was just never live-tested
+  end-to-end (DOM read) until now — a `localStorage`-only check would have
+  missed it entirely, since the underlying data write was always correct.
+- **Fix**: `Editor.tsx`'s `InPageFind` call site's `onReplace` now
+  constructs the replaced plain text once, then updates `text` AND
+  `properties.richText` (via the existing `plainTextToRichText()` helper
+  from `utils/richText.ts`) together in the same patch — matching the
+  exact pattern every other real edit path in this file already uses.
+  Added `plainTextToRichText` to this file's existing `richText` import.
+- **Verified live, twice**: (1) on a stale page from earlier testing,
+  confirmed `localStorage` already had the correct replaced text while the
+  DOM still showed the pre-replace text — proving the desync. (2) On a
+  completely fresh page created from scratch, typed "Hello world hello
+  universe", searched "hello", replaced all with "HOWDY" — DOM correctly
+  updated to "Hello world HOWDY universe" (case-sensitivity of the
+  original "Hello" preserved, matching the existing case-insensitive-match/
+  case-preserving-replacement behavior exactly).
+- **Known limitation of this fix, documented not fixed further**: using
+  `plainTextToRichText()` on the whole block after a replace collapses any
+  existing bold/italic/etc. formatting spans on that specific block into
+  plain text (since the fix only has the plain replaced string, not the
+  original span structure.) This is an acceptable tradeoff — the feature
+  went from "does nothing visible at all" to "works correctly for plain
+  text, may flatten rich formatting on the edited block" — a strict
+  improvement, and matches the granularity `handleReplace`/
+  `handleReplaceAll` operate at (whole-block plain-text search, same as
+  before). A span-preserving replace would require matching against
+  `richText` spans directly, a larger change out of scope for this fix.
+
+### Security check
+Grepped `Editor.tsx`'s changed region for credentials/`any`/`@ts-ignore`/
+`@ts-nocheck`: none found (only pre-existing `apiKey` prop passthrough for
+the user's own bring-your-own AI key, not a hardcoded secret). No auth/RLS
+logic touched.
+
+### Verification
+- `npx tsc --noEmit`: clean (full project).
+- `npm run build`: succeeded.
+- `npx vitest run`: **140/140 tests pass**.
+- All above confirmed live in a running `TEST_MODE` browser session, not
+  just statically.
+
+### Commit
+- Ready to commit as a follow-up on top of the Batch A/B conversions:
+  "Fix InPageFind replace not updating visible block text" plus the
+  Batch A/B conversion commits themselves (all still pending commit per
+  the earlier instruction to test before committing).

@@ -51,7 +51,7 @@ import {
 import { AnimatedSparkle } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss, TextArea } from "./ui";
 import { emojis, covers, blockFor, getPagePermission, renderInlineMarkdown, softDelete, getDescendants, turnInto } from "../utils/helpers";
-import { richTextToPlainText } from "../utils/richText";
+import { richTextToPlainText, plainTextToRichText } from "../utils/richText";
 
 // Searchable emoji catalog for the /emoji picker (keyword-indexed).
 const EMOJI_CATALOG = [
@@ -867,7 +867,33 @@ export default function Editor({
               exit={{ opacity: 0, y: -8 }}
               className="mb-3"
             >
-              <InPageFind blocks={page.blocks || []} onClose={() => setFindOpen(false)} onReplace={(blockId, start, end, replacement) => { onBlocks((page.blocks || []).map(b => b.id === blockId ? { ...b, text: b.text.slice(0, start) + replacement + b.text.slice(end) } : b)); }} />
+              <InPageFind
+                blocks={page.blocks || []}
+                onClose={() => setFindOpen(false)}
+                onReplace={(blockId, start, end, replacement) => {
+                  // Real bug, fixed: this only ever wrote the replacement to
+                  // the block's top-level `text` field. Every real block
+                  // renderer (renderBlockEditor.tsx, ~10 call sites) reads
+                  // and displays `properties.richText`, not `text` — so a
+                  // find-and-replace here silently updated a field nothing
+                  // shows, while the visible content never changed. Fixed
+                  // to update both fields together, matching the exact
+                  // pattern every other edit path in this file already
+                  // uses (`properties: { ...block.properties, richText },
+                  // text`). Confirmed live: before this fix, Replace edited
+                  // localStorage's `text` field correctly but the on-screen
+                  // block text never updated, even after a full reload.
+                  onBlocks((page.blocks || []).map((b) => {
+                    if (b.id !== blockId) return b;
+                    const nextText = (b.text || "").slice(0, start) + replacement + (b.text || "").slice(end);
+                    return {
+                      ...b,
+                      text: nextText,
+                      properties: { ...(b.properties || {}), richText: plainTextToRichText(nextText) }
+                    };
+                  }));
+                }}
+              />
             </motion.div>
           )}
           {backlinksOpen && (
