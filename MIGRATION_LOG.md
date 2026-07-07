@@ -2110,3 +2110,148 @@ logic touched.
   "Fix InPageFind replace not updating visible block text" plus the
   Batch A/B conversion commits themselves (all still pending commit per
   the earlier instruction to test before committing).
+
+
+---
+
+## Final batch — remaining editor-chrome and app-shell files (23 files)
+
+Converted the last 23 `.jsx`/`.js` files in `src/`, completing the TypeScript
+migration end to end: `src/` now has **zero** `.js`/`.jsx` files remaining.
+
+### Approach
+Split into independent groups (no cross-imports between them — all consumed
+only by `Editor.tsx`/`App.tsx`) and dispatched most to parallel sub-agents,
+consistent with the earlier Batch A/B pattern. I handled `BlockPreviewIllustration.tsx`
+(finished a conversion already in progress), `SlashCommandPreviewPanel.tsx`,
+`CommandPalette.tsx`, and the `Editor.tsx` fallout myself; `WorkspaceViews.tsx`
+was re-dispatched to a fresh sub-agent after an earlier attempt failed with a
+network/deserialization error mid-report (its actual file output was
+independently re-verified before trusting it — see below).
+
+### Files converted
+- `src/modules/index.js` → `.ts` (trivial barrel file)
+- `src/components/editor/BlockPreviewIllustration.tsx`, `SlashCommandPreviewPanel.tsx`
+- `src/components/editor/RichTextEditor.tsx`, `SelectionAIBar.tsx`, `SlashCommandMenu.tsx`, `src/components/AIPanel.tsx`
+- `src/components/AIRightPanel.tsx`, `src/components/Sidebar.tsx`
+- `src/components/editor/FloatingFormatToolbar.tsx`, `ImagePicker.tsx`, `PageOptionsMenu.tsx`, `src/components/auth/AuthPage.tsx`, `src/components/Topbar.tsx`
+- `src/components/editor/BacklinksPanel.tsx`, `InlineAIBar.tsx`, `VersionHistoryPanel.tsx`, `CodeBlock.tsx`, `BlockContextMenu.tsx`, `CustomizePanel.tsx`
+- `src/components/Modals.tsx` (5 exported modal components: Settings/Trash/Share/Help/CustomDialog)
+- `src/components/CommandPalette.tsx`
+- `src/components/WorkspaceViews.tsx` (~20 components — the last file)
+
+### Bug found and fixed: ImagePicker's UnsplashTab bare `error` reference
+Pre-existing crash bug (not migration-introduced), caught during typing:
+`UnsplashTab` referenced a bare `error` identifier in its render body that was
+never declared as a prop or local state — only `setError` was destructured.
+This threw a `ReferenceError` every time the Unsplash tab rendered its
+empty-results placeholder (i.e. every time a user opened the Unsplash tab
+before typing a search). Fixed by threading the parent's `error` state down
+as an explicit prop, matching the evident intent. Flagged distinctly from
+routine typing per the established rule.
+
+### Type-only fix: CommandRegistry.ts's `onTrash` context field
+`CommandContext.onTrash` was declared as `() => void`, but its own "trash"
+command calls `ctx.onTrash?.(ctx.page.id)` — a real caller passing an
+argument the declared type didn't accept. This was a pre-existing type-only
+gap (JS never checked call-site arity) that only surfaced once
+`CommandPalette.tsx` (forwarding `Editor.tsx`'s `onTrashPage: (pageId: string) => void`)
+was typed and checked against it. Fixed by widening the declaration to
+`(pageId?: string) => void` — no runtime behavior change, purely a type
+correction to match already-existing call sites.
+
+### Type-only fix: Editor.tsx's `lastEditedAt` unknown-typed cast
+`Block` (types/blocks.ts) declares `lastEditedTime`, not `lastEditedAt` —
+`block.lastEditedAt` only existed via `BaseBlock`'s catch-all index
+signature, which resolved to `unknown` and broke the `||` fallback chain
+feeding `BlockContextMenu`'s `lastEditedAt` prop. Fixed with a narrow,
+documented cast (`(block as unknown as { lastEditedAt?: string })`) — not a
+behavior change, since this field was never actually set on a block at
+runtime; the expression already always fell through to `page?.updatedAt`.
+
+### Quirks found and preserved (not changed)
+- `SelectionAIBar.tsx`: `selection.rect.bottom` is read in a dead-code branch
+  that's unreachable given how `top`/`left` are clamped elsewhere in
+  `Editor.tsx`; `SelectionState.rect` never actually sets `bottom`. Typed as
+  optional and documented, not removed.
+- `Topbar.tsx`: `onExport`/`onClipper`/`onLineage`/`onCollab`/`onLockPage`/
+  `onRemoveEncryption` are passed by `App.tsx` but never read in the
+  component body — pre-existing dead props, documented not removed.
+- `BlockContextMenu.tsx`: `block` prop is accepted but never read anywhere in
+  the component body, despite `Editor.tsx` passing it on every render —
+  confirmed via full read of both files, not a typo. Documented, preserved.
+- `WorkspaceViews.tsx`: `chat.title` is read throughout but `AIChat` only has
+  a `name` field — every read is always `undefined` at runtime and falls
+  back to a literal string. `MarketplaceRoute` is dead/unreachable code
+  (superseded by an earlier `view === "marketplace"` dispatch to the real
+  `MarketplacePage`). `AgentCard`'s `active` prop is passed but never read.
+  All documented, none changed.
+- `CommandPalette.tsx`: the already-documented App.tsx dead-instance /
+  `context` prop-shape mismatch (highest-priority finding from Phase 5) is
+  preserved exactly — typed in place, not fixed or consolidated, per
+  standing instruction.
+
+### CommandPalette.tsx type-only fix (not a live bug)
+`cmd.preview` in the results list render is the normalized
+`{ description, image? }` object (`NormalizedCommand`), never a plain
+string — rendering it directly wouldn't type-check as a JSX child. Not
+currently reachable at runtime (every command definition in
+`CommandRegistry.ts` sets `description`, so the `||` chain always
+short-circuits before reaching `.preview`), but fixed to read
+`.preview.description` since that's the type-correct form and stays correct
+if that invariant ever changes. Verified via grep that all command entries
+have a `description` field before characterizing this as latent, not live.
+
+### Sub-agent output re-verification
+Per established practice, every sub-agent's output was independently
+re-checked before trusting/committing: scoped and full-project `tsc --noEmit`
+re-run myself (not just trusting the sub-agent's self-report), security
+greps re-run for credentials/`any`/`@ts-ignore`/`@ts-nocheck` across every
+new file, exported symbol names spot-checked against the original `.jsx`
+files via `Select-String`. One sub-agent (Modals+WorkspaceViews, first
+attempt) failed with a deserialization/network error mid-run — `Modals.tsx`
+had already been fully written to disk and was independently verified
+(line count, exports, tsc-clean, security-clean) before committing;
+`WorkspaceViews.tsx` was re-dispatched to a fresh sub-agent which completed
+successfully and was likewise independently re-verified.
+
+### Security check
+Grepped every new/changed file in this batch for hardcoded credentials
+(`api_key|apikey|secret|password|token|Bearer|sk-|AKIA`): no hardcoded
+values found — only pre-existing prop/parameter names (`apiKey`, `nvidiaKey`)
+and one already-known, unchanged pre-existing Unsplash public access key in
+`ImagePicker.tsx` (carried over verbatim from the original `.jsx`, not
+introduced by this migration). Confirmed no RLS/auth/permission logic was
+touched, dropped, or weakened in any file this batch (`AuthPage.tsx`'s
+Supabase OAuth flow, `PageOptionsMenu.tsx`'s lock/permission toggles, and
+`CommandRegistry.ts`'s `onTrash` fix were all specifically checked for this).
+
+### Verification
+- `npx tsc --noEmit`: **clean, 0 errors, full project** (confirmed multiple
+  times across the batch, and once more after the final commit).
+- `npm run build`: succeeded (`✓ built in ~1-2s`; only the pre-existing
+  chunk-size-over-1200kB warning, unrelated to this migration).
+- `npx vitest run`: **140/140 tests pass** (baseline maintained).
+- `Get-ChildItem -Path src -Recurse -Include *.js,*.jsx`: **zero results** —
+  confirmed the entire `src/` tree is now TypeScript-only.
+
+### Commits (this batch, in order)
+1. `962f04d` — BlockPreviewIllustration, SlashCommandPreviewPanel, modules/index
+2. `04383c8` — RichTextEditor, SelectionAIBar, SlashCommandMenu, AIPanel
+3. `0b540b3` — AIRightPanel, Sidebar
+4. `61b8c97` — FloatingFormatToolbar, ImagePicker (+ bug fix), PageOptionsMenu, AuthPage, Topbar
+5. `eac4cfa` — BacklinksPanel, InlineAIBar, VersionHistoryPanel, CodeBlock, BlockContextMenu, CustomizePanel
+6. `ef9c364` — Modals
+7. `8e9bda2` — Editor.tsx lastEditedAt cast fix
+8. `7f3ed30` — CommandPalette (+ CommandRegistry.ts onTrash type fix)
+9. `61d6b12` — WorkspaceViews (final file)
+
+### Status
+**The `.jsx`/`.js` → `.tsx`/`.ts` conversion of `src/` is now 100% complete.**
+Per standing instruction, the next step is resuming the deferred RLS/database
+security work (see the RLS finding documented earlier in this log and in
+`.kiro/specs/auth-rls-security-migration/`) — not yet started, explicitly
+picking back up now that all conversions are done. Live-browser QA of this
+final batch's newly-converted files (per the standing "test before moving on"
+instruction) has **not yet been performed** and should happen before or
+alongside resuming the RLS work.
