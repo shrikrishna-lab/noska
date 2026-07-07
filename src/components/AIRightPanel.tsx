@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import type { LucideIcon } from "lucide-react";
 import {
   X, Sparkles, ChevronDown, BookOpen, PenLine, BarChart3,
   CheckSquare, Languages, Wand2, Table, Brain,
@@ -14,6 +16,8 @@ import { getAgentList, getAgent } from "../ai/agents";
 import { uid, now } from "../utils/helpers";
 import { getAllRelations } from "../utils/pageLinks";
 import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
+import type { Page, AIChat } from "../lib/supabaseService";
+import type { Block } from "../../types/blocks";
 
 const SPRING = { type: "spring", stiffness: 400, damping: 28 };
 const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 };
@@ -24,7 +28,19 @@ const LANGUAGES = [
   "Dutch", "Polish", "Turkish", "Vietnamese", "Thai"
 ];
 
-const AI_ACTIONS = [
+/** Shared shape for the AI_ACTIONS / QUICK_ACTIONS entries below — `icon`
+ * is always a real lucide-react component here (unlike Sidebar.jsx's
+ * NoskaNavItem, no inline zero-arg icon components are used in this
+ * file), so a plain LucideIcon is accurate without needing the wider
+ * union pattern PageTree.tsx uses for its mixed icon sets. */
+interface AIActionDef {
+  id: string;
+  icon: LucideIcon;
+  label: string;
+  prompt?: string;
+}
+
+const AI_ACTIONS: AIActionDef[] = [
   { id: "summarize", icon: BookOpen, label: "Summarize", prompt: "Summarize this page in 3 concise bullet points" },
   { id: "rewrite", icon: PenLine, label: "Rewrite", prompt: "Rewrite this page to be clearer and more concise" },
   { id: "translate", icon: Languages, label: "Translate", prompt: "Translate this page to {lang}. Keep the structure." },
@@ -39,7 +55,7 @@ const AI_ACTIONS = [
   { id: "docs", icon: Code2, label: "Documentation", prompt: "Generate API documentation from this content" }
 ];
 
-const QUICK_ACTIONS = [
+const QUICK_ACTIONS: AIActionDef[] = [
   { id: "summarize", icon: BookOpen, label: "Summarize" },
   { id: "translate", icon: Languages, label: "Translate" },
   { id: "rewrite", icon: PenLine, label: "Rewrite" },
@@ -49,7 +65,12 @@ const QUICK_ACTIONS = [
   { id: "flashcards", icon: LayoutDashboard, label: "Flashcards" },
 ];
 
-const VIEW_META = {
+interface ViewMetaEntry {
+  icon: LucideIcon;
+  label: string;
+}
+
+const VIEW_META: Record<string, ViewMetaEntry> = {
   page: { icon: Globe, label: "Page" },
   home: { icon: Home, label: "Home" },
   calendar: { icon: Calendar, label: "Calendar" },
@@ -61,22 +82,89 @@ const VIEW_META = {
   meetings: { icon: Briefcase, label: "Meetings" },
 };
 
+/** Chat message shape actually produced/consumed here and in
+ * ChatMessageBubble below — `text`/`html` are legacy/alternate fields
+ * some older messages may carry (read via `message.text || message.content`
+ * throughout), kept optional rather than assumed present since this file
+ * never normalizes them away. */
+interface AIChatMessage {
+  id: string;
+  role: string;
+  content?: string;
+  text?: string;
+  html?: string;
+  createdAt?: string;
+}
+
+/** Shape of `toolContext`, passed straight through to
+ * `executeAllToolCalls` (src/ai/tools.ts) — mirrors the object literal
+ * built by `toolContext` in src/App.tsx's `useMemo`. `actions` methods are
+ * typed loosely (parameters that tools.ts passes positionally) since
+ * tools.ts itself accepts them untyped (`context.actions.createPage(...)`
+ * etc. with no shared interface declared there); redefining a stricter
+ * shape here wouldn't be enforced on the producing side anyway. */
+interface ToolContextActions {
+  createPage: (title: string, icon?: string, content?: string, tags?: string) => string;
+  renamePage: (title: string) => void;
+  appendBlocks: (blocks: Block[]) => void;
+  setPageTags: (tags: unknown[]) => void;
+  updateAnyPage: (id: string, patch: Partial<Page>) => void;
+  replaceBlocks: (blocks: Block[]) => void;
+  insertBlock: (index: number, block: Block) => void;
+  deleteBlock: (blockId: string) => void;
+  updateBlockById: (blockId: string, patch: Record<string, unknown>) => void;
+  undo: () => void;
+  redo: () => void;
+}
+
+interface ToolContextShape {
+  currentPage: Page | undefined;
+  pages: Page[];
+  actions: ToolContextActions;
+}
+
+interface AIRightPanelProps {
+  open: boolean;
+  onClose: () => void;
+  page: Page | undefined;
+  pages: Page[];
+  appView: string;
+  pageMode: string;
+  apiKey: string;
+  aiProvider: string;
+  nvidiaKey: string;
+  aiChats?: AIChat[];
+  activeChatId: string | null;
+  onChatsChange?: (chats: AIChat[]) => void;
+  onActiveChat?: (chatId: string | null) => void;
+  onNewChat?: (chatId?: string | null) => void;
+  onSelectChat?: (chatId: string) => void;
+  onDeleteChat?: (chatId: string) => void;
+  onRenameChat?: (chatId: string, name: string) => void;
+  onPagePatch?: (patch: Partial<Page>) => void;
+  onInsert?: (blocks: Block[]) => void;
+  onAppend?: (blocks: Block[]) => void;
+  onReplaceText?: (text: string) => void;
+  onToast?: (message: string) => void;
+  toolContext: ToolContextShape;
+}
+
 export default function AIRightPanel({
   open, onClose, page, pages, appView, pageMode,
   apiKey, aiProvider, nvidiaKey,
   aiChats = [], activeChatId, onChatsChange, onActiveChat, onNewChat,
   onSelectChat, onDeleteChat, onRenameChat, onPagePatch, onInsert,
   onAppend, onReplaceText, onToast, toolContext
-}) {
+}: AIRightPanelProps) {
   const [prompt, setPrompt] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<AIChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeAgent, setActiveAgent] = useState("assistant");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [targetLang, setTargetLang] = useState("Spanish");
   const [tokenEstimate, setTokenEstimate] = useState(0);
-  const [attachments, setAttachments] = useState([]);
+  const [attachments, setAttachments] = useState<unknown[]>([]);
   const pageId = page?.id;
   const relations = useMemo(() => {
     if (!pageId) return { backlinks: [], outgoing: [] };
@@ -92,8 +180,8 @@ export default function AIRightPanel({
   }, [relations]);
   const [showHistory, setShowHistory] = useState(false);
 
-  const messagesEndRef = useRef(null);
-  const composerRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLInputElement>(null);
 
   const currentAgent = getAgent(activeAgent);
   const agents = getAgentList();
@@ -117,7 +205,7 @@ export default function AIRightPanel({
     if (activeChatId) {
       const chat = aiChats.find(c => c.id === activeChatId);
       if (chat?.messages?.length) {
-        setMessages(chat.messages);
+        setMessages(chat.messages as AIChatMessage[]);
       }
     } else {
       setMessages([]);
@@ -132,17 +220,17 @@ export default function AIRightPanel({
     let chatId = activeChatId;
     if (!chatId) {
       chatId = uid();
-      const chat = { id: chatId, name: "New Chat", messages: [], createdAt: now(), updatedAt: now(), chatType: "private" };
+      const chat = { id: chatId, name: "New Chat", messages: [], createdAt: now(), updatedAt: now(), chatType: "private" } as unknown as AIChat;
       onChatsChange?.([...aiChats, chat]);
       onActiveChat?.(chatId);
     }
     return chatId;
   }, [activeChatId, aiChats, onChatsChange, onActiveChat]);
 
-  const handleSend = useCallback(async (text) => {
+  const handleSend = useCallback(async (text: string) => {
     if (!text?.trim() || loading) return;
     const chatId = ensureActiveChat();
-    const userMsg = { id: uid(), role: "user", content: text, createdAt: now() };
+    const userMsg: AIChatMessage = { id: uid(), role: "user", content: text, createdAt: now() };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setPrompt("");
@@ -150,7 +238,7 @@ export default function AIRightPanel({
 
     setTokenEstimate(prev => prev + Math.ceil(text.length / 4));
 
-    const chats = aiChats.map(c => c.id === chatId ? { ...c, messages: updatedMessages, updatedAt: now() } : c);
+    const chats = aiChats.map(c => c.id === chatId ? { ...c, messages: updatedMessages, updatedAt: now() } : c) as unknown as AIChat[];
     onChatsChange?.(chats);
 
     try {
@@ -164,12 +252,12 @@ export default function AIRightPanel({
       if (hasToolCalls(result)) {
         const cleaned = stripToolCalls(result);
         if (cleaned?.trim()) {
-          const toolMsg = { id: uid(), role: "assistant", content: cleaned, createdAt: now() };
+          const toolMsg: AIChatMessage = { id: uid(), role: "assistant", content: cleaned, createdAt: now() };
           processedMessages = [...processedMessages, toolMsg];
           setMessages(processedMessages);
         }
         const toolResults = await executeAllToolCalls(result, toolContext);
-        const toolResultText = toolResults.map(r => {
+        const toolResultText = toolResults.map((r: { name: string; error?: string; result?: unknown }) => {
           const success = r.error ? `Error: ${r.error}` : JSON.stringify(r.result, null, 2);
           return `Tool: ${r.name}\nResult: ${success}`;
         }).join("\n\n");
@@ -181,35 +269,36 @@ export default function AIRightPanel({
           page, pages,
         });
         const finalContent = hasToolCalls(followUp) ? stripToolCalls(followUp) : followUp;
-        const finalMsg = { id: uid(), role: "assistant", content: finalContent, createdAt: now() };
+        const finalMsg: AIChatMessage = { id: uid(), role: "assistant", content: finalContent, createdAt: now() };
         processedMessages = [...processedMessages, finalMsg];
       } else {
-        const aiMsg = { id: uid(), role: "assistant", content: result, createdAt: now() };
+        const aiMsg: AIChatMessage = { id: uid(), role: "assistant", content: result, createdAt: now() };
         processedMessages = [...processedMessages, aiMsg];
       }
 
       setTokenEstimate(prev => prev + Math.ceil(result.length / 4));
 
       setMessages(processedMessages);
-      const finalChats = chats.map(c => c.id === chatId ? { ...c, messages: processedMessages, updatedAt: now() } : c);
+      const finalChats = chats.map(c => c.id === chatId ? { ...c, messages: processedMessages, updatedAt: now() } : c) as unknown as AIChat[];
       onChatsChange?.(finalChats);
-    } catch (err) {
-      const friendly = err?.message?.includes("not configured") || err?.message?.includes("API key")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      const friendly = message?.includes("not configured") || message?.includes("API key")
         ? "AI provider not configured. Add an API key in Settings → AI Providers."
-        : err?.message?.includes("fetch") || err?.message?.includes("network") || err?.message?.includes("Failed to fetch")
+        : message?.includes("fetch") || message?.includes("network") || message?.includes("Failed to fetch")
           ? "Network error. Check your internet connection and try again."
-          : err?.message?.includes("timeout") || err?.message?.includes("timed out")
+          : message?.includes("timeout") || message?.includes("timed out")
             ? "AI request timed out. Try again or use a different model."
             : `AI request failed. Please try again.`;
-      const errMsg = { id: uid(), role: "assistant", content: friendly, createdAt: now() };
+      const errMsg: AIChatMessage = { id: uid(), role: "assistant", content: friendly, createdAt: now() };
       setMessages([...updatedMessages, errMsg]);
-      onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: [...updatedMessages, errMsg], updatedAt: now() } : c));
+      onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: [...updatedMessages, errMsg], updatedAt: now() } : c) as unknown as AIChat[]);
     } finally {
       setLoading(false);
     }
   }, [loading, messages, aiChats, activeChatId, page, pages, appView, pageMode, apiKey, aiProvider, nvidiaKey, toolContext, onChatsChange, onActiveChat, ensureActiveChat]);
 
-  const handleQuickAction = useCallback((actionId) => {
+  const handleQuickAction = useCallback((actionId: string) => {
     const action = AI_ACTIONS.find(a => a.id === actionId) || QUICK_ACTIONS.find(a => a.id === actionId);
     if (!action) return;
     const filled = action.prompt ? action.prompt.replace(/\{lang\}/g, targetLang) : `/${action.label.toLowerCase()}`;
@@ -217,17 +306,17 @@ export default function AIRightPanel({
     setTimeout(() => composerRef.current?.focus?.(), 50);
   }, [targetLang]);
 
-  const handleSwitchAgent = useCallback((agentId) => {
+  const handleSwitchAgent = useCallback((agentId: string) => {
     setActiveAgent(agentId);
   }, []);
 
   const hasMessages = messages.length > 0;
   const ViewIcon = currentView.icon;
   const chatHistory = useMemo(() => {
-    return aiChats.filter(c => c.messages?.length > 0).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    return aiChats.filter(c => c.messages?.length > 0).sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
   }, [aiChats]);
 
-  const selectedText = page?.blocks?.find(b => b.selected)?.text || "";
+  const selectedText = page?.blocks?.find((b) => (b as unknown as { selected?: boolean }).selected)?.text || "";
   const currentHistory = chatHistory.slice(0, 5);
 
   return (
@@ -294,7 +383,7 @@ export default function AIRightPanel({
               <div className="flex-1" />
               <select
                 value={targetLang}
-                onChange={(e) => setTargetLang(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setTargetLang(e.target.value)}
                 className="bg-transparent text-[9px] text-[var(--muted)] outline-none cursor-pointer hover:text-[var(--text-secondary)] transition"
                 aria-label="Target language"
               >
@@ -518,7 +607,7 @@ export default function AIRightPanel({
                             <Languages size={7} className="text-[var(--muted)] shrink-0" />
                             <select
                               value={targetLang}
-                              onChange={(e) => setTargetLang(e.target.value)}
+                              onChange={(e: ChangeEvent<HTMLSelectElement>) => setTargetLang(e.target.value)}
                               className="flex-1 bg-transparent text-[9px] text-[var(--text-secondary)] outline-none appearance-none cursor-pointer"
                             >
                               {LANGUAGES.map((lang) => (
@@ -623,8 +712,8 @@ export default function AIRightPanel({
                       ref={composerRef}
                       type="text"
                       value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      onKeyDown={(e) => {
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPrompt(e.target.value)}
+                      onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
                           handleSend(prompt);
@@ -662,21 +751,31 @@ export default function AIRightPanel({
   );
 }
 
-function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceText, onToast }) {
+interface ChatMessageBubbleProps {
+  message: AIChatMessage;
+  index: number;
+  total: number;
+  page: Page | undefined;
+  onInsert?: (blocks: Block[]) => void;
+  onReplaceText?: (text: string) => void;
+  onToast?: (message: string) => void;
+}
+
+function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceText, onToast }: ChatMessageBubbleProps) {
   const isUser = message.role === 'user';
   const isFirstAi = index === 0 && !isUser;
 
-  const handleCopy = useCallback((text) => {
+  const handleCopy = useCallback((text: string) => {
     navigator.clipboard.writeText(text).then(() => onToast?.('Copied to clipboard')).catch(() => {});
   }, [onToast]);
 
-  const handleInsertBelow = useCallback((text) => {
-    const blocks = text.split('\n').filter(Boolean).map(t => ({ id: uid(), type: 'text', text: t }));
+  const handleInsertBelow = useCallback((text: string) => {
+    const blocks = text.split('\n').filter(Boolean).map(t => ({ id: uid(), type: 'text', text: t })) as unknown as Block[];
     onInsert?.(blocks);
     onToast?.('Inserted below current blocks');
   }, [onInsert, onToast]);
 
-  const handleReplacePage = useCallback((text) => {
+  const handleReplacePage = useCallback((text: string) => {
     onReplaceText?.(text);
     onToast?.('Page content replaced');
   }, [onReplaceText, onToast]);
@@ -704,7 +803,7 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
         {isUser ? (
           <span className="whitespace-pre-wrap">{message.text || message.content}</span>
         ) : (
-          <div className="ai-md-container" dangerouslySetInnerHTML={{ __html: message.html || message.text || message.content }} />
+          <div className="ai-md-container" dangerouslySetInnerHTML={{ __html: message.html || message.text || message.content || "" }} />
         )}
 
         {/* Reactions + Actions */}
@@ -720,19 +819,19 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
             ))}
             <span className="w-px h-2.5 bg-[var(--border)] mx-0.5" />
             <button
-              onClick={() => handleInsertBelow(message.text || message.content)}
+              onClick={() => handleInsertBelow(message.text || message.content || "")}
               className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
             >
               Insert below
             </button>
             <button
-              onClick={() => handleReplacePage(message.text || message.content)}
+              onClick={() => handleReplacePage(message.text || message.content || "")}
               className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
             >
               Replace
             </button>
             <button
-              onClick={() => handleCopy(message.text || message.content)}
+              onClick={() => handleCopy(message.text || message.content || "")}
               className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
             >
               Copy

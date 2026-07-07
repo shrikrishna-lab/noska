@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import type { ReactNode, ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { SPRING_PRESETS, StaggerContainer, StaggerItem } from "../features/motion/MotionSystem";
@@ -11,7 +12,8 @@ import {
   Users,
   X,
   LogOut,
-  Settings
+  Settings,
+  type LucideIcon
 } from "lucide-react";
 import {
   AnimatedMenu,
@@ -35,8 +37,108 @@ import {
   AnimatedDownload
 } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss } from "./ui";
-import { timeAgo, plainText } from "../utils/helpers";
+import { timeAgo, plainText, emojis } from "../utils/helpers";
 import PageTree from "./PageTree";
+import type { PageSelectOptions } from "./PageTree";
+import type { Page } from "../lib/supabaseService";
+
+// IconButton (src/components/ui/index.tsx) types its `icon` prop as
+// lucide-react's `LucideIcon`, but several calls below pass this
+// codebase's custom AnimatedX icon components (AnimatedBack,
+// AnimatedForward, etc.) which share the same size/className prop shape
+// but aren't LucideIcon instances — same mismatch already documented/cast
+// for in src/components/Topbar.tsx and src/components/PageTree.tsx.
+// Casting via this helper rather than widening IconButton's exported prop
+// type, which is out of scope for this migration pass.
+const asLucideIcon = (icon: unknown) => icon as LucideIcon;
+
+// `icon` here is used interchangeably with real LucideIcon components
+// (Star, Brain, Terminal) and this codebase's custom AnimatedX icon
+// components (AnimatedFolder, AnimatedAI, etc.), plus a handful of
+// call sites that pass an inline zero-prop-typed function component
+// (e.g. the favorites list's `(props) => <Star {...props} .../>`) — same
+// mixed-icon-set pattern documented in src/components/PageTree.tsx's
+// MenuActionIcon and src/components/editor/ImageBlock.tsx's renderTabIcon.
+type NavIcon = LucideIcon | ComponentType<{ size?: number; className?: string }>;
+
+interface RealtimeCollabLike {
+  getUser?: () => { userName?: string; userId?: string; userAvatar?: string } | undefined;
+}
+
+interface SidebarWorkspaceAccount {
+  name: string;
+  email: string;
+  avatar: string;
+  active: boolean;
+}
+
+interface SidebarStoredData {
+  workspaces: string[];
+  accounts: SidebarWorkspaceAccount[];
+}
+
+interface AppMenuItem {
+  label: string;
+  shortcut?: string;
+  action: () => void;
+  disabled?: boolean;
+  checked?: boolean;
+}
+
+interface BeamCoords {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
+
+interface SidebarProps {
+  open: boolean;
+  pages: Page[];
+  trashCount: number;
+  activeId: string | null;
+  workspaceName: string;
+  setWorkspaceName: (name: string) => void;
+  onToggle: () => void;
+  onSelect: (pageId: string, options?: PageSelectOptions) => void;
+  onNew: (template?: string) => void;
+  onSearch: () => void;
+  onTrash: () => void;
+  onSettings: (tab?: string) => void;
+  onAI: () => void;
+  onAIFull: () => void;
+  onHelp: () => void;
+  onView: (view: string) => void;
+  onPrev: () => void;
+  onNext: () => void;
+  onPatchPage: (pageId: string, patch: Partial<Page>) => void;
+  onMovePage?: (pageId: string, newParentId: string | null, orderedSiblingIds: string[]) => void;
+  onDuplicatePage?: (pageId: string) => void;
+  onAddInside?: (pageId: string) => void;
+  onRenamePage?: (pageId: string) => void;
+  onRemoveFromRecents: (pageId: string) => void;
+  onToggleOffline?: (pageId: string) => void;
+  onCopyLink?: (pageId: string) => void;
+  onTrashPage?: (pageId: string) => void;
+  collapsedPages: Set<string>;
+  onToggleCollapse?: (pageId: string) => void;
+  onReview: () => void;
+  onAPI: () => void;
+  theme: string;
+  onThemeChange: (theme: string) => void;
+  appView: string;
+  // Upgraded click interaction props
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  pageMode?: string;
+  onPageModeChange?: (mode: string) => void;
+  onExport?: () => void;
+  onShare?: () => void;
+  onToast?: (message: string) => void;
+  onLogout?: () => void;
+}
 
 export default function Sidebar({
   open,
@@ -84,37 +186,41 @@ export default function Sidebar({
   onShare,
   onToast,
   onLogout
-}) {
+}: SidebarProps) {
   const recents = [...pages]
     .filter((p) => !p.hiddenFromRecents)
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
     .slice(0, 5);
 
   const SIDEBAR_STORAGE_KEY = 'noska_sidebar_data';
-  const loadSidebarData = () => {
+  const loadSidebarData = (): SidebarStoredData | null => {
     try {
       const data = localStorage.getItem(SIDEBAR_STORAGE_KEY);
       if (data) return JSON.parse(data);
     } catch {}
     return null;
   };
-  const saveSidebarData = (data) => {
+  const saveSidebarData = (data: SidebarStoredData) => {
     try { localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(data)); } catch {}
   };
 
   const defaultUser = () => {
-    const u = window.realtimeCollab?.getUser?.();
+    // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
+    // (deliberately, to avoid a circular type dependency — see that
+    // file's comment) — narrow it at each read site, matching the
+    // pattern in src/features/collab/CoThinking.tsx.
+    const u = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
     return u?.userName || 'Workspace User';
   };
   const defaultEmail = () => {
-    const u = window.realtimeCollab?.getUser?.();
+    const u = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
     return u?.userId || 'user@workspace';
   };
   const defaultAvatar = () => {
-    const u = window.realtimeCollab?.getUser?.();
+    const u = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
     return u?.userAvatar || '👤';
   };
-  const defaultData = {
+  const defaultData: SidebarStoredData = {
     workspaces: [`${defaultUser()}'s Workspace`],
     accounts: [{ name: defaultUser(), email: defaultEmail(), avatar: defaultAvatar(), active: true }]
   };
@@ -122,22 +228,22 @@ export default function Sidebar({
   const initialData = loadSidebarData() || defaultData;
   const [appMenuOpen, setAppMenuOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState(null);
-  const [workspaces, setWorkspaces] = useState(initialData.workspaces);
-  const [accounts, setAccounts] = useState(initialData.accounts);
+  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<string[]>(initialData.workspaces);
+  const [accounts, setAccounts] = useState<SidebarWorkspaceAccount[]>(initialData.accounts);
   const activeAccount = accounts.find(a => a.active) || accounts[0];
 
   // Click-outside references
-  const logoRef = useRef(null);
-  const switcherRef = useRef(null);
-  const userRef = useRef(null);
-  const appMenuRef = useOutsideDismiss(appMenuOpen, () => setAppMenuOpen(false));
-  const switcherMenuRef = useOutsideDismiss(switcherOpen, () => setSwitcherOpen(false));
+  const logoRef = useRef<HTMLButtonElement>(null);
+  const switcherRef = useRef<HTMLButtonElement>(null);
+  const userRef = useRef<HTMLButtonElement>(null);
+  const appMenuRef = useOutsideDismiss<HTMLDivElement>(appMenuOpen, () => setAppMenuOpen(false));
+  const switcherMenuRef = useOutsideDismiss<HTMLDivElement>(switcherOpen, () => setSwitcherOpen(false));
 
   // Anchor and Beam Coordinate states
   const [logoCoords, setLogoCoords] = useState({ top: 0, left: 0 });
   const [switcherCoords, setSwitcherCoords] = useState({ top: 0, left: 0 });
-  const [beamCoords, setBeamCoords] = useState(null);
+  const [beamCoords, setBeamCoords] = useState<BeamCoords | null>(null);
 
   // Keyboard navigation items and states
   const menuCategories = ["File", "Edit", "View", "History", "Window", "Help"];
@@ -146,7 +252,7 @@ export default function Sidebar({
   const [keyboardActive, setKeyboardActive] = useState(false);
 
   // App menu actions mapping
-  const appMenuItems = {
+  const appMenuItems: Record<string, AppMenuItem[]> = {
     File: [
       { label: "New Page", shortcut: "Ctrl+N", action: () => onNew("blank") },
       { label: "Import...", action: () => onSettings("Import") },
@@ -171,7 +277,7 @@ export default function Sidebar({
     ],
     Window: [
       { label: "Minimize", action: () => onToast?.("Minimized window (simulated). Add to home screen for desktop integration.") },
-      { label: "Close Tab", action: async () => { if (await window.noskaConfirm("Close this workspace tab?")) window.close(); } }
+      { label: "Close Tab", action: async () => { if (await window.noskaConfirm?.("Close this workspace tab?")) window.close(); } }
     ],
     Help: [
       { label: "Help Center", action: () => onHelp() },
@@ -236,7 +342,7 @@ export default function Sidebar({
       return;
     }
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       setKeyboardActive(true);
       const activeCat = menuCategories[focusedCatIndex];
       const subItems = appMenuItems[activeCat] || [];
@@ -294,7 +400,7 @@ export default function Sidebar({
 
   // Escape key global hook
   useEffect(() => {
-    const handleGlobalKeys = (e) => {
+    const handleGlobalKeys = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setAppMenuOpen(false);
         setSwitcherOpen(false);
@@ -304,7 +410,7 @@ export default function Sidebar({
     return () => window.removeEventListener("keydown", handleGlobalKeys);
   }, []);
 
-  const handleCategoryHover = (cat, index) => {
+  const handleCategoryHover = (cat: string, index: number) => {
     if (!keyboardActive) {
       setFocusedCatIndex(index);
       setActiveSubmenu(cat);
@@ -547,7 +653,7 @@ export default function Sidebar({
                 <div className="flex flex-col space-y-0.5">
                   <button
                     onClick={async () => {
-                      const name = await window.noskaPrompt("Enter new workspace name:", "", "Workspace Name");
+                      const name = await window.noskaPrompt?.("Enter new workspace name:", "", "Workspace Name");
                       if (name && name.trim()) {
                         setWorkspaces(prev => [...prev, name.trim()]);
                         setWorkspaceName(name.trim());
@@ -561,11 +667,11 @@ export default function Sidebar({
                   </button>
                   <button
                     onClick={async () => {
-                      const email = await window.noskaPrompt("Enter email for new account:", "", "user@example.com");
+                      const email = await window.noskaPrompt?.("Enter email for new account:", "", "user@example.com");
                       if (email && email.trim() && email.includes("@")) {
                         const namePart = email.split("@")[0];
                         const formattedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
-                        const newAcc = { name: formattedName, email: email.trim(), avatar: '👤', active: true };
+                        const newAcc: SidebarWorkspaceAccount = { name: formattedName, email: email.trim(), avatar: '👤', active: true };
                         setAccounts(prev => prev.map(a => ({ ...a, active: false })).concat(newAcc));
                         onToast?.(`Successfully signed into ${email.trim()}`);
                       } else if (email) {
@@ -580,7 +686,7 @@ export default function Sidebar({
                   </button>
                   <button
                     onClick={async () => {
-                      if (await window.noskaConfirm("Are you sure you want to log out?")) {
+                      if (await window.noskaConfirm?.("Are you sure you want to log out?")) {
                         onLogout?.();
                       }
                       setSwitcherOpen(false);
@@ -752,11 +858,11 @@ export default function Sidebar({
           
           {/* Navigation Toolbar */}
           <div className="flex items-center justify-between gap-1 select-none">
-            <IconButton icon={AnimatedSidebar} label="Toggle sidebar" tone="dark" onClick={onToggle} />
-            <IconButton icon={AnimatedBack} label="Back" tone="dark" onClick={onPrev} />
-            <IconButton icon={AnimatedForward} label="Forward" tone="dark" onClick={onNext} />
-            <IconButton icon={AnimatedCanvas} label="Tabs" tone="dark" onClick={() => onView("library")} />
-            <IconButton icon={AnimatedPlus} label="New tab" tone="dark" onClick={() => onNew("blank")} />
+            <IconButton icon={asLucideIcon(AnimatedSidebar)} label="Toggle sidebar" tone="dark" onClick={onToggle} />
+            <IconButton icon={asLucideIcon(AnimatedBack)} label="Back" tone="dark" onClick={onPrev} />
+            <IconButton icon={asLucideIcon(AnimatedForward)} label="Forward" tone="dark" onClick={onNext} />
+            <IconButton icon={asLucideIcon(AnimatedCanvas)} label="Tabs" tone="dark" onClick={() => onView("library")} />
+            <IconButton icon={asLucideIcon(AnimatedPlus)} label="New tab" tone="dark" onClick={() => onNew("blank")} />
           </div>
 
           <div className="h-px bg-[var(--border)] my-1" />
@@ -807,7 +913,14 @@ export default function Sidebar({
   );
 }
 
-function RecentsPageItem({ page, active, onSelect, onRemove }) {
+interface RecentsPageItemProps {
+  page: Page;
+  active: boolean;
+  onSelect: (pageId: string, options?: PageSelectOptions) => void;
+  onRemove: (pageId: string) => void;
+}
+
+function RecentsPageItem({ page, active, onSelect, onRemove }: RecentsPageItemProps) {
   const wordCount = page.blocks ? page.blocks.reduce((acc, b) => acc + (b.text ? b.text.split(/\s+/).filter(Boolean).length : 0), 0) : 0;
   return (
     <div className={`group relative flex min-h-[26px] items-center rounded-lg transition-all duration-150 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]`}>
@@ -846,7 +959,13 @@ function RecentsPageItem({ page, active, onSelect, onRemove }) {
   );
 }
 
-function NoskaSection({ title, children, defaultExpanded = true }) {
+interface NoskaSectionProps {
+  title: string;
+  children: ReactNode;
+  defaultExpanded?: boolean;
+}
+
+function NoskaSection({ title, children, defaultExpanded = true }: NoskaSectionProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   return (
     <div className="mt-4.5 first:mt-1 select-none">
@@ -881,12 +1000,23 @@ function NoskaSection({ title, children, defaultExpanded = true }) {
   );
 }
 
-function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ariaLabel, compact }) {
+interface NoskaNavItemProps {
+  icon: NavIcon;
+  label: ReactNode;
+  subtitle?: ReactNode;
+  active?: boolean;
+  muted?: boolean;
+  onClick?: () => void;
+  ariaLabel?: string;
+  compact?: boolean;
+}
+
+function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ariaLabel, compact }: NoskaNavItemProps) {
   return (
     <button
       aria-label={ariaLabel}
       onClick={onClick}
-      onMouseUp={(e) => e.currentTarget.blur()}
+      onMouseUp={(e) => (e.currentTarget as HTMLButtonElement).blur()}
       className={`flex ${compact ? "min-h-[22px] text-[11px] py-0.5" : "min-h-[26px] text-[12px] py-1"} w-full items-center gap-2 rounded-lg px-2.5 text-left outline-none relative transition-all duration-150 cursor-pointer ${
         active
           ? "text-[var(--text)] font-semibold"
@@ -911,7 +1041,16 @@ function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ari
   );
 }
 
-export function PageRow({ page, active, onSelect, onPatchPage, collapsed, onCollapse }) {
+interface PageRowProps {
+  page: Page;
+  active: boolean;
+  onSelect: (pageId: string, options?: PageSelectOptions) => void;
+  onPatchPage: (pageId: string, patch: Partial<Page>) => void;
+  collapsed?: boolean;
+  onCollapse?: () => void;
+}
+
+export function PageRow({ page, active, onSelect, onPatchPage, collapsed, onCollapse }: PageRowProps) {
   const words = plainText(page).trim().split(/\s+/).filter(Boolean).length;
   return (
     <div
@@ -944,7 +1083,12 @@ export function PageRow({ page, active, onSelect, onPatchPage, collapsed, onColl
   );
 }
 
-export function SectionTitle({ icon: Icon, text }) {
+interface SectionTitleProps {
+  icon: LucideIcon;
+  text: ReactNode;
+}
+
+export function SectionTitle({ icon: Icon, text }: SectionTitleProps) {
   return (
     <div className="mt-3 flex items-center gap-2 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
       <Icon size={13} />
@@ -953,7 +1097,14 @@ export function SectionTitle({ icon: Icon, text }) {
   );
 }
 
-export function SidebarAction({ icon: Icon, label, hint, onClick }) {
+interface SidebarActionProps {
+  icon: LucideIcon;
+  label: ReactNode;
+  hint?: ReactNode;
+  onClick?: () => void;
+}
+
+export function SidebarAction({ icon: Icon, label, hint, onClick }: SidebarActionProps) {
   return (
     <button
       onClick={onClick}
