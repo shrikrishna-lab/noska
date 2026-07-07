@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { supabase } from "../../lib/supabase";
 import AuthBackground from "./AuthBackground";
 import AuthProviders from "./AuthProviders";
 import AuthError from "./AuthError";
 import AuthLoading from "./AuthLoading";
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0, scale: 0.96, y: 16 },
   visible: {
     opacity: 1,
@@ -29,10 +29,21 @@ const containerVariants = {
   }
 };
 
-export default function AuthPage({ onAuthSuccess }) {
-  const [loadingProvider, setLoadingProvider] = useState(null);
+interface AuthSuccessData {
+  userId: string;
+  userName?: string;
+  email?: string;
+  avatarUrl?: string | null;
+}
+
+interface AuthPageProps {
+  onAuthSuccess: (data: AuthSuccessData) => void;
+}
+
+export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
+  const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -53,7 +64,7 @@ export default function AuthPage({ onAuthSuccess }) {
     return () => subscription.unsubscribe();
   }, [onAuthSuccess]);
 
-  const handleProviderClick = async (provider) => {
+  const handleProviderClick = async (provider: "github" | "google") => {
     setError(null);
     setLoadingProvider(provider);
     setIsConnecting(true);
@@ -68,7 +79,7 @@ export default function AuthPage({ onAuthSuccess }) {
       });
       if (signInError) throw signInError;
     } catch (e) {
-      setError(e.message || "Failed to sign in. Please try again.");
+      setError((e as Error).message || "Failed to sign in. Please try again.");
       setLoadingProvider(null);
       setIsConnecting(false);
     }

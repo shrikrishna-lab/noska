@@ -3,11 +3,16 @@ import { Search, Upload, Link, Image as ImageIcon, X, Loader2, ExternalLink } fr
 
 const UNSPLASH_ACCESS_KEY = "BkXiwJRFV3x6R8NsbRcph1U8qRcx0tQ5B60QFKQoWcQ";
 
-function classNames(...classes) {
+function classNames(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }
 
-export default function ImagePicker({ onSelect, onClose }) {
+interface ImagePickerProps {
+  onSelect: (url: string) => void;
+  onClose: () => void;
+}
+
+export default function ImagePicker({ onSelect, onClose }: ImagePickerProps) {
   const [tab, setTab] = useState("upload");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -49,20 +54,26 @@ export default function ImagePicker({ onSelect, onClose }) {
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
         {tab === "upload" && <UploadTab onSelect={onSelect} setLoading={setLoading} setError={setError} />}
-        {tab === "unsplash" && <UnsplashTab onSelect={onSelect} setLoading={setLoading} setError={setError} />}
+        {tab === "unsplash" && <UnsplashTab onSelect={onSelect} setLoading={setLoading} setError={setError} error={error} />}
         {tab === "link" && <LinkTab onSelect={onSelect} setError={setError} />}
       </div>
     </div>
   );
 }
 
-function UploadTab({ onSelect, setLoading, setError }) {
-  const [preview, setPreview] = useState(null);
-  const fileRef = useRef(null);
-  const dropRef = useRef(null);
+interface UploadTabProps {
+  onSelect: (url: string) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string) => void;
+}
+
+function UploadTab({ onSelect, setLoading, setError }: UploadTabProps) {
+  const [preview, setPreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  const handleFile = useCallback((file) => {
+  const handleFile = useCallback((file: File | null | undefined) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setError("Please select an image file");
@@ -72,7 +83,7 @@ function UploadTab({ onSelect, setLoading, setError }) {
     setLoading(true);
     const reader = new FileReader();
     reader.onload = (e) => {
-      setPreview(e.target.result);
+      setPreview(e.target?.result as string);
       setLoading(false);
     };
     reader.onerror = () => {
@@ -82,18 +93,18 @@ function UploadTab({ onSelect, setLoading, setError }) {
     reader.readAsDataURL(file);
   }, [setLoading, setError]);
 
-  const handleDrop = useCallback((e) => {
+  const handleDrop = useCallback((e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const file = e.dataTransfer.files[0];
+    const file = e.dataTransfer?.files[0];
     handleFile(file);
   }, [handleFile]);
 
   useEffect(() => {
     const el = dropRef.current;
     if (!el) return;
-    const onDragOver = (e) => { e.preventDefault(); setDragging(true); };
-    const onDragLeave = (e) => { if (!el.contains(e.relatedTarget)) setDragging(false); };
+    const onDragOver = (e: DragEvent) => { e.preventDefault(); setDragging(true); };
+    const onDragLeave = (e: DragEvent) => { if (!el.contains(e.relatedTarget as Node)) setDragging(false); };
     el.addEventListener("dragover", onDragOver);
     el.addEventListener("dragleave", onDragLeave);
     el.addEventListener("drop", handleDrop);
@@ -129,7 +140,7 @@ function UploadTab({ onSelect, setLoading, setError }) {
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={(e) => handleFile(e.target.files[0])}
+          onChange={(e) => handleFile(e.target.files?.[0])}
         />
       </div>
 
@@ -156,13 +167,37 @@ function UploadTab({ onSelect, setLoading, setError }) {
   );
 }
 
-function UnsplashTab({ onSelect, setLoading, setError }) {
+interface UnsplashPhoto {
+  id: string;
+  urls: { regular: string; small: string };
+  alt_description?: string | null;
+  user: { name: string };
+}
+
+interface UnsplashTabProps {
+  onSelect: (url: string) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string) => void;
+  error: string;
+}
+
+// Real bug, fixed: the original JSX referenced a bare `error` identifier
+// in this component's render (below, in the empty-state condition)
+// without ever declaring it as a prop or local state — only `setError`
+// was destructured/passed down. That's an undeclared-variable reference,
+// which throws a ReferenceError the instant this tab renders its
+// no-results-yet placeholder (i.e. every time a user opens the Unsplash
+// tab before typing a search). Fixed by threading the parent's `error`
+// state down as an explicit prop, matching the evident intent (hide the
+// "search millions of free images" placeholder while an error banner is
+// showing instead of always crashing on render).
+function UnsplashTab({ onSelect, setError, error }: UnsplashTabProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<UnsplashPhoto[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [searching, setSearching] = useState(false);
-  const inputRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -191,13 +226,13 @@ function UnsplashTab({ onSelect, setLoading, setError }) {
       setHasMore(data.results?.length === 20);
       setPage(p);
     } catch (e) {
-      setError(e.message);
+      setError((e as Error).message);
     } finally {
       setSearching(false);
     }
   }, [query, setError]);
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     search(1);
   };
@@ -269,12 +304,16 @@ function UnsplashTab({ onSelect, setLoading, setError }) {
   );
 }
 
-function LinkTab({ onSelect, setError }) {
-  const [url, setUrl] = useState("");
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
+interface LinkTabProps {
+  onSelect: (url: string) => void;
+  setError: (error: string) => void;
+}
 
-  const handleUrlChange = (value) => {
+function LinkTab({ onSelect, setError }: LinkTabProps) {
+  const [url, setUrl] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const handleUrlChange = (value: string) => {
     setUrl(value);
     setError("");
     if (value && /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(value)) {

@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 import {
   ChevronDown,
   Link2,
-  Sparkles
+  Sparkles,
+  type LucideIcon
 } from "lucide-react";
 import {
   AnimatedMenu,
@@ -19,6 +20,51 @@ import {
 } from "./ui/icons";
 import { IconButton, PearlButton } from "./ui";
 import WorkspaceJoinBar from "./collab/WorkspaceJoinBar";
+import type { Page } from "../lib/supabaseService";
+
+interface TopbarProps {
+  page: Page;
+  sidebarOpen: boolean;
+  saveState: string;
+  onSidebar: () => void;
+  onShare: () => void;
+  onCopyLink: () => void;
+  onAI: () => void;
+  onFavorite: () => void;
+  onMore: () => void;
+  onQuickActions?: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  dark: boolean;
+  onThemeChange: (theme: string) => void;
+  onReadingModeToggle: () => void;
+  pageMode?: string;
+  onPageModeChange?: (mode: string) => void;
+  appView?: string;
+  // The following are passed by src/App.tsx but not currently read here —
+  // added to the destructure only to document that they're intentionally
+  // unused by this component (same dead-prop pattern applied to other
+  // still-.jsx components during the TypeScript migration), not a
+  // behavior change.
+  onExport?: () => void;
+  onClipper?: () => void;
+  onLineage?: () => void;
+  onCollab?: () => void;
+  onLockPage?: () => void;
+  onRemoveEncryption?: (pageId: string) => void;
+}
+
+// IconButton (src/components/ui/index.tsx) types its `icon` prop as
+// lucide-react's `LucideIcon` (a ForwardRefExoticComponent), but several
+// calls below pass this codebase's custom AnimatedX icon components
+// (AnimatedMenu, AnimatedBookmark, etc.) which share the same size/
+// className prop shape but aren't LucideIcon instances — same mismatch
+// already documented/cast for in src/components/PageTree.tsx. Casting via
+// this helper rather than widening IconButton's exported prop type, which
+// is out of scope for this migration pass.
+const asLucideIcon = (icon: unknown) => icon as LucideIcon;
 
 export default function Topbar({
   page,
@@ -41,22 +87,17 @@ export default function Topbar({
   pageMode = "doc",
   onPageModeChange,
   appView = "page",
-  // The following are passed by src/App.tsx but not currently read here —
-  // added to the destructure only to document that they're intentionally
-  // unused by this component (same dead-prop pattern applied to other
-  // still-.jsx components during the TypeScript migration), not a
-  // behavior change.
   onExport,
   onClipper,
   onLineage,
   onCollab,
   onLockPage,
   onRemoveEncryption
-}) {
+}: TopbarProps) {
 
   return (
     <header className="flex h-11 shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg)] px-3">
-      {!sidebarOpen && <IconButton icon={AnimatedMenu} label="Open sidebar" onClick={onSidebar} />}
+      {!sidebarOpen && <IconButton icon={asLucideIcon(AnimatedMenu)} label="Open sidebar" onClick={onSidebar} />}
       <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] text-[var(--text-secondary)]">
         <span>{page.icon}</span>
         <span className="truncate text-[var(--text)]">{page.title || "Untitled"}</span>
@@ -110,7 +151,7 @@ export default function Topbar({
         <ChevronDown size={12} />
       </button>
       <IconButton icon={Link2} label="Copy link" onClick={onCopyLink} />
-      <IconButton icon={AnimatedBookmark} label="Favorite" onClick={onFavorite} />
+      <IconButton icon={asLucideIcon(AnimatedBookmark)} label="Favorite" onClick={onFavorite} />
 
       <PearlButton
         onClick={onAI}
@@ -121,10 +162,10 @@ export default function Topbar({
         textColor="var(--text)"
         className="mx-1"
       />
-      <IconButton icon={AnimatedSettings} label="Settings" onClick={onMore} />
-      <IconButton icon={AnimatedUndo} label="Undo" disabled={!canUndo} onClick={onUndo} />
-      <IconButton icon={AnimatedRedo} label="Redo" disabled={!canRedo} onClick={onRedo} />
-      <IconButton icon={AnimatedCanvas} label="Reading Mode" onClick={onReadingModeToggle} />
+      <IconButton icon={asLucideIcon(AnimatedSettings)} label="Settings" onClick={onMore} />
+      <IconButton icon={asLucideIcon(AnimatedUndo)} label="Undo" disabled={!canUndo} onClick={onUndo} />
+      <IconButton icon={asLucideIcon(AnimatedRedo)} label="Redo" disabled={!canRedo} onClick={onRedo} />
+      <IconButton icon={asLucideIcon(AnimatedCanvas)} label="Reading Mode" onClick={onReadingModeToggle} />
       <button
         onClick={() => onThemeChange(dark ? "light" : "dark")}
         className="grid h-7 w-7 place-items-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition duration-200"

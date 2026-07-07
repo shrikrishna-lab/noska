@@ -3,9 +3,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Link2, Copy, CopyPlus, Move, Trash2, Presentation, Wifi, Type, Maximize2,
   Palette, Lock, Sparkles, FileEdit, Languages, FileDown, Upload, Globe,
-  BarChart3, History, Bell, Cable, Search, X, ChevronRight, ChevronLeft, Eye
+  BarChart3, History, Bell, Cable, Search, X, ChevronRight, ChevronLeft, Eye,
+  type LucideIcon
 } from "lucide-react";
 import { executeCommand } from "../../core/commands/ActionExecutor";
+import type { Page } from "../../lib/supabaseService";
 
 const fontOptions = [
   { id: "default", label: "Default", class: "font-sans" },
@@ -13,7 +15,19 @@ const fontOptions = [
   { id: "mono", label: "Mono", class: "font-mono" }
 ];
 
-const submenus = {
+interface SubmenuItem {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  active?: boolean;
+}
+
+interface Submenu {
+  title: string;
+  items: SubmenuItem[];
+}
+
+const submenus: Record<string, Submenu> = {
   ai: {
     title: "AI Actions",
     items: [
@@ -53,6 +67,38 @@ const submenus = {
   }
 };
 
+interface MainAction {
+  id: string;
+  icon: LucideIcon;
+  label: string;
+  shortcut?: string;
+  danger?: boolean;
+  toggle?: boolean;
+  value?: boolean;
+  submenu?: boolean;
+}
+
+type MenuItem = MainAction | SubmenuItem;
+
+interface PageOptionsMenuProps {
+  open: boolean;
+  onClose: () => void;
+  page: Page;
+  onAction?: (actionId: string) => void;
+  wordCount?: number;
+  lastEditedBy?: string;
+  lastEditedAt?: string;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+  onToast?: (message: string) => void;
+  onTrash?: (pageId: string) => void;
+  onDuplicatePage?: () => void;
+  onImport?: () => void;
+  onExport?: () => void;
+  onAnalytics?: () => void;
+  onHistory?: () => void;
+  onAskAI?: () => void;
+}
+
 export default function PageOptionsMenu({
   open,
   onClose,
@@ -70,15 +116,15 @@ export default function PageOptionsMenu({
   onAnalytics,
   onHistory,
   onAskAI
-}) {
+}: PageOptionsMenuProps) {
   const [search, setSearch] = useState("");
-  const [activeSubmenu, setActiveSubmenu] = useState(null); // null | 'ai' | 'translate' | 'notify' | 'connections'
+  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null); // null | 'ai' | 'translate' | 'notify' | 'connections'
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  
-  const listRef = useRef(null);
-  const searchRef = useRef(null);
 
-  const mainActions = [
+  const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const mainActions: MainAction[] = [
     { id: "copy-link", icon: Link2, label: "Copy link", shortcut: "Ctrl+L" },
     { id: "copy-contents", icon: Copy, label: "Copy page contents", shortcut: "" },
     { id: "duplicate", icon: CopyPlus, label: "Duplicate", shortcut: "Ctrl+D" },
@@ -104,7 +150,7 @@ export default function PageOptionsMenu({
   ];
 
   // Helper fuzzy matching
-  const fuzzyMatch = (query, text) => {
+  const fuzzyMatch = (query: string, text: string): boolean => {
     if (!query) return true;
     const q = query.toLowerCase();
     const t = text.toLowerCase();
@@ -116,7 +162,7 @@ export default function PageOptionsMenu({
   };
 
   // Determine actual items shown
-  const getVisibleItems = () => {
+  const getVisibleItems = (): MenuItem[] => {
     if (activeSubmenu) {
       const sub = submenus[activeSubmenu];
       return sub ? sub.items.filter(item => fuzzyMatch(search, item.label)) : [];
@@ -135,8 +181,8 @@ export default function PageOptionsMenu({
     }
   }, [open]);
 
-  const handleAction = (item) => {
-    if (item.submenu) {
+  const handleAction = (item: MenuItem) => {
+    if ("submenu" in item && item.submenu) {
       setActiveSubmenu(item.id);
       setSearch("");
       setHighlightedIndex(-1);
@@ -160,12 +206,12 @@ export default function PageOptionsMenu({
     executeCommand(item.id, ctx);
 
     onAction?.(item.id);
-    if (!item.toggle) {
+    if (!("toggle" in item && item.toggle)) {
       onClose();
     }
   };
 
-  const handleKeyDown = useCallback((e) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlightedIndex((i) => Math.min(i + 1, filtered.length - 1));
@@ -187,6 +233,7 @@ export default function PageOptionsMenu({
         onClose();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, highlightedIndex, activeSubmenu]);
 
   useEffect(() => {
@@ -196,7 +243,7 @@ export default function PageOptionsMenu({
     }
   }, [highlightedIndex]);
 
-  const formatTimeAgo = (ts) => {
+  const formatTimeAgo = (ts?: string): string => {
     if (!ts) return "";
     const diff = Date.now() - new Date(ts).getTime();
     const mins = Math.floor(diff / 60000);
@@ -316,9 +363,9 @@ export default function PageOptionsMenu({
               <div className="px-3 py-8 text-center text-xs text-[var(--muted)]">No actions found</div>
             ) : (
               filtered.map((item, idx) => {
-                const isItemDanger = item.danger;
+                const isItemDanger = "danger" in item && item.danger;
                 const isSelected = highlightedIndex === idx;
-                
+
                 return (
                   <button
                     key={item.id}
@@ -330,16 +377,16 @@ export default function PageOptionsMenu({
                   >
                     <item.icon size={13} className={`shrink-0 ${isItemDanger ? "text-[var(--danger)]" : "text-[var(--secondary)]"}`} />
                     <span className="flex-1 truncate">{item.label}</span>
-                    
-                    {item.toggle && (
+
+                    {"toggle" in item && item.toggle && (
                       <span className={`flex h-3.5 w-6 shrink-0 items-center rounded-full p-0.5 transition-colors ${item.value ? "bg-[var(--accent)]" : "bg-[var(--border)]"}`}>
                         <span className={`h-2.5 w-2.5 rounded-full bg-[var(--text)] shadow-sm transition-transform ${item.value ? "translate-x-2.5" : "translate-x-0"}`} />
                       </span>
                     )}
-                    {item.shortcut && (
+                    {"shortcut" in item && item.shortcut && (
                       <span className="text-[9px] text-[var(--muted)] font-mono">{item.shortcut}</span>
                     )}
-                    {item.submenu && (
+                    {"submenu" in item && item.submenu && (
                       <ChevronRight size={12} className="text-[var(--muted)]" />
                     )}
                   </button>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bold, Italic, Underline, Code, Strikethrough, Eraser, Palette } from "lucide-react";
+import { Bold, Italic, Underline, Code, Strikethrough, Eraser, Palette, type LucideIcon } from "lucide-react";
 
 const TEXT_COLORS = [
   { name: "Gray", var: "gray" }, { name: "Brown", var: "brown" }, { name: "Orange", var: "orange" },
@@ -12,7 +12,13 @@ const TEXT_COLORS = [
   { name: "Charcoal", var: "charcoal" }
 ];
 
-const FORMAT_BUTTONS = [
+interface FormatButton {
+  key: string;
+  icon: LucideIcon;
+  label: string;
+}
+
+const FORMAT_BUTTONS: FormatButton[] = [
   { key: "bold", icon: Bold, label: "Bold (Ctrl+B)" },
   { key: "italic", icon: Italic, label: "Italic (Ctrl+I)" },
   { key: "underline", icon: Underline, label: "Underline (Ctrl+U)" },
@@ -22,22 +28,22 @@ const FORMAT_BUTTONS = [
   { key: "clear", icon: Eraser, label: "Clear formatting" },
 ];
 
-function getActiveEditable() {
+function getActiveEditable(): Element | null {
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount) return null;
   const node = sel.anchorNode;
   if (!node) return null;
-  const editable = node.nodeType === 3 ? node.parentElement?.closest("[contentEditable]") : node.closest?.("[contentEditable]");
+  const editable = node.nodeType === 3 ? node.parentElement?.closest("[contentEditable]") : (node as Element).closest?.("[contentEditable]");
   return editable || null;
 }
 
-function hasSelection() {
+function hasSelection(): boolean {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.rangeCount) return false;
   return true;
 }
 
-function getSelRect() {
+function getSelRect(): DOMRect | null {
   try {
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return null;
@@ -45,7 +51,7 @@ function getSelRect() {
   } catch { return null; }
 }
 
-function applyExecCommand(cmd, value) {
+function applyExecCommand(cmd: string) {
   if (cmd === "bold") document.execCommand("bold", false, null);
   else if (cmd === "italic") document.execCommand("italic", false, null);
   else if (cmd === "underline") document.execCommand("underline", false, null);
@@ -61,7 +67,10 @@ function applyExecCommand(cmd, value) {
   else if (cmd?.startsWith("color-")) {
     const isBg = cmd.includes("bg-");
     const colorVar = cmd.replace("color-", "").replace("bg-", "");
-    document.execCommand("styleWithCSS", false, true);
+    // Cast: execCommand's DOM type signature declares its 3rd arg as
+    // `string`, but browsers accept (and this pre-existing call always
+    // passed) a boolean here — same runtime behavior, just satisfying tsc.
+    document.execCommand("styleWithCSS", false, true as unknown as string);
     if (isBg) {
       document.execCommand("backColor", false, `var(--clr-bg-${colorVar})`);
     } else {
@@ -70,13 +79,19 @@ function applyExecCommand(cmd, value) {
   }
 }
 
-export default function FloatingFormatToolbar({ blockId, inputRef, onFormat }) {
+interface FloatingFormatToolbarProps {
+  blockId: string;
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  onFormat: (formatKey: string) => void;
+}
+
+export default function FloatingFormatToolbar({ blockId, inputRef, onFormat }: FloatingFormatToolbarProps) {
   const [visible, setVisible] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [colorOpen, setColorOpen] = useState(false);
   const [colorTab, setColorTab] = useState("text");
-  const toolbarRef = useRef(null);
-  const colorRef = useRef(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const colorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleSelectionChange = () => {
@@ -97,9 +112,9 @@ export default function FloatingFormatToolbar({ blockId, inputRef, onFormat }) {
 
   useEffect(() => {
     if (!visible) return;
-    const handler = (e) => {
-      if (toolbarRef.current && !toolbarRef.current.contains(e.target) &&
-          colorRef.current && !colorRef.current.contains(e.target)) {
+    const handler = (e: MouseEvent) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node) &&
+          colorRef.current && !colorRef.current.contains(e.target as Node)) {
         setVisible(false);
         setColorOpen(false);
       }
@@ -108,12 +123,12 @@ export default function FloatingFormatToolbar({ blockId, inputRef, onFormat }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [visible]);
 
-  const handleFormat = (formatKey) => {
+  const handleFormat = (formatKey: string) => {
     if (formatKey === "color") { setColorOpen(v => !v); return; }
 
     const sel = window.getSelection();
     const hasSel = sel && !sel.isCollapsed && sel.rangeCount > 0;
-    let savedRange = null;
+    let savedRange: Range | null = null;
 
     if (hasSel) {
       savedRange = sel.getRangeAt(0).cloneRange();
@@ -128,14 +143,14 @@ export default function FloatingFormatToolbar({ blockId, inputRef, onFormat }) {
     }
 
     if (savedRange) {
-      sel.removeAllRanges();
-      sel.addRange(savedRange);
+      sel!.removeAllRanges();
+      sel!.addRange(savedRange);
     }
 
     setVisible(false);
   };
 
-  const handleColor = (colorVar) => {
+  const handleColor = (colorVar: string) => {
     const prefix = colorTab === "bg" ? "bg-" : "";
     const editable = getActiveEditable();
     if (editable) {
