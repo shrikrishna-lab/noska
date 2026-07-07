@@ -2,9 +2,27 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X } from "lucide-react";
 import * as Icons from "lucide-react";
-import { getFilteredCommands } from "../core/commands/CommandRegistry";
+import { getFilteredCommands, type CommandContext, type NormalizedCommand } from "../core/commands/CommandRegistry";
 import { executeCommand } from "../core/commands/ActionExecutor";
 import { blockFor } from "../utils/helpers";
+import type { Page } from "../lib/supabaseService";
+
+/** This component's own `context` prop is a superset of `CommandContext`
+ * (CommandRegistry.ts) — it's forwarded as-is into `executeCommand`/
+ * `getFilteredCommands`, plus this file reads a few extra fields off it
+ * directly (`pages`, `onNavigate`) that aren't part of the declared
+ * `CommandContext` shape. Kept as an intersection rather than widening
+ * `CommandContext` itself, since those two fields are specific to this
+ * component's own page-search feature, not the general command-context
+ * contract every command definition relies on. */
+type PaletteContext = CommandContext & {
+  pages?: Page[];
+  onNavigate?: (pageId: string) => void;
+};
+
+type PaletteResultItem =
+  | { type: "command"; cmd: NormalizedCommand }
+  | { type: "page"; page: Page };
 
 // NOTE (found during TypeScript migration, Phase 4 Tier 2 — App.tsx):
 // src/App.tsx's call site passes `pages`/`query`/`setQuery`/`onSelect`/
@@ -22,6 +40,33 @@ import { blockFor } from "../utils/helpers";
 // change (wiring the palette to actually work) outside a type-only
 // migration pass. The extra props are destructured below purely so the
 // call site type-checks; they are NOT used.
+interface CommandPaletteProps {
+  open: boolean | undefined;
+  onClose: () => void;
+  context?: PaletteContext;
+  // All of the below are unused dead props from App.tsx's call site (see
+  // note above) — typed as optional/unknown-shaped rather than removed,
+  // since Editor.tsx's call site (the one that actually works, via
+  // `context={{...}}`) doesn't pass any of them, but App.tsx's dead
+  // instance does and this component must still type-check against both.
+  pages?: unknown;
+  query?: unknown;
+  setQuery?: unknown;
+  onSelect?: unknown;
+  onNew?: unknown;
+  onTheme?: unknown;
+  onTrash?: unknown;
+  onExport?: unknown;
+  onClipper?: unknown;
+  onVoice?: unknown;
+  onReview?: unknown;
+  onLineage?: unknown;
+  onAPI?: unknown;
+  onSettings?: unknown;
+  onCollab?: unknown;
+  onToast?: unknown;
+}
+
 export default function CommandPalette({
   open, onClose, context = {},
   // All of the below are unused dead props from App.tsx's call site (see
@@ -34,13 +79,13 @@ export default function CommandPalette({
   onVoice: _unusedOnVoice = undefined, onReview: _unusedOnReview = undefined, onLineage: _unusedOnLineage = undefined,
   onAPI: _unusedOnAPI = undefined, onSettings: _unusedOnSettings = undefined, onCollab: _unusedOnCollab = undefined,
   onToast: _unusedOnToast = undefined
-}) {
+}: CommandPaletteProps) {
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState("commands"); // "commands" | "pages"
+  const [mode, setMode] = useState<"commands" | "pages">("commands");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [pages, setPages] = useState([]);
-  const inputRef = useRef(null);
-  const listRef = useRef(null);
+  const [pages, setPages] = useState<Page[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -66,20 +111,20 @@ export default function CommandPalette({
     return p.title?.toLowerCase().includes(query.toLowerCase());
   }).slice(0, 8);
 
-  const results = [];
+  const results: PaletteResultItem[] = [];
   if (mode === "pages" || (query.startsWith(">") && mode === "commands")) {
     const pageQuery = query.startsWith(">") ? query.slice(1).trim() : query;
     const fp = pages.filter((p) => p.title?.toLowerCase().includes(pageQuery.toLowerCase())).slice(0, 8);
-    results.push(...fp.map((p) => ({ type: "page", page: p })));
+    results.push(...fp.map((p): PaletteResultItem => ({ type: "page", page: p })));
   }
   // Show commands (always)
-  results.splice(0, 0, ...filteredCommands.map((c) => ({ type: "command", cmd: c })));
+  results.splice(0, 0, ...filteredCommands.map((c): PaletteResultItem => ({ type: "command", cmd: c })));
 
   useEffect(() => {
     setHighlightedIndex((prev) => Math.min(prev, results.length - 1));
   }, [results.length]);
 
-  const handleSelect = useCallback((item) => {
+  const handleSelect = useCallback((item: PaletteResultItem) => {
     if (item.type === "command") {
       const cmd = item.cmd;
       if (cmd.category === "Page actions") {
@@ -87,17 +132,17 @@ export default function CommandPalette({
         onClose();
         return;
       }
-      const page = context.page;
-      const onBlocks = context.onBlocks;
+      const page = context.page as Page | undefined;
+      const onBlocks = context.onBlocks as ((blocks: unknown[]) => void) | undefined;
       if (!page || !onBlocks) {
         onClose();
         return;
       }
-      const focusedEl = document.activeElement?.closest?.(".noska-block");
+      const focusedEl = document.activeElement?.closest?.(".noska-block") as HTMLElement | null;
       const focusedBlockId = focusedEl?.dataset?.blockId;
       const targetBlock = page.blocks?.find(b => b.id === focusedBlockId);
       if (targetBlock) {
-        const onPatch = (patch) => {
+        const onPatch = (patch: Record<string, unknown>) => {
           onBlocks((page.blocks || []).map((b) =>
             b.id === targetBlock.id ? { ...b, ...patch } : b
           ));
@@ -106,7 +151,7 @@ export default function CommandPalette({
           ...context, block: targetBlock,
           text: targetBlock.text || "", onPatch,
           onDelete: () => onBlocks((page.blocks || []).filter(b => b.id !== targetBlock.id)),
-          onAdd: (type, text) => {
+          onAdd: (type: string, text: string) => {
             const nb = blockFor(type, text || "");
             const idx = page.blocks.findIndex(b => b.id === targetBlock.id);
             const next = [...page.blocks];
@@ -118,7 +163,7 @@ export default function CommandPalette({
         const newBlock = blockFor(cmd.id, "");
         onBlocks([...(page.blocks || []), newBlock]);
         setTimeout(() => {
-          document.querySelector(`[data-block-id="${newBlock.id}"] textarea`)?.focus();
+          document.querySelector<HTMLTextAreaElement>(`[data-block-id="${newBlock.id}"] textarea`)?.focus();
         }, 50);
       }
     } else if (item.type === "page") {
@@ -127,7 +172,7 @@ export default function CommandPalette({
     onClose();
   }, [context, onClose]);
 
-  const handleKeyDown = useCallback((e) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlightedIndex((i) => Math.min(i + 1, results.length - 1));
@@ -149,8 +194,13 @@ export default function CommandPalette({
     }
   }, [results, highlightedIndex, handleSelect, onClose, query]);
 
-  const renderIcon = (iconName) => {
-    const Icon = Icons[iconName];
+  const renderIcon = (iconName: string) => {
+    // Cast: lucide-react's namespace import isn't indexable by an
+    // arbitrary string at the type level, but every icon name passed here
+    // comes from a command's `.icon` field, a runtime-validated string
+    // key into the same module. Same pattern as SlashCommandMenu.tsx's
+    // RenderIcon.
+    const Icon = (Icons as unknown as Record<string, React.ComponentType<{ size?: number }>>)[iconName];
     return Icon ? <Icon size={14} /> : null;
   };
 
@@ -222,7 +272,20 @@ export default function CommandPalette({
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-[var(--text)] truncate">{cmd.title}</div>
-                          <div className="text-[10px] text-[var(--text-muted)] truncate">{cmd.description || cmd.preview || ""}</div>
+                          {/* Type-only fix: `cmd.preview` here is the
+                              normalized `{ description, image? }` object
+                              (getFilteredCommands returns
+                              NormalizedCommand), never a plain string, so
+                              rendering it directly wouldn't type-check as
+                              a JSX child. Not a currently-reachable
+                              runtime crash — every command definition in
+                              CommandRegistry.ts sets `description`, so
+                              this `||` always short-circuits before
+                              reaching `.preview` — but reading
+                              `.preview.description` is the correct fix
+                              for the type and stays correct if that ever
+                              changes. */}
+                          <div className="text-[10px] text-[var(--text-muted)] truncate">{cmd.description || cmd.preview?.description || ""}</div>
                         </div>
                         {cmd.shortcut && (
                           <span className="text-[9px] text-[var(--text-muted)] font-mono shrink-0">{cmd.shortcut}</span>

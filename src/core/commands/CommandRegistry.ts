@@ -37,7 +37,13 @@ export interface CommandContext {
   onPresent?: () => void;
   onToast?: (message: string) => void;
   onToggleSuggest?: () => void;
-  onTrash?: () => void;
+  // Declared with an optional pageId param to match the one real caller
+  // below (`ctx.onTrash?.(ctx.page.id)`) — the param was previously
+  // missing from this declaration (a type-only bug, not a runtime one;
+  // JS never checked call-site arity), only surfaced now that a real
+  // typed caller (CommandPalette.tsx forwarding Editor.tsx's
+  // `onTrashPage: (pageId: string) => void`) is checked against it.
+  onTrash?: (pageId?: string) => void;
   onWiki?: () => void;
   setCustomizeOpen?: (open: boolean) => void;
   [key: string]: unknown;
