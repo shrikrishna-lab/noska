@@ -5,9 +5,33 @@ import {
   Type, Heading1, Heading2, Heading3, Heading4, List, ListChecks, CheckSquare, Quote, MessageSquare, Code,
   Palette, MessageCircle, Play, Square
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { TEXT_COLORS, BG_COLORS } from "../../utils/colors";
+import type { Block } from "../../../types/blocks";
+import type { Page } from "../../lib/supabaseService";
 
-const blockTypes = [
+/** Single flexible shape covering every item type this menu's
+ * `getVisibleItems()` can produce (main actions, block-type entries,
+ * color entries, move-to-page entries) — matches the actual runtime
+ * shape (each branch only ever populates the subset of fields relevant
+ * to it) rather than a discriminated union, since the render code below
+ * already branches on `activeSubmenu`/presence of `colorInfo`/
+ * `pageInfo` rather than a `kind` tag. */
+interface MenuItem {
+  id: string;
+  label: string;
+  icon?: LucideIcon;
+  submenu?: boolean;
+  section?: string;
+  group?: number;
+  danger?: boolean;
+  shortcut?: string;
+  badge?: string;
+  colorInfo?: { name: string; value: string; bg: string };
+  pageInfo?: Page;
+}
+
+const blockTypes: MenuItem[] = [
   { id: "text", icon: Type, label: "Text" },
   { id: "h1", icon: Heading1, label: "Heading 1" },
   { id: "h2", icon: Heading2, label: "Heading 2" },
@@ -21,13 +45,28 @@ const blockTypes = [
   { id: "code", icon: Code, label: "Code" }
 ];
 
-function darken(hex, amount) {
+function darken(hex: string, amount: number): string {
   if (hex.startsWith('var(') || hex === 'transparent') return hex;
   const num = parseInt(hex.slice(1), 16);
   const r = Math.max(0, (num >> 16) - amount);
   const g = Math.max(0, ((num >> 8) & 0xff) - amount);
   const b = Math.max(0, (num & 0xff) - amount);
   return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
+}
+
+interface BlockContextMenuProps {
+  open: boolean;
+  onClose: () => void;
+  // Accepted but not read anywhere in this component's body — Editor.tsx
+  // passes the current block in on every render (line ~2338) yet nothing
+  // here ever touches `block`. Pre-existing dead prop, preserved as-is
+  // per migration scope (type-in-place only, no behavior change).
+  block?: Block;
+  onAction?: (action: string, payload?: string) => void;
+  lastEditedBy?: string;
+  lastEditedAt?: string;
+  pages?: Page[];
+  onToast?: (message: string) => void;
 }
 
 export default function BlockContextMenu({
@@ -39,22 +78,22 @@ export default function BlockContextMenu({
   lastEditedAt,
   pages = [],
   onToast
-}) {
+}: BlockContextMenuProps) {
   const [search, setSearch] = useState("");
-  const [activeSubmenu, setActiveSubmenu] = useState(null);
+  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [colorTab, setColorTab] = useState("text");
   const [customColor, setCustomColor] = useState("#ffffff");
   const [showCustomPicker, setShowCustomPicker] = useState(false);
 
-  const listRef = useRef(null);
-  const searchRef = useRef(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Layout actions and groups matching Image 2
-  const mainActions = [
+  const mainActions: MenuItem[] = [
     { id: "turn-into", icon: Type, label: "Turn into", submenu: true, section: "Text" },
     { id: "color", icon: Palette, label: "Color", submenu: true, section: "Text" },
-    
+
     // Divider group 1
     { id: "copy-link", icon: Link2, label: "Copy link to block", shortcut: "Alt+⇧+L", group: 2 },
     { id: "duplicate", icon: Copy, label: "Duplicate", shortcut: "Ctrl+D", group: 2 },
@@ -70,7 +109,7 @@ export default function BlockContextMenu({
     { id: "ask-ai", icon: Sparkles, label: "Ask AI", shortcut: "Ctrl+J", group: 3 }
   ];
 
-  const fuzzyMatch = (query, text) => {
+  const fuzzyMatch = (query: string, text: string): boolean => {
     if (!query) return true;
     const q = query.toLowerCase();
     const t = text.toLowerCase();
@@ -81,7 +120,7 @@ export default function BlockContextMenu({
     return qi === q.length;
   };
 
-  const getVisibleItems = () => {
+  const getVisibleItems = (): MenuItem[] => {
     if (activeSubmenu === "turn-into") {
       return blockTypes.filter(t => fuzzyMatch(search, t.label));
     }
@@ -112,7 +151,7 @@ export default function BlockContextMenu({
     }
   }, [open]);
 
-  const handleAction = (item) => {
+  const handleAction = (item: MenuItem) => {
     if (item.submenu) {
       setActiveSubmenu(item.id);
       setSearch("");
@@ -127,7 +166,7 @@ export default function BlockContextMenu({
       return;
     }
 
-    if (activeSubmenu === "color") {
+    if (activeSubmenu === "color" && item.colorInfo) {
       const colName = item.colorInfo.name.toLowerCase();
       if (colorTab === "bg") {
         onAction?.("bgColor", colName === "none" ? undefined : colName);
@@ -140,7 +179,7 @@ export default function BlockContextMenu({
       return;
     }
 
-    if (activeSubmenu === "move-to") {
+    if (activeSubmenu === "move-to" && item.pageInfo) {
       onAction?.("move-to-page", item.pageInfo.id);
       onToast?.(`Block moved to page "${item.pageInfo.title || "Untitled"}"`);
       onClose();
@@ -157,7 +196,7 @@ export default function BlockContextMenu({
     onClose();
   };
 
-  const handleKeyDown = useCallback((e) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlightedIndex((i) => Math.min(i + 1, filtered.length - 1));
@@ -188,7 +227,7 @@ export default function BlockContextMenu({
     }
   }, [highlightedIndex]);
 
-  const formatTimeAgo = (ts) => {
+  const formatTimeAgo = (ts?: string): string => {
     if (!ts) return "Today at 12:36 PM";
     const date = new Date(ts);
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " at " + date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -297,7 +336,7 @@ export default function BlockContextMenu({
             ) : (
               filtered.map((item, idx) => {
                 const isSelected = highlightedIndex === idx;
-                
+
                 // Group Section Header / Divider Rendering
                 const showHeader = !activeSubmenu && item.section && (idx === 0 || mainActions[idx - 1]?.section !== item.section);
                 const showDivider = !activeSubmenu && item.group && idx > 0 && mainActions[idx - 1]?.group !== item.group;
@@ -312,7 +351,7 @@ export default function BlockContextMenu({
                     {showDivider && (
                       <div className="my-1 border-t border-[var(--border)]" />
                     )}
-                    
+
                     <button
                       onClick={() => handleAction(item)}
                       onMouseEnter={() => setHighlightedIndex(idx)}
@@ -331,13 +370,13 @@ export default function BlockContextMenu({
                       )}
 
                       <span className="flex-1 truncate">{item.label}</span>
-                      
+
                       {item.badge && (
                         <span className="rounded bg-[var(--accent)]/10 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-[var(--accent)] mr-1">
                           {item.badge}
                         </span>
                       )}
-                      
+
                       {item.shortcut && (
                         <span className="text-[9px] text-[var(--muted)] font-mono">{item.shortcut}</span>
                       )}

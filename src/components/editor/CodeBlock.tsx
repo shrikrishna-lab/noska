@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import { Copy, Check, ChevronDown } from "lucide-react";
+import type { CodeBlockData } from "../../../types/blocks";
 
 const LANGUAGES = [
   { id: "javascript", label: "JavaScript" },
@@ -28,19 +29,26 @@ const LANGUAGES = [
   { id: "plaintext", label: "Plain text" },
 ];
 
-export default function CodeBlock({ block, onPatch, isLocked, onDelete }) {
+interface CodeBlockProps {
+  block: CodeBlockData;
+  onPatch: (patch: Record<string, unknown>) => void;
+  isLocked?: boolean;
+  onDelete?: () => void;
+}
+
+export default function CodeBlock({ block, onPatch, isLocked, onDelete }: CodeBlockProps) {
   const [language, setLanguage] = useState(block.language || "javascript");
   const [copied, setCopied] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
-  const codeRef = useRef(null);
-  const langRef = useRef(null);
+  const codeRef = useRef<HTMLPreElement>(null);
+  const langRef = useRef<HTMLDivElement>(null);
 
   const highlighted = block.text ? hljs.highlight(block.text, { language: language === "plaintext" ? "plaintext" : language }).value : "";
 
   useEffect(() => {
     if (!langOpen) return;
-    const handler = (e) => {
-      if (langRef.current && !langRef.current.contains(e.target)) setLangOpen(false);
+    const handler = (e: MouseEvent | PointerEvent) => {
+      if (langRef.current && !langRef.current.contains(e.target as Node)) setLangOpen(false);
     };
     document.addEventListener("pointerdown", handler);
     return () => document.removeEventListener("pointerdown", handler);
@@ -52,7 +60,7 @@ export default function CodeBlock({ block, onPatch, isLocked, onDelete }) {
     setTimeout(() => setCopied(false), 2000);
   }, [block.text]);
 
-  const handleLanguageChange = useCallback((langId) => {
+  const handleLanguageChange = useCallback((langId: string) => {
     setLanguage(langId);
     onPatch({ language: langId });
     setLangOpen(false);

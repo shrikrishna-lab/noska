@@ -4,8 +4,9 @@ import {
   X, Type, Maximize2, Palette, Image, Lock, Eye, Sparkles,
   Sun, Moon, Monitor, ChevronDown
 } from "lucide-react";
+import type { Page } from "../../lib/supabaseService";
 
-const BG_COLORS = [
+const BG_COLORS: Array<{ label: string; value: string | null }> = [
   { label: "Default", value: null },
   { label: "Dark navy", value: "#1a1a2e" },
   { label: "Deep blue", value: "#16213e" },
@@ -25,13 +26,21 @@ const BG_COLORS = [
   { label: "Peach", value: "#fbe9e7" },
 ];
 
-const FONT_OPTIONS = [
+const FONT_OPTIONS: Array<{ id: string; label: string; class: string; preview: string }> = [
   { id: "default", label: "Sans", class: "font-sans", preview: "Aa" },
   { id: "serif", label: "Serif", class: "font-serif", preview: "Aa" },
   { id: "mono", label: "Mono", class: "font-mono", preview: "Aa" },
 ];
 
-export default function CustomizePanel({ open, onClose, page, onPagePatch, onToast }) {
+interface CustomizePanelProps {
+  open: boolean;
+  onClose: () => void;
+  page?: Page;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+  onToast?: (message: string) => void;
+}
+
+export default function CustomizePanel({ open, onClose, page, onPagePatch, onToast }: CustomizePanelProps) {
   const [tab, setTab] = useState("style");
 
   if (!open) return null;

@@ -1,11 +1,43 @@
 import React, { useState } from "react";
 import { History, X, ChevronLeft } from "lucide-react";
+import type { Block, DatabaseSchema } from "../../../types/blocks";
 
-function computeBlockDiff(oldBlocks, newBlocks) {
+/** Shape of a single saved snapshot, as written by Editor.tsx's
+ * auto-save effect (`audit_${page.id}` in localStorage) and read back by
+ * `loadVersionHistory()`. Not exported from anywhere else in the
+ * codebase — defined here since this is the only file that consumes it. */
+interface VersionEntry {
+  id?: string;
+  timestamp: string;
+  title?: string;
+  blocks: Block[];
+  database?: DatabaseSchema;
+  label?: string;
+}
+
+interface BlockDiffChange {
+  id: string;
+  oldText?: string;
+  newText?: string;
+  oldType?: string;
+  newType?: string;
+}
+
+interface BlockDiff {
+  added: Block[];
+  removed: Block[];
+  changed: BlockDiffChange[];
+  unchanged: Block[];
+  addedCount: number;
+  removedCount: number;
+  changedCount: number;
+}
+
+function computeBlockDiff(oldBlocks: Block[] | undefined, newBlocks: Block[] | undefined): BlockDiff {
   const oldMap = new Map((oldBlocks || []).map(b => [b.id, b]));
   const newMap = new Map((newBlocks || []).map(b => [b.id, b]));
   const allIds = new Set([...oldMap.keys(), ...newMap.keys()]);
-  const added = [], removed = [], changed = [], unchanged = [];
+  const added: Block[] = [], removed: Block[] = [], changed: BlockDiffChange[] = [], unchanged: Block[] = [];
   for (const id of allIds) {
     const old = oldMap.get(id);
     const cur = newMap.get(id);
@@ -22,9 +54,20 @@ function computeBlockDiff(oldBlocks, newBlocks) {
   return { added, removed, changed, unchanged, addedCount: added.length, removedCount: removed.length, changedCount: changed.length };
 }
 
-export default function VersionHistoryPanel({ versionHistory, onClose, currentBlocks, currentTitle, currentDb, onRestore, onSelectiveRestore, onRestoreDbView }) {
-  const [selectedDiff, setSelectedDiff] = useState(null);
-  const [selectedBlocks, setSelectedBlocks] = useState(new Set());
+interface VersionHistoryPanelProps {
+  versionHistory: VersionEntry[];
+  onClose: () => void;
+  currentBlocks: Block[];
+  currentTitle?: string;
+  currentDb?: DatabaseSchema;
+  onRestore: (version: VersionEntry) => void;
+  onSelectiveRestore: (blocks: Block[]) => void;
+  onRestoreDbView: (version: VersionEntry) => void;
+}
+
+export default function VersionHistoryPanel({ versionHistory, onClose, currentBlocks, currentTitle, currentDb, onRestore, onSelectiveRestore, onRestoreDbView }: VersionHistoryPanelProps) {
+  const [selectedDiff, setSelectedDiff] = useState<BlockDiff | null>(null);
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">

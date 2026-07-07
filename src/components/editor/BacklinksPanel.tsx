@@ -1,12 +1,25 @@
 import React, { useMemo } from "react";
 import { ArrowLeft, ExternalLink } from "lucide-react";
+import type { Page } from "../../lib/supabaseService";
 
-export default function BacklinksPanel({ pageId, pages, onNavigate, onClose }) {
+interface BacklinksPanelProps {
+  pageId: string;
+  pages: Page[];
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+  onClose: () => void;
+}
+
+interface Backlink {
+  page: Page;
+  mentions: Page["blocks"];
+}
+
+export default function BacklinksPanel({ pageId, pages, onNavigate, onClose }: BacklinksPanelProps) {
   const backlinks = useMemo(() => {
     const currentPage = pages.find(p => p.id === pageId);
     if (!currentPage) return [];
     const title = currentPage.title?.toLowerCase() || "";
-    const results = [];
+    const results: Backlink[] = [];
     pages.forEach((p) => {
       if (p.id === pageId) return;
       const blocks = p.blocks || [];

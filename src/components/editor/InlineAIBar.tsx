@@ -2,16 +2,26 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { runAI } from "../../utils/ai";
 
-export default function InlineAIBar({ text, apiKey, aiProvider, nvidiaKey, style, onClose, onResult }) {
+interface InlineAIBarProps {
+  text: string;
+  apiKey?: string;
+  aiProvider?: string;
+  nvidiaKey?: string;
+  style?: React.CSSProperties;
+  onClose?: () => void;
+  onResult: (result: string) => void;
+}
+
+export default function InlineAIBar({ text, apiKey, aiProvider, nvidiaKey, style, onClose, onResult }: InlineAIBarProps) {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef(null);
-  const barRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
-    const handler = (e) => {
-      if (barRef.current && !barRef.current.contains(e.target)) onClose?.();
+    const handler = (e: MouseEvent | PointerEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) onClose?.();
     };
     document.addEventListener("pointerdown", handler);
     return () => document.removeEventListener("pointerdown", handler);
