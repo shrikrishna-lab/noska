@@ -1,4 +1,5 @@
 import React from "react";
+import type { NormalizedCommand } from "../../core/commands/CommandRegistry";
 
 /**
  * BlockPreviewIllustration — renders a stylized "skeleton" illustration of what
@@ -25,12 +26,27 @@ const C = {
   accentLine: "color-mix(in srgb, var(--accent, #f59e0b) 45%, transparent)",
 };
 
+interface LineProps {
+  x: number;
+  y: number;
+  w: number;
+  h?: number;
+  fill?: string;
+  rx?: number;
+}
+
 // Rounded skeleton line helper
-function Line({ x, y, w, h = 7, fill = C.skeleton, rx }) {
+function Line({ x, y, w, h = 7, fill = C.skeleton, rx }: LineProps) {
   return <rect x={x} y={y} width={w} height={h} rx={rx ?? h / 2} fill={fill} />;
 }
 
 // ── Variant renderers ────────────────────────────────────────────────────────
+// Each entry renders a distinct SVG skeleton illustration; several accept an
+// optional numeric level/count/color argument (heading/toggleHeading level,
+// columns count, color hex). Left untyped as a Record (relying on inference)
+// rather than a single shared function signature, since each variant's
+// parameter type/default differs (number for level/count, string for color)
+// and resolveVariant always calls each one with the argument type it expects.
 const VARIANTS = {
   text: () => (
     <>
@@ -436,7 +452,7 @@ const VARIANTS = {
       <Line x={20} y={62} w={176} h={6} fill={C.skeletonSoft} />
     </>
   ),
-  color: (accent) => (
+  color: (accent: string = COLOR_HEX.default) => (
     <>
       <Line x={20} y={40} w={40} h={7} fill={C.skeletonSoft} />
       <rect x={66} y={33} width={70} height={20} rx={4} fill={accent} opacity={0.28} />
@@ -465,14 +481,14 @@ const VARIANTS = {
   ),
 };
 
-const COLOR_HEX = {
+const COLOR_HEX: Record<string, string> = {
   gray: "#9ca3af", brown: "#a1785a", orange: "#f97316", yellow: "#eab308",
   green: "#22c55e", blue: "#3b82f6", purple: "#a855f7", pink: "#ec4899",
   red: "#ef4444", default: "var(--accent, #f59e0b)",
 };
 
 // ── Map a command to a variant renderer ──────────────────────────────────────
-function resolveVariant(command) {
+function resolveVariant(command: NormalizedCommand | null | undefined): () => React.ReactElement {
   const id = command?.id || "";
   const cat = command?.category || "";
 
@@ -535,7 +551,13 @@ function resolveVariant(command) {
   return () => VARIANTS.generic();
 }
 
-export default function BlockPreviewIllustration({ command, width = 236, height = 132 }) {
+interface BlockPreviewIllustrationProps {
+  command: NormalizedCommand | null | undefined;
+  width?: number;
+  height?: number;
+}
+
+export default function BlockPreviewIllustration({ command, width = 236, height = 132 }: BlockPreviewIllustrationProps) {
   if (!command) return null;
   const render = resolveVariant(command);
   return (

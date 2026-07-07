@@ -2,9 +2,19 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as Icons from "lucide-react";
 import BlockPreviewIllustration from "./BlockPreviewIllustration";
+import type { NormalizedCommand } from "../../core/commands/CommandRegistry";
 
-function RenderIcon({ iconName, size = 14, className = "" }) {
-  const IconComponent = Icons[iconName];
+interface RenderIconProps {
+  iconName: string;
+  size?: number;
+  className?: string;
+}
+
+function RenderIcon({ iconName, size = 14, className = "" }: RenderIconProps) {
+  // Cast: lucide-react's namespace import isn't indexable by an arbitrary
+  // string at the type level, but every icon name we pass here comes from
+  // command.icon, a runtime-validated string key into the same module.
+  const IconComponent = (Icons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>)[iconName];
   if (!IconComponent) return null;
   return <IconComponent size={size} className={`shrink-0 ${className}`} />;
 }
@@ -19,12 +29,19 @@ function RenderIcon({ iconName, size = 14, className = "" }) {
  *   visible   — Whether the panel should be shown (controls AnimatePresence)
  *   menuWidth — Width of the main menu (default 352)
  */
-export default function SlashCommandPreviewPanel({ command, side = "right", visible, menuWidth = 352 }) {
+interface SlashCommandPreviewPanelProps {
+  command: NormalizedCommand | null | undefined;
+  side?: "right" | "left";
+  visible: boolean;
+  menuWidth?: number;
+}
+
+export default function SlashCommandPreviewPanel({ command, side = "right", visible, menuWidth = 352 }: SlashCommandPreviewPanelProps) {
   const [imgFailed, setImgFailed] = useState(false);
 
   // Reset imgFailed when command changes
   const commandId = command?.id;
-  const [lastCommandId, setLastCommandId] = useState(null);
+  const [lastCommandId, setLastCommandId] = useState<string | undefined>(undefined);
   if (commandId !== lastCommandId) {
     setLastCommandId(commandId);
     setImgFailed(false);
@@ -33,7 +50,7 @@ export default function SlashCommandPreviewPanel({ command, side = "right", visi
   const PANEL_WIDTH = 260;
   const GAP = 8;
 
-  const positionStyle = {
+  const positionStyle: React.CSSProperties = {
     position: "absolute",
     top: 0,
     width: PANEL_WIDTH,
