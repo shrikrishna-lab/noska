@@ -2409,7 +2409,14 @@ function Block({
               setBlockContextOpen(false);
             }}
             lastEditedBy={block?.lastEditedBy || page?.lastEditedBy || "Krishna Handibagシ"}
-            lastEditedAt={block?.lastEditedAt || page?.updatedAt}
+            // `lastEditedAt` isn't a declared field on `Block` (only
+            // `lastEditedTime` is, in BaseBlock) — it only exists via the
+            // catch-all index signature, which types as `unknown`. Same
+            // type-only gap as the softDelete/turnInto casts above, not a
+            // real behavior change: at runtime this is never actually set
+            // on a block, so the expression already always fell through to
+            // `page?.updatedAt`.
+            lastEditedAt={(block as unknown as { lastEditedAt?: string })?.lastEditedAt || page?.updatedAt}
             onToast={onToast}
           />
         </FloatingMenu>
