@@ -2391,3 +2391,111 @@ existing Locked/View-only badges, shown only when `page.sharedRole` is set.
   on" instruction) — should happen before considering this fully done.
 - The broader 18-table RLS lockdown (documented earlier in this log) is
   still deferred, independent of this feature.
+
+
+---
+
+## Live QA: real end-to-end RLS testing of the sharing feature
+
+Per the "test before moving on" standing instruction, ran a full
+end-to-end test of the invite/accept/share pipeline directly against
+production RLS policies — not just the app UI — since `TEST_MODE` bypasses
+Supabase entirely and can't exercise this feature's actual backend logic.
+
+### Method
+Used Postgres role/JWT simulation (`SET LOCAL ROLE authenticated` +
+`SET LOCAL request.jwt.claims`) to act as three distinct simulated users
+(owner/invitee/stranger) against real RLS policies, using only synthetic
+test rows (fixed, clearly-identifiable UUIDs prefixed `aaaaaaaa`/
+`bbbbbbbb`/`cccccccc`/`11111111`/`22222222`). Supabase MCP write access
+was enabled with the user's explicit approval for this, and restored to
+`read_only=true` immediately after.
+
+### Critical bug found and fixed: infinite RLS recursion
+`pages_select_own_or_shared` (on `pages`) queries `page_permissions` to
+check for a grant; `page_permissions`'s own SELECT/INSERT/UPDATE/DELETE
+policies queried `pages` right back to verify ownership — a circular RLS
+evaluation loop. This surfaced as a real `42P17: infinite recursion
+detected in policy for relation "pages"` error the moment a second user
+(not the owner) tried to read anything, which would have broken the
+sharing feature for every non-owner the instant they tried to view/accept
+a shared page. Fixed with a `SECURITY DEFINER` helper function
+(`is_page_owner(page_id, user_id)`) that checks ownership without
+re-triggering `pages`' own RLS, breaking the cycle (migration
+`fix_page_permissions_rls_recursion`).
+
+### Secondary hardening: SECURITY DEFINER function over-exposed
+The security advisor flagged that `is_page_owner` was callable as a public
+RPC endpoint by both `anon` (unauthenticated) and `authenticated`, despite
+only intending the latter — `REVOKE ALL FROM PUBLIC` alone didn't reliably
+strip the inherited `anon` grant. Explicitly revoked from `anon` (migration
+`harden_is_page_owner_function`). Low severity (the function only returns
+a boolean, not page contents — a same-page-ownership oracle at worst, no
+data leak), but closed since it wasn't the intended surface.
+
+### Scenarios verified (all passed after the recursion fix)
+1. Owner resolves invitee by username, sends invite → succeeds.
+2. Duplicate pending invite to the same (page, invitee) → rejected by the
+   partial unique index (23505), matching `sendPageInvite`'s catch handler.
+3. A third party (stranger) attempting to insert an invite while claiming
+   to be a different inviter than their own `auth.uid()` → rejected by
+   the INSERT policy's `WITH CHECK`.
+4. Invitee can SELECT their own pending invite (Inbox visibility).
+5. Stranger cannot SELECT that invite, and (pre-fix) triggered the
+   recursion bug when checking page visibility — confirmed fixed post-migration.
+6. Invitee accepts: UPDATE their own invite to `accepted` (succeeds, only
+   the invitee's own row), then self-inserts the `page_permissions` grant
+   row (mirrors `acceptPageInvite`'s two-step write) — both succeed.
+7. Post-accept, invitee can now SELECT the previously-invisible page, and
+   `pages.user_id` still shows the ORIGINAL owner — confirming the
+   ownership-preservation design (`updateSharedPage`'s whole reason for
+   existing) holds at the database level, not just in application code.
+8. Invitee (editor-role grant) can UPDATE the shared page's content
+   without touching `user_id` — mirrors `updateSharedPage()` exactly.
+9. Stranger (no grant) still cannot SELECT or UPDATE the page even after
+   it's been shared with someone else — UPDATE attempt matched 0 rows.
+10. A separate viewer-role grant (`can_edit: false`) correctly allows
+    SELECT but blocks UPDATE — content unchanged after the attempt.
+11. Decline flow: invitee updates their own invite to `declined` —
+    succeeds. Owner then attempts to flip that same invite back to
+    `accepted` themselves — 0 rows affected (only the invitee may update
+    their own invite's status, confirmed by the status remaining
+    `declined` afterward).
+12. Withdraw flow: inviter deletes their own still-pending invite —
+    succeeds.
+
+### Cleanup
+All synthetic rows (3 `user_profiles`, 2 `pages`, 1 `page_permissions`,
+plus the various `page_invites` created/consumed during the scenarios
+above) were deleted at the end. Verified via a zero-row count query
+across all four tables (filtered by the `qa_`/`QA Test` synthetic
+markers) that production data was returned to exactly its pre-test state.
+
+### Verification
+- `get_advisors(security)` re-run after both fix migrations: the 3
+  sharing-related tables remain correctly non-permissive; the only new
+  advisory items were the `is_page_owner` exposure (found and fixed, see
+  above) — no other regressions introduced.
+- No app code changes were needed as a result of this QA — both bugs
+  found were database-side (RLS policy structure), not application logic.
+
+### Also fixed this session (before QA): owner-only action visibility
+Per the earlier-flagged follow-up: `PageOptionsMenu.tsx` now hides
+Duplicate/Move to/Trash/Lock/Read-only/Customize/Turn into wiki when
+`page.sharedRole` is set (`OWNER_ONLY_ACTION_IDS` filter) instead of
+showing owner-only actions that silently no-op for a shared-page viewer.
+Also closed a real gap in `Editor.tsx`'s `BlockContextMenu` `onAction`
+switch: it previously only checked `page.isLocked`, not `blockPermission`
+— a viewer/commenter on a shared page could still open the block grip
+menu and delete/duplicate/convert blocks, bypassing the keyboard-only
+`blockPermission === 'view'` guard already in place for typing. Fixed by
+adding the same check to the menu-action dispatch, with `copy-link`
+exempted since it isn't a mutation.
+
+### Status
+The real page-sharing feature (Phase B) is now considered fully
+implemented, RLS-tested end-to-end against real policies (not just
+application-level assumptions), and verified clean. Combined with Phase A
+(usernames + real edit attribution), both original requests from this
+task are complete. The broader 18-table RLS lockdown remains a separate,
+already-tracked, deferred item.
