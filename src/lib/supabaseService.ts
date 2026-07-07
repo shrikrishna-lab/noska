@@ -153,6 +153,14 @@ export interface Page {
   trashedAt?: string;
   purgeAfter?: string;
   deleteAfter?: string;
+
+  /** Set only on pages returned by `fetchSharedPages` — marks this as a
+   * page shared TO the current user (they're not its owner). Never sent
+   * to the DB (not a `pages` column) and never present on a normal
+   * owned page. Read by App.tsx to keep shared pages out of the owner-
+   * scoped `pages` array / auto-save pipeline, and by the UI to show a
+   * "Shared with you" indicator and gate owner-only actions. */
+  sharedRole?: "editor" | "commenter" | "viewer";
 }
 
 /** Loose partial input accepted by savePage/savePages/mapPageToDb — pages
@@ -193,6 +201,28 @@ export async function savePages(pages: PageInput[], userId: string): Promise<Pag
     .select();
   if (error) throw error;
   return (data || []).map(mapPageFromDb);
+}
+
+/** Updates a shared page's content WITHOUT ever touching `user_id` —
+ * unlike `savePage`/`savePages` (which always set `user_id: userId` on
+ * upsert), this is a plain field-level UPDATE so an editor with a
+ * `page_permissions` grant can edit a page's content without silently
+ * reassigning its ownership to themselves. RLS enforces the actual
+ * write permission (`pages_update_own_or_editor` — see migration
+ * rls_page_permissions_and_shared_pages): this will fail server-side if
+ * `editorUserId` doesn't actually have a `can_edit` grant on this page. */
+export async function updateSharedPage(pageId: string, patch: PageInput, editorUserId: string): Promise<Page> {
+  requireOwner(editorUserId);
+  const dbPatch = mapPageToDb(patch) as Partial<TablesInsert<"pages">>;
+  delete dbPatch.id;
+  const { data, error } = await supabase
+    .from("pages")
+    .update(dbPatch)
+    .eq("id", pageId)
+    .select()
+    .single();
+  if (error) throw error;
+  return mapPageFromDb(data);
 }
 
 export async function deletePage(id: string): Promise<void> {
@@ -486,6 +516,23 @@ export async function setUsername(userId: string, username: string): Promise<Tab
   return data;
 }
 
+/** Resolves a `@username` to the user's id/display name for the Share
+ * modal's "invite by username" flow. Returns `null` if no such username
+ * exists — callers surface this as "user not found" rather than throwing,
+ * since an unrecognized username is expected user input, not an error. */
+export async function findUserByUsername(username: string): Promise<{ userId: string; userName: string; username: string } | null> {
+  const normalized = normalizeUsername(username);
+  if (!normalized) return null;
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("user_id, user_name, username")
+    .ilike("username", normalized)
+    .maybeSingle();
+  if (error && error.code !== "42P01") throw error;
+  if (!data || !data.username) return null;
+  return { userId: data.user_id, userName: data.user_name, username: data.username };
+}
+
 export async function fetchUserProfile(userId: string): Promise<Tables<"user_profiles"> | null> {
   const { data, error } = await supabase
     .from("user_profiles")
@@ -555,6 +602,181 @@ export async function setOnboardingComplete(
     if (error.code === "23505") throw new Error("That username is already taken.");
     throw error;
   }
+}
+
+// ============ PAGE INVITES ============
+// RLS: inviter/invitee-participant-scoped (see migration
+// `create_page_invites` — inviter can read/create; only the invitee can
+// accept/decline their own invite; either party can withdraw/delete).
+// Distinct from `page_permissions` (a pure grant, no lifecycle) — an
+// accepted invite here is what actually creates the page_permissions row
+// (see acceptPageInvite below).
+
+export type PageInviteRole = "editor" | "commenter" | "viewer";
+
+export interface SendPageInviteInput {
+  pageId: string;
+  pageTitle: string;
+  inviterUserId: string;
+  inviterUsername?: string | null;
+  inviteeUsername: string;
+  role: PageInviteRole;
+}
+
+/** Sends a real invite: resolves the invitee's username to a user id,
+ * refuses self-invites, and refuses re-inviting someone who already has
+ * a pending invite for this page (DB unique index is the final backstop;
+ * this check just gives a clean error message instead of a raw 23505). */
+export async function sendPageInvite(input: SendPageInviteInput): Promise<Tables<"page_invites">> {
+  requireOwner(input.inviterUserId);
+  const invitee = await findUserByUsername(input.inviteeUsername);
+  if (!invitee) {
+    throw new Error(`No user found with username "${normalizeUsername(input.inviteeUsername)}".`);
+  }
+  if (invitee.userId === input.inviterUserId) {
+    throw new Error("You can't invite yourself.");
+  }
+  const { data, error } = await supabase
+    .from("page_invites")
+    .insert({
+      page_id: input.pageId,
+      page_title: input.pageTitle || "Untitled",
+      inviter_user_id: input.inviterUserId,
+      inviter_username: input.inviterUsername ? normalizeUsername(input.inviterUsername) : null,
+      invitee_user_id: invitee.userId,
+      invitee_username: invitee.username,
+      role: input.role,
+      status: "pending",
+    } as TablesInsert<"page_invites">)
+    .select()
+    .single();
+  if (error) {
+    if (error.code === "23505") throw new Error(`${invitee.username} already has a pending invite for this page.`);
+    throw error;
+  }
+  return data;
+}
+
+/** Invites addressed to `userId` — powers the Inbox's "Invites" section.
+ * `status` filter defaults to pending-only (what the Inbox actually needs
+ * to show accept/decline actions for); pass `"all"` for a full history. */
+export async function fetchPageInvites(userId: string, status: "pending" | "all" = "pending"): Promise<Tables<"page_invites">[]> {
+  let query = supabase.from("page_invites").select("*").eq("invitee_user_id", userId);
+  if (status === "pending") query = query.eq("status", "pending");
+  const { data, error } = await query.order("created_at", { ascending: false });
+  if (error && error.code !== "42P01") return [];
+  return data || [];
+}
+
+/** Invites this user has sent that are still pending — lets the Share
+ * modal show "invite already pending" instead of silently re-sending. */
+export async function fetchSentPageInvites(userId: string, pageId?: string): Promise<Tables<"page_invites">[]> {
+  let query = supabase.from("page_invites").select("*").eq("inviter_user_id", userId).eq("status", "pending");
+  if (pageId) query = query.eq("page_id", pageId);
+  const { data, error } = await query.order("created_at", { ascending: false });
+  if (error && error.code !== "42P01") return [];
+  return data || [];
+}
+
+const INVITE_ROLE_CAPS: Record<PageInviteRole, { can_view: boolean; can_edit: boolean; can_comment: boolean }> = {
+  editor: { can_view: true, can_edit: true, can_comment: true },
+  commenter: { can_view: true, can_edit: false, can_comment: true },
+  viewer: { can_view: true, can_edit: false, can_comment: false },
+};
+
+/** Accepts a pending invite: flips its status, then grants the real
+ * `page_permissions` row the rest of the app actually checks (Editor.tsx's
+ * getPagePermission, etc.). Both writes use the invite's own
+ * `invitee_user_id` as the actor per RLS (the invitee can update their own
+ * invite row and insert their own permissions row — see the migration). */
+export async function acceptPageInvite(inviteId: string, userId: string): Promise<Tables<"page_invites">> {
+  requireOwner(userId);
+  const { data: invite, error: fetchError } = await supabase
+    .from("page_invites")
+    .select("*")
+    .eq("id", inviteId)
+    .eq("invitee_user_id", userId)
+    .single();
+  if (fetchError) throw fetchError;
+  if (invite.status !== "pending") {
+    throw new Error("This invite has already been responded to.");
+  }
+
+  const caps = INVITE_ROLE_CAPS[invite.role as PageInviteRole] || INVITE_ROLE_CAPS.editor;
+  const { error: grantError } = await supabase
+    .from("page_permissions")
+    .upsert(
+      {
+        page_id: invite.page_id,
+        user_id: userId,
+        user_name: invite.invitee_username,
+        role: invite.role,
+        ...caps,
+      } as TablesInsert<"page_permissions">,
+      { onConflict: "page_id,user_id" }
+    );
+  if (grantError) throw grantError;
+
+  const { data, error } = await supabase
+    .from("page_invites")
+    .update({ status: "accepted", responded_at: new Date().toISOString() } as Tables<"page_invites">)
+    .eq("id", inviteId)
+    .eq("invitee_user_id", userId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function declinePageInvite(inviteId: string, userId: string): Promise<void> {
+  requireOwner(userId);
+  const { error } = await supabase
+    .from("page_invites")
+    .update({ status: "declined", responded_at: new Date().toISOString() } as Tables<"page_invites">)
+    .eq("id", inviteId)
+    .eq("invitee_user_id", userId);
+  if (error) throw error;
+}
+
+/** Withdraws a pending invite the current user sent (not one addressed
+ * to them) — used by the Share modal's per-invite remove button. */
+export async function withdrawPageInvite(inviteId: string, inviterUserId: string): Promise<void> {
+  requireOwner(inviterUserId);
+  const { error } = await supabase
+    .from("page_invites")
+    .delete()
+    .eq("id", inviteId)
+    .eq("inviter_user_id", inviterUserId);
+  if (error) throw error;
+}
+
+/** Pages shared with `userId` — i.e. rows in `page_permissions` granting
+ * them access to a page they don't own. Distinct from `fetchPages`
+ * (owner-scoped) since shared pages must NOT be swept into the normal
+ * pages array (see App.tsx's sharedPages state / the sync-ownership
+ * hazard documented there): the auto-save pipeline stamps every page in
+ * that array with the current user's id, which would silently steal
+ * ownership of a page shared *to* them. */
+export async function fetchSharedPages(userId: string): Promise<Page[]> {
+  const { data: grants, error: grantError } = await supabase
+    .from("page_permissions")
+    .select("page_id, role, can_edit, can_comment")
+    .eq("user_id", userId);
+  if (grantError && grantError.code !== "42P01") return [];
+  if (!grants || grants.length === 0) return [];
+  const pageIds = grants.map((g) => g.page_id).filter((id): id is string => Boolean(id));
+  if (pageIds.length === 0) return [];
+  const { data: dbPages, error } = await supabase.from("pages").select("*").in("id", pageIds);
+  if (error) throw error;
+  const roleByPageId = new Map(grants.map((g) => [g.page_id, g.role]));
+  return (dbPages || []).map((db) => ({
+    ...mapPageFromDb(db),
+    // Client-only marker (not a `pages` column — see mapPageFromDb) so
+    // the UI can show a "Shared with you" badge and gate write actions
+    // that don't make sense on a shared page (delete, re-share, etc.)
+    // without a separate lookup.
+    sharedRole: roleByPageId.get(db.id) as PageInviteRole | undefined,
+  }));
 }
 
 // ============ CREATOR PROFILES ============

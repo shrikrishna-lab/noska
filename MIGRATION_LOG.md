@@ -2255,3 +2255,139 @@ picking back up now that all conversions are done. Live-browser QA of this
 final batch's newly-converted files (per the standing "test before moving on"
 instruction) has **not yet been performed** and should happen before or
 alongside resuming the RLS work.
+
+
+---
+
+## Feature: Real username-based page sharing + invite inbox (Phase B)
+
+Replaced the entirely fake "Share" surface (hardcoded `noska.local/...`
+link, `localStorage`-only "invites" that never touched Supabase, dead
+`page_permissions` table) with a real invite/accept/decline/share
+pipeline backed by actual RLS-protected tables. Builds directly on the
+username feature (Phase A) — invites are addressed by `@username`, not
+email, since no email-sending infrastructure exists in this app.
+
+### Database changes (production, applied with explicit write-access approval)
+- New table `page_invites`: pending/accepted/declined lifecycle, one
+  pending invite per (page, invitee) enforced via a partial unique index,
+  RLS scoped to inviter/invitee participants only (migration
+  `create_page_invites`).
+- Tightened `page_permissions` RLS from the pre-existing `USING (true)`
+  placeholder to real owner/grantee-scoped policies, and extended `pages`
+  RLS so a `page_permissions` grant actually gates SELECT/UPDATE access
+  (migration `rls_page_permissions_and_shared_pages`) — without this, the
+  new invite/grant system would have been decorative, since every row was
+  already readable/writable by anyone regardless of any grant. Scoped
+  narrowly to what sharing needs; the broader 18-table RLS lockdown
+  (documented earlier in this log) remains separately tracked/deferred.
+- `types/supabase.ts`: manually added the `page_invites` Row/Insert/Update
+  types (couldn't regenerate via the MCP tool mid-session; hand-written to
+  match the migration's actual column set exactly).
+- Confirmed via `get_advisors(security)`: `pages`/`page_permissions`/
+  `page_invites` no longer appear in the "RLS Policy Always True" advisory
+  list post-migration; all other flagged tables are the pre-existing,
+  already-documented deferred gap, unrelated to and untouched by this work.
+
+### Service layer (`src/lib/supabaseService.ts`)
+- `findUserByUsername`, `sendPageInvite`, `fetchPageInvites`,
+  `fetchSentPageInvites`, `acceptPageInvite` (also grants the real
+  `page_permissions` row), `declinePageInvite`, `withdrawPageInvite`,
+  `fetchSharedPages`.
+- `updateSharedPage`: a plain field-level UPDATE that deliberately never
+  touches `user_id` — see the architectural note below for why this is a
+  separate function from `savePage`/`savePages`.
+- Added `Page.sharedRole` — a client-only marker (not a DB column) set
+  only on pages returned by `fetchSharedPages`, read by the UI for a
+  "Shared with you" badge and by `updatePage`'s routing logic.
+
+### Critical architectural fix: shared-page ownership hazard
+Found during design, before writing any UI: the app's existing auto-save
+pipeline (`utils/storage.ts` → `savePages(pages, currentUserId)`) stamps
+**every page in the `pages` array** with the *current* user's id on every
+save. If a shared page were ever merged into that same array (the naive
+approach), the very next auto-save would silently reassign its ownership
+to whoever was viewing it. Fixed by keeping shared pages in a completely
+separate `sharedPages` state array in `App.tsx`, never merged into
+`pages`/`commitPages`, with all edits to a shared page routed through a
+dedicated `updateSharedPage()` local handler → `updateSharedPage()` service
+call (field-level UPDATE, `user_id` untouched, gated server-side by the
+new `can_edit` RLS policy) instead of the normal `commitPages` pipeline.
+
+### App.tsx wiring
+- `sharedPages`/`pendingInvites` state, loaded via a shared
+  `loadCollabData(userId)` helper called from both bootstrap paths
+  (initial mount + `handleAuthSuccess`).
+- `activePage` resolution order extended: owned non-trashed match →
+  shared-page match (deep link / Inbox "open page" now actually works) →
+  first owned non-trashed page (original recovery behavior, unchanged).
+  Shared match gets a derived `permission: 'edit' | 'view'` based on
+  `sharedRole` (`editor` → edit, `commenter`/`viewer` → view-only) without
+  mutating the source `sharedPages` entry.
+- Stacked-column `colPage` lookup extended the same way, so opening a
+  shared page in a background column (Ctrl-click) doesn't silently vanish.
+- `updatePage()` now detects "this id isn't owned but IS shared" for ANY
+  page id (not just the active one) and routes to the shared-page pipeline.
+- `handleAcceptInvite`/`handleDeclineInvite`: optimistic local state
+  update, accept also refreshes `sharedPages` since a new grant needs to
+  actually surface somewhere.
+- `copyPageLink`/`ShareModal` now build a real resolvable
+  `${origin}/${workspaceSlug}/${pageId}` URL (App.tsx's own
+  `/:workspaceSlug/:pageId` route) instead of the previous hardcoded fake
+  `noska.local/page/...` domain — actually opens the page now, subject to
+  the RLS check above.
+
+### ShareModal rewrite (`src/components/Modals.tsx`)
+Replaced the email-input + `localStorage`-only invite list with a
+real username-input form: `sendPageInvite` on submit, live pending-invite
+list via `fetchSentPageInvites` (with a withdraw button calling
+`withdrawPageInvite`), inline error display (unknown username / already
+invited / self-invite). Role selector now maps directly to
+`PageInviteRole` (`editor`/`commenter`/`viewer`) instead of the old
+4-option "Full access/Can edit/Can comment/Can view" list that never
+actually did anything.
+
+### Inbox rewrite (`src/components/WorkspaceViews.tsx`)
+`InboxRoute` now renders real invite cards above the existing (unchanged)
+localStorage reminders section, each with working Accept/Decline buttons
+wired to `App.tsx`'s handlers, with a per-card in-flight/disabled state.
+Also fixed two other fake "Shared" surfaces found while doing this:
+`WorkspaceView`'s `view === "shared"` panel and `LibraryRoute`'s "Shared"
+tab both previously just displayed the same owned-pages list mislabeled
+as "shared" — both now pull from the real `sharedPages` array.
+
+### Sidebar (`src/components/Sidebar.tsx`)
+Added a `badge` prop to `NoskaNavItem` (didn't exist before) and wired a
+real pending-invite count onto the Inbox nav item.
+
+### Editor.tsx
+Added a "🤝 Shared · can edit/comment/view only" badge next to the
+existing Locked/View-only badges, shown only when `page.sharedRole` is set.
+
+### Verification
+- `npx tsc --noEmit`: clean, 0 errors, full project.
+- `npm run build`: succeeded.
+- `npx vitest run`: 140/140 tests pass (baseline maintained).
+- Security grep across every file touched: no hardcoded credentials, no
+  `any`/`@ts-ignore`/`@ts-nocheck` introduced.
+- `get_advisors(security)`: confirmed the 3 tables this feature touches
+  (`pages`, `page_permissions`, `page_invites`) are no longer
+  "USING(true)" — verified via the advisor output directly, not just by
+  re-reading the SQL I wrote.
+- Supabase MCP connection was switched to write mode twice (once for the
+  username migration, once for this feature), both times with the user's
+  explicit approval beforehand, and restored to `read_only=true`
+  immediately after each.
+
+### Known follow-ups (not done, out of scope for this pass)
+- Owner-only page actions (Trash, Move to, Lock, Customize, Duplicate,
+  Turn into wiki) are not yet hidden/disabled in `PageOptionsMenu` for a
+  shared-page viewer — they're safe (all operate on the owner-scoped
+  `pages` array, which never contains a shared page's id, so they no-op
+  harmlessly rather than corrupt anything) but not yet hidden from the UI
+  for a cleaner experience.
+- Live browser QA of the full invite → accept → edit → RLS-enforcement
+  flow has not been performed yet (per the standing "test before moving
+  on" instruction) — should happen before considering this fully done.
+- The broader 18-table RLS lockdown (documented earlier in this log) is
+  still deferred, independent of this feature.

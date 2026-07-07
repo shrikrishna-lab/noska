@@ -58,8 +58,12 @@ import {
   getPageSubtreeIds,
   ensurePageEntity
 } from "./utils/pageTreeOps";
-import { fetchPages, fetchSettings, fetchAIChats, savePage, saveSetting, fetchUserProfile, upsertUserProfile, setOnboardingComplete } from "./lib/supabaseService";
+import {
+  fetchPages, fetchSettings, fetchAIChats, savePage, saveSetting, fetchUserProfile, upsertUserProfile, setOnboardingComplete,
+  fetchPageInvites, acceptPageInvite, declinePageInvite, fetchSharedPages, updateSharedPage as updateSharedPageRemote
+} from "./lib/supabaseService";
 import type { Page, AIChat } from "./lib/supabaseService";
+import type { Tables } from "../types/supabase";
 import type { Block, LineageEntry } from "../types/blocks";
 import type { OnboardingFormData, OnboardingPagePreview } from "./onboarding/types";
 
@@ -106,6 +110,16 @@ function App() {
   // username is set — starts false so the claim modal never flashes
   // before fetchUserProfile resolves.
   const [needsUsernameClaim, setNeedsUsernameClaim] = useState(false);
+  // Pages shared TO the current user (fetchSharedPages) — deliberately
+  // kept in a SEPARATE array from `pages`, never merged into it. `pages`
+  // is what the auto-save pipeline (utils/storage.ts -> savePages) syncs
+  // on every change, stamping every row with the CURRENT user's id — if
+  // a shared page ever ended up in that array, the very next auto-save
+  // would silently reassign its ownership to whoever's viewing it. See
+  // sharedActivePage/handleSharedBlockPatch below for how edits to a
+  // shared page are routed to savePage() directly instead.
+  const [sharedPages, setSharedPages] = useState<Page[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<Tables<"page_invites">[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -222,7 +236,27 @@ function App() {
   // if every page in the workspace was. When no non-trashed page exists
   // at all, activePage is correctly undefined, which renders the
   // (now-fixed, recoverable) empty-pages screen instead of a trashed page.
-  const activePage = pages.find((p) => p.id === activeId && !p.trashed) || pages.find((p) => !p.trashed);
+  // Checked in order: (1) an owned, non-trashed page matching activeId,
+  // (2) a page shared TO this user matching activeId — this is what makes
+  // a shared page's deep link / Inbox "open page" actually resolve, (3)
+  // only if NEITHER matches, fall back to the first owned non-trashed
+  // page (the original empty-active-id / trashed-active-page recovery
+  // behavior, unchanged). `isSharedActivePage` lets the block-patch/
+  // updatePage call sites below route edits through updateSharedPage()
+  // instead of the normal commitPages() pipeline, which would otherwise
+  // silently reassign ownership (see sharedPages' declaration comment).
+  const activeOwnedMatch = pages.find((p) => p.id === activeId && !p.trashed);
+  const activeSharedMatch = !activeOwnedMatch ? sharedPages.find((p) => p.id === activeId) : undefined;
+  const isSharedActivePage = !activeOwnedMatch && !!activeSharedMatch;
+  // A shared page's own `permission` field (getPagePermission/Editor.tsx's
+  // existing "View only" badge/edit-gating) is derived from its grant role
+  // here rather than mutated at the source — `permission` is otherwise a
+  // distinct, purely client-side "read-only toggle" concept (see its own
+  // doc comment in supabaseService.ts) that this shouldn't conflate with.
+  // `viewer`/`commenter` grants render read-only; only `editor` allows edits.
+  const activePage = activeOwnedMatch
+    || (activeSharedMatch ? { ...activeSharedMatch, permission: activeSharedMatch.sharedRole === "editor" ? "edit" as const : "view" as const } : undefined)
+    || pages.find((p) => !p.trashed);
   const visiblePages = pages.filter((p) => !p.trashed);
   const trashPages = pages.filter((p) => p.trashed);
   const pageText = activePage ? plainText(activePage) : "";
@@ -533,6 +567,7 @@ function App() {
       realtimeCollab.initUser(u.id, uname, u.user_metadata?.avatar_url || u.user_metadata?.picture || '👤');
       setWorkspaceName(prev => prev === 'My Workspace' ? `${uname}'s Workspace` : prev);
       setCurrentUserId(u.id);
+      loadCollabData(u.id);
 
       try {
         const profile = await fetchUserProfile(u.id);
@@ -615,6 +650,7 @@ function App() {
     realtimeCollab.initUser(userData.userId, uname, userData.avatarUrl || '👤');
     try { localStorage.setItem("noska_user_id", userData.userId); } catch {}
     setCurrentUserId(userData.userId);
+    loadCollabData(userData.userId);
 
     let existingProfile = null;
     try {
@@ -747,6 +783,34 @@ function App() {
     }
     setAppFlowState("workspace");
   }, [currentUsername]);
+
+  // Accept/decline handlers for the Inbox's real invite cards. Both
+  // update local state optimistically then reconcile with the server
+  // response/failure — accepting also refreshes `sharedPages` since the
+  // newly-granted page needs to actually appear somewhere.
+  const handleAcceptInvite = useCallback(async (inviteId: string) => {
+    if (!currentUserId) return;
+    try {
+      await acceptPageInvite(inviteId, currentUserId);
+      setPendingInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
+      const shared = await fetchSharedPages(currentUserId);
+      setSharedPages(shared);
+      showToast("Invite accepted");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Couldn't accept invite");
+    }
+  }, [currentUserId]);
+
+  const handleDeclineInvite = useCallback(async (inviteId: string) => {
+    if (!currentUserId) return;
+    try {
+      await declinePageInvite(inviteId, currentUserId);
+      setPendingInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
+      showToast("Invite declined");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Couldn't decline invite");
+    }
+  }, [currentUserId]);
 
   // Replay onboarding from settings
   const handleReplayOnboarding = useCallback(() => {
@@ -1131,6 +1195,25 @@ function App() {
     });
   };
 
+  // Loads both halves of the real sharing feature for the signed-in user:
+  // pages actually shared TO them (kept in the separate `sharedPages`
+  // array — see its declaration's comment for why), and invites still
+  // awaiting their accept/decline (Inbox's "Invites" section). Called
+  // from both bootstrap paths (initial mount + handleAuthSuccess) so a
+  // user sees pending invites/shared pages whichever path resolves.
+  const loadCollabData = useCallback(async (userId: string) => {
+    try {
+      const [shared, invites] = await Promise.all([
+        fetchSharedPages(userId),
+        fetchPageInvites(userId, "pending"),
+      ]);
+      setSharedPages(shared);
+      setPendingInvites(invites);
+    } catch (e) {
+      console.warn("App: failed to load shared pages/invites", e);
+    }
+  }, []);
+
   // Stamps real user attribution (replacing the "Krishna Handibag"
   // hardcoded fallback in Editor.tsx/BlockContextMenu.tsx) onto any block
   // that's new or was actually touched in `nextBlocks`, detected via
@@ -1158,7 +1241,42 @@ function App() {
     });
   };
 
+  // Edits to a page shared TO this user (not owned) must never go through
+  // the owner-scoped `pages`/commitPages pipeline — that pipeline's
+  // auto-save (utils/storage.ts) stamps every page with the CURRENT
+  // user's id on every save, which would silently steal ownership of the
+  // shared page. Instead: update `sharedPages` locally (optimistic) and
+  // persist via updateSharedPage(), a plain field UPDATE that never
+  // touches `user_id`, gated server-side by the `can_edit` RLS check
+  // (migration rls_page_permissions_and_shared_pages). Trash/restore/
+  // move-parent aren't supported on a shared page (no owner-level
+  // actions), so those patches are ignored here rather than routed.
+  const updateSharedPage = (id: string, patch: Partial<Page>) => {
+    if (patch.trashed !== undefined || patch.parentId !== undefined) return;
+    const target = sharedPages.find((p) => p.id === id);
+    if (!target || target.sharedRole !== "editor") {
+      showToast("You don't have edit access to this page.");
+      return;
+    }
+    const editorId = currentUserId;
+    if (!editorId) return;
+    const stampedPatch = patch.blocks
+      ? { ...patch, blocks: stampBlockAttribution(target.blocks, patch.blocks) }
+      : patch;
+    setSharedPages((prev) => prev.map((p) => p.id === id ? { ...p, ...stampedPatch, updatedAt: now() } : p));
+    updateSharedPageRemote(id, { ...stampedPatch, id }, editorId).catch((e) => {
+      showToast(e instanceof Error ? e.message : "Couldn't save changes to shared page.");
+    });
+  };
+
   const updatePage = (id: string, patch: Partial<Page>) => {
+    // Route to the shared-page pipeline for ANY page id that's shared-not-
+    // owned (not just the active page) — a shared page can also be open
+    // in a background stacked column (see stackedPageIds.map above).
+    if (!pages.some((p) => p.id === id) && sharedPages.some((p) => p.id === id)) {
+      updateSharedPage(id, patch);
+      return;
+    }
     if (patch.trashed === true) {
       trashPageSubtree(id);
       return;
@@ -2044,6 +2162,7 @@ function App() {
             open={sidebarOpen}
             pages={visiblePages}
             trashCount={trashPages.length}
+            pendingInvitesCount={pendingInvites.length}
             activeId={activeId}
             workspaceName={workspaceName}
             setWorkspaceName={setWorkspaceName}
@@ -2155,7 +2274,12 @@ function App() {
                       <div className="flex-1 flex overflow-x-auto overflow-y-hidden divide-x divide-[var(--border)]">
                         <AnimatePresence mode="popLayout">
                           {stackedPageIds.map((pId, idx) => {
-                            const colPage = pages.find((p) => p.id === pId);
+                            // Falls back to sharedPages the same way activePage
+                            // does above — otherwise a shared page pushed into
+                            // the stack (e.g. opened via Ctrl-click from the
+                            // Inbox/Library) would resolve to nothing and
+                            // silently vanish from the column view.
+                            const colPage = pages.find((p) => p.id === pId) || sharedPages.find((p) => p.id === pId);
                             if (!colPage) return null;
                             return (
                               <motion.div
@@ -2247,6 +2371,10 @@ function App() {
                     <WorkspaceView
                       view={appView}
                       pages={visiblePages}
+                      sharedPages={sharedPages}
+                      pendingInvites={pendingInvites}
+                      onAcceptInvite={handleAcceptInvite}
+                      onDeclineInvite={handleDeclineInvite}
                       workspaceName={workspaceName}
                       aiChats={aiChats}
                       onSelect={handlePageSelect}
@@ -2411,7 +2539,16 @@ function App() {
               />
             )}
             {trashOpen && <TrashModal pages={trashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} />}
-            {shareOpen && <ShareModal page={activePage} onClose={() => setShareOpen(false)} onToast={showToast} />}
+            {shareOpen && (
+              <ShareModal
+                page={activePage}
+                onClose={() => setShareOpen(false)}
+                onToast={showToast}
+                currentUserId={currentUserId}
+                currentUsername={currentUsername}
+                workspaceSlug={slugifyWorkspaceName(workspaceName)}
+              />
+            )}
             {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
             
             {/* Phase 3-5 Feature Modals */}

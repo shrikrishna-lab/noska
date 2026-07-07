@@ -138,12 +138,16 @@ interface SidebarProps {
   onShare?: () => void;
   onToast?: (message: string) => void;
   onLogout?: () => void;
+  /** Real pending page-invite count — shown as a badge on the Inbox nav
+   * item so unresponded invites are actually visible without opening it. */
+  pendingInvitesCount?: number;
 }
 
 export default function Sidebar({
   open,
   pages,
   trashCount,
+  pendingInvitesCount = 0,
   activeId,
   workspaceName,
   setWorkspaceName,
@@ -758,7 +762,7 @@ export default function Sidebar({
             <NoskaNavItem icon={AnimatedFolder} label="Home" active={appView === "home"} onClick={() => onView("home")} />
             <NoskaNavItem icon={AnimatedAI} label="AI Workspace" active={false} onClick={onAIFull} />
             <NoskaNavItem icon={AnimatedHistory} label="Calendar" active={appView === "calendar"} onClick={() => onView("calendar")} />
-            <NoskaNavItem icon={AnimatedBell} label="Inbox" active={appView === "inbox"} onClick={() => onView("inbox")} />
+            <NoskaNavItem icon={AnimatedBell} label="Inbox" active={appView === "inbox"} onClick={() => onView("inbox")} badge={pendingInvitesCount} />
           </NoskaSection>
 
           {/* 2. Starred Favorites */}
@@ -1009,9 +1013,12 @@ interface NoskaNavItemProps {
   onClick?: () => void;
   ariaLabel?: string;
   compact?: boolean;
+  /** Small numeric pill shown at the end of the row — used by Inbox for
+   * a real pending-invite count instead of a static/no-op indicator. */
+  badge?: number;
 }
 
-function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ariaLabel, compact }: NoskaNavItemProps) {
+function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ariaLabel, compact, badge }: NoskaNavItemProps) {
   return (
     <button
       aria-label={ariaLabel}
@@ -1037,6 +1044,11 @@ function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ari
         <span className={`block truncate ${active ? "font-semibold" : "font-normal"}`}>{label}</span>
         {subtitle && <span className="block truncate text-[9px] text-[var(--muted)] leading-none mt-0.5">{subtitle}</span>}
       </span>
+      {!!badge && badge > 0 && (
+        <span className="z-10 shrink-0 grid h-4 min-w-[16px] place-items-center rounded-full bg-[var(--accent)] px-1 text-[9px] font-bold text-white">
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
     </button>
   );
 }

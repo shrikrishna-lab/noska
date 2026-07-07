@@ -47,6 +47,7 @@ import { IconButton, Modal, ModalHeader, PearlButton } from "./ui";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block, LineageEntry } from "../../types/blocks";
+import type { Tables } from "../../types/supabase";
 
 // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
 // (deliberately, to avoid a circular type dependency — see that file's
@@ -112,6 +113,16 @@ type ChatDisplay = AIChat & { title?: string };
 interface WorkspaceViewProps {
   view: string;
   pages: Page[];
+  /** Pages actually shared TO the current user (real page_permissions
+   * grants) — kept separate from `pages` (owned pages) per App.tsx's
+   * comment on its `sharedPages` state. Rendered in LibraryRoute's
+   * "Shared with you" section. */
+  sharedPages?: Page[];
+  /** Invites still awaiting this user's accept/decline — rendered as
+   * actionable cards in InboxRoute. */
+  pendingInvites?: Tables<"page_invites">[];
+  onAcceptInvite?: (inviteId: string) => void;
+  onDeclineInvite?: (inviteId: string) => void;
   workspaceName?: string;
   aiChats?: AIChat[];
   onSelect: (pageId: string) => void;
@@ -130,6 +141,10 @@ interface WorkspaceViewProps {
 export function WorkspaceView({
   view,
   pages,
+  sharedPages = [],
+  pendingInvites = [],
+  onAcceptInvite,
+  onDeclineInvite,
   workspaceName,
   aiChats = [],
   onSelect,
@@ -220,12 +235,12 @@ export function WorkspaceView({
   if (view === "marketplace") return <MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} />;
   if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} onDuplicate={onDuplicate || (() => {})} />;
   if (view === "agents") return <AgentWorkspace pages={pages} onToast={onToast} onDuplicate={onDuplicate || (() => {})} />;
-  if (view === "library") return <LibraryRoute pages={pages} workspaceName={workspaceName} onSelect={onSelect} onNew={onNew} />;
+  if (view === "library") return <LibraryRoute pages={pages} sharedPages={sharedPages} workspaceName={workspaceName} onSelect={onSelect} onNew={onNew} />;
   if (view === "tasks") return <TasksRoute tasks={tasks} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
   if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
   if (view === "meetings") return <MeetingsRoute onNew={onNew} />;
   if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
-  if (view === "inbox") return <InboxRoute onNew={onNew} onToast={onToast} />;
+  if (view === "inbox") return <InboxRoute onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
 
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -598,11 +613,25 @@ export function WorkspaceView({
           </Panel>
         )}
 
-        {(view === "library" || view === "teamspace" || view === "shared") && (
-          <Panel title={view === "shared" ? "Shared pages" : "Workspace library"}>
+        {(view === "library" || view === "teamspace") && (
+          <Panel title="Workspace library">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {pages.map((page) => <PageCard key={page.id} page={page} onSelect={onSelect} />)}
             </div>
+          </Panel>
+        )}
+
+        {view === "shared" && (
+          <Panel title="Shared with you">
+            {sharedPages.length === 0 ? (
+              <div className="py-8 text-center text-sm text-[var(--muted)]">
+                No pages have been shared with you yet. Invites you accept from your Inbox will appear here.
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {sharedPages.map((page) => <PageCard key={page.id} page={page} onSelect={onSelect} />)}
+              </div>
+            )}
           </Panel>
         )}
 
@@ -657,12 +686,16 @@ interface Teamspace {
 
 interface LibraryRouteProps {
   pages: Page[];
+  /** Real pages shared TO the current user — shown when the "Shared" tab
+   * is active, instead of the previous behavior of just showing the same
+   * owned `pages` list unfiltered under a "Shared" label. */
+  sharedPages?: Page[];
   workspaceName?: string;
   onSelect: (pageId: string) => void;
   onNew: (template: string) => void;
 }
 
-function LibraryRoute({ pages, workspaceName, onSelect, onNew }: LibraryRouteProps) {
+function LibraryRoute({ pages, sharedPages = [], workspaceName, onSelect, onNew }: LibraryRouteProps) {
   const [activeTab, setActiveTab] = useState("Teamspaces");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -670,7 +703,12 @@ function LibraryRoute({ pages, workspaceName, onSelect, onNew }: LibraryRoutePro
     { name: `${workspaceName} HQ`, desc: "Default workspace for private and shared pages", access: "Default", members: 1 }
   ]);
 
-  const filteredPages = pages.filter(p => {
+  // "Shared" pulls from the real sharedPages list (pages actually granted
+  // to this user via an accepted invite), not the owned `pages` array —
+  // every other tab still filters owned pages.
+  const sourcePages = activeTab === "Shared" ? sharedPages : pages;
+
+  const filteredPages = sourcePages.filter(p => {
     if (activeTab === "Favorites" && !p.favorite) return false;
     if (activeTab === "AI Meeting Notes" && !p.title?.toLowerCase().includes("meeting") && p.icon !== "🗓️") return false;
     if (searchQuery.trim()) {
@@ -749,7 +787,7 @@ function LibraryRoute({ pages, workspaceName, onSelect, onNew }: LibraryRoutePro
         {displayPages.map((page) => <PageCard key={page.id} page={page} onSelect={onSelect} />)}
         {displayPages.length === 0 && (
           <div className="col-span-full py-12 text-center text-sm text-[var(--muted)]">
-            No pages found in this section.
+            {activeTab === "Shared" ? "No pages have been shared with you yet." : "No pages found in this section."}
           </div>
         )}
       </div>
@@ -1023,10 +1061,27 @@ function saveInboxReminders(reminders: InboxReminder[]): void {
 interface InboxRouteProps {
   onNew: (template: string) => void;
   onToast?: (message: string) => void;
+  pendingInvites?: Tables<"page_invites">[];
+  onAcceptInvite?: (inviteId: string) => void;
+  onDeclineInvite?: (inviteId: string) => void;
 }
 
-function InboxRoute({ onNew, onToast }: InboxRouteProps) {
+function InboxRoute({ onNew, onToast, pendingInvites = [], onAcceptInvite, onDeclineInvite }: InboxRouteProps) {
   const [reminders, setReminders] = useState<InboxReminder[]>(loadInboxReminders);
+  // Tracks in-flight accept/decline per invite so the buttons disable
+  // and show a spinner state instead of allowing a double-click double-
+  // submit while the request is outstanding.
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  const respond = async (inviteId: string, action: "accept" | "decline") => {
+    setRespondingId(inviteId);
+    try {
+      if (action === "accept") await onAcceptInvite?.(inviteId);
+      else await onDeclineInvite?.(inviteId);
+    } finally {
+      setRespondingId(null);
+    }
+  };
 
   useEffect(() => {
     saveInboxReminders(reminders);
@@ -1049,7 +1104,47 @@ function InboxRoute({ onNew, onToast }: InboxRouteProps) {
       )}
     </>}>
       <div className="max-w-xl space-y-4">
-        {activeReminders.length === 0 && (
+        {pendingInvites.length > 0 && (
+          <div className="space-y-3 border-b border-[var(--border)] pb-6">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+              Page invites
+            </div>
+            {pendingInvites.map((inv) => {
+              const isResponding = respondingId === inv.id;
+              return (
+                <div key={inv.id} className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+                  <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--accent)]/10 text-sm font-bold text-[var(--accent)]">
+                    {(inv.inviter_username || "?")[0]?.toUpperCase()}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-[var(--text)]">
+                      <span className="font-semibold">@{inv.inviter_username || "someone"}</span> invited you to{" "}
+                      <span className="font-semibold">{inv.role === "viewer" ? "view" : inv.role === "commenter" ? "comment on" : "edit"}</span>
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-[var(--muted)]">{inv.page_title || "Untitled"}</div>
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <button
+                        onClick={() => respond(inv.id, "accept")}
+                        disabled={isResponding}
+                        className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                      >
+                        {isResponding ? "..." : "Accept"}
+                      </button>
+                      <button
+                        onClick={() => respond(inv.id, "decline")}
+                        disabled={isResponding}
+                        className="rounded-md border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--secondary)] transition hover:bg-[var(--hover)] disabled:opacity-40"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {activeReminders.length === 0 && pendingInvites.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="text-3xl mb-3 opacity-30">📥</div>
             <div className="text-sm text-[var(--muted)]">Your inbox is clear</div>

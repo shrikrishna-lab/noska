@@ -775,6 +775,11 @@ export default function Editor({
               👁 View only
             </span>
           )}
+          {page.sharedRole && (
+            <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]" title="Shared with you — you are not the owner of this page">
+              🤝 Shared {page.sharedRole === "editor" ? "· can edit" : page.sharedRole === "commenter" ? "· can comment" : "· view only"}
+            </span>
+          )}
             <CollabPresenceBar users={users} ownStatus={ownStatus} pageId={page?.id} onStatusChange={(s) => setOwnStatus(s)} />
             <div className="ml-auto relative">
               <div ref={pageOptionsRef}>

@@ -535,6 +535,56 @@ export type Database = {
           },
         ]
       }
+      page_invites: {
+        Row: {
+          created_at: string
+          id: string
+          invitee_user_id: string
+          invitee_username: string
+          inviter_user_id: string
+          inviter_username: string | null
+          page_id: string
+          page_title: string
+          responded_at: string | null
+          role: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invitee_user_id: string
+          invitee_username: string
+          inviter_user_id: string
+          inviter_username?: string | null
+          page_id: string
+          page_title?: string
+          responded_at?: string | null
+          role?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invitee_user_id?: string
+          invitee_username?: string
+          inviter_user_id?: string
+          inviter_username?: string | null
+          page_id?: string
+          page_title?: string
+          responded_at?: string | null
+          role?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_invites_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       page_permissions: {
         Row: {
           can_audit: boolean | null

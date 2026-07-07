@@ -27,7 +27,9 @@ import { Modal, ModalHeader, IconButton, Field } from "./ui";
 import { aiManager } from "../ai/AIManager";
 import { getProviderList, testProviderConnection } from "../ai/providers";
 import { getAgentList } from "../ai/agents";
+import { sendPageInvite, fetchSentPageInvites, withdrawPageInvite, type PageInviteRole } from "../lib/supabaseService";
 import type { Page } from "../lib/supabaseService";
+import type { Tables } from "../../types/supabase";
 
 // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
 // (deliberately, to avoid a circular type dependency — see that file's
@@ -1192,33 +1194,28 @@ export function TrashModal({ pages, onClose, onRestore, onDelete }: TrashModalPr
   );
 }
 
-const SHARE_INVITES_KEY = 'noska_share_invites';
-
-interface ShareInvite {
-  email: string;
-  role: string;
-  invitedAt: string;
-  pageId: string;
-}
-
-function loadInvites(): ShareInvite[] {
-  try { return JSON.parse(localStorage.getItem(SHARE_INVITES_KEY) || '[]'); } catch { return []; }
-}
-function saveInvites(invites: ShareInvite[]) {
-  try { localStorage.setItem(SHARE_INVITES_KEY, JSON.stringify(invites)); } catch {}
-}
-
 interface ShareModalProps {
   page: Page;
   onClose: () => void;
   onToast?: (message: string) => void;
+  /** The signed-in user's id/username — required to actually send
+   * real invites (sendPageInvite requires an authenticated inviter) and
+   * to build a real, working page URL (see `link` below). Optional only
+   * so this modal doesn't hard-crash if App.tsx somehow renders it before
+   * these resolve; the invite form is disabled until both are present. */
+  currentUserId?: string | null;
+  currentUsername?: string | null;
+  workspaceSlug: string;
 }
 
-export function ShareModal({ page, onClose, onToast }: ShareModalProps) {
+export function ShareModal({ page, onClose, onToast, currentUserId, currentUsername, workspaceSlug }: ShareModalProps) {
   const [tab, setTab] = useState("share");
-  const [email, setEmail] = useState("");
-  const [access, setAccess] = useState("Full access");
-  const [invites, setInvites] = useState<ShareInvite[]>(loadInvites);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [access, setAccess] = useState<PageInviteRole>("editor");
+  const [sentInvites, setSentInvites] = useState<Tables<"page_invites">[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [generalAccess, setGeneralAccess] = useState("Only people invited");
   const [generalAccessOpen, setGeneralAccessOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(true);
@@ -1232,13 +1229,32 @@ export function ShareModal({ page, onClose, onToast }: ShareModalProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  React.useEffect(() => { saveInvites(invites); }, [invites]);
+  const loadSentInvites = React.useCallback(async () => {
+    if (!currentUserId) { setInvitesLoading(false); return; }
+    setInvitesLoading(true);
+    try {
+      const rows = await fetchSentPageInvites(currentUserId, page.id);
+      setSentInvites(rows);
+    } catch {
+      // Non-fatal — the invite list is a convenience view, not required
+      // for sending new invites.
+    } finally {
+      setInvitesLoading(false);
+    }
+  }, [currentUserId, page.id]);
+
+  React.useEffect(() => { loadSentInvites(); }, [loadSentInvites]);
 
   const currentUser = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
   const userName = currentUser?.userName || 'Workspace User';
-  const userEmail = currentUser?.userId || 'local@workspace';
+  const userHandle = currentUsername ? `@${currentUsername}` : (currentUser?.userId || 'local@workspace');
 
-  const link = `noska.local/page/${page.id}`;
+  // Real, resolvable app URL (App.tsx's own <Route path="/:workspaceSlug/:pageId">)
+  // rather than the previous hardcoded "noska.local/page/..." fake domain —
+  // clicking this actually opens the page, subject to the RLS-backed
+  // ownership/permission check now enforced on `pages` (see migration
+  // rls_page_permissions_and_shared_pages).
+  const link = `${window.location.origin}/${workspaceSlug}/${page.id}`;
 
   const copyLink = () => {
     navigator.clipboard?.writeText(link);
@@ -1246,18 +1262,38 @@ export function ShareModal({ page, onClose, onToast }: ShareModalProps) {
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const sendInvite = () => {
-    if (!email.trim()) return;
-    const newInvites = email.split(',').map(e => e.trim()).filter(Boolean).map(e => ({
-      email: e, role: access, invitedAt: new Date().toISOString(), pageId: page.id
-    }));
-    setInvites(prev => [...newInvites, ...prev]);
-    setEmail("");
-    onToast?.(`Invited ${newInvites.length} user${newInvites.length > 1 ? 's' : ''}`);
+  const sendInvite = async () => {
+    const handle = usernameInput.trim().replace(/^@/, "");
+    if (!handle || !currentUserId) return;
+    setSending(true);
+    setInviteError(null);
+    try {
+      await sendPageInvite({
+        pageId: page.id,
+        pageTitle: page.title || "Untitled",
+        inviterUserId: currentUserId,
+        inviterUsername: currentUsername,
+        inviteeUsername: handle,
+        role: access,
+      });
+      setUsernameInput("");
+      onToast?.(`Invited @${handle.toLowerCase()}`);
+      await loadSentInvites();
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : "Couldn't send invite.");
+    } finally {
+      setSending(false);
+    }
   };
 
-  const removeInvite = (idx: number) => {
-    setInvites(prev => prev.filter((_, i) => i !== idx));
+  const removeInvite = async (inviteId: string) => {
+    if (!currentUserId) return;
+    setSentInvites(prev => prev.filter((inv) => inv.id !== inviteId)); // optimistic
+    try {
+      await withdrawPageInvite(inviteId, currentUserId);
+    } catch {
+      await loadSentInvites(); // reconcile on failure
+    }
   };
 
   return (
@@ -1311,29 +1347,40 @@ export function ShareModal({ page, onClose, onToast }: ShareModalProps) {
             <div className="p-4">
               <div className="flex gap-2">
                 <MotionInput
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email or group, separated by commas"
+                  value={usernameInput}
+                  onChange={(e) => { setUsernameInput(e.target.value); setInviteError(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && usernameInput.trim() && !sending) sendInvite(); }}
+                  placeholder="Username, e.g. jane_doe"
                   className="min-w-0 flex-1"
                 />
+                <select
+                  value={access}
+                  onChange={(e) => setAccess(e.target.value as PageInviteRole)}
+                  className="shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface-3)] px-2 text-xs text-[var(--text)] outline-none cursor-pointer hover:bg-[var(--surface-4)] transition"
+                >
+                  <option value="editor">Can edit</option>
+                  <option value="commenter">Can comment</option>
+                  <option value="viewer">Can view</option>
+                </select>
                 <button
-                  disabled={!email.trim()}
+                  disabled={!usernameInput.trim() || !currentUserId || sending}
                   onClick={sendInvite}
                   className="shrink-0 rounded-md bg-[var(--accent)] text-[var(--bg)] px-4 py-2 text-sm font-semibold hover:-translate-y-px active:scale-95 disabled:opacity-40 transition cursor-pointer"
                 >
-                  Invite
+                  {sending ? "Inviting..." : "Invite"}
                 </button>
               </div>
-              {invites.length > 0 && (
+              {inviteError && <p className="mt-1.5 text-xs text-[var(--danger)]">{inviteError}</p>}
+              {!invitesLoading && sentInvites.length > 0 && (
                 <div className="mt-3 space-y-1 max-h-32 overflow-y-auto">
-                  {invites.map((inv, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-[var(--text)]">
+                  {sentInvites.map((inv) => (
+                    <div key={inv.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-[var(--text)]">
                       <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--surface-3)] text-[9px] font-bold">
-                        {inv.email[0].toUpperCase()}
+                        {inv.invitee_username[0]?.toUpperCase()}
                       </span>
-                      <span className="flex-1 truncate">{inv.email}</span>
-                      <span className="text-[var(--muted)] text-[9px]">{inv.role}</span>
-                      <button onClick={() => removeInvite(i)} className="text-[var(--danger)] hover:text-[var(--danger)] text-[9px]">✕</button>
+                      <span className="flex-1 truncate">@{inv.invitee_username}</span>
+                      <span className="text-[var(--muted)] text-[9px]">Pending · {inv.role}</span>
+                      <button onClick={() => removeInvite(inv.id)} className="text-[var(--danger)] hover:text-[var(--danger)] text-[9px]" title="Withdraw invite">✕</button>
                     </div>
                   ))}
                 </div>
@@ -1344,17 +1391,8 @@ export function ShareModal({ page, onClose, onToast }: ShareModalProps) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-[var(--text)]">{userName} (You)</div>
-                  <div className="truncate text-xs text-[var(--text-secondary)]">{userEmail}</div>
+                  <div className="truncate text-xs text-[var(--text-secondary)]">{userHandle} · Owner</div>
                 </div>
-                <select
-                  value={access}
-                  onChange={(e) => setAccess(e.target.value)}
-                  className="rounded-md border border-[var(--border)] bg-[var(--surface-3)] px-2 py-1.5 text-xs text-[var(--text)] outline-none cursor-pointer hover:bg-[var(--surface-4)] transition"
-                >
-                  {["Full access", "Can edit", "Can comment", "Can view"].map((level) => (
-                    <option key={level}>{level}</option>
-                  ))}
-                </select>
               </div>
               <div className="mt-4 border-t border-[var(--border-strong)] pt-4">
                 <div className="mb-2 text-xs font-medium text-[var(--secondary)]">General access</div>
