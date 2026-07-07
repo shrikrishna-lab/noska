@@ -36,7 +36,8 @@ import {
   Languages,
   Loader2,
   SendHorizontal,
-  Brain
+  Brain,
+  type LucideIcon
 } from "lucide-react";
 import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
 import MarketplacePage from "../features/marketplace/MarketplacePage";
@@ -44,6 +45,87 @@ import CreatorDashboard from "../features/creator/CreatorDashboard";
 import AgentWorkspace from "../features/agents/AgentWorkspace";
 import { IconButton, Modal, ModalHeader, PearlButton } from "./ui";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
+import type { Page, AIChat } from "../lib/supabaseService";
+import type { Block, LineageEntry } from "../../types/blocks";
+
+// `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
+// (deliberately, to avoid a circular type dependency — see that file's
+// comment) — narrow it at each read site, matching the established
+// pattern in src/features/collab/CoThinking.tsx / src/components/Sidebar.tsx /
+// src/components/Modals.tsx.
+interface RealtimeCollabLike {
+  getUser?: () => { userId?: string; userName?: string; userAvatar?: string } | undefined;
+}
+
+/** Task-like item derived from a page's `todo` blocks — the flatMap below
+ * spreads a `Block` with three extra page-context fields. `Block`'s
+ * `text`/`type` are already real fields on `BaseBlock`; `checked` isn't a
+ * named field there (only reachable via `BaseBlock`'s index signature, so
+ * it types as `unknown`), matching how every other already-migrated file
+ * that reads `block.checked` treats it (src/components/editor/PagePeek.tsx). */
+type TaskItem = Block & {
+  pageTitle: string;
+  pageIcon: string;
+  pageId: string;
+};
+
+/** Workspace activity timeline entry — a page's `LineageEntry` plus the
+ * three page-context fields spread on top in the `recentActivities` memo
+ * below. */
+type ActivityItem = LineageEntry & {
+  pageId: string;
+  pageTitle: string;
+  pageIcon: string;
+};
+
+/** Tag-overlap "Suggested Connections" recommendation — a plain object
+ * literal built in the `suggestedConnections` memo below, not tied to any
+ * shared app-wide shape. */
+interface ConnectionItem {
+  p1Id: string;
+  p1Title: string;
+  p1Icon: string;
+  p2Id: string;
+  p2Title: string;
+  p2Icon: string;
+  reason: string;
+}
+
+/** `block.review` isn't a named field on `BaseBlock` (only reachable via
+ * its index signature, typed `unknown`) — narrowed here the same way
+ * src/features/spaced/SpacedRepetition.tsx's `ReviewState` narrows the
+ * identical field for the identical spaced-repetition data. */
+interface ReviewState {
+  nextReview?: string;
+}
+
+/** `AIChat` (src/lib/supabaseService.ts) has no `title` field, only
+ * `name` — but every chat-rendering call site below reads `chat.title`
+ * anyway (a pre-existing gap, same category as CommandPalette.tsx's
+ * documented dead `context` props). In practice `chat.title` is always
+ * `undefined` here and every read falls through to a literal fallback
+ * string ("AI chat"/"AI Chat"). Documented, not fixed — fixing it would
+ * mean deciding whether to wire it to `chat.name` instead, which is a
+ * real behavior change outside a type-only migration pass. */
+type ChatDisplay = AIChat & { title?: string };
+
+interface WorkspaceViewProps {
+  view: string;
+  pages: Page[];
+  workspaceName?: string;
+  aiChats?: AIChat[];
+  onSelect: (pageId: string) => void;
+  onNew: (template: string) => void;
+  onAI: () => void;
+  onOpenChat?: (chatId: string) => void;
+  onBlockPatch?: (pageId: string, blockId: string, patch: Record<string, unknown>) => void;
+  onReview?: () => void;
+  onToast?: (message: string) => void;
+  apiKey?: string;
+  aiProvider?: string;
+  nvidiaKey?: string;
+  onDuplicate?: (page: Page) => void;
+}
 
 export function WorkspaceView({
   view,
@@ -61,14 +143,14 @@ export function WorkspaceView({
   aiProvider,
   nvidiaKey,
   onDuplicate
-}) {
-  const tasks = pages.flatMap((page) =>
+}: WorkspaceViewProps) {
+  const tasks: TaskItem[] = pages.flatMap((page) =>
     page.blocks
       .filter((block) => block.type === "todo")
       .map((block) => ({ ...block, pageTitle: page.title, pageIcon: page.icon, pageId: page.id }))
   );
-  const recent = [...pages].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 6);
-  const calendarRows = [...pages].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  const recent = [...pages].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 6);
+  const calendarRows = [...pages].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   const templates = [
     { id: "blank", title: "Blank page", icon: "📝", description: "Start a clean Noska-style page." },
     { id: "standup", title: "Meeting note", icon: "🎤", description: "Updates, blockers, and action items." },
@@ -82,8 +164,9 @@ export function WorkspaceView({
     for (const page of pages) {
       if (page.trashed) continue;
       for (const block of page.blocks || []) {
-        if (block.review) {
-          if (!block.review.nextReview || block.review.nextReview <= now) {
+        const review = block.review as ReviewState | undefined;
+        if (review) {
+          if (!review.nextReview || review.nextReview <= now) {
             count++;
           }
         }
@@ -94,7 +177,7 @@ export function WorkspaceView({
 
   // Aggregate Workspace Activity Timeline
   const recentActivities = React.useMemo(() => {
-    const list = [];
+    const list: ActivityItem[] = [];
     for (const page of pages) {
       if (page.trashed) continue;
       for (const event of page.lineage || []) {
@@ -106,12 +189,12 @@ export function WorkspaceView({
         });
       }
     }
-    return list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 4);
+    return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 4);
   }, [pages]);
 
   // Tag-based Suggested Connections recommendation logic
   const suggestedConnections = React.useMemo(() => {
-    const connections = [];
+    const connections: ConnectionItem[] = [];
     const activePages = pages.filter((p) => !p.trashed && p.tags?.length > 0);
     for (let i = 0; i < activePages.length; i++) {
       for (let j = i + 1; j < activePages.length; j++) {
@@ -158,7 +241,7 @@ export function WorkspaceView({
           <div>
             <div className="text-[11px] font-semibold tracking-wider text-[var(--accent)] uppercase">{formattedDate}</div>
             <h1 className="text-3xl font-bold tracking-tight text-[var(--text)] mt-1">Workspace Pulse</h1>
-            <div className="text-sm text-[var(--secondary)] mt-1">Hello, {window.realtimeCollab?.getUser?.()?.userName || 'there'}. Welcome to your central intelligence node.</div>
+            <div className="text-sm text-[var(--secondary)] mt-1">Hello, {(window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || 'there'}. Welcome to your central intelligence node.</div>
           </div>
           <div className="flex gap-2">
             <button onClick={() => onNew("blank")} className="rounded-md bg-[var(--surface)] border border-[var(--border-strong)] px-3 py-2 text-xs font-medium text-[var(--text)] hover:bg-[var(--hover)] transition">New page</button>
@@ -382,10 +465,10 @@ export function WorkspaceView({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text)]">
                             <MessageSquare size={12} className="text-[var(--accent)]" />
-                            <span className="truncate">{chat.title || "AI chat"}</span>
+                            <span className="truncate">{(chat as ChatDisplay).title || "AI chat"}</span>
                           </div>
                           <span className="block text-[10px] text-[var(--secondary)] truncate mt-0.5">
-                            {chat.messages?.slice(-1)[0]?.text || "No messages yet"}
+                            {(chat.messages as Array<{ text?: string }>).slice(-1)[0]?.text || "No messages yet"}
                           </span>
                         </div>
                         <span className="text-[9px] text-[var(--muted)] whitespace-nowrap ml-2">
@@ -420,10 +503,10 @@ export function WorkspaceView({
                 <button key={chat.id} onClick={() => onOpenChat?.(chat.id)} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-left hover:border-[var(--accent)]">
                   <div className="flex items-center gap-2">
                     <MessageSquare size={15} className="text-[var(--secondary)]" />
-                    <div className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--text)]">{chat.title || "AI chat"}</div>
+                    <div className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--text)]">{(chat as ChatDisplay).title || "AI chat"}</div>
                     <div className="text-[11px] text-[var(--muted)]">{timeAgo(chat.updatedAt)}</div>
                   </div>
-                  <div className="mt-1 truncate text-xs text-[var(--secondary)]">{chat.messages?.slice(-1)[0]?.text || "Continue this conversation"}</div>
+                  <div className="mt-1 truncate text-xs text-[var(--secondary)]">{(chat.messages as Array<{ text?: string }>).slice(-1)[0]?.text || "Continue this conversation"}</div>
                 </button>
               ))}
             </div>
@@ -436,7 +519,7 @@ export function WorkspaceView({
               {Array.from({ length: 35 }, (_, i) => i + 1).map((day) => (
                 <div key={day} className="min-h-28 rounded-md border border-[var(--border)] bg-[var(--panel)] p-2">
                   <div className="text-xs text-[var(--muted)]">{day}</div>
-                  {calendarRows.filter((p) => Number(new Date(p.updatedAt).getDate()) === day).map((p) => (
+                  {calendarRows.filter((p) => Number(new Date(p.updatedAt as string).getDate()) === day).map((p) => (
                     <button key={p.id} onClick={() => onSelect(p.id)} className="mt-1 block w-full truncate rounded bg-[var(--surface)] px-1.5 py-1 text-left text-xs text-[var(--text)] hover:bg-[var(--hover)]">{p.icon} {p.title}</button>
                   ))}
                 </div>
@@ -541,7 +624,14 @@ export function WorkspaceView({
   );
 }
 
-function RouteShell({ title, subtitle, children, actions }) {
+interface RouteShellProps {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  actions?: React.ReactNode;
+}
+
+function RouteShell({ title, subtitle, children, actions }: RouteShellProps) {
   return (
     <section className="min-h-0 flex-1 overflow-y-auto bg-[var(--sidebar)] p-8 scrollbar-thin">
       <div className="mx-auto max-w-7xl">
@@ -558,11 +648,25 @@ function RouteShell({ title, subtitle, children, actions }) {
   );
 }
 
-function LibraryRoute({ pages, workspaceName, onSelect, onNew }) {
+interface Teamspace {
+  name: string;
+  desc: string;
+  access: string;
+  members: number;
+}
+
+interface LibraryRouteProps {
+  pages: Page[];
+  workspaceName?: string;
+  onSelect: (pageId: string) => void;
+  onNew: (template: string) => void;
+}
+
+function LibraryRoute({ pages, workspaceName, onSelect, onNew }: LibraryRouteProps) {
   const [activeTab, setActiveTab] = useState("Teamspaces");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [teamspaces, setTeamspaces] = useState([
+  const [teamspaces, setTeamspaces] = useState<Teamspace[]>([
     { name: `${workspaceName} HQ`, desc: "Default workspace for private and shared pages", access: "Default", members: 1 }
   ]);
 
@@ -576,14 +680,14 @@ function LibraryRoute({ pages, workspaceName, onSelect, onNew }) {
   });
 
   const displayPages = activeTab === "Recents"
-    ? [...filteredPages].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 6)
+    ? [...filteredPages].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 6)
     : filteredPages;
 
   return (
     <RouteShell
       title="Library"
       actions={<button onClick={async () => {
-        const name = await window.noskaPrompt("Enter new teamspace name:", "", "Teamspace Name");
+        const name = await window.noskaPrompt?.("Enter new teamspace name:", "", "Teamspace Name");
         if (name && name.trim()) {
           setTeamspaces([...teamspaces, { name: name.trim(), desc: "Custom teamspace for project collaboration", access: "Custom", members: 1 }]);
         }
@@ -653,7 +757,14 @@ function LibraryRoute({ pages, workspaceName, onSelect, onNew }) {
   );
 }
 
-function TasksRoute({ tasks, onSelect, onNew, onToast }) {
+interface TasksRouteProps {
+  tasks: TaskItem[];
+  onSelect: (pageId: string) => void;
+  onNew: (template: string) => void;
+  onToast?: (message: string) => void;
+}
+
+function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [hideCompleted, setHideCompleted] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -783,7 +894,13 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }) {
   );
 }
 
-function ChatsRoute({ aiChats, onAI, onOpenChat }) {
+interface ChatsRouteProps {
+  aiChats: AIChat[];
+  onAI: () => void;
+  onOpenChat?: (chatId: string) => void;
+}
+
+function ChatsRoute({ aiChats, onAI, onOpenChat }: ChatsRouteProps) {
   return (
     <RouteShell title="Chat" subtitle="Noska AI agents and saved conversations">
       <div className="mb-7 flex items-center gap-5">
@@ -796,7 +913,7 @@ function ChatsRoute({ aiChats, onAI, onOpenChat }) {
         {aiChats.map((chat) => (
           <button key={chat.id} onClick={() => onOpenChat?.(chat.id)} className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left hover:bg-[var(--surface)]">
             <MessageSquare size={18} className="text-[var(--secondary)]" />
-            <span className="min-w-0 flex-1 truncate font-semibold text-[var(--secondary)]">{chat.title || "AI Chat"}</span>
+            <span className="min-w-0 flex-1 truncate font-semibold text-[var(--secondary)]">{(chat as ChatDisplay).title || "AI Chat"}</span>
             <span className="text-xs text-[var(--muted)]">{timeAgo(chat.updatedAt)}</span>
           </button>
         ))}
@@ -805,7 +922,17 @@ function ChatsRoute({ aiChats, onAI, onOpenChat }) {
   );
 }
 
-function AgentCard({ name }) {
+interface AgentCardProps {
+  name: string;
+  // `active` is passed by ChatsRoute's call site below but was never
+  // destructured/read by this component even before this migration
+  // (pre-existing dead prop, same category as CommandPalette.tsx's
+  // documented dead `context` props) — typed as optional so the call
+  // site still type-checks, without inventing a behavior for it.
+  active?: boolean;
+}
+
+function AgentCard({ name }: AgentCardProps) {
   return (
     <div className="grid h-28 w-28 place-items-center rounded-xl bg-[var(--hover)] text-center">
       <div className="grid h-14 w-14 place-items-center rounded-full bg-[var(--surface)] text-3xl">◔</div>
@@ -814,7 +941,11 @@ function AgentCard({ name }) {
   );
 }
 
-function MeetingsRoute({ onNew }) {
+interface MeetingsRouteProps {
+  onNew: (template: string) => void;
+}
+
+function MeetingsRoute({ onNew }: MeetingsRouteProps) {
   const [connected, setConnected] = useState(false);
   return (
     <RouteShell title="Meetings" subtitle="Upcoming">
@@ -823,7 +954,7 @@ function MeetingsRoute({ onNew }) {
           <div className="space-y-3 text-sm text-[var(--secondary)]">
             <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
               <div className="font-medium text-[var(--text)]">Google Calendar</div>
-              <div className="mt-1 text-xs">{connected ? `Connected as ${window.realtimeCollab?.getUser?.()?.userId || 'user@email.com'}` : "Not connected to any account."}</div>
+              <div className="mt-1 text-xs">{connected ? `Connected as ${(window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userId || 'user@email.com'}` : "Not connected to any account."}</div>
               <button
                 onClick={() => setConnected(!connected)}
                 className={`mt-3 rounded-md px-3 py-2 text-xs font-medium text-white ${connected ? "bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20" : "bg-[var(--accent)]"}`}
@@ -855,31 +986,53 @@ function MeetingsRoute({ onNew }) {
   );
 }
 
-function MeetingNoteRoute({ onNew, onAI, onToast, apiKey, aiProvider, nvidiaKey, pages }) {
+interface MeetingNoteRouteProps {
+  onNew: (template: string) => void;
+  onAI: () => void;
+  onToast?: (message: string) => void;
+  apiKey?: string;
+  aiProvider?: string;
+  nvidiaKey?: string;
+  pages?: Page[];
+}
+
+function MeetingNoteRoute({ onNew, onAI, onToast, apiKey, aiProvider, nvidiaKey, pages }: MeetingNoteRouteProps) {
   return <MeetingWorkspace onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages || []} />;
 }
 
 const INBOX_STORAGE_KEY = 'noska_inbox_reminders';
 
-function loadInboxReminders() {
+interface InboxReminder {
+  id: string;
+  text: string;
+  date?: string;
+  dismissed?: boolean;
+}
+
+function loadInboxReminders(): InboxReminder[] {
   try {
     const data = localStorage.getItem(INBOX_STORAGE_KEY);
     return data ? JSON.parse(data) : [];
   } catch { return []; }
 }
 
-function saveInboxReminders(reminders) {
+function saveInboxReminders(reminders: InboxReminder[]): void {
   try { localStorage.setItem(INBOX_STORAGE_KEY, JSON.stringify(reminders)); } catch {}
 }
 
-function InboxRoute({ onNew, onToast }) {
-  const [reminders, setReminders] = useState(loadInboxReminders);
+interface InboxRouteProps {
+  onNew: (template: string) => void;
+  onToast?: (message: string) => void;
+}
+
+function InboxRoute({ onNew, onToast }: InboxRouteProps) {
+  const [reminders, setReminders] = useState<InboxReminder[]>(loadInboxReminders);
 
   useEffect(() => {
     saveInboxReminders(reminders);
   }, [reminders]);
 
-  const dismissReminder = (id) => {
+  const dismissReminder = (id: string) => {
     setReminders(prev => prev.filter(r => r.id !== id));
     saveInboxReminders(reminders.filter(r => r.id !== id));
     onToast?.("Reminder dismissed.");
@@ -941,7 +1094,14 @@ function InboxRoute({ onNew, onToast }) {
   );
 }
 
-const MARKETPLACE_ITEMS = [
+interface MarketplaceItem {
+  name: string;
+  type: "agent" | "template";
+  desc: string;
+  uses: string;
+}
+
+const MARKETPLACE_ITEMS: MarketplaceItem[] = [
   { name: "OKR Coach", type: "agent", desc: "Sets and tracks Objectives and Key Results across your workspace.", uses: "2.6K" },
   { name: "Course Study Coach", type: "agent", desc: "Creates study plans, flashcards, and progress tracking.", uses: "1.8K" },
   { name: "Walt: Weekly Briefing Agent", type: "agent", desc: "Summarizes your week into a structured briefing report.", uses: "3.2K" },
@@ -956,11 +1116,24 @@ const MARKETPLACE_ITEMS = [
 
 const MARKETPLACE_CATEGORIES = ["All", "AI Agents", "Templates", "Workspaces", "Planning & Standup", "Wiki & Docs"];
 
-function MarketplaceRoute({ onNew, onToast }) {
+interface MarketplaceRouteProps {
+  onNew: (template: string) => void;
+  onToast?: (message: string) => void;
+}
+
+// Not currently reachable from WorkspaceView's own view-dispatch (which
+// routes "marketplace" straight to the real MarketplacePage from
+// src/features/marketplace/MarketplacePage.tsx instead — see the
+// `if (view === "marketplace") return <MarketplacePage .../>` early
+// return above), and not imported anywhere else in the app (grepped) —
+// pre-existing dead/unreachable component, kept as-is (same "type in
+// place, don't remove" scope boundary as the other documented quirks
+// in this file).
+function MarketplaceRoute({ onNew, onToast }: MarketplaceRouteProps) {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [modalOpen, setModalOpen] = useState(null);
+  const [modalOpen, setModalOpen] = useState<"profile" | "purchased" | null>(null);
 
   const filtered = MARKETPLACE_ITEMS.filter(item => {
     if (searchQuery.trim() && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -1060,11 +1233,11 @@ function MarketplaceRoute({ onNew, onToast }) {
             </div>
             <div className="flex items-center gap-3 mb-4">
               <div className="h-10 w-10 rounded-full bg-[var(--active)] flex items-center justify-center font-bold text-[var(--text)] text-sm">
-                {window.realtimeCollab?.getUser?.()?.userName?.[0] || window.realtimeCollab?.getUser?.()?.userId?.[0] || '?'}
+                {(window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName?.[0] || (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userId?.[0] || '?'}
               </div>
               <div>
-                <div className="font-bold text-sm text-[var(--text)]">{window.realtimeCollab?.getUser?.()?.userName || 'Workspace User'}</div>
-                <div className="text-xs text-[var(--muted)]">{window.realtimeCollab?.getUser?.()?.userId || 'Local workspace'}</div>
+                <div className="font-bold text-sm text-[var(--text)]">{(window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || 'Workspace User'}</div>
+                <div className="text-xs text-[var(--muted)]">{(window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userId || 'Local workspace'}</div>
               </div>
             </div>
             <div className="text-xs text-[var(--secondary)] leading-relaxed mb-4">
@@ -1093,8 +1266,8 @@ function MarketplaceRoute({ onNew, onToast }) {
   );
 }
 
-function viewTitle(view, workspaceName) {
-  return {
+function viewTitle(view: string, workspaceName?: string): string {
+  return ({
     home: "Home",
     calendar: "Calendar",
     inbox: "Inbox",
@@ -1106,11 +1279,11 @@ function viewTitle(view, workspaceName) {
     meetingNote: "AI meeting note",
     shared: "Shared",
     teamspace: workspaceName
-  }[view] || "Home";
+  } as Record<string, string | undefined>)[view] || "Home";
 }
 
-function viewSubtitle(view) {
-  return {
+function viewSubtitle(view: string): string {
+  return ({
     home: "A working dashboard for pages, tasks, and AI actions.",
     calendar: "Pages organized by last edited date.",
     inbox: "Action items collected from your pages.",
@@ -1122,10 +1295,15 @@ function viewSubtitle(view) {
     meetingNote: "Create separated AI meeting notes, agendas, and action trackers.",
     shared: "Collaboration-ready workspace pages.",
     teamspace: "Teamspace overview and page library."
-  }[view] || "";
+  } as Record<string, string | undefined>)[view] || "";
 }
 
-function Panel({ title, children }) {
+interface PanelProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+function Panel({ title, children }: PanelProps) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-5 shadow-sm transition hover:shadow-md">
       <div className="mb-4 text-sm font-bold tracking-tight text-[var(--text)]">{title}</div>
@@ -1134,7 +1312,12 @@ function Panel({ title, children }) {
   );
 }
 
-function Metric({ label, value }) {
+interface MetricProps {
+  label: string;
+  value: React.ReactNode;
+}
+
+function Metric({ label, value }: MetricProps) {
   return (
     <div className="mb-2 rounded-md bg-[var(--surface)] p-3">
       <div className="text-xs text-[var(--secondary)]">{label}</div>
@@ -1143,7 +1326,12 @@ function Metric({ label, value }) {
   );
 }
 
-function PageCard({ page, onSelect }) {
+interface PageCardProps {
+  page: Page;
+  onSelect: (pageId: string) => void;
+}
+
+function PageCard({ page, onSelect }: PageCardProps) {
   return (
     <motion.button
       whileHover={{ scale: 1.015, y: -1 }}
@@ -1161,7 +1349,15 @@ function PageCard({ page, onSelect }) {
   );
 }
 
-const templateCards = [
+interface TemplateCard {
+  id: string;
+  title: string;
+  icon: LucideIcon;
+  tone: string;
+  description: string;
+}
+
+const templateCards: TemplateCard[] = [
   { id: "blank", title: "Empty page", icon: FileText, tone: "border-[var(--border)] bg-[var(--bg)]", description: "Start from a blank page." },
   { id: "database", title: "Empty database", icon: Database, tone: "border-[var(--border)] bg-[var(--bg)]", description: "Start from a database shell." },
   { id: "tasks", title: "Tasks Tracker", icon: CheckSquare, tone: "border-[var(--success)]/70 bg-[var(--success)]/15", description: "Stay organized with tasks, your way." },
@@ -1172,7 +1368,12 @@ const templateCards = [
   { id: "goals", title: "Goals Tracker", icon: CheckSquare, tone: "border-[var(--accent)]/70 bg-[var(--accent)]/15", description: "Set team goals, achieve together." }
 ];
 
-export function TemplatePicker({ onClose, onCreate }) {
+interface TemplatePickerProps {
+  onClose: () => void;
+  onCreate: (templateId: string) => void;
+}
+
+export function TemplatePicker({ onClose, onCreate }: TemplatePickerProps) {
   const [search, setSearch] = useState("");
   const visible = templateCards.filter((card) => `${card.title} ${card.description}`.toLowerCase().includes(search.toLowerCase()));
   return (
@@ -1201,7 +1402,13 @@ export function TemplatePicker({ onClose, onCreate }) {
   );
 }
 
-function TemplateTile({ card, onCreate, compact }) {
+interface TemplateTileProps {
+  card: TemplateCard;
+  onCreate: (templateId: string) => void;
+  compact?: boolean;
+}
+
+function TemplateTile({ card, onCreate, compact }: TemplateTileProps) {
   const Icon = card.icon;
   return (
     <motion.button
@@ -1227,7 +1434,13 @@ function TemplateTile({ card, onCreate, compact }) {
   );
 }
 
-export function AIHomeView({ onAI, onPrompt, onSettings }) {
+interface AIHomeViewProps {
+  onAI?: () => void;
+  onPrompt?: () => void;
+  onSettings?: () => void;
+}
+
+export function AIHomeView({ onAI, onPrompt, onSettings }: AIHomeViewProps) {
   return (
     <section className="relative flex min-h-0 flex-1 flex-col bg-[var(--bg)]">
       <div className="flex flex-1 flex-col items-center justify-center px-6">
@@ -1258,9 +1471,20 @@ export function AIHomeView({ onAI, onPrompt, onSettings }) {
   );
 }
 
-export function NewPageOverlay({ page, onClose, onPagePatch, onShare, onFavorite, onMore, onAction, onToast }) {
-  const titleRef = useRef(null);
-  const fileInputRef = useRef(null);
+interface NewPageOverlayProps {
+  page: Page;
+  onClose: () => void;
+  onPagePatch: (patch: Partial<Page>) => void;
+  onShare: () => void;
+  onFavorite: () => void;
+  onMore: () => void;
+  onAction: (action: string) => void;
+  onToast?: (message: string) => void;
+}
+
+export function NewPageOverlay({ page, onClose, onPagePatch, onShare, onFavorite, onMore, onAction, onToast }: NewPageOverlayProps) {
+  const titleRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     titleRef.current?.focus();
   }, []);
@@ -1276,14 +1500,14 @@ export function NewPageOverlay({ page, onClose, onPagePatch, onShare, onFavorite
     { id: "templates", icon: SlidersHorizontal, label: "Templates" }
   ];
 
-  const handleFileImport = (e) => {
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
-      const content = event.target.result;
+      const content = event.target?.result as string;
       const title = file.name.replace(/\.[^/.]+$/, "");
-      let blocks = [];
+      let blocks: Block[] = [];
       
       if (file.name.endsWith(".json")) {
         try {
@@ -1299,27 +1523,27 @@ export function NewPageOverlay({ page, onClose, onPagePatch, onShare, onFavorite
           const trimmed = line.trim();
           if (!trimmed) continue;
           if (trimmed.startsWith("# ")) {
-            blocks.push({ id: uid(), type: "h1", text: trimmed.slice(2) });
+            blocks.push({ id: uid(), type: "h1", text: trimmed.slice(2) } as Block);
           } else if (trimmed.startsWith("## ")) {
-            blocks.push({ id: uid(), type: "h2", text: trimmed.slice(3) });
+            blocks.push({ id: uid(), type: "h2", text: trimmed.slice(3) } as Block);
           } else if (trimmed.startsWith("### ")) {
-            blocks.push({ id: uid(), type: "h3", text: trimmed.slice(4) });
+            blocks.push({ id: uid(), type: "h3", text: trimmed.slice(4) } as Block);
           } else if (trimmed.startsWith("- [ ]") || trimmed.startsWith("- [ ] ")) {
-            blocks.push({ id: uid(), type: "todo", text: trimmed.replace(/^-\s*\[\s*\]\s*/, ""), checked: false });
+            blocks.push({ id: uid(), type: "todo", text: trimmed.replace(/^-\s*\[\s*\]\s*/, ""), checked: false } as Block);
           } else if (trimmed.startsWith("- [x]") || trimmed.startsWith("- [x] ")) {
-            blocks.push({ id: uid(), type: "todo", text: trimmed.replace(/^-\s*\[\s*x\s*\]\s*/, ""), checked: true });
+            blocks.push({ id: uid(), type: "todo", text: trimmed.replace(/^-\s*\[\s*x\s*\]\s*/, ""), checked: true } as Block);
           } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-            blocks.push({ id: uid(), type: "bullet", text: trimmed.slice(2) });
+            blocks.push({ id: uid(), type: "bullet", text: trimmed.slice(2) } as Block);
           } else if (trimmed.startsWith("> ")) {
-            blocks.push({ id: uid(), type: "quote", text: trimmed.slice(2) });
+            blocks.push({ id: uid(), type: "quote", text: trimmed.slice(2) } as Block);
           } else {
-            blocks.push({ id: uid(), type: "text", text: trimmed });
+            blocks.push({ id: uid(), type: "text", text: trimmed } as Block);
           }
         }
       }
       
       if (blocks.length === 0) {
-        blocks.push({ id: uid(), type: "text", text: "" });
+        blocks.push({ id: uid(), type: "text", text: "" } as Block);
       }
       
       onPagePatch({ title, blocks });
