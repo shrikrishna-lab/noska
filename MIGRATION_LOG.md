@@ -2950,3 +2950,51 @@ menu-of-mostly-duplicated-and-one-fake-action. The account switcher is a
 single coherent real-data panel (identity, workspace, theme) instead of
 two disconnected real-data fragments. No fake multi-account or
 cascading-menu simulation remains anywhere in this component.
+
+## Fix real bug: account switcher popover never rendered (AnimatePresence/createPortal ordering)
+
+### Root cause found (correction to previous entry)
+The previous entry attributed the switcher popover's failure to render
+under Playwright automation to a "pre-existing environment limitation."
+Re-investigation found a real bug instead: the popover was structured as
+`<AnimatePresence>{open && createPortal(<motion.div>...</motion.div>,
+document.body)}</AnimatePresence>` — i.e. `createPortal(...)` was a
+*child* of `AnimatePresence`. `AnimatePresence` needs to directly own the
+animated element to track its mount/exit lifecycle; handing it a portal
+object instead of the `motion.div` itself broke that contract, so the
+portal's content was never actually committed to `document.body` (state
+was toggling correctly — confirmed via a temporary debug log on
+`switcherOpen` — but nothing rendered). This reproduced identically for a
+real user in a real browser, not just under automation.
+
+Confirmed by comparison against this codebase's own correct pattern
+(`FloatingMenu` in `src/components/ui/index.tsx`), which nests them the
+other way around: `createPortal(<AnimatePresence>{open &&
+<motion.div>...}</AnimatePresence>, document.body)`.
+
+### Fix
+`src/components/Sidebar.tsx` — swapped the nesting so `createPortal` is
+outermost and `AnimatePresence` (with the conditional `motion.div` as its
+child) is what gets portaled, matching `FloatingMenu`'s working pattern.
+No visual/behavioral changes — same animation, same content, same
+dismiss-on-outside-click behavior (confirmed `useOutsideDismiss` was never
+the problem, as previously suspected).
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: succeeded.
+- `npx vitest run`: **140/140 tests pass**.
+- Live browser QA (dev server, `TEST_MODE` bypass): clicking the "Account &
+  workspace" header button now visibly opens the popover with real content
+  (Log out, workspace rename, Settings/Share buttons, Light/Dark/System
+  theme buttons) confirmed via full accessibility-tree snapshot and
+  screenshot. Clicking outside the popover correctly dismisses it
+  (`useOutsideDismiss` behaving correctly). Re-opened and closed multiple
+  times with no issues. Swept the rest of `src/**/*.tsx` for the same
+  `<AnimatePresence>{... && createPortal(...)}</AnimatePresence>` ordering
+  mistake — no other occurrences found.
+
+### Status
+The account switcher popover is now fully functional and visually
+confirmed working, closing out the investigation left open at the end of
+the previous entry.

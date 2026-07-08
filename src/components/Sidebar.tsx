@@ -267,9 +267,9 @@ export default function Sidebar({
             panel (real signed-in identity, real workspace name, real
             theme setting) instead of the previous fake multi-account/
             multi-workspace list + separate cascading app menu. */}
-        <AnimatePresence>
-          {switcherOpen && (
-            createPortal(
+        {createPortal(
+          <AnimatePresence>
+            {switcherOpen && (
               <motion.div
                 ref={switcherMenuRef}
                 initial={{ opacity: 0, scale: 0.96, y: -4 }}
@@ -370,11 +370,11 @@ export default function Sidebar({
                     ))}
                   </div>
                 </div>
-              </motion.div>,
-              document.body
-            )
-          )}
-        </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
         {/* Search Bar - Framer Layout */}
         <div className="px-3 pt-3 pb-2 select-none shrink-0 bg-[var(--sidebar)]">
