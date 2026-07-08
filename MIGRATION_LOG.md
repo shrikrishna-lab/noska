@@ -2624,3 +2624,83 @@ client-side rendering-permission bug with no corresponding database
 interaction — underscoring why the "test like a real human" browser pass
 was a valuable, distinct verification layer. Phase B (real page sharing)
 is now fully implemented, RLS-tested, and browser-UI-tested end-to-end.
+
+---
+
+## Live QA: real browser UI testing of the username feature
+
+Per explicit instruction, tested the username feature (Phase A) live in the
+browser, the same way the sharing feature was tested — both `UsernameStep`
+(new-user onboarding) and `ClaimUsernameModal` (pre-existing-account gate).
+
+### Method
+Same `TEST_MODE` bypass as the prior QA round (`.env.development.local`,
+gitignored, `envGuard.ts` untouched). Since `TEST_MODE` never calls
+Supabase, a temporary `// TEMP QA SEED` was added twice in sequence (once
+setting `appFlowState` to `"workspace"` with `needsUsernameClaim: true` to
+reach `ClaimUsernameModal`, then reverted and changed to set
+`appFlowState` to `"onboarding"` to reach `UsernameStep` via the real
+wizard) — each reverted immediately after its scenario was verified, never
+left in place between scenarios.
+
+Because the fake Supabase URL only exercises the availability check's
+*error* path (network failure), Playwright's `page.route()` was used to
+intercept `**/rest/v1/user_profiles**` and return controlled responses,
+so the actual *success* paths (available / taken) could be verified
+against real component logic, not just the error fallback.
+
+### Scenarios verified via live browser interaction
+**`ClaimUsernameModal`** (reached by seeding `needsUsernameClaim: true`):
+- Renders as a blocking overlay in front of the workspace, no
+  skip/dismiss control present — matches its documented intent (every
+  pre-existing account must end up with a username).
+- Invalid format (e.g. starts with a digit) shows the correct inline
+  format error, Continue disabled.
+
+**`UsernameStep`** (reached by advancing through the real onboarding
+wizard's `WelcomeStep` → "Get started"):
+- Renders as Step 1 of 5, correct heading/copy/progress sidebar.
+- Too-short input shows the "3-20 characters" format error.
+- Valid-format input with an unreachable backend correctly settles on
+  "Couldn't check availability — check your connection and try again."
+  (not a false pass, not a crash, not a stuck spinner) with Continue kept
+  disabled — confirmed via snapshot after the debounce+fetch had time to
+  fully resolve.
+- **Mocked available response** (`ilike` query returns no row): shows the
+  green checkmark, "noska.app/@username is yours" copy, and enables
+  Continue.
+- **Mocked taken response** (`ilike` query returns an existing row): shows
+  the red X, "That username is already taken." error, Continue stays
+  disabled.
+- Clicking Continue with a confirmed-available username correctly
+  advances to Step 2 of 5 ("Name your workspace") — the full onboarding
+  handoff into the next step works end-to-end, not just the isolated step
+  component.
+
+### No bugs found
+Unlike the sharing-feature QA round, this pass did not surface any real
+bugs — the debounced availability check, format validation, own-username
+exclusion logic (not exercised live here since it requires a real
+signed-in id match, but already covered by the RLS/code-level checks from
+Phase A), and the graceful network-failure fallback all behaved exactly as
+implemented. No code changes were made as a result of this QA pass.
+
+### Cleanup performed
+- Both `// TEMP QA SEED` blocks in `src/App.tsx` were fully reverted —
+  confirmed via `git status --short` / `git diff --stat` returning empty
+  (i.e. the file matches its last committed state exactly, no leftover
+  seed).
+- `.env.development.local` deleted.
+- Dev server stopped, Playwright browser session closed, `.playwright-mcp/`
+  scratch logs removed.
+
+### Verification
+- `git status --short`: clean (no diff to commit — this was a pure QA
+  pass with zero net code change).
+- `npx tsc --noEmit`: clean.
+
+### Status
+The username feature (Phase A) is now browser-UI-tested live, alongside
+its already-existing database-level uniqueness constraint and
+`isUsernameAvailable`/`setUsername` server-side re-validation. No fixes
+were needed this round.
