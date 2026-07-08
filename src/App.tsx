@@ -106,6 +106,10 @@ function App() {
   // excludeUserId param in supabaseService.ts).
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  // Real signed-in email (Supabase auth session / user_profiles.email) —
+  // shown in the Sidebar's account popover and Settings' Account tab
+  // instead of the previous fake multi-account email list.
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   // True only once we've actually checked the profile and confirmed no
   // username is set — starts false so the claim modal never flashes
   // before fetchUserProfile resolves.
@@ -576,6 +580,7 @@ function App() {
       realtimeCollab.initUser(u.id, uname, u.user_metadata?.avatar_url || u.user_metadata?.picture || '👤');
       setWorkspaceName(prev => prev === 'My Workspace' ? `${uname}'s Workspace` : prev);
       setCurrentUserId(u.id);
+      setCurrentUserEmail(u.email || null);
       loadCollabData(u.id);
 
       try {
@@ -659,6 +664,7 @@ function App() {
     realtimeCollab.initUser(userData.userId, uname, userData.avatarUrl || '👤');
     try { localStorage.setItem("noska_user_id", userData.userId); } catch {}
     setCurrentUserId(userData.userId);
+    setCurrentUserEmail(userData.email || null);
     loadCollabData(userData.userId);
 
     let existingProfile = null;
@@ -864,6 +870,13 @@ function App() {
     setActiveId(null);
     setStackedPageIds([]);
     setWorkspaceName('My Workspace');
+    // Real bug fix: currentUserId/currentUsername/currentUserEmail were
+    // never reset here, so the Sidebar's account popover (and Settings'
+    // Account tab) kept showing the previous session's identity until a
+    // full page reload happened to re-run the bootstrap effect.
+    setCurrentUserId(null);
+    setCurrentUsername(null);
+    setCurrentUserEmail(null);
     realtimeCollab.initUser(`anon-${Math.random().toString(36).slice(2, 11)}`, 'Anonymous', '👤');
     realtimeCollab.leaveWorkspace();
     setAppFlowState("auth");
@@ -2213,6 +2226,8 @@ function App() {
             onShare={() => setShareOpen(true)}
             onToast={showToast}
             onLogout={handleLogout}
+            currentUsername={currentUsername}
+            currentUserEmail={currentUserEmail}
           />
           <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)]">
             <Topbar
@@ -2553,6 +2568,10 @@ function App() {
                 onClose={() => setSettingsOpen(false)}
                 ghostWriterEnabled={ghostWriterEnabled}
                 setGhostWriterEnabled={setGhostWriterEnabled}
+                currentUserId={currentUserId}
+                currentUsername={currentUsername}
+                currentUserEmail={currentUserEmail}
+                onUsernameChanged={setCurrentUsername}
               />
             )}
             {trashOpen && <TrashModal pages={trashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} />}

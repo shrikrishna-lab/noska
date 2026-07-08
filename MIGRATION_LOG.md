@@ -2704,3 +2704,168 @@ The username feature (Phase A) is now browser-UI-tested live, alongside
 its already-existing database-level uniqueness constraint and
 `isUsernameAvailable`/`setUsername` server-side re-validation. No fixes
 were needed this round.
+
+---
+
+## Feature: Settings modal rewrite (remove fake tabs, wire real ones) + account switcher fixes
+
+Per explicit instruction to make Settings "all real and workable", remove fake
+data, and fix the account switcher / remove its beam animation.
+
+### Settings modal (`src/components/Modals.tsx`)
+Audited every tab via a context-gathering pass, then rewrote the component.
+
+**Removed entirely** (previously 100% fake — local `useState` only, no
+persistence, no consumer anywhere else in the codebase):
+- **People** (Guests/Members/Groups/Contacts) — session-only arrays, no real
+  workspace-membership table exists in the schema.
+- **Preferences** (Sidebar Position, Typography, Compact Mode) — none of
+  these had any effect on the app; `fontStyle`/`smallText`/`fullWidth` are
+  real but are per-*page* settings already controllable via each page's own
+  Customize/PageOptions menu, not appropriate as a global preference.
+- **Notifications** (Email/Push/Digest checkboxes) — no notification system
+  exists to wire these into.
+- **Mail & Calendar** (Google/Outlook "Connect" buttons) — no OAuth flow,
+  just local boolean flips.
+- **Import** (Notion/Confluence/etc. buttons) — explicitly self-labelled in
+  the old code as `Mock imported data from ${src}`.
+- **Connections** (GitHub/Slack) — same local-boolean-flip pattern, no real
+  integration.
+- **Noska MCP** — fake server list, no real MCP protocol connection.
+- **Public pages** — static informational text, no real published-pages
+  query.
+- **Emoji** — custom emoji list never read by anything (comments/
+  co-thinking reactions don't consume it).
+- **Teamspaces** — disconnected from the one real teamspace concept
+  (workspace name) already shown correctly in the sidebar.
+
+**Real structural bug fixed while removing People**: the old JSX had an
+orphaned "Log out" card nested *inside* the Guests-tab's empty-state
+conditional branch (confirmed by careful bracket-matching before editing) —
+so a real, working action (log out) was buried inside a rarely-reached,
+soon-to-be-deleted tab. Moved to the Account tab where it belongs, as a
+top-level always-visible action.
+
+**Rewrote Account tab** to be fully real:
+- Name/Email are now read-only display fields sourced from the actual OAuth
+  session (`window.realtimeCollab.getUser()` / `currentUserEmail` prop) —
+  replacing text inputs whose "Save Profile" button never called any
+  Supabase write and silently reverted on reload.
+- Added a **real username-change flow**, mirroring `UsernameStep.tsx`'s
+  exact debounced-availability-check pattern (`isUsernameAvailable`/
+  `isValidUsernameFormat`/`normalizeUsername`/`setUsername` from
+  `supabaseService.ts`), calling the real `setUsername()` write and
+  propagating the result back to `App.tsx`'s `currentUsername` state via a
+  new `onUsernameChanged` prop.
+- Log out button kept, now un-orphaned.
+
+**Rewrote Offline tab** to be fully real: replaced the hardcoded literal
+`"342 KB used of 50 MB local storage capacity (0.6%)"` with an actual byte
+count computed by summing `localStorage` key/value lengths, and replaced
+the no-op "Clear Local Cache" button (previously only showed a toast, never
+called `localStorage.removeItem` on anything) with a real clear that
+removes the same cache keys `App.tsx`'s `handleLogout` uses (excluding auth/
+session keys, since this is a cache-only clear, not a logout), then
+reloads so the UI reflects the real post-clear state.
+
+**Kept unchanged** (already real): General (workspace name, theme,
+theme-transition effects, replay onboarding — all backed by real App.tsx
+state) and Noska AI (backed by the separate `aiManager` singleton).
+
+**Prop signature changes**: `SettingsModalProps` gained `currentUserId`,
+`currentUsername`, `currentUserEmail`, `onUsernameChanged` — wired from
+`App.tsx`'s real auth-session state at the `<SettingsModal>` call site.
+
+**Layout fix**: modal height changed from a hardcoded `h-[calc(100vh-40px)]`
+to `h-[min(calc(100vh-40px),720px)]` with `max-w-[calc(100vw-32px)]` (was
+`max-w-full` combined with a fixed `w-[980px]`, which still overflowed
+narrow viewports) — real, now-much-shorter tab list no longer needs the
+full-height/full-width modal the old 15-tab version required.
+
+### Account switcher (`src/components/Sidebar.tsx`)
+Removed the fake multi-account/multi-workspace simulation and the beam
+connector animation, per explicit instruction.
+
+**Removed**: `SidebarWorkspaceAccount`/`SidebarStoredData` types, the
+`workspaces`/`accounts` state arrays and their `noska_sidebar_data`
+localStorage persistence, "New workspace"/"Add new account"/per-account
+switch buttons, and the entire `beamCoords` state + two `useEffect`s that
+computed it + the SVG/`motion.path` portal that rendered it. The switcher
+popover's "Workspaces" list and "Switch account" list are gone — replaced
+with a single "Rename workspace" action (the one real, persisted workspace
+concept in the data model: `App.tsx`'s `workspaceName` state /
+`user_profiles.workspace_name`) and a single real signed-in-user row
+(`currentUsername`/`currentUserEmail` props, sourced from the actual
+Supabase auth session) with a real Log out action.
+
+**Real bugs fixed while removing this** (found during code review, not
+just style cleanup):
+1. Account "switching" never actually changed the signed-in Supabase
+   session, `pages`, or any App-level state — clicking a different
+   "account" just flipped a local `active` flag and showed a misleading
+   toast (`Switched to account: ...`) while the user kept seeing the exact
+   same workspace/pages as before.
+2. The bottom user-avatar button's switcher-open handler computed its own
+   popover position (`top: r.top - 420`) completely independently from the
+   top header button's handler, and **never updated `beamCoords` at all** —
+   so opening the switcher from the bottom button showed the beam anchored
+   to a stale/wrong position (or none), not matching where the popover
+   actually rendered.
+3. The `-420`px hardcoded offset assumed the popover was always exactly
+   420px tall; with a longer accounts/workspaces list it could render
+   off-screen. Fixed (now that the real content is short and fixed-size)
+   by anchoring the bottom-button case from `bottom` instead of computing
+   `top` from a hardcoded height assumption.
+4. "Add new account" had no duplicate-email guard — re-adding the same
+   email created a second entry rather than reusing the existing one.
+   Moot now that the fake account list is gone entirely.
+5. `handleLogout` (`App.tsx`) never reset `currentUserId`/`currentUsername`
+   (pre-existing gap, unrelated to the switcher rewrite but found while
+   wiring the switcher's new real-identity props) — the Sidebar's account
+   row would keep showing the previous session's identity until a full
+   page reload happened to re-run the bootstrap effect. Fixed by resetting
+   all three (`currentUserId`/`currentUsername`/`currentUserEmail`) in
+   `handleLogout`.
+
+**Prop signature changes**: `SidebarProps` gained `currentUsername`/
+`currentUserEmail`, wired from `App.tsx`'s real auth-session state (a new
+`currentUserEmail` App.tsx state was added, populated at both real auth
+entry points — the bootstrap session check and `handleAuthSuccess` — mirroring
+how `currentUserId`/`currentUsername` are already populated).
+
+### Live browser QA
+Tested via the established `TEST_MODE` bypass. Confirmed:
+- Settings modal: Account tab shows read-only Name/Email, a working
+  username field (correctly shows the graceful "Couldn't check
+  availability" state against the fake `TEST_MODE` backend, Save button
+  stays disabled), and a working Log out action.
+- Offline tab shows a real measured byte count ("70.0 KB used") instead of
+  the old hardcoded literal.
+- No People/Preferences/Notifications/Mail & Calendar/Import/Connections/
+  MCP/Public pages/Emoji/Teamspaces tabs remain in the sidebar nav.
+- Owned-page block editing controls unaffected (no regression).
+
+**Known limitation, not a regression**: could not get the account-switcher
+popover (or the pre-existing, untouched Application Menu popover, which
+uses the identical `createPortal`/`AnimatePresence`/`useOutsideDismiss`
+pattern) to render visibly under Playwright automation in this environment
+— confirmed via direct DOM inspection that this reproduces identically on
+the unmodified prior commit, ruling out a regression from this change.
+Verified correctness instead via careful code review (props, state wiring,
+JSX structure) and by confirming the Settings modal — which uses a simpler
+direct-render pattern, not a nested portal — works correctly live,
+including the new real Account/Offline tab logic.
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: succeeded.
+- `npx vitest run`: **140/140 tests pass**.
+- Grepped diff for credentials/secrets: none found.
+
+### Status
+Settings is now fully real — every remaining tab (Account, General, Noska
+AI, Offline) is backed by genuine app/Supabase state with no local-only
+simulation. The account switcher no longer pretends to support
+multi-account switching and no longer renders the beam animation. Two real
+identity-sync bugs (logout not resetting identity state, bottom-button
+switcher position bug) were found and fixed as part of this work.

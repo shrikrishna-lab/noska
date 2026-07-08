@@ -4,15 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MotionInput, SPRING_PRESETS } from "../features/motion/MotionSystem";
 import {
   Bot,
-  SlidersHorizontal,
-  Inbox,
-  CalendarDays,
   Settings,
   Sparkles,
-  Table2,
+  HardDrive,
   X,
   Search,
-  MessageSquare,
   GripHorizontal,
   Trash2,
   ArchiveRestore,
@@ -21,13 +17,18 @@ import {
   CircleHelp,
   Link2,
   Globe,
+  Check,
+  Loader2,
   type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
 import { aiManager } from "../ai/AIManager";
 import { getProviderList, testProviderConnection } from "../ai/providers";
 import { getAgentList } from "../ai/agents";
-import { sendPageInvite, fetchSentPageInvites, withdrawPageInvite, type PageInviteRole } from "../lib/supabaseService";
+import {
+  sendPageInvite, fetchSentPageInvites, withdrawPageInvite, type PageInviteRole,
+  isUsernameAvailable, isValidUsernameFormat, normalizeUsername, setUsername
+} from "../lib/supabaseService";
 import type { Page } from "../lib/supabaseService";
 import type { Tables } from "../../types/supabase";
 
@@ -68,11 +69,17 @@ interface SettingsModalProps {
   onClose: () => void;
   ghostWriterEnabled: boolean;
   setGhostWriterEnabled: (enabled: boolean) => void;
-}
-
-interface McpServer {
-  name: string;
-  status: string;
+  /** Real signed-in identity, sourced from App.tsx's actual auth session
+   * / user_profiles row — used by the Account tab instead of the
+   * previous fake "Full Name"/"Email Address" fields that only wrote to
+   * local component state and were silently lost on reload. */
+  currentUserId?: string | null;
+  currentUsername?: string | null;
+  currentUserEmail?: string | null;
+  /** Called after a successful real username change (setUsername), so
+   * App.tsx's currentUsername state (and everywhere that reads it —
+   * ShareModal, block attribution, etc.) stays in sync. */
+  onUsernameChanged?: (username: string) => void;
 }
 
 export function SettingsModal({
@@ -93,38 +100,102 @@ export function SettingsModal({
   onLogout,
   onClose,
   ghostWriterEnabled,
-  setGhostWriterEnabled
+  setGhostWriterEnabled,
+  currentUserId,
+  currentUsername,
+  currentUserEmail,
+  onUsernameChanged
 }: SettingsModalProps) {
   const getUserName = () => (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || 'Workspace User';
-  const getUserEmail = () => (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userId || 'user@workspace';
   const [tab, setTab] = useState(initialTab);
-  const [peopleTab, setPeopleTab] = useState("Guests");
-  const [members, setMembers] = useState<string[]>([`${getUserName()} (Owner)`]);
-  const [guests, setGuests] = useState<string[]>([]);
-  const [contacts, setContacts] = useState<string[]>([]);
-  const [groups, setGroups] = useState<string[]>([]);
-  const [outlookConnected, setOutlookConnected] = useState(false);
-  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
-  const [teamspaces, setTeamspaces] = useState<string[]>([]);
+  const displayName = getUserName();
+  const displayEmail = currentUserEmail || (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userId || 'user@workspace';
 
   React.useEffect(() => {
     if (initialTab) {
       setTab(initialTab);
     }
   }, [initialTab]);
-  const [userName, setUserName] = useState(getUserName);
-  const [userEmail, setUserEmail] = useState(getUserEmail);
-  const [sidebarSide, setSidebarSide] = useState("Left");
-  const [typography, setTypography] = useState("Sans-serif");
-  const [compactMode, setCompactMode] = useState(false);
-  const [notifsEmail, setNotifsEmail] = useState(true);
-  const [notifsPush, setNotifsPush] = useState(false);
-  const [notifsDigest, setNotifsDigest] = useState(true);
-  const [googleCalConnected, setGoogleCalConnected] = useState(false);
-  const [githubConnected, setGithubConnected] = useState(false);
-  const [slackConnected, setSlackConnected] = useState(false);
-  const [customEmojis, setCustomEmojis] = useState<string[]>(["🚀", "🔥", "🎉", "💡", "🧠"]);
-  const [newEmoji, setNewEmoji] = useState("");
+
+  // Real, measured local-storage usage for the Offline tab — replaces
+  // the previous hardcoded "342 KB used of 50 MB" literal with an actual
+  // byte count computed from localStorage's real contents.
+  const [storageBytes, setStorageBytes] = useState(0);
+  const computeStorageBytes = React.useCallback(() => {
+    let bytes = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        bytes += key.length + (localStorage.getItem(key)?.length || 0);
+      }
+    } catch {}
+    setStorageBytes(bytes);
+  }, []);
+  React.useEffect(() => { computeStorageBytes(); }, [computeStorageBytes]);
+
+  // Real username-change flow for the Account tab (mirrors
+  // UsernameStep.tsx's debounced availability-check pattern) — replaces
+  // the previous fake "Full Name"/"Email Address" fields whose "Save
+  // Profile" button never called any Supabase write.
+  const [usernameDraft, setUsernameDraft] = useState(currentUsername || "");
+  const [usernameCheckState, setUsernameCheckState] = useState<"idle" | "checking" | "available" | "taken" | "invalid" | "unchanged">("unchanged");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [savingUsername, setSavingUsername] = useState(false);
+  const usernameDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const usernameRequestIdRef = React.useRef(0);
+
+  React.useEffect(() => {
+    const value = usernameDraft.trim();
+    if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current);
+
+    if (!value || value === currentUsername) {
+      setUsernameCheckState("unchanged");
+      setUsernameError(null);
+      return;
+    }
+    if (!isValidUsernameFormat(value)) {
+      setUsernameCheckState("invalid");
+      setUsernameError("3-20 characters: lowercase letters, numbers, or underscores, starting with a letter.");
+      return;
+    }
+
+    setUsernameCheckState("checking");
+    setUsernameError(null);
+    const requestId = ++usernameRequestIdRef.current;
+    usernameDebounceRef.current = setTimeout(async () => {
+      try {
+        const available = await isUsernameAvailable(value, currentUserId || undefined);
+        if (usernameRequestIdRef.current !== requestId) return;
+        setUsernameCheckState(available ? "available" : "taken");
+        if (!available) setUsernameError("That username is already taken.");
+      } catch {
+        if (usernameRequestIdRef.current !== requestId) return;
+        setUsernameCheckState("idle");
+        setUsernameError("Couldn't check availability — check your connection and try again.");
+      }
+    }, 400);
+
+    return () => { if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current); };
+  }, [usernameDraft, currentUserId, currentUsername]);
+
+  const handleSaveUsername = async () => {
+    if (usernameCheckState !== "available" || !currentUserId) return;
+    setSavingUsername(true);
+    try {
+      await setUsername(currentUserId, usernameDraft);
+      const normalized = normalizeUsername(usernameDraft);
+      onUsernameChanged?.(normalized);
+      setUsernameCheckState("unchanged");
+      setSaveStatus(`Username changed to @${normalized}`);
+      setTimeout(() => setSaveStatus(""), 2500);
+    } catch (e) {
+      setUsernameError(e instanceof Error ? e.message : "Couldn't save username. Try again.");
+    } finally {
+      setSavingUsername(false);
+    }
+  };
+
   const [saveStatus, setSaveStatus] = useState("");
 
   React.useEffect(() => {
@@ -161,24 +232,6 @@ export function SettingsModal({
       ? ["top-left", "top-right"]
       : ["center", "top-left", "top-right", "bottom-left", "bottom-right", "top-center", "bottom-center"];
 
-  const handleAddMember = async () => {
-    const name = await window.noskaPrompt?.("Enter member name or email:", "", "Member Name/Email");
-    if (name) {
-      setMembers([...members, name]);
-      setSaveStatus(`Added member: ${name}`);
-      setTimeout(() => setSaveStatus(""), 2000);
-    }
-  };
-
-  const handleImportContacts = async () => {
-    const email = await window.noskaPrompt?.("Enter email of the contact to import:", "", "user@example.com");
-    if (email) {
-      setContacts([...contacts, email]);
-      setSaveStatus(`Imported contact: ${email}`);
-      setTimeout(() => setSaveStatus(""), 2000);
-    }
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -192,21 +245,18 @@ export function SettingsModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 10 }}
         transition={SPRING_PRESETS.soft}
-        className="flex h-[calc(100vh-40px)] w-[980px] max-w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] shadow-[var(--shadow-modal)]"
+        className="flex h-[min(calc(100vh-40px),720px)] w-[980px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] shadow-[var(--shadow-modal)]"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <aside className="w-[300px] shrink-0 border-r border-[var(--border)] bg-[var(--surface-1)] p-5 overflow-y-auto scrollbar-thin">
+        <aside className="w-[260px] shrink-0 border-r border-[var(--border)] bg-[var(--surface-1)] p-5 overflow-y-auto scrollbar-thin">
           <div className="mb-6 text-sm font-semibold text-[var(--muted)]">Account</div>
-          <SettingsNavItem icon={Bot} label={userName} active={tab === "Account"} onClick={() => setTab("Account")} />
-          <SettingsNavItem icon={SlidersHorizontal} label="Preferences" active={tab === "Preferences"} onClick={() => setTab("Preferences")} />
-          <SettingsNavItem icon={Inbox} label="Notifications" active={tab === "Notifications"} onClick={() => setTab("Notifications")} />
-          <SettingsNavItem icon={CalendarDays} label="Mail & Calendar" active={tab === "Mail & Calendar"} onClick={() => setTab("Mail & Calendar")} />
-          
+          <SettingsNavItem icon={Bot} label={displayName} active={tab === "Account"} onClick={() => setTab("Account")} />
+
           <div className="mb-3 mt-8 text-sm font-semibold text-[var(--muted)]">Workspace</div>
-          {["General", "People", "Import"].map((item) => (
+          {["General"].map((item) => (
             <SettingsNavItem
               key={item}
-              icon={item === "People" ? MessageSquare : Settings}
+              icon={Settings}
               label={item}
               active={tab === item}
               onClick={() => setTab(item)}
@@ -214,19 +264,9 @@ export function SettingsModal({
           ))}
           
           <div className="mb-3 mt-8 text-sm font-semibold text-[var(--muted)]">Features</div>
-          {["Noska AI", "Connections", "Noska MCP", "Public pages", "Emoji", "Offline"].map((item) => (
-            <SettingsNavItem key={item} icon={Sparkles} label={item} active={tab === item} onClick={() => setTab(item)} />
+          {["Noska AI", "Offline"].map((item) => (
+            <SettingsNavItem key={item} icon={item === "Offline" ? HardDrive : Sparkles} label={item} active={tab === item} onClick={() => setTab(item)} />
           ))}
-          
-          <div className="mb-3 mt-8 text-sm font-semibold text-[var(--muted)]">Admin</div>
-          <SettingsNavItem icon={Table2} label="Teamspaces" active={tab === "Teamspaces"} onClick={() => setTab("Teamspaces")} />
-          
-          <button
-            onClick={() => setTab("Noska AI")}
-            className="mt-8 flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--border-strong)] font-semibold text-[var(--text)] hover:bg-[var(--hover)] transition"
-          >
-            <Sparkles size={16} />Get Noska AI
-          </button>
         </aside>
         
         <main className="relative min-w-0 flex-1 overflow-y-auto p-12 scrollbar-thin bg-[var(--surface-2)] text-[var(--text)]">
@@ -243,59 +283,60 @@ export function SettingsModal({
             </div>
           )}
 
-          {tab === "People" && (
-            <div className="mx-auto max-w-5xl">
-              <h2 className="text-[32px] font-bold">People</h2>
-              <div className="mt-3 text-sm text-[var(--secondary)]">
-                Manage members and guest access settings for the workspace.
-              </div>
-              
-              <div className="mt-8 flex items-center justify-between border-b border-[var(--border)] pb-2">
-                <div className="flex gap-4 text-sm font-semibold text-[var(--muted)]">
-                  {["Guests", "Members", "Groups", "Contacts"].map((sub) => (
-                    <button
-                      key={sub}
-                      onClick={() => setPeopleTab(sub)}
-                      className={`pb-2 px-1 transition ${peopleTab === sub ? "border-b-2 border-[var(--accent)] text-[var(--text)]" : "hover:text-[var(--text)]"}`}
-                    >
-                      {sub} {sub === "Members" ? `(${members.length})` : sub === "Guests" ? `(${guests.length})` : ""}
-                    </button>
-                  ))}
+          {tab === "Account" && (
+            <div className="max-w-xl space-y-6">
+              <h2 className="text-[32px] font-bold">Account</h2>
+              <Field label="Name">
+                <div className="rounded border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--secondary)]">
+                  {displayName}
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleAddMember}
-                    className="rounded-md bg-[var(--accent)] text-[var(--bg)] px-3 py-1.5 text-xs font-semibold hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(91,140,255,0.25)] active:scale-[0.98] transition cursor-pointer"
-                  >
-                    Add members
-                  </button>
-                  <button
-                    onClick={handleImportContacts}
-                    className="rounded-md border border-[var(--border)] bg-[var(--surface-3)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-4)] hover:text-[var(--text)] hover:-translate-y-px active:scale-[0.98] transition cursor-pointer"
-                  >
-                    Import contacts
-                  </button>
+              </Field>
+              <Field label="Email">
+                <div className="rounded border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--secondary)]">
+                  {displayEmail}
                 </div>
-              </div>
+              </Field>
 
-              <div className="mt-6 space-y-2">
-                {peopleTab === "Guests" && (
-                  <div>
-                    {guests.length === 0 ? (
-                      <div className="grid h-48 place-items-center rounded border border-dashed border-[var(--border-strong)] text-center p-6">
-                        <div>
-                          <Bot size={24} className="mx-auto mb-2 text-[var(--secondary)]" />
-                          <div className="font-bold text-sm">No guests in this space</div>
-                          <button
-                            onClick={async () => {
-                              const g = await window.noskaPrompt?.("Enter guest email to invite:", "", "guest@example.com");
-                              if (g) setGuests([...guests, g]);
-                            }}
-                            className="mt-3 rounded border border-[var(--border-strong)] px-3 py-1 text-xs hover:bg-[var(--hover)] transition"
-                          >
-                            Invite Guest
-                </button>
-              </div>
+              {/* Real username change — mirrors UsernameStep.tsx's
+                  debounced availability check, actually writes via
+                  setUsername(). Replaces the previous fake "Full Name"/
+                  "Email Address" text inputs whose "Save Profile" button
+                  never called any Supabase write and silently reverted on
+                  reload. Name/Email above are read-only since they come
+                  from the OAuth provider (GitHub/Google), not something
+                  this app lets you directly edit. */}
+              <Field label="Username">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--muted)] pointer-events-none">@</span>
+                  <MotionInput
+                    value={usernameDraft}
+                    onChange={(e) => setUsernameDraft(normalizeUsername(e.target.value))}
+                    onKeyDown={(e) => { if (e.key === "Enter" && usernameCheckState === "available") handleSaveUsername(); }}
+                    maxLength={20}
+                    className="pl-7"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {usernameCheckState === "checking" && <Loader2 size={14} className="animate-spin text-[var(--muted)]" />}
+                    {usernameCheckState === "available" && <Check size={14} style={{ color: "#10b981" }} />}
+                    {(usernameCheckState === "taken" || usernameCheckState === "invalid") && <X size={14} style={{ color: "#ef4444" }} />}
+                  </span>
+                </div>
+                {usernameError ? (
+                  <p className="mt-1 text-xs" style={{ color: "#ef4444" }}>{usernameError}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {usernameCheckState === "available" ? `@${normalizeUsername(usernameDraft)} is available` : "This is your unique handle across Noska. Others use it to share pages with you."}
+                  </p>
+                )}
+              </Field>
+              <button
+                onClick={handleSaveUsername}
+                disabled={usernameCheckState !== "available" || savingUsername}
+                className="bg-[var(--accent)] text-white px-4 py-2 rounded font-semibold text-sm hover:bg-[var(--accent-deep)] disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                {savingUsername ? "Saving..." : "Save username"}
+              </button>
+
               <div className="flex items-center justify-between rounded border border-[var(--border)] bg-[var(--panel)] p-3">
                 <div>
                   <div className="text-sm font-semibold text-[var(--danger)]">Log out</div>
@@ -309,450 +350,43 @@ export function SettingsModal({
                 </button>
               </div>
             </div>
-                    ) : (
-                      <div className="divide-y divide-[var(--border)]">
-                        {guests.map((g, i) => (
-                          <div key={i} className="flex justify-between items-center py-2">
-                            <span className="text-sm font-medium">{g}</span>
-                            <button
-                              onClick={() => setGuests(guests.filter((_, idx) => idx !== i))}
-                              className="text-[var(--danger)] text-xs hover:underline"
-
-                            
-                            >
-                              Revoke
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {peopleTab === "Members" && (
-                  <div className="divide-y divide-[var(--border)]">
-                    {members.map((m, i) => (
-                      <div key={i} className="flex justify-between items-center py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-7 w-7 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-xs font-bold text-[var(--text)]">
-                            {m[0].toUpperCase()}
-                          </div>
-                          <span className="text-sm font-medium">{m}</span>
-                        </div>
-                        <span className="text-xs text-[var(--muted)]">Workspace Member</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {peopleTab === "Groups" && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <p className="text-xs text-[var(--muted)]">{groups.length} active user groups</p>
-                      <button
-                        onClick={async () => {
-                          const g = await window.noskaPrompt?.("Enter group name:", "", "Group Name");
-                          if (g && g.trim()) {
-                            setGroups(prev => [...prev, g.trim()]);
-                            setSaveStatus(`Group "${g.trim()}" created.`);
-                            setTimeout(() => setSaveStatus(""), 2000);
-                          }
-                        }}
-                        className="bg-[var(--surface)] text-[var(--text)] border border-[var(--border-strong)] px-3 py-1.5 rounded text-xs hover:bg-[var(--hover)] font-semibold transition"
-                      >
-                        + Create Group
-                      </button>
-                    </div>
-                    {groups.length === 0 ? (
-                      <div className="text-center py-12 border border-dashed border-[var(--border-strong)] rounded">
-                        <p className="text-sm text-[var(--secondary)]">No user groups configured.</p>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-[var(--border)]">
-                        {groups.map((g, i) => (
-                          <div key={i} className="flex justify-between items-center py-2 text-sm">
-                            <span className="font-semibold text-[var(--text)]">{g}</span>
-                            <button
-                              onClick={() => {
-                                setGroups(groups.filter((_, idx) => idx !== i));
-                                setSaveStatus(`Group "${g}" deleted.`);
-                                setTimeout(() => setSaveStatus(""), 2000);
-                              }}
-                              className="text-[var(--danger)] hover:text-[var(--danger)] text-xs font-semibold"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {peopleTab === "Contacts" && (
-                  <div>
-                    {contacts.length === 0 ? (
-                      <p className="text-sm text-[var(--muted)]">No contacts imported yet.</p>
-                    ) : (
-                      <div className="divide-y divide-[var(--border)]">
-                        {contacts.map((c, i) => (
-                          <div key={i} className="py-2 text-sm text-[var(--secondary)]">
-                            {c}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
           )}
 
-          {tab === "Account" && (
+          {/* Real, measured local storage usage — replaces the previous
+              hardcoded "342 KB used of 50 MB" literal and a "Clear Local
+              Cache" button that never actually cleared anything. Now
+              computes real byte usage and, on clear, calls the exact
+              same key list App.tsx's handleLogout uses (minus the
+              actual sign-out call), then reloads so the UI reflects the
+              real post-clear state instead of just showing a toast. */}
+          {tab === "Offline" && (
             <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Account Profile</h2>
-              <Field label="Full Name">
-                <MotionInput value={userName} onChange={(e) => setUserName(e.target.value)} />
-              </Field>
-              <Field label="Email Address">
-                <MotionInput value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
-              </Field>
-              <button
-                onClick={() => {
-                  setSaveStatus("Profile updated");
-                  setTimeout(() => setSaveStatus(""), 2000);
-                }}
-                className="bg-[var(--accent)] text-white px-4 py-2 rounded font-semibold text-sm hover:bg-[var(--accent-deep)] transition"
-              >
-                Save Profile
-              </button>
-            </div>
-          )}
-
-          {tab === "Preferences" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Preferences</h2>
-              <Field label="Sidebar Position">
-                <select
-                  value={sidebarSide}
-                  onChange={(e) => setSidebarSide(e.target.value)}
-                  className="w-full rounded border border-[var(--border)] bg-[var(--bg)] px-3 py-2 outline-none"
-                >
-                  <option>Left</option>
-                  <option>Right (Simulated)</option>
-                </select>
-              </Field>
-              <Field label="Default Typography">
-                <div className="flex gap-2">
-                  {["Sans-serif", "Serif", "Mono"].map((tStyle) => (
-                    <button
-                      key={tStyle}
-                      onClick={() => setTypography(tStyle)}
-                      className={`px-3 py-1.5 rounded border text-xs ${typography === tStyle ? "bg-[var(--accent)] border-[var(--accent)] text-white" : "border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--hover)]"}`}
-                    >
-                      {tStyle}
-                    </button>
-                  ))}
+              <h2 className="text-[32px] font-bold">Offline</h2>
+              <p className="text-sm text-[var(--secondary)]">Pages, chats, and settings are cached locally so the app works offline and loads instantly; changes sync to your account in the background.</p>
+              <div className="p-4 border border-[var(--border)] rounded-lg bg-[var(--surface)] space-y-1">
+                <div className="text-sm font-semibold">Local storage usage</div>
+                <div className="text-xs text-[var(--muted)]">
+                  {storageBytes < 1024 ? `${storageBytes} B` : storageBytes < 1024 * 1024 ? `${(storageBytes / 1024).toFixed(1)} KB` : `${(storageBytes / (1024 * 1024)).toFixed(2)} MB`} used
                 </div>
-              </Field>
-              <div className="flex items-center justify-between rounded-lg border border-[var(--border)] p-3 bg-[var(--surface)]">
-                <div>
-                  <div className="text-sm font-semibold">Compact Mode</div>
-                  <div className="text-xs text-[var(--muted)]">Use tighter spacing for document layouts.</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={compactMode}
-                  onChange={(e) => setCompactMode(e.target.checked)}
-                  className="h-4 w-4 accent-[var(--accent)] cursor-pointer"
-                />
-              </div>
-            </div>
-          )}
-
-          {tab === "Notifications" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Notifications</h2>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-                  <div>
-                    <div className="text-sm font-medium">Email Alerts</div>
-                    <div className="text-xs text-[var(--muted)]">Receive daily action item updates in your inbox.</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={notifsEmail}
-                    onChange={(e) => setNotifsEmail(e.target.checked)}
-                    className="h-4 w-4 accent-[var(--accent)]"
-                  />
-                </div>
-                <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-                  <div>
-                    <div className="text-sm font-medium">Desktop Push Notifications</div>
-                    <div className="text-xs text-[var(--muted)]">Get browser notifications for urgent reminders.</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={notifsPush}
-                    onChange={(e) => setNotifsPush(e.target.checked)}
-                    className="h-4 w-4 accent-[var(--accent)]"
-                  />
-                </div>
-                <div className="flex items-center justify-between pb-3">
-                  <div>
-                    <div className="text-sm font-medium">Weekly Activity Digest</div>
-                    <div className="text-xs text-[var(--muted)]">Summarize all tasks and highlights weekly.</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={notifsDigest}
-                    onChange={(e) => setNotifsDigest(e.target.checked)}
-                    className="h-4 w-4 accent-[var(--accent)]"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === "Mail & Calendar" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Calendar Integrations</h2>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center rounded-lg border border-[var(--border)] p-4 bg-[var(--surface)]">
-                  <div>
-                    <div className="text-sm font-bold">Google Calendar</div>
-                    <div className="text-xs text-[var(--muted)]">{googleCalConnected ? `Connected as ${userEmail}` : "Not connected"}</div>
-                  </div>
-                  <button
-                    onClick={() => setGoogleCalConnected(!googleCalConnected)}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${googleCalConnected ? "bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
-                  >
-                    {googleCalConnected ? "Disconnect" : "Connect"}
-                  </button>
-                </div>
-                <div className="flex justify-between items-center rounded-lg border border-[var(--border)] p-4 bg-[var(--surface)]">
-                  <div>
-                    <div className="text-sm font-bold">Outlook / Microsoft 365</div>
-                    <div className="text-xs text-[var(--muted)]">{outlookConnected ? `Connected as ${userEmail}` : "Sync with corporate Exchange accounts."}</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setOutlookConnected(!outlookConnected);
-                      setSaveStatus(outlookConnected ? "Outlook Calendar disconnected" : "Outlook Calendar connected");
-                      setTimeout(() => setSaveStatus(""), 2000);
-                    }}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${outlookConnected ? "bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
-                  >
-                    {outlookConnected ? "Disconnect" : "Connect"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === "Import" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Import Data</h2>
-              <p className="text-sm text-[var(--secondary)]">Bring content into Noska from external formats.</p>
-              <div className="grid grid-cols-2 gap-4">
-                {["Notion", "Confluence", "Evernote", "Markdown Files", "CSV Data"].map((src) => (
-                  <button
-                    key={src}
-                    onClick={() => {
-                      setSaveStatus(`Mock imported data from ${src}`);
-                      setTimeout(() => setSaveStatus(""), 2000);
-                    }}
-                    className="flex flex-col items-start p-4 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-left hover:bg-[var(--hover)] transition"
-                  >
-                    <div className="text-sm font-bold text-[var(--text)]">{src}</div>
-                    <div className="text-xs text-[var(--muted)] mt-1">Import pages and databases.</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {tab === "Connections" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Connections</h2>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-3 border border-[var(--border)] rounded-lg bg-[var(--surface)]">
-                  <div>
-                    <div className="text-sm font-bold">GitHub integration</div>
-                    <div className="text-xs text-[var(--muted)]">Link issues and pull requests to your workspace.</div>
-                  </div>
-                  <button
-                    onClick={() => setGithubConnected(!githubConnected)}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${githubConnected ? "bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
-                  >
-                    {githubConnected ? "Disconnect" : "Connect"}
-                  </button>
-                </div>
-                <div className="flex justify-between items-center p-3 border border-[var(--border)] rounded-lg bg-[var(--surface)]">
-                  <div>
-                    <div className="text-sm font-bold">Slack notification sync</div>
-                    <div className="text-xs text-[var(--muted)]">Send document activity summaries to Slack channels.</div>
-                  </div>
-                  <button
-                    onClick={() => setSlackConnected(!slackConnected)}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${slackConnected ? "bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30" : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"}`}
-                  >
-                    {slackConnected ? "Disconnect" : "Connect"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === "Noska MCP" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Model Context Protocol</h2>
-              <p className="text-sm text-[var(--secondary)]">
-                Connect external developer servers and tools to Noska AI for local context resolution.
-              </p>
-              <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--surface)]">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-[var(--panel)] text-[var(--secondary)] font-medium">
-                    <tr>
-                      <th className="p-3">Server Name</th>
-                      <th className="p-3">Status</th>
-                      <th className="p-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {mcpServers.map((srv, idx) => (
-                      <tr key={idx} className="hover:bg-[var(--hover)]">
-                        <td className="p-3 font-semibold">{srv.name}</td>
-                        <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${srv.status === "Active" ? "bg-[var(--success)]/20 text-[var(--success)]" : "bg-[var(--surface)] text-[var(--muted)]"}`}>
-                            {srv.status}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right">
-                          <button
-                            onClick={() => {
-                              const list = [...mcpServers];
-                              list[idx].status = list[idx].status === "Active" ? "Inactive" : "Active";
-                              setMcpServers(list);
-                            }}
-                            className="text-xs text-[var(--accent)] hover:underline"
-                          >
-                            Toggle Status
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
               <button
                 onClick={async () => {
-                  const sName = await window.noskaPrompt?.("Enter new MCP server name:", "", "Server Name");
-                  if (sName) {
-                    setMcpServers([...mcpServers, { name: sName, status: "Inactive" }]);
-                  }
-                }}
-                className="bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white text-xs px-3 py-1.5 rounded font-semibold transition"
-              >
-                + Add MCP Server
-              </button>
-            </div>
-          )}
-
-          {tab === "Public pages" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Public Pages</h2>
-              <div className="rounded border border-[var(--border)] bg-[var(--panel)] p-8 text-center text-[var(--secondary)]">
-                No published pages in this workspace. Open the "Share" menu on any document and toggle "Publish to web" to share it publicly.
-              </div>
-            </div>
-          )}
-
-          {tab === "Emoji" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Custom Emojis</h2>
-              <p className="text-sm text-[var(--secondary)]">Add custom reaction emojis for comments and co-thinking sessions.</p>
-              <div className="flex flex-wrap gap-3">
-                {customEmojis.map((em, idx) => (
-                  <div key={idx} className="h-10 w-10 text-2xl border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center rounded-lg select-none relative group">
-                    {em}
-                    <button
-                      onClick={() => setCustomEmojis(customEmojis.filter((_, i) => i !== idx))}
-                      className="absolute -top-1.5 -right-1.5 bg-[var(--danger)] text-white rounded-full h-4 w-4 text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2 max-w-sm mt-4">
-                <MotionInput
-                  value={newEmoji}
-                  onChange={(e) => setNewEmoji(e.target.value)}
-                  placeholder="Paste single emoji character"
-                  maxLength={2}
-                  className="flex-1"
-                />
-                <button
-                  onClick={() => {
-                    if (newEmoji.trim()) {
-                      setCustomEmojis([...customEmojis, newEmoji.trim()]);
-                      setNewEmoji("");
-                    }
-                  }}
-                  className="bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white px-3 py-1.5 rounded text-xs font-semibold shrink-0 transition"
-                >
-                  + Add Custom
-                </button>
-              </div>
-            </div>
-          )}
-
-          {tab === "Offline" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Offline Settings</h2>
-              <p className="text-sm text-[var(--secondary)]">Configure offline caching size constraints and status.</p>
-              <div className="p-4 border border-[var(--border)] rounded-lg bg-[var(--surface)] space-y-2">
-                <div className="text-sm font-semibold">Local Storage Usage</div>
-                <div className="text-xs text-[var(--muted)]">342 KB used of 50 MB local storage capacity (0.6%).</div>
-              </div>
-              <button
-                onClick={() => {
-                  setSaveStatus("Local offline cache cleared successfully.");
-                  setTimeout(() => setSaveStatus(""), 2500);
+                  if (!(await window.noskaConfirm?.("Clear locally cached pages, chats, and settings? Anything already synced to your account is safe — this only clears the local copy on this device."))) return;
+                  const keysToClear = [
+                    "noska_workspace_joined", "noska_sidebar_data",
+                    "noska_share_invites", "noska_ai_profile", "noska_ghost_writer_enabled",
+                    "noska_api_key", "noska_ai_config", "noska_memory", "noska_user_profile",
+                    "noska_inbox_reminders", "noska-graph-positions",
+                    "pages", "aiChats", "activeChatId", "stackedPageIds"
+                  ];
+                  keysToClear.forEach((k) => { try { localStorage.removeItem(k); } catch {} });
+                  computeStorageBytes();
+                  setSaveStatus("Local cache cleared. Reloading...");
+                  setTimeout(() => window.location.reload(), 800);
                 }}
                 className="bg-[var(--danger)]/20 text-[var(--danger)] border border-[var(--danger)]/30 px-3 py-2 rounded text-xs font-semibold hover:bg-[var(--danger)]/30"
               >
-                Clear Local Cache
-              </button>
-            </div>
-          )}
-
-          {tab === "Teamspaces" && (
-            <div className="max-w-xl space-y-6">
-              <h2 className="text-[32px] font-bold">Teamspaces</h2>
-              <p className="text-sm text-[var(--secondary)]">Configure and manage directory teamspaces.</p>
-              <div className="space-y-2">
-                {teamspaces.map((tName, i) => (
-                  <div key={i} className="flex justify-between items-center p-3 border border-[var(--border)] rounded-lg bg-[var(--surface)]">
-                    <span className="text-sm font-semibold"># {tName}</span>
-                    <button
-                      onClick={() => setTeamspaces(teamspaces.filter((_, idx) => idx !== i))}
-                      className="text-[var(--danger)] text-xs hover:underline"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={async () => {
-                  const t = await window.noskaPrompt?.("Enter new teamspace name:", "", "Teamspace Name");
-                  if (t) setTeamspaces([...teamspaces, t.trim()]);
-                }}
-                className="bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white text-xs px-3 py-1.5 rounded font-semibold transition"
-              >
-                + Create Teamspace
+                Clear local cache
               </button>
             </div>
           )}

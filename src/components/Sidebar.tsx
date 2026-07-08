@@ -65,31 +65,12 @@ interface RealtimeCollabLike {
   getUser?: () => { userName?: string; userId?: string; userAvatar?: string } | undefined;
 }
 
-interface SidebarWorkspaceAccount {
-  name: string;
-  email: string;
-  avatar: string;
-  active: boolean;
-}
-
-interface SidebarStoredData {
-  workspaces: string[];
-  accounts: SidebarWorkspaceAccount[];
-}
-
 interface AppMenuItem {
   label: string;
   shortcut?: string;
   action: () => void;
   disabled?: boolean;
   checked?: boolean;
-}
-
-interface BeamCoords {
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
 }
 
 interface SidebarProps {
@@ -141,6 +122,13 @@ interface SidebarProps {
   /** Real pending page-invite count — shown as a badge on the Inbox nav
    * item so unresponded invites are actually visible without opening it. */
   pendingInvitesCount?: number;
+  /** Real signed-in identity (App.tsx's currentUsername/currentUserId,
+   * sourced from the actual Supabase auth session) — used by the account
+   * popover instead of the fake multi-account list that used to live here.
+   * Falls back to window.realtimeCollab's cached user when absent (e.g.
+   * TEST_MODE, or before the profile fetch resolves). */
+  currentUsername?: string | null;
+  currentUserEmail?: string | null;
 }
 
 export default function Sidebar({
@@ -189,53 +177,28 @@ export default function Sidebar({
   onExport,
   onShare,
   onToast,
-  onLogout
+  onLogout,
+  currentUsername,
+  currentUserEmail
 }: SidebarProps) {
   const recents = [...pages]
     .filter((p) => !p.hiddenFromRecents)
     .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
     .slice(0, 5);
 
-  const SIDEBAR_STORAGE_KEY = 'noska_sidebar_data';
-  const loadSidebarData = (): SidebarStoredData | null => {
-    try {
-      const data = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-      if (data) return JSON.parse(data);
-    } catch {}
-    return null;
-  };
-  const saveSidebarData = (data: SidebarStoredData) => {
-    try { localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(data)); } catch {}
-  };
+  // Real display identity, sourced from App.tsx's actual signed-in state
+  // (currentUsername/currentUserEmail, backed by the real Supabase auth
+  // session and user_profiles row) with a fallback to realtimeCollab's
+  // cached user for TEST_MODE / pre-fetch moments — no fake accounts,
+  // no localStorage-simulated multi-account list.
+  const collabUser = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
+  const displayName = currentUsername ? `@${currentUsername}` : (collabUser?.userName || 'Workspace User');
+  const displayEmail = currentUserEmail || collabUser?.userId || 'user@workspace';
+  const displayAvatar = collabUser?.userAvatar || '👤';
 
-  const defaultUser = () => {
-    // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
-    // (deliberately, to avoid a circular type dependency — see that
-    // file's comment) — narrow it at each read site, matching the
-    // pattern in src/features/collab/CoThinking.tsx.
-    const u = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
-    return u?.userName || 'Workspace User';
-  };
-  const defaultEmail = () => {
-    const u = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
-    return u?.userId || 'user@workspace';
-  };
-  const defaultAvatar = () => {
-    const u = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
-    return u?.userAvatar || '👤';
-  };
-  const defaultData: SidebarStoredData = {
-    workspaces: [`${defaultUser()}'s Workspace`],
-    accounts: [{ name: defaultUser(), email: defaultEmail(), avatar: defaultAvatar(), active: true }]
-  };
-
-  const initialData = loadSidebarData() || defaultData;
   const [appMenuOpen, setAppMenuOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
-  const [workspaces, setWorkspaces] = useState<string[]>(initialData.workspaces);
-  const [accounts, setAccounts] = useState<SidebarWorkspaceAccount[]>(initialData.accounts);
-  const activeAccount = accounts.find(a => a.active) || accounts[0];
 
   // Click-outside references
   const logoRef = useRef<HTMLButtonElement>(null);
@@ -244,10 +207,17 @@ export default function Sidebar({
   const appMenuRef = useOutsideDismiss<HTMLDivElement>(appMenuOpen, () => setAppMenuOpen(false));
   const switcherMenuRef = useOutsideDismiss<HTMLDivElement>(switcherOpen, () => setSwitcherOpen(false));
 
-  // Anchor and Beam Coordinate states
+  // Anchor coordinate state (beam-connector animation removed — see
+  // git history). `switcherCoords` uses either `top` (opened from the
+  // header button, popover grows downward) or `bottom` (opened from the
+  // bottom user button, popover grows upward) — real bug fix: the old
+  // bottom-button handler hardcoded `top: r.top - 420`, assuming the
+  // popover was always exactly 420px tall (it no longer is, now that the
+  // fake workspace/account lists are gone, and was never guaranteed to be
+  // even before). Anchoring from `bottom` instead lets the popover size
+  // itself naturally regardless of content length.
   const [logoCoords, setLogoCoords] = useState({ top: 0, left: 0 });
-  const [switcherCoords, setSwitcherCoords] = useState({ top: 0, left: 0 });
-  const [beamCoords, setBeamCoords] = useState<BeamCoords | null>(null);
+  const [switcherCoords, setSwitcherCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
 
   // Keyboard navigation items and states
   const menuCategories = ["File", "Edit", "View", "History", "Window", "Help"];
@@ -289,19 +259,18 @@ export default function Sidebar({
     ]
   };
 
-  // Coords and Beam coordinates hooks
+  // Anchor coordinate hooks — position the two popovers under their
+  // trigger buttons. Also updated for the bottom user-avatar button
+  // (userRef) right where it opens the switcher, rather than only here,
+  // so the popover is always correctly anchored regardless of which of
+  // the two trigger buttons opened it (real bug fix — see the userRef
+  // button's onClick below for the matching update).
   useEffect(() => {
     if (appMenuOpen && logoRef.current) {
       const rect = logoRef.current.getBoundingClientRect();
       setLogoCoords({
         top: rect.bottom + 6,
         left: rect.left
-      });
-      setBeamCoords({
-        startX: rect.left + rect.width / 2,
-        startY: rect.top + rect.height / 2,
-        endX: rect.left,
-        endY: rect.bottom + 6
       });
     }
   }, [appMenuOpen]);
@@ -311,22 +280,11 @@ export default function Sidebar({
       const rect = switcherRef.current.getBoundingClientRect();
       setSwitcherCoords({
         top: rect.bottom + 6,
+        bottom: undefined,
         left: rect.left
-      });
-      setBeamCoords({
-        startX: rect.left + rect.width / 2,
-        startY: rect.top + rect.height / 2,
-        endX: rect.left,
-        endY: rect.bottom + 6
       });
     }
   }, [switcherOpen]);
-
-  useEffect(() => {
-    if (!appMenuOpen && !switcherOpen) {
-      setBeamCoords(null);
-    }
-  }, [appMenuOpen, switcherOpen]);
 
   // Hybrid mouse-keyboard menu navigation handler
   useEffect(() => {
@@ -399,9 +357,6 @@ export default function Sidebar({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [appMenuOpen, focusedCatIndex, focusedSubIndex, activeSubmenu]);
 
-  // Persist workspaces and accounts to localStorage
-  useEffect(() => { saveSidebarData({ workspaces, accounts }); }, [workspaces, accounts]);
-
   // Escape key global hook
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
@@ -441,7 +396,7 @@ export default function Sidebar({
             onClick={() => {
               if (switcherRef.current) {
                 const r = switcherRef.current.getBoundingClientRect();
-                setSwitcherCoords({ top: r.bottom + 6, left: r.left });
+                setSwitcherCoords({ top: r.bottom + 6, bottom: undefined, left: r.left });
               }
               setSwitcherOpen(o => !o);
               setAppMenuOpen(false);
@@ -478,31 +433,6 @@ export default function Sidebar({
             <AnimatedMenu size={14} />
           </button>
         </div>
-
-        {/* Portal overlays for menus and connecting visual beam */}
-        {beamCoords && (
-          createPortal(
-            <svg className="pointer-events-none fixed inset-0 z-[110] h-full w-full">
-              <motion.path
-                d={`M ${beamCoords.startX} ${beamCoords.startY} Q ${(beamCoords.startX + beamCoords.endX) / 2} ${(beamCoords.startY + beamCoords.endY) / 2 - 12}, ${beamCoords.endX} ${beamCoords.endY}`}
-                fill="none"
-                stroke="url(#beam-grad)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: [0, 1], opacity: [0, 1, 1, 0] }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-              />
-              <defs>
-                <linearGradient id="beam-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="var(--noska-blue)" />
-                  <stop offset="100%" stopColor="var(--noska-blue-light)" />
-                </linearGradient>
-              </defs>
-            </svg>,
-            document.body
-          )
-        )}
 
         {/* macOS Desktop application menu */}
         <AnimatePresence>
@@ -589,7 +519,7 @@ export default function Sidebar({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -4 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                style={{ top: switcherCoords.top, left: switcherCoords.left }}
+                style={{ top: switcherCoords.top, bottom: switcherCoords.bottom, left: switcherCoords.left }}
                 className="fixed z-[100] w-[260px] rounded-xl border border-[var(--border)] bg-[var(--surface-1)] backdrop-blur-xl p-3 shadow-2xl text-[12px] outline-none select-none flex flex-col gap-2"
               >
                 {/* Current Workspace Info */}
@@ -599,7 +529,7 @@ export default function Sidebar({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-[var(--text)] truncate leading-none text-[12.5px]">{workspaceName}</div>
-                    <div className="text-[9.5px] text-[var(--text-secondary)] truncate mt-1">Free Plan · 1 member</div>
+                    <div className="text-[9.5px] text-[var(--text-secondary)] truncate mt-1">Noska Workspace</div>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
                     <button
@@ -621,73 +551,46 @@ export default function Sidebar({
 
                 <div className="h-px bg-[var(--hover)] my-0.5" />
 
-                {/* Workspace list */}
+                {/* Rename workspace — the one real, persisted workspace
+                    concept in the app (App.tsx's workspaceName state).
+                    Real bug fix: this used to be a fake "workspace list"
+                    with a client-only array simulating multiple
+                    workspaces that didn't actually exist in the data
+                    model — replaced with a direct rename action on the
+                    single real workspace. */}
                 <div className="flex flex-col space-y-0.5">
-                  <div className="px-1 py-0.5 text-[9px] font-bold text-[var(--muted)] uppercase tracking-wider">Workspaces</div>
-                  {workspaces.map((ws) => {
-                    const isActive = ws === workspaceName;
-                    return (
-                      <button
-                        key={ws}
-                        onClick={() => {
-                          setWorkspaceName(ws);
-                          setSwitcherOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] ${
-                          isActive ? "bg-[var(--hover)] text-[var(--text)] font-semibold" : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <div className={`h-5 w-5 rounded flex items-center justify-center text-[10px] font-bold text-[var(--text)] shrink-0 ${
-                            isActive ? "bg-[var(--noska-blue)]" : "bg-[var(--surface-3)]"
-                          }`}>
-                            {ws.charAt(0)}
-                          </div>
-                          <span className="truncate text-[12px]">{ws}</span>
-                        </div>
-                        {isActive && <span className="text-[var(--noska-blue)] font-bold shrink-0">✓</span>}
-                      </button>
-                    );
-                  })}
+                  <button
+                    onClick={async () => {
+                      const name = await window.noskaPrompt?.("Rename workspace:", workspaceName, "Workspace Name");
+                      if (name && name.trim()) setWorkspaceName(name.trim());
+                      setSwitcherOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] text-[11.5px]"
+                  >
+                    <AnimatedMenu size={11} className="text-[var(--text-secondary)]" />
+                    <span>Rename workspace</span>
+                  </button>
                 </div>
 
                 <div className="h-px bg-[var(--hover)] my-0.5" />
 
-                {/* Switcher popover actions */}
-                <div className="flex flex-col space-y-0.5">
-                  <button
-                    onClick={async () => {
-                      const name = await window.noskaPrompt?.("Enter new workspace name:", "", "Workspace Name");
-                      if (name && name.trim()) {
-                        setWorkspaces(prev => [...prev, name.trim()]);
-                        setWorkspaceName(name.trim());
-                      }
-                      setSwitcherOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] text-[11.5px]"
-                  >
-                    <AnimatedPlus size={11} className="text-[var(--text-secondary)]" />
-                    <span>New workspace</span>
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const email = await window.noskaPrompt?.("Enter email for new account:", "", "user@example.com");
-                      if (email && email.trim() && email.includes("@")) {
-                        const namePart = email.split("@")[0];
-                        const formattedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
-                        const newAcc: SidebarWorkspaceAccount = { name: formattedName, email: email.trim(), avatar: '👤', active: true };
-                        setAccounts(prev => prev.map(a => ({ ...a, active: false })).concat(newAcc));
-                        onToast?.(`Successfully signed into ${email.trim()}`);
-                      } else if (email) {
-                        onToast?.("Invalid email format");
-                      }
-                      setSwitcherOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] text-[11.5px]"
-                  >
-                    <Users size={11} className="text-[var(--muted)]" />
-                    <span>Add new account</span>
-                  </button>
+                {/* Signed-in user row — real identity (currentUsername/
+                    currentUserEmail from App.tsx's actual auth session),
+                    single account, single session. Real bug fix: this
+                    used to show a fake multi-account list where "switching
+                    accounts" only flipped a local flag with no actual
+                    session/data change — removed entirely rather than
+                    left as a decorative dead end. */}
+                <div className="flex flex-col space-y-1 px-1 py-0.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs shadow-inner select-none pointer-events-none text-[var(--text)]">
+                      {displayAvatar}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[var(--text)] truncate leading-none text-[11.5px]">{displayName}</div>
+                      <div className="text-[9px] text-[var(--muted)] truncate mt-1">{displayEmail}</div>
+                    </div>
+                  </div>
                   <button
                     onClick={async () => {
                       if (await window.noskaConfirm?.("Are you sure you want to log out?")) {
@@ -700,42 +603,6 @@ export default function Sidebar({
                     <X size={11} className="text-[var(--danger)] shrink-0" />
                     <span>Log out</span>
                   </button>
-                </div>
-
-                <div className="h-px bg-[var(--hover)] my-0.5" />
-
-                {/* Switcher Signed-in User Row */}
-                <div className="flex flex-col space-y-1 px-1 py-0.5">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs shadow-inner select-none pointer-events-none text-[var(--text)]">
-                      {activeAccount.avatar || '👤'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-[var(--text)] truncate leading-none text-[11.5px]">{activeAccount.name}</div>
-                      <div className="text-[9px] text-[var(--muted)] truncate mt-1">{activeAccount.email}</div>
-                    </div>
-                    <span className="text-[8px] bg-[var(--success)]/20 text-[var(--success)] border border-[var(--success)]/30 px-1 py-0.5 rounded-md shrink-0 font-bold leading-none">Active</span>
-                  </div>
-
-                  {accounts.filter(a => !a.active).map((acc, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setAccounts(accounts.map(a => ({ ...a, active: a.email === acc.email })));
-                        onToast?.(`Switched to account: ${acc.email}`);
-                        setSwitcherOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 rounded-lg p-1.5 hover:bg-[var(--hover)] transition text-left cursor-pointer outline-none border border-transparent hover:border-[var(--border)]"
-                    >
-                      <div className="h-6 w-6 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[10px]">
-                        {acc.avatar || '👤'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-[var(--text)] text-[11px] truncate leading-none">{acc.name}</div>
-                        <div className="text-[8px] text-[var(--muted)] truncate mt-0.5">{acc.email}</div>
-                      </div>
-                    </button>
-                  ))}
                 </div>
               </motion.div>,
               document.body
@@ -896,7 +763,7 @@ export default function Sidebar({
           onClick={() => {
             if (userRef.current) {
               const r = userRef.current.getBoundingClientRect();
-              setSwitcherCoords({ top: r.top - 420, left: r.left });
+              setSwitcherCoords({ bottom: window.innerHeight - r.top + 6, left: r.left });
             }
             setSwitcherOpen(o => !o);
             setAppMenuOpen(false);
@@ -904,11 +771,11 @@ export default function Sidebar({
           className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--hover)] transition text-left"
         >
           <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs text-[var(--text)] shrink-0">
-            {activeAccount.avatar || '👤'}
+            {displayAvatar}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-semibold text-[var(--text)] truncate leading-none">{activeAccount.name}</div>
-            <div className="text-[9px] text-[var(--muted)] truncate mt-0.5">{activeAccount.email}</div>
+            <div className="text-[12px] font-semibold text-[var(--text)] truncate leading-none">{displayName}</div>
+            <div className="text-[9px] text-[var(--muted)] truncate mt-0.5">{displayEmail}</div>
           </div>
           <ChevronDown size={12} className="text-[var(--muted)] shrink-0" />
         </button>
