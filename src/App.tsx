@@ -245,17 +245,26 @@ function App() {
   // updatePage call sites below route edits through updateSharedPage()
   // instead of the normal commitPages() pipeline, which would otherwise
   // silently reassign ownership (see sharedPages' declaration comment).
-  const activeOwnedMatch = pages.find((p) => p.id === activeId && !p.trashed);
-  const activeSharedMatch = !activeOwnedMatch ? sharedPages.find((p) => p.id === activeId) : undefined;
-  const isSharedActivePage = !activeOwnedMatch && !!activeSharedMatch;
   // A shared page's own `permission` field (getPagePermission/Editor.tsx's
   // existing "View only" badge/edit-gating) is derived from its grant role
   // here rather than mutated at the source — `permission` is otherwise a
   // distinct, purely client-side "read-only toggle" concept (see its own
   // doc comment in supabaseService.ts) that this shouldn't conflate with.
   // `viewer`/`commenter` grants render read-only; only `editor` allows edits.
+  // Factored into a helper (real bug fix, found during live UI QA): the
+  // stacked-column `colPage` lookup below used to read straight from
+  // `sharedPages` without this mapping, so a viewer/commenter opening a
+  // shared page via the stacked column (e.g. Ctrl-click from Inbox/Library)
+  // got full edit affordances in the actual Editor.tsx rendering path even
+  // though `activePage` correctly showed read-only.
+  const withSharedPermission = (p: Page): Page =>
+    ({ ...p, permission: p.sharedRole === "editor" ? "edit" as const : "view" as const });
+
+  const activeOwnedMatch = pages.find((p) => p.id === activeId && !p.trashed);
+  const activeSharedMatch = !activeOwnedMatch ? sharedPages.find((p) => p.id === activeId) : undefined;
+  const isSharedActivePage = !activeOwnedMatch && !!activeSharedMatch;
   const activePage = activeOwnedMatch
-    || (activeSharedMatch ? { ...activeSharedMatch, permission: activeSharedMatch.sharedRole === "editor" ? "edit" as const : "view" as const } : undefined)
+    || (activeSharedMatch ? withSharedPermission(activeSharedMatch) : undefined)
     || pages.find((p) => !p.trashed);
   const visiblePages = pages.filter((p) => !p.trashed);
   const trashPages = pages.filter((p) => p.trashed);
@@ -2278,8 +2287,16 @@ function App() {
                             // does above — otherwise a shared page pushed into
                             // the stack (e.g. opened via Ctrl-click from the
                             // Inbox/Library) would resolve to nothing and
-                            // silently vanish from the column view.
-                            const colPage = pages.find((p) => p.id === pId) || sharedPages.find((p) => p.id === pId);
+                            // silently vanish from the column view. Also
+                            // applies the same sharedRole->permission mapping
+                            // as activePage (real bug, fixed: this used to
+                            // read straight from sharedPages with no mapping,
+                            // so a viewer/commenter got full edit affordances
+                            // in the Editor.tsx rendering path for this code
+                            // path specifically).
+                            const ownedColPage = pages.find((p) => p.id === pId);
+                            const sharedColPage = !ownedColPage ? sharedPages.find((p) => p.id === pId) : undefined;
+                            const colPage = ownedColPage || (sharedColPage ? withSharedPermission(sharedColPage) : undefined);
                             if (!colPage) return null;
                             return (
                               <motion.div

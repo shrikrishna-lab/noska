@@ -678,7 +678,12 @@ export default function Editor({
               setCoverMenuOpen(true);
             }}
           >
-            {!page.isLocked && (
+            {/* Cover-mutating controls: gated on isEditable (not just isLocked) so
+                viewers/commenters on a shared page can't change the cover/customize.
+                Real gap found during live UI QA — previously matched only
+                `!page.isLocked`, same class of bug already fixed for the block
+                context menu. */}
+            {isEditable && (
               <div className="absolute top-3 right-3 flex gap-1.5">
                 <button
                   onClick={(e) => { e.stopPropagation(); setCoverPickerOpen(!coverPickerOpen); }}
@@ -718,7 +723,7 @@ export default function Editor({
               currentIcon={page.icon}
               position={{ top: 52, left: 0 }}
             />
-          {!page.isLocked && (
+          {isEditable && (
             <>
               <div className="relative">
                 <button
@@ -915,30 +920,39 @@ export default function Editor({
         </AnimatePresence>
         {/* Page title row with hover controls + icon picker */}
         <div className="group/title relative flex items-start gap-1 mb-5">
-          {/* Hover-revealed title controls — mirrors block-tools pattern */}
+          {/* Hover-revealed title controls — mirrors block-tools pattern.
+              Drag/add-block are mutation-only, gated on isEditable (not just
+              isLocked) — real gap found during live UI QA, same class of bug
+              already fixed for the block context menu. The comment toggle is
+              intentionally NOT gated on isEditable since commenting doesn't
+              require edit access in this app's permission model. */}
           {!page.isLocked && (
             <div className="block-tools flex w-12 shrink-0 items-start justify-end gap-0.5 pt-2 transition z-20 opacity-0 group-hover/title:opacity-100">
-              {/* Drag handle (visual — title is structural, not in block list) */}
-              <button
-                className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:scale-110 active:scale-90 cursor-grab active:cursor-grabbing transition-transform touch-none"
-                aria-label="Drag title"
-                draggable="false"
-              >
-                <GripVertical size={15} />
-              </button>
-              {/* Add block above (inserts at top of block list + opens slash menu) */}
-              <button
-                className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer transition"
-                aria-label="Add block above title"
-                onClick={() => {
-                  const nextId = crypto.randomUUID();
-                  const blocks = page.blocks || [];
-                  onBlocks([{ id: nextId, type: "text", text: "" }, ...blocks]);
-                  setOpenSlashForBlockId(nextId);
-                }}
-              >
-                <Plus size={15} />
-              </button>
+              {isEditable && (
+                <>
+                  {/* Drag handle (visual — title is structural, not in block list) */}
+                  <button
+                    className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:scale-110 active:scale-90 cursor-grab active:cursor-grabbing transition-transform touch-none"
+                    aria-label="Drag title"
+                    draggable="false"
+                  >
+                    <GripVertical size={15} />
+                  </button>
+                  {/* Add block above (inserts at top of block list + opens slash menu) */}
+                  <button
+                    className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer transition"
+                    aria-label="Add block above title"
+                    onClick={() => {
+                      const nextId = crypto.randomUUID();
+                      const blocks = page.blocks || [];
+                      onBlocks([{ id: nextId, type: "text", text: "" }, ...blocks]);
+                      setOpenSlashForBlockId(nextId);
+                    }}
+                  >
+                    <Plus size={15} />
+                  </button>
+                </>
+              )}
               {/* Comment on title */}
               <div className="relative">
                 <button
@@ -1092,8 +1106,10 @@ export default function Editor({
           </DragOverlay>
         </DndContext>
 
-        {/* Multi-selection batch action bar */}
-        {hasSelection && selectedBlockIds.size > 0 && !page.isLocked && (
+        {/* Multi-selection batch action bar — all actions mutate blocks,
+            gated on isEditable (not just isLocked); real gap found during
+            live UI QA. */}
+        {hasSelection && selectedBlockIds.size > 0 && isEditable && (
           <div className="sticky bottom-0 z-40 -mx-16 mt-2 flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 shadow-lg backdrop-blur-sm w-fit mx-auto">
             <span className="text-[10px] font-medium text-[var(--secondary)] mr-1.5">
               {selectedBlockIds.size} selected
@@ -1163,8 +1179,9 @@ export default function Editor({
           </div>
         )}
 
-        {/* Click empty space to add a block — large invisible click target */}
-        {!page.isLocked && (page.blocks || []).length > 0 && (
+        {/* Click empty space to add a block — large invisible click target.
+            Mutation-only, gated on isEditable (not just isLocked). */}
+        {isEditable && (page.blocks || []).length > 0 && (
           <div
             onClick={() => {
               const lastBlock = page.blocks[page.blocks.length - 1];
@@ -1180,7 +1197,9 @@ export default function Editor({
       </div>
 
       <AnimatePresence>
-        {selection.text && !page.isLocked && (
+        {/* Selection AI bar exposes format/replace/insert — all mutations,
+            gated on isEditable (not just isLocked). */}
+        {selection.text && isEditable && (
           <SelectionAIBar
             selection={selection}
             apiKey={apiKey}
@@ -2011,48 +2030,55 @@ function Block({
       }}
       onPaste={handlePaste}
     >
-      {/* Block Hover Affordance */}
+      {/* Block Hover Affordance. Drag/add-plus are mutation-only, gated on
+          blockPermission !== 'view' (not just isLocked) — real gap found
+          during live UI QA, same class of bug already fixed for the block
+          context menu. Comment indicator intentionally stays available. */}
       {!page.isLocked && (
         <div className={`block-tools flex w-12 shrink-0 items-start justify-end gap-0.5 pt-1 transition z-20 ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
-          {/* Grip handle (@dnd-kit) */}
-          <button
-            ref={menuButtonRef}
-            {...attributes}
-            {...listeners}
-            className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:scale-110 active:scale-90 cursor-grab active:cursor-grabbing transition-transform touch-none"
-            aria-label="Block options and drag reorder"
-            onClick={(e) => {
-              e.stopPropagation();
-              setBlockContextOpen((open) => !open);
-            }}
-          >
-            <GripVertical size={15} />
-          </button>
+          {blockPermission !== 'view' && (
+            <>
+              {/* Grip handle (@dnd-kit) */}
+              <button
+                ref={menuButtonRef}
+                {...attributes}
+                {...listeners}
+                className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:scale-110 active:scale-90 cursor-grab active:cursor-grabbing transition-transform touch-none"
+                aria-label="Block options and drag reorder"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBlockContextOpen((open) => !open);
+                }}
+              >
+                <GripVertical size={15} />
+              </button>
 
-          {/* Plus action button */}
-          <div className="relative group/plus">
-            <motion.button
-              whileHover={{ scale: 1.1, color: "var(--accent)" }}
-              whileTap={{ scale: 0.9 }}
-              className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer"
-              aria-label="Add block"
-              onClick={(e) => {
-                const nextId = crypto.randomUUID();
-                onSetOpenSlashBlockId?.(nextId);
-                if (e.altKey) {
-                  onAddAbove?.("text", "", nextId);
-                } else {
-                  onAdd("text", "", nextId);
-                }
-              }}
-            >
-              <Plus size={15} />
-            </motion.button>
-            <div className="absolute top-8 left-1/2 -translate-x-1/2 hidden group-hover/plus:block bg-[var(--elevated)] border border-[var(--border-strong)] text-[var(--text)] text-[10px] py-1.5 px-2.5 rounded-lg shadow-xl pointer-events-none z-50 leading-normal min-w-[150px] text-center select-none font-medium">
-              <div><strong>Click</strong> <span className="text-[var(--text-secondary)] font-normal">to add below</span></div>
-              <div><strong>Alt-click</strong> <span className="text-[var(--text-secondary)] font-normal">to add a block above</span></div>
-            </div>
-          </div>
+              {/* Plus action button */}
+              <div className="relative group/plus">
+                <motion.button
+                  whileHover={{ scale: 1.1, color: "var(--accent)" }}
+                  whileTap={{ scale: 0.9 }}
+                  className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer"
+                  aria-label="Add block"
+                  onClick={(e) => {
+                    const nextId = crypto.randomUUID();
+                    onSetOpenSlashBlockId?.(nextId);
+                    if (e.altKey) {
+                      onAddAbove?.("text", "", nextId);
+                    } else {
+                      onAdd("text", "", nextId);
+                    }
+                  }}
+                >
+                  <Plus size={15} />
+                </motion.button>
+                <div className="absolute top-8 left-1/2 -translate-x-1/2 hidden group-hover/plus:block bg-[var(--elevated)] border border-[var(--border-strong)] text-[var(--text)] text-[10px] py-1.5 px-2.5 rounded-lg shadow-xl pointer-events-none z-50 leading-normal min-w-[150px] text-center select-none font-medium">
+                  <div><strong>Click</strong> <span className="text-[var(--text-secondary)] font-normal">to add below</span></div>
+                  <div><strong>Alt-click</strong> <span className="text-[var(--text-secondary)] font-normal">to add a block above</span></div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Comment indicator */}
           <div className="relative">

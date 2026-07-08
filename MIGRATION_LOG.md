@@ -2499,3 +2499,128 @@ application-level assumptions), and verified clean. Combined with Phase A
 (usernames + real edit attribution), both original requests from this
 task are complete. The broader 18-table RLS lockdown remains a separate,
 already-tracked, deferred item.
+
+---
+
+## Live QA: real browser UI testing of the sharing feature ("test like a real human")
+
+Per explicit instruction, this is an additional verification layer beyond
+the database-level RLS testing above — actual browser interaction via
+Playwright against the real running app, not code review or SQL-level
+simulation.
+
+### Method
+Used the established `TEST_MODE` bypass (`.env.development.local` with a
+fake non-production Supabase URL + `VITE_TEST_MODE=true`, gitignored, never
+weakening `envGuard.ts` itself) so the dev server boots straight into the
+workspace without hitting production Supabase. Since `TEST_MODE` never
+calls Supabase, a temporary, clearly-marked `// TEMP QA SEED` block was
+added to `src/App.tsx` to populate `sharedPages`/`pendingInvites` with
+synthetic data (`qa-shared-page-1`, `qa-invite-1`) so the real sharing UI
+had something to render. This block was fully reverted before any commit
+(see below) — it was never intended to be permanent.
+
+### Scenarios verified via live browser interaction
+- Sidebar Inbox nav item shows the correct real pending-invite badge count.
+- Inbox page renders a real invite card (`@qa_inviter invited you to edit`)
+  with working Accept/Decline buttons; clicking either correctly attempts
+  a real Supabase call (which fails only due to the fake DNS under
+  `TEST_MODE` — confirmed graceful non-optimistic rollback, no crash).
+- Library's "Shared" tab correctly shows only the seeded shared page card
+  (previously verified fake-data bug from Phase B's code fix — confirmed
+  fixed live).
+- Clicking the shared page card navigates to `/my-workspace/qa-shared-page-1`
+  and correctly resolves via the `activePage`/`sharedPages` fallback.
+- Editor renders the "🤝 Shared · view only" badge for the seeded
+  `sharedRole: 'viewer'` page.
+- `PageOptionsMenu` correctly excludes all owner-only actions (Duplicate,
+  Move to, Trash, Lock, Read-only, Customize, Turn into wiki) for this
+  shared page — confirmed via live snapshot of the opened menu, only
+  non-owner-only items present (Typography, Page Color, Copy link, Copy
+  page contents, Present, Available offline, Small text, Full width, Use
+  with AI, Suggest edits, Translate, Import, Export, Updates & analytics,
+  Version history, Notify me, Connections).
+
+### Real bug found and fixed: mutation-only UI controls not gated on edit permission
+While confirming the block-grip/cover/customize controls were also hidden
+for a viewer, found they were **not** — despite `isEditable`/
+`blockPermission` already being correctly computed in `Editor.tsx` (used
+correctly by the keyboard-input guards and the block-context-menu fix from
+the prior QA round), several purely-visual/mutation-affordance render
+gates in `Editor.tsx` checked only `!page.isLocked`, never the actual
+edit permission:
+- The cover-area "Change Cover"/"Customize" quick-action buttons.
+- The "Add cover" text button and its `CoverPicker` trigger.
+- The title row's drag-handle and "Add block above title" buttons.
+- The multi-selection batch action bar (Delete/Duplicate/Highlight/Copy).
+- The "click empty space to add a block" invisible click target.
+- The `SelectionAIBar` (format/replace/insert on text selection).
+- Each block's hover-revealed grip/drag-reorder handle and "+" add-block
+  button.
+
+Comment-related controls (title/block comment toggle buttons) were
+deliberately left ungated, since commenting doesn't require edit access in
+this app's existing permission model (`commenter` role explicitly allows
+`can_comment: true` with `can_edit: false` — see `INVITE_ROLE_CAPS`/
+`ROLE_DEFAULTS`). Fixed each mutation-only gate to check `isEditable`
+(page-level) or `blockPermission !== 'view'` (block-level) instead of/in
+addition to `!page.isLocked`, each with an inline comment identifying it
+as a real gap found during this QA pass, distinct from the already-fixed
+context-menu gap.
+
+### Deeper root cause found and fixed: `colPage` never applied the shared-role permission mapping
+After fixing the above `Editor.tsx` gates, live re-testing showed **zero
+effect** — the controls were still visible. Root cause: `App.tsx`'s
+`activePage` derivation correctly maps a shared page's `sharedRole` onto
+a `permission: 'edit' | 'view'` field that `getPagePermission`/
+`isEditable`/`blockPermission` all read — but the actual page object
+passed to the rendered `Editor` (via `StackedColumn`, using a separately-
+computed `colPage` for the stacked-column view, which is what's really on
+screen) read straight from `sharedPages` with **no such mapping applied**.
+So `colPage.permission` was always `undefined`, and `getPagePermission`
+defaults an unset `permission` to `'edit'` — meaning a `viewer`-role shared
+page rendered with full edit affordances in the code path a real user
+actually sees, even though the separate, mostly-cosmetic `activePage`
+value showed the correct read-only state. This is a materially more
+serious version of the same class of bug as the context-menu gap fixed in
+the prior QA round, since it affected the actual rendered block/cover/title
+controls, not just one context menu.
+
+Fixed by factoring the mapping into a shared `withSharedPermission()`
+helper (used by both `activePage` and the stacked-column `colPage`
+lookup), so both code paths apply the identical `sharedRole → permission`
+rule instead of `activePage` doing it correctly and `colPage` silently
+not. Re-verified live after the fix: all mutation controls (grip handles,
+add-block buttons, drag-title, cover/customize buttons, add-cover) are
+now correctly absent for the viewer-role shared page — confirmed via
+Playwright element counts going from 1 (visible) to 0 (hidden) for every
+one of the 7 affected controls, with zero change to the owned page's
+full edit controls (still 5/5 blocks with working grip/add buttons,
+confirming no regression for normal editing).
+
+### Cleanup performed
+- The `// TEMP QA SEED` block in `src/App.tsx` was fully deleted (not just
+  disabled/commented) before this log entry / any commit.
+- `.env.development.local` deleted.
+- Dev server (background process) stopped.
+- Playwright browser session closed; `.playwright-mcp/` scratch logs
+  (untracked, gitignored) removed.
+- `git status --short` after cleanup shows only the two real source
+  changes (`src/App.tsx`, `src/components/Editor.tsx`) — no leftover QA
+  artifacts.
+
+### Verification
+- `npx tsc --noEmit`: clean.
+- `npm run build`: succeeded (`✓ built`; only the pre-existing chunk-size
+  warning, unrelated).
+- `npx vitest run`: **140/140 tests pass**.
+
+### Status
+Live browser UI QA of the sharing feature is now complete, on top of the
+already-completed database-level RLS testing. One real, non-trivial
+permission gap was found and fixed (the `colPage` mapping bug above) that
+static/RLS-level testing could not have caught, since it was purely a
+client-side rendering-permission bug with no corresponding database
+interaction — underscoring why the "test like a real human" browser pass
+was a valuable, distinct verification layer. Phase B (real page sharing)
+is now fully implemented, RLS-tested, and browser-UI-tested end-to-end.
