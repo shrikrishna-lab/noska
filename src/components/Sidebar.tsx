@@ -11,12 +11,14 @@ import {
   Star,
   Users,
   X,
-  LogOut,
+  PanelLeftClose,
+  Sun,
+  Moon,
+  Monitor,
   Settings,
   type LucideIcon
 } from "lucide-react";
 import {
-  AnimatedMenu,
   AnimatedSidebar,
   AnimatedBack,
   AnimatedForward,
@@ -65,14 +67,6 @@ interface RealtimeCollabLike {
   getUser?: () => { userName?: string; userId?: string; userAvatar?: string } | undefined;
 }
 
-interface AppMenuItem {
-  label: string;
-  shortcut?: string;
-  action: () => void;
-  disabled?: boolean;
-  checked?: boolean;
-}
-
 interface SidebarProps {
   open: boolean;
   pages: Page[];
@@ -108,14 +102,6 @@ interface SidebarProps {
   theme: string;
   onThemeChange: (theme: string) => void;
   appView: string;
-  // Upgraded click interaction props
-  onUndo?: () => void;
-  onRedo?: () => void;
-  canUndo?: boolean;
-  canRedo?: boolean;
-  pageMode?: string;
-  onPageModeChange?: (mode: string) => void;
-  onExport?: () => void;
   onShare?: () => void;
   onToast?: (message: string) => void;
   onLogout?: () => void;
@@ -167,14 +153,6 @@ export default function Sidebar({
   theme,
   onThemeChange,
   appView,
-  // Upgraded click interaction props
-  onUndo,
-  onRedo,
-  canUndo,
-  canRedo,
-  pageMode,
-  onPageModeChange,
-  onExport,
   onShare,
   onToast,
   onLogout,
@@ -196,186 +174,36 @@ export default function Sidebar({
   const displayEmail = currentUserEmail || collabUser?.userId || 'user@workspace';
   const displayAvatar = collabUser?.userAvatar || '👤';
 
-  const [appMenuOpen, setAppMenuOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
 
   // Click-outside references
-  const logoRef = useRef<HTMLButtonElement>(null);
   const switcherRef = useRef<HTMLButtonElement>(null);
   const userRef = useRef<HTMLButtonElement>(null);
-  const appMenuRef = useOutsideDismiss<HTMLDivElement>(appMenuOpen, () => setAppMenuOpen(false));
   const switcherMenuRef = useOutsideDismiss<HTMLDivElement>(switcherOpen, () => setSwitcherOpen(false));
 
-  // Anchor coordinate state (beam-connector animation removed — see
-  // git history). `switcherCoords` uses either `top` (opened from the
-  // header button, popover grows downward) or `bottom` (opened from the
-  // bottom user button, popover grows upward) — real bug fix: the old
+  // Anchor coordinate state for the account-switcher popover. Uses either
+  // `top` (opened from the header button, popover grows downward) or
+  // `bottom` (opened from the bottom user button, popover grows upward) —
+  // real bug fix carried over from the previous version: the old
   // bottom-button handler hardcoded `top: r.top - 420`, assuming the
-  // popover was always exactly 420px tall (it no longer is, now that the
-  // fake workspace/account lists are gone, and was never guaranteed to be
-  // even before). Anchoring from `bottom` instead lets the popover size
-  // itself naturally regardless of content length.
-  const [logoCoords, setLogoCoords] = useState({ top: 0, left: 0 });
+  // popover was always exactly 420px tall. Anchoring from `bottom` lets
+  // the popover size itself naturally regardless of content length.
   const [switcherCoords, setSwitcherCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
 
-  // Keyboard navigation items and states
-  const menuCategories = ["File", "Edit", "View", "History", "Window", "Help"];
-  const [focusedCatIndex, setFocusedCatIndex] = useState(0);
-  const [focusedSubIndex, setFocusedSubIndex] = useState(-1);
-  const [keyboardActive, setKeyboardActive] = useState(false);
-
-  // App menu actions mapping
-  const appMenuItems: Record<string, AppMenuItem[]> = {
-    File: [
-      { label: "New Page", shortcut: "Ctrl+N", action: () => onNew("blank") },
-      { label: "Import...", action: () => onSettings("Import") },
-      { label: "Export Page...", action: () => onExport?.() },
-      { label: "Settings...", action: () => onSettings("General") }
-    ],
-    Edit: [
-      { label: "Undo", shortcut: "Ctrl+Z", action: () => onUndo?.(), disabled: !canUndo },
-      { label: "Redo", shortcut: "Ctrl+Y", action: () => onRedo?.(), disabled: !canRedo }
-    ],
-    View: [
-      { label: "Toggle Sidebar", shortcut: "Ctrl+\\", action: () => onToggle() },
-      { label: "Document Mode", action: () => onPageModeChange?.("doc"), checked: pageMode === "doc" },
-      { label: "Canvas Mode", action: () => onPageModeChange?.("canvas"), checked: pageMode === "canvas" },
-      { label: "Graph Mode", action: () => onPageModeChange?.("graph"), checked: pageMode === "graph" },
-      { label: "Toggle AI Panel", action: () => onAI() }
-    ],
-    History: [
-      { label: "Go Back", shortcut: "Alt+Left", action: () => onPrev() },
-      { label: "Go Forward", shortcut: "Alt+Right", action: () => onNext() },
-      { label: "Search Workspace", shortcut: "Ctrl+K", action: () => onSearch() }
-    ],
-    Window: [
-      { label: "Minimize", action: () => onToast?.("Minimized window (simulated). Add to home screen for desktop integration.") },
-      { label: "Close Tab", action: async () => { if (await window.noskaConfirm?.("Close this workspace tab?")) window.close(); } }
-    ],
-    Help: [
-      { label: "Help Center", action: () => onHelp() },
-      { label: "Developer API Console", action: () => onAPI() }
-    ]
-  };
-
-  // Anchor coordinate hooks — position the two popovers under their
-  // trigger buttons. Also updated for the bottom user-avatar button
-  // (userRef) right where it opens the switcher, rather than only here,
-  // so the popover is always correctly anchored regardless of which of
-  // the two trigger buttons opened it (real bug fix — see the userRef
-  // button's onClick below for the matching update).
-  useEffect(() => {
-    if (appMenuOpen && logoRef.current) {
-      const rect = logoRef.current.getBoundingClientRect();
-      setLogoCoords({
-        top: rect.bottom + 6,
-        left: rect.left
-      });
-    }
-  }, [appMenuOpen]);
-
-  useEffect(() => {
-    if (switcherOpen && switcherRef.current) {
-      const rect = switcherRef.current.getBoundingClientRect();
-      setSwitcherCoords({
-        top: rect.bottom + 6,
-        bottom: undefined,
-        left: rect.left
-      });
-    }
-  }, [switcherOpen]);
-
-  // Hybrid mouse-keyboard menu navigation handler
-  useEffect(() => {
-    const handleMouseMove = () => {
-      setKeyboardActive(false);
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
-
-  // Keyboard navigation listener for Logo dropdown menu
-  useEffect(() => {
-    if (!appMenuOpen) {
-      setFocusedCatIndex(0);
-      setFocusedSubIndex(-1);
-      setActiveSubmenu(null);
-      return;
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      setKeyboardActive(true);
-      const activeCat = menuCategories[focusedCatIndex];
-      const subItems = appMenuItems[activeCat] || [];
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        if (activeSubmenu) {
-          setFocusedSubIndex((prev) => (prev + 1) % subItems.length);
-        } else {
-          setFocusedCatIndex((prev) => (prev + 1) % menuCategories.length);
-        }
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        if (activeSubmenu) {
-          setFocusedSubIndex((prev) => (prev - 1 + subItems.length) % subItems.length);
-        } else {
-          setFocusedCatIndex((prev) => (prev - 1 + menuCategories.length) % menuCategories.length);
-        }
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        if (!activeSubmenu) {
-          setActiveSubmenu(activeCat);
-          setFocusedSubIndex(0);
-        }
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        if (activeSubmenu) {
-          setActiveSubmenu(null);
-          setFocusedSubIndex(-1);
-        }
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        setAppMenuOpen(false);
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        if (activeSubmenu && focusedSubIndex >= 0) {
-          const item = subItems[focusedSubIndex];
-          if (item && !item.disabled) {
-            item.action();
-            setAppMenuOpen(false);
-          }
-        } else {
-          setActiveSubmenu(activeCat);
-          setFocusedSubIndex(0);
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appMenuOpen, focusedCatIndex, focusedSubIndex, activeSubmenu]);
-
-  // Escape key global hook
+  // Escape key closes the switcher popover.
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setAppMenuOpen(false);
-        setSwitcherOpen(false);
-      }
+      if (e.key === "Escape") setSwitcherOpen(false);
     };
     window.addEventListener("keydown", handleGlobalKeys);
     return () => window.removeEventListener("keydown", handleGlobalKeys);
   }, []);
 
-  const handleCategoryHover = (cat: string, index: number) => {
-    if (!keyboardActive) {
-      setFocusedCatIndex(index);
-      setActiveSubmenu(cat);
-      setFocusedSubIndex(-1);
-    }
-  };
+  const themeOptions: Array<{ value: string; label: string; icon: LucideIcon }> = [
+    { value: "light", label: "Light", icon: Sun },
+    { value: "dark", label: "Dark", icon: Moon },
+    { value: "system", label: "System", icon: Monitor }
+  ];
 
   return (
     <motion.aside
@@ -399,10 +227,9 @@ export default function Sidebar({
                 setSwitcherCoords({ top: r.bottom + 6, bottom: undefined, left: r.left });
               }
               setSwitcherOpen(o => !o);
-              setAppMenuOpen(false);
             }}
             className="flex-grow min-w-0 flex items-center gap-2.5 px-2 py-1 rounded-lg hover:bg-[var(--hover)] transition duration-150 outline-none cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-[var(--noska-blue)]"
-            title="Switch Workspace"
+            title="Account & workspace"
           >
             {/* Framer-style Icon Box */}
             <div className="w-8 h-8 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center p-1.5 shrink-0 shadow-[inset_0_1px_0_var(--glass-highlight)]">
@@ -416,100 +243,30 @@ export default function Sidebar({
             <ChevronDown size={11} className="text-[var(--muted)] shrink-0 ml-1" />
           </button>
 
-          {/* Settings Menu Launcher */}
+          {/* Hide sidebar. Real bug fix: this used to launch a "macOS
+              Desktop application menu" (File/Edit/View/History/Window/
+              Help) that was mostly redundant with functionality already
+              exposed elsewhere in the UI (Ctrl+N/Ctrl+K/Ctrl+Z are real
+              global shortcuts, Undo/Redo/AI/mode-switch buttons already
+              exist in the Topbar) and contained one explicitly-fake
+              action ("Minimized window (simulated)..."). Replaced with a
+              single real, obvious action: collapse the sidebar — mirrors
+              the exact button already present in the Topbar for the
+              reverse (open) direction, so the collapse/expand pair is
+              now consistent and always reachable from both ends. */}
           <button
-            ref={logoRef}
-            onClick={() => {
-              if (logoRef.current) {
-                const r = logoRef.current.getBoundingClientRect();
-                setLogoCoords({ top: r.bottom + 4, left: r.left - 10 });
-              }
-              setAppMenuOpen(o => !o);
-              setSwitcherOpen(false);
-            }}
+            onClick={onToggle}
             className="w-8 h-8 rounded-lg hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] transition duration-150 outline-none flex items-center justify-center cursor-pointer shrink-0 focus-visible:ring-1 focus-visible:ring-[var(--noska-blue)]"
-            title="Application Menu"
+            title="Hide sidebar (Ctrl+\)"
           >
-            <AnimatedMenu size={14} />
+            <PanelLeftClose size={15} />
           </button>
         </div>
 
-        {/* macOS Desktop application menu */}
-        <AnimatePresence>
-          {appMenuOpen && (
-            createPortal(
-              <motion.div
-                ref={appMenuRef}
-                initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                style={{ top: logoCoords.top, left: logoCoords.left }}
-                className="fixed z-[100] w-[145px] rounded-lg border border-[var(--border)] bg-[var(--surface-1)] backdrop-blur-xl p-1 shadow-2xl text-[11.5px] outline-none select-none text-[var(--text-secondary)]"
-              >
-                {menuCategories.map((cat, idx) => {
-                  const isFocused = idx === focusedCatIndex;
-                  const isSubOpen = activeSubmenu === cat;
-                  return (
-                    <div
-                      key={cat}
-                      onMouseEnter={() => handleCategoryHover(cat, idx)}
-                      className={`relative flex items-center justify-between rounded px-2 py-1.5 cursor-pointer transition-colors duration-100 ${
-                        isFocused || isSubOpen ? "bg-[var(--hover)] text-[var(--text)] font-medium" : "text-[var(--text-secondary)]"
-                      }`}
-                    >
-                      <span>{cat}</span>
-                      <ChevronRight size={10} className="text-[var(--muted)]" />
-                      
-                      {/* Submenu Dropdown popout */}
-                      <AnimatePresence>
-                        {isSubOpen && (
-                          <motion.div
-                            initial={{ opacity: 0, x: -6, scale: 0.98 }}
-                            animate={{ opacity: 1, x: 0, scale: 1 }}
-                            exit={{ opacity: 0, x: -3, scale: 0.98 }}
-                            transition={{ type: "spring", stiffness: 420, damping: 30 }}
-                            className="absolute left-[100%] top-0 ml-1.5 w-[165px] rounded-lg border border-[var(--border)] bg-[var(--surface-1)] backdrop-blur-xl p-1 shadow-2xl text-[11.5px] z-50 flex flex-col space-y-px"
-                          >
-                            {(appMenuItems[cat] || []).map((subItem, subIdx) => {
-                              const isSubFocused = subIdx === focusedSubIndex;
-                              return (
-                                <button
-                                  key={subItem.label}
-                                  disabled={subItem.disabled}
-                                  onMouseEnter={() => !keyboardActive && setFocusedSubIndex(subIdx)}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    subItem.action();
-                                    setAppMenuOpen(false);
-                                  }}
-                                  className={`w-full flex items-center justify-between rounded px-2 py-1.5 text-left select-none transition-colors duration-100 outline-none disabled:opacity-40 disabled:pointer-events-none cursor-pointer ${
-                                    isSubFocused ? "bg-[var(--hover)] text-[var(--text)]" : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-                                  }`}
-                                >
-                                  <span className="flex items-center gap-1.5 truncate">
-                                    {subItem.checked && <span className="text-[var(--noska-blue)] font-bold shrink-0">✓</span>}
-                                    <span className="truncate">{subItem.label}</span>
-                                  </span>
-                                  {subItem.shortcut && (
-                                    <span className="text-[9px] text-[var(--muted)] font-mono shrink-0 ml-2">{subItem.shortcut}</span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
-              </motion.div>,
-              document.body
-            )
-          )}
-        </AnimatePresence>
-
-        {/* Workspace popover Switcher */}
+        {/* Account switcher popover — redesigned as a single real-data
+            panel (real signed-in identity, real workspace name, real
+            theme setting) instead of the previous fake multi-account/
+            multi-workspace list + separate cascading app menu. */}
         <AnimatePresence>
           {switcherOpen && (
             createPortal(
@@ -520,89 +277,98 @@ export default function Sidebar({
                 exit={{ opacity: 0, scale: 0.95, y: -4 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
                 style={{ top: switcherCoords.top, bottom: switcherCoords.bottom, left: switcherCoords.left }}
-                className="fixed z-[100] w-[260px] rounded-xl border border-[var(--border)] bg-[var(--surface-1)] backdrop-blur-xl p-3 shadow-2xl text-[12px] outline-none select-none flex flex-col gap-2"
+                className="fixed z-[100] w-[266px] rounded-xl border border-[var(--border)] bg-[var(--surface-1)] backdrop-blur-xl p-3 shadow-2xl text-[12px] outline-none select-none flex flex-col gap-2"
               >
-                {/* Current Workspace Info */}
+                {/* Signed-in account — real identity (currentUsername/
+                    currentUserEmail from App.tsx's actual auth session).
+                    Real bug fix: this used to show a fake multi-account
+                    list where "switching accounts" only flipped a local
+                    flag with no actual session/data change — replaced
+                    with the one real account, plus a real Log out. */}
                 <div className="flex items-center gap-2.5 px-1">
-                  <div className="h-8.5 w-8.5 rounded-lg bg-gradient-to-tr from-[var(--noska-blue)] to-[var(--noska-blue-light)] flex items-center justify-center text-sm font-bold text-white shadow-sm shrink-0">
-                    {workspaceName.charAt(0)}
+                  <div className="h-8.5 w-8.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-sm shadow-inner select-none shrink-0 text-[var(--text)]">
+                    {displayAvatar}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-[var(--text)] truncate leading-none text-[12.5px]">{workspaceName}</div>
-                    <div className="text-[9.5px] text-[var(--text-secondary)] truncate mt-1">Noska Workspace</div>
+                    <div className="font-bold text-[var(--text)] truncate leading-none text-[12.5px]">{displayName}</div>
+                    <div className="text-[9.5px] text-[var(--text-secondary)] truncate mt-1">{displayEmail}</div>
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <button
-                      onClick={() => { setSwitcherOpen(false); onSettings(); }}
-                      className="h-6.5 w-6.5 rounded-md hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)]"
-                      title="Workspace Settings"
-                    >
-                      <AnimatedMenu size={12} />
-                    </button>
-                    <button
-                      onClick={() => { setSwitcherOpen(false); onShare?.(); }}
-                      className="h-6.5 w-6.5 rounded-md hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)]"
-                      title="Invite Members / Share"
-                    >
-                      <Users size={12} />
-                    </button>
-                  </div>
+                  <button
+                    onClick={async () => {
+                      if (await window.noskaConfirm?.("Are you sure you want to log out?")) onLogout?.();
+                      setSwitcherOpen(false);
+                    }}
+                    className="h-6.5 w-6.5 rounded-md hover:bg-[var(--danger)]/10 text-[var(--muted)] hover:text-[var(--danger)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--danger)] shrink-0"
+                    title="Log out"
+                  >
+                    <X size={13} />
+                  </button>
                 </div>
 
                 <div className="h-px bg-[var(--hover)] my-0.5" />
 
-                {/* Rename workspace — the one real, persisted workspace
-                    concept in the app (App.tsx's workspaceName state).
-                    Real bug fix: this used to be a fake "workspace list"
-                    with a client-only array simulating multiple
-                    workspaces that didn't actually exist in the data
-                    model — replaced with a direct rename action on the
-                    single real workspace. */}
-                <div className="flex flex-col space-y-0.5">
+                {/* Workspace — the one real, persisted workspace concept
+                    in the app (App.tsx's workspaceName state /
+                    user_profiles.workspace_name). Real bug fix: this used
+                    to be a fake "workspace list" simulating multiple
+                    workspaces that didn't exist in the data model —
+                    replaced with a direct rename action on the single
+                    real workspace, plus real Settings/Share shortcuts. */}
+                <div className="flex items-center gap-2.5 px-1">
+                  <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-[var(--noska-blue)] to-[var(--noska-blue-light)] flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0">
+                    {workspaceName.charAt(0)}
+                  </div>
                   <button
                     onClick={async () => {
                       const name = await window.noskaPrompt?.("Rename workspace:", workspaceName, "Workspace Name");
                       if (name && name.trim()) setWorkspaceName(name.trim());
-                      setSwitcherOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] text-left transition duration-100 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] text-[11.5px]"
+                    className="flex-1 min-w-0 text-left rounded-md hover:bg-[var(--hover)] px-1 py-0.5 -mx-1 transition cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)]"
+                    title="Rename workspace"
                   >
-                    <AnimatedMenu size={11} className="text-[var(--text-secondary)]" />
-                    <span>Rename workspace</span>
+                    <div className="font-bold text-[var(--text)] truncate leading-none text-[11.5px]">{workspaceName}</div>
+                    <div className="text-[9px] text-[var(--muted)] truncate mt-0.5">Click to rename</div>
                   </button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={() => { setSwitcherOpen(false); onSettings(); }}
+                      className="h-6.5 w-6.5 rounded-md hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)]"
+                      title="Workspace settings"
+                    >
+                      <Settings size={13} />
+                    </button>
+                    <button
+                      onClick={() => { setSwitcherOpen(false); onShare?.(); }}
+                      className="h-6.5 w-6.5 rounded-md hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)]"
+                      title="Invite members / share"
+                    >
+                      <Users size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="h-px bg-[var(--hover)] my-0.5" />
 
-                {/* Signed-in user row — real identity (currentUsername/
-                    currentUserEmail from App.tsx's actual auth session),
-                    single account, single session. Real bug fix: this
-                    used to show a fake multi-account list where "switching
-                    accounts" only flipped a local flag with no actual
-                    session/data change — removed entirely rather than
-                    left as a decorative dead end. */}
-                <div className="flex flex-col space-y-1 px-1 py-0.5">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs shadow-inner select-none pointer-events-none text-[var(--text)]">
-                      {displayAvatar}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-[var(--text)] truncate leading-none text-[11.5px]">{displayName}</div>
-                      <div className="text-[9px] text-[var(--muted)] truncate mt-1">{displayEmail}</div>
-                    </div>
+                {/* Theme — real, previously-dead props (`theme`/
+                    `onThemeChange` were passed into Sidebar but never
+                    read anywhere in the component). Now genuinely wired
+                    to App.tsx's setThemeWithTransition. */}
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[10.5px] font-semibold text-[var(--muted)] uppercase tracking-wider">Theme</span>
+                  <div className="flex items-center gap-0.5 rounded-lg bg-[var(--surface-3)] p-0.5">
+                    {themeOptions.map(({ value, icon: Icon }) => (
+                      <button
+                        key={value}
+                        onClick={() => onThemeChange(value)}
+                        className={`h-6 w-6 grid place-items-center rounded-md transition cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)] ${
+                          theme === value ? "bg-[var(--surface-1)] text-[var(--text)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--text)]"
+                        }`}
+                        title={value.charAt(0).toUpperCase() + value.slice(1)}
+                      >
+                        <Icon size={12} />
+                      </button>
+                    ))}
                   </div>
-                  <button
-                    onClick={async () => {
-                      if (await window.noskaConfirm?.("Are you sure you want to log out?")) {
-                        onLogout?.();
-                      }
-                      setSwitcherOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-[var(--danger)] hover:bg-[var(--danger)]/10 text-left transition duration-100 font-semibold cursor-pointer outline-none focus:ring-1 focus:ring-[var(--danger)] text-[11.5px]"
-                  >
-                    <X size={11} className="text-[var(--danger)] shrink-0" />
-                    <span>Log out</span>
-                  </button>
                 </div>
               </motion.div>,
               document.body
@@ -766,7 +532,6 @@ export default function Sidebar({
               setSwitcherCoords({ bottom: window.innerHeight - r.top + 6, left: r.left });
             }
             setSwitcherOpen(o => !o);
-            setAppMenuOpen(false);
           }}
           className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--hover)] transition text-left"
         >

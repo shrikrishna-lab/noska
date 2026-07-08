@@ -2216,13 +2216,6 @@ function App() {
             theme={theme}
             onThemeChange={setThemeWithTransition}
             appView={appView}
-            onUndo={undo}
-            onRedo={redo}
-            canUndo={history.length > 0}
-            canRedo={future.length > 0}
-            pageMode={pageMode}
-            onPageModeChange={setPageMode}
-            onExport={() => setExportOpen(true)}
             onShare={() => setShareOpen(true)}
             onToast={showToast}
             onLogout={handleLogout}

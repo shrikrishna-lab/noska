@@ -2869,3 +2869,84 @@ simulation. The account switcher no longer pretends to support
 multi-account switching and no longer renders the beam animation. Two real
 identity-sync bugs (logout not resetting identity state, bottom-button
 switcher position bug) were found and fixed as part of this work.
+
+---
+
+## Feature: New account switcher panel + sidebar header "burger" replaced with real hide-sidebar toggle
+
+Per explicit instruction ("create a new account switcher and also that
+burger button to sidebar hide"), redesigned the Sidebar header (`src/
+components/Sidebar.tsx`).
+
+### Header burger button → real sidebar-hide toggle
+The header's second button used to launch a cascading "macOS Desktop
+application menu" (File/Edit/View/History/Window/Help categories, each with
+a submenu, plus full keyboard arrow-key navigation state). Removed
+entirely and replaced with a single button that collapses the sidebar
+(`onToggle`), mirroring the exact icon/action already used by `Topbar.tsx`'s
+"Open sidebar" button for the reverse direction — so collapse/expand is now
+a consistent, discoverable pair reachable from both ends instead of one
+being a real toggle and the other being buried inside a menu category
+("View" → "Toggle Sidebar").
+
+This menu was mostly redundant busywork rather than real missing
+functionality: "New Page"/"Search Workspace"/"Undo"/"Redo" are already real
+global keyboard shortcuts and/or Topbar buttons; "Document/Canvas/Graph
+Mode" and "Toggle AI Panel" duplicate controls already in the Topbar.
+**One real fake action was found and removed in the process**: "Minimize"
+was explicitly self-labelled in its own code as `"Minimized window
+(simulated). Add to home screen for desktop integration."` — a no-op
+placeholder.
+
+Removed the entire supporting apparatus: `AppMenuItem` interface,
+`appMenuOpen`/`activeSubmenu`/`focusedCatIndex`/`focusedSubIndex`/
+`keyboardActive` state, `logoRef`/`appMenuRef`/`logoCoords`, the
+`menuCategories` array and `appMenuItems` record, the keyboard
+arrow-navigation `useEffect`, the mouse/keyboard-hybrid-mode `useEffect`,
+and `handleCategoryHover`.
+
+### Account switcher — full redesign
+Replaced the two-section (workspace-rename-only + signed-in-user-row-only)
+popover from the previous pass with a single, denser real-data panel:
+1. **Account row** — real avatar/name/email (`currentUsername`/
+   `currentUserEmail`), with the Log out action moved inline as an icon
+   button on the same row instead of a separate full-width button below a
+   duplicate copy of the same identity block.
+2. **Workspace row** — the workspace name is now itself a clickable
+   "click to rename" control (was a separate menu item below), with real
+   Settings and Share/Invite shortcuts alongside it.
+3. **Theme row** — new. `theme`/`onThemeChange` were props already being
+   passed into `Sidebar` from `App.tsx` but were **never read anywhere in
+   the component** (confirmed via grep before this change) — a real dead-
+   prop bug. Added a real Light/Dark/System segmented control wired
+   directly to `onThemeChange` (`App.tsx`'s `setThemeWithTransition`).
+
+### Verification
+- `npx tsc --noEmit`: clean (also caught and fixed a real fallout error:
+  `App.tsx`'s `<Sidebar>` call site still passed `onUndo`/`onRedo`/
+  `canUndo`/`canRedo`/`pageMode`/`onPageModeChange`/`onExport`, which no
+  longer exist on `SidebarProps` after removing the app menu that was
+  their only consumer — removed from both the interface and the call
+  site).
+- `npm run build`: succeeded.
+- `npx vitest run`: **140/140 tests pass**.
+- Live browser QA: confirmed the header now shows "Account & workspace" and
+  "Hide sidebar (Ctrl+\)" button titles (previously "Switch Workspace" /
+  "Application Menu"), and clicking "Hide sidebar" correctly collapses the
+  sidebar to ~0px width while the Topbar's "Open sidebar" button correctly
+  reappears — full round-trip collapse/expand confirmed working live.
+- Could not visually confirm the switcher popover's rendered content live
+  (same pre-existing Playwright-automation portal-rendering limitation
+  documented in the previous entry — reproduces identically on unrelated
+  unmodified popovers in this environment) — verified correctness instead
+  via full code review of the redesigned JSX (props wiring, event
+  handlers, conditional rendering) plus the passing type-check/build/test
+  suite.
+
+### Status
+The sidebar header now exposes exactly two real actions (open the account/
+workspace panel, hide the sidebar) instead of one real + one
+menu-of-mostly-duplicated-and-one-fake-action. The account switcher is a
+single coherent real-data panel (identity, workspace, theme) instead of
+two disconnected real-data fragments. No fake multi-account or
+cascading-menu simulation remains anywhere in this component.
