@@ -36,7 +36,7 @@ export default function Navbar() {
         {/* Left Side: Logo & Main Navigation */}
         <div className="navbar-left">
           <Link to="/" className="navbar-logo">
-            <img src="/logo.png" alt="Noska Logo" className="navbar-brand-logo" />
+            <img src="/logo.png?v=2" alt="Noska Logo" className="navbar-brand-logo" />
             <span className="logo-text">Noska</span>
           </Link>
 

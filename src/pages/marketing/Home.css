@@ -1137,43 +1137,98 @@
 /* ---------------------------------------------------------------- */
 /* Preloader                                                         */
 /* ---------------------------------------------------------------- */
-.marketing .mkt-preloader {
+.mkt-preloader-wrapper {
   position: fixed;
   inset: 0;
-  z-index: 2000;
-  background-color: var(--mkt-bg-primary);
+  z-index: 9999;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+.mkt-preloader-bg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.marketing .mkt-preloader-mark {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.marketing .mkt-preloader-logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  object-fit: contain;
-  box-shadow: var(--mkt-card-shadow-hover);
-}
-
-.marketing .mkt-preloader-bar {
-  width: 110px;
-  height: 3px;
-  border-radius: 3px;
-  background-color: var(--mkt-border-color);
   overflow: hidden;
 }
 
-.marketing .mkt-preloader-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  background-color: var(--mkt-text-primary);
+/* Glowing Radial Blobs */
+.mkt-preloader-radial {
+  position: absolute;
+  width: 640px;
+  height: 640px;
+  border-radius: 50%;
+  filter: blur(57px);
+  -webkit-filter: blur(57px);
+  z-index: 1;
+}
+
+.radial-cyan {
+  bottom: -300px;
+  left: -300px;
+  background: radial-gradient(circle, rgb(89, 187, 213) 0%, rgba(89, 187, 213, 0) 70%);
+}
+
+.radial-lime {
+  top: -300px;
+  right: -300px;
+  background: radial-gradient(circle, rgb(206, 255, 113) 0%, rgba(206, 255, 113, 0) 70%);
+}
+
+/* Adjust blobs for mobile viewports */
+@media (max-width: 768px) {
+  .mkt-preloader-radial {
+    width: 520px;
+    height: 520px;
+  }
+  .radial-cyan {
+    bottom: -250px;
+    left: -250px;
+  }
+  .radial-lime {
+    top: -250px;
+    right: -250px;
+  }
+}
+
+/* Content Area */
+.mkt-preloader-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.mkt-preloader-text-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.mkt-preloader-title {
+  font-family: var(--mkt-font-heading);
+  font-size: clamp(48px, 8vw, 120px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: rgb(23, 23, 23);
+  margin: 0;
+  line-height: 1;
+}
+
+.mkt-preloader-slogan-wrapper {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ---------------------------------------------------------------- */

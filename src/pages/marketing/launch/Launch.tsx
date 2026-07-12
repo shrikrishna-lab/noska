@@ -3,7 +3,7 @@ import Lenis from 'lenis';
 import { motion } from 'framer-motion';
 import { Sparkles, PlayCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 
-import { Preloader } from './components/Preloader';
+import { Preloader } from '../components/Preloader';
 import { LaunchNavbar } from './components/LaunchNavbar';
 import { LiquidBackground } from './components/LiquidBackground';
 import { ShinyText } from './components/ShinyText';
@@ -84,7 +84,7 @@ export default function Launch() {
 
   return (
     <div className="noska-launch" id="nl-top">
-      <Preloader />
+      <Preloader persistKey={null} />
       <LaunchNavbar />
 
       {/* Hero */}
