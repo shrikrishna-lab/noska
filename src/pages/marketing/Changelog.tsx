@@ -14,7 +14,7 @@ const ENTRIES = [
     date: 'Latest',
     tag: 'Security',
     title: 'Owner-scoped row-level security across every table',
-    desc: 'Every Postgres table now enforces access scoped to the authenticated user via Supabase Auth — replacing the previous open policy. Writes require a real session; there is no anonymous data path.',
+    desc: 'Authentication now runs entirely through Clerk on a headless layer — Supabase remains the source of truth for application data, with a webhook keeping user_profiles in sync on user.created / updated / deleted.',
   },
   {
     date: 'Recent',

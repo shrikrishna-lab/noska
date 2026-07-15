@@ -48,6 +48,7 @@ const TYPEWRITER_WORDS = [
 export default function Launch() {
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const scratchSectionRef = useRef(null);
 
   useEffect(() => {
@@ -67,14 +68,18 @@ export default function Launch() {
     return () => lenis.destroy();
   }, []);
 
-  const handleWaitlistSubmit = (e) => {
+  const handleWaitlistSubmit = async (e) => {
     e.preventDefault();
     if (!waitlistEmail.trim()) return;
+    setWaitlistSubmitting(true);
     try {
-      const existing = JSON.parse(localStorage.getItem('noska_launch_waitlist') || '[]');
-      existing.push({ email: waitlistEmail.trim(), joinedAt: new Date().toISOString() });
-      localStorage.setItem('noska_launch_waitlist', JSON.stringify(existing));
+      await fetch('https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/waitlist-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: waitlistEmail.trim() }),
+      });
     } catch {}
+    setWaitlistSubmitting(false);
     setWaitlistSubmitted(true);
   };
 
@@ -180,8 +185,8 @@ export default function Launch() {
                   onChange={(e) => setWaitlistEmail(e.target.value)}
                   aria-label="Email address"
                 />
-                <button type="submit" className="nl-btn nl-btn-primary">
-                  Join Waitlist <ArrowRight size={16} />
+                <button type="submit" className="nl-btn nl-btn-primary" disabled={waitlistSubmitting}>
+                  {waitlistSubmitting ? 'Joining...' : <>Join Waitlist <ArrowRight size={16} /></>}
                 </button>
               </form>
             )}

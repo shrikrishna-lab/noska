@@ -185,7 +185,7 @@ export default function Enterprise() {
                 <h3>Owner-scoped data access, by default.</h3>
                 <p>Every table is protected by Postgres row-level security scoped to the authenticated user — not a shared "allow all" policy. Locked pages are encrypted client-side with AES-GCM before anything is stored.</p>
                 <ul className="bullet-checklist">
-                  <li><CheckCircle size={16} className="check-icon" /> Google / GitHub OAuth via Supabase Auth</li>
+                  <li><CheckCircle size={16} className="check-icon" /> Google / GitHub OAuth via Clerk</li>
                   <li><CheckCircle size={16} className="check-icon" /> Row-level security on every table</li>
                   <li><CheckCircle size={16} className="check-icon" /> SAML SSO — on the roadmap, not yet shipped</li>
                 </ul>

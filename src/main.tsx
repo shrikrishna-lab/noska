@@ -1,3 +1,4 @@
+import { ClerkProvider, AuthenticateWithRedirectCallback } from "@clerk/react";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -16,28 +17,33 @@ import "./index.css";
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <Routes>
-        {/* Public marketing site — never runs the auth/session bootstrap.
-            Each page shares the Navbar/Footer via MarketingLayout. */}
-        <Route path="/" element={<MarketingLayout><MarketingHome /></MarketingLayout>} />
-        <Route path="/pricing" element={<MarketingLayout><MarketingPricing /></MarketingLayout>} />
-        <Route path="/enterprise" element={<MarketingLayout><MarketingEnterprise /></MarketingLayout>} />
-        <Route path="/product" element={<MarketingLayout><MarketingProduct /></MarketingLayout>} />
-        <Route path="/solutions" element={<MarketingLayout><MarketingSolutions /></MarketingLayout>} />
-        <Route path="/resources" element={<MarketingLayout><MarketingResources /></MarketingLayout>} />
-        <Route path="/changelog" element={<MarketingLayout><MarketingChangelog /></MarketingLayout>} />
-        {/* Standalone pre-launch waitlist page — ships its own navbar,
-            footer, and smooth-scroll setup, so it deliberately skips
-            MarketingLayout (which would double up both). */}
-        <Route path="/launch" element={<Launch />} />
-        {/* Everything else (login, onboarding, and the workspace itself) is
-            handled by App, which reads the current route to decide what to
-            show and keeps the URL in sync as auth/onboarding state resolves. */}
-        <Route path="/login" element={<App />} />
-        <Route path="/onboarding" element={<App />} />
-        <Route path="/:workspaceSlug" element={<App />} />
-        <Route path="/:workspaceSlug/:pageId" element={<App />} />
-      </Routes>
+      <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/login">
+        <Routes>
+          {/* Public marketing site — never runs the auth/session bootstrap.
+              Each page shares the Navbar/Footer via MarketingLayout. */}
+          <Route path="/" element={<MarketingLayout><MarketingHome /></MarketingLayout>} />
+          <Route path="/pricing" element={<MarketingLayout><MarketingPricing /></MarketingLayout>} />
+          <Route path="/enterprise" element={<MarketingLayout><MarketingEnterprise /></MarketingLayout>} />
+          <Route path="/product" element={<MarketingLayout><MarketingProduct /></MarketingLayout>} />
+          <Route path="/solutions" element={<MarketingLayout><MarketingSolutions /></MarketingLayout>} />
+          <Route path="/resources" element={<MarketingLayout><MarketingResources /></MarketingLayout>} />
+          <Route path="/changelog" element={<MarketingLayout><MarketingChangelog /></MarketingLayout>} />
+          {/* Standalone pre-launch waitlist page — ships its own navbar,
+              footer, and smooth-scroll setup, so it deliberately skips
+              MarketingLayout (which would double up both). */}
+          <Route path="/launch" element={<Launch />} />
+          {/* SSO callback handler — Clerk processes the OAuth redirect here,
+              then redirects to /login where App reads the auth state. */}
+          <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback signInForceRedirectUrl="/login" />} />
+          {/* Everything else (login, onboarding, and the workspace itself) is
+              handled by App, which reads the current route to decide what to
+              show and keeps the URL in sync as auth/onboarding state resolves. */}
+          <Route path="/login" element={<App />} />
+          <Route path="/onboarding" element={<App />} />
+          <Route path="/:workspaceSlug" element={<App />} />
+          <Route path="/:workspaceSlug/:pageId" element={<App />} />
+        </Routes>
+      </ClerkProvider>
     </BrowserRouter>
   </React.StrictMode>
 );
