@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useUsers, useBanUser, useHardBanUser, useDeleteUserData, type AdminUserRow } from "@/lib/queries";
+import { useUsers, useBanUser, useHardBanUser, useDeleteUserData, useRealtimeInvalidate, type AdminUserRow } from "@/lib/queries";
 import { formatRelativeTime, initialsFromName } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -120,6 +120,8 @@ export function Users() {
   const [banTarget, setBanTarget] = useState<AdminUserRow | null>(null);
   const canBan = user ? hasRole(user, "admin") : false;
 
+  useRealtimeInvalidate(["admin", "users"], "user_profiles");
+
   const actionColumn: Column<AdminUserRow> = {
     key: "actions", label: "", className: "text-right w-[120px]",
     render: (row) => canBan ? (
@@ -131,7 +133,7 @@ export function Users() {
     ) : null,
   };
 
-  if (isLoading) return <div className="p-6"><PageHeader title="Users" description="Manage all platform users" /><LoadingState count={6} /></div>;
+  if (isLoading) return <div className="p-6"><PageHeader title="Users" description="Manage all platform users — updates in real time" /><LoadingState count={6} /></div>;
 
   return (
     <div className="p-6">
