@@ -8,3 +8,29 @@ test-ui.mjs
 
 # MCP config may contain personal access tokens — never commit
 .kiro/settings/mcp.json
+
+# Playwright browser artifacts
+.playwright-mcp/
+
+# Playwright accessibility snapshot exports
+admin-dashboard
+admin-email-campaigns
+admin-login
+admin-login-full
+admin-login-ui
+admin-models-boxes
+admin-models-page
+admin-models-rendered
+admin-models-view.png
+admin-settings-page
+admin-subs-boxes
+admin-users-page
+
+# AI session logs
+.agents/session-*.md
+
+# Playwright error logs
+admin/playwright-errors.log
+
+# Freebuff artifact
+.freebuff/

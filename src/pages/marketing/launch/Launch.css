@@ -183,47 +183,7 @@
   line-height: 1.6;
 }
 
-/* ============================================================
-   Preloader
-   ============================================================ */
-.noska-launch .nl-preloader {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background-color: var(--nl-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
-.noska-launch .nl-preloader-mark {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-}
-
-.noska-launch .nl-preloader-logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  object-fit: contain;
-  box-shadow: var(--nl-shadow-md);
-}
-
-.noska-launch .nl-preloader-bar {
-  width: 120px;
-  height: 3px;
-  border-radius: 3px;
-  background-color: var(--nl-border);
-  overflow: hidden;
-}
-
-.noska-launch .nl-preloader-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--nl-accent), var(--nl-accent-ink));
-}
 
 /* ============================================================
    Navbar

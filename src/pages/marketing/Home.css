@@ -215,113 +215,6 @@
   margin: -20px;
 }
 
-.marketing .hero-scene-float {
-  position: absolute;
-  border-radius: var(--mkt-radius-md);
-  background-color: var(--mkt-bg-primary);
-  border: 1px solid var(--mkt-border-color);
-  box-shadow: var(--mkt-card-shadow-hover);
-  padding: 14px 16px;
-}
-
-.marketing .hero-scene-palette {
-  top: 2%;
-  right: 0%;
-  width: 62%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.marketing .hs-palette-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--mkt-text-primary);
-  font-weight: 600;
-}
-
-.marketing .hs-palette-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  color: var(--mkt-accent-purple);
-  background-color: var(--mkt-accent-purple-tint);
-  padding: 6px 9px;
-  border-radius: 7px;
-  width: max-content;
-}
-
-.marketing .hero-scene-graph {
-  bottom: 4%;
-  left: 4%;
-  width: 54%;
-}
-
-.marketing .hs-graph-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--mkt-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 12px;
-}
-
-.marketing .hs-graph-nodes {
-  position: relative;
-  height: 56px;
-}
-
-.marketing .hs-node {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.marketing .hs-node.n1 {
-  top: 4px;
-  left: 6px;
-  background-color: var(--mkt-accent-blue);
-}
-
-.marketing .hs-node.n2 {
-  top: 30px;
-  left: 46px;
-  background-color: var(--mkt-accent-sage);
-}
-
-.marketing .hs-node.n3 {
-  top: 8px;
-  left: 86px;
-  background-color: var(--mkt-accent-orange);
-}
-
-.marketing .hs-edge {
-  position: absolute;
-  height: 1px;
-  background-color: var(--mkt-border-strong);
-}
-
-.marketing .hs-edge.e1 {
-  top: 12px;
-  left: 14px;
-  width: 40px;
-  transform: rotate(24deg);
-}
-
-.marketing .hs-edge.e2 {
-  top: 18px;
-  left: 54px;
-  width: 42px;
-  transform: rotate(-20deg);
-}
-
 /* ---------------------------------------------------------------- */
 /* 2. Real-stats strip                                               */
 /* ---------------------------------------------------------------- */
@@ -1244,43 +1137,98 @@
 /* ---------------------------------------------------------------- */
 /* Preloader                                                         */
 /* ---------------------------------------------------------------- */
-.marketing .mkt-preloader {
+.mkt-preloader-wrapper {
   position: fixed;
   inset: 0;
-  z-index: 2000;
-  background-color: var(--mkt-bg-primary);
+  z-index: 9999;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+.mkt-preloader-bg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.marketing .mkt-preloader-mark {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.marketing .mkt-preloader-logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  object-fit: contain;
-  box-shadow: var(--mkt-card-shadow-hover);
-}
-
-.marketing .mkt-preloader-bar {
-  width: 110px;
-  height: 3px;
-  border-radius: 3px;
-  background-color: var(--mkt-border-color);
   overflow: hidden;
 }
 
-.marketing .mkt-preloader-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  background-color: var(--mkt-text-primary);
+/* Glowing Radial Blobs */
+.mkt-preloader-radial {
+  position: absolute;
+  width: 640px;
+  height: 640px;
+  border-radius: 50%;
+  filter: blur(57px);
+  -webkit-filter: blur(57px);
+  z-index: 1;
+}
+
+.radial-cyan {
+  bottom: -300px;
+  left: -300px;
+  background: radial-gradient(circle, rgb(89, 187, 213) 0%, rgba(89, 187, 213, 0) 70%);
+}
+
+.radial-lime {
+  top: -300px;
+  right: -300px;
+  background: radial-gradient(circle, rgb(206, 255, 113) 0%, rgba(206, 255, 113, 0) 70%);
+}
+
+/* Adjust blobs for mobile viewports */
+@media (max-width: 768px) {
+  .mkt-preloader-radial {
+    width: 520px;
+    height: 520px;
+  }
+  .radial-cyan {
+    bottom: -250px;
+    left: -250px;
+  }
+  .radial-lime {
+    top: -250px;
+    right: -250px;
+  }
+}
+
+/* Content Area */
+.mkt-preloader-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.mkt-preloader-text-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.mkt-preloader-title {
+  font-family: var(--mkt-font-heading);
+  font-size: clamp(48px, 8vw, 120px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: rgb(23, 23, 23);
+  margin: 0;
+  line-height: 1;
+}
+
+.mkt-preloader-slogan-wrapper {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ---------------------------------------------------------------- */

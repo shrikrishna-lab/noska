@@ -1,0 +1,54 @@
+{
+  "compilerOptions": {
+    /* Bundler / module resolution — matches Vite's own handling so tsc
+       type-checks the same way Vite resolves imports at build time. */
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+
+    /* React (new JSX transform, no need to import React in scope) */
+    "jsx": "react-jsx",
+
+    /* Allow this config to type-check the existing .js/.jsx files that
+       haven't been migrated yet, so tsc can run project-wide from day one
+       instead of only covering the handful of files already converted. */
+    "allowJs": true,
+    "checkJs": false,
+
+    /* Strictness — intentionally OFF for this initial migration pass so
+       the large existing codebase doesn't block on day one. Tighten
+       incrementally per-file/per-folder once the bulk of the migration
+       has landed (e.g. flip "strict": true and fix the fallout in a
+       dedicated follow-up pass). */
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+
+    /* Keep these hygiene checks on regardless of strict mode — cheap to
+       satisfy and catch real bugs (unreachable code, unused catch vars
+       are still allowed since JS code often ignores caught errors). */
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Vite/esbuild transpiles each file in isolation and does the actual
+       bundling — tsc here is used for type-checking only, not emitting. */
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    /* Mirrors the "@" -> "./src" alias configured in vite.config.js so
+       imports resolve identically for tsc and for the Vite dev/build. */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "types", "vite.config.js"],
+  "exclude": ["node_modules", "dist", "graphify-out", "Noska Onboarding", "supabase"]
+}
