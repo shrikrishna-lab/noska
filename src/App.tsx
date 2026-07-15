@@ -35,6 +35,7 @@ import { aiManager } from "./ai/AIManager";
 import { initializeMemory } from "./ai/memory";
 import { realtimeCollab } from "./lib/realtimeCollab";
 import { auditEngine } from "./lib/auditEngine";
+import { useAuth, useUser, useClerk } from "@clerk/react";
 import { supabase } from "./lib/supabase";
 import { TEST_MODE } from "./lib/envGuard";
 
@@ -190,6 +191,11 @@ function App() {
     resolve: ((value: string | boolean | null) => void) | null;
   }
   const [dialogState, setDialogState] = useState<DialogState>({ open: false, type: "prompt", title: "", placeholder: "", defaultValue: "", resolve: null });
+
+  // Clerk auth hooks — replaces Supabase auth session management
+  const { isLoaded: clerkLoaded, isSignedIn } = useAuth();
+  const { user: clerkUser } = useUser();
+  const clerk = useClerk();
 
   useEffect(() => {
     window.noskaPrompt = (title: string, defaultValue = "", placeholder = "") => {
@@ -420,11 +426,12 @@ function App() {
         return;
       }
 
-      // 1. Check session FIRST — determines user isolation
-      const { data: { session } } = await supabase.auth.getSession();
+      // 1. Check session FIRST — determines user isolation (Clerk replaces Supabase auth)
+      if (hydrated.current) return;
+      if (!clerkLoaded) return;
       if (!mounted) return;
 
-      const userId = session?.user?.id || null;
+      const userId = isSignedIn && clerkUser ? clerkUser.id : null;
 
       // 2. Fetch data from Supabase (filtered by user_id if logged in)
       try {
@@ -575,12 +582,13 @@ function App() {
       }
 
       // 4. Authenticated user: use fetched data (already filtered by user_id)
-      const u = session.user;
-      const uname = u.user_metadata?.full_name || u.email?.split('@')[0] || 'Workspace User';
-      realtimeCollab.initUser(u.id, uname, u.user_metadata?.avatar_url || u.user_metadata?.picture || '👤');
+      const u = clerkUser;
+      if (!u) { setAppFlowState("auth"); return; }
+      const uname = u.fullName || u.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Workspace User';
+      realtimeCollab.initUser(u.id, uname, u.imageUrl || '👤');
       setWorkspaceName(prev => prev === 'My Workspace' ? `${uname}'s Workspace` : prev);
       setCurrentUserId(u.id);
-      setCurrentUserEmail(u.email || null);
+      setCurrentUserEmail(u.primaryEmailAddress?.emailAddress || null);
       loadCollabData(u.id);
 
       try {
@@ -647,7 +655,7 @@ function App() {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [clerkLoaded]);
 
   interface AuthUserData {
     userId: string;
@@ -838,7 +846,7 @@ function App() {
   // Logout handler — clears cache, resets state, redirects to auth
   const handleLogout = useCallback(async () => {
     try {
-      await supabase.auth.signOut();
+      await clerk.signOut();
     } catch {}
     // Clear all user-data localStorage keys
     const keysToClear = [
@@ -881,7 +889,7 @@ function App() {
     realtimeCollab.leaveWorkspace();
     setAppFlowState("auth");
     setToast("Logged out. See you next time.");
-  }, []);
+  }, [clerk]);
 
   useEffect(() => {
     if (!hydrated.current) return;

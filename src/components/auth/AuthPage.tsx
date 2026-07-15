@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
-import { supabase } from "../../lib/supabase";
+import { useSignIn } from "@clerk/react";
 import AuthBackground from "./AuthBackground";
 import AuthProviders from "./AuthProviders";
 import AuthError from "./AuthError";
@@ -29,55 +29,27 @@ const containerVariants: Variants = {
   }
 };
 
-interface AuthSuccessData {
-  userId: string;
-  userName?: string;
-  email?: string;
-  avatarUrl?: string | null;
-}
-
 interface AuthPageProps {
-  onAuthSuccess: (data: AuthSuccessData) => void;
+  onAuthSuccess?: (data: never) => void;
 }
 
-export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
+export default function AuthPage(_props: AuthPageProps) {
+  const { signIn } = useSignIn();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        const user = session.user;
-        onAuthSuccess({
-          userId: user.id,
-          userName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Workspace User',
-          email: user.email,
-          avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || null
-        });
-      }
-      if (event === 'SIGNED_OUT') {
-        setIsConnecting(false);
-        setLoadingProvider(null);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [onAuthSuccess]);
 
   const handleProviderClick = async (provider: "github" | "google") => {
     setError(null);
     setLoadingProvider(provider);
     setIsConnecting(true);
     try {
-      const { error: signInError } = await supabase.auth.signInWithOAuth({
-        // Must land back on a route that mounts App (which imports the
-        // Supabase client and runs detectSessionInUrl) — "/" is now the
-        // public marketing LandingPage and never touches Supabase, so the
-        // OAuth callback tokens would otherwise be stranded in the URL.
-        provider,
-        options: { redirectTo: `${window.location.origin}/login` }
+      const strategy = provider === "github" ? "oauth_github" : "oauth_google";
+      await signIn.sso({
+        strategy,
+        redirectUrl: `${window.location.origin}/sso-callback`,
+        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
       });
-      if (signInError) throw signInError;
     } catch (e) {
       setError((e as Error).message || "Failed to sign in. Please try again.");
       setLoadingProvider(null);
