@@ -111,7 +111,7 @@ class AuditEngine {
     const batch = this.pending.splice(0, this.pending.length);
     if (batch.length === 0) return;
     try {
-      const { error } = await supabase.from("audit_events").insert(batch);
+      const { error } = await supabase.rpc("batch_insert_audit_events", { p_events: batch as never });
       if (error) console.warn("Audit flush error:", error);
     } catch (e) {
       console.warn("Audit flush failed:", e);
@@ -120,23 +120,21 @@ class AuditEngine {
 
   async getPageAudit(pageId: string, options: AuditQueryOptions = {}): Promise<Tables<"audit_events">[]> {
     const cacheKey = `page:${pageId}`;
-    let query = supabase.from("audit_events").select("*").eq("page_id", pageId).order("created_at", { ascending: false });
-
-    if (options.limit) query = query.limit(options.limit);
-    if (options.offset) query = query.range(options.offset, options.offset + (options.limit || 50) - 1);
-    if (options.action) query = query.eq("action", options.action);
-    if (options.userId) query = query.eq("user_id", options.userId);
-    if (options.since) query = query.gte("created_at", options.since);
-    if (options.blockId) query = query.eq("block_id", options.blockId);
-    if (options.search) {
-      query = query.or(`detail.ilike.%${options.search}%,content_after->>text.ilike.%${options.search}%`);
-    }
-
     try {
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc("get_page_audit_events", {
+        p_page_id: pageId,
+        p_block_id: options.blockId || null,
+        p_action: options.action || null,
+        p_user_id: options.userId || null,
+        p_since: options.since || null,
+        p_search: options.search || null,
+        p_limit: options.limit || 50,
+        p_offset: options.offset || 0,
+      });
       if (error) throw error;
-      this.cache.set(cacheKey, data || []);
-      return data || [];
+      const events = (data as unknown as Tables<"audit_events">[]) || [];
+      this.cache.set(cacheKey, events);
+      return events;
     } catch (e) {
       console.warn("Audit query failed:", e);
       return this.cache.get(cacheKey) || [];
@@ -145,14 +143,8 @@ class AuditEngine {
 
   async getAIEvents(pageId: string, limit = 50): Promise<Tables<"audit_events">[]> {
     try {
-      const { data } = await supabase
-        .from("audit_events")
-        .select("*")
-        .eq("page_id", pageId)
-        .or("action.eq.ai_generated,action.eq.ai_edit")
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      return data || [];
+      const { data } = await supabase.rpc("get_ai_audit_events", { p_page_id: pageId, p_limit: limit });
+      return (data as unknown as Tables<"audit_events">[]) || [];
     } catch (e) {
       console.warn("auditEngine: getAIEvents failed", e);
       return [];
@@ -161,13 +153,12 @@ class AuditEngine {
 
   async getBlockHistory(blockId: string, limit = 20): Promise<Tables<"audit_events">[]> {
     try {
-      const { data } = await supabase
-        .from("audit_events")
-        .select("*")
-        .eq("block_id", blockId)
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      return data || [];
+      const { data } = await supabase.rpc("get_page_audit_events", {
+        p_page_id: null as never,
+        p_block_id: blockId,
+        p_limit: limit,
+      });
+      return (data as unknown as Tables<"audit_events">[]) || [];
     } catch (e) {
       console.warn("auditEngine: getBlockHistory failed", e);
       return [];
@@ -176,22 +167,17 @@ class AuditEngine {
 
   async getAuditSummary(pageId: string): Promise<AuditSummary> {
     try {
-      const { data, error } = await supabase
-        .from("audit_events")
-        .select("action, created_at, user_id", { count: "exact", head: false })
-        .eq("page_id", pageId);
+      const { data, error } = await supabase.rpc("get_audit_summary", { p_page_id: pageId });
       if (error) throw error;
-      const events = data || [];
-      const last24h = events.filter((e) => Date.now() - new Date(e.created_at as string).getTime() < 86400000).length;
-      const byAction: Record<string, number> = {};
-      const byUser: Record<string, number> = {};
-      let aiCount = 0;
-      for (const e of events) {
-        byAction[e.action] = (byAction[e.action] || 0) + 1;
-        byUser[e.user_id] = (byUser[e.user_id] || 0) + 1;
-        if (e.action.startsWith("ai_")) aiCount++;
-      }
-      return { total: events.length, byAction, byUser, aiCount, last24h };
+      const summary = data as unknown as Record<string, unknown> | null;
+      if (!summary) return { total: 0, byAction: {}, byUser: {}, aiCount: 0, last24h: 0 };
+      return {
+        total: (summary.total as number) || 0,
+        byAction: (summary.byAction as Record<string, number>) || {},
+        byUser: {},
+        aiCount: (summary.aiCount as number) || 0,
+        last24h: (summary.last24h as number) || 0,
+      };
     } catch (e) {
       console.warn("auditEngine: getAuditSummary failed", e);
       return { total: 0, byAction: {}, byUser: {}, aiCount: 0, last24h: 0 };
@@ -200,7 +186,8 @@ class AuditEngine {
 
   async restoreBlock(_blockId: string, targetEventId: string): Promise<unknown | null> {
     try {
-      const { data: event } = await supabase.from("audit_events").select("*").eq("id", targetEventId).single();
+      const { data } = await supabase.rpc("get_audit_event", { p_event_id: targetEventId });
+      const event = data as unknown as Tables<"audit_events"> | null;
       if (!event || !event.content_after) return null;
       return event.content_after;
     } catch (e) {

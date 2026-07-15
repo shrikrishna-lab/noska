@@ -940,6 +940,11 @@ export type Database = {
       clean_stale_sessions: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      batch_insert_audit_events: { Args: { p_events: Json }; Returns: number }
+      get_page_audit_events: { Args: { p_page_id: string; p_block_id?: string; p_action?: string; p_user_id?: string; p_since?: string; p_search?: string; p_limit?: number; p_offset?: number }; Returns: Json }
+      get_ai_audit_events: { Args: { p_page_id: string; p_limit?: number }; Returns: Json }
+      get_audit_summary: { Args: { p_page_id: string }; Returns: Json }
+      get_audit_event: { Args: { p_event_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
