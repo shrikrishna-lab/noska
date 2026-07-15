@@ -111,6 +111,45 @@ Deno.serve(async (req: Request) => {
       break
     }
 
+    case "waitlistEntry.created": {
+      const entryEmail = data.email as string | undefined
+      if (entryEmail) {
+        const { error } = await supabase
+          .from("waitlist_entries")
+          .upsert({
+            name: entryEmail.split("@")[0],
+            email: entryEmail,
+            provider: "clerk",
+            status: "waiting",
+            joined_at: new Date().toISOString(),
+            referral_count: 0,
+            invite_sent: false,
+            accepted: false,
+          }, { onConflict: "email" })
+
+        if (error) {
+          console.error("Error upserting waitlist entry:", error)
+        }
+      }
+      break
+    }
+
+    case "waitlistEntry.updated": {
+      const updatedEmail = data.email as string | undefined
+      const updatedStatus = data.status as string | undefined
+      if (updatedEmail && updatedStatus) {
+        const { error } = await supabase
+          .from("waitlist_entries")
+          .update({ status: updatedStatus })
+          .eq("email", updatedEmail)
+
+        if (error) {
+          console.error("Error updating waitlist entry:", error)
+        }
+      }
+      break
+    }
+
     default:
       console.log(`Unhandled webhook event type: ${eventType}`)
   }
