@@ -32,7 +32,7 @@ const GUIDES = [
   {
     icon: LifeBuoy,
     title: 'Security & encryption practices',
-    desc: 'How row-level security, Supabase Auth, and client-side AES-GCM encryption fit together to protect your workspace.',
+    desc: 'How row-level security, Clerk-managed authentication, and client-side AES-GCM encryption fit together to protect your workspace.',
   },
 ];
 
