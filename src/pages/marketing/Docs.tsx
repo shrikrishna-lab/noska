@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, BookOpen, ChevronRight, Terminal, Shield, Users, Key, Database, Brain, Layout, Share2, Keyboard, FileText, HelpCircle, Github, ExternalLink, Menu, X } from 'lucide-react';
 import './Docs.css';
@@ -698,6 +699,37 @@ GET    /api/v1/search?q=          Search workspace
   },
 };
 
+function parseInlineMarkdown(text: string): React.ReactNode[] {
+  const regex = /(\*\*.*?\*\*|`.*?`|\[.*?\]\(.*?\))/g;
+  const parts = text.split(regex);
+  
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={index} className="docs-inline-code">{part.slice(1, -1)}</code>;
+    }
+    if (part.startsWith('[') && part.includes('](')) {
+      const match = part.match(/\[(.*?)\]\((.*?)\)/);
+      if (match) {
+        const [, label, url] = match;
+        const isExternal = url.startsWith('http') || url.startsWith('//');
+        if (isExternal) {
+          return (
+            <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="docs-link">
+              {label} <ExternalLink size={10} style={{ display: 'inline', marginLeft: 2 }} />
+            </a>
+          );
+        } else {
+          return <Link key={index} to={url} className="docs-link">{label}</Link>;
+        }
+      }
+    }
+    return part;
+  });
+}
+
 export default function Docs() {
   const [search, setSearch] = useState('');
   const [activeSection, setActiveSection] = useState('introduction');
@@ -762,7 +794,7 @@ export default function Docs() {
       )}
 
       <div className="docs-body mkt-container">
-        <aside className={`docs-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <aside className={`docs-sidebar ${sidebarOpen ? 'open' : ''}`} data-lenis-prevent>
           {sidebarOpen && <div className="docs-sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
           <nav className="docs-nav">
             {sections.map((section) => {
@@ -812,32 +844,32 @@ export default function Docs() {
                   );
                 }
                 if (line.startsWith('### ')) {
-                  return <h3 key={i} className="docs-h3">{line.slice(4)}</h3>;
+                  return <h3 key={i} className="docs-h3">{parseInlineMarkdown(line.slice(4))}</h3>;
                 }
                 if (line.startsWith('## ')) {
-                  return <h2 key={i} className="docs-h2">{line.slice(3)}</h2>;
+                  return <h2 key={i} className="docs-h2">{parseInlineMarkdown(line.slice(3))}</h2>;
                 }
                 if (line.startsWith('**') && line.endsWith('**')) {
-                  return <p key={i} className="docs-strong-line">{line.slice(2, -2)}</p>;
+                  return <p key={i} className="docs-strong-line">{parseInlineMarkdown(line.slice(2, -2))}</p>;
                 }
                 if (line.startsWith('- ')) {
-                  return <li key={i} className="docs-li">{line.slice(2)}</li>;
+                  return <li key={i} className="docs-li">{parseInlineMarkdown(line.slice(2))}</li>;
                 }
                 if (line.startsWith('| ')) {
                   const cells = line.split('|').filter(Boolean).map(c => c.trim());
                   if (cells.every(c => /^[-]+$/.test(c))) return null;
                   if (i > 0 && lines[i - 1]?.startsWith('| ')) {
-                    return <tr key={i}>{cells.map((c, ci) => <td key={ci}>{c}</td>)}</tr>;
+                    return <tr key={i}>{cells.map((c, ci) => <td key={ci}>{parseInlineMarkdown(c)}</td>)}</tr>;
                   }
                   return (
                     <table key={i} className="docs-table">
-                      <thead><tr>{cells.map((c, ci) => <th key={ci}>{c}</th>)}</tr></thead>
+                      <thead><tr>{cells.map((c, ci) => <th key={ci}>{parseInlineMarkdown(c)}</th>)}</tr></thead>
                       <tbody></tbody>
                     </table>
                   );
                 }
                 if (line.trim() === '') return null;
-                return <p key={i} className="docs-p">{line}</p>;
+                return <p key={i} className="docs-p">{parseInlineMarkdown(line)}</p>;
               })}
             </div>
           </motion.div>
