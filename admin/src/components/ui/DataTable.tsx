@@ -28,7 +28,7 @@ interface DataTableProps<T> {
   filter?: (row: T) => boolean;
 }
 
-export function DataTable<T extends Record<string, unknown>>({
+export function DataTable<T>({
   columns, data, searchable = true, searchPlaceholder = "Search...",
   pageSize = 10, pageSizeOptions = [10, 25, 50, 100],
   onRowClick, actions, filter,
@@ -45,7 +45,7 @@ export function DataTable<T extends Record<string, unknown>>({
       const q = search.toLowerCase();
       result = result.filter((row) =>
         columns.some((col) => {
-          const val = row[col.key];
+          const val = (row as any)[col.key];
           return val != null && String(val).toLowerCase().includes(q);
         })
       );
@@ -57,8 +57,8 @@ export function DataTable<T extends Record<string, unknown>>({
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
     return [...filtered].sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
+      const aVal = (a as any)[sortKey];
+      const bVal = (b as any)[sortKey];
       if (aVal == null) return 1;
       if (bVal == null) return -1;
       const cmp = typeof aVal === "number" ? aVal - (bVal as number) : String(aVal).localeCompare(String(bVal));
@@ -95,7 +95,7 @@ export function DataTable<T extends Record<string, unknown>>({
         )}
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      <div className="overflow-hidden rounded-xl border">
+      <div className="relative isolate overflow-hidden rounded-xl border">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -133,7 +133,7 @@ export function DataTable<T extends Record<string, unknown>>({
               )}
               {paged.map((row, i) => (
                 <tr
-                  key={(row.id as string) || i}
+                  key={((row as any).id as string) || i}
                   className={cn(
                     "transition-colors hover:bg-muted/30",
                     onRowClick && "cursor-pointer"
@@ -149,7 +149,7 @@ export function DataTable<T extends Record<string, unknown>>({
                         col.hideOnMobile && "hidden md:table-cell"
                       )}
                     >
-                      {col.render ? col.render(row) : String(row[col.key] ?? "")}
+                      {col.render ? col.render(row) : String((row as any)[col.key] ?? "")}
                     </td>
                   ))}
                 </tr>

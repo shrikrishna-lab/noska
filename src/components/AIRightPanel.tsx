@@ -16,6 +16,7 @@ import { getAgentList, getAgent } from "../ai/agents";
 import { uid, now } from "../utils/helpers";
 import { getAllRelations } from "../utils/pageLinks";
 import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
+import { capture } from "../lib/posthog";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 
@@ -235,6 +236,8 @@ export default function AIRightPanel({
     setMessages(updatedMessages);
     setPrompt("");
     setLoading(true);
+
+    capture("ai_generation", { model: aiProvider, provider: aiProvider });
 
     setTokenEstimate(prev => prev + Math.ceil(text.length / 4));
 

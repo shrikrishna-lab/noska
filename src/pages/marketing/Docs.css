@@ -310,6 +310,35 @@
   white-space: pre;
 }
 
+.docs-inline-code {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  padding: 1.5px 6px;
+  border-radius: 5px;
+  font-size: 0.85em;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  color: #a78bfa;
+  white-space: nowrap;
+}
+
+.docs-link {
+  color: #a78bfa;
+  text-decoration: underline;
+  text-decoration-color: rgba(167, 139, 250, 0.3);
+  text-underline-offset: 2px;
+  transition: text-decoration-color 0.2s ease, color 0.2s ease;
+}
+
+.docs-link:hover {
+  color: #c4b5fd;
+  text-decoration-color: #c4b5fd;
+}
+
+.docs-content-body strong {
+  color: var(--mkt-text-primary);
+  font-weight: 600;
+}
+
 .docs-footer-nav {
   display: flex;
   gap: 16px;

@@ -84,7 +84,7 @@ export default function Changelog() {
                       exit={{ height: 0 }}
                       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                     >
-                      <p>{entry.description}</p>
+                      <p>{entry.description?.replace(/\\n/g, '\n')}</p>
                     </motion.div>
                   )}
                 </AnimatePresence>

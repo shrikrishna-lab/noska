@@ -30,7 +30,7 @@ export function Shell() {
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((p) => !p)} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setMobileOpen(true)} onSearchOpen={() => setSearchOpen(true)} />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto isolate">
           <Outlet />
         </main>
       </div>

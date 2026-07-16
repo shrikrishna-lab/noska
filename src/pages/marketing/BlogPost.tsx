@@ -90,7 +90,7 @@ export default function BlogPost() {
           )}
 
           <div className="blog-post-content">
-            {post.content?.split('\n').map((line, i) => {
+            {post.content?.replace(/\\n/g, '\n').split('\n').map((line, i) => {
               if (line.startsWith('## ')) return <h2 key={i}>{line.slice(3)}</h2>;
               if (line.startsWith('### ')) return <h3 key={i}>{line.slice(4)}</h3>;
               if (line.startsWith('- ')) return <li key={i}>{line.slice(2)}</li>;

@@ -170,6 +170,8 @@ export interface BannedUser {
 export interface EmailCampaign {
   id: string;
   name: string;
+  subject?: string;
+  html_content?: string;
   status: CampaignStatus;
   recipients: number;
   sent: number;

@@ -5,6 +5,7 @@ import AuthBackground from "./AuthBackground";
 import AuthProviders from "./AuthProviders";
 import AuthError from "./AuthError";
 import AuthLoading from "./AuthLoading";
+import { capture } from "../../lib/posthog";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0, scale: 0.96, y: 16 },
@@ -43,6 +44,9 @@ export default function AuthPage(_props: AuthPageProps) {
     setError(null);
     setLoadingProvider(provider);
     setIsConnecting(true);
+    capture("signup_started");
+    if (provider === "google") capture("google_login");
+    if (provider === "microsoft") capture("microsoft_login");
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
       await signIn.sso({

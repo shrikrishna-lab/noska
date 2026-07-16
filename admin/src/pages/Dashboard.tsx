@@ -116,7 +116,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-3">
-              {collabSessions.map((s: { id: string; user_name: string; user_color: string; status: string; current_block_id: string | null; last_activity: string; page_id: string }) => (
+              {(collabSessions as any[]).map((s: { id: string; user_name: string; user_color: string; status: string; current_block_id: string | null; last_activity: string; page_id: string }) => (
                 <div key={s.id} className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
                   <Avatar className="h-7 w-7" style={{ backgroundColor: s.user_color || "#7c3aed" }}>
                     <AvatarFallback className="text-[10px] text-white">{(s.user_name ?? "?").charAt(0).toUpperCase()}</AvatarFallback>

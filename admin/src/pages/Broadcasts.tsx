@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Portal } from "@/components/ui/Portal";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useBroadcasts, useCreateBroadcast, useUpdateBroadcast, useDeleteBroadcast } from "@/lib/queries";
+import { sendBroadcast } from "@/lib/email";
 import type { BroadcastCampaign } from "@/lib/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -72,6 +74,7 @@ function BroadcastForm({ broadcast, onClose }: BroadcastFormProps) {
   };
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="w-full max-w-2xl rounded-xl border bg-background p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
@@ -162,6 +165,7 @@ function BroadcastForm({ broadcast, onClose }: BroadcastFormProps) {
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -174,8 +178,17 @@ export function Broadcasts() {
 
   const handleSend = async (b: BroadcastCampaign) => {
     try {
+      const res = await sendBroadcast({
+        broadcast_id: b.id,
+        title: b.title,
+        message: b.message,
+        type: b.type,
+        target_type: b.target_type,
+        target_users: null,
+      });
+      if (res.error) { toast.error("Send failed: " + res.error); return; }
       await updateBroadcast.mutateAsync({ id: b.id, status: "sending", send_immediately: true, scheduled_at: null });
-      toast.success("Broadcast queued for sending");
+      toast.success(`Broadcast sent to ${res.sent ?? 0} users`);
     } catch { toast.error("Failed to send"); }
   };
 

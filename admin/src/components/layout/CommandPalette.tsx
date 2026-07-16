@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Portal } from "@/components/ui/Portal";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ArrowRight } from "lucide-react";
@@ -50,7 +51,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   return (
     <AnimatePresence>
       {open && (
-        <>
+        <Portal>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm" onClick={onClose} />
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: -20 }}
@@ -100,7 +101,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               )}
             </div>
           </motion.div>
-        </>
+        </Portal>
       )}
     </AnimatePresence>
   );

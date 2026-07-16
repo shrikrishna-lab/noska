@@ -12,7 +12,8 @@ import {
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useAllPlatformSettings, useUpdatePlatformSetting } from "@/lib/queries";
 import { supabase, getAdminToken } from "@/lib/supabase";
-import { Save, Trash2, AlertTriangle, Loader2, CheckCircle2 } from "lucide-react";
+import { sendEmail } from "@/lib/email";
+import { Save, Trash2, AlertTriangle, Loader2, CheckCircle2, Mail } from "lucide-react";
 import toast from "react-hot-toast";
 
 export function Settings() {
@@ -70,6 +71,7 @@ export function Settings() {
           <TabsTrigger value="auth">Authentication</TabsTrigger>
           <TabsTrigger value="billing">Billing</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="danger">Danger Zone</TabsTrigger>
         </TabsList>
 
@@ -232,6 +234,49 @@ export function Settings() {
               <Button onClick={() => handleSave("allowed_ips")} disabled={saving["allowed_ips"]}>
                 {saving["allowed_ips"] ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
                 Save IPs
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="email" className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Email Settings</CardTitle><CardDescription>Configure Resend integration for transactional and campaign emails</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Resend API Key</Label>
+                <Input type="password" value={getStr("resend_api_key")} onChange={(e) => setValues((v) => ({ ...v, resend_api_key: e.target.value }))} placeholder="re_..." />
+              </div>
+              <div className="space-y-2">
+                <Label>From Email</Label>
+                <Input value={getStr("from_email")} onChange={(e) => setValues((v) => ({ ...v, from_email: e.target.value }))} placeholder="noreply@yourdomain.com" />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={() => handleSaveMultiple(["resend_api_key", "from_email"], "Email settings")} disabled={saving["resend_api_key"]}>
+                  {saving["resend_api_key"] ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+                  Save Email Settings
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Test Email</CardTitle><CardDescription>Send a test email to verify your configuration</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Recipient Email</Label>
+                <Input value={getStr("test_recipient")} onChange={(e) => setValues((v) => ({ ...v, test_recipient: e.target.value }))} placeholder="you@example.com" />
+              </div>
+              <Button variant="outline" onClick={async () => {
+                const to = getStr("test_recipient");
+                if (!to) { toast.error("Enter a recipient email"); return; }
+                try {
+                  const res = await sendEmail({ to, subject: "Test from Noska Admin", html: "<h2>Test Email</h2><p>If you see this, email is working!</p>" });
+                  if (res.error) { toast.error("Test failed: " + res.error); return; }
+                  toast.success("Test email sent! Check " + to);
+                } catch { toast.error("Test failed"); }
+              }} disabled={!getStr("test_recipient")}>
+                <Mail className="mr-1 h-4 w-4" /> Send Test Email
               </Button>
             </CardContent>
           </Card>

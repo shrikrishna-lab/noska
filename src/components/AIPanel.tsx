@@ -10,6 +10,7 @@ import { textToBlocks, uid, now, plainText } from "../utils/helpers";
 import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
 import { realtimeCollab } from "../lib/realtimeCollab";
 import { auditEngine } from "../lib/auditEngine";
+import { capture } from "../lib/posthog";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 
@@ -173,6 +174,8 @@ export default function AIPanel({
     setLoading(true);
     setExecutingTools(true);
     setToolResults([]);
+
+    capture("ai_generation", { model: aiProvider, provider: aiProvider });
 
     // Update chat list
     const chatId = activeChatId || uid();

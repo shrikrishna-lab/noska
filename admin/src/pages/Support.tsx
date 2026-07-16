@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Portal } from "@/components/ui/Portal";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -113,6 +114,7 @@ function ChatPanel({ ticket, onClose }: { ticket: SupportTicket; onClose: () => 
   };
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="flex h-[80vh] w-full max-w-2xl flex-col rounded-xl border bg-background shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b p-4">
@@ -179,6 +181,7 @@ function ChatPanel({ ticket, onClose }: { ticket: SupportTicket; onClose: () => 
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 

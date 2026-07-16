@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { runAI } from "../../utils/ai";
+import { capture } from "../../lib/posthog";
 
 interface InlineAIBarProps {
   text: string;
@@ -30,6 +31,7 @@ export default function InlineAIBar({ text, apiKey, aiProvider, nvidiaKey, style
   const handleSubmit = async () => {
     if (!prompt.trim() || loading) return;
     setLoading(true);
+    capture("ai_generation", { model: aiProvider, provider: aiProvider });
     try {
       const response = await runAI({
         provider: aiProvider,
