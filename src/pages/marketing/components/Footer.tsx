@@ -69,6 +69,8 @@ export default function Footer() {
           <p className="footer-col-title">Resources</p>
           <ul>
             <li><Link to="/resources">Guides & shortcuts</Link></li>
+            <li><Link to="/docs">Documentation</Link></li>
+            <li><Link to="/blog">Blog</Link></li>
             <li><Link to="/changelog">Changelog</Link></li>
             <li><Link to="/login">Help center</Link></li>
           </ul>
@@ -84,6 +86,11 @@ export default function Footer() {
       </div>
 
       <div className="footer-bottom mkt-container">
+        <div className="footer-bottom-links">
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+          <Link to="/policy">Cookies</Link>
+        </div>
         <p className="copyright-text">© {new Date().getFullYear()} Noska. All rights reserved.</p>
       </div>
     </footer>

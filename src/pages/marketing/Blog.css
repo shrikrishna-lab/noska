@@ -1,0 +1,218 @@
+.marketing .blog-wrapper {
+  padding-bottom: 100px;
+}
+
+.marketing .blog-hero {
+  text-align: center;
+  padding: 90px 24px 40px 24px;
+  max-width: 680px !important;
+}
+
+.marketing .blog-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--mkt-accent-blue);
+  background-color: var(--mkt-accent-blue-tint);
+  padding: 6px 12px;
+  border-radius: 30px;
+  margin-bottom: 20px;
+}
+
+.marketing .blog-hero h1 {
+  font-size: 44px;
+  letter-spacing: -0.03em;
+  margin-bottom: 14px;
+}
+
+.marketing .blog-hero p {
+  font-size: 16px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.55;
+}
+
+.marketing .blog-tags {
+  padding: 0 24px 32px;
+  max-width: 900px !important;
+}
+
+.marketing .blog-tags-scroll {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.marketing .blog-tag-btn {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--mkt-border-color);
+  background: var(--mkt-bg-primary);
+  color: var(--mkt-text-secondary);
+  cursor: pointer;
+  transition: all var(--mkt-transition-fast);
+}
+
+.marketing .blog-tag-btn:hover {
+  border-color: var(--mkt-text-primary);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .blog-tag-btn.active {
+  background: var(--mkt-brand-color);
+  color: #fff;
+  border-color: var(--mkt-brand-color);
+}
+
+.marketing .blog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+  padding: 0 24px;
+  max-width: 900px !important;
+}
+
+.marketing .blog-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--mkt-bg-primary);
+  transition: all var(--mkt-transition-normal);
+  text-decoration: none;
+  color: inherit;
+}
+
+.marketing .blog-card:hover {
+  border-color: var(--mkt-text-primary);
+  box-shadow: var(--mkt-card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.marketing .blog-card-image {
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  background: var(--mkt-bg-secondary);
+}
+
+.marketing .blog-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.marketing .blog-card:hover .blog-card-image img {
+  transform: scale(1.05);
+}
+
+.marketing .blog-card-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.marketing .blog-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--mkt-text-muted);
+}
+
+.marketing .blog-card-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.marketing .blog-card-author {
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .blog-card-title {
+  font-size: 20px;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.marketing .blog-card-excerpt {
+  font-size: 14px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.55;
+  flex: 1;
+}
+
+.marketing .blog-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--mkt-border-color);
+}
+
+.marketing .blog-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.marketing .blog-card-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--mkt-bg-tertiary);
+}
+
+.marketing .blog-card-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mkt-brand-color);
+}
+
+.marketing .blog-loading {
+  display: flex;
+  justify-content: center;
+  padding: 60px 20px;
+}
+
+.marketing .blog-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--mkt-border-color);
+  border-top-color: var(--mkt-brand-color);
+  border-radius: 50%;
+  animation: mkt-spin-slow 0.8s linear infinite;
+}
+
+.marketing .blog-empty {
+  text-align: center;
+  color: var(--mkt-text-muted);
+  padding: 60px 20px;
+}
+
+@media (max-width: 768px) {
+  .marketing .blog-hero h1 {
+    font-size: 32px;
+  }
+  .marketing .blog-grid {
+    grid-template-columns: 1fr;
+  }
+}

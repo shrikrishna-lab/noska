@@ -11,6 +11,10 @@ import MarketingProduct from "./pages/marketing/Product";
 import MarketingSolutions from "./pages/marketing/Solutions";
 import MarketingResources from "./pages/marketing/Resources";
 import MarketingChangelog from "./pages/marketing/Changelog";
+import MarketingBlog from "./pages/marketing/Blog";
+import BlogPost from "./pages/marketing/BlogPost";
+import Legal from "./pages/marketing/Legal";
+import Docs from "./pages/marketing/Docs";
 import Launch from "./pages/marketing/launch/Launch";
 import ControlCenter from "./ControlCenter";
 import "./index.css";
@@ -29,6 +33,12 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/solutions" element={<MarketingLayout><MarketingSolutions /></MarketingLayout>} />
           <Route path="/resources" element={<MarketingLayout><MarketingResources /></MarketingLayout>} />
           <Route path="/changelog" element={<MarketingLayout><MarketingChangelog /></MarketingLayout>} />
+          <Route path="/blog" element={<MarketingLayout><MarketingBlog /></MarketingLayout>} />
+          <Route path="/blog/:slug" element={<MarketingLayout><BlogPost /></MarketingLayout>} />
+          <Route path="/privacy" element={<MarketingLayout><Legal /></MarketingLayout>} />
+          <Route path="/terms" element={<MarketingLayout><Legal /></MarketingLayout>} />
+          <Route path="/policy" element={<MarketingLayout><Legal /></MarketingLayout>} />
+          <Route path="/docs" element={<MarketingLayout><Docs /></MarketingLayout>} />
           {/* Standalone pre-launch waitlist page — ships its own navbar,
               footer, and smooth-scroll setup, so it deliberately skips
               MarketingLayout (which would double up both). */}

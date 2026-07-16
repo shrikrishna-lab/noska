@@ -22,6 +22,10 @@ import { Feedback } from "@/pages/Feedback";
 import { Support } from "@/pages/Support";
 import { AuditLogs } from "@/pages/AuditLogs";
 import { Roadmap } from "@/pages/Roadmap";
+import { ChangelogEntries } from "@/pages/ChangelogEntries";
+import { BlogPosts } from "@/pages/BlogPosts";
+import { LegalPages } from "@/pages/LegalPages";
+import { Broadcasts } from "@/pages/Broadcasts";
 import { Integrations } from "@/pages/Integrations";
 import { ApiKeys } from "@/pages/ApiKeys";
 import { SystemStatus } from "@/pages/SystemStatus";
@@ -81,6 +85,10 @@ export default function App() {
                   <Route path="support" element={<Support />} />
                   <Route path="audit-logs" element={<AuditLogs />} />
                   <Route path="roadmap" element={<Roadmap />} />
+                  <Route path="changelog" element={<ChangelogEntries />} />
+                  <Route path="blog" element={<BlogPosts />} />
+                  <Route path="legal" element={<LegalPages />} />
+                  <Route path="broadcasts" element={<Broadcasts />} />
                   <Route path="integrations" element={<Integrations />} />
                   <Route path="api-keys" element={<ApiKeys />} />
                 <Route path="system-status" element={<SystemStatus />} />

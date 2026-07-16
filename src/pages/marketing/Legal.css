@@ -1,0 +1,89 @@
+.marketing .legal-wrapper {
+  padding-bottom: 100px;
+}
+
+.marketing .legal-content {
+  max-width: 720px !important;
+  padding: 60px 24px;
+}
+
+.marketing .legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+  text-decoration: none;
+  margin-bottom: 32px;
+  transition: color var(--mkt-transition-fast);
+}
+
+.marketing .legal-back:hover {
+  color: var(--mkt-text-primary);
+}
+
+.marketing .legal-content h1 {
+  font-size: 40px;
+  margin-bottom: 24px;
+}
+
+.marketing .legal-body {
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .legal-body h2 {
+  font-size: 24px;
+  margin-top: 36px;
+  margin-bottom: 10px;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .legal-body h3 {
+  font-size: 18px;
+  margin-top: 24px;
+  margin-bottom: 8px;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .legal-body p {
+  margin-bottom: 14px;
+}
+
+.marketing .legal-loading {
+  display: flex;
+  justify-content: center;
+  padding: 80px 20px;
+}
+
+.marketing .legal-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--mkt-border-color);
+  border-top-color: var(--mkt-brand-color);
+  border-radius: 50%;
+  animation: mkt-spin-slow 0.8s linear infinite;
+}
+
+.marketing .legal-not-found {
+  text-align: center;
+  padding: 80px 24px;
+}
+
+.marketing .legal-not-found h1 {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.marketing .legal-not-found p {
+  color: var(--mkt-text-secondary);
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .marketing .legal-content h1 {
+    font-size: 28px;
+  }
+}

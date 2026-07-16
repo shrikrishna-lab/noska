@@ -99,7 +99,26 @@
   margin-top: 48px;
   padding-top: 24px;
   display: flex;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.marketing .footer-bottom-links {
+  display: flex;
+  gap: 16px;
+}
+
+.marketing .footer-bottom-links a {
+  font-size: 12px;
+  color: var(--mkt-text-muted);
+  transition: color var(--mkt-transition-fast);
+}
+
+.marketing .footer-bottom-links a:hover {
+  color: var(--mkt-text-primary);
+  text-decoration: underline;
 }
 
 .marketing .copyright-text {

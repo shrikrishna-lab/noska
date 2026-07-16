@@ -1,62 +1,42 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, ChevronDown } from 'lucide-react';
 import { Reveal } from './components/Reveal';
+import { supabase } from '../../lib/supabase';
 import './Changelog.css';
 
-/**
- * Real changelog entries sourced from the actual feature set shipped in the
- * app (see features_list.md / Noska_Engineering_Handbook at the time these
- * were built) — no placeholder "v2.4.1 - bug fixes" filler.
- */
-const ENTRIES = [
-  {
-    date: 'Latest',
-    tag: 'Security',
-    title: 'Owner-scoped row-level security across every table',
-    desc: 'Authentication now runs entirely through Clerk on a headless layer — Supabase remains the source of truth for application data, with a webhook keeping user_profiles in sync on user.created / updated / deleted.',
-  },
-  {
-    date: 'Recent',
-    tag: 'Editor',
-    title: 'Page title icon picker & hover block tools',
-    desc: 'The page title now has its own emoji picker, drag handle, and inline comment support — matching the interaction model of every other block.',
-  },
-  {
-    date: 'Recent',
-    tag: 'Databases',
-    title: 'View reordering, renaming, and a fullscreen mode',
-    desc: 'Database views can now be dragged into a new order or renamed inline, and any view can expand to fill the screen for focused work.',
-  },
-  {
-    tag: 'Core',
-    title: 'Thought Graph view',
-    desc: 'Every page in your workspace rendered as a node in a force-directed graph, connected by real parent/child and tag relationships.',
-  },
-  {
-    tag: 'Core',
-    title: 'Infinite Canvas mode',
-    desc: 'Any page can switch into a zoomable, pannable canvas where blocks become draggable cards with persisted positions.',
-  },
-  {
-    tag: 'AI',
-    title: '8 AI providers, bring your own key',
-    desc: 'OpenAI, Anthropic, Gemini, Groq, OpenRouter, NVIDIA NIM, and local Ollama/LM Studio for fully offline AI — your key, never routed through us.',
-  },
-  {
-    tag: 'Study',
-    title: 'Spaced repetition with the SM-2 algorithm',
-    desc: 'Turn any block into a flashcard and review it on the same spacing schedule that powers Anki.',
-  },
-  {
-    tag: 'Security',
-    title: 'Client-side page encryption',
-    desc: 'Lock any page with AES-GCM 256-bit encryption derived via PBKDF2 — entirely in your browser, using the Web Crypto API.',
-  },
-];
+interface ChangelogEntry {
+  id: string;
+  title: string;
+  description: string | null;
+  tag: string;
+  version: string | null;
+  published_at: string | null;
+  created_at: string;
+}
 
 export default function Changelog() {
+  const [entries, setEntries] = useState<ChangelogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [openIndex, setOpenIndex] = useState(0);
+
+  useEffect(() => {
+    async function fetch() {
+      setLoading(true);
+      const { data, error } = await (supabase as any)
+        .from('changelog_entries')
+        .select('*')
+        .eq('published', true)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Failed to fetch changelog:', error);
+      } else {
+        setEntries(data ?? []);
+      }
+      setLoading(false);
+    }
+    fetch();
+  }, []);
 
   return (
     <div className="changelog-wrapper">
@@ -68,45 +48,50 @@ export default function Changelog() {
         >
           <span className="changelog-eyebrow"><Sparkles size={13} /> Changelog</span>
           <h1>What's actually shipped.</h1>
-          <p>Every entry below is a real, built feature — not a roadmap promise. Roadmap items are called out separately on the Enterprise and Pricing pages.</p>
+          <p>Every entry below is a real, built feature — not a roadmap promise.</p>
         </motion.div>
       </section>
 
-      {/* Each entry is an expandable drawer — title/tag always visible,
-          description reveals on click via an animated height (native
-          reimplementation of the referenced Framer "Expandable-Drawers"
-          component, which is Framer canvas-only). */}
       <section className="changelog-list mkt-container">
-        {ENTRIES.map((entry, i) => {
-          const isOpen = openIndex === i;
-          return (
-            <Reveal key={entry.title} delay={Math.min(i * 0.05, 0.3)} className={`changelog-entry ${isOpen ? 'open' : ''}`}>
-              <button className="changelog-entry-header" onClick={() => setOpenIndex(isOpen ? -1 : i)}>
-                <div className="changelog-entry-header-text">
-                  <div className="changelog-meta">
-                    {entry.date && <span className="changelog-date">{entry.date}</span>}
-                    <span className={`changelog-tag tag-${entry.tag.toLowerCase()}`}>{entry.tag}</span>
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <div className="w-6 h-6 border-2 border-charcoal/20 border-t-charcoal rounded-full animate-spin" />
+          </div>
+        ) : entries.length === 0 ? (
+          <p className="text-center text-muted-foreground py-20">No changelog entries yet.</p>
+        ) : (
+          entries.map((entry, i) => {
+            const isOpen = openIndex === i;
+            return (
+              <Reveal key={entry.id} delay={Math.min(i * 0.05, 0.3)} className={`changelog-entry ${isOpen ? 'open' : ''}`}>
+                <button className="changelog-entry-header" onClick={() => setOpenIndex(isOpen ? -1 : i)}>
+                  <div className="changelog-entry-header-text">
+                    <div className="changelog-meta">
+                      {entry.published_at && <span className="changelog-date">{new Date(entry.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+                      <span className={`changelog-tag tag-${entry.tag?.toLowerCase()}`}>{entry.tag}</span>
+                      {entry.version && <span className="changelog-version">{entry.version}</span>}
+                    </div>
+                    <h3>{entry.title}</h3>
                   </div>
-                  <h3>{entry.title}</h3>
-                </div>
-                <ChevronDown size={16} className={`changelog-chevron ${isOpen ? 'open' : ''}`} />
-              </button>
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    className="changelog-entry-body"
-                    initial={{ height: 0 }}
-                    animate={{ height: 'auto' }}
-                    exit={{ height: 0 }}
-                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    <p>{entry.desc}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </Reveal>
-          );
-        })}
+                  <ChevronDown size={16} className={`changelog-chevron ${isOpen ? 'open' : ''}`} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      className="changelog-entry-body"
+                      initial={{ height: 0 }}
+                      animate={{ height: 'auto' }}
+                      exit={{ height: 0 }}
+                      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      <p>{entry.description}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </Reveal>
+            );
+          })
+        )}
       </section>
     </div>
   );

@@ -150,6 +150,13 @@ export default function Navbar() {
                           <p className="item-desc">Real keyboard shortcuts & feature guides</p>
                         </div>
                       </Link>
+                      <Link to="/docs" className="dropdown-item">
+                        <div className="mkt-avatar tint-blue">📚</div>
+                        <div className="item-content">
+                          <p className="item-title">Documentation</p>
+                          <p className="item-desc">Guides, API reference & tutorials</p>
+                        </div>
+                      </Link>
                       <Link to="/changelog" className="dropdown-item">
                         <div className="mkt-avatar tint-purple">📖</div>
                         <div className="item-content">
@@ -213,6 +220,7 @@ export default function Navbar() {
               <div className="mobile-group">
                 <p className="mobile-group-title">Resources</p>
                 <Link to="/resources" className="mobile-item">Guides & shortcuts</Link>
+                <Link to="/docs" className="mobile-item">Documentation</Link>
                 <Link to="/changelog" className="mobile-item">Changelog</Link>
                 <Link to="/login" className="mobile-item">Help Center</Link>
               </div>
