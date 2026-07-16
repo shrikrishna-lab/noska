@@ -23,6 +23,15 @@ const GOOGLE_SVG = (
   </svg>
 );
 
+const MICROSOFT_SVG = (
+  <svg className="w-4 h-4 mr-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="2" y="2" width="9.5" height="9.5" fill="#F25022" />
+    <rect x="12.5" y="2" width="9.5" height="9.5" fill="#7FBA00" />
+    <rect x="2" y="12.5" width="9.5" height="9.5" fill="#00A4EF" />
+    <rect x="12.5" y="12.5" width="9.5" height="9.5" fill="#FFB900" />
+  </svg>
+);
+
 const GITHUB_SVG = (
   <svg className="w-4 h-4 mr-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
     <path
@@ -39,9 +48,8 @@ export default function ProviderButton({
   onClick,
   disabled,
 }) {
-  const isGoogle = provider === "google";
-  const icon = isGoogle ? GOOGLE_SVG : GITHUB_SVG;
-  const label = isGoogle ? "Continue with Google" : "Continue with GitHub";
+  const icon = provider === "google" ? GOOGLE_SVG : provider === "microsoft" ? MICROSOFT_SVG : GITHUB_SVG;
+  const label = provider === "google" ? "Continue with Google" : provider === "microsoft" ? "Continue with Microsoft" : "Continue with GitHub";
 
   return (
     <motion.button

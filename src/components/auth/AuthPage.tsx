@@ -39,12 +39,12 @@ export default function AuthPage(_props: AuthPageProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleProviderClick = async (provider: "github" | "google") => {
+  const handleProviderClick = async (provider: "github" | "google" | "microsoft") => {
     setError(null);
     setLoadingProvider(provider);
     setIsConnecting(true);
     try {
-      const strategy = provider === "github" ? "oauth_github" : "oauth_google";
+      const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
       await signIn.sso({
         strategy,
         redirectUrl: `${window.location.origin}/sso-callback`,

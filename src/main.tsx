@@ -12,6 +12,7 @@ import MarketingSolutions from "./pages/marketing/Solutions";
 import MarketingResources from "./pages/marketing/Resources";
 import MarketingChangelog from "./pages/marketing/Changelog";
 import Launch from "./pages/marketing/launch/Launch";
+import ControlCenter from "./ControlCenter";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -35,6 +36,8 @@ createRoot(document.getElementById("root")!).render(
           {/* SSO callback handler — Clerk processes the OAuth redirect here,
               then redirects to /login where App reads the auth state. */}
           <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback signInForceRedirectUrl="/login" />} />
+          {/* Admin portal — full-page redirect to the separate admin SPA */}
+          <Route path="/control" element={<ControlCenter />} />
           {/* Everything else (login, onboarding, and the workspace itself) is
               handled by App, which reads the current route to decide what to
               show and keeps the URL in sync as auth/onboarding state resolves. */}
