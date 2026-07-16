@@ -1,0 +1,130 @@
+.marketing .blog-post-wrapper {
+  padding-bottom: 100px;
+}
+
+.marketing .blog-post-article {
+  max-width: 720px !important;
+  padding: 60px 24px;
+}
+
+.marketing .blog-post-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+  text-decoration: none;
+  margin-bottom: 32px;
+  transition: color var(--mkt-transition-fast);
+}
+
+.marketing .blog-post-back:hover {
+  color: var(--mkt-text-primary);
+}
+
+.marketing .blog-post-cover {
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 32px;
+  background: var(--mkt-bg-secondary);
+}
+
+.marketing .blog-post-cover img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.marketing .blog-post-title {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.marketing .blog-post-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--mkt-text-muted);
+  margin-bottom: 16px;
+}
+
+.marketing .blog-post-date,
+.marketing .blog-post-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.marketing .blog-post-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.marketing .blog-post-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--mkt-bg-tertiary);
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .blog-post-content {
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .blog-post-content h2 {
+  font-size: 26px;
+  margin-top: 40px;
+  margin-bottom: 12px;
+}
+
+.marketing .blog-post-content h3 {
+  font-size: 20px;
+  margin-top: 28px;
+  margin-bottom: 8px;
+}
+
+.marketing .blog-post-content p {
+  margin-bottom: 16px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .blog-post-content li {
+  margin-left: 20px;
+  margin-bottom: 6px;
+  color: var(--mkt-text-secondary);
+}
+
+.marketing .blog-post-loading {
+  display: flex;
+  justify-content: center;
+  padding: 80px 20px;
+}
+
+.marketing .blog-post-not-found {
+  text-align: center;
+  padding: 80px 24px;
+}
+
+.marketing .blog-post-not-found h1 {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.marketing .blog-post-not-found p {
+  color: var(--mkt-text-secondary);
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .marketing .blog-post-title {
+    font-size: 28px;
+  }
+}

@@ -25,7 +25,9 @@ import {
   ListChecks,
   Workflow,
   Ban,
-  Gavel
+  Gavel,
+  Newspaper,
+  BookOpen
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -57,6 +59,10 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/support", label: "Support Tickets", icon: LifeBuoy, group: "operations" },
   { to: "/audit-logs", label: "Audit Logs", icon: ShieldCheck, group: "operations", requiresRole: "developer" },
   { to: "/roadmap", label: "Roadmap", icon: Map, group: "platform" },
+  { to: "/changelog", label: "Changelog", icon: ListChecks, group: "platform" },
+  { to: "/blog", label: "Blog Posts", icon: FileText, group: "platform" },
+  { to: "/legal", label: "Legal Pages", icon: ShieldCheck, group: "platform" },
+  { to: "/broadcasts", label: "Broadcasts", icon: Send, group: "platform" },
   { to: "/integrations", label: "Integrations", icon: Plug, group: "platform" },
   { to: "/api-keys", label: "API Keys", icon: Key, group: "platform", requiresRole: "admin" },
   { to: "/system-status", label: "System Status", icon: Activity, group: "operations" },

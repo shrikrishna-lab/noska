@@ -131,6 +131,17 @@
 .marketing .changelog-tag.tag-core { background-color: var(--mkt-accent-purple-tint); color: var(--mkt-accent-purple); }
 .marketing .changelog-tag.tag-ai { background-color: var(--mkt-accent-purple-tint); color: var(--mkt-accent-purple); }
 .marketing .changelog-tag.tag-study { background-color: var(--mkt-accent-red-tint); color: var(--mkt-accent-red); }
+.marketing .changelog-tag.tag-api { background-color: var(--mkt-accent-blue-tint); color: var(--mkt-accent-blue); }
+.marketing .changelog-tag.tag-ui { background-color: var(--mkt-accent-orange-tint); color: var(--mkt-accent-orange); }
+
+.marketing .changelog-version {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+  background-color: var(--mkt-bg-tertiary);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
 
 .marketing .changelog-entry h3 {
   font-size: 18px;

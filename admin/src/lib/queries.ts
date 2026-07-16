@@ -697,6 +697,214 @@ export function useRealtimeAuditFeed(limit = 20) {
   return events;
 }
 
+// ── Changelog Entries ──
+export function useChangelogEntries() {
+  return useQuery({
+    queryKey: ["admin", "changelog"],
+    queryFn: () => adminSelect<import("./types").ChangelogEntry>("changelog_entries", "*", { order: "created_at desc" }),
+  });
+}
+
+export function useCreateChangelogEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { title: string; description?: string; tag?: string; version?: string; published?: boolean; published_at?: string | null }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "changelog_entries",
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "changelog"] }),
+  });
+}
+
+export function useUpdateChangelogEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; title?: string; description?: string; tag?: string; version?: string; published?: boolean; published_at?: string | null }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "changelog_entries", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "changelog"] }),
+  });
+}
+
+export function useDeleteChangelogEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "changelog_entries", p_id: id, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "changelog"] }),
+  });
+}
+
+// ── Blog Posts ──
+export function useBlogPosts() {
+  return useQuery({
+    queryKey: ["admin", "blog-posts"],
+    queryFn: () => adminSelect<import("./types").BlogPost>("blog_posts", "*", { order: "created_at desc" }),
+  });
+}
+
+export function useCreateBlogPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { title: string; slug: string; excerpt?: string; content?: string; author?: string; cover_image?: string; tags?: string[]; published?: boolean; published_at?: string | null }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "blog_posts",
+        p_data: { ...data, tags: data.tags ?? [], updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "blog-posts"] }),
+  });
+}
+
+export function useUpdateBlogPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; title?: string; slug?: string; excerpt?: string; content?: string; author?: string; cover_image?: string; tags?: string[]; published?: boolean; published_at?: string | null }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "blog_posts", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "blog-posts"] }),
+  });
+}
+
+export function useDeleteBlogPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "blog_posts", p_id: id, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "blog-posts"] }),
+  });
+}
+
+// ── Legal Pages ──
+export function useLegalPages() {
+  return useQuery({
+    queryKey: ["admin", "legal-pages"],
+    queryFn: () => adminSelect<import("./types").LegalPage>("legal_pages", "*", { order: "title asc" }),
+  });
+}
+
+export function useCreateLegalPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { title: string; slug: string; content?: string; published?: boolean }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "legal_pages",
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "legal-pages"] }),
+  });
+}
+
+export function useUpdateLegalPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; title?: string; slug?: string; content?: string; published?: boolean }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "legal_pages", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "legal-pages"] }),
+  });
+}
+
+export function useDeleteLegalPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "legal_pages", p_id: id, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "legal-pages"] }),
+  });
+}
+
+// ── Broadcast Campaigns ──
+export function useBroadcasts() {
+  return useQuery({
+    queryKey: ["admin", "broadcasts"],
+    queryFn: () => adminSelect<import("./types").BroadcastCampaign>("admin_broadcasts", "*", { order: "created_at desc" }),
+  });
+}
+
+export function useCreateBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "admin_broadcasts",
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useUpdateBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "admin_broadcasts", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useDeleteBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "admin_broadcasts", p_id: id, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
 // ── Admin Accounts Mutations ──
 export function useInviteAdmin() {
   const qc = useQueryClient();

@@ -236,3 +236,60 @@ export interface TrendPoint {
   date: string;
   value: number;
 }
+
+export interface ChangelogEntry {
+  id: string;
+  title: string;
+  description: string | null;
+  tag: string;
+  version: string | null;
+  published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  content: string | null;
+  author: string;
+  cover_image: string | null;
+  tags: string[];
+  published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LegalPage {
+  id: string;
+  title: string;
+  slug: string;
+  content: string | null;
+  published: boolean;
+  updated_at: string;
+}
+
+export interface BroadcastCampaign {
+  id: string;
+  title: string;
+  message: string;
+  type: "info" | "warning" | "announcement" | "alert";
+  target_type: "all" | "random" | "selected" | "per_user";
+  target_count: number | null;
+  target_users: string[] | null;
+  send_immediately: boolean;
+  scheduled_at: string | null;
+  schedule_start: string | null;
+  schedule_end: string | null;
+  random_delay_minutes: boolean;
+  status: "draft" | "scheduled" | "sending" | "sent" | "cancelled";
+  sent_count: number;
+  total_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
