@@ -71,11 +71,15 @@ export function Webhooks() {
 
   return (
     <div className="p-6">
-      <PageHeader title="Webhooks" description="Manage webhook endpoints and monitor deliveries">
-        <Button onClick={() => setShowCreate(!showCreate)}>
-          <Plus className="mr-1 h-4 w-4" /> New Endpoint
-        </Button>
-      </PageHeader>
+      <PageHeader
+        title="Webhooks"
+        description="Manage webhook endpoints and monitor deliveries"
+        actions={
+          <Button onClick={() => setShowCreate(!showCreate)}>
+            <Plus className="mr-1 h-4 w-4" /> New Endpoint
+          </Button>
+        }
+      />
 
       {showCreate && (
         <Card className="mb-6">

@@ -131,6 +131,21 @@ export function useFeatureFlags() {
   });
 }
 
+export function useCreateFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { key: string; name: string; description?: string; category: string; enabled: boolean; rollout_percent: number }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "feature_flags",
+        p_data: { ...data }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "feature-flags"] }); },
+  });
+}
+
 export function useToggleFeatureFlag() {
   const qc = useQueryClient();
   return useMutation({
@@ -152,6 +167,9 @@ export interface DbWaitlistEntry {
   country: string | null; joined_at: string | null;
   referral_count: number; status: string; position: number | null;
   invite_sent: boolean; accepted: boolean;
+  invite_code: string | null; notes: string | null;
+  approved_by: string | null; approved_at: string | null;
+  rejected_by: string | null; rejected_at: string | null;
 }
 export function useWaitlist() {
   return useQuery({
@@ -674,7 +692,7 @@ export function useRealtimeInvalidate(queryKey: string[], table: string, event: 
         qc.invalidateQueries({ queryKey });
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase?.removeChannel(channel); };
   }, [qc, queryKey.join(","), table, event]);
 }
 
@@ -691,7 +709,7 @@ export function useRealtimeAuditFeed(limit = 20) {
         qc.invalidateQueries({ queryKey: ["admin", "audit"] });
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase?.removeChannel(channel); };
   }, [limit]);
 
   return events;
@@ -986,9 +1004,40 @@ export function useSendWaitlistInvite() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const code = Math.random().toString(36).substring(2, 10).toUpperCase();
       const { error } = await supabase.rpc("admin_update", {
         p_session_token: token(), p_table: "waitlist_entries", p_id: id,
-        p_data: { invite_sent: true, status: "invited" }, p_min_role: "support",
+        p_data: { invite_sent: true, status: "invited", invite_code: code }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
+  });
+}
+
+export function useApproveWaitlistEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "waitlist_entries", p_id: id,
+        p_data: { status: "accepted", approved_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
+  });
+}
+
+export function useRejectWaitlistEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "waitlist_entries", p_id: id,
+        p_data: { status: "rejected", rejected_at: new Date().toISOString() }, p_min_role: "support",
       });
       if (error) throw error;
     },
@@ -1012,6 +1061,36 @@ export function useDeleteApiKey() {
 }
 
 // ── Email Campaigns Mutations ──
+export function useCreateEmailCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; subject: string; html_content: string; status: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "email_campaigns",
+        p_data: { ...data, recipients: 0, sent: 0, open_rate: "0", click_rate: "0", bounce_rate: "0" }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+  });
+}
+
+export function useUpdateEmailCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; name?: string; subject?: string; html_content?: string; status?: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "email_campaigns", p_id: id,
+        p_data: { ...data }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+  });
+}
+
 export function useDeleteEmailCampaign() {
   const qc = useQueryClient();
   return useMutation({

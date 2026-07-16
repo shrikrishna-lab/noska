@@ -29,6 +29,8 @@ import { Broadcasts } from "@/pages/Broadcasts";
 import { Integrations } from "@/pages/Integrations";
 import { ApiKeys } from "@/pages/ApiKeys";
 import { SystemStatus } from "@/pages/SystemStatus";
+import { SystemHealth } from "@/pages/SystemHealth";
+import { EmailAnalytics } from "@/pages/EmailAnalytics";
 import { Settings } from "@/pages/Settings";
 import { AdminAccounts } from "@/pages/AdminAccounts";
 import { Webhooks } from "@/pages/Webhooks";
@@ -91,10 +93,12 @@ export default function App() {
                   <Route path="broadcasts" element={<Broadcasts />} />
                   <Route path="integrations" element={<Integrations />} />
                   <Route path="api-keys" element={<ApiKeys />} />
-                <Route path="system-status" element={<SystemStatus />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="admin-accounts" element={<AdminAccounts />} />
-                <Route path="webhooks" element={<Webhooks />} />
+                  <Route path="system-status" element={<SystemStatus />} />
+                  <Route path="system-health" element={<SystemHealth />} />
+                  <Route path="email-analytics" element={<EmailAnalytics />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="admin-accounts" element={<AdminAccounts />} />
+                  <Route path="webhooks" element={<Webhooks />} />
                 </Route>
                 <Route path="/403" element={<Forbidden />} />
                 <Route path="*" element={<Forbidden />} />

@@ -11,9 +11,9 @@ export function AiUsage() {
   const { data: totalChats } = useAiChatCount();
   const { data: aiEvents, isLoading: eventsLoading } = useAiUsageFromAudit();
 
-  const totalCost = (aiEvents ?? []).reduce((s, e) => s + (e.ai_cost ?? 0), 0);
+  const totalCost = (aiEvents ?? []).reduce((s: number, e: any) => s + (e.ai_cost ?? 0), 0);
   const avgLatency = (aiEvents ?? []).length
-    ? Math.round((aiEvents ?? []).reduce((s, e) => s + (e.ai_latency_ms ?? 0), 0) / aiEvents!.length)
+    ? Math.round((aiEvents ?? []).reduce((s: number, e: any) => s + (e.ai_latency_ms ?? 0), 0) / aiEvents!.length)
     : 0;
 
   if (chatsLoading || eventsLoading) return <div className="p-6"><PageHeader title="AI Usage" description="Monitor AI platform usage" /><LoadingState count={4} /></div>;
@@ -57,7 +57,7 @@ export function AiUsage() {
             {aiEvents && aiEvents.length > 0 ? (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={aiEvents.slice(0, 30).map((e) => ({
+                  <AreaChart data={aiEvents.slice(0, 30).map((e: any) => ({
                     date: e.created_at ? new Date(e.created_at).toLocaleDateString() : "",
                     latency: e.ai_latency_ms ?? 0,
                   }))}>

@@ -29,7 +29,7 @@ export function AuditLogs() {
         description={`${total ?? 0} total events`}
         actions={
           events && events.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={() => downloadCSV("audit-logs.csv", events)}>
+            <Button variant="outline" size="sm" onClick={() => downloadCSV("audit-logs.csv", events as any)}>
               <Download className="mr-1 h-3.5 w-3.5" /> Export
             </Button>
           ) : undefined
