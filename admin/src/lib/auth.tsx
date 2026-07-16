@@ -35,8 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       if (SUPABASE_ENABLED && supabase) {
         try {
-          const { count } = await supabase.from("admin_users").select("id", { count: "exact", head: true });
-          setNeedsSetup(count === 0);
+          const { data: hasAdmin } = await supabase.rpc("check_admin_exists");
+          setNeedsSetup(hasAdmin === false);
         } catch { setNeedsSetup(false); }
         setCheckingSetup(false);
         const token = getAdminToken();
@@ -59,20 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const { count } = await supabase.from("admin_users").select("id", { count: "exact", head: true });
-      if (count && count > 0) {
-        setError("An admin account already exists. Please sign in instead.");
-        return;
-      }
-      const { error: insertError } = await supabase.from("admin_users").insert({ name, email, role: "super_admin" });
-      if (insertError) {
-        setError("Failed to create admin record: " + insertError.message);
-        return;
-      }
-      const { error: pwdError } = await supabase.rpc("set_admin_password", { p_email: email, p_password: password, p_session_token: null });
-      if (pwdError) {
-        await supabase.from("admin_users").delete().eq("email", email);
-        setError("Failed to set password: " + pwdError.message);
+      const { data: created, error: setupError } = await supabase.rpc("setup_first_admin", { p_email: email, p_name: name, p_password: password });
+      if (setupError) {
+        if (setupError.message?.includes("ADMIN_ALREADY_EXISTS")) {
+          setError("An admin account already exists. Please sign in instead.");
+        } else {
+          setError("Failed to create admin account: " + setupError.message);
+        }
         return;
       }
       const { data: loginData, error: loginError } = await supabase.rpc("admin_login", { p_email: email, p_password: password });
