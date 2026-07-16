@@ -68,10 +68,10 @@ export default function Footer() {
         <div className="footer-links-col">
           <p className="footer-col-title">Resources</p>
           <ul>
-            <li><Link to="/resources">Guides & shortcuts</Link></li>
             <li><Link to="/docs">Documentation</Link></li>
             <li><Link to="/blog">Blog</Link></li>
             <li><Link to="/changelog">Changelog</Link></li>
+            <li><Link to="/resources">Guides & shortcuts</Link></li>
             <li><Link to="/login">Help center</Link></li>
           </ul>
         </div>
@@ -80,7 +80,19 @@ export default function Footer() {
           <p className="footer-col-title">Company</p>
           <ul>
             <li><Link to="/pricing">Pricing</Link></li>
-            <li><Link to="/enterprise">Contact sales</Link></li>
+            <li><Link to="/enterprise">Enterprise</Link></li>
+            <li><Link to="/blog">Blog</Link></li>
+            <li><Link to="/launch">What's new</Link></li>
+          </ul>
+        </div>
+
+        <div className="footer-links-col">
+          <p className="footer-col-title">Developers</p>
+          <ul>
+            <li><Link to="/docs">API Reference</Link></li>
+            <li><Link to="/changelog">Changelog</Link></li>
+            <li><Link to="/docs">Documentation</Link></li>
+            <li><Link to="/login">Status</Link></li>
           </ul>
         </div>
       </div>
