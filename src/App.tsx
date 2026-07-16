@@ -38,6 +38,8 @@ import { auditEngine } from "./lib/auditEngine";
 import { useAuth, useUser, useClerk } from "@clerk/react";
 import { supabase } from "./lib/supabase";
 import { TEST_MODE } from "./lib/envGuard";
+import { capture, identifyUser, resetIdentity } from "./lib/posthog";
+import { setSentryUser, captureException } from "./lib/sentry";
 
 
 import {
@@ -340,6 +342,25 @@ function App() {
     document.documentElement.classList.toggle("dark", dark);
     document.documentElement.classList.toggle("light", !dark);
   }, [dark]);
+
+  useEffect(() => {
+    capture("page_view", { path: location.pathname });
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (isSignedIn && clerkUser) {
+      identifyUser(clerkUser.id, {
+        email: clerkUser.emailAddresses?.[0]?.emailAddress,
+      });
+      setSentryUser({
+        id: clerkUser.id,
+        email: clerkUser.emailAddresses?.[0]?.emailAddress,
+        name: `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || clerkUser.username || undefined,
+      });
+    } else {
+      setSentryUser(null);
+    }
+  }, [isSignedIn, clerkUser]);
 
   useEffect(() => {
     let mounted = true;
@@ -701,6 +722,7 @@ function App() {
     }
 
     if (existingProfile?.onboarding_complete) {
+      capture("login");
       // Same pre-existing-account gate as the initial-mount bootstrap
       // above — see its comment for why this can't just be folded into
       // the onboarding wizard for these users.
@@ -773,7 +795,11 @@ function App() {
 
   // Onboarding complete — set pages directly in state, persist async
   const handleOnboardingComplete = useCallback(async (formData: OnboardingFormData, starterPages: OnboardingPagePreview[]) => {
-    if (formData.workspaceName) setWorkspaceName(formData.workspaceName);
+    capture("signup_completed");
+    if (formData.workspaceName) {
+      capture("workspace_created", { workspaceName: formData.workspaceName });
+      setWorkspaceName(formData.workspaceName);
+    }
     // See handleFinalize's comment above — `starterPages` is declared as
     // OnboardingPagePreview[] but is really the Page[] built by
     // handleFinalize; cast back to what this function actually needs.
@@ -845,6 +871,8 @@ function App() {
 
   // Logout handler — clears cache, resets state, redirects to auth
   const handleLogout = useCallback(async () => {
+    capture("logout");
+    resetIdentity();
     try {
       await clerk.signOut();
     } catch {}
@@ -1473,6 +1501,7 @@ function App() {
       ],
       blocks: templateBlocks(template)
     });
+    if (template === "blank") capture("note_created");
     let nextPages = [next, ...pages];
     // Method A & C: If parentId is given, append the new page's id to the parent's content array
     if (parentId) {
@@ -1775,6 +1804,7 @@ function App() {
               : [{ id: uid(), type: "text", text: "" }]
       ) as unknown as Block[]
     });
+    capture("template_created", { templateName: templateTitles[resolved] || resolved });
     commitPages(normalizePageTree([next, ...basePages]));
     setActiveId(next.id);
     setAppView("page");

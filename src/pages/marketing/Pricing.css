@@ -263,6 +263,10 @@
   color: var(--mkt-text-primary);
 }
 
+.marketing .comparison-table th:not(:first-child) {
+  text-align: center;
+}
+
 .marketing .comparison-table th:first-child {
   width: 40%;
 }

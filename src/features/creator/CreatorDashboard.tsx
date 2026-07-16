@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Store, Upload, Image, Video, DollarSign, Users, Settings, ExternalLink, Grid, BarChart3, ChevronLeft, Plus, Save } from "lucide-react";
 import { uid } from "../../utils/helpers";
+import { capture } from "../../lib/posthog";
 
 const TABS = [
   { id: 'listings', label: 'Listings', icon: Grid },
@@ -19,6 +20,7 @@ export default function CreatorDashboard({ pages, onToast, onDuplicate }) {
   const handlePublish = (listing) => {
     setListings(prev => [{ ...listing, id: uid(), status: 'draft', addCount: 0, createdAt: new Date().toISOString() }, ...prev]);
     setShowPublish(false);
+    capture("template_created", { templateName: listing.title });
     onToast?.('Template created as draft');
   };
 

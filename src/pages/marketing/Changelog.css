@@ -152,6 +152,7 @@
   font-size: 14px;
   color: var(--mkt-text-secondary);
   line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 992px) {

@@ -6,6 +6,7 @@ import { getFilteredCommands, type CommandContext, type NormalizedCommand } from
 import { executeCommand } from "../core/commands/ActionExecutor";
 import { blockFor } from "../utils/helpers";
 import type { Page } from "../lib/supabaseService";
+import { capture } from "../lib/posthog";
 
 /** This component's own `context` prop is a superset of `CommandContext`
  * (CommandRegistry.ts) — it's forwarded as-is into `executeCommand`/
@@ -89,6 +90,7 @@ export default function CommandPalette({
 
   useEffect(() => {
     if (open) {
+      capture("command_palette_opened");
       setQuery("");
       setHighlightedIndex(0);
       setMode("commands");

@@ -65,7 +65,7 @@ export default function Legal() {
         <Link to="/" className="legal-back"><ArrowLeft size={14} /> Back to Home</Link>
         <h1>{page.title}</h1>
         <div className="legal-body">
-          {page.content?.split('\n').map((line, i) => {
+          {page.content?.replace(/\\n/g, '\n').split('\n').map((line, i) => {
             if (line.startsWith('## ')) return <h2 key={i}>{line.slice(3)}</h2>;
             if (line.startsWith('### ')) return <h3 key={i}>{line.slice(4)}</h3>;
             if (line.trim() === '') return <br key={i} />;

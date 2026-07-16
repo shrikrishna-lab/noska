@@ -66,6 +66,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/integrations", label: "Integrations", icon: Plug, group: "platform" },
   { to: "/api-keys", label: "API Keys", icon: Key, group: "platform", requiresRole: "admin" },
   { to: "/system-status", label: "System Status", icon: Activity, group: "operations" },
+  { to: "/system-health", label: "System Health", icon: Server, group: "operations", requiresRole: "admin" },
+  { to: "/email-analytics", label: "Email Analytics", icon: Mail, group: "growth" },
   { to: "/webhooks", label: "Webhooks", icon: Workflow, group: "platform" },
   { to: "/settings", label: "Settings", icon: Settings, group: "settings" },
   { to: "/admin-accounts", label: "Administrator Accounts", icon: ShieldCheck, group: "settings", requiresRole: "super_admin" }

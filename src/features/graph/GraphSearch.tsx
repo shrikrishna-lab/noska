@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Search, X, CornerDownLeft } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FADE_IN_VARIANTS } from "./GraphAnimations";
+import { capture } from "../../lib/posthog";
 
 export default function GraphSearch({ 
   pages, 
@@ -23,6 +24,7 @@ export default function GraphSearch({
     const val = e.target.value;
     setQuery(val);
     onSearchChange(val);
+    if (val.trim()) capture("search_used");
   };
 
   const handleClear = () => {

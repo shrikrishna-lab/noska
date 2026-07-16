@@ -2,6 +2,9 @@ import { ClerkProvider, AuthenticateWithRedirectCallback } from "@clerk/react";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import posthog from "posthog-js";
+import { initPosthog, capture } from "./lib/posthog";
+import { initSentry } from "./lib/sentry";
 import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import MarketingHome from "./pages/marketing/Home";
@@ -18,6 +21,9 @@ import Docs from "./pages/marketing/Docs";
 import Launch from "./pages/marketing/launch/Launch";
 import ControlCenter from "./ControlCenter";
 import "./index.css";
+
+initPosthog();
+initSentry();
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
