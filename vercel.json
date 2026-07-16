@@ -27,5 +27,8 @@
     { "source": "/control", "destination": "/control/index.html" },
     { "source": "/control/(.*)", "destination": "/control/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "overrides": [
+    { "path": "/control", "outputPath": "/control/index.html" }
   ]
 }

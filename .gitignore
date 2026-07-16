@@ -34,3 +34,5 @@ admin/playwright-errors.log
 
 # Freebuff artifact
 .freebuff/
+.vercel
+.env*
