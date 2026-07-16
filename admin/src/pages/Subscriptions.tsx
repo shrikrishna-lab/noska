@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Portal } from "@/components/ui/Portal";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { DollarSign, CreditCard, TrendingUp, Users, Plus, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
-const statusColors: Record<string, "default" | "success" | "warning" | "destructive"> = {
+const statusColors: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
   active: "success", past_due: "warning", canceled: "destructive", trialing: "default", paused: "secondary",
 };
 
@@ -60,6 +61,7 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl border bg-background p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
@@ -95,6 +97,7 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
