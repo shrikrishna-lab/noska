@@ -55,8 +55,8 @@ export function Login() {
         <CardContent>
           <form onSubmit={isSetup ? handleSetup : handleSignIn} className="space-y-4">
             {error && (
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-gradient-to-br from-purple-50 via-purple-50 to-red-50 p-3 text-sm text-red-700 shadow-sm dark:border-red-800 dark:from-purple-950 dark:via-purple-950 dark:to-red-950 dark:text-red-400">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
                 <span>{error}</span>
               </div>
             )}
