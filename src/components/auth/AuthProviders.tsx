@@ -16,6 +16,12 @@ export default function AuthProviders({ onProviderClick, loadingProvider, disabl
         onClick={() => onProviderClick("google")}
         disabled={disabled || (loadingProvider && loadingProvider !== "google")}
       />
+      <ProviderButton
+        provider="microsoft"
+        isLoading={loadingProvider === "microsoft"}
+        onClick={() => onProviderClick("microsoft")}
+        disabled={disabled || (loadingProvider && loadingProvider !== "microsoft")}
+      />
     </div>
   );
 }
