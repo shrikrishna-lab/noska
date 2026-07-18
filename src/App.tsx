@@ -344,13 +344,11 @@ function App() {
   }, [dark]);
 
   useEffect(() => {
-    capture("page_view", { path: location.pathname });
-  }, [location.pathname]);
-
-  useEffect(() => {
     if (isSignedIn && clerkUser) {
       identifyUser(clerkUser.id, {
         email: clerkUser.emailAddresses?.[0]?.emailAddress,
+        name: `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || clerkUser.username || undefined,
+        created_at: clerkUser.createdAt,
       });
       setSentryUser({
         id: clerkUser.id,
@@ -797,7 +795,7 @@ function App() {
   const handleOnboardingComplete = useCallback(async (formData: OnboardingFormData, starterPages: OnboardingPagePreview[]) => {
     capture("signup_completed");
     if (formData.workspaceName) {
-      capture("workspace_created", { workspaceName: formData.workspaceName });
+      capture("workspace_created");
       setWorkspaceName(formData.workspaceName);
     }
     // See handleFinalize's comment above — `starterPages` is declared as
@@ -1501,7 +1499,7 @@ function App() {
       ],
       blocks: templateBlocks(template)
     });
-    if (template === "blank") capture("note_created");
+    if (template === "blank") capture("note_created", { creation_method: "blank" });
     let nextPages = [next, ...pages];
     // Method A & C: If parentId is given, append the new page's id to the parent's content array
     if (parentId) {
@@ -1804,7 +1802,7 @@ function App() {
               : [{ id: uid(), type: "text", text: "" }]
       ) as unknown as Block[]
     });
-    capture("template_created", { templateName: templateTitles[resolved] || resolved });
+    capture("template_created", { template_type: resolved });
     commitPages(normalizePageTree([next, ...basePages]));
     setActiveId(next.id);
     setAppView("page");

@@ -3,8 +3,9 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import posthog from "posthog-js";
-import { initPosthog, capture } from "./lib/posthog";
-import { initSentry } from "./lib/sentry";
+import { PostHogProvider } from "posthog-js/react";
+import { initPosthog } from "./lib/posthog";
+import { initSentry, Sentry } from "./lib/sentry";
 import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import MarketingHome from "./pages/marketing/Home";
@@ -28,7 +29,22 @@ initSentry();
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
+      <PostHogProvider client={posthog}>
       <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/login">
+        <Sentry.ErrorBoundary fallback={({ error }) => (
+          <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] p-8">
+            <div className="max-w-md text-center">
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Something went wrong</h1>
+              <p className="text-[var(--text-secondary)] mb-4">An unexpected error occurred. Our team has been notified.</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="rounded-lg bg-[var(--accent)] px-4 py-2 text-white hover:opacity-90"
+              >
+                Reload page
+              </button>
+            </div>
+          </div>
+        )}>
         <Routes>
           {/* Public marketing site — never runs the auth/session bootstrap.
               Each page shares the Navbar/Footer via MarketingLayout. */}
@@ -62,7 +78,9 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/:workspaceSlug" element={<App />} />
           <Route path="/:workspaceSlug/:pageId" element={<App />} />
         </Routes>
+        </Sentry.ErrorBoundary>
       </ClerkProvider>
+      </PostHogProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

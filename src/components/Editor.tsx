@@ -8,6 +8,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { Block as BlockType } from "../../types/blocks";
 import type { Page } from "../lib/supabaseService";
 import type { TreeBlock } from "../utils/blockModel";
+import { capture } from "../lib/posthog";
 
 /** Editor.tsx's own local tree-manipulation shape — deliberately a
  * minimal structural type (id/parentId/content, matching every block
@@ -526,6 +527,7 @@ export default function Editor({
   const handleAddComment = (comment) => {
     const existing = page.comments || [];
     onPagePatch?.({ comments: [...existing, comment] });
+    capture("comment_added", { surface: comment.blockId === "__title__" ? "title" : "block" });
     onToast?.("Comment added");
   };
 

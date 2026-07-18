@@ -20,7 +20,7 @@ export default function CreatorDashboard({ pages, onToast, onDuplicate }) {
   const handlePublish = (listing) => {
     setListings(prev => [{ ...listing, id: uid(), status: 'draft', addCount: 0, createdAt: new Date().toISOString() }, ...prev]);
     setShowPublish(false);
-    capture("template_created", { templateName: listing.title });
+    capture("template_created", { creation_source: "creator_studio" });
     onToast?.('Template created as draft');
   };
 

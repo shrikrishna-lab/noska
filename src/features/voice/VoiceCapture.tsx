@@ -4,6 +4,7 @@ import { SPRING_PRESETS } from "../motion/MotionSystem";
 import { Mic, MicOff, Square, Sparkles, X, AlertCircle } from "lucide-react";
 import { runAI } from "../../utils/ai";
 import { uid, blockFor } from "../../utils/helpers";
+import { capture } from "../../lib/posthog";
 
 /* ─── text → structured blocks ─── */
 
@@ -235,6 +236,7 @@ Rules:
       header.meta = { tone: "info", icon: "🎙️" };
 
       onAppendBlocks([header, ...blocks]);
+      capture("voice_note_inserted", { structured_with_ai: true, duration_seconds: elapsed, block_count: blocks.length });
       onToast?.(`${blocks.length} structured blocks added`);
       onClose();
     } catch (err) {
@@ -255,6 +257,7 @@ Rules:
     header.meta = { tone: "info", icon: "🎙️" };
 
     onAppendBlocks([header, ...blocks]);
+    capture("voice_note_inserted", { structured_with_ai: false, duration_seconds: elapsed, block_count: blocks.length });
     onToast?.("Voice note added");
     onClose();
   };

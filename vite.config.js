@@ -13,6 +13,9 @@ export default defineConfig({
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
+      release: process.env.VITE_APP_VERSION
+        ? `noska@${process.env.VITE_APP_VERSION}`
+        : undefined,
       telemetry: false,
     }),
   ],
@@ -23,10 +26,6 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Fail fast instead of silently moving to another port (5174, 5175, ...)
-    // when 5173 is taken by an unrelated process. A shifting port breaks the
-    // Supabase OAuth redirect, which is configured against a fixed
-    // http://localhost:5173 URL in the Supabase dashboard.
     strictPort: true
   },
   build: {
@@ -34,4 +33,3 @@ export default defineConfig({
     chunkSizeWarningLimit: 1200
   }
 });
-

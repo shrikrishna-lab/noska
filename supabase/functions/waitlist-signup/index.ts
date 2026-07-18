@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
           Authorization: `Bearer ${CLERK_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email_address: email }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -59,19 +59,24 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  const upsertData: Record<string, unknown> = {
+    name,
+    email,
+    provider: "clerk",
+    status: "waiting",
+    country: null,
+    joined_at: new Date().toISOString(),
+    referral_count: 0,
+    invite_sent: false,
+    accepted: false,
+  }
+  if (clerkEntryId) {
+    upsertData.clerk_entry_id = clerkEntryId
+  }
+
   const { error: dbError } = await supabase
     .from("waitlist_entries")
-    .upsert({
-      name,
-      email,
-      provider: "clerk",
-      status: "waiting",
-      country: null,
-      joined_at: new Date().toISOString(),
-      referral_count: 0,
-      invite_sent: false,
-      accepted: false,
-    }, { onConflict: "email" })
+    .upsert(upsertData, { onConflict: "email" })
 
   if (dbError) {
     console.error("Failed to insert waitlist entry:", dbError)

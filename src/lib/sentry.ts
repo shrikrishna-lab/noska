@@ -1,7 +1,6 @@
 import * as Sentry from "@sentry/react";
 
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || "1.0.0";
 
 export function initSentry() {
   if (!SENTRY_DSN) {
@@ -11,7 +10,6 @@ export function initSentry() {
 
   Sentry.init({
     dsn: SENTRY_DSN,
-    release: `noska@${APP_VERSION}`,
     environment: import.meta.env.PROD ? "production" : "development",
     integrations: [
       Sentry.browserTracingIntegration(),
@@ -20,9 +18,38 @@ export function initSentry() {
     tracesSampleRate: import.meta.env.PROD ? 0.1 : 0,
     replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 0,
     replaysOnErrorSampleRate: import.meta.env.PROD ? 1.0 : 0,
+    tracePropagationTargets: [
+      /^https?:\/\/localhost(:\d+)?/,
+      /^https:\/\/([a-z0-9-]+\.)?noska\.dev/,
+      /^https:\/\/([a-z0-9-]+\.)?noska\.app/,
+      /^https:\/\/([a-z0-9-]+\.)?noska\.vercel\.app/,
+      /^https:\/\/yxgtmzksnyarlivgxujf\.supabase\.co/,
+    ],
     beforeSend(event) {
       if (import.meta.env.DEV) return null;
       return event;
+    },
+    beforeSendTransaction(event) {
+      if (import.meta.env.DEV) return null;
+      return event;
+    },
+    beforeBreadcrumb(breadcrumb) {
+      if (breadcrumb.category === "xhr" || breadcrumb.category === "fetch") {
+        const url = breadcrumb.data?.url as string | undefined;
+        if (url && !url.startsWith(window.location.origin) && !url.includes("supabase.co") && !url.includes("clerk.")) {
+          return null;
+        }
+      }
+      if (breadcrumb.category === "console" && breadcrumb.level === "debug") {
+        return null;
+      }
+      if (breadcrumb.category === "ui.click") {
+        const selector = breadcrumb.message || "";
+        if (/password|secret|token|key|jwt|credit|ssn|ssn/i.test(selector)) {
+          return null;
+        }
+      }
+      return breadcrumb;
     },
   });
 }
