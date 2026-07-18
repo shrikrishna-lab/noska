@@ -7,7 +7,7 @@ const LINKS = [
   { label: 'Roadmap', to: '/changelog' },
   { label: 'GitHub', href: 'https://github.com', external: true },
   { label: 'Discord', href: 'https://discord.com', external: true },
-  { label: 'Contact', href: 'mailto:hello@noska.app' },
+  { label: 'Contact', href: 'mailto:hello@noska.me' },
 ];
 
 export function LaunchFooter() {
