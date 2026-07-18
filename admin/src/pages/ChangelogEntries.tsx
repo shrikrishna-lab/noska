@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useChangelogEntries, useCreateChangelogEntry, useUpdateChangelogEntry, useDeleteChangelogEntry } from "@/lib/queries";
+import { useChangelogEntries, useCreateChangelogEntry, useUpdateChangelogEntry, useDeleteChangelogEntry, useRealtimeInvalidate } from "@/lib/queries";
 import type { ChangelogEntry } from "@/lib/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -98,6 +98,7 @@ export function ChangelogEntries() {
   const deleteEntry = useDeleteChangelogEntry();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ChangelogEntry | null>(null);
+  useRealtimeInvalidate(["admin", "changelog"], "changelog_entries");
 
   const columns: Column<ChangelogEntry>[] = [
     { key: "title", label: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title}</span> },

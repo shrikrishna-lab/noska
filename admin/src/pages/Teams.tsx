@@ -1,6 +1,6 @@
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { useTeams, type DbTeam } from "@/lib/queries";
+import { useTeams, type DbTeam, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -15,6 +15,7 @@ const columns: Column<DbTeam>[] = [
 
 export function Teams() {
   const { data: teams, isLoading } = useTeams();
+  useRealtimeInvalidate(["admin", "teams"], "teams");
 
   if (isLoading) return <div className="p-6"><PageHeader title="Teams" description="Manage teams across workspaces" /><LoadingState count={4} /></div>;
 

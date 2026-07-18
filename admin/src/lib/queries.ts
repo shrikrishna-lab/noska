@@ -1046,6 +1046,25 @@ export function useRejectWaitlistEntry() {
 }
 
 // ── API Keys Mutations ──
+export function useCreateApiKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; scopes: string[] }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const prefix = "nsk_" + Array.from({ length: 8 }, () => Math.random().toString(36)[2]).join("");
+      const key = prefix + "_" + Array.from({ length: 32 }, () => Math.random().toString(36)[2]).join("");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "api_keys",
+        p_data: { name: data.name, prefix, key, scopes: data.scopes, usage_this_month: 0 },
+        p_min_role: "admin",
+      });
+      if (error) throw error;
+      return { prefix, key, name: data.name };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "api-keys"] }),
+  });
+}
+
 export function useDeleteApiKey() {
   const qc = useQueryClient();
   return useMutation({
@@ -1079,7 +1098,7 @@ export function useCreateEmailCampaign() {
 export function useUpdateEmailCampaign() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; name?: string; subject?: string; html_content?: string; status?: string }) => {
+    mutationFn: async ({ id, ...data }: { id: string; name?: string; subject?: string; html_content?: string; status?: string; scheduled_for?: string }) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
       const { error } = await supabase.rpc("admin_update", {
         p_session_token: token(), p_table: "email_campaigns", p_id: id,
@@ -1102,6 +1121,37 @@ export function useDeleteEmailCampaign() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+  });
+}
+
+// ── Integration Mutations ──
+export function useSyncIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "integrations", p_id: id,
+        p_data: { last_sync_at: new Date().toISOString() }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "integrations"] }),
+  });
+}
+
+export function useDisconnectIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "integrations", p_id: id,
+        p_data: { status: "disconnected" }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "integrations"] }),
   });
 }
 

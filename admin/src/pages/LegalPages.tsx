@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useLegalPages, useCreateLegalPage, useUpdateLegalPage, useDeleteLegalPage } from "@/lib/queries";
+import { useLegalPages, useCreateLegalPage, useUpdateLegalPage, useDeleteLegalPage, useRealtimeInvalidate } from "@/lib/queries";
 import type { LegalPage } from "@/lib/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -84,6 +84,7 @@ export function LegalPages() {
   const deletePage = useDeleteLegalPage();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<LegalPage | null>(null);
+  useRealtimeInvalidate(["admin", "legal-pages"], "legal_pages");
 
   const columns: Column<LegalPage>[] = [
     { key: "title", label: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title}</span> },

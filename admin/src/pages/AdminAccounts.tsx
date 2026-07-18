@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "@/lib/supabase";
-import { useAdminUsers, useInviteAdmin, useDeleteAdmin, useUpdateAdminRole, type DbAdminUser } from "@/lib/queries";
+import { useAdminUsers, useInviteAdmin, useDeleteAdmin, useUpdateAdminRole, type DbAdminUser, useRealtimeInvalidate } from "@/lib/queries";
 import { initialsFromName } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -89,6 +89,7 @@ export function AdminAccounts() {
   const updateRole = useUpdateAdminRole();
   const [showInvite, setShowInvite] = useState(false);
   const [editingRole, setEditingRole] = useState<string | null>(null);
+  useRealtimeInvalidate(["admin", "admin-accounts"], "admin_users");
 
   const columns: Column<DbAdminUser>[] = [
     {

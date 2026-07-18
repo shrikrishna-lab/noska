@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useBlogPosts, useCreateBlogPost, useUpdateBlogPost, useDeleteBlogPost } from "@/lib/queries";
+import { useBlogPosts, useCreateBlogPost, useUpdateBlogPost, useDeleteBlogPost, useRealtimeInvalidate } from "@/lib/queries";
 import type { BlogPost } from "@/lib/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -102,6 +102,7 @@ export function BlogPosts() {
   const deletePost = useDeleteBlogPost();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<BlogPost | null>(null);
+  useRealtimeInvalidate(["admin", "blog-posts"], "blog_posts");
 
   const columns: Column<BlogPost>[] = [
     { key: "title", label: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title}</span> },

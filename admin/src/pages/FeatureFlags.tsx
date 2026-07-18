@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { useFeatureFlags, useToggleFeatureFlag, useCreateFeatureFlag } from "@/lib/queries";
+import { useFeatureFlags, useToggleFeatureFlag, useCreateFeatureFlag, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -92,6 +92,7 @@ export function FeatureFlags() {
   const toggleMutation = useToggleFeatureFlag();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  useRealtimeInvalidate(["admin", "feature-flags"], "feature_flags");
 
   const filtered = (flags ?? []).filter(
     (f) => f.name.toLowerCase().includes(search.toLowerCase()) || f.key.toLowerCase().includes(search.toLowerCase())
