@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
@@ -17,10 +18,11 @@ import { AiUsage } from "@/pages/AiUsage";
 import { Models } from "@/pages/Models";
 import { FeatureFlags } from "@/pages/FeatureFlags";
 import { EmailCampaigns } from "@/pages/EmailCampaigns";
-import { Notifications } from "@/pages/Notifications";
+
 import { Feedback } from "@/pages/Feedback";
 import { Support } from "@/pages/Support";
 import { AuditLogs } from "@/pages/AuditLogs";
+import { NotificationDetail } from "@/pages/NotificationDetail";
 import { Roadmap } from "@/pages/Roadmap";
 import { ChangelogEntries } from "@/pages/ChangelogEntries";
 import { BlogPosts } from "@/pages/BlogPosts";
@@ -37,6 +39,17 @@ import { Webhooks } from "@/pages/Webhooks";
 import { Forbidden } from "@/pages/Forbidden";
 import { Login } from "@/pages/Login";
 import { Loader2 } from "lucide-react";
+
+const MonitoringOverview = lazy(() => import("@/pages/monitoring/Overview").then((m) => ({ default: m.MonitoringOverview })));
+const MonitoringErrors = lazy(() => import("@/pages/monitoring/Errors").then((m) => ({ default: m.MonitoringErrors })));
+const MonitoringPerformance = lazy(() => import("@/pages/monitoring/Performance").then((m) => ({ default: m.MonitoringPerformance })));
+const MonitoringSessions = lazy(() => import("@/pages/monitoring/Sessions").then((m) => ({ default: m.MonitoringSessions })));
+const MonitoringInfrastructure = lazy(() => import("@/pages/monitoring/Infrastructure").then((m) => ({ default: m.MonitoringInfrastructure })));
+const MonitoringEmailHealth = lazy(() => import("@/pages/monitoring/EmailHealth").then((m) => ({ default: m.MonitoringEmailHealth })));
+const MonitoringDeployments = lazy(() => import("@/pages/monitoring/Deployments").then((m) => ({ default: m.MonitoringDeployments })));
+const MonitoringLogs = lazy(() => import("@/pages/monitoring/Logs").then((m) => ({ default: m.MonitoringLogs })));
+const MonitoringIntegrations = lazy(() => import("@/pages/monitoring/Integrations").then((m) => ({ default: m.MonitoringIntegrations })));
+const NotificationCenter = lazy(() => import("@/pages/NotificationCenter").then((m) => ({ default: m.NotificationCenter })));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30000, retry: 1 } },
@@ -82,7 +95,8 @@ export default function App() {
                   <Route path="models" element={<Models />} />
                   <Route path="feature-flags" element={<FeatureFlags />} />
                   <Route path="email-campaigns" element={<EmailCampaigns />} />
-                  <Route path="notifications" element={<Notifications />} />
+                  <Route path="notifications" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><NotificationCenter /></Suspense>} />
+                  <Route path="notifications/:id" element={<NotificationDetail />} />
                   <Route path="feedback" element={<Feedback />} />
                   <Route path="support" element={<Support />} />
                   <Route path="audit-logs" element={<AuditLogs />} />
@@ -99,6 +113,15 @@ export default function App() {
                   <Route path="settings" element={<Settings />} />
                   <Route path="admin-accounts" element={<AdminAccounts />} />
                   <Route path="webhooks" element={<Webhooks />} />
+                  <Route path="monitoring/overview" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringOverview /></Suspense>} />
+                  <Route path="monitoring/errors" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringErrors /></Suspense>} />
+                  <Route path="monitoring/performance" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringPerformance /></Suspense>} />
+                  <Route path="monitoring/sessions" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringSessions /></Suspense>} />
+                  <Route path="monitoring/infrastructure" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringInfrastructure /></Suspense>} />
+                  <Route path="monitoring/email-health" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringEmailHealth /></Suspense>} />
+                  <Route path="monitoring/deployments" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringDeployments /></Suspense>} />
+                  <Route path="monitoring/logs" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringLogs /></Suspense>} />
+                  <Route path="monitoring/integrations" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringIntegrations /></Suspense>} />
                 </Route>
                 <Route path="/403" element={<Forbidden />} />
                 <Route path="*" element={<Forbidden />} />

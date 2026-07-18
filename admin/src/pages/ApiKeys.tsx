@@ -1,20 +1,64 @@
+import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useApiKeys, useDeleteApiKey } from "@/lib/queries";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useApiKeys, useDeleteApiKey, useCreateApiKey, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime, formatNumber } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { ApiKey } from "@/lib/types";
-import { Plus, RotateCcw, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Copy, Check, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { useState } from "react";
+
+const ALL_SCOPES = ["read", "write", "admin", "analytics", "monitoring", "billing", "ai"];
 
 export function ApiKeys() {
   const { data: keys, isLoading } = useApiKeys();
   const deleteKey = useDeleteApiKey();
+  const createKey = useCreateApiKey();
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newScopes, setNewScopes] = useState<string[]>(["read"]);
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  useRealtimeInvalidate(["admin", "api-keys"], "api_keys");
+
+  const handleGenerate = async () => {
+    if (!newName.trim()) { toast.error("Name is required"); return; }
+    if (newScopes.length === 0) { toast.error("Select at least one scope"); return; }
+    try {
+      const result = await createKey.mutateAsync({ name: newName.trim(), scopes: newScopes });
+      setCreatedKey(result.key);
+    } catch {
+      toast.error("Failed to generate API key");
+    }
+  };
+
+  const handleCopy = async () => {
+    if (createdKey) {
+      await navigator.clipboard.writeText(createdKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleClose = () => {
+    setShowModal(false);
+    setNewName("");
+    setNewScopes(["read"]);
+    setCreatedKey(null);
+    setCopied(false);
+  };
+
+  const toggleScope = (scope: string) => {
+    setNewScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]
+    );
+  };
 
   const columns: Column<ApiKey>[] = [
     { key: "name", label: "Name", sortable: true, render: (row) => <span className="font-medium">{row.name}</span> },
@@ -46,12 +90,80 @@ export function ApiKeys() {
   if (isLoading) return <div className="p-6"><PageHeader title="API Keys" description="Manage API keys" /><LoadingState count={3} /></div>;
 
   return (
-    <div className="p-6">
-      <PageHeader title="API Keys" description="Manage API keys for external access" actions={<Button size="sm"><Plus className="mr-1 h-3.5 w-3.5" /> Generate Key</Button>} />
+    <div className="p-6 space-y-6">
+      <PageHeader title="API Keys" description="Manage API keys for external access" actions={
+        <Button size="sm" onClick={() => setShowModal(true)}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Generate Key
+        </Button>
+      } />
       {keys && keys.length > 0 ? (
         <DataTable columns={columns} data={keys} searchable={false} />
       ) : (
-        <EmptyState title="No API keys" description="API keys will appear here once generated." />
+        <EmptyState
+          title="No API keys"
+          description="Generate your first API key to get started."
+        />
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleClose}>
+          <Card className="w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle>{createdKey ? "API Key Generated" : "Generate API Key"}</CardTitle>
+                <CardDescription>
+                  {createdKey ? "Copy this key now. You won't be able to see it again." : "Create a new API key for external access."}
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClose}><X className="h-4 w-4" /></Button>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              {createdKey ? (
+                <>
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <code className="break-all text-xs font-mono">{createdKey}</code>
+                  </div>
+                  <Button className="w-full" onClick={handleCopy}>
+                    {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                    {copied ? "Copied!" : "Copy Key"}
+                  </Button>
+                  <Button variant="outline" className="w-full" onClick={handleClose}>Done</Button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Name</label>
+                    <Input
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder="e.g. Production API Key"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Scopes</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_SCOPES.map((s) => (
+                        <Badge
+                          key={s}
+                          variant={newScopes.includes(s) ? "default" : "outline"}
+                          className="cursor-pointer"
+                          onClick={() => toggleScope(s)}
+                        >{s}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" className="flex-1" onClick={handleClose}>Cancel</Button>
+                    <Button className="flex-1" onClick={handleGenerate} disabled={createKey.isPending}>
+                      {createKey.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Generate
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

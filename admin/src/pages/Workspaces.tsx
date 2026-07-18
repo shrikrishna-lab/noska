@@ -1,7 +1,7 @@
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { useWorkspaceSettings, usePages, usePageCount } from "@/lib/queries";
+import { useWorkspaceSettings, usePages, usePageCount, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -21,6 +21,7 @@ export function Workspaces() {
   const { data: settings, isLoading: loadSettings } = useWorkspaceSettings();
   const { data: pages } = usePages();
   const { data: totalPages } = usePageCount();
+  useRealtimeInvalidate(["admin", "workspaces"], "workspace_settings");
 
   if (loadSettings) return <div className="p-6"><PageHeader title="Workspaces" description="Manage all workspaces on the platform" /><LoadingState count={4} /></div>;
 

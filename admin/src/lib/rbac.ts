@@ -49,6 +49,10 @@ export function canManageAdmins(user: AdminUser | null): boolean {
   return user?.role === "super_admin";
 }
 
+export function canViewMonitoring(user: AdminUser | null): boolean {
+  return hasRole(user, "admin");
+}
+
 export const DEFAULT_ADMIN_USERS: AdminUser[] = [
   {
     id: "u-001",

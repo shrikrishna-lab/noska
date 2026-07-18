@@ -1,7 +1,6 @@
 import {
   Users,
   UserCog,
-  UserPlus,
   Mail,
   Building2,
   CreditCard,
@@ -25,9 +24,14 @@ import {
   ListChecks,
   Workflow,
   Ban,
-  Gavel,
-  Newspaper,
-  BookOpen
+  Gauge,
+  AlertTriangle,
+  Zap,
+  Radio,
+  Database,
+  Rocket,
+  ScrollText,
+  Puzzle,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -35,7 +39,7 @@ export interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
-  group: "overview" | "growth" | "people" | "platform" | "operations" | "settings";
+  group: "overview" | "growth" | "people" | "platform" | "operations" | "monitoring" | "settings";
   badge?: string | number;
   requiresRole?: "super_admin" | "admin" | "developer";
 }
@@ -70,6 +74,15 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/email-analytics", label: "Email Analytics", icon: Mail, group: "growth" },
   { to: "/webhooks", label: "Webhooks", icon: Workflow, group: "platform" },
   { to: "/settings", label: "Settings", icon: Settings, group: "settings" },
+  { to: "/monitoring/overview", label: "Overview", icon: Gauge, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring/errors", label: "Errors", icon: AlertTriangle, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring/performance", label: "Performance", icon: Zap, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring/sessions", label: "Sessions", icon: Radio, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring/infrastructure", label: "Infrastructure", icon: Server, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring/email-health", label: "Email Health", icon: Mail, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring/deployments", label: "Deployments", icon: Rocket, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring/logs", label: "Logs", icon: ScrollText, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring/integrations", label: "Integrations", icon: Puzzle, group: "monitoring", requiresRole: "admin" },
   { to: "/admin-accounts", label: "Administrator Accounts", icon: ShieldCheck, group: "settings", requiresRole: "super_admin" }
 ];
 
@@ -79,6 +92,7 @@ export const NAV_GROUPS: Array<{ id: NavItem["group"]; label: string }> = [
   { id: "people", label: "People" },
   { id: "platform", label: "Platform" },
   { id: "operations", label: "Operations" },
+  { id: "monitoring", label: "Monitoring" },
   { id: "settings", label: "Settings" }
 ];
 

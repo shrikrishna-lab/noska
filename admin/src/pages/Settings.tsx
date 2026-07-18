@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { useAllPlatformSettings, useUpdatePlatformSetting } from "@/lib/queries";
+import { useAllPlatformSettings, useUpdatePlatformSetting, useRealtimeInvalidate } from "@/lib/queries";
 import { supabase, getAdminToken } from "@/lib/supabase";
 import { sendEmail } from "@/lib/email";
 import { Save, Trash2, AlertTriangle, Loader2, CheckCircle2, Mail } from "lucide-react";
@@ -21,6 +21,7 @@ export function Settings() {
   const updateSetting = useUpdatePlatformSetting();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  useRealtimeInvalidate(["admin", "settings"], "platform_settings");
 
   useEffect(() => {
     if (settings && Object.keys(values).length === 0) {

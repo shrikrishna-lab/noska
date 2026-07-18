@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { useAiChats, useAiChatCount, useAiUsageFromAudit } from "@/lib/queries";
+import { useAiChats, useAiChatCount, useAiUsageFromAudit, useRealtimeInvalidate } from "@/lib/queries";
 import { formatNumber } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -10,6 +10,7 @@ export function AiUsage() {
   const { data: chats, isLoading: chatsLoading } = useAiChats();
   const { data: totalChats } = useAiChatCount();
   const { data: aiEvents, isLoading: eventsLoading } = useAiUsageFromAudit();
+  useRealtimeInvalidate(["admin", "ai-usage"], "audit_logs");
 
   const totalCost = (aiEvents ?? []).reduce((s: number, e: any) => s + (e.ai_cost ?? 0), 0);
   const avgLatency = (aiEvents ?? []).length

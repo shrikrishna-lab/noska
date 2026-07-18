@@ -3,7 +3,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useBannedUsers, useUnbanUser } from "@/lib/queries";
+import { useBannedUsers, useUnbanUser, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -31,6 +31,7 @@ export function BannedUsers() {
   const { data: banned, isLoading } = useBannedUsers();
   const unbanUser = useUnbanUser();
   const [unbanning, setUnbanning] = useState<string | null>(null);
+  useRealtimeInvalidate(["admin", "banned-users"], "user_profiles");
 
   const handleUnban = async (userId: string) => {
     setUnbanning(userId);

@@ -2,7 +2,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuditEvents, useAuditCount } from "@/lib/queries";
+import { useAuditEvents, useAuditCount, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime, downloadCSV } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -19,6 +19,7 @@ const columns: Column<AuditEventRow>[] = [
 export function AuditLogs() {
   const { data: events, isLoading } = useAuditEvents(100);
   const { data: total } = useAuditCount();
+  useRealtimeInvalidate(["admin", "audit-logs"], "audit_logs");
 
   if (isLoading) return <div className="p-6"><PageHeader title="Audit Logs" description="Track all administrative actions" /><LoadingState count={8} /></div>;
 

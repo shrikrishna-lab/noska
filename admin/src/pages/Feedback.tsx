@@ -2,7 +2,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useFeedback, useUpdateFeedbackStatus } from "@/lib/queries";
+import { useFeedback, useUpdateFeedbackStatus, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -20,6 +20,7 @@ export function Feedback() {
   const { data: feedback, isLoading } = useFeedback();
   const updateStatus = useUpdateFeedbackStatus();
   const [archiving, setArchiving] = useState<string | null>(null);
+  useRealtimeInvalidate(["admin", "feedback"], "feedback");
 
   const columns: Column<FeedbackItem>[] = [
     { key: "user_name", label: "User", sortable: true, render: (row) => (

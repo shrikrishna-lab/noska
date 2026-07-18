@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useRoadmap } from "@/lib/queries";
+import { useRoadmap, useRealtimeInvalidate } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -17,6 +17,7 @@ const priorityColors: Record<string, "secondary" | "default" | "warning" | "dest
 
 export function Roadmap() {
   const { data: items, isLoading } = useRoadmap();
+  useRealtimeInvalidate(["admin", "roadmap"], "roadmap");
 
   if (isLoading) return <div className="p-6"><PageHeader title="Roadmap" description="Product roadmap" /><LoadingState count={5} /></div>;
 

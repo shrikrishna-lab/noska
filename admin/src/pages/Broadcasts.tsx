@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useBroadcasts, useCreateBroadcast, useUpdateBroadcast, useDeleteBroadcast } from "@/lib/queries";
+import { useBroadcasts, useCreateBroadcast, useUpdateBroadcast, useDeleteBroadcast, useRealtimeInvalidate } from "@/lib/queries";
 import { sendBroadcast } from "@/lib/email";
 import type { BroadcastCampaign } from "@/lib/types";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -175,6 +175,7 @@ export function Broadcasts() {
   const updateBroadcast = useUpdateBroadcast();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<BroadcastCampaign | null>(null);
+  useRealtimeInvalidate(["admin", "broadcasts"], "admin_broadcasts");
 
   const handleSend = async (b: BroadcastCampaign) => {
     try {

@@ -1,7 +1,7 @@
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Progress } from "@/components/ui/progress";
-import { useAiUsageFromAudit } from "@/lib/queries";
+import { useAiUsageFromAudit, useRealtimeInvalidate } from "@/lib/queries";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -19,6 +19,7 @@ const columns: Column<ModelDisplay>[] = [
 
 export function Models() {
   const { data: aiEvents, isLoading } = useAiUsageFromAudit();
+  useRealtimeInvalidate(["admin", "models"], "audit_logs");
 
   if (isLoading) return <div className="p-6"><PageHeader title="Models" description="AI model usage and performance" /><LoadingState count={3} /></div>;
 
