@@ -1155,6 +1155,92 @@ export function useDisconnectIntegration() {
   });
 }
 
+// ── Referral Types ──
+export interface DbReferralCode {
+  id: string; user_id: string; code: string;
+  total_referrals: number; active_referrals: number;
+  rewards_earned: number; ai_credits: number; xp: number; level: number;
+  created_at: string; updated_at: string;
+}
+
+export interface DbReferralReward {
+  id: string; name: string; description: string | null;
+  type: string; value: number; min_referrals: number;
+  icon: string | null; color: string | null; active: boolean;
+  created_at: string;
+}
+
+export interface DbUserReferral {
+  id: string; referrer_id: string; referred_id: string;
+  referral_code_id: string | null;
+  status: string; reward_claimed: boolean;
+  reward_id: string | null; joined_at: string | null;
+  created_at: string;
+}
+
+export function useReferralCodes() {
+  return useQuery({
+    queryKey: ["admin", "referral-codes"],
+    queryFn: () => adminSelect<DbReferralCode>("referral_codes", "*", { order: "created_at desc" }),
+  });
+}
+
+export function useReferralRewards() {
+  return useQuery({
+    queryKey: ["admin", "referral-rewards"],
+    queryFn: () => adminSelect<DbReferralReward>("referral_rewards", "*", { order: "min_referrals asc" }),
+  });
+}
+
+export function useUserReferrals() {
+  return useQuery({
+    queryKey: ["admin", "user-referrals"],
+    queryFn: () => adminSelect<DbUserReferral>("user_referrals", "*", { order: "created_at desc" }),
+  });
+}
+
+export function useCreateReferralReward() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "referral_rewards", p_data: data,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "referral-rewards"] }),
+  });
+}
+
+export function useUpdateReferralReward() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; [key: string]: unknown }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "referral_rewards", p_id: id, p_data: data,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "referral-rewards"] }),
+  });
+}
+
+export function useDeleteReferralReward() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "referral_rewards", p_id: id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "referral-rewards"] }),
+  });
+}
+
 // ── Feedback Mutations ──
 export function useUpdateFeedbackStatus() {
   const qc = useQueryClient();

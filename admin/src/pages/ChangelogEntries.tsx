@@ -15,6 +15,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, Pencil, Trash2, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 const tagColors: Record<string, "default" | "secondary" | "destructive" | "success" | "warning"> = {
   security: "success", editor: "default", databases: "warning", core: "secondary", ai: "secondary", study: "destructive",
@@ -94,6 +95,7 @@ function ChangelogForm({ entry, onClose }: ChangelogFormProps) {
 }
 
 export function ChangelogEntries() {
+  const { confirm } = useConfirmDialog();
   const { data: entries, isLoading } = useChangelogEntries();
   const deleteEntry = useDeleteChangelogEntry();
   const [showForm, setShowForm] = useState(false);
@@ -118,7 +120,7 @@ export function ChangelogEntries() {
         <div className="flex justify-end gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(row); setShowForm(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
-            if (!confirm(`Delete "${row.title}"?`)) return;
+            if (!await confirm({ title: "Delete Changelog Entry", description: `Permanently delete "${row.title}"? This cannot be undone.`, variant: "delete", confirmText: "Delete" })) return;
             try { await deleteEntry.mutateAsync(row.id); toast.success("Deleted"); } catch { toast.error("Failed to delete"); }
           }}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>

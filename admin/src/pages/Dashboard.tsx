@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Users, FileText, Bot, Activity, Database, HardDrive, BarChart3, UserCheck, Radio, Wifi, Globe, Bell } from "lucide-react";
+import { Users, FileText, Bot, Activity, Database, HardDrive, BarChart3, UserCheck, Radio, Wifi, Globe, Bell, RotateCcw } from "lucide-react";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -10,6 +10,8 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { useCommandCenter } from "@/components/ui/AdminCommandCenter";
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } };
 const itemAnim = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
@@ -29,6 +31,7 @@ export function Dashboard() {
   const { data: auditCount } = useAuditCount();
   const { data: chatCount } = useAiChatCount();
   const { data: collabSessions } = useActiveCollabSessions();
+  const { trigger, showSuccess } = useCommandCenter();
 
   const stats = {
     totalUsers: userCount ?? kpis?.userCount ?? 0,
@@ -59,7 +62,39 @@ export function Dashboard() {
 
   return (
     <div className="p-6">
-      <PageHeader title="Dashboard" description="Platform overview and key metrics" />
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+        <PageHeader title="Dashboard" description="Platform overview and key metrics" />
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => trigger({
+              type: "backup",
+              onConfirm: async () => {
+                // mock network delay for backup animation
+                await new Promise((resolve) => setTimeout(resolve, 3500));
+              }
+            })}
+          >
+            <Database className="mr-2 h-4 w-4" /> Backup
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => trigger({
+              type: "restore",
+              onConfirm: async () => {
+                // mock restore animation delay
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                showSuccess("System restore completed successfully");
+              }
+            })}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" /> Restore
+          </Button>
+        </div>
+      </div>
+
 
       <motion.div variants={container} initial="hidden" animate="show" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {KPI_CARDS.map((kpi) => (

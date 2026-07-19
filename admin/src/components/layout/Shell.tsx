@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { CommandCenterProvider, AdminCommandCenter, useCommandCenter } from "@/components/ui/AdminCommandCenter";
+import { DynamicIslandNotificationProvider } from "@/components/ui/DynamicIslandNotification";
 
-export function Shell() {
+function ShellInner() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
+  const { trigger } = useCommandCenter();
 
   useEffect(() => {
     setMobileOpen(false);
@@ -20,10 +23,15 @@ export function Shell() {
         e.preventDefault();
         setSearchOpen((p) => !p);
       }
+      // Ctrl+Space to summon Quick Actions Command Center
+      if (e.ctrlKey && e.key === " ") {
+        e.preventDefault();
+        trigger({ type: "quick_actions" });
+      }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, []);
+  }, [trigger]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -35,6 +43,18 @@ export function Shell() {
         </main>
       </div>
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <AdminCommandCenter />
     </div>
   );
 }
+
+export function Shell() {
+  return (
+    <DynamicIslandNotificationProvider>
+      <CommandCenterProvider>
+        <ShellInner />
+      </CommandCenterProvider>
+    </DynamicIslandNotificationProvider>
+  );
+}
+

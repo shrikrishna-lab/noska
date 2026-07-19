@@ -10,12 +10,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { Integration } from "@/lib/types";
 import { Plug, RefreshCw, Trash2, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 const statusColors: Record<string, "success" | "destructive" | "warning"> = {
   connected: "success", disconnected: "destructive", error: "warning",
 };
 
 export function Integrations() {
+  const { confirm } = useConfirmDialog();
   const { data: integrations, isLoading } = useIntegrations();
   const syncMut = useSyncIntegration();
   const disconnectMut = useDisconnectIntegration();
@@ -31,7 +33,7 @@ export function Integrations() {
   }, [syncMut]);
 
   const handleDisconnect = useCallback(async (int: Integration) => {
-    if (!confirm(`Disconnect "${int.name}"?`)) return;
+    if (!await confirm({ title: "Disconnect Integration", description: `Disconnect "${int.name}"? The integration will stop syncing and may lose data.`, confirmText: "Disconnect", destructive: true })) return;
     try {
       await disconnectMut.mutateAsync(int.id);
       toast.success(`${int.name} disconnected`);

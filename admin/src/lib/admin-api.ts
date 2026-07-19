@@ -1,9 +1,13 @@
-import { supabase, SUPABASE_ENABLED } from "./supabase";
+import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
 
 class AdminApi {
   private async request<T>(service: string, action: string, payload?: Record<string, unknown>): Promise<T> {
     if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+    const token = getAdminToken();
+    if (!token) throw new Error("No admin session");
     const { data, error } = await supabase.functions.invoke("admin-api", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
       body: { service, action, payload },
     });
     if (error) throw error;

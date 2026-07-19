@@ -14,6 +14,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, Pencil, Trash2, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 interface LegalFormProps {
   page?: LegalPage;
@@ -80,6 +81,7 @@ function LegalForm({ page, onClose }: LegalFormProps) {
 }
 
 export function LegalPages() {
+  const { confirm } = useConfirmDialog();
   const { data: pages, isLoading } = useLegalPages();
   const deletePage = useDeleteLegalPage();
   const [showForm, setShowForm] = useState(false);
@@ -103,7 +105,7 @@ export function LegalPages() {
           </a>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(row); setShowForm(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
-            if (!confirm(`Delete "${row.title}"?`)) return;
+            if (!await confirm({ title: "Delete Legal Page", description: `Permanently delete "${row.title}"? This cannot be undone.`, variant: "delete", confirmText: "Delete" })) return;
             try { await deletePage.mutateAsync(row.id); toast.success("Deleted"); } catch { toast.error("Failed to delete"); }
           }}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>

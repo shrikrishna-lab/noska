@@ -15,6 +15,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, Shield, Trash2, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 const roleColors: Record<string, "default" | "destructive" | "secondary" | "success" | "warning"> = {
   super_admin: "destructive", admin: "default", developer: "secondary", support: "success", marketing: "warning",
@@ -84,6 +85,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 }
 
 export function AdminAccounts() {
+  const { confirm } = useConfirmDialog();
   const { data: admins, isLoading } = useAdminUsers();
   const deleteAdmin = useDeleteAdmin();
   const updateRole = useUpdateAdminRole();
@@ -137,7 +139,7 @@ export function AdminAccounts() {
       render: (row) => (
         <div className="flex justify-end gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
-            if (!confirm(`Delete admin "${row.name}"?`)) return;
+            if (!await confirm({ title: "Delete Admin", description: `Are you sure you want to delete "${row.name}"? This action cannot be undone.`, variant: "delete", confirmText: "Delete" })) return;
             try { await deleteAdmin.mutateAsync(row.id); toast.success("Admin deleted"); }
             catch { toast.error("Failed to delete admin"); }
           }}><Trash2 className="h-3.5 w-3.5" /></Button>

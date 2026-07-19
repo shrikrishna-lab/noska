@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { DbFeatureFlag } from "@/lib/queries";
 import { Flag, Plus, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useIslandNotification } from "@/components/ui/DynamicIslandNotification";
 
 const categoryColors: Record<string, "default" | "secondary" | "success" | "warning"> = {
   growth: "success", platform: "default", experimental: "warning", ops: "secondary",
@@ -30,6 +31,7 @@ function CreateFlagModal({ onClose }: { onClose: () => void }) {
   const [rolloutPercent, setRolloutPercent] = useState("100");
   const createFlag = useCreateFeatureFlag();
   const [submitting, setSubmitting] = useState(false);
+  const island = useIslandNotification();
 
   const handleSubmit = async () => {
     if (!key.trim() || !name.trim()) return;
@@ -43,9 +45,11 @@ function CreateFlagModal({ onClose }: { onClose: () => void }) {
         enabled: false,
         rollout_percent: parseInt(rolloutPercent) || 100,
       });
-      toast.success(`Flag "${name}" created`);
+      island.success("Flag Created", `Feature flag "${name}" has been created.`, { icon: "workspace" });
       onClose();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to create flag"); }
+    } catch (e) {
+      island.error("Failed to Create Flag", e instanceof Error ? e.message : "Error occurred");
+    }
     setSubmitting(false);
   };
 
@@ -92,6 +96,7 @@ export function FeatureFlags() {
   const toggleMutation = useToggleFeatureFlag();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const island = useIslandNotification();
   useRealtimeInvalidate(["admin", "feature-flags"], "feature_flags");
 
   const filtered = (flags ?? []).filter(
@@ -138,7 +143,11 @@ export function FeatureFlags() {
                     checked={flag.enabled}
                     onCheckedChange={(checked) => {
                       toggleMutation.mutate({ id: flag.id, enabled: checked });
-                      toast.success(`${flag.name} ${checked ? "enabled" : "disabled"}`);
+                      if (checked) {
+                        island.success("Feature Flag Enabled", `"${flag.name}" is now active platform-wide.`, { icon: "deploy" });
+                      } else {
+                        island.info("Feature Flag Disabled", `"${flag.name}" is now disabled.`, { icon: "deploy" });
+                      }
                     }}
                   />
                 </div>
