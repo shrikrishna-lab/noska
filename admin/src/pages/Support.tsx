@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { SupportTicket, SupportMessage } from "@/lib/types";
 import { MessageSquare, Send, Monitor, Gamepad2, X, Loader2, Trash2, UserCheck, Clock } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 const priorityColors: Record<string, "secondary" | "warning" | "destructive" | "default"> = {
   low: "secondary", medium: "default", high: "warning", urgent: "destructive",
@@ -102,8 +103,9 @@ function ChatPanel({ ticket, onClose }: { ticket: SupportTicket; onClose: () => 
     }
   };
 
+  const { confirm } = useConfirmDialog();
   const handleDelete = async () => {
-    if (!confirm("Delete this ticket and all messages?")) return;
+    if (!await confirm({ title: "Delete Ticket", description: "Delete this support ticket and all messages? This cannot be undone.", variant: "delete", confirmText: "Delete" })) return;
     try {
       await deleteTicket.mutateAsync(ticket.id);
       toast.success("Ticket deleted");

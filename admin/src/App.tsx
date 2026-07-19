@@ -1,9 +1,11 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryCache, MutationCache, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { DialogProvider } from "@/components/ui/ConfirmationDialog";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { isUnauthorizedError, triggerSessionExpired } from "@/lib/session-expired";
 import { Shell } from "@/components/layout/Shell";
 import { Dashboard } from "@/pages/Dashboard";
 import { Analytics } from "@/pages/Analytics";
@@ -18,6 +20,7 @@ import { AiUsage } from "@/pages/AiUsage";
 import { Models } from "@/pages/Models";
 import { FeatureFlags } from "@/pages/FeatureFlags";
 import { EmailCampaigns } from "@/pages/EmailCampaigns";
+import { Referrals } from "@/pages/Referrals";
 
 import { Feedback } from "@/pages/Feedback";
 import { Support } from "@/pages/Support";
@@ -53,6 +56,28 @@ const NotificationCenter = lazy(() => import("@/pages/NotificationCenter").then(
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30000, retry: 1 } },
+  queryCache: new QueryCache({
+    onError: (err) => {
+      // Defense in depth: if the fetch wrapper somehow missed it,
+      // catch the same signature here when it's thrown into React Query.
+      if (isUnauthorizedError(err)) {
+        triggerSessionExpired(
+          err instanceof Error ? err.message : "UNAUTHORIZED",
+          "react-query",
+        );
+      }
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (err) => {
+      if (isUnauthorizedError(err)) {
+        triggerSessionExpired(
+          err instanceof Error ? err.message : "UNAUTHORIZED",
+          "react-query",
+        );
+      }
+    },
+  }),
 });
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -77,9 +102,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename="/control">
-        <AuthProvider>
+            <AuthProvider queryClient={queryClient}>
           <AuthGate>
             <TooltipProvider delayDuration={200}>
+              <DialogProvider>
               <Routes>
                 <Route element={<Shell />}>
                   <Route index element={<Dashboard />} />
@@ -95,6 +121,7 @@ export default function App() {
                   <Route path="models" element={<Models />} />
                   <Route path="feature-flags" element={<FeatureFlags />} />
                   <Route path="email-campaigns" element={<EmailCampaigns />} />
+                  <Route path="referrals" element={<Referrals />} />
                   <Route path="notifications" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><NotificationCenter /></Suspense>} />
                   <Route path="notifications/:id" element={<NotificationDetail />} />
                   <Route path="feedback" element={<Feedback />} />
@@ -126,9 +153,24 @@ export default function App() {
                 <Route path="/403" element={<Forbidden />} />
                 <Route path="*" element={<Forbidden />} />
               </Routes>
-              <Toaster position="bottom-right" toastOptions={{
-                style: { borderRadius: "10px", background: "hsl(var(--background))", color: "hsl(var(--foreground))", border: "1px solid hsl(var(--border))" },
-              }} />
+              </DialogProvider>
+              <Toaster
+                position="bottom-right"
+                containerClassName="noska-toaster"
+                toastOptions={{
+                  duration: 4500,
+                  style: {
+                    /* Strip default padding/bg/shadow — our noska-toast-card handles all of that */
+                    background: "transparent",
+                    boxShadow: "none",
+                    border: "none",
+                    padding: 0,
+                  },
+                  /* Disable built-in success/error icons (cards render their own) */
+                  success: { iconTheme: { primary: "transparent", secondary: "transparent" } },
+                  error: { iconTheme: { primary: "transparent", secondary: "transparent" } },
+                }}
+              />
             </TooltipProvider>
           </AuthGate>
         </AuthProvider>

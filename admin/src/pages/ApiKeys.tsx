@@ -12,10 +12,12 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { ApiKey } from "@/lib/types";
 import { Plus, Trash2, Loader2, Copy, Check, X } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 const ALL_SCOPES = ["read", "write", "admin", "analytics", "monitoring", "billing", "ai"];
 
 export function ApiKeys() {
+  const { confirm } = useConfirmDialog();
   const { data: keys, isLoading } = useApiKeys();
   const deleteKey = useDeleteApiKey();
   const createKey = useCreateApiKey();
@@ -74,7 +76,7 @@ export function ApiKeys() {
       render: (row) => (
         <div className="flex justify-end gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
-            if (!confirm(`Revoke API key "${row.name}"?`)) return;
+            if (!await confirm({ title: "Revoke API Key", description: `Permanently revoke "${row.name}"? This key will stop working immediately.`, variant: "delete", confirmText: "Revoke" })) return;
             setDeleting(row.id);
             try { await deleteKey.mutateAsync(row.id); toast.success("API key revoked"); }
             catch { toast.error("Failed to revoke key"); }

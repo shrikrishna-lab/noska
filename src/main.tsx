@@ -19,6 +19,7 @@ import MarketingBlog from "./pages/marketing/Blog";
 import BlogPost from "./pages/marketing/BlogPost";
 import Legal from "./pages/marketing/Legal";
 import Docs from "./pages/marketing/Docs";
+import Referrals from "./pages/marketing/Referrals";
 import Launch from "./pages/marketing/launch/Launch";
 import ControlCenter from "./ControlCenter";
 import "./index.css";
@@ -61,6 +62,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/terms" element={<MarketingLayout><Legal /></MarketingLayout>} />
           <Route path="/policy" element={<MarketingLayout><Legal /></MarketingLayout>} />
           <Route path="/docs" element={<MarketingLayout><Docs /></MarketingLayout>} />
+          <Route path="/referrals" element={<MarketingLayout><Referrals /></MarketingLayout>} />
           {/* Standalone pre-launch waitlist page — ships its own navbar,
               footer, and smooth-scroll setup, so it deliberately skips
               MarketingLayout (which would double up both). */}

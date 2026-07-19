@@ -8,6 +8,7 @@ import { BlockRegistry } from "../../registry/BlockRegistry";
 import { runAI } from "../../utils/ai";
 import { blockFor, uid } from "../../utils/helpers";
 import { TEXT_COLORS, BG_COLORS } from "../../utils/colors";
+import { customPrompt } from "../../lib/custom-dialogs";
 import type { Page } from "../../lib/supabaseService";
 import type { Block } from "../../../types/blocks";
 
@@ -162,8 +163,8 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }: Select
               </div>
 
               <div className="flex items-center justify-between px-1 border-b border-[var(--border)] pb-1.5">
-                <button onClick={() => {
-                  const url = window.prompt("Enter hyperlink URL:");
+                <button onClick={async () => {
+                  const url = await customPrompt("Enter hyperlink URL:");
                   if (url) {
                     const targetBlock = selection.text;
                     onReplace(`[${targetBlock}](${url})`);
@@ -177,8 +178,8 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }: Select
                 <button onClick={() => onFormat("code")} className="p-1 rounded hover:bg-[var(--hover)] text-[var(--secondary)] cursor-pointer" title="Code block">
                   <Code size={13} />
                 </button>
-                <button onClick={() => {
-                  const equation = window.prompt("Enter LaTeX equation formula:");
+                <button onClick={async () => {
+                  const equation = await customPrompt("Enter LaTeX equation formula:");
                   if (equation) onReplace(`$$${equation}$$`);
                 }} className="p-1 rounded hover:bg-[var(--hover)] text-xs font-bold font-mono text-[var(--secondary)] cursor-pointer" title="Inline Math">
                   √x
@@ -324,8 +325,8 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }: Select
                 <Code size={13} /> Code Block
               </button>
               <button
-                onClick={() => {
-                  const val = window.prompt("Enter LaTeX equation formula:");
+                onClick={async () => {
+                  const val = await customPrompt("Enter LaTeX equation formula:");
                   if (val) onReplace(`$$${val}$$`);
                   setSubView("main");
                 }}

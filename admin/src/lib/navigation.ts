@@ -32,6 +32,7 @@ import {
   Rocket,
   ScrollText,
   Puzzle,
+  Gift,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -52,6 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/banned-users", label: "Banned Users", icon: Ban, group: "people", requiresRole: "admin" },
   { to: "/workspaces", label: "Workspaces", icon: Building2, group: "people" },
   { to: "/teams", label: "Teams", icon: UserCog, group: "people" },
+  { to: "/referrals", label: "Referrals", icon: Gift, group: "growth" },
   { to: "/subscriptions", label: "Subscriptions", icon: Layers, group: "growth" },
   { to: "/payments", label: "Payments", icon: CreditCard, group: "growth" },
   { to: "/ai-usage", label: "AI Usage", icon: Bot, group: "platform" },

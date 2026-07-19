@@ -2,6 +2,7 @@ import React, { useRef, useCallback, useLayoutEffect, useMemo, useState } from "
 import { renderInlineMarkdown } from "../../utils/helpers";
 import { richTextToHtml, htmlToRichText, richTextToPlainText, normalizeRichText, isEmptyRichText, type RichTextSpan } from "../../utils/richText";
 import { EditorCommands } from "../../editor/EditorCommands";
+import { customPrompt } from "../../lib/custom-dialogs";
 import { ClipboardPipeline } from "../../editor/ClipboardPipeline";
 
 function markdownToHtml(text: string | null | undefined) {
@@ -140,7 +141,7 @@ function RichTextMode({
     isInternal.current = false;
   }, [readOnly, isComposing, syncToRichText, onRichTextChange]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback(async (e: React.KeyboardEvent) => {
     if (readOnly) return;
 
     if (e.key === "Enter" && !e.shiftKey) {
@@ -184,7 +185,7 @@ function RichTextMode({
       commands.el = divRef.current as HTMLElement;
       const sel = window.getSelection();
       if (sel && sel.toString()) {
-        const url = prompt("Enter URL:", "https://");
+        const url = await customPrompt("Enter URL:", "https://");
         if (url) {
           commands.insertLink(url, sel.toString());
           handleInput();

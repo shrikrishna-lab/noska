@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, getAdminToken } from "@/lib/supabase";
 import { sentry, posthog, resend, vercel, clerk, isSupabaseAvailable } from "./api";
 import type {
   OverviewMetrics, SentryError, PerformanceMetric, PerformancePoint,
@@ -471,19 +471,25 @@ export function useEmailCampaigns() {
     queryKey: ["monitoring", "email", "campaigns"],
     queryFn: async () => {
       if (!isSupabaseAvailable()) return [] as EmailCampaignMetric[];
+      const token = getAdminToken();
+      if (!token) return [] as EmailCampaignMetric[];
       const { data, error } = await supabase!
-        .from("email_campaigns")
-        .select("id, name, sent, opened, clicked, bounced, sent_at")
-        .order("sent_at", { ascending: false })
-        .limit(10);
+        .rpc("admin_select", {
+          p_session_token: token,
+          p_table: "email_campaigns",
+          p_select: "id, name, sent, open_rate, click_rate, bounce_rate, sent_at",
+          p_order_col: "sent_at",
+          p_order_dir: "desc",
+          p_limit: 10,
+        });
       if (error) throw error;
-      return (data ?? []).map((c: Record<string, unknown>) => ({
+      return ((data ?? []) as Array<Record<string, unknown>>).map((c) => ({
         id: String(c.id ?? ""),
         name: String(c.name ?? ""),
         sent: Number(c.sent ?? 0),
-        opened: Number(c.opened ?? 0),
-        clicked: Number(c.clicked ?? 0),
-        bounced: Number(c.bounced ?? 0),
+        opened: Number(c.open_rate ?? 0),
+        clicked: Number(c.click_rate ?? 0),
+        bounced: Number(c.bounce_rate ?? 0),
         sentAt: String(c.sent_at ?? new Date().toISOString()),
       })) as EmailCampaignMetric[];
     },

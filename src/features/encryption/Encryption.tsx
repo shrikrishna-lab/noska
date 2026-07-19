@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { SPRING_PRESETS } from "../motion/MotionSystem";
 import { Lock, Unlock, KeyRound, AlertTriangle, X } from "lucide-react";
+import { customConfirm } from "../../lib/custom-dialogs";
 
 /* ─── Web Crypto API Helpers ─── */
 
@@ -301,8 +302,8 @@ export function UnlockPagePrompt({ pageTitle, onUnlock, onDecryptRemove, onToast
 
         <div className="mt-8 border-t border-[var(--border)] pt-4">
           <button
-            onClick={() => {
-              if (window.confirm("Are you sure you want to permanently delete this page? You do not have the passphrase to recover it.")) {
+            onClick={async () => {
+              if (await customConfirm("Are you sure you want to permanently delete this page? You do not have the passphrase to recover it.")) {
                 onDecryptRemove();
               }
             }}

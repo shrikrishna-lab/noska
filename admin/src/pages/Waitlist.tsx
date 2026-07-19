@@ -13,6 +13,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Download, Mail, Trash2, Loader2, Check, X, Search, MessageSquare, ClipboardList } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 import { supabase, getAdminToken } from "@/lib/supabase";
 
 const statusColors: Record<string, "secondary" | "default" | "success" | "warning" | "destructive"> = {
@@ -62,6 +63,7 @@ function NotesModal({ entry, onClose }: { entry: DbWaitlistEntry; onClose: () =>
 }
 
 export function Waitlist() {
+  const { confirm } = useConfirmDialog();
   const { data: entries, isLoading } = useWaitlist();
   const { data: count } = useWaitlistCount();
   const sendInvite = useSendWaitlistInvite();
@@ -173,7 +175,7 @@ export function Waitlist() {
           )}
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setNotesEntry(row)} title="Notes"><MessageSquare className="h-3.5 w-3.5" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
-            if (!confirm(`Remove "${row.name}" from waitlist?`)) return;
+            if (!await confirm({ title: "Remove from Waitlist", description: `Remove "${row.name}" from the waitlist? They will lose their spot.`, variant: "delete", confirmText: "Remove" })) return;
             setDeleting(row.id);
             try { await deleteEntry.mutateAsync(row.id); toast.success("Entry removed"); }
             catch { toast.error("Failed to remove entry"); }
