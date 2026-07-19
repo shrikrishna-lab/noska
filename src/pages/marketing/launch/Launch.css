@@ -1283,6 +1283,23 @@
   box-shadow: 0 0 0 3px var(--nl-accent-tint);
 }
 
+.noska-launch .nl-waitlist-form {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 380px;
+}
+
+.noska-launch .nl-waitlist-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #DC2626;
+  background-color: rgba(220, 38, 38, 0.08);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
 .noska-launch .nl-waitlist-success {
   display: flex;
   align-items: center;

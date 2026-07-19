@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { useWaitlist, useWaitlistCount, useSendWaitlistInvite, useDeleteWaitlistEntry, useApproveWaitlistEntry, useRejectWaitlistEntry, type DbWaitlistEntry } from "@/lib/queries";
+import { useWaitlist, useWaitlistCount, useSendWaitlistInvite, useDeleteWaitlistEntry, useRejectWaitlistEntry, type DbWaitlistEntry } from "@/lib/queries";
 import { sendWaitlistInvite } from "@/lib/email";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -68,7 +68,6 @@ export function Waitlist() {
   const { data: count } = useWaitlistCount();
   const sendInvite = useSendWaitlistInvite();
   const deleteEntry = useDeleteWaitlistEntry();
-  const approveEntry = useApproveWaitlistEntry();
   const rejectEntry = useRejectWaitlistEntry();
   const [sending, setSending] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -95,12 +94,24 @@ export function Waitlist() {
     else setSelectedIds(new Set(filtered.map((e) => e.id)));
   };
 
+  const handleApprove = async (row: DbWaitlistEntry) => {
+    try {
+      const token = getAdminToken();
+      if (!token) { toast.error("No session"); return; }
+      await supabase?.functions.invoke("approve-waitlist", {
+        body: { waitlist_id: row.id, admin_name: row.name },
+      });
+      toast.success(`${row.name} approved & invited`);
+    } catch { toast.error("Failed to approve"); }
+  };
+
   const handleBulkApprove = async () => {
     if (!selectedIds.size) return;
     setBulkAction("approve");
     const ids = Array.from(selectedIds);
     for (const id of ids) {
-      try { await approveEntry.mutateAsync(id); } catch { /* skip */ }
+      const entry = entries?.find((e) => e.id === id);
+      if (entry) await handleApprove(entry);
     }
     toast.success(`Approved ${ids.length} entries`);
     setSelectedIds(new Set());
@@ -150,26 +161,24 @@ export function Waitlist() {
       render: (row) => (
         <div className="flex justify-end gap-1">
           {row.status === "waiting" && (
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={async () => {
-              try { await approveEntry.mutateAsync(row.id); toast.success(`${row.name} approved`); } catch { toast.error("Failed to approve"); }
-            }} title="Approve"><Check className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={() => handleApprove(row)} title="Approve & invite"><Check className="h-3.5 w-3.5" /></Button>
           )}
           {row.status === "waiting" && (
             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
               try { await rejectEntry.mutateAsync(row.id); toast.success(`${row.name} rejected`); } catch { toast.error("Failed to reject"); }
             }} title="Reject"><X className="h-3.5 w-3.5" /></Button>
           )}
-          {!row.invite_sent && row.status === "accepted" && (
+          {row.status === "invited" && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => {
               setSending(row.id);
               try {
                 const res = await sendWaitlistInvite({ waitlist_id: row.id, name: row.name, email: row.email });
                 if (res.error) { toast.error(res.error); return; }
                 await sendInvite.mutateAsync(row.id);
-                toast.success(`Invite sent to ${row.name}`);
-              } catch { toast.error("Failed to send invite"); }
+                toast.success(`Invite resent to ${row.name}`);
+              } catch { toast.error("Failed to resend invite"); }
               setSending(null);
-            }} disabled={sending === row.id} title="Send invite">
+            }} disabled={sending === row.id} title="Resend invite">
               {sending === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
             </Button>
           )}

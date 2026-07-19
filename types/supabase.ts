@@ -932,6 +932,183 @@ export type Database = {
         }
         Relationships: []
       }
+      launch_settings: {
+        Row: {
+          id: string; launch_mode: string; login_mode: string; custom_login_url: string | null
+          launch_date: string | null; countdown_enabled: boolean; auto_switch_mode: string | null
+          auto_switch_at: string | null; maintenance_title: string; maintenance_message: string
+          registration_enabled: boolean; show_pricing: boolean; show_blog: boolean; show_docs: boolean
+          show_changelog: boolean; show_login: boolean; show_signup: boolean; show_waitlist: boolean
+          show_discord: boolean; show_community: boolean; page_visibility: Json; route_protection: Json
+          updated_at: string | null; updated_by: string | null; published: boolean
+        }
+        Insert: {
+          id?: string; launch_mode?: string; login_mode?: string; custom_login_url?: string | null
+          launch_date?: string | null; countdown_enabled?: boolean; auto_switch_mode?: string | null
+          auto_switch_at?: string | null; maintenance_title?: string; maintenance_message?: string
+          registration_enabled?: boolean; show_pricing?: boolean; show_blog?: boolean; show_docs?: boolean
+          show_changelog?: boolean; show_login?: boolean; show_signup?: boolean; show_waitlist?: boolean
+          show_discord?: boolean; show_community?: boolean; page_visibility?: Json; route_protection?: Json
+          updated_at?: string | null; updated_by?: string | null; published?: boolean
+        }
+        Update: {
+          id?: string; launch_mode?: string; login_mode?: string; custom_login_url?: string | null
+          launch_date?: string | null; countdown_enabled?: boolean; auto_switch_mode?: string | null
+          auto_switch_at?: string | null; maintenance_title?: string; maintenance_message?: string
+          registration_enabled?: boolean; show_pricing?: boolean; show_blog?: boolean; show_docs?: boolean
+          show_changelog?: boolean; show_login?: boolean; show_signup?: boolean; show_waitlist?: boolean
+          show_discord?: boolean; show_community?: boolean; page_visibility?: Json; route_protection?: Json
+          updated_at?: string | null; updated_by?: string | null; published?: boolean
+        }
+        Relationships: [{ foreignKeyName: "launch_settings_updated_by_fkey", columns: ["updated_by"], isOneToOne: false, referencedRelation: "admin_users", referencedColumns: ["id"] }]
+      }
+      landing_content: {
+        Row: {
+          id: string; section: string; title: string | null; subtitle: string | null; body: string | null
+          cta_text: string | null; cta_link: string | null; secondary_cta_text: string | null; secondary_cta_link: string | null
+          image_url: string | null; icon: string | null; badge: string | null; sort_order: number
+          content: Json; active: boolean; updated_at: string | null; updated_by: string | null
+        }
+        Insert: {
+          id?: string; section: string; title?: string | null; subtitle?: string | null; body?: string | null
+          cta_text?: string | null; cta_link?: string | null; secondary_cta_text?: string | null; secondary_cta_link?: string | null
+          image_url?: string | null; icon?: string | null; badge?: string | null; sort_order?: number
+          content?: Json; active?: boolean; updated_at?: string | null; updated_by?: string | null
+        }
+        Update: {
+          id?: string; section?: string; title?: string | null; subtitle?: string | null; body?: string | null
+          cta_text?: string | null; cta_link?: string | null; secondary_cta_text?: string | null; secondary_cta_link?: string | null
+          image_url?: string | null; icon?: string | null; badge?: string | null; sort_order?: number
+          content?: Json; active?: boolean; updated_at?: string | null; updated_by?: string | null
+        }
+        Relationships: [{ foreignKeyName: "landing_content_updated_by_fkey", columns: ["updated_by"], isOneToOne: false, referencedRelation: "admin_users", referencedColumns: ["id"] }]
+      }
+      cta_buttons: {
+        Row: {
+          id: string; button_id: string; button_text: string; destination: string; variant: string
+          color: string; icon: string | null; open_in_new_tab: boolean; visible: boolean; enabled: boolean
+          animation: string; priority: number; confirmation_text: string | null; requires_auth: boolean
+          launch_mode_override: Json; ab_variants: Json; ab_enabled: boolean
+          created_at: string; updated_at: string; updated_by: string | null
+        }
+        Insert: {
+          id?: string; button_id: string; button_text?: string; destination?: string; variant?: string
+          color?: string; icon?: string | null; open_in_new_tab?: boolean; visible?: boolean; enabled?: boolean
+          animation?: string; priority?: number; confirmation_text?: string | null; requires_auth?: boolean
+          launch_mode_override?: Json; ab_variants?: Json; ab_enabled?: boolean
+          created_at?: string; updated_at?: string; updated_by?: string | null
+        }
+        Update: {
+          id?: string; button_id?: string; button_text?: string; destination?: string; variant?: string
+          color?: string; icon?: string | null; open_in_new_tab?: boolean; visible?: boolean; enabled?: boolean
+          animation?: string; priority?: number; confirmation_text?: string | null; requires_auth?: boolean
+          launch_mode_override?: Json; ab_variants?: Json; ab_enabled?: boolean
+          created_at?: string; updated_at?: string; updated_by?: string | null
+        }
+        Relationships: [{ foreignKeyName: "cta_buttons_updated_by_fkey", columns: ["updated_by"], isOneToOne: false, referencedRelation: "admin_users", referencedColumns: ["id"] }]
+      }
+      announcement_bar: {
+        Row: {
+          id: string; enabled: boolean; text: string; link_url: string | null; link_text: string | null
+          background_color: string; text_color: string; emoji: string; countdown_enabled: boolean
+          countdown_target: string | null; dismissible: boolean; sticky: boolean; animation: string
+          updated_at: string | null; updated_by: string | null
+        }
+        Insert: {
+          id?: string; enabled?: boolean; text?: string; link_url?: string | null; link_text?: string | null
+          background_color?: string; text_color?: string; emoji?: string; countdown_enabled?: boolean
+          countdown_target?: string | null; dismissible?: boolean; sticky?: boolean; animation?: string
+          updated_at?: string | null; updated_by?: string | null
+        }
+        Update: {
+          id?: string; enabled?: boolean; text?: string; link_url?: string | null; link_text?: string | null
+          background_color?: string; text_color?: string; emoji?: string; countdown_enabled?: boolean
+          countdown_target?: string | null; dismissible?: boolean; sticky?: boolean; animation?: string
+          updated_at?: string | null; updated_by?: string | null
+        }
+        Relationships: [{ foreignKeyName: "announcement_bar_updated_by_fkey", columns: ["updated_by"], isOneToOne: false, referencedRelation: "admin_users", referencedColumns: ["id"] }]
+      }
+      approved_emails: {
+        Row: { id: string; email: string; waitlist_entry_id: string | null; approved_at: string; approved_by: string | null; invite_sent: boolean; created_at: string }
+        Insert: { id?: string; email: string; waitlist_entry_id?: string | null; approved_at?: string; approved_by?: string | null; invite_sent?: boolean; created_at?: string }
+        Update: { id?: string; email?: string; waitlist_entry_id?: string | null; approved_at?: string; approved_by?: string | null; invite_sent?: boolean; created_at?: string }
+        Relationships: [{ foreignKeyName: "approved_emails_waitlist_entry_id_fkey", columns: ["waitlist_entry_id"], isOneToOne: false, referencedRelation: "waitlist_entries", referencedColumns: ["id"] }]
+      }
+      waitlist_settings: {
+        Row: {
+          id: string; enabled: boolean; collect_name: boolean; collect_company: boolean; collect_role: boolean
+          collect_country: boolean; collect_referral_code: boolean; collect_phone: boolean
+          email_verification: boolean; double_opt_in: boolean; auto_approve: boolean; max_waitlist: number
+          confirmation_title: string; confirmation_message: string; updated_at: string | null; updated_by: string | null
+        }
+        Insert: {
+          id?: string; enabled?: boolean; collect_name?: boolean; collect_company?: boolean; collect_role?: boolean
+          collect_country?: boolean; collect_referral_code?: boolean; collect_phone?: boolean
+          email_verification?: boolean; double_opt_in?: boolean; auto_approve?: boolean; max_waitlist?: number
+          confirmation_title?: string; confirmation_message?: string; updated_at?: string | null; updated_by?: string | null
+        }
+        Update: {
+          id?: string; enabled?: boolean; collect_name?: boolean; collect_company?: boolean; collect_role?: boolean
+          collect_country?: boolean; collect_referral_code?: boolean; collect_phone?: boolean
+          email_verification?: boolean; double_opt_in?: boolean; auto_approve?: boolean; max_waitlist?: number
+          confirmation_title?: string; confirmation_message?: string; updated_at?: string | null; updated_by?: string | null
+        }
+        Relationships: [{ foreignKeyName: "waitlist_settings_updated_by_fkey", columns: ["updated_by"], isOneToOne: false, referencedRelation: "admin_users", referencedColumns: ["id"] }]
+      }
+      social_links: {
+        Row: {
+          id: string; platform: string; url: string; label: string | null; icon: string | null
+          sort_order: number; active: boolean
+        }
+        Insert: {
+          id?: string; platform: string; url?: string; label?: string | null; icon?: string | null
+          sort_order?: number; active?: boolean
+        }
+        Update: {
+          id?: string; platform?: string; url?: string; label?: string | null; icon?: string | null
+          sort_order?: number; active?: boolean
+        }
+        Relationships: []
+      }
+      seo_settings: {
+        Row: {
+          id: string; page_path: string; title: string | null; description: string | null
+          og_image: string | null; og_title: string | null; og_description: string | null
+          twitter_card: string; twitter_site: string | null; keywords: string; robots: string
+          canonical_url: string | null; schema_markup: Json | null; updated_at: string | null; updated_by: string | null
+        }
+        Insert: {
+          id?: string; page_path?: string; title?: string | null; description?: string | null
+          og_image?: string | null; og_title?: string | null; og_description?: string | null
+          twitter_card?: string; twitter_site?: string | null; keywords?: string; robots?: string
+          canonical_url?: string | null; schema_markup?: Json | null; updated_at?: string | null; updated_by?: string | null
+        }
+        Update: {
+          id?: string; page_path?: string; title?: string | null; description?: string | null
+          og_image?: string | null; og_title?: string | null; og_description?: string | null
+          twitter_card?: string; twitter_site?: string | null; keywords?: string; robots?: string
+          canonical_url?: string | null; schema_markup?: Json | null; updated_at?: string | null; updated_by?: string | null
+        }
+        Relationships: [{ foreignKeyName: "seo_settings_updated_by_fkey", columns: ["updated_by"], isOneToOne: false, referencedRelation: "admin_users", referencedColumns: ["id"] }]
+      }
+      launch_audit_log: {
+        Row: {
+          id: string; admin_id: string | null; admin_name: string | null; action: string
+          entity_type: string; entity_id: string | null; field: string | null
+          old_value: Json | null; new_value: Json | null; details: string | null; created_at: string | null
+        }
+        Insert: {
+          id?: string; admin_id?: string | null; admin_name?: string | null; action: string
+          entity_type: string; entity_id?: string | null; field?: string | null
+          old_value?: Json | null; new_value?: Json | null; details?: string | null; created_at?: string | null
+        }
+        Update: {
+          id?: string; admin_id?: string | null; admin_name?: string | null; action?: string
+          entity_type?: string; entity_id?: string | null; field?: string | null
+          old_value?: Json | null; new_value?: Json | null; details?: string | null; created_at?: string | null
+        }
+        Relationships: [{ foreignKeyName: "launch_audit_log_admin_id_fkey", columns: ["admin_id"], isOneToOne: false, referencedRelation: "admin_users", referencedColumns: ["id"] }]
+      }
     }
     Views: {
       [_ in never]: never
@@ -945,6 +1122,8 @@ export type Database = {
       get_ai_audit_events: { Args: { p_page_id: string; p_limit?: number }; Returns: Json }
       get_audit_summary: { Args: { p_page_id: string }; Returns: Json }
       get_audit_event: { Args: { p_event_id: string }; Returns: Json }
+      log_launch_audit: { Args: { p_admin_id?: string; p_admin_name?: string; p_action?: string; p_entity_type?: string; p_entity_id?: string; p_field?: string; p_old_value?: Json; p_new_value?: Json; p_details?: string }; Returns: undefined }
+      get_waitlist_stats: { Args: Record<string, never>; Returns: Json }
     }
     Enums: {
       [_ in never]: never

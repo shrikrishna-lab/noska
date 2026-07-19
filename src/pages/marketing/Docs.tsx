@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, BookOpen, ChevronRight, Terminal, Shield, Users, Key, Database, Brain, Layout, Share2, Keyboard, FileText, HelpCircle, Github, ExternalLink, Menu, X } from 'lucide-react';
+import { Search, BookOpen, ChevronRight, Terminal, Shield, Users, Key, Database, Brain, Layout, Share2, Keyboard, FileText, HelpCircle, ExternalLink, Menu, X } from 'lucide-react';
 import './Docs.css';
 
 interface DocSection {

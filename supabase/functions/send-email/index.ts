@@ -51,11 +51,6 @@ function hasMinRole(adminRole: string, minRole: string): boolean {
 const RATE_LIMIT_CACHE = new Map<string, number>();
 
 function checkRateLimit(adminId: string, action: string): { allowed: boolean; reason?: string } {
-  if (action === "send_single") {
-    // 10 test emails per hour per admin
-    // Skipping in-memory tracking for simplicity; DB tracking would be better
-    return { allowed: true };
-  }
   if (action === "send_campaign" || action === "send_broadcast") {
     const key = `campaign_${adminId}`;
     const last = RATE_LIMIT_CACHE.get(key);
@@ -89,6 +84,19 @@ async function getSettings(): Promise<{ apiKey: string; fromEmail: string }> {
   }
 }
 
+async function logEvent(event: string, recipient: string, subject?: string, campaignId?: string, messageId?: string) {
+  try {
+    await supabase.from("email_events").insert({
+      event,
+      recipient,
+      subject,
+      campaign_id: campaignId,
+      message_id: messageId,
+      created_at: new Date().toISOString(),
+    });
+  } catch {}
+}
+
 interface SendEmailPayload {
   to: string;
   subject: string;
@@ -115,71 +123,66 @@ interface BroadcastPayload {
   target_type: "all" | "random" | "selected" | "per_user";
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "*",
+};
+
+const TRACKING = { click_tracking: true, open_tracking: true };
+
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
   }
 
   try {
+    const respond = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
     const authHeader = req.headers.get("Authorization") ?? "";
     const body = await req.json();
     const bodyToken = (body as Record<string, unknown>).admin_token as string | undefined;
 
-    // Read token from Authorization: Bearer <token> first, fall back to body
     const token = authHeader.startsWith("Bearer ")
       ? authHeader.slice(7).trim()
       : bodyToken ?? "";
 
     if (!token) {
-      return new Response(JSON.stringify({ error: "Unauthorized: missing admin token" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+      return respond({ error: "Unauthorized: missing admin token" }, 401);
     }
 
     const admin = await validateAdmin(token);
     if (!admin) {
-      return new Response(JSON.stringify({ error: "Unauthorized: invalid or expired admin session" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+      return respond({ error: "Unauthorized: invalid or expired admin session" }, 401);
     }
 
     const { action, ...payload } = body as Record<string, unknown>;
     if (!action || typeof action !== "string") {
-      return new Response(JSON.stringify({ error: "Missing action" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return respond({ error: "Missing action" }, 400);
     }
 
     const minRole = MIN_ROLES[action] ?? "admin";
     if (!hasMinRole(admin.role, minRole)) {
-      return new Response(JSON.stringify({
+      return respond({
         error: `Forbidden: role "${admin.role}" cannot perform action "${action}" (requires "${minRole}")`,
-      }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      });
+      }, 403);
     }
 
     const rateCheck = checkRateLimit(admin.id, action);
     if (!rateCheck.allowed) {
-      return new Response(JSON.stringify({ error: rateCheck.reason }), {
-        status: 429,
-        headers: { "Content-Type": "application/json" },
-      });
+      return respond({ error: rateCheck.reason }, 429);
     }
 
     const settings = await getSettings();
     if (!settings.apiKey) {
-      return new Response(JSON.stringify({ error: "Resend API key not configured" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return respond({ error: "Resend API key not configured" }, 500);
     }
 
     switch (action) {
@@ -192,16 +195,10 @@ Deno.serve(async (req: Request) => {
       case "send_invite":
         return await handleSendInvite(payload as unknown as { waitlist_id: string; name: string; email: string }, settings);
       default:
-        return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
+        return respond({ error: `Unknown action: ${action}` }, 400);
     }
   } catch (err) {
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Failed to process request" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return respond({ error: err instanceof Error ? err.message : "Failed to process request" }, 500);
   }
 });
 
@@ -219,14 +216,18 @@ async function handleSendSingle(payload: SendEmailPayload, settings: { apiKey: s
       html: payload.html,
       text: payload.text || undefined,
       bcc: payload.bcc || undefined,
+      ...TRACKING,
     }),
   });
 
   const data = await res.json();
-  return new Response(JSON.stringify(data), {
-    status: res.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  if (res.ok) {
+    await logEvent("sent", payload.to, payload.subject, undefined, data.id);
+  }
+
+  const respond = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  return respond(data, res.status);
 }
 
 async function handleSendCampaign(payload: SendBulkPayload, settings: { apiKey: string; fromEmail: string }): Promise<Response> {
@@ -250,11 +251,14 @@ async function handleSendCampaign(payload: SendBulkPayload, settings: { apiKey: 
           subject: payload.subject,
           html: personalHtml,
           text: payload.text || undefined,
+          ...TRACKING,
         }),
       });
 
       if (res.ok) {
         results.sent++;
+        const data = await res.json().catch(() => ({}));
+        await logEvent("sent", recipient.email, payload.subject, payload.campaign_id, data.id);
       } else {
         results.failed++;
         const errData = await res.json().catch(() => ({}));
@@ -275,10 +279,9 @@ async function handleSendCampaign(payload: SendBulkPayload, settings: { apiKey: 
     })
     .eq("id", payload.campaign_id);
 
-  return new Response(JSON.stringify(results), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  const respond = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  return respond(results);
 }
 
 async function handleSendBroadcast(payload: BroadcastPayload, settings: { apiKey: string; fromEmail: string }): Promise<Response> {
@@ -317,11 +320,13 @@ async function handleSendBroadcast(payload: BroadcastPayload, settings: { apiKey
           to: user.email,
           subject: payload.title,
           html: html,
+          ...TRACKING,
         }),
       });
 
       if (res.ok) {
         results.sent++;
+        await logEvent("sent", user.email, payload.title);
       } else {
         results.failed++;
       }
@@ -340,10 +345,9 @@ async function handleSendBroadcast(payload: BroadcastPayload, settings: { apiKey
     })
     .eq("id", payload.broadcast_id);
 
-  return new Response(JSON.stringify(results), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  const respond = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  return respond(results);
 }
 
 async function handleSendInvite(payload: { waitlist_id: string; name: string; email: string }, settings: { apiKey: string; fromEmail: string }): Promise<Response> {
@@ -368,6 +372,7 @@ async function handleSendInvite(payload: { waitlist_id: string; name: string; em
       to: payload.email,
       subject: "You're invited to Noska!",
       html,
+      ...TRACKING,
     }),
   });
 
@@ -378,10 +383,10 @@ async function handleSendInvite(payload: { waitlist_id: string; name: string; em
       .from("waitlist_entries")
       .update({ invite_sent: true, status: "invited" })
       .eq("id", payload.waitlist_id);
+    await logEvent("sent", payload.email, "You're invited to Noska!");
   }
 
-  return new Response(JSON.stringify(data), {
-    status: res.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  const respond = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  return respond(data, res.status);
 }

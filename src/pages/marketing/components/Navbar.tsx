@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { ChevronDown, Menu, X, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedUnderline } from './AnimatedUnderline';
+import { useCTAButtons, useLaunchSettings } from '../../../hooks/useLaunchSettings';
+import { AnnouncementBar } from './AnnouncementBar';
 import './Navbar.css';
 
 const drawerMotion = {
@@ -23,6 +25,14 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const location = useLocation();
+  const { getButton, getDestination } = useCTAButtons();
+  const { settings } = useLaunchSettings();
+
+  const navLoginBtn = getButton('navbar_login');
+  const navCtaBtn = getButton('navbar_cta');
+  const navDemoBtn = getButton('navbar_demo');
+  const mobileLoginBtn = getButton('mobile_login');
+  const mobileCtaBtn = getButton('mobile_cta');
 
   // Close mobile menu on page change
   useEffect(() => {
@@ -32,6 +42,7 @@ export default function Navbar() {
 
   return (
     <nav className="navbar-container">
+      <AnnouncementBar />
       <div className="navbar-content mkt-container">
         {/* Left Side: Logo & Main Navigation */}
         <div className="navbar-left">
@@ -188,10 +199,16 @@ export default function Navbar() {
 
         {/* Right Side: Account Actions */}
         <div className="navbar-right-actions">
-          <Link to="/enterprise" className="nav-action-text hide-mobile">Request a demo</Link>
-          <div className="divider-vertical hide-mobile"></div>
-          <Link to="/login" className="nav-action-text hide-mobile">Log in</Link>
-          <Link to="/login" className="btn btn-primary btn-nav-cta hide-mobile">Get Noska free</Link>
+          {navDemoBtn.visible && navDemoBtn.enabled && (
+            <Link to={navDemoBtn.destination} className="nav-action-text hide-mobile">{navDemoBtn.button_text}</Link>
+          )}
+          {navDemoBtn.visible && navDemoBtn.enabled && <div className="divider-vertical hide-mobile"></div>}
+          {navLoginBtn.visible && navLoginBtn.enabled && (
+            <Link to={navLoginBtn.destination} className="nav-action-text hide-mobile">{navLoginBtn.button_text}</Link>
+          )}
+          {navCtaBtn.visible && navCtaBtn.enabled && (
+            <Link to={navCtaBtn.destination} className="btn btn-primary btn-nav-cta hide-mobile">{navCtaBtn.button_text}</Link>
+          )}
           <button className="mobile-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
             {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
@@ -228,13 +245,19 @@ export default function Navbar() {
               <div className="mobile-flat-links">
                 <Link to="/pricing" className="mobile-flat-item">Pricing</Link>
                 <Link to="/enterprise" className="mobile-flat-item">Enterprise</Link>
-                <Link to="/enterprise" className="mobile-flat-item">Request a demo</Link>
-                <Link to="/login" className="mobile-flat-item">Log in</Link>
+                {navDemoBtn.visible && navDemoBtn.enabled && (
+                  <Link to={navDemoBtn.destination} className="mobile-flat-item">{navDemoBtn.button_text}</Link>
+                )}
+                {mobileLoginBtn.visible && mobileLoginBtn.enabled && (
+                  <Link to={mobileLoginBtn.destination} className="mobile-flat-item">{mobileLoginBtn.button_text}</Link>
+                )}
               </div>
 
-              <Link to="/login" className="btn btn-primary mobile-cta-btn">
-                Get Noska free <ArrowRight size={16} />
-              </Link>
+              {mobileCtaBtn.visible && mobileCtaBtn.enabled && (
+                <Link to={mobileCtaBtn.destination} className="btn btn-primary mobile-cta-btn">
+                  {mobileCtaBtn.button_text} <ArrowRight size={16} />
+                </Link>
+              )}
             </div>
           </motion.div>
         )}

@@ -37,6 +37,7 @@ import { realtimeCollab } from "./lib/realtimeCollab";
 import { auditEngine } from "./lib/auditEngine";
 import { useAuth, useUser, useClerk } from "@clerk/react";
 import { supabase } from "./lib/supabase";
+import { WaitlistGate } from "./components/auth/WaitlistGate";
 import { TEST_MODE } from "./lib/envGuard";
 import { capture, identifyUser, resetIdentity } from "./lib/posthog";
 import { setSentryUser, captureException } from "./lib/sentry";
@@ -2169,35 +2170,30 @@ function App() {
       {appFlowState === "auth" && (
         <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
       )}
-      {appFlowState === "onboarding" && !onboardingOpen && (
-        <OnboardingPage
-          key="onboarding"
-          initialWorkspaceName={workspaceName}
-          initialUsername={currentUsername ?? undefined}
-          currentUserId={currentUserId ?? undefined}
-          onFinalize={handleFinalize}
-          onComplete={handleOnboardingComplete}
-        />
-      )}
-      {onboardingOpen && (
-        // Real bug fix: this wrapper dropped OnboardingContext's second
-        // `pages` (starter pages built from the user's actual template
-        // selection via onFinalize) argument, so replaying onboarding
-        // from Settings always silently fell back to
-        // handleOnboardingComplete's default "Getting Started" page
-        // regardless of what the user picked. Every other onComplete
-        // binding in this file passes both args straight through.
-        <OnboardingPage
-          key="onboarding-overlay"
-          overlay
-          initialWorkspaceName={workspaceName}
-          initialUsername={currentUsername ?? undefined}
-          currentUserId={currentUserId ?? undefined}
-          onFinalize={handleFinalize}
-          onComplete={(data, starterPages) => { setOnboardingOpen(false); handleOnboardingComplete(data, starterPages); }}
-        />
-      )}
-      {appFlowState === "workspace" && (
+      {(appFlowState === "onboarding" || appFlowState === "workspace") && (
+        <WaitlistGate>
+          {appFlowState === "onboarding" && !onboardingOpen && (
+            <OnboardingPage
+              key="onboarding"
+              initialWorkspaceName={workspaceName}
+              initialUsername={currentUsername ?? undefined}
+              currentUserId={currentUserId ?? undefined}
+              onFinalize={handleFinalize}
+              onComplete={handleOnboardingComplete}
+            />
+          )}
+          {onboardingOpen && (
+            <OnboardingPage
+              key="onboarding-overlay"
+              overlay
+              initialWorkspaceName={workspaceName}
+              initialUsername={currentUsername ?? undefined}
+              currentUserId={currentUserId ?? undefined}
+              onFinalize={handleFinalize}
+              onComplete={(data, starterPages) => { setOnboardingOpen(false); handleOnboardingComplete(data, starterPages); }}
+            />
+          )}
+          {appFlowState === "workspace" && (
         <motion.div
           key="workspace"
           initial={{ opacity: 0, scale: 0.985 }}
@@ -2737,6 +2733,8 @@ function App() {
             />
           )}
         </motion.div>
+      )}
+      </WaitlistGate>
       )}
     </AnimatePresence>
   );

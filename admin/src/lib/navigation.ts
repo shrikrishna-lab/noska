@@ -33,6 +33,13 @@ import {
   ScrollText,
   Puzzle,
   Gift,
+  Megaphone,
+  MousePointerClick,
+  PanelTop,
+  UsersRound,
+  Search,
+  Link2,
+  BarChart4,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -40,14 +47,21 @@ export interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
-  group: "overview" | "growth" | "people" | "platform" | "operations" | "monitoring" | "settings";
+  group: "overview" | "marketing" | "growth" | "people" | "platform" | "operations" | "monitoring" | "settings";
   badge?: string | number;
-  requiresRole?: "super_admin" | "admin" | "developer";
+  requiresRole?: "super_admin" | "admin" | "developer" | "marketing";
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Dashboard", icon: Home, group: "overview" },
   { to: "/analytics", label: "Analytics", icon: BarChart3, group: "overview" },
+  { to: "/launch-control", label: "Launch Control", icon: Megaphone, group: "marketing", requiresRole: "marketing" },
+  { to: "/landing-page", label: "Landing Page", icon: PanelTop, group: "marketing", requiresRole: "marketing" },
+  { to: "/cta-buttons", label: "CTA Buttons", icon: MousePointerClick, group: "marketing", requiresRole: "marketing" },
+  { to: "/announcement-bar", label: "Announcement Bar", icon: Megaphone, group: "marketing", requiresRole: "marketing" },
+  { to: "/waitlist-settings", label: "Waitlist Settings", icon: UsersRound, group: "marketing", requiresRole: "marketing" },
+  { to: "/seo-settings", label: "SEO", icon: Search, group: "marketing", requiresRole: "marketing" },
+  { to: "/social-links", label: "Social Links", icon: Link2, group: "marketing", requiresRole: "marketing" },
   { to: "/waitlist", label: "Waitlist", icon: ListChecks, group: "growth" },
   { to: "/users", label: "Users", icon: Users, group: "people" },
   { to: "/banned-users", label: "Banned Users", icon: Ban, group: "people", requiresRole: "admin" },
@@ -90,6 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const NAV_GROUPS: Array<{ id: NavItem["group"]; label: string }> = [
   { id: "overview", label: "Overview" },
+  { id: "marketing", label: "Marketing" },
   { id: "growth", label: "Growth" },
   { id: "people", label: "People" },
   { id: "platform", label: "Platform" },

@@ -21,6 +21,13 @@ import { Models } from "@/pages/Models";
 import { FeatureFlags } from "@/pages/FeatureFlags";
 import { EmailCampaigns } from "@/pages/EmailCampaigns";
 import { Referrals } from "@/pages/Referrals";
+import { LaunchControl } from "@/pages/LaunchControl";
+import { LandingPage } from "@/pages/LandingPage";
+import { CTAManager } from "@/pages/CTAManager";
+import { AnnouncementBarPage } from "@/pages/AnnouncementBar";
+import { WaitlistSettingsPage } from "@/pages/WaitlistSettings";
+import { SEOSettingsPage } from "@/pages/SEOSettings";
+import { SocialLinksPage } from "@/pages/SocialLinks";
 
 import { Feedback } from "@/pages/Feedback";
 import { Support } from "@/pages/Support";
@@ -119,6 +126,13 @@ export default function App() {
                   <Route path="payments" element={<Payments />} />
                   <Route path="ai-usage" element={<AiUsage />} />
                   <Route path="models" element={<Models />} />
+                  <Route path="launch-control" element={<LaunchControl />} />
+                  <Route path="landing-page" element={<LandingPage />} />
+                  <Route path="cta-buttons" element={<CTAManager />} />
+                  <Route path="announcement-bar" element={<AnnouncementBarPage />} />
+                  <Route path="waitlist-settings" element={<WaitlistSettingsPage />} />
+                  <Route path="seo-settings" element={<SEOSettingsPage />} />
+                  <Route path="social-links" element={<SocialLinksPage />} />
                   <Route path="feature-flags" element={<FeatureFlags />} />
                   <Route path="email-campaigns" element={<EmailCampaigns />} />
                   <Route path="referrals" element={<Referrals />} />
