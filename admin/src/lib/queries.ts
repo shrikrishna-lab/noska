@@ -1155,6 +1155,272 @@ export function useDisconnectIntegration() {
   });
 }
 
+// ── Launch Control ──
+import type { LaunchSettings, LandingContent, CTAButton, AnnouncementBar, WaitlistSettings, SocialLink, SEOSettings, LaunchAuditLog, WaitlistStats } from "./types";
+
+export function useLaunchSettings() {
+  return useQuery({
+    queryKey: ["admin", "launch-settings"],
+    queryFn: async () => {
+      const data = await adminSelect<LaunchSettings>("launch_settings", "*");
+      return data?.[0] ?? null;
+    },
+  });
+}
+
+export function useUpdateLaunchSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<LaunchSettings> & { admin_name?: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const existing = await adminSelect<LaunchSettings>("launch_settings", "*");
+      const id = existing?.[0]?.id;
+      if (!id) throw new Error("No launch settings found");
+      const { admin_name, ...updates } = data;
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "launch_settings", p_id: id,
+        p_data: { ...updates, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "super_admin",
+      });
+      if (error) throw error;
+      // Log audit
+      for (const [key, newVal] of Object.entries(updates)) {
+        const oldVal = existing[0]?.[key as keyof LaunchSettings];
+        if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+          await supabase.rpc("log_launch_audit", {
+            p_admin_name: admin_name ?? "Unknown",
+            p_action: "update",
+            p_entity_type: "launch_settings",
+            p_entity_id: id,
+            p_field: key,
+            p_old_value: JSON.parse(JSON.stringify(oldVal ?? null)),
+            p_new_value: JSON.parse(JSON.stringify(newVal)),
+          }).catch(() => {});
+        }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "launch-settings"] });
+    },
+  });
+}
+
+export function useLandingContent() {
+  return useQuery({
+    queryKey: ["admin", "landing-content"],
+    queryFn: () => adminSelect<LandingContent>("landing_content", "*", { order: "sort_order asc" }),
+  });
+}
+
+export function useUpdateLandingContent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, admin_name, ...data }: { id: string; admin_name?: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "landing_content", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+      await supabase.rpc("log_launch_audit", {
+        p_admin_name: admin_name ?? "Unknown",
+        p_action: "update", p_entity_type: "landing_content", p_entity_id: id,
+      }).catch(() => {});
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "landing-content"] }),
+  });
+}
+
+// ── CTA Buttons ──
+export function useCTAButtons() {
+  return useQuery({
+    queryKey: ["admin", "cta-buttons"],
+    queryFn: () => adminSelect<CTAButton>("cta_buttons", "*", { order: "priority asc" }),
+  });
+}
+
+export function useUpdateCTAButton() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, admin_name, ...data }: { id: string; admin_name?: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "cta_buttons", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+      await supabase.rpc("log_launch_audit", {
+        p_admin_name: admin_name ?? "Unknown",
+        p_action: "update", p_entity_type: "cta_button", p_entity_id: id,
+        p_field: Object.keys(data).join(", "),
+      }).catch(() => {});
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "cta-buttons"] }),
+  });
+}
+
+export function useResetCTAButton() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "cta_buttons", p_id: id,
+        p_data: { destination: null, button_text: null, variant: null, visible: true, enabled: true, updated_at: new Date().toISOString() }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "cta-buttons"] }),
+  });
+}
+
+// ── Announcement Bar ──
+export function useAnnouncementBar() {
+  return useQuery({
+    queryKey: ["admin", "announcement-bar"],
+    queryFn: async () => {
+      const data = await adminSelect<AnnouncementBar>("announcement_bar", "*");
+      return data?.[0] ?? null;
+    },
+  });
+}
+
+export function useUpdateAnnouncementBar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<AnnouncementBar> & { admin_name?: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const existing = await adminSelect<AnnouncementBar>("announcement_bar", "*");
+      const id = existing?.[0]?.id;
+      if (!id) throw new Error("No announcement bar found");
+      const { admin_name, ...updates } = data;
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "announcement_bar", p_id: id,
+        p_data: { ...updates, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "announcement-bar"] }),
+  });
+}
+
+// ── Waitlist Settings ──
+export function useWaitlistSettings() {
+  return useQuery({
+    queryKey: ["admin", "waitlist-settings"],
+    queryFn: async () => {
+      const data = await adminSelect<WaitlistSettings>("waitlist_settings", "*");
+      return data?.[0] ?? null;
+    },
+  });
+}
+
+export function useUpdateWaitlistSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<WaitlistSettings>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const existing = await adminSelect<WaitlistSettings>("waitlist_settings", "*");
+      const id = existing?.[0]?.id;
+      if (!id) throw new Error("No waitlist settings found");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "waitlist_settings", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist-settings"] }),
+  });
+}
+
+export function useWaitlistStats() {
+  return useQuery({
+    queryKey: ["admin", "waitlist-stats"],
+    queryFn: async () => {
+      if (!SUPABASE_ENABLED || !supabase) return null;
+      const { data, error } = await supabase.rpc("get_waitlist_stats");
+      if (error) throw error;
+      return data as WaitlistStats;
+    },
+  });
+}
+
+// ── Social Links ──
+export function useSocialLinks() {
+  return useQuery({
+    queryKey: ["admin", "social-links"],
+    queryFn: () => adminSelect<SocialLink>("social_links", "*", { order: "sort_order asc" }),
+  });
+}
+
+export function useUpdateSocialLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "social_links", p_id: id,
+        p_data: data, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "social-links"] }),
+  });
+}
+
+// ── SEO Settings ──
+export function useSEOSettings(pagePath = "/") {
+  return useQuery({
+    queryKey: ["admin", "seo", pagePath],
+    queryFn: async () => {
+      const data = await adminSelect<SEOSettings>("seo_settings", "*", { eq: ["page_path", pagePath] });
+      return data?.[0] ?? null;
+    },
+  });
+}
+
+export function useUpdateSEOSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ page_path, admin_name, ...data }: { page_path: string; admin_name?: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const existing = await adminSelect<SEOSettings>("seo_settings", "*", { eq: ["page_path", page_path] });
+      const id = existing?.[0]?.id;
+      if (id) {
+        const { error } = await supabase.rpc("admin_update", {
+          p_session_token: token(), p_table: "seo_settings", p_id: id,
+          p_data: { ...data, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "marketing",
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc("admin_insert", {
+          p_session_token: token(), p_table: "seo_settings",
+          p_data: { page_path, ...data, updated_by: getAdminId() }, p_min_role: "marketing",
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "seo"] }),
+  });
+}
+
+// ── Launch Audit Log ──
+export function useLaunchAuditLogs(limit = 50) {
+  return useQuery({
+    queryKey: ["admin", "launch-audit", limit],
+    queryFn: () => adminSelect<LaunchAuditLog>("launch_audit_log", "*", { order: "created_at desc", limit }),
+  });
+}
+
+// Helper to get admin ID from session
+function getAdminId(): string | null {
+  try {
+    const token = getAdminToken();
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
+    return payload.sub ?? payload.admin_id ?? null;
+  } catch { return null; }
+}
+
 // ── Referral Types ──
 export interface DbReferralCode {
   id: string; user_id: string; code: string;

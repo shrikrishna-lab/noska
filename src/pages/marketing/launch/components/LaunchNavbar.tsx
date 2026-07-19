@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useCTAButtons } from '../../../../hooks/useLaunchSettings';
 
 const ANCHOR_LINKS = [
   { id: 'features', label: 'Features' },
@@ -10,19 +11,45 @@ const ANCHOR_LINKS = [
   { id: 'faq', label: 'FAQ' },
 ];
 
-// Docs and Pricing point at the real, already-built marketing pages rather
-// than an in-page anchor — this launch page doesn't have its own docs or
-// pricing content, and linking to placeholder sections would be dishonest.
 const ROUTE_LINKS = [
   { to: '/product', label: 'Docs' },
   { to: '/pricing', label: 'Pricing' },
 ];
 
-/**
- * Sticky, blurred, compact navbar for the launch page. Section links smooth
- * scroll to in-page anchors; the primary CTA jumps straight to the
- * scratch-reveal waitlist moment near the bottom of the page.
- */
+function LaunchNavCTAs({ scrollToScratch, setMobileOpen, mobile }: { scrollToScratch: (id: string) => (e: React.MouseEvent) => void; setMobileOpen: (v: boolean) => void; mobile?: boolean }) {
+  const { getButton } = useCTAButtons();
+  const loginBtn = getButton('launch_navbar_login');
+  const ctaBtn = getButton('launch_navbar_cta');
+
+  if (mobile) {
+    return (
+      <>
+        {loginBtn.visible && loginBtn.enabled && (
+          <Link to={loginBtn.destination} onClick={() => setMobileOpen(false)}>{loginBtn.button_text}</Link>
+        )}
+        {ctaBtn.visible && ctaBtn.enabled && (
+          <a href="#scratch" onClick={scrollToScratch('scratch')} className="nl-btn nl-btn-primary">{ctaBtn.button_text}</a>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {loginBtn.visible && loginBtn.enabled && (
+        <Link to={loginBtn.destination} className="nl-hide-mobile" style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--nl-text-secondary)' }}>
+          {loginBtn.button_text}
+        </Link>
+      )}
+      {ctaBtn.visible && ctaBtn.enabled && (
+        <a href="#scratch" onClick={scrollToScratch('scratch')} className="nl-btn nl-btn-primary nl-btn-sm nl-hide-mobile">
+          {ctaBtn.button_text}
+        </a>
+      )}
+    </>
+  );
+}
+
 export function LaunchNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -57,12 +84,7 @@ export function LaunchNavbar() {
         </div>
 
         <div className="nl-navbar-actions">
-          <Link to="/login" className="nl-hide-mobile" style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--nl-text-secondary)' }}>
-            Log in
-          </Link>
-          <a href="#scratch" onClick={scrollTo('scratch')} className="nl-btn nl-btn-primary nl-btn-sm nl-hide-mobile">
-            Join Waitlist
-          </a>
+          <LaunchNavCTAs scrollToScratch={scrollTo} setMobileOpen={setMobileOpen} />
           <button className="nl-navbar-mobile-toggle" onClick={() => setMobileOpen((v) => !v)} aria-label="Toggle menu">
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -85,8 +107,7 @@ export function LaunchNavbar() {
               {ROUTE_LINKS.map((l) => (
                 <Link key={l.to} to={l.to} onClick={() => setMobileOpen(false)}>{l.label}</Link>
               ))}
-              <Link to="/login" onClick={() => setMobileOpen(false)}>Log in</Link>
-              <a href="#scratch" onClick={scrollTo('scratch')} className="nl-btn nl-btn-primary">Join Waitlist</a>
+              <LaunchNavCTAs scrollToScratch={scrollTo} setMobileOpen={setMobileOpen} mobile />
             </div>
           </motion.div>
         )}

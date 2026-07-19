@@ -6,6 +6,9 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 const supabase = createClient(supabaseUrl, supabaseKey)
 
+const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY") ?? ""
+const CLERK_API = "https://api.clerk.com/v1"
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -71,6 +74,32 @@ Deno.serve(async (req: Request) => {
       const name = `${firstName} ${lastName}`.trim() || (data.username as string) || "Workspace User"
       const avatarUrl = data.image_url as string | undefined
 
+      // On user.created, check if email is approved
+      if (eventType === "user.created" && email) {
+        const { data: approved } = await supabase
+          .from("approved_emails")
+          .select("id")
+          .eq("email", email.toLowerCase())
+          .maybeSingle()
+
+        if (!approved && CLERK_SECRET_KEY) {
+          // Delete the unapproved user from Clerk
+          console.warn(`Blocking unapproved user: ${email}`)
+          try {
+            await fetch(`${CLERK_API}/users/${clerkId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${CLERK_SECRET_KEY}` },
+            })
+          } catch (e) {
+            console.error("Failed to delete unapproved Clerk user:", e)
+          }
+          return new Response(JSON.stringify({ error: "Email not approved. User deleted." }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          })
+        }
+      }
+
       const { error } = await supabase
         .from("user_profiles")
         .upsert({
@@ -90,6 +119,15 @@ Deno.serve(async (req: Request) => {
           status: 500,
           headers: { "Content-Type": "application/json" },
         })
+      }
+
+      // Mark invite as accepted in waitlist_entries
+      if (email) {
+        await supabase
+          .from("waitlist_entries")
+          .update({ status: "accepted", accepted: true })
+          .eq("email", email.toLowerCase())
+          .is("accepted", false)
       }
       break
     }

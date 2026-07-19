@@ -275,6 +275,170 @@ export interface LegalPage {
   updated_at: string;
 }
 
+// ── Launch Control Types ──
+export type LaunchMode = "waitlist" | "early_beta" | "closed_beta" | "open_beta" | "public" | "maintenance";
+
+export interface LaunchSettings {
+  id: string;
+  launch_mode: LaunchMode;
+  login_mode: "login" | "launch" | "waitlist" | "custom";
+  custom_login_url: string | null;
+  launch_date: string | null;
+  countdown_enabled: boolean;
+  auto_switch_mode: LaunchMode | null;
+  auto_switch_at: string | null;
+  maintenance_title: string;
+  maintenance_message: string;
+  registration_enabled: boolean;
+  show_pricing: boolean;
+  show_blog: boolean;
+  show_docs: boolean;
+  show_changelog: boolean;
+  show_login: boolean;
+  show_signup: boolean;
+  show_waitlist: boolean;
+  show_discord: boolean;
+  show_community: boolean;
+  page_visibility: Record<string, boolean>;
+  route_protection: Record<string, unknown>;
+  updated_at: string | null;
+  updated_by: string | null;
+  published: boolean;
+}
+
+export interface LandingContent {
+  id: string;
+  section: string;
+  title: string | null;
+  subtitle: string | null;
+  body: string | null;
+  cta_text: string | null;
+  cta_link: string | null;
+  secondary_cta_text: string | null;
+  secondary_cta_link: string | null;
+  image_url: string | null;
+  icon: string | null;
+  badge: string | null;
+  sort_order: number;
+  content: Record<string, unknown>;
+  active: boolean;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+export interface CTAButton {
+  id: string;
+  button_id: string;
+  button_text: string;
+  destination: string;
+  variant: "primary" | "secondary" | "ghost" | "outline" | "link" | "danger";
+  color: string;
+  icon: string | null;
+  open_in_new_tab: boolean;
+  visible: boolean;
+  enabled: boolean;
+  animation: string;
+  priority: number;
+  confirmation_text: string | null;
+  requires_auth: boolean;
+  launch_mode_override: Record<string, string>;
+  ab_variants: Array<{ text: string; destination: string; weight: number }>;
+  ab_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AnnouncementBar {
+  id: string;
+  enabled: boolean;
+  text: string;
+  link_url: string | null;
+  link_text: string | null;
+  background_color: string;
+  text_color: string;
+  emoji: string;
+  countdown_enabled: boolean;
+  countdown_target: string | null;
+  dismissible: boolean;
+  sticky: boolean;
+  animation: string;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+export interface WaitlistSettings {
+  id: string;
+  enabled: boolean;
+  collect_name: boolean;
+  collect_company: boolean;
+  collect_role: boolean;
+  collect_country: boolean;
+  collect_referral_code: boolean;
+  collect_phone: boolean;
+  email_verification: boolean;
+  double_opt_in: boolean;
+  auto_approve: boolean;
+  max_waitlist: number;
+  confirmation_title: string;
+  confirmation_message: string;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+export interface SocialLink {
+  id: string;
+  platform: string;
+  url: string;
+  label: string | null;
+  icon: string | null;
+  sort_order: number;
+  active: boolean;
+}
+
+export interface SEOSettings {
+  id: string;
+  page_path: string;
+  title: string | null;
+  description: string | null;
+  og_image: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  twitter_card: string;
+  twitter_site: string | null;
+  keywords: string;
+  robots: string;
+  canonical_url: string | null;
+  schema_markup: Record<string, unknown> | null;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+export interface LaunchAuditLog {
+  id: string;
+  admin_id: string | null;
+  admin_name: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  field: string | null;
+  old_value: unknown;
+  new_value: unknown;
+  details: string | null;
+  created_at: string;
+}
+
+export interface WaitlistStats {
+  total: number;
+  today: number;
+  waiting: number;
+  invited: number;
+  accepted: number;
+  rejected: number;
+  countries: Record<string, number>;
+  top_referrers: Array<{ name: string; count: number }>;
+}
+
 export interface BroadcastCampaign {
   id: string;
   title: string;

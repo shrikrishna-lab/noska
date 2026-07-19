@@ -8,11 +8,21 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 const CLERK_API = "https://api.clerk.com/v1"
 const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY") ?? ""
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }
+
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     })
   }
 
@@ -22,7 +32,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     })
   }
 
@@ -30,7 +40,7 @@ Deno.serve(async (req: Request) => {
   if (!email) {
     return new Response(JSON.stringify({ error: "Email is required" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     })
   }
 
@@ -82,12 +92,12 @@ Deno.serve(async (req: Request) => {
     console.error("Failed to insert waitlist entry:", dbError)
     return new Response(JSON.stringify({ error: "Database error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     })
   }
 
   return new Response(JSON.stringify({ success: true, clerk_entry_id: clerkEntryId }), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...corsHeaders },
   })
 })

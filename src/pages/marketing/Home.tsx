@@ -22,6 +22,7 @@ import { WavyTicker } from './components/WavyTicker';
 import { ScrollZoomReveal } from './components/ScrollZoomReveal';
 import { ScrollFadeText } from './components/ScrollFadeText';
 import { CaptureMockup, OrganizeMockup, ConnectMockup, RememberMockup } from './components/StoryMockups';
+import { useCTAButtons } from '../../hooks/useLaunchSettings';
 import './Home.css';
 
 const TYPEWRITER_WORDS = [
@@ -149,14 +150,7 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
             >
-              <Magnetic>
-                <Link to="/login" className="btn btn-primary btn-lg">
-                  Get started free <ArrowRight size={18} />
-                </Link>
-              </Magnetic>
-              <Link to="/product" className="btn btn-secondary btn-lg">
-                See what's inside
-              </Link>
+              <HeroButtons />
             </motion.div>
 
             <motion.div
@@ -454,16 +448,7 @@ export default function Home() {
         <Reveal className="cta-banner mkt-blobs">
           <h2>Start writing in less than a minute.</h2>
           <p>No credit card. No fake trial countdown. Just a workspace that's ready when you are.</p>
-          <div className="cta-btn-group">
-            <Magnetic>
-              <Link to="/login" className="btn btn-primary btn-lg">
-                Get Noska free <ArrowUpRight size={16} />
-              </Link>
-            </Magnetic>
-            <Link to="/pricing" className="btn btn-secondary btn-lg">
-              View all plans
-            </Link>
-          </div>
+          <FinalCTASection />
         </Reveal>
       </section>
     </div>
@@ -485,6 +470,50 @@ function StorySection({ section, reverse }) {
       <Reveal delay={0.1} blur className="story-visual">
         <Mockup />
       </Reveal>
+    </div>
+  );
+}
+
+function HeroButtons() {
+  const { getButton } = useCTAButtons();
+  const primary = getButton('hero_primary');
+  const secondary = getButton('hero_secondary');
+  return (
+    <>
+      {primary.visible && primary.enabled && (
+        <Magnetic>
+          <Link to={primary.destination} className="btn btn-primary btn-lg">
+            {primary.button_text} <ArrowRight size={18} />
+          </Link>
+        </Magnetic>
+      )}
+      {secondary.visible && secondary.enabled && (
+        <Link to={secondary.destination} className="btn btn-secondary btn-lg">
+          {secondary.button_text}
+        </Link>
+      )}
+    </>
+  );
+}
+
+function FinalCTASection() {
+  const { getButton } = useCTAButtons();
+  const primary = getButton('final_cta_primary');
+  const secondary = getButton('final_cta_secondary');
+  return (
+    <div className="cta-btn-group">
+      {primary.visible && primary.enabled && (
+        <Magnetic>
+          <Link to={primary.destination} className="btn btn-primary btn-lg">
+            {primary.button_text} <ArrowUpRight size={16} />
+          </Link>
+        </Magnetic>
+      )}
+      {secondary.visible && secondary.enabled && (
+        <Link to={secondary.destination} className="btn btn-secondary btn-lg">
+          {secondary.button_text}
+        </Link>
+      )}
     </div>
   );
 }

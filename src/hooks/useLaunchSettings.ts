@@ -1,0 +1,323 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+
+export type LaunchMode = 'waitlist' | 'early_beta' | 'closed_beta' | 'open_beta' | 'public' | 'maintenance';
+
+export interface LaunchSettings {
+  id: string;
+  launch_mode: LaunchMode;
+  login_mode: 'login' | 'launch' | 'waitlist' | 'custom';
+  custom_login_url: string | null;
+  launch_date: string | null;
+  countdown_enabled: boolean;
+  auto_switch_mode: LaunchMode | null;
+  auto_switch_at: string | null;
+  maintenance_title: string;
+  maintenance_message: string;
+  registration_enabled: boolean;
+  show_pricing: boolean;
+  show_blog: boolean;
+  show_docs: boolean;
+  show_changelog: boolean;
+  show_login: boolean;
+  show_signup: boolean;
+  show_waitlist: boolean;
+  show_discord: boolean;
+  show_community: boolean;
+  page_visibility: Record<string, boolean>;
+  route_protection: Record<string, unknown>;
+  updated_at: string | null;
+  published: boolean;
+}
+
+export interface CTAButton {
+  id: string;
+  button_id: string;
+  button_text: string;
+  destination: string;
+  variant: string;
+  color: string;
+  icon: string | null;
+  open_in_new_tab: boolean;
+  visible: boolean;
+  enabled: boolean;
+  animation: string;
+  priority: number;
+  confirmation_text: string | null;
+  requires_auth: boolean;
+  launch_mode_override: Record<string, string>;
+  ab_variants: Array<{ text: string; destination: string; weight: number }>;
+  ab_enabled: boolean;
+}
+
+export interface AnnouncementBarData {
+  enabled: boolean;
+  text: string;
+  link_url: string | null;
+  link_text: string | null;
+  background_color: string;
+  text_color: string;
+  emoji: string;
+  countdown_enabled: boolean;
+  countdown_target: string | null;
+  dismissible: boolean;
+  sticky: boolean;
+  animation: string;
+}
+
+export interface LandingContent {
+  section: string;
+  title: string | null;
+  subtitle: string | null;
+  body: string | null;
+  cta_text: string | null;
+  cta_link: string | null;
+  secondary_cta_text: string | null;
+  secondary_cta_link: string | null;
+  image_url: string | null;
+  badge: string | null;
+  active: boolean;
+}
+
+const DEFAULT_SETTINGS: LaunchSettings = {
+  id: '', launch_mode: 'waitlist', login_mode: 'login', custom_login_url: null,
+  launch_date: null, countdown_enabled: false, auto_switch_mode: null, auto_switch_at: null,
+  maintenance_title: 'Scheduled Maintenance', maintenance_message: 'We are performing scheduled maintenance. We will be back shortly.',
+  registration_enabled: true, show_pricing: true, show_blog: true, show_docs: true,
+  show_changelog: true, show_login: true, show_signup: true, show_waitlist: true,
+  show_discord: true, show_community: true,
+  page_visibility: { blog: true, pricing: true, templates: true, roadmap: true, careers: true, community: true },
+  route_protection: {}, updated_at: null, published: true,
+};
+
+function useSupabaseQuery(table: string) {
+  return supabase?.from(table as never);
+}
+
+export function useLaunchSettings(): { settings: LaunchSettings; loading: boolean } {
+  const [settings, setSettings] = useState<LaunchSettings>(DEFAULT_SETTINGS);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+
+    const fetchSettings = async () => {
+      const { data } = await useSupabaseQuery('launch_settings')?.select('*').limit(1).single() ?? {};
+      if (data) setSettings({ ...DEFAULT_SETTINGS, ...data as unknown as LaunchSettings });
+      setLoading(false);
+    };
+
+    fetchSettings();
+
+    const channel = supabase
+      .channel('launch-settings-changes')
+      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'launch_settings' },
+        (payload: { new: Record<string, unknown> }) => {
+          if (payload.new) setSettings({ ...DEFAULT_SETTINGS, ...payload.new as unknown as LaunchSettings });
+        })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  return { settings, loading };
+}
+
+const DEFAULT_CTAS: Record<string, CTAButton> = {};
+
+function makeDefaultCTA(id: string, text: string, dest: string, variant = 'primary', priority = 0): CTAButton {
+  return { id: '', button_id: id, button_text: text, destination: dest, variant, color: 'default', icon: null, open_in_new_tab: false, visible: true, enabled: true, animation: 'none', priority, confirmation_text: null, requires_auth: false, launch_mode_override: {}, ab_variants: [], ab_enabled: false };
+}
+
+['navbar_login','navbar_cta','navbar_demo','hero_primary','hero_secondary','footer_cta','pricing_cta','final_cta_primary','final_cta_secondary','mobile_login','mobile_cta','launch_hero_primary','launch_hero_secondary','launch_navbar_login','launch_navbar_cta'].forEach((id) => {
+  DEFAULT_CTAS[id] = makeDefaultCTA(id, id.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()), '/');
+});
+
+DEFAULT_CTAS.navbar_login = makeDefaultCTA('navbar_login', 'Log in', '/login', 'ghost', 10);
+DEFAULT_CTAS.navbar_cta = makeDefaultCTA('navbar_cta', 'Get Noska free', '/login', 'primary', 11);
+DEFAULT_CTAS.navbar_demo = makeDefaultCTA('navbar_demo', 'Request a demo', '/enterprise', 'ghost', 9);
+DEFAULT_CTAS.hero_primary = makeDefaultCTA('hero_primary', 'Get started free', '/login', 'primary', 20);
+DEFAULT_CTAS.hero_secondary = makeDefaultCTA('hero_secondary', "See what's inside", '/product', 'secondary', 19);
+DEFAULT_CTAS.footer_cta = makeDefaultCTA('footer_cta', 'Get Noska free', '/login', 'primary', 30);
+DEFAULT_CTAS.pricing_cta = makeDefaultCTA('pricing_cta', 'View all plans', '/pricing', 'primary', 40);
+DEFAULT_CTAS.final_cta_primary = makeDefaultCTA('final_cta_primary', 'Get Noska free', '/login', 'primary', 60);
+DEFAULT_CTAS.final_cta_secondary = makeDefaultCTA('final_cta_secondary', 'View all plans', '/pricing', 'secondary', 59);
+DEFAULT_CTAS.mobile_login = makeDefaultCTA('mobile_login', 'Log in', '/login', 'ghost', 50);
+DEFAULT_CTAS.mobile_cta = makeDefaultCTA('mobile_cta', 'Get Noska free', '/login', 'primary', 51);
+DEFAULT_CTAS.launch_navbar_login = makeDefaultCTA('launch_navbar_login', 'Log in', '/login', 'ghost', 80);
+DEFAULT_CTAS.launch_navbar_cta = makeDefaultCTA('launch_navbar_cta', 'Join Waitlist', '/launch', 'primary', 81);
+DEFAULT_CTAS.launch_hero_primary = makeDefaultCTA('launch_hero_primary', 'Join Waitlist', '/launch', 'primary', 70);
+DEFAULT_CTAS.launch_hero_secondary = makeDefaultCTA('launch_hero_secondary', 'Watch Demo', '#demo', 'secondary', 69);
+
+export function useCTAButtons(): {
+  buttons: Record<string, CTAButton>;
+  getButton: (buttonId: string) => CTAButton;
+  getDestination: (buttonId: string) => string;
+  getButtonText: (buttonId: string) => string;
+  loading: boolean;
+} {
+  const [ctaMap, setCtaMap] = useState<Record<string, CTAButton>>(DEFAULT_CTAS);
+  const [loading, setLoading] = useState(true);
+  const { settings } = useLaunchSettings();
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+
+    const fetchCTAs = async () => {
+      const { data } = await useSupabaseQuery('cta_buttons')?.select('*').order('priority') ?? {};
+      if (data) {
+        const map: Record<string, CTAButton> = {};
+        for (const btn of (data as unknown as CTAButton[])) {
+          map[btn.button_id] = btn;
+        }
+        setCtaMap((prev) => ({ ...prev, ...map }));
+      }
+      setLoading(false);
+    };
+
+    fetchCTAs();
+
+    const channel = supabase
+      .channel('cta-button-changes')
+      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'cta_buttons' },
+        (payload: { new: Record<string, unknown> }) => {
+          const btn = payload.new as unknown as CTAButton;
+          if (btn?.button_id) setCtaMap((prev) => ({ ...prev, [btn.button_id]: btn }));
+        })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const getButton = useCallback((buttonId: string): CTAButton => {
+    const btn = ctaMap[buttonId];
+    if (!btn) return DEFAULT_CTAS[buttonId] ?? makeDefaultCTA(buttonId, buttonId, '/', 'primary', 0);
+
+    const override = (btn.launch_mode_override ?? {})[settings.launch_mode];
+    if (override) return { ...btn, destination: override };
+
+    if (btn.destination === '/login' || btn.button_id.includes('login')) {
+      if (settings.login_mode === 'launch') return { ...btn, destination: '/launch' };
+      if (settings.login_mode === 'waitlist') return { ...btn, destination: '/waitlist' };
+      if (settings.login_mode === 'custom' && settings.custom_login_url) return { ...btn, destination: settings.custom_login_url };
+    }
+
+    return btn;
+  }, [ctaMap, settings]);
+
+  const getDestination = useCallback((buttonId: string): string => getButton(buttonId).destination, [getButton]);
+  const getButtonText = useCallback((buttonId: string): string => getButton(buttonId).button_text, [getButton]);
+
+  return { buttons: ctaMap, getButton, getDestination, getButtonText, loading };
+}
+
+export function useAnnouncementBar(): { bar: AnnouncementBarData | null; loading: boolean } {
+  const [bar, setBar] = useState<AnnouncementBarData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+
+    const fetch = async () => {
+      const { data } = await useSupabaseQuery('announcement_bar')?.select('*').limit(1).single() ?? {};
+      if (data) setBar(data as unknown as AnnouncementBarData);
+      setLoading(false);
+    };
+
+    fetch();
+
+    const channel = supabase
+      .channel('announcement-bar-changes')
+      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'announcement_bar' },
+        (payload: { new: Record<string, unknown> }) => { if (payload.new) setBar(payload.new as unknown as AnnouncementBarData); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  return { bar, loading };
+}
+
+export function useLandingContent(): { content: LandingContent[]; getSection: (section: string) => LandingContent | undefined; loading: boolean } {
+  const [content, setContent] = useState<LandingContent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+
+    const fetch = async () => {
+      const { data } = await useSupabaseQuery('landing_content')?.select('*').order('sort_order') ?? {};
+      if (data) setContent(data as unknown as LandingContent[]);
+      setLoading(false);
+    };
+
+    fetch();
+    const channel = supabase
+      .channel('landing-content-changes')
+      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'landing_content' }, () => { fetch(); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const getSection = useCallback((section: string): LandingContent | undefined => content.find((c) => c.section === section && c.active), [content]);
+  return { content, getSection, loading };
+}
+
+export function useSubmitWaitlist(): { submit: (data: { email: string; name?: string; company?: string; role?: string; country?: string; referral_code?: string; phone?: string }) => Promise<{ success: boolean; error?: string }>; submitting: boolean } {
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = useCallback(async (data: { email: string; name?: string; company?: string; role?: string; country?: string; referral_code?: string; phone?: string }): Promise<{ success: boolean; error?: string }> => {
+    setSubmitting(true);
+    try {
+      const BASE = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabase || !BASE) {
+        const res = await fetch(`${BASE}/functions/v1/waitlist-signup`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+        if (!res.ok) return { success: false, error: result.error ?? 'Failed to join' };
+        return { success: true };
+      }
+
+      const { data: existing } = await useSupabaseQuery('waitlist_entries')
+        ?.select('id').eq('email' as never, data.email).maybeSingle() ?? {};
+      if (existing) return { success: false, error: 'This email is already on the waitlist.' };
+
+      const { error } = await useSupabaseQuery('waitlist_entries')
+        ?.insert({ email: data.email, name: data.name ?? null, provider: 'direct', status: 'waiting', country: data.country ?? null, joined_at: new Date().toISOString(), referral_count: 0 } as never) ?? {};
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to join waitlist' };
+    } finally { setSubmitting(false); }
+  }, []);
+
+  return { submit, submitting };
+}
+
+export function useSocialLinks(): { links: Array<{ platform: string; url: string; label: string | null; active: boolean }>; loading: boolean } {
+  const [links, setLinks] = useState<Array<{ platform: string; url: string; label: string | null; active: boolean }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+
+    const fetch = async () => {
+      const { data } = await useSupabaseQuery('social_links')?.select('platform, url, label, active').order('sort_order') ?? {};
+      if (data) setLinks(data as unknown as Array<{ platform: string; url: string; label: string | null; active: boolean }>);
+      setLoading(false);
+    };
+
+    fetch();
+    const channel = supabase
+      .channel('social-links-changes')
+      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'social_links' }, () => { fetch(); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  return { links, loading };
+}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
 import { motion } from 'framer-motion';
-import { Sparkles, PlayCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Sparkles, PlayCircle, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 
 import { Preloader } from '../components/Preloader';
 import { LaunchNavbar } from './components/LaunchNavbar';
@@ -49,6 +49,8 @@ export default function Launch() {
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistError, setWaitlistError] = useState('');
+  const [waitlistName, setWaitlistName] = useState('');
   const scratchSectionRef = useRef(null);
 
   useEffect(() => {
@@ -72,13 +74,88 @@ export default function Launch() {
     e.preventDefault();
     if (!waitlistEmail.trim()) return;
     setWaitlistSubmitting(true);
+    setWaitlistError('');
+
+    const email = waitlistEmail.trim().toLowerCase();
+    const name = waitlistName.trim() || null;
+
     try {
-      await fetch('https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/waitlist-signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: waitlistEmail.trim() }),
-      });
-    } catch {}
+      const { supabase } = await import('../../../lib/supabase');
+      if (supabase) {
+        const { data: existing } = await supabase
+          .from('waitlist_entries' as never)
+          .select('id')
+          .eq('email' as never, email)
+          .maybeSingle() as unknown as { data: { id: string } | null };
+
+        if (existing) {
+          setWaitlistError('This email is already on the waitlist!');
+          setWaitlistSubmitting(false);
+          return;
+        }
+
+        const { error } = await supabase
+          .from('waitlist_entries' as never)
+          .insert({
+            email, name, provider: 'launch-page', status: 'waiting',
+            joined_at: new Date().toISOString(), referral_count: 0,
+          } as never);
+
+        if (error) {
+          console.warn('Supabase insert failed, falling back to edge function:', error);
+          const res = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/waitlist-signup`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, name }),
+            }
+          );
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            setWaitlistError(errData.error || 'Failed to join. Please try again.');
+            setWaitlistSubmitting(false);
+            return;
+          }
+        }
+      } else {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/waitlist-signup`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, name }),
+          }
+        );
+        if (!res.ok) {
+          setWaitlistError('Failed to join. Please try again.');
+          setWaitlistSubmitting(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Waitlist submission error, falling back:', err);
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/waitlist-signup`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, name }),
+          }
+        );
+        if (!res.ok) {
+          setWaitlistError('Failed to join. Please try again.');
+          setWaitlistSubmitting(false);
+          return;
+        }
+      } catch (err2) {
+        setWaitlistError(err2 instanceof Error ? err2.message : 'Something went wrong');
+        setWaitlistSubmitting(false);
+        return;
+      }
+    }
+
     setWaitlistSubmitting(false);
     setWaitlistSubmitted(true);
   };
@@ -177,6 +254,14 @@ export default function Launch() {
             ) : (
               <form className="nl-waitlist-form" onSubmit={handleWaitlistSubmit}>
                 <input
+                  type="text"
+                  placeholder="Your name (optional)"
+                  className="nl-waitlist-input"
+                  value={waitlistName}
+                  onChange={(e) => setWaitlistName(e.target.value)}
+                  aria-label="Your name"
+                />
+                <input
                   type="email"
                   required
                   placeholder="you@company.com"
@@ -185,6 +270,11 @@ export default function Launch() {
                   onChange={(e) => setWaitlistEmail(e.target.value)}
                   aria-label="Email address"
                 />
+                {waitlistError && (
+                  <div className="nl-waitlist-error">
+                    <AlertCircle size={14} /> {waitlistError}
+                  </div>
+                )}
                 <button type="submit" className="nl-btn nl-btn-primary" disabled={waitlistSubmitting}>
                   {waitlistSubmitting ? 'Joining...' : <>Join Waitlist <ArrowRight size={16} /></>}
                 </button>
