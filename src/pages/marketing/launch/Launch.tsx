@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Lenis from 'lenis';
 import { motion } from 'framer-motion';
 import { Sparkles, PlayCircle, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -50,7 +51,10 @@ export default function Launch() {
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistError, setWaitlistError] = useState('');
+  const [searchParams] = useSearchParams();
   const [waitlistName, setWaitlistName] = useState('');
+  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
+  const [waitlistReferralCode, setWaitlistReferralCode] = useState<string | null>(null);
   const scratchSectionRef = useRef(null);
 
   useEffect(() => {
@@ -78,6 +82,10 @@ export default function Launch() {
 
     const email = waitlistEmail.trim().toLowerCase();
     const name = waitlistName.trim() || null;
+    const ref = searchParams.get('ref') || null;
+
+    const signupBody = { email, name };
+    if (ref) signupBody['ref'] = ref;
 
     try {
       const { supabase } = await import('../../../lib/supabase');
@@ -99,6 +107,7 @@ export default function Launch() {
           .insert({
             email, name, provider: 'launch-page', status: 'waiting',
             joined_at: new Date().toISOString(), referral_count: 0,
+            referrer_id: undefined,
           } as never);
 
         if (error) {
@@ -108,7 +117,7 @@ export default function Launch() {
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, name }),
+              body: JSON.stringify(signupBody),
             }
           );
           if (!res.ok) {
@@ -124,7 +133,7 @@ export default function Launch() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, name }),
+            body: JSON.stringify(signupBody),
           }
         );
         if (!res.ok) {
@@ -158,6 +167,21 @@ export default function Launch() {
 
     setWaitlistSubmitting(false);
     setWaitlistSubmitted(true);
+
+    try {
+      const { supabase } = await import('../../../lib/supabase');
+      if (supabase) {
+        const { data: entry } = await supabase
+          .from('waitlist_entries' as never)
+          .select('position, invite_code')
+          .eq('email' as never, email)
+          .maybeSingle() as any;
+        if (entry) {
+          setWaitlistPosition(entry.position as number);
+          setWaitlistReferralCode(entry.invite_code as string | null);
+        }
+      }
+    } catch {}
   };
 
   const scrollToScratch = () => {
@@ -250,6 +274,31 @@ export default function Launch() {
             {waitlistSubmitted ? (
               <div className="nl-waitlist-success">
                 <CheckCircle2 size={18} /> You're on the list — we'll be in touch.
+                {waitlistPosition && (
+                  <p className="mt-2 text-sm text-zinc-400">
+                    Your queue position: <strong className="text-[#7c3aed]">#{waitlistPosition}</strong>
+                  </p>
+                )}
+                {waitlistReferralCode && (
+                  <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4 text-left">
+                    <p className="mb-2 text-sm text-zinc-300 font-medium">Share & move up the queue</p>
+                    <p className="mb-2 text-xs text-zinc-500">Share your referral link — for each friend who joins, you move up one spot.</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={`${window.location.origin}/launch?ref=${waitlistReferralCode}`}
+                        className="flex-1 rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300"
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <button
+                        onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/launch?ref=${waitlistReferralCode}`)}
+                        className="rounded bg-[#7c3aed] px-3 py-1.5 text-xs text-white hover:bg-[#6d28d9]"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <form className="nl-waitlist-form" onSubmit={handleWaitlistSubmit}>

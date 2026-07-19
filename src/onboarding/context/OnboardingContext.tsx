@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useCallback, useEffect, u
 import { saveOnboardingState, loadOnboardingState, clearOnboardingState } from "../services/onboardingService";
 import type { OnboardingFormData, OnboardingPagePreview, OnboardingTeammate } from "../types";
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 interface OnboardingState {
   step: number;
@@ -23,6 +23,8 @@ const initialState: OnboardingState = {
     workspaceIcon: "🏢",
     role: "",
     useCase: [],
+    teamSize: "",
+    goals: [],
     teammates: [],
     template: ""
   }

@@ -73,9 +73,59 @@ Deno.serve(async (req: Request) => {
       const lastName = (data.last_name as string) ?? ""
       const name = `${firstName} ${lastName}`.trim() || (data.username as string) || "Workspace User"
       const avatarUrl = data.image_url as string | undefined
+      const externalAccounts = data.external_accounts as Array<Record<string, unknown>> | undefined
+
+      // Extract OAuth provider IDs for duplicate protection
+      let githubId: string | null = null
+      let googleId: string | null = null
+      let microsoftId: string | null = null
+      if (externalAccounts) {
+        for (const acct of externalAccounts) {
+          const provider = acct.provider as string | undefined
+          const providerUserId = acct.provider_user_id as string | undefined
+          if (provider === "github" && providerUserId) githubId = providerUserId
+          else if (provider === "google" && providerUserId) googleId = providerUserId
+          else if (provider === "microsoft" && providerUserId) microsoftId = providerUserId
+        }
+      }
 
       // On user.created, check if email is approved
       if (eventType === "user.created" && email) {
+        // Duplicate protection: check if any OAuth ID already exists
+        if (githubId || googleId || microsoftId) {
+          const dupQuery = supabase.from("waitlist_entries").select("id, email")
+          const dupFilters: string[] = []
+          if (githubId) dupFilters.push(`github_id.eq.${githubId}`)
+          if (googleId) dupFilters.push(`google_id.eq.${googleId}`)
+          if (microsoftId) dupFilters.push(`microsoft_id.eq.${microsoftId}`)
+          // We'll check each independently since Supabase OR is clunky here
+          for (const providerField of ["github_id", "google_id", "microsoft_id"]) {
+            const val = providerField === "github_id" ? githubId : providerField === "google_id" ? googleId : microsoftId
+            if (!val) continue
+            const { data: dup } = await supabase
+              .from("waitlist_entries")
+              .select("id, email")
+              .eq(providerField, val)
+              .neq("email", email.toLowerCase())
+              .maybeSingle()
+            if (dup && CLERK_SECRET_KEY) {
+              console.warn(`Duplicate ${providerField} detected for ${email}, blocking creation`)
+              try {
+                await fetch(`${CLERK_API}/users/${clerkId}`, {
+                  method: "DELETE",
+                  headers: { Authorization: `Bearer ${CLERK_SECRET_KEY}` },
+                })
+              } catch (e) {
+                console.error("Failed to delete duplicate Clerk user:", e)
+              }
+              return new Response(JSON.stringify({ error: `Account with this ${providerField.replace('_id','')} already exists. User deleted.` }), {
+                status: 403,
+                headers: { "Content-Type": "application/json" },
+              })
+            }
+          }
+        }
+
         const { data: approved } = await supabase
           .from("approved_emails")
           .select("id")
@@ -83,7 +133,6 @@ Deno.serve(async (req: Request) => {
           .maybeSingle()
 
         if (!approved && CLERK_SECRET_KEY) {
-          // Delete the unapproved user from Clerk
           console.warn(`Blocking unapproved user: ${email}`)
           try {
             await fetch(`${CLERK_API}/users/${clerkId}`, {
@@ -123,11 +172,25 @@ Deno.serve(async (req: Request) => {
 
       // Mark invite as accepted in waitlist_entries
       if (email) {
+        const updateData: Record<string, unknown> = {
+          status: "accepted",
+          accepted: true,
+          first_login_at: new Date().toISOString(),
+        }
+        if (githubId) updateData.github_id = githubId
+        if (googleId) updateData.google_id = googleId
+        if (microsoftId) updateData.microsoft_id = microsoftId
         await supabase
           .from("waitlist_entries")
-          .update({ status: "accepted", accepted: true })
+          .update(updateData)
           .eq("email", email.toLowerCase())
           .is("accepted", false)
+
+        // Update approved_emails too
+        await supabase
+          .from("approved_emails")
+          .update({ status: "accepted" })
+          .eq("email", email.toLowerCase())
       }
       break
     }

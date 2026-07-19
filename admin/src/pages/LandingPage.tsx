@@ -30,7 +30,7 @@ const SECTION_LABELS: Record<string, string> = {
   final_cta: "Final CTA",
 };
 
-function SectionEditor({ section, onSave }: { section: { id: string; section: string; title?: string; subtitle?: string; body?: string; cta_text?: string; cta_link?: string; secondary_cta_text?: string; secondary_cta_link?: string; badge?: string; image_url?: string; active: boolean }; onSave: (id: string, data: Record<string, unknown>) => Promise<void> }) {
+function SectionEditor({ section, onSave }: { section: { id: string; section: string; title?: string | null; subtitle?: string | null; body?: string | null; cta_text?: string | null; cta_link?: string | null; secondary_cta_text?: string | null; secondary_cta_link?: string | null; badge?: string | null; image_url?: string | null; active: boolean }; onSave: (id: string, data: Record<string, unknown>) => Promise<void> }) {
   const [title, setTitle] = useState(section.title ?? "");
   const [subtitle, setSubtitle] = useState(section.subtitle ?? "");
   const [body, setBody] = useState(section.body ?? "");

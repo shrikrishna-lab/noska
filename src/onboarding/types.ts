@@ -14,6 +14,8 @@ export interface OnboardingFormData {
   workspaceIcon: string;
   role: string;
   useCase: string[];
+  teamSize: string;
+  goals: string[];
   teammates: OnboardingTeammate[];
   template: string;
 }
