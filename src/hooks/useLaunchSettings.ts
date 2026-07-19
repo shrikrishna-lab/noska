@@ -94,12 +94,37 @@ function useSupabaseQuery(table: string) {
   return supabase?.from(table as never);
 }
 
+const listeners: Record<string, Set<() => void>> = {};
+let realtimeInit = false;
+
+function initRealtime() {
+  if (!supabase || realtimeInit) return;
+  realtimeInit = true;
+
+  const tables = [
+    { channel: 'launch-settings-changes', table: 'launch_settings' },
+    { channel: 'cta-button-changes', table: 'cta_buttons' },
+    { channel: 'announcement-bar-changes', table: 'announcement_bar' },
+    { channel: 'landing-content-changes', table: 'landing_content' },
+    { channel: 'social-links-changes', table: 'social_links' },
+  ];
+
+  for (const { channel: name, table } of tables) {
+    supabase
+      .channel(name)
+      .on('postgres_changes' as never, { event: '*', schema: 'public', table },
+        () => { listeners[name]?.forEach((fn) => fn()); })
+      .subscribe();
+  }
+}
+
 export function useLaunchSettings(): { settings: LaunchSettings; loading: boolean } {
   const [settings, setSettings] = useState<LaunchSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
+    initRealtime();
 
     const fetchSettings = async () => {
       const { data } = await useSupabaseQuery('launch_settings')?.select('*').limit(1).single() ?? {};
@@ -108,16 +133,6 @@ export function useLaunchSettings(): { settings: LaunchSettings; loading: boolea
     };
 
     fetchSettings();
-
-    const channel = supabase
-      .channel('launch-settings-changes')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'launch_settings' },
-        (payload: { new: Record<string, unknown> }) => {
-          if (payload.new) setSettings({ ...DEFAULT_SETTINGS, ...payload.new as unknown as LaunchSettings });
-        })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, []);
 
   return { settings, loading };
@@ -162,6 +177,7 @@ export function useCTAButtons(): {
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
+    initRealtime();
 
     const fetchCTAs = async () => {
       const { data } = await useSupabaseQuery('cta_buttons')?.select('*').order('priority') ?? {};
@@ -177,16 +193,20 @@ export function useCTAButtons(): {
 
     fetchCTAs();
 
-    const channel = supabase
-      .channel('cta-button-changes')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'cta_buttons' },
-        (payload: { new: Record<string, unknown> }) => {
-          const btn = payload.new as unknown as CTAButton;
-          if (btn?.button_id) setCtaMap((prev) => ({ ...prev, [btn.button_id]: btn }));
-        })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    const key = 'cta-button-changes';
+    if (!listeners[key]) listeners[key] = new Set();
+    const refetch = async () => {
+      const { data } = await useSupabaseQuery('cta_buttons')?.select('*').order('priority') ?? {};
+      if (data) {
+        const map: Record<string, CTAButton> = {};
+        for (const btn of (data as unknown as CTAButton[])) {
+          map[btn.button_id] = btn;
+        }
+        setCtaMap((prev) => ({ ...prev, ...map }));
+      }
+    };
+    listeners[key].add(refetch);
+    return () => { listeners[key].delete(refetch); };
   }, []);
 
   const getButton = useCallback((buttonId: string): CTAButton => {
@@ -217,6 +237,7 @@ export function useAnnouncementBar(): { bar: AnnouncementBarData | null; loading
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
+    initRealtime();
 
     const fetch = async () => {
       const { data } = await useSupabaseQuery('announcement_bar')?.select('*').limit(1).single() ?? {};
@@ -226,13 +247,10 @@ export function useAnnouncementBar(): { bar: AnnouncementBarData | null; loading
 
     fetch();
 
-    const channel = supabase
-      .channel('announcement-bar-changes')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'announcement_bar' },
-        (payload: { new: Record<string, unknown> }) => { if (payload.new) setBar(payload.new as unknown as AnnouncementBarData); })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    const key = 'announcement-bar-changes';
+    if (!listeners[key]) listeners[key] = new Set();
+    listeners[key].add(fetch);
+    return () => { listeners[key].delete(fetch); };
   }, []);
 
   return { bar, loading };
@@ -244,6 +262,7 @@ export function useLandingContent(): { content: LandingContent[]; getSection: (s
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
+    initRealtime();
 
     const fetch = async () => {
       const { data } = await useSupabaseQuery('landing_content')?.select('*').order('sort_order') ?? {};
@@ -252,12 +271,11 @@ export function useLandingContent(): { content: LandingContent[]; getSection: (s
     };
 
     fetch();
-    const channel = supabase
-      .channel('landing-content-changes')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'landing_content' }, () => { fetch(); })
-      .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const key = 'landing-content-changes';
+    if (!listeners[key]) listeners[key] = new Set();
+    listeners[key].add(fetch);
+    return () => { listeners[key].delete(fetch); };
   }, []);
 
   const getSection = useCallback((section: string): LandingContent | undefined => content.find((c) => c.section === section && c.active), [content]);
@@ -303,6 +321,7 @@ export function useSocialLinks(): { links: Array<{ platform: string; url: string
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
+    initRealtime();
 
     const fetch = async () => {
       const { data } = await useSupabaseQuery('social_links')?.select('platform, url, label, active').order('sort_order') ?? {};
@@ -311,12 +330,11 @@ export function useSocialLinks(): { links: Array<{ platform: string; url: string
     };
 
     fetch();
-    const channel = supabase
-      .channel('social-links-changes')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'social_links' }, () => { fetch(); })
-      .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const key = 'social-links-changes';
+    if (!listeners[key]) listeners[key] = new Set();
+    listeners[key].add(fetch);
+    return () => { listeners[key].delete(fetch); };
   }, []);
 
   return { links, loading };
