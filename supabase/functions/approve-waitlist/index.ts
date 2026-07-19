@@ -63,6 +63,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const inviteCode = generateCode()
+    const now = new Date().toISOString()
+    const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
     const { error: updateErr } = await supabase
       .from("waitlist_entries")
@@ -70,7 +72,10 @@ Deno.serve(async (req: Request) => {
         status: "invited",
         invite_sent: true,
         invite_code: inviteCode,
-        approved_at: new Date().toISOString(),
+        approved_at: now,
+        invite_expires_at: inviteExpiresAt,
+        email_status: "queued",
+        email_queued_at: now,
       })
       .eq("id", waitlistId)
 
@@ -82,6 +87,8 @@ Deno.serve(async (req: Request) => {
         email: entry.email,
         waitlist_entry_id: waitlistId,
         invite_sent: true,
+        status: "invited",
+        invite_expires_at: inviteExpiresAt,
       }, { onConflict: "email" })
 
     const config = await getResendConfig()
@@ -91,12 +98,12 @@ Deno.serve(async (req: Request) => {
         <p>Hey ${entry.name},</p>
         <p>Great news — you've been approved from the waitlist! You can now create your account and start using Noska.</p>
         <p style="margin: 24px 0;"><strong>Your invite code:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 14px;">${inviteCode}</code></p>
-        <a href="https://noska.dev/login" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Create Account</a>
+        <a href="${Deno.env.get("PUBLIC_SITE_URL") ?? "https://noska.dev"}/invite/${inviteCode}" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invitation</a>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-        <p style="color: #6b7280; font-size: 12px;">If you didn't sign up for Noska, you can ignore this email.</p>
+        <p style="color: #6b7280; font-size: 12px;">This invite expires in 7 days. If you didn't sign up for Noska, you can ignore this email.</p>
       </div>`
 
-      await fetch("https://api.resend.com/emails", {
+      const emailRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${config.apiKey}`,
@@ -111,6 +118,13 @@ Deno.serve(async (req: Request) => {
           open_tracking: true,
         }),
       })
+
+      if (emailRes.ok) {
+        await supabase
+          .from("waitlist_entries")
+          .update({ email_status: "sent", email_sent_at: new Date().toISOString() })
+          .eq("id", waitlistId)
+      }
     }
 
     return respond({ success: true, invite_code: inviteCode })

@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useLaunchSettings, useUpdateLaunchSettings, useWaitlistStats, useRealtimeInvalidate, useLaunchAuditLogs } from "@/lib/queries";
+import { useLaunchSettings, useUpdateLaunchSettings, useWaitlistStats, useRealtimeInvalidate, useLaunchAuditLogs, useCTAButtons, useUpdateCTAButton } from "@/lib/queries";
 import { useAuth } from "@/lib/auth";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { formatRelativeTime } from "@/lib/utils";
-import { Megaphone, Globe, Clock, EyeOff, Users, CheckCircle2, ChevronDown, ChevronUp, History, RotateCcw, Sparkles, ArrowUpDown } from "lucide-react";
+import { Megaphone, Globe, Clock, EyeOff, Users, CheckCircle2, ChevronDown, ChevronUp, History, RotateCcw, Sparkles, ArrowUpDown, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 
 const MODE_LABELS: Record<string, string> = {
@@ -80,18 +80,128 @@ function ToggleCard({ title, description, enabled, onToggle, children }: { title
   );
 }
 
+const MODE_CTA_PRESETS: Record<string, Record<string, { text: string; dest: string }>> = {
+  waitlist: {
+    navbar_login: { text: "Log in", dest: "/login" },
+    navbar_cta: { text: "Join Waitlist", dest: "/launch" },
+    navbar_demo: { text: "Request a demo", dest: "/enterprise" },
+    hero_primary: { text: "Join Waitlist", dest: "/launch" },
+    hero_secondary: { text: "Watch Demo", dest: "#demo" },
+    footer_cta: { text: "Join Waitlist", dest: "/launch" },
+    pricing_cta: { text: "View all plans", dest: "/pricing" },
+    final_cta_primary: { text: "Join Waitlist", dest: "/launch" },
+    final_cta_secondary: { text: "Learn more", dest: "/product" },
+    mobile_login: { text: "Log in", dest: "/login" },
+    mobile_cta: { text: "Join Waitlist", dest: "/launch" },
+    launch_navbar_login: { text: "Log in", dest: "/login" },
+    launch_navbar_cta: { text: "Join Waitlist", dest: "/launch" },
+    launch_hero_primary: { text: "Join Waitlist", dest: "/launch" },
+    launch_hero_secondary: { text: "Watch Demo", dest: "#demo" },
+  },
+  early_beta: {
+    navbar_login: { text: "Log in", dest: "/login" },
+    navbar_cta: { text: "Get Started", dest: "/signup" },
+    navbar_demo: { text: "Request a demo", dest: "/enterprise" },
+    hero_primary: { text: "Get Started", dest: "/signup" },
+    hero_secondary: { text: "See what's inside", dest: "/product" },
+    footer_cta: { text: "Get Started", dest: "/signup" },
+    pricing_cta: { text: "View all plans", dest: "/pricing" },
+    final_cta_primary: { text: "Get Started", dest: "/signup" },
+    final_cta_secondary: { text: "Learn more", dest: "/product" },
+    mobile_login: { text: "Log in", dest: "/login" },
+    mobile_cta: { text: "Get Started", dest: "/signup" },
+    launch_navbar_login: { text: "Log in", dest: "/login" },
+    launch_navbar_cta: { text: "Get Started", dest: "/signup" },
+    launch_hero_primary: { text: "Get Started", dest: "/signup" },
+    launch_hero_secondary: { text: "See what's inside", dest: "/product" },
+  },
+  closed_beta: {
+    navbar_login: { text: "Log in", dest: "/login" },
+    navbar_cta: { text: "Get Started", dest: "/signup" },
+    navbar_demo: { text: "Request a demo", dest: "/enterprise" },
+    hero_primary: { text: "Get Started", dest: "/signup" },
+    hero_secondary: { text: "See what's inside", dest: "/product" },
+    footer_cta: { text: "Get Started", dest: "/signup" },
+    pricing_cta: { text: "View all plans", dest: "/pricing" },
+    final_cta_primary: { text: "Get Started", dest: "/signup" },
+    final_cta_secondary: { text: "Learn more", dest: "/product" },
+    mobile_login: { text: "Log in", dest: "/login" },
+    mobile_cta: { text: "Get Started", dest: "/signup" },
+    launch_navbar_login: { text: "Log in", dest: "/login" },
+    launch_navbar_cta: { text: "Get Started", dest: "/signup" },
+    launch_hero_primary: { text: "Get Started", dest: "/signup" },
+    launch_hero_secondary: { text: "See what's inside", dest: "/product" },
+  },
+  open_beta: {
+    navbar_login: { text: "Log in", dest: "/login" },
+    navbar_cta: { text: "Get Started", dest: "/signup" },
+    navbar_demo: { text: "Request a demo", dest: "/enterprise" },
+    hero_primary: { text: "Get started free", dest: "/signup" },
+    hero_secondary: { text: "See what's inside", dest: "/product" },
+    footer_cta: { text: "Get started free", dest: "/signup" },
+    pricing_cta: { text: "View all plans", dest: "/pricing" },
+    final_cta_primary: { text: "Get started free", dest: "/signup" },
+    final_cta_secondary: { text: "Learn more", dest: "/product" },
+    mobile_login: { text: "Log in", dest: "/login" },
+    mobile_cta: { text: "Get started free", dest: "/signup" },
+    launch_navbar_login: { text: "Log in", dest: "/login" },
+    launch_navbar_cta: { text: "Get started free", dest: "/signup" },
+    launch_hero_primary: { text: "Get started free", dest: "/signup" },
+    launch_hero_secondary: { text: "What's new", dest: "/changelog" },
+  },
+  public: {
+    navbar_login: { text: "Log in", dest: "/login" },
+    navbar_cta: { text: "Get started free", dest: "/signup" },
+    navbar_demo: { text: "Request a demo", dest: "/enterprise" },
+    hero_primary: { text: "Get started free", dest: "/signup" },
+    hero_secondary: { text: "See what's inside", dest: "/product" },
+    footer_cta: { text: "Get started free", dest: "/signup" },
+    pricing_cta: { text: "View all plans", dest: "/pricing" },
+    final_cta_primary: { text: "Get started free", dest: "/signup" },
+    final_cta_secondary: { text: "Learn more", dest: "/product" },
+    mobile_login: { text: "Log in", dest: "/login" },
+    mobile_cta: { text: "Get started free", dest: "/signup" },
+    launch_navbar_login: { text: "Log in", dest: "/login" },
+    launch_navbar_cta: { text: "Get started free", dest: "/signup" },
+    launch_hero_primary: { text: "Get started free", dest: "/signup" },
+    launch_hero_secondary: { text: "What's new", dest: "/changelog" },
+  },
+};
+
+const CTA_LABELS: Record<string, string> = {
+  navbar_login: "Navbar Login",
+  navbar_cta: "Navbar Primary CTA",
+  navbar_demo: "Navbar Demo",
+  hero_primary: "Hero Primary CTA",
+  hero_secondary: "Hero Secondary CTA",
+  footer_cta: "Footer CTA",
+  pricing_cta: "Pricing CTA",
+  final_cta_primary: "Final CTA Primary",
+  final_cta_secondary: "Final CTA Secondary",
+  mobile_login: "Mobile Login",
+  mobile_cta: "Mobile CTA",
+  launch_navbar_login: "Launch Navbar Login",
+  launch_navbar_cta: "Launch Navbar CTA",
+  launch_hero_primary: "Launch Hero Primary",
+  launch_hero_secondary: "Launch Hero Secondary",
+};
+
 export function LaunchControl() {
   const { user } = useAuth();
   const { data: settings, isLoading } = useLaunchSettings();
   const updateSettings = useUpdateLaunchSettings();
   const { data: stats } = useWaitlistStats();
   const { data: auditLogs } = useLaunchAuditLogs(10);
+  const { data: ctaButtons } = useCTAButtons();
+  const updateCTAButton = useUpdateCTAButton();
   useRealtimeInvalidate(["admin", "launch-settings"], "launch_settings");
   useRealtimeInvalidate(["admin", "waitlist-stats"], "waitlist_entries");
 
   const [local, setLocal] = useState<Record<string, unknown>>({});
   const [showAudit, setShowAudit] = useState(false);
+  const [showCtaPreview, setShowCtaPreview] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [applyingPresets, setApplyingPresets] = useState(false);
 
   const merged = useMemo(() => {
     if (!settings) return null;
@@ -100,6 +210,62 @@ export function LaunchControl() {
 
   const set = (key: string, value: unknown) => {
     setLocal((p) => ({ ...p, [key]: value }));
+    setDirty(true);
+  };
+
+  const handleModeChange = (newMode: string) => {
+    const updates: Record<string, unknown> = { launch_mode: newMode };
+    switch (newMode) {
+      case "waitlist":
+        updates.show_waitlist = true;
+        updates.show_pricing = false;
+        updates.show_blog = false;
+        updates.show_docs = false;
+        updates.show_login = false;
+        updates.show_signup = false;
+        break;
+      case "early_beta":
+        updates.show_waitlist = false;
+        updates.show_pricing = true;
+        updates.show_blog = true;
+        updates.show_docs = true;
+        updates.show_login = true;
+        updates.show_signup = false;
+        break;
+      case "closed_beta":
+        updates.show_waitlist = false;
+        updates.show_pricing = true;
+        updates.show_blog = true;
+        updates.show_docs = true;
+        updates.show_login = true;
+        updates.show_signup = false;
+        break;
+      case "open_beta":
+        updates.show_waitlist = false;
+        updates.show_pricing = true;
+        updates.show_blog = true;
+        updates.show_docs = true;
+        updates.show_login = true;
+        updates.show_signup = true;
+        break;
+      case "public":
+        updates.show_waitlist = false;
+        updates.show_pricing = true;
+        updates.show_blog = true;
+        updates.show_docs = true;
+        updates.show_login = true;
+        updates.show_signup = true;
+        break;
+      case "maintenance":
+        updates.show_waitlist = false;
+        updates.show_pricing = false;
+        updates.show_blog = false;
+        updates.show_docs = false;
+        updates.show_login = false;
+        updates.show_signup = false;
+        break;
+    }
+    setLocal((p) => ({ ...p, ...updates }));
     setDirty(true);
   };
 
@@ -179,7 +345,7 @@ export function LaunchControl() {
       <Card>
         <CardHeader><CardTitle className="text-base">Launch Mode</CardTitle></CardHeader>
         <CardContent>
-          <ModeSelector value={merged.launch_mode} onChange={(v) => set("launch_mode", v)} />
+          <ModeSelector value={merged.launch_mode} onChange={handleModeChange} />
         </CardContent>
       </Card>
 
@@ -254,7 +420,14 @@ export function LaunchControl() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Global CTA Behavior</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Global CTA Behavior</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => setShowCtaPreview(!showCtaPreview)}>
+              {showCtaPreview ? "Hide" : "Preview"} CTAs
+            </Button>
+          </div>
+        </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Login Button Mode</Label>
@@ -274,6 +447,72 @@ export function LaunchControl() {
               <Input value={merged.custom_login_url ?? ""} onChange={(e) => set("custom_login_url", e.target.value)} placeholder="https://..." />
             </div>
           )}
+
+          <div className="flex items-center justify-between rounded-lg border bg-muted/50 p-3">
+            <div className="text-sm text-muted-foreground">
+              <strong>Mode Presets:</strong> Apply {MODE_LABELS[merged.launch_mode]}-optimized button text and destinations to all CTAs.
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={applyingPresets}
+              onClick={async () => {
+                if (!user || !ctaButtons) return;
+                setApplyingPresets(true);
+                const preset = MODE_CTA_PRESETS[merged.launch_mode];
+                if (!preset) { toast.error("No presets for this mode"); setApplyingPresets(false); return; }
+                let count = 0;
+                for (const btn of ctaButtons) {
+                  const p = preset[btn.button_id];
+                  if (p) {
+                    try {
+                      await updateCTAButton.mutateAsync({
+                        id: btn.id,
+                        button_text: p.text,
+                        destination: p.dest,
+                        admin_name: user.name,
+                      });
+                      count++;
+                    } catch { /* skip failed */ }
+                  }
+                }
+                toast.success(`Applied ${count} CTA presets for ${MODE_LABELS[merged.launch_mode]}`);
+                setApplyingPresets(false);
+              }}
+            >
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${applyingPresets ? "animate-spin" : ""}`} />
+              {applyingPresets ? "Applying..." : "Apply Mode Presets"}
+            </Button>
+          </div>
+
+          {showCtaPreview && ctaButtons && (
+            <div className="rounded-lg border overflow-hidden">
+              <div className="max-h-72 overflow-y-auto divide-y text-xs">
+                <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 font-medium text-muted-foreground">
+                  <span className="flex-1">Button</span>
+                  <span className="w-28">Current</span>
+                  <span className="w-28">Mode Preset</span>
+                </div>
+                {ctaButtons.map((btn) => {
+                  const preset = MODE_CTA_PRESETS[merged.launch_mode]?.[btn.button_id];
+                  const currentText = btn.button_text;
+                  const presetText = preset?.text;
+                  return (
+                    <div key={btn.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30">
+                      <span className="flex-1 font-medium">{CTA_LABELS[btn.button_id] ?? btn.button_id}</span>
+                      <span className="w-28 truncate text-muted-foreground">
+                        {currentText} <span className="text-[10px] opacity-50">→ {btn.destination}</span>
+                      </span>
+                      <span className={`w-28 truncate ${currentText !== presetText && presetText ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                        {presetText ? `${presetText} → ${preset.dest}` : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground">
             All login/CTA buttons across the site will automatically redirect based on this setting. Individual CTA buttons can override this in the CTA Manager.
           </div>

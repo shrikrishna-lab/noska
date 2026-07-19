@@ -22,6 +22,7 @@ import Docs from "./pages/marketing/Docs";
 import Referrals from "./pages/marketing/Referrals";
 import Launch from "./pages/marketing/launch/Launch";
 import ControlCenter from "./ControlCenter";
+import { InvitePage } from "./pages/invite/InvitePage";
 import "./index.css";
 
 initPosthog();
@@ -67,6 +68,7 @@ createRoot(document.getElementById("root")!).render(
               footer, and smooth-scroll setup, so it deliberately skips
               MarketingLayout (which would double up both). */}
           <Route path="/launch" element={<Launch />} />
+          <Route path="/invite/:code" element={<InvitePage />} />
           {/* SSO callback handler — Clerk processes the OAuth redirect here,
               then redirects to /login where App reads the auth state. */}
           <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback signInForceRedirectUrl="/login" />} />
