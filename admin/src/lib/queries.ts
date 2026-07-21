@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
-import type { SupportTicket, SupportMessage, BannedUser } from "./types";
+import type { SupportTicket, SupportMessage, BannedUser, DeletedAccount } from "./types";
 import type { FeatureFlag, FeedbackItem, EmailCampaign, RoadmapItem, Integration, ApiKey, NotificationItem } from "./types";
 
 function token(): string {
@@ -161,6 +161,35 @@ export function useToggleFeatureFlag() {
   });
 }
 
+export function useUpdateFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "feature_flags", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "feature-flags"] }); },
+  });
+}
+
+export function useDeleteFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "feature_flags", p_id: id, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "feature-flags"] }); },
+  });
+}
+
 // ── Waitlist ──
 export interface DbWaitlistEntry {
   id: string; name: string; email: string; provider: string;
@@ -266,6 +295,48 @@ export function useRoadmap() {
   return useQuery({
     queryKey: ["admin", "roadmap"],
     queryFn: () => adminSelect<RoadmapItem>("roadmap_items", "*", { order: "priority desc" }),
+  });
+}
+
+export function useCreateRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "roadmap_items", p_data: data,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "roadmap"] }),
+  });
+}
+
+export function useUpdateRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; [key: string]: unknown }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "roadmap_items", p_id: id, p_data: data,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "roadmap"] }),
+  });
+}
+
+export function useDeleteRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "roadmap_items", p_id: id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "roadmap"] }),
   });
 }
 
@@ -638,6 +709,39 @@ export function useDeleteUserData() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "users"] }); },
+  });
+}
+
+// ── Deleted Accounts (Trash) ──
+export function useDeletedAccounts() {
+  return useQuery({
+    queryKey: ["admin", "deleted-accounts"],
+    queryFn: () => adminSelect<DeletedAccount>("deleted_accounts", "*", { order: "deleted_at desc" }),
+    refetchInterval: 30000,
+  });
+}
+
+export function useRestoreAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (account_id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("restore_account", { p_account_id: account_id, p_session_token: token() });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "deleted-accounts"] }); },
+  });
+}
+
+export function usePermanentDeleteAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (account_id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("permanently_delete_account", { p_account_id: account_id, p_session_token: token() });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "deleted-accounts"] }); },
   });
 }
 
@@ -1416,7 +1520,7 @@ export function useUpdateLaunchSettings() {
             p_field: key,
             p_old_value: JSON.parse(JSON.stringify(oldVal ?? null)),
             p_new_value: JSON.parse(JSON.stringify(newVal)),
-          }); } catch {} 
+          }); } catch {}
         }
       }
     },
@@ -1446,7 +1550,7 @@ export function useUpdateLandingContent() {
       try { await supabase.rpc("log_launch_audit", {
         p_admin_name: admin_name ?? "Unknown",
         p_action: "update", p_entity_type: "landing_content", p_entity_id: id,
-      }); } catch {} 
+      }); } catch {}
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "landing-content"] }),
   });
@@ -1474,7 +1578,7 @@ export function useUpdateCTAButton() {
         p_admin_name: admin_name ?? "Unknown",
         p_action: "update", p_entity_type: "cta_button", p_entity_id: id,
         p_field: Object.keys(data).join(", "),
-      }); } catch {} 
+      }); } catch {}
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "cta-buttons"] }),
   });
@@ -1744,3 +1848,4 @@ export function useUpdateFeedbackStatus() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "feedback"] }),
   });
 }
+

@@ -1243,7 +1243,7 @@ export function Dashboard() {
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <p className="text-xs font-medium text-muted-foreground">Waitlist</p>
-                    <p className="text-2xl font-bold tracking-tight">{formatNumber(waitlistCount)}</p>
+                    <p className="text-2xl font-bold tracking-tight">{formatNumber(waitlistCount ?? 0)}</p>
                     <p className="text-[11px] text-muted-foreground">{waitlistPending} pending approval</p>
                   </div>
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600 dark:bg-rose-500/15">

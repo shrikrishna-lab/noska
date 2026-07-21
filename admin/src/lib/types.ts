@@ -180,6 +180,21 @@ export interface BannedUser {
   created_at: string;
 }
 
+export interface DeletedAccount {
+  id: string;
+  original_id: string;
+  account_type: "user" | "admin";
+  name: string | null;
+  email: string | null;
+  role: string | null;
+  metadata: Record<string, unknown> | null;
+  deleted_by_admin_id: string | null;
+  deleted_by_name: string | null;
+  deleted_at: string;
+  restored_at: string | null;
+  restored_by_admin_id: string | null;
+}
+
 export interface EmailCampaign {
   id: string;
   name: string;
