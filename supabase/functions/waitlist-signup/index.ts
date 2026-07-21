@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
     })
   }
 
-  let body: { email?: string; name?: string }
+  let body: { email?: string; name?: string; ref?: string }
   try {
     body = await req.json()
   } catch {
@@ -45,6 +45,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const name = body.name?.trim() || email.split("@")[0]
+  const referralCode = body.ref?.trim()?.toUpperCase()
 
   let clerkEntryId: string | null = null
   if (CLERK_SECRET_KEY) {
@@ -69,6 +70,24 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Resolve referral code to referrer
+  let referrerId: string | null = null
+  if (referralCode) {
+    const { data: refEntry } = await supabase
+      .from("waitlist_entries")
+      .select("id, referral_count")
+      .eq("invite_code", referralCode)
+      .maybeSingle()
+    if (refEntry) {
+      referrerId = refEntry.id as string
+      // Bump referrer's referral_count
+      await supabase
+        .from("waitlist_entries")
+        .update({ referral_count: ((refEntry.referral_count as number) || 0) + 1 })
+        .eq("id", referrerId)
+    }
+  }
+
   const upsertData: Record<string, unknown> = {
     name,
     email,
@@ -80,9 +99,8 @@ Deno.serve(async (req: Request) => {
     invite_sent: false,
     accepted: false,
   }
-  if (clerkEntryId) {
-    upsertData.clerk_entry_id = clerkEntryId
-  }
+  if (clerkEntryId) upsertData.clerk_entry_id = clerkEntryId
+  if (referrerId) upsertData.referrer_id = referrerId
 
   const { error: dbError } = await supabase
     .from("waitlist_entries")

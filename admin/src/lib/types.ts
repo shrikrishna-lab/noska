@@ -7,6 +7,19 @@ export type TicketStatus = "open" | "in_progress" | "pending" | "resolved" | "cl
 export type TicketPriority = "low" | "medium" | "high" | "urgent";
 export type FeedbackStatus = "new" | "in_review" | "planned" | "shipped" | "archived";
 export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent";
+export type TemplateCategory =
+  | "waitlist_confirmation" | "waitlist_approved" | "invitation" | "welcome"
+  | "verify_email" | "password_reset" | "workspace_invite" | "security_alert"
+  | "newsletter" | "product_update" | "changelog" | "beta_launch"
+  | "maintenance" | "survey" | "referral_rewards" | "custom";
+export type TemplateStatus = "draft" | "published" | "archived";
+export type SegmentFilterOperator = "eq" | "neq" | "contains" | "gt" | "gte" | "lt" | "lte" | "in" | "between";
+export type SubscriberStatus = "active" | "unsubscribed" | "bounced";
+export type SubscriberSource = "waitlist" | "signup" | "manual" | "import" | "referral";
+export type EmailBlockType =
+  | "logo" | "hero" | "heading" | "paragraph" | "button" | "divider" | "spacer"
+  | "feature_grid" | "card" | "testimonial" | "faq" | "countdown"
+  | "referral_card" | "social_links" | "footer" | "signature";
 export type BanType = "soft" | "hard";
 
 export interface AdminUser {
@@ -452,6 +465,109 @@ export interface WaitlistStats {
   rejected: number;
   countries: Record<string, number>;
   top_referrers: Array<{ name: string; count: number }>;
+}
+
+// ── Email Marketing Types ──
+export interface EmailBlock {
+  id: string;
+  type: EmailBlockType;
+  content: Record<string, unknown>;
+  styles?: Record<string, unknown>;
+  sort_order: number;
+}
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  category: TemplateCategory;
+  subject: string;
+  html_content?: string;
+  plain_text?: string;
+  blocks: EmailBlock[];
+  variables: string[];
+  thumbnail?: string;
+  status: TemplateStatus;
+  version: number;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailBranding {
+  id: string;
+  company_name: string;
+  logo_url?: string;
+  favicon_url?: string;
+  primary_color: string;
+  secondary_color: string;
+  accent_color: string;
+  support_email: string;
+  website_url: string;
+  github_url?: string;
+  discord_url?: string;
+  linkedin_url?: string;
+  twitter_url?: string;
+  youtube_url?: string;
+  footer_text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailSegment {
+  id: string;
+  name: string;
+  description?: string;
+  filters: SegmentFilter[];
+  subscriber_count: number;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SegmentFilter {
+  field: string;
+  operator: SegmentFilterOperator;
+  value: unknown;
+}
+
+export interface EmailVersion {
+  id: string;
+  template_id: string;
+  version_number: number;
+  html_content?: string;
+  blocks: EmailBlock[];
+  changes_description?: string;
+  created_by?: string;
+  created_at: string;
+}
+
+export interface EmailHistoryEntry {
+  id: string;
+  recipient_email: string;
+  template_id?: string;
+  campaign_id?: string;
+  subject?: string;
+  status: 'queued' | 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained' | 'failed';
+  sent_at?: string;
+  opened_at?: string;
+  clicked_at?: string;
+  delivery_logs: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface NewsletterSubscriber {
+  id: string;
+  email: string;
+  name?: string;
+  status: SubscriberStatus;
+  subscribed_at: string;
+  unsubscribed_at?: string;
+  source: SubscriberSource;
+  tags: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface BroadcastCampaign {

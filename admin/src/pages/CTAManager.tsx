@@ -28,7 +28,7 @@ const MODE_LABELS: Record<string, string> = {
 function CTAEditor({ button, onSave, onReset }: { button: CTAButton; onSave: (id: string, data: Record<string, unknown>) => Promise<void>; onReset: (id: string) => Promise<void> }) {
   const [text, setText] = useState(button.button_text);
   const [dest, setDest] = useState(button.destination);
-  const [variant, setVariant] = useState(button.variant);
+  const [variant, setVariant] = useState<string>(button.variant);
   const [visible, setVisible] = useState(button.visible);
   const [enabled, setEnabled] = useState(button.enabled);
   const [newTab, setNewTab] = useState(button.open_in_new_tab);

@@ -11,12 +11,13 @@ const NoskaLogo = "/logo.png";
 const WelcomeStep = lazy(() => import("./steps/WelcomeStep"));
 const UsernameStep = lazy(() => import("./steps/UsernameStep"));
 const WorkspaceStep = lazy(() => import("./steps/WorkspaceStep"));
+const TeamSizeStep = lazy(() => import("./steps/TeamSizeStep"));
 const RoleStep = lazy(() => import("./steps/RoleStep"));
 const InviteStep = lazy(() => import("./steps/InviteStep"));
 const OnboardingTemplateStep = lazy(() => import("./steps/OnboardingTemplateStep"));
 const DoneStep = lazy(() => import("./steps/DoneStep"));
 
-const stepMap = [WelcomeStep, UsernameStep, WorkspaceStep, RoleStep, InviteStep, OnboardingTemplateStep, DoneStep];
+const stepMap = [WelcomeStep, UsernameStep, WorkspaceStep, TeamSizeStep, RoleStep, InviteStep, OnboardingTemplateStep, DoneStep];
 
 interface OnboardingInnerProps {
   overlay?: boolean;

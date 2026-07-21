@@ -23,6 +23,7 @@ import Referrals from "./pages/marketing/Referrals";
 import Launch from "./pages/marketing/launch/Launch";
 import ControlCenter from "./ControlCenter";
 import { AuthCallbackScreen } from "./components/auth/AuthCallbackScreen";
+import { InvitePage } from "./pages/invite/InvitePage";
 import "./index.css";
 
 initPosthog();
@@ -68,6 +69,7 @@ createRoot(document.getElementById("root")!).render(
               footer, and smooth-scroll setup, so it deliberately skips
               MarketingLayout (which would double up both). */}
           <Route path="/launch" element={<Launch />} />
+          <Route path="/invite/:code" element={<InvitePage />} />
           {/* SSO callback handler — branded Noska loading screen.
               Processes the OAuth redirect, syncs user to Supabase, checks
               waitlist status, then redirects to the appropriate destination. */}

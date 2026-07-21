@@ -199,6 +199,23 @@ export interface DbWaitlistEntry {
   invite_code: string | null; notes: string | null;
   approved_by: string | null; approved_at: string | null;
   rejected_by: string | null; rejected_at: string | null;
+  invite_expires_at: string | null;
+  email_status: string | null;
+  email_queued_at: string | null;
+  email_sent_at: string | null;
+  email_delivered_at: string | null;
+  email_opened_at: string | null;
+  email_clicked_at: string | null;
+  first_login_at: string | null;
+  workspace_created_at: string | null;
+  github_id: string | null;
+  google_id: string | null;
+  microsoft_id: string | null;
+  referrer_id: string | null;
+  banned_at: string | null;
+  ban_reason: string | null;
+  suspended_at: string | null;
+  suspension_reason: string | null;
 }
 export function useWaitlist() {
   return useQuery({
@@ -1225,6 +1242,211 @@ export function useDeleteEmailCampaign() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+  });
+}
+
+// ── Email Template Queries ──
+export function useEmailTemplates() {
+  return useQuery({
+    queryKey: ["admin", "email-templates"],
+    queryFn: () => adminSelect<import("./types").EmailTemplate>("email_templates", "*", { order: "updated_at desc" }),
+  });
+}
+
+export function useEmailTemplate(id: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "email-templates", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const data = await adminSelect<import("./types").EmailTemplate>("email_templates", "*");
+      return data?.find((t) => t.id === id) ?? null;
+    },
+  });
+}
+
+export function useCreateEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "email_templates", p_data: data, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-templates"] }),
+  });
+}
+
+export function useUpdateEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "email_templates", p_id: id, p_data: data, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-templates"] }),
+  });
+}
+
+export function useDeleteEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "email_templates", p_id: id, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-templates"] }),
+  });
+}
+
+// ── Email Branding Queries ──
+export function useEmailBranding() {
+  return useQuery({
+    queryKey: ["admin", "email-branding"],
+    queryFn: async () => {
+      const data = await adminSelect<import("./types").EmailBranding>("email_branding", "*");
+      return data?.[0] ?? null;
+    },
+  });
+}
+
+export function useUpdateEmailBranding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "email_branding", p_id: id, p_data: data, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-branding"] }),
+  });
+}
+
+// ── Email Segment Queries ──
+export function useEmailSegments() {
+  return useQuery({
+    queryKey: ["admin", "email-segments"],
+    queryFn: () => adminSelect<import("./types").EmailSegment>("email_segments", "*", { order: "name asc" }),
+  });
+}
+
+export function useCreateEmailSegment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "email_segments", p_data: data, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-segments"] }),
+  });
+}
+
+export function useDeleteEmailSegment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "email_segments", p_id: id, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-segments"] }),
+  });
+}
+
+// ── Email Version Queries ──
+export function useEmailVersions(templateId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "email-versions", templateId],
+    enabled: !!templateId,
+    queryFn: () => adminSelect<import("./types").EmailVersion>(
+      "email_versions", "*", { order: "version_number desc" }
+    ).then((rows) => rows?.filter((v) => v.template_id === templateId) ?? []),
+  });
+}
+
+export function useCreateEmailVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "email_versions", p_data: data, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-versions"] }),
+  });
+}
+
+// ── Email History Queries ──
+export function useEmailHistory(limit = 50) {
+  return useQuery({
+    queryKey: ["admin", "email-history", limit],
+    queryFn: async () => {
+      const { data, error } = await supabase!
+        .from("email_history")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data as import("./types").EmailHistoryEntry[];
+    },
+  });
+}
+
+export function useEmailHistoryStats() {
+  return useQuery({
+    queryKey: ["admin", "email-history-stats"],
+    queryFn: async () => {
+      const { data, error } = await supabase!
+        .from("email_history")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const entries = data as import("./types").EmailHistoryEntry[];
+      const today = entries.filter((e) =>
+        new Date(e.created_at).toDateString() === new Date().toDateString()
+      );
+      const total = today.length;
+      const delivered = today.filter((e) => e.status === "delivered" || e.status === "sent").length;
+      const opened = today.filter((e) => e.status === "opened" || e.status === "clicked").length;
+      const clicked = today.filter((e) => e.status === "clicked").length;
+      const bounced = today.filter((e) => e.status === "bounced").length;
+      const spammed = today.filter((e) => e.status === "complained").length;
+      return {
+        sentToday: total,
+        deliveryRate: total > 0 ? Math.round((delivered / total) * 100) : 0,
+        openRate: delivered > 0 ? Math.round((opened / delivered) * 100) : 0,
+        clickRate: opened > 0 ? Math.round((clicked / opened) * 100) : 0,
+        bounceRate: total > 0 ? Math.round((bounced / total) * 100) : 0,
+        spamRate: total > 0 ? Math.round((spammed / total) * 100) : 0,
+      };
+    },
+    refetchInterval: 30000,
+  });
+}
+
+// ── Newsletter Subscriber Queries ──
+export function useNewsletterSubscribers() {
+  return useQuery({
+    queryKey: ["admin", "newsletter-subscribers"],
+    queryFn: () => adminSelect<import("./types").NewsletterSubscriber>(
+      "newsletter_subscribers", "*", { order: "created_at desc" }
+    ),
   });
 }
 

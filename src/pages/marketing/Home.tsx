@@ -22,7 +22,7 @@ import { WavyTicker } from './components/WavyTicker';
 import { ScrollZoomReveal } from './components/ScrollZoomReveal';
 import { ScrollFadeText } from './components/ScrollFadeText';
 import { CaptureMockup, OrganizeMockup, ConnectMockup, RememberMockup } from './components/StoryMockups';
-import { useCTAButtons } from '../../hooks/useLaunchSettings';
+import { useCTAButtons, useLandingContent } from '../../hooks/useLaunchSettings';
 import './Home.css';
 
 const TYPEWRITER_WORDS = [
@@ -95,6 +95,13 @@ export default function Home() {
   const [aiText, setAiText] = useState('');
   const [aiTyping, setAiTyping] = useState(false);
   const [openFaq, setOpenFaq] = useState(0);
+  const { getSection } = useLandingContent();
+  const hero = getSection('hero');
+  const features = getSection('features');
+  const faqSection = getSection('faq');
+  const finalCta = getSection('final_cta');
+  const security = getSection('security');
+  const stats = getSection('stats');
 
   const handleGenerateAi = () => {
     if (aiTyping) return;
@@ -122,19 +129,21 @@ export default function Home() {
         <LiquidBackground />
         <div className="mkt-container hero-grid">
           <div>
-            <motion.span
-              className="hero-eyebrow"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <Sparkles size={13} /> A calmer way to think on a page
-            </motion.span>
+            {hero && (
+              <motion.span
+                className="hero-eyebrow"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <Sparkles size={13} /> {hero.subtitle ?? "A calmer way to think on a page"}
+              </motion.span>
+            )}
 
             <h1 className="hero-title">
-              <WordReveal text="The smartest place" delay={0.1} />
+              <WordReveal text={hero?.title ? hero.title.split('.').slice(0, -1).join('.') || hero.title : "The smartest place"} delay={0.1} />
               <br />
-              <ShinyText className="hero-title-italic">to think.</ShinyText>
+              <ShinyText className="hero-title-italic">{hero?.title?.includes('.') ? hero.title.split('.').pop() : "to think."}</ShinyText>
             </h1>
 
             <div className="hero-typewriter-row">
@@ -142,7 +151,7 @@ export default function Home() {
               <Typewriter words={TYPEWRITER_WORDS} />
             </div>
 
-            <PaintReveal text="Your team's second brain, powered by AI." className="hero-paint-reveal" />
+            <PaintReveal text={hero?.body ?? "Your team's second brain, powered by AI."} className="hero-paint-reveal" />
 
             <motion.div
               className="hero-cta-group"
@@ -219,9 +228,9 @@ export default function Home() {
       {/* 5. Interactive feature tabs — real product behavior */}
       <section className="features-section mkt-container">
         <Reveal className="section-header">
-          <span className="section-eyebrow-pill">Inside the workspace</span>
-          <h2>Every way you work, in one place.</h2>
-          <p>Consolidate docs, structured data, and AI into a single, quiet interface.</p>
+          <span className="section-eyebrow-pill">{features?.title ?? "Inside the workspace"}</span>
+          <h2>{features?.subtitle ?? "Every way you work, in one place."}</h2>
+          <p>{features?.body ?? "Consolidate docs, structured data, and AI into a single, quiet interface."}</p>
         </Reveal>
 
         <Reveal delay={0.1} className="features-tab-group">
@@ -383,16 +392,11 @@ export default function Home() {
       {/* 8. Security */}
       <section className="security-section">
         <div className="mkt-container security-grid">
-          <Reveal>
-            <span className="section-eyebrow-pill">Under the hood</span>
-            <h2>Your data, scoped to you.</h2>
-            <p>
-              Every table is protected by Postgres row-level security policies scoped to your
-              authenticated user id — not a shared "allow all" rule. Page encryption uses your
-              browser's native Web Crypto API; the passphrase and plaintext never leave your
-              device unencrypted.
-            </p>
-          </Reveal>
+        <Reveal>
+          <span className="section-eyebrow-pill">{security?.badge ?? "Under the hood"}</span>
+          <h2>{security?.title ?? "Your data, scoped to you."}</h2>
+          <p>{security?.body ?? "Every table is protected by Postgres row-level security policies. Page encryption uses your browser's native Web Crypto API."}</p>
+        </Reveal>
           <Stagger className="security-checklist">
             {[
               'Owner-scoped Postgres row-level security on every table',
@@ -412,8 +416,8 @@ export default function Home() {
       {/* 9. FAQ */}
       <section className="faq-home-section mkt-container">
         <Reveal className="section-header">
-          <span className="section-eyebrow-pill">Questions</span>
-          <h2>Good to know before you start.</h2>
+          <span className="section-eyebrow-pill">{faqSection?.badge ?? "Questions"}</span>
+          <h2>{faqSection?.title ?? "Good to know before you start."}</h2>
         </Reveal>
         <div className="faq-home-list">
           {FAQS.map((faq, i) => {
@@ -446,8 +450,8 @@ export default function Home() {
       {/* 10. Final CTA */}
       <section className="final-cta-section mkt-container">
         <Reveal className="cta-banner mkt-blobs">
-          <h2>Start writing in less than a minute.</h2>
-          <p>No credit card. No fake trial countdown. Just a workspace that's ready when you are.</p>
+          <h2>{finalCta?.title ?? "Start writing in less than a minute."}</h2>
+          <p>{finalCta?.body ?? "No credit card. No fake trial countdown. Just a workspace that is ready when you are."}</p>
           <FinalCTASection />
         </Reveal>
       </section>

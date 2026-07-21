@@ -10,6 +10,7 @@ import { Shell } from "@/components/layout/Shell";
 import { Dashboard } from "@/pages/Dashboard";
 import { Analytics } from "@/pages/Analytics";
 import { Waitlist } from "@/pages/Waitlist";
+import WaitlistAnalyticsPage from "@/pages/WaitlistAnalyticsPage";
 import { Users } from "@/pages/Users";
 import { BannedUsers } from "@/pages/BannedUsers";
 import { Trash } from "@/pages/Trash";
@@ -67,6 +68,16 @@ const MonitoringDeployments = lazy(() => import("@/pages/monitoring/Deployments"
 const MonitoringLogs = lazy(() => import("@/pages/monitoring/Logs").then((m) => ({ default: m.MonitoringLogs })));
 const MonitoringIntegrations = lazy(() => import("@/pages/monitoring/Integrations").then((m) => ({ default: m.MonitoringIntegrations })));
 const NotificationCenter = lazy(() => import("@/pages/NotificationCenter").then((m) => ({ default: m.NotificationCenter })));
+const EmailDashboard = lazy(() => import("@/pages/EmailDashboard").then((m) => ({ default: m.EmailDashboard })));
+const EmailTemplates = lazy(() => import("@/pages/EmailTemplates").then((m) => ({ default: m.EmailTemplates })));
+const EmailTemplateEditor = lazy(() => import("@/pages/EmailTemplateEditor").then((m) => ({ default: m.EmailTemplateEditor })));
+const TransactionalEmails = lazy(() => import("@/pages/TransactionalEmails").then((m) => ({ default: m.TransactionalEmails })));
+const AudienceManager = lazy(() => import("@/pages/AudienceManager").then((m) => ({ default: m.AudienceManager })));
+const Subscribers = lazy(() => import("@/pages/Subscribers").then((m) => ({ default: m.Subscribers })));
+const Segments = lazy(() => import("@/pages/Segments").then((m) => ({ default: m.Segments })));
+const ScheduledEmails = lazy(() => import("@/pages/ScheduledEmails").then((m) => ({ default: m.ScheduledEmails })));
+const BrandSettings = lazy(() => import("@/pages/BrandSettings").then((m) => ({ default: m.BrandSettings })));
+const EmailHistory = lazy(() => import("@/pages/EmailHistory").then((m) => ({ default: m.EmailHistory })));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30000, retry: 1 } },
@@ -138,6 +149,7 @@ export default function App() {
                   <Route path="landing-page" element={<LandingPage />} />
                   <Route path="cta-buttons" element={<CTAManager />} />
                   <Route path="announcement-bar" element={<AnnouncementBarPage />} />
+                  <Route path="waitlist-analytics" element={<WaitlistAnalyticsPage />} />
                   <Route path="waitlist-settings" element={<WaitlistSettingsPage />} />
                   <Route path="seo-settings" element={<SEOSettingsPage />} />
                   <Route path="social-links" element={<SocialLinksPage />} />
@@ -145,7 +157,18 @@ export default function App() {
                   <Route path="files" element={<ContentFiles />} />
                   <Route path="templates" element={<ContentTemplates />} />
                   <Route path="feature-flags" element={<FeatureFlags />} />
+                  <Route path="email-dashboard" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmailDashboard /></Suspense>} />
+                  <Route path="email-templates" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmailTemplates /></Suspense>} />
+                  <Route path="email-templates/:id/edit" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmailTemplateEditor /></Suspense>} />
                   <Route path="email-campaigns" element={<EmailCampaigns />} />
+                  <Route path="transactional-emails" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><TransactionalEmails /></Suspense>} />
+                  <Route path="audience-manager" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><AudienceManager /></Suspense>} />
+                  <Route path="subscribers" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><Subscribers /></Suspense>} />
+                  <Route path="segments" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><Segments /></Suspense>} />
+                  <Route path="scheduled-emails" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><ScheduledEmails /></Suspense>} />
+                  <Route path="email-analytics" element={<EmailAnalytics />} />
+                  <Route path="brand-settings" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><BrandSettings /></Suspense>} />
+                  <Route path="email-history" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmailHistory /></Suspense>} />
                   <Route path="referrals" element={<Referrals />} />
                   <Route path="notifications" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><NotificationCenter /></Suspense>} />
                   <Route path="notifications/:id" element={<NotificationDetail />} />
