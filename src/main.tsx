@@ -1,4 +1,4 @@
-import { ClerkProvider, AuthenticateWithRedirectCallback } from "@clerk/react";
+import { ClerkProvider } from "@clerk/react";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -22,6 +22,7 @@ import Docs from "./pages/marketing/Docs";
 import Referrals from "./pages/marketing/Referrals";
 import Launch from "./pages/marketing/launch/Launch";
 import ControlCenter from "./ControlCenter";
+import { AuthCallbackScreen } from "./components/auth/AuthCallbackScreen";
 import "./index.css";
 
 initPosthog();
@@ -67,9 +68,10 @@ createRoot(document.getElementById("root")!).render(
               footer, and smooth-scroll setup, so it deliberately skips
               MarketingLayout (which would double up both). */}
           <Route path="/launch" element={<Launch />} />
-          {/* SSO callback handler — Clerk processes the OAuth redirect here,
-              then redirects to /login where App reads the auth state. */}
-          <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback signInForceRedirectUrl="/login" />} />
+          {/* SSO callback handler — branded Noska loading screen.
+              Processes the OAuth redirect, syncs user to Supabase, checks
+              waitlist status, then redirects to the appropriate destination. */}
+          <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           {/* Admin portal — full-page redirect to the separate admin SPA */}
           <Route path="/control" element={<ControlCenter />} />
           {/* Everything else (login, onboarding, and the workspace itself) is
@@ -77,6 +79,8 @@ createRoot(document.getElementById("root")!).render(
               show and keeps the URL in sync as auth/onboarding state resolves. */}
           <Route path="/login" element={<App />} />
           <Route path="/onboarding" element={<App />} />
+          <Route path="/waitlist" element={<App />} />
+          <Route path="/banned" element={<App />} />
           <Route path="/:workspaceSlug" element={<App />} />
           <Route path="/:workspaceSlug/:pageId" element={<App />} />
         </Routes>

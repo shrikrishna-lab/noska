@@ -982,6 +982,7 @@ function App() {
   // selectByOffset/sidebar navigation, not URL history entries.
   useEffect(() => {
     if (appFlowState === "loading") return;
+    if (location.pathname === "/waitlist" || location.pathname === "/banned") return;
     if (appFlowState === "auth") {
       if (location.pathname !== "/login") navigate("/login", { replace: true });
       return;
@@ -2164,13 +2165,21 @@ function App() {
 
   return (
     <AnimatePresence mode="wait">
-      {appFlowState === "loading" && !TEST_MODE && (
+      {appFlowState === "loading" && !TEST_MODE && !isSignedIn && (
         <LoadingScreen key="loader" onComplete={() => setAppFlowState("auth")} />
+      )}
+      {appFlowState === "loading" && !TEST_MODE && isSignedIn && (
+        <div className="fixed inset-0 flex items-center justify-center bg-[#f8fafc] z-50">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 rounded-full border-2 border-slate-200 border-t-slate-700 animate-spin" />
+            <p className="text-xs text-slate-400">Loading your workspace...</p>
+          </div>
+        </div>
       )}
       {appFlowState === "auth" && (
         <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
       )}
-      {(appFlowState === "onboarding" || appFlowState === "workspace") && (
+      {(appFlowState === "onboarding" || appFlowState === "workspace") && location.pathname !== "/banned" && (
         <WaitlistGate>
           {appFlowState === "onboarding" && !onboardingOpen && (
             <OnboardingPage
@@ -2735,6 +2744,35 @@ function App() {
         </motion.div>
       )}
       </WaitlistGate>
+      )}
+      {location.pathname === "/banned" && (
+        <motion.div
+          key="banned"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed inset-0 flex items-center justify-center bg-[#0a0a0a] z-50"
+        >
+          <div className="w-full max-w-md text-center p-4">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-950/50">
+              <svg className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            </div>
+            <h1 className="mb-3 text-2xl font-bold text-white">Access Revoked</h1>
+            <p className="mb-2 text-zinc-400">
+              Your account has been suspended. You no longer have access to this workspace.
+            </p>
+            <p className="mb-8 text-sm text-zinc-500">
+              If you believe this is a mistake, please contact the workspace administrator.
+            </p>
+            <button
+              onClick={() => clerk.signOut()}
+              className="rounded-lg bg-zinc-800 px-6 py-2.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-700"
+            >
+              Sign out
+            </button>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
