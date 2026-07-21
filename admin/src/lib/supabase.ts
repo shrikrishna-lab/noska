@@ -68,12 +68,15 @@ async function detectUnauthorized(response: Response, requestUrl: string): Promi
   const err = body as { code?: string; message?: string } | null;
   if (!err || typeof err !== "object") return;
 
-  const isUnauthorized =
-    err.code === "42501" ||
-    err.message === "UNAUTHORIZED" ||
-    (typeof err.message === "string" && /jwt.*expired|expired.*jwt/i.test(err.message));
+  // Distinguish between UNAUTHORIZED (session expired / invalid token)
+  // and TABLE_NOT_ALLOWED (table not in allow-list). Both use code 42501
+  // but only UNAUTHORIZED should trigger session expiry.
+  const msg = typeof err.message === "string" ? err.message : "";
+  const isSessionExpired =
+    msg === "UNAUTHORIZED" ||
+    /jwt.*expired|expired.*jwt/i.test(msg);
 
-  if (isUnauthorized) {
+  if (isSessionExpired) {
     // Defer to the session-expired module via a CustomEvent so we don't
     // create an import cycle. The `triggerSessionExpired` function lives
     // in session-expired.ts and listens for this event.

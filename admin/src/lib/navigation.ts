@@ -40,6 +40,10 @@ import {
   Search,
   Link2,
   BarChart4,
+  HardDrive,
+  LayoutTemplate,
+  LayoutGrid,
+  Trash2,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -47,7 +51,7 @@ export interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
-  group: "overview" | "marketing" | "growth" | "people" | "platform" | "operations" | "monitoring" | "settings";
+  group: "overview" | "content" | "marketing" | "growth" | "people" | "platform" | "operations" | "monitoring" | "settings";
   badge?: string | number;
   requiresRole?: "super_admin" | "admin" | "developer" | "marketing";
 }
@@ -62,9 +66,13 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/waitlist-settings", label: "Waitlist Settings", icon: UsersRound, group: "marketing", requiresRole: "marketing" },
   { to: "/seo-settings", label: "SEO", icon: Search, group: "marketing", requiresRole: "marketing" },
   { to: "/social-links", label: "Social Links", icon: Link2, group: "marketing", requiresRole: "marketing" },
+  { to: "/pages", label: "Pages", icon: FileText, group: "content" },
+  { to: "/files", label: "Files", icon: HardDrive, group: "content" },
+  { to: "/templates", label: "Templates", icon: LayoutTemplate, group: "content" },
   { to: "/waitlist", label: "Waitlist", icon: ListChecks, group: "growth" },
   { to: "/users", label: "Users", icon: Users, group: "people" },
   { to: "/banned-users", label: "Banned Users", icon: Ban, group: "people", requiresRole: "admin" },
+  { to: "/trash", label: "Trash", icon: Trash2, group: "people", requiresRole: "admin" },
   { to: "/workspaces", label: "Workspaces", icon: Building2, group: "people" },
   { to: "/teams", label: "Teams", icon: UserCog, group: "people" },
   { to: "/referrals", label: "Referrals", icon: Gift, group: "growth" },
@@ -78,7 +86,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/feedback", label: "Feedback", icon: MessageSquare, group: "operations" },
   { to: "/support", label: "Support Tickets", icon: LifeBuoy, group: "operations" },
   { to: "/audit-logs", label: "Audit Logs", icon: ShieldCheck, group: "operations", requiresRole: "developer" },
-  { to: "/roadmap", label: "Roadmap", icon: Map, group: "platform" },
+  { to: "/roadmap", label: "Roadmap", icon: LayoutGrid, group: "platform" },
   { to: "/changelog", label: "Changelog", icon: ListChecks, group: "platform" },
   { to: "/blog", label: "Blog Posts", icon: FileText, group: "platform" },
   { to: "/legal", label: "Legal Pages", icon: ShieldCheck, group: "platform" },
@@ -99,11 +107,15 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/monitoring/deployments", label: "Deployments", icon: Rocket, group: "monitoring", requiresRole: "admin" },
   { to: "/monitoring/logs", label: "Logs", icon: ScrollText, group: "monitoring", requiresRole: "admin" },
   { to: "/monitoring/integrations", label: "Integrations", icon: Puzzle, group: "monitoring", requiresRole: "admin" },
+  { to: "/sentry", label: "Sentry", icon: AlertTriangle, group: "monitoring", requiresRole: "admin" },
+  { to: "/posthog", label: "PostHog", icon: BarChart4, group: "monitoring", requiresRole: "admin" },
+  { to: "/monitoring", label: "Monitoring", icon: Activity, group: "monitoring", requiresRole: "admin" },
   { to: "/admin-accounts", label: "Administrator Accounts", icon: ShieldCheck, group: "settings", requiresRole: "super_admin" }
 ];
 
 export const NAV_GROUPS: Array<{ id: NavItem["group"]; label: string }> = [
   { id: "overview", label: "Overview" },
+  { id: "content", label: "Content" },
   { id: "marketing", label: "Marketing" },
   { id: "growth", label: "Growth" },
   { id: "people", label: "People" },

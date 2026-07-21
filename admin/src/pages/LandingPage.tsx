@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLandingContent, useUpdateLandingContent, useRealtimeInvalidate } from "@/lib/queries";
+import type { LandingContent } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -30,7 +31,7 @@ const SECTION_LABELS: Record<string, string> = {
   final_cta: "Final CTA",
 };
 
-function SectionEditor({ section, onSave }: { section: { id: string; section: string; title?: string; subtitle?: string; body?: string; cta_text?: string; cta_link?: string; secondary_cta_text?: string; secondary_cta_link?: string; badge?: string; image_url?: string; active: boolean }; onSave: (id: string, data: Record<string, unknown>) => Promise<void> }) {
+function SectionEditor({ section, onSave }: { section: LandingContent; onSave: (id: string, data: Record<string, unknown>) => Promise<void> }) {
   const [title, setTitle] = useState(section.title ?? "");
   const [subtitle, setSubtitle] = useState(section.subtitle ?? "");
   const [body, setBody] = useState(section.body ?? "");

@@ -12,6 +12,7 @@ import { Analytics } from "@/pages/Analytics";
 import { Waitlist } from "@/pages/Waitlist";
 import { Users } from "@/pages/Users";
 import { BannedUsers } from "@/pages/BannedUsers";
+import { Trash } from "@/pages/Trash";
 import { Workspaces } from "@/pages/Workspaces";
 import { Teams } from "@/pages/Teams";
 import { Subscriptions } from "@/pages/Subscriptions";
@@ -46,6 +47,12 @@ import { EmailAnalytics } from "@/pages/EmailAnalytics";
 import { Settings } from "@/pages/Settings";
 import { AdminAccounts } from "@/pages/AdminAccounts";
 import { Webhooks } from "@/pages/Webhooks";
+import { ContentPages } from "@/pages/ContentPages";
+import { ContentFiles } from "@/pages/ContentFiles";
+import { ContentTemplates } from "@/pages/ContentTemplates";
+import { Sentry } from "@/pages/Sentry";
+import { PostHog } from "@/pages/PostHog";
+import { MonitoringHub } from "@/pages/MonitoringHub";
 import { Forbidden } from "@/pages/Forbidden";
 import { Login } from "@/pages/Login";
 import { Loader2 } from "lucide-react";
@@ -120,6 +127,7 @@ export default function App() {
                   <Route path="waitlist" element={<Waitlist />} />
                   <Route path="users" element={<Users />} />
                   <Route path="banned-users" element={<BannedUsers />} />
+                  <Route path="trash" element={<Trash />} />
                   <Route path="workspaces" element={<Workspaces />} />
                   <Route path="teams" element={<Teams />} />
                   <Route path="subscriptions" element={<Subscriptions />} />
@@ -133,6 +141,9 @@ export default function App() {
                   <Route path="waitlist-settings" element={<WaitlistSettingsPage />} />
                   <Route path="seo-settings" element={<SEOSettingsPage />} />
                   <Route path="social-links" element={<SocialLinksPage />} />
+                  <Route path="pages" element={<ContentPages />} />
+                  <Route path="files" element={<ContentFiles />} />
+                  <Route path="templates" element={<ContentTemplates />} />
                   <Route path="feature-flags" element={<FeatureFlags />} />
                   <Route path="email-campaigns" element={<EmailCampaigns />} />
                   <Route path="referrals" element={<Referrals />} />
@@ -154,6 +165,9 @@ export default function App() {
                   <Route path="settings" element={<Settings />} />
                   <Route path="admin-accounts" element={<AdminAccounts />} />
                   <Route path="webhooks" element={<Webhooks />} />
+                  <Route path="sentry" element={<Sentry />} />
+                  <Route path="posthog" element={<PostHog />} />
+                  <Route path="monitoring" element={<MonitoringHub />} />
                   <Route path="monitoring/overview" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringOverview /></Suspense>} />
                   <Route path="monitoring/errors" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringErrors /></Suspense>} />
                   <Route path="monitoring/performance" element={<Suspense fallback={<div className="p-6"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /></div>}><MonitoringPerformance /></Suspense>} />

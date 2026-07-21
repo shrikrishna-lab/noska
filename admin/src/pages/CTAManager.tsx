@@ -66,7 +66,7 @@ function CTAEditor({ button, onSave, onReset }: { button: CTAButton; onSave: (id
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <Label className="text-[10px]">Variant</Label>
-            <Select value={variant} onValueChange={setVariant}>
+            <Select value={variant} onValueChange={(v) => setVariant(v as typeof variant)}>
               <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="primary">Primary</SelectItem>
