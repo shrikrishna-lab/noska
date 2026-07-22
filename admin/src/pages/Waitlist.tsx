@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { useWaitlist, useWaitlistCount, useSendWaitlistInvite, useDeleteWaitlistEntry, useRejectWaitlistEntry, type DbWaitlistEntry } from "@/lib/queries";
+import { useWaitlist, useWaitlistCount, useSendWaitlistInvite, useDeleteWaitlistEntry, useRejectWaitlistEntry, useRealtimeInvalidate, type DbWaitlistEntry } from "@/lib/queries";
 import { sendWaitlistInvite } from "@/lib/email";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Download, Mail, Trash2, Loader2, Check, X, Search, MessageSquare, ClipboardList, Clock, Eye, Link2, Copy, BarChart3, RefreshCw, Ban, UserX, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
@@ -193,12 +194,14 @@ function NotesModal({ entry, onClose }: { entry: DbWaitlistEntry; onClose: () =>
 
 export function Waitlist() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { confirm } = useConfirmDialog();
   const { data: entries, isLoading, refetch, isRefetching } = useWaitlist();
   const { data: count } = useWaitlistCount();
   const sendInvite = useSendWaitlistInvite();
   const deleteEntry = useDeleteWaitlistEntry();
   const rejectEntry = useRejectWaitlistEntry();
+  useRealtimeInvalidate(["admin", "waitlist"], "waitlist_entries");
   const [sending, setSending] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -252,6 +255,10 @@ export function Waitlist() {
         body: { waitlist_id: row.id, admin_name: row.name },
         headers: { Authorization: `Bearer ${token}` },
       });
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
+        old?.map((e) => e.id === row.id ? { ...e, status: "invited", approved_at: new Date().toISOString() } : e)
+      );
+      qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
       toast.success(`${row.name} approved & invited`);
     } catch { toast.error("Failed to approve"); }
   };

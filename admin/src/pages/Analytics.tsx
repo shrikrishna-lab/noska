@@ -1,4 +1,4 @@
-import { useDailySignups, useDailyAuditEvents } from "@/lib/queries";
+import { useDailySignups, useDailyAuditEvents, useRealtimeInvalidate } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -10,6 +10,8 @@ const COLORS = ["hsl(var(--primary))", "hsl(210 40% 60%)", "hsl(142 71% 45%)", "
 export function Analytics() {
   const { data: signups, isLoading: loadSignups } = useDailySignups(30);
   const { data: events, isLoading: loadEvents } = useDailyAuditEvents(30);
+  useRealtimeInvalidate(["admin", "analytics"], "user_profiles");
+  useRealtimeInvalidate(["admin", "analytics"], "audit_events");
 
   if (loadSignups || loadEvents) return <div className="p-6"><PageHeader title="Analytics" description="Detailed analytics" /><LoadingState count={4} /></div>;
 

@@ -32,6 +32,7 @@ export function BannedUsers() {
   const unbanUser = useUnbanUser();
   const [unbanning, setUnbanning] = useState<string | null>(null);
   useRealtimeInvalidate(["admin", "banned-users"], "user_profiles");
+  useRealtimeInvalidate(["admin", "banned-users"], "banned_users");
 
   const handleUnban = async (userId: string) => {
     setUnbanning(userId);

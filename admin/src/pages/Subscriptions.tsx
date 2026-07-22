@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useSubscriptions, useProvisionSubscription, type DbSubscription } from "@/lib/queries";
+import { useSubscriptions, useProvisionSubscription, useRealtimeInvalidate, type DbSubscription } from "@/lib/queries";
 import { formatRelativeTime, formatCurrency } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -103,6 +103,7 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
 
 export function Subscriptions() {
   const { data: subs, isLoading } = useSubscriptions();
+  useRealtimeInvalidate(["admin", "subscriptions"], "subscriptions");
   const [showProvision, setShowProvision] = useState(false);
   const totalMrr = (subs ?? []).reduce((s, sub) => s + (sub.mrr ?? 0), 0);
   const activeCount = (subs ?? []).filter((s) => s.status === "active").length;

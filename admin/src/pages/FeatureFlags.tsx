@@ -25,10 +25,10 @@ import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 const CATEGORIES = ["all", "growth", "platform", "experimental", "ops"] as const;
 
 const categoryConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: typeof Flag }> = {
-  growth: { label: "Growth", color: "text-white", bg: "bg-white/10", border: "border-white/20", icon: Zap },
-  platform: { label: "Platform", color: "text-white", bg: "bg-white/10", border: "border-white/20", icon: Layers },
-  experimental: { label: "Experimental", color: "text-white", bg: "bg-white/10", border: "border-white/20", icon: Sparkles },
-  ops: { label: "Ops", color: "text-white/60", bg: "bg-white/5", border: "border-white/10", icon: AlertTriangle },
+  growth: { label: "Growth", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", icon: Zap },
+  platform: { label: "Platform", color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", icon: Layers },
+  experimental: { label: "Experimental", color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/20", icon: Sparkles },
+  ops: { label: "Ops", color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20", icon: AlertTriangle },
 };
 
 function FlagFormModal({ flag, onClose }: { flag?: DbFeatureFlag; onClose: () => void }) {

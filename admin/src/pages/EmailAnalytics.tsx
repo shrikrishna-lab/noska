@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase, getAdminToken, SUPABASE_ENABLED } from "@/lib/supabase";
+import { useRealtimeInvalidate } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -103,6 +104,7 @@ export function EmailAnalytics() {
   const [timeRange, setTimeRange] = useState("30d");
   const [eventFilter, setEventFilter] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EmailEvent | null>(null);
+  useRealtimeInvalidate(["admin", "email-events"], "email_events");
 
   const { data: events, isLoading, dataUpdatedAt } = useQuery({
     queryKey: ["admin", "email-events"],

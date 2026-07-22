@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useSEOSettings, useUpdateSEOSettings } from "@/lib/queries";
+import { useSEOSettings, useUpdateSEOSettings, useRealtimeInvalidate } from "@/lib/queries";
 import { useAuth } from "@/lib/auth";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Search, Save } from "lucide-react";
@@ -29,6 +29,7 @@ export function SEOSettingsPage() {
   const [activePage, setActivePage] = useState("/");
   const { data: seo, isLoading } = useSEOSettings(activePage);
   const updateSEO = useUpdateSEOSettings();
+  useRealtimeInvalidate(["admin", "seo-settings"], "seo_settings");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");

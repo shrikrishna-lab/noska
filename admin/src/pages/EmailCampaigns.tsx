@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useEmailCampaigns, useDeleteEmailCampaign, useCreateEmailCampaign, useUpdateEmailCampaign } from "@/lib/queries";
+import { useEmailCampaigns, useDeleteEmailCampaign, useCreateEmailCampaign, useUpdateEmailCampaign, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -475,6 +475,7 @@ export function EmailCampaigns() {
   const { data: campaigns, isLoading } = useEmailCampaigns();
   const deleteCampaign = useDeleteEmailCampaign();
   const updateCampaign = useUpdateEmailCampaign();
+  useRealtimeInvalidate(["admin", "campaigns"], "email_campaigns");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<EmailCampaign | null>(null);
   const [sendingCampaign, setSendingCampaign] = useState<EmailCampaign | null>(null);

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useWaitlist } from "@/lib/queries";
+import { useWaitlist, useRealtimeInvalidate } from "@/lib/queries";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from "recharts";
@@ -25,6 +25,7 @@ const PIE_COLORS = ["#6b7280", "#3b82f6", "#f59e0b", "#22c55e", "#9ca3af", "#ef4
 export default function WaitlistAnalyticsPage() {
   const navigate = useNavigate();
   const { data: entries, isLoading } = useWaitlist();
+  useRealtimeInvalidate(["admin", "waitlist"], "waitlist_entries");
 
   const stats = useMemo(() => {
     if (!entries) return null;

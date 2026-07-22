@@ -1135,6 +1135,13 @@ export function useDeleteWaitlistEntry() {
       });
       if (error) throw error;
     },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "waitlist"] });
+      const previous = qc.getQueryData<DbWaitlistEntry[]>(["admin", "waitlist"]);
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) => old?.filter((e) => e.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "waitlist"], context.previous); },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
   });
 }
@@ -1151,6 +1158,15 @@ export function useSendWaitlistInvite() {
       });
       if (error) throw error;
     },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "waitlist"] });
+      const previous = qc.getQueryData<DbWaitlistEntry[]>(["admin", "waitlist"]);
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
+        old?.map((e) => e.id === id ? { ...e, status: "invited", invite_sent: true } : e)
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "waitlist"], context.previous); },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
   });
 }
@@ -1181,6 +1197,15 @@ export function useRejectWaitlistEntry() {
       });
       if (error) throw error;
     },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "waitlist"] });
+      const previous = qc.getQueryData<DbWaitlistEntry[]>(["admin", "waitlist"]);
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
+        old?.map((e) => e.id === id ? { ...e, status: "rejected", rejected_at: new Date().toISOString() } : e)
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "waitlist"], context.previous); },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
   });
 }

@@ -17,7 +17,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Portal } from "@/components/ui/Portal";
 import {
-  useReferralCodes, useReferralRewards, useUserReferrals,
+  useReferralCodes, useReferralRewards, useUserReferrals, useRealtimeInvalidate,
   useCreateReferralReward, useUpdateReferralReward, useDeleteReferralReward,
 } from "@/lib/queries";
 
@@ -143,6 +143,9 @@ export function Referrals() {
   const { data: rewards, isLoading: rewardsLoading } = useReferralRewards();
   const { data: userRefs, isLoading: refsLoading } = useUserReferrals();
   const deleteReward = useDeleteReferralReward();
+  useRealtimeInvalidate(["admin", "referral-codes"], "referral_codes");
+  useRealtimeInvalidate(["admin", "referral-rewards"], "referral_rewards");
+  useRealtimeInvalidate(["admin", "user-referrals"], "user_referrals");
 
   const totalRefs = codes?.reduce((s, c) => s + c.total_referrals, 0) ?? 0;
   const activeRefs = codes?.reduce((s, c) => s + c.active_referrals, 0) ?? 0;
