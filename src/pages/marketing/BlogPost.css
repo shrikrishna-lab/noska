@@ -1,34 +1,196 @@
+/* Single Blog Post View Styles — Scoped under .marketing */
+
 .marketing .blog-post-wrapper {
-  padding-bottom: 100px;
+  position: relative;
+  padding-bottom: 120px;
+  background-color: var(--mkt-bg-primary);
+  color: var(--mkt-text-primary);
+  min-height: 100vh;
+}
+
+/* Scroll Progress Bar at the top of the viewport */
+.marketing .scroll-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3.5px;
+  background: linear-gradient(90deg, var(--mkt-accent-blue), var(--mkt-accent-purple));
+  z-index: 1000;
+  transition: width 0.1s ease-out;
 }
 
 .marketing .blog-post-article {
-  max-width: 720px !important;
+  max-width: 780px !important;
+  margin: 0 auto;
   padding: 60px 24px;
+}
+
+/* Top Action Header Bar */
+.marketing .blog-post-top-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
 }
 
 .marketing .blog-post-back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--mkt-text-secondary);
   text-decoration: none;
-  margin-bottom: 32px;
-  transition: color var(--mkt-transition-fast);
+  transition: color 0.15s, transform 0.15s;
 }
 
 .marketing .blog-post-back:hover {
   color: var(--mkt-text-primary);
+  transform: translateX(-3px);
 }
 
+.marketing .top-action-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.marketing .action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  color: var(--mkt-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.marketing .action-btn:hover,
+.marketing .action-btn.active {
+  background-color: var(--mkt-bg-primary);
+  color: var(--mkt-text-primary);
+  border-color: var(--mkt-border-strong);
+  box-shadow: var(--mkt-card-shadow);
+}
+
+/* Post Header Metadata */
+.marketing .post-header-meta {
+  margin-bottom: 36px;
+}
+
+.marketing .post-meta-badges {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.marketing .post-tag-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background-color: var(--mkt-accent-blue-tint);
+  color: var(--mkt-accent-blue);
+}
+
+.marketing .blog-post-title {
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  margin-bottom: 16px;
+  color: var(--mkt-text-primary);
+  font-family: var(--mkt-font-heading);
+}
+
+.marketing .blog-post-subtitle {
+  font-size: 19px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.marketing .author-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 20px;
+  border-top: 1px solid var(--mkt-border-color);
+}
+
+.marketing .author-detail {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.marketing .author-avatar-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: var(--mkt-bg-charcoal);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.marketing .author-name-lg {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .post-date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mkt-text-muted);
+  margin-top: 2px;
+}
+
+.marketing .post-date-row .dot {
+  font-size: 10px;
+}
+
+.marketing .like-reaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 8px 16px;
+  border-radius: 30px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mkt-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.marketing .like-reaction-btn:hover,
+.marketing .like-reaction-btn.liked {
+  background-color: rgba(193, 105, 79, 0.1);
+  color: var(--mkt-accent-red);
+  border-color: rgba(193, 105, 79, 0.25);
+}
+
+/* Cover Image */
 .marketing .blog-post-cover {
   width: 100%;
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  margin-bottom: 32px;
-  background: var(--mkt-bg-secondary);
+  margin-bottom: 48px;
+  background-color: var(--mkt-bg-secondary);
+  box-shadow: var(--mkt-card-shadow);
 }
 
 .marketing .blog-post-cover img {
@@ -37,94 +199,238 @@
   display: block;
 }
 
-.marketing .blog-post-title {
-  font-size: 40px;
-  margin-bottom: 16px;
-}
-
-.marketing .blog-post-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 13px;
-  color: var(--mkt-text-muted);
-  margin-bottom: 16px;
-}
-
-.marketing .blog-post-date,
-.marketing .blog-post-author {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.marketing .blog-post-tags {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 32px;
-}
-
-.marketing .blog-post-tag {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: var(--mkt-bg-tertiary);
-  color: var(--mkt-text-secondary);
-}
-
+/* Formatted Content Typography */
 .marketing .blog-post-content {
-  font-size: 16px;
-  line-height: 1.75;
+  font-size: 17.5px;
+  line-height: 1.8;
   color: var(--mkt-text-primary);
 }
 
-.marketing .blog-post-content h2 {
-  font-size: 26px;
-  margin-top: 40px;
-  margin-bottom: 12px;
-}
-
-.marketing .blog-post-content h3 {
-  font-size: 20px;
-  margin-top: 28px;
-  margin-bottom: 8px;
-}
-
-.marketing .blog-post-content p {
+.marketing .blog-heading-2 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 48px;
   margin-bottom: 16px;
+  color: var(--mkt-text-primary);
+  font-family: var(--mkt-font-heading);
+}
+
+.marketing .blog-heading-3 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 36px;
+  margin-bottom: 12px;
+  color: var(--mkt-text-primary);
+  font-family: var(--mkt-font-heading);
+}
+
+.marketing .blog-paragraph {
+  margin-bottom: 22px;
   color: var(--mkt-text-secondary);
 }
 
-.marketing .blog-post-content li {
-  margin-left: 20px;
-  margin-bottom: 6px;
-  color: var(--mkt-text-secondary);
+.marketing .blog-bold {
+  font-weight: 700 !important;
+  color: var(--mkt-text-primary) !important;
 }
 
-.marketing .blog-post-loading {
-  display: flex;
-  justify-content: center;
-  padding: 80px 20px;
+.marketing .blog-italic {
+  font-style: italic;
 }
 
-.marketing .blog-post-not-found {
-  text-align: center;
-  padding: 80px 24px;
+.marketing .blog-inline-code {
+  font-family: monospace;
+  font-size: 14.5px;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: var(--mkt-text-primary);
 }
 
-.marketing .blog-post-not-found h1 {
-  font-size: 32px;
+.marketing .blog-list-item {
+  margin-left: 24px;
   margin-bottom: 10px;
+  color: var(--mkt-text-secondary);
+  list-style-type: disc;
 }
 
-.marketing .blog-post-not-found p {
+/* Code Snippet Box */
+.marketing .blog-code-container {
+  background-color: #121214;
+  border-radius: 14px;
+  overflow: hidden;
+  margin: 32px 0;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
+}
+
+.marketing .code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #1a1a1e;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.marketing .code-lang {
+  font-size: 12px;
+  font-weight: 600;
+  color: #a1a1aa;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.marketing .code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.marketing .code-copy-btn:hover {
+  color: #fff;
+}
+
+.marketing .blog-code-container pre {
+  padding: 20px;
+  margin: 0;
+  overflow-x: auto;
+  color: #e4e4e7;
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+}
+
+/* Blockquote */
+.marketing .blog-blockquote {
+  border-left: 4px solid var(--mkt-accent-blue);
+  padding: 16px 24px;
+  margin: 32px 0;
+  background-color: var(--mkt-accent-blue-tint);
+  border-radius: 0 12px 12px 0;
+  font-size: 18px;
+  font-style: italic;
+  color: var(--mkt-text-primary);
+  line-height: 1.6;
+}
+
+/* Footer & Share Box */
+.marketing .blog-post-footer-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+  padding: 32px 36px;
+  margin-top: 60px;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.marketing .footer-card-content h3 {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .footer-card-content p {
+  font-size: 14.5px;
   color: var(--mkt-text-secondary);
-  margin-bottom: 24px;
+}
+
+.marketing .footer-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.marketing .like-btn-lg,
+.marketing .share-btn-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, transform 0.1s;
+  border: 1px solid var(--mkt-border-color);
+}
+
+.marketing .like-btn-lg {
+  background-color: var(--mkt-bg-primary);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .like-btn-lg:hover,
+.marketing .like-btn-lg.liked {
+  background-color: rgba(193, 105, 79, 0.1);
+  color: var(--mkt-accent-red);
+  border-color: rgba(193, 105, 79, 0.25);
+}
+
+.marketing .share-btn-lg {
+  background-color: var(--mkt-bg-charcoal);
+  color: #fff;
+  border: none;
+}
+
+.marketing .share-btn-lg:hover {
+  background-color: var(--mkt-brand-color-hover);
+}
+
+/* Loading & Not Found */
+.marketing .blog-post-loading,
+.marketing .blog-post-not-found {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 24px;
+  text-align: center;
+}
+
+.marketing .btn-back-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--mkt-bg-charcoal);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: 16px;
 }
 
 @media (max-width: 768px) {
   .marketing .blog-post-title {
-    font-size: 28px;
+    font-size: 32px;
+  }
+  
+  .marketing .blog-post-footer-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .marketing .footer-actions {
+    width: 100%;
+  }
+
+  .marketing .like-btn-lg,
+  .marketing .share-btn-lg {
+    flex: 1;
+    justify-content: center;
   }
 }
