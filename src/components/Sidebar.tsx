@@ -173,6 +173,7 @@ export default function Sidebar({
   const displayName = currentUsername ? `@${currentUsername}` : (collabUser?.userName || 'Workspace User');
   const displayEmail = currentUserEmail || collabUser?.userId || 'user@workspace';
   const displayAvatar = collabUser?.userAvatar || '👤';
+  const avatarIsUrl = typeof displayAvatar === 'string' && (displayAvatar.startsWith('http://') || displayAvatar.startsWith('https://'));
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
@@ -286,8 +287,8 @@ export default function Sidebar({
                     flag with no actual session/data change — replaced
                     with the one real account, plus a real Log out. */}
                 <div className="flex items-center gap-2.5 px-1">
-                  <div className="h-8.5 w-8.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-sm shadow-inner select-none shrink-0 text-[var(--text)]">
-                    {displayAvatar}
+                  <div className="h-8.5 w-8.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-sm shadow-inner select-none shrink-0 text-[var(--text)] overflow-hidden">
+                    {avatarIsUrl ? <img src={displayAvatar} alt="" className="h-full w-full object-cover" /> : displayAvatar}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-[var(--text)] truncate leading-none text-[12.5px]">{displayName}</div>
@@ -535,8 +536,8 @@ export default function Sidebar({
           }}
           className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--hover)] transition text-left"
         >
-          <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs text-[var(--text)] shrink-0">
-            {displayAvatar}
+          <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs text-[var(--text)] shrink-0 overflow-hidden">
+            {avatarIsUrl ? <img src={displayAvatar} alt="" className="h-full w-full object-cover" /> : displayAvatar}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-[12px] font-semibold text-[var(--text)] truncate leading-none">{displayName}</div>
