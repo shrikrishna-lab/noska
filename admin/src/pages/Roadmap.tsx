@@ -47,8 +47,8 @@ const PRIORITY_ICONS: Record<string, typeof ArrowUp> = {
   critical: AlertTriangle, high: ArrowUp, medium: ArrowUp, low: ArrowUp, nice_to_have: Circle,
 };
 const PRIORITY_CLASS: Record<string, string> = {
-  critical: "text-[#E3CFB3]", high: "text-[#E3CFB3]/80", medium: "text-[#E3CFB3]/60",
-  low: "text-[#E3CFB3]/40", nice_to_have: "text-[#E3CFB3]/30",
+  critical: "text-white", high: "text-white/80", medium: "text-white/60",
+  low: "text-white/40", nice_to_have: "text-white/30",
 };
 
 function parseLabels(labels: unknown): string[] {
@@ -80,17 +80,14 @@ function getItemIcon(title: string, category: string | null) {
 function StatsCards({ stats }: { stats: RoadmapStats | null | undefined }) {
   if (!stats) return null;
   const cards = [
-    { label: "Total Features", value: stats.total, icon: Box, accent: "text-[#E3CFB3]" },
-    { label: "In Progress", value: stats.in_progress, icon: Zap, accent: "text-[#4791FF]" },
-    { label: "Planned", value: stats.planned, icon: Target, accent: "text-[#E3CFB3]/60" },
-    { label: "Released", value: stats.released, icon: Sparkles, accent: "text-[#3FB950]" },
-    { label: "Blocked", value: stats.blocked, icon: AlertTriangle, accent: "text-[#F85149]" },
-    { label: "Overdue", value: stats.overdue, icon: Clock, accent: "text-[#F4B740]" },
-    { label: "Backlog", value: stats.backlog, icon: Layers, accent: "text-[#8874A8]" },
-    {
-      label: "Completions", value: `${stats.completion_pct}%`, icon: BarChart3,
-      accent: "text-[#E3CFB3]",
-    },
+    { label: "Total Features", value: stats.total, icon: Box },
+    { label: "In Progress", value: stats.in_progress, icon: Zap },
+    { label: "Planned", value: stats.planned, icon: Target },
+    { label: "Released", value: stats.released, icon: Sparkles },
+    { label: "Blocked", value: stats.blocked, icon: AlertTriangle },
+    { label: "Overdue", value: stats.overdue, icon: Clock },
+    { label: "Backlog", value: stats.backlog, icon: Layers },
+    { label: "Completions", value: `${stats.completion_pct}%`, icon: BarChart3 },
   ];
 
   return (
@@ -98,15 +95,15 @@ function StatsCards({ stats }: { stats: RoadmapStats | null | undefined }) {
       {cards.map((c) => {
         const Icon = c.icon;
         return (
-          <Card key={c.label} className="border-[rgba(227,207,179,0.08)] bg-[#0F1117]/60 backdrop-blur-sm hover:border-[rgba(227,207,179,0.18)] transition-all duration-200">
+          <Card key={c.label} className="border-white/10 bg-black/40 hover:border-white/20 transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(227,207,179,0.08)] ring-1 ring-[rgba(227,207,179,0.12)]">
-                  <Icon className={cn("h-4 w-4", c.accent)} />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/10">
+                  <Icon className="h-4 w-4 text-white/70" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-medium text-[#9A9892] uppercase tracking-wider">{c.label}</p>
-                  <p className={cn("text-lg font-bold text-[#EDEBE5]", c.accent)}>{c.value}</p>
+                  <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider">{c.label}</p>
+                  <p className="text-lg font-bold text-white">{c.value}</p>
                 </div>
               </div>
             </CardContent>
@@ -122,31 +119,31 @@ function SprintReleaseBar({ stats, sprints, releases }: { stats: RoadmapStats | 
   const upcomingRelease = releases.find((r) => r.status === "planned" || r.status === "in_progress");
 
   return (
-    <div className="flex flex-wrap items-center gap-4 mb-6 text-xs text-[#9A9892]">
+    <div className="flex flex-wrap items-center gap-4 mb-6 text-xs text-white/50">
       {activeSprint && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgba(227,207,179,0.06)] border border-[rgba(227,207,179,0.12)]">
-          <Zap className="h-3.5 w-3.5 text-[#E3CFB3]" />
-          <span className="text-[#EDEBE5] font-medium">Sprint:</span>
-          <span className="text-[#E3CFB3]/80">{activeSprint.name}</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-white/10">
+          <Zap className="h-3.5 w-3.5 text-white/70" />
+          <span className="text-white font-medium">Sprint:</span>
+          <span className="text-white/70">{activeSprint.name}</span>
           {activeSprint.end_date && (
-            <span className="text-[#9A9892]">
+            <span className="text-white/40">
               (ends {new Date(activeSprint.end_date).toLocaleDateString()})
             </span>
           )}
         </div>
       )}
       {upcomingRelease && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgba(0,102,255,0.06)] border border-[rgba(0,102,255,0.12)]">
-          <Rocket className="h-3.5 w-3.5 text-[#0066FF]" />
-          <span className="text-[#EDEBE5] font-medium">Release:</span>
-          <span className="text-[#4791FF]">{upcomingRelease.name} ({upcomingRelease.version})</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-white/10">
+          <Rocket className="h-3.5 w-3.5 text-white/70" />
+          <span className="text-white font-medium">Release:</span>
+          <span className="text-white/70">{upcomingRelease.name} ({upcomingRelease.version})</span>
         </div>
       )}
       {stats && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgba(63,185,80,0.06)] border border-[rgba(63,185,80,0.12)]">
-          <BarChart3 className="h-3.5 w-3.5 text-[#3FB950]" />
-          <span className="text-[#EDEBE5] font-medium">{stats.completion_pct}%</span>
-          <span className="text-[#9A9892]">complete</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-white/10">
+          <BarChart3 className="h-3.5 w-3.5 text-white/70" />
+          <span className="text-white font-medium">{stats.completion_pct}%</span>
+          <span className="text-white/50">complete</span>
         </div>
       )}
     </div>
@@ -166,77 +163,77 @@ function FeatureCard({
   return (
     <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
       <Card
-        className="group border-[rgba(227,207,179,0.08)] bg-[#0F1117]/40 hover:border-[rgba(227,207,179,0.2)] hover:bg-[rgba(227,207,179,0.03)] transition-all duration-200 cursor-pointer"
+        className="group border-white/[0.06] bg-black/30 hover:border-white/[0.15] hover:bg-white/[0.02] transition-all duration-200 cursor-pointer"
         onClick={() => onSelect(feature)}
       >
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[rgba(227,207,179,0.08)] ring-1 ring-[rgba(227,207,179,0.12)] text-[#E3CFB3]/70">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/10 text-white/60">
               {IconEl}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="text-sm font-medium text-[#EDEBE5] truncate">{feature.title}</h3>
+                <h3 className="text-sm font-medium text-white truncate">{feature.title}</h3>
                 <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => { e.stopPropagation(); onEdit(feature); }}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-[#9A9892] hover:bg-[rgba(227,207,179,0.1)] hover:text-[#E3CFB3] transition-colors"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-white/40 hover:bg-white/10 hover:text-white transition-colors"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(feature); }}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-[#9A9892] hover:bg-[rgba(248,81,73,0.1)] hover:text-[#F85149] transition-colors"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-white/40 hover:bg-white/10 hover:text-white transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span className={cn("flex items-center gap-1 text-[10px] text-[#EDEBE5]/80")}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[feature.status] || "bg-[#9A9892]")} />
+                <span className="flex items-center gap-1 text-[10px] text-white/80">
+                  <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[feature.status] || "bg-white/40")} />
                   {STATUS_LABELS[feature.status] || feature.status}
                 </span>
-                <span className={cn("flex items-center gap-0.5 text-[10px]", PRIORITY_CLASS[feature.priority] || "text-[#9A9892]")}>
+                <span className={cn("flex items-center gap-0.5 text-[10px]", PRIORITY_CLASS[feature.priority] || "text-white/40")}>
                   <PrioIcon className="h-3 w-3" />
                   {PRIORITY_LABELS[feature.priority] || feature.priority}
                 </span>
                 {voteCount > 0 && (
-                  <span className="flex items-center gap-1 text-[10px] text-[#E3CFB3]/60">
+                  <span className="flex items-center gap-1 text-[10px] text-white/50">
                     <ThumbsUp className="h-3 w-3" />{voteCount}
                   </span>
                 )}
               </div>
               {feature.description && (
-                <p className="text-[11px] text-[#9A9892] mt-2 line-clamp-2 leading-relaxed">{feature.description}</p>
+                <p className="text-[11px] text-white/50 mt-2 line-clamp-2 leading-relaxed">{feature.description}</p>
               )}
               <div className="flex items-center gap-3 mt-2 flex-wrap">
                 {feature.owner && (
-                  <span className="flex items-center gap-1 text-[10px] text-[#6B6A66]">
+                  <span className="flex items-center gap-1 text-[10px] text-white/40">
                     <User className="h-3 w-3" />{feature.owner}
                   </span>
                 )}
                 {feature.eta && (
-                  <span className="flex items-center gap-1 text-[10px] text-[#6B6A66]">
+                  <span className="flex items-center gap-1 text-[10px] text-white/40">
                     <Clock className="h-3 w-3" />{feature.eta}
                   </span>
                 )}
                 {feature.category && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[rgba(227,207,179,0.06)] text-[#9A9892] border border-[rgba(227,207,179,0.1)]">{feature.category}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/50 border border-white/10">{feature.category}</span>
                 )}
               </div>
               {labels.length > 0 && (
                 <div className="flex gap-1 mt-2 flex-wrap">
                   {labels.slice(0, 4).map((l) => (
-                    <span key={l} className="text-[9px] px-1.5 py-0.5 rounded-full bg-[rgba(227,207,179,0.04)] text-[#9A9892] border border-[rgba(227,207,179,0.08)]">{l}</span>
+                    <span key={l} className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/50 border border-white/10">{l}</span>
                   ))}
-                  {labels.length > 4 && <span className="text-[9px] text-[#6B6A66]">+{labels.length - 4}</span>}
+                  {labels.length > 4 && <span className="text-[9px] text-white/30">+{labels.length - 4}</span>}
                 </div>
               )}
               {feature.progress > 0 && (
                 <div className="mt-2 flex items-center gap-2">
-                  <Progress value={feature.progress} className="h-1 flex-1 bg-[rgba(227,207,179,0.06)] [&>div]:bg-gradient-to-r [&>div]:from-[#E3CFB3] [&>div]:to-[#C9B090]" />
-                  <span className="text-[9px] font-mono text-[#9A9892]">{feature.progress}%</span>
+                  <Progress value={feature.progress} className="h-1 flex-1 bg-white/10 [&>div]:bg-white" />
+                  <span className="text-[9px] font-mono text-white/50">{feature.progress}%</span>
                 </div>
               )}
             </div>
@@ -911,17 +908,17 @@ export function Roadmap() {
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#EDEBE5] tracking-tight">Roadmap</h1>
-          <p className="text-sm text-[#9A9892] mt-0.5">Plan, track, and manage feature development</p>
+          <h1 className="text-xl font-bold text-white tracking-tight">Roadmap</h1>
+          <p className="text-sm text-white/50 mt-0.5">Plan, track, and manage feature development</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowSprintManager(!showSprintManager)} className="border-[rgba(227,207,179,0.15)] text-[#E3CFB3]/80 hover:bg-[rgba(227,207,179,0.08)] hover:text-[#E3CFB3] text-xs h-8">
+          <Button variant="outline" size="sm" onClick={() => setShowSprintManager(!showSprintManager)} className="border-white/20 text-white/70 hover:bg-white/10 hover:text-white text-xs h-8">
             <Zap className="mr-1 h-3.5 w-3.5" />Sprints
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowReleaseManager(!showReleaseManager)} className="border-[rgba(0,102,255,0.2)] text-[#0066FF]/80 hover:bg-[rgba(0,102,255,0.08)] hover:text-[#0066FF] text-xs h-8">
+          <Button variant="outline" size="sm" onClick={() => setShowReleaseManager(!showReleaseManager)} className="border-white/20 text-white/70 hover:bg-white/10 hover:text-white text-xs h-8">
             <Rocket className="mr-1 h-3.5 w-3.5" />Releases
           </Button>
-          <Button onClick={() => setShowForm(true)} className="bg-[#E3CFB3] hover:bg-[#C9B090] text-[#0F1117] font-semibold border-0 shadow-lg shadow-[rgba(227,207,179,0.2)] h-8 text-xs">
+          <Button onClick={() => setShowForm(true)} className="bg-white hover:bg-white/80 text-black font-semibold border-0 h-8 text-xs">
             <Plus className="mr-1 h-3.5 w-3.5" /> Add Feature
           </Button>
         </div>
@@ -931,14 +928,14 @@ export function Roadmap() {
       <AnimatePresence>
         {showSprintManager && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-4">
-            <Card className="border-[rgba(227,207,179,0.08)] bg-[#0F1117]/60 backdrop-blur-sm">
+            <Card className="border-white/10 bg-black/40">
               <SprintManager onClose={() => setShowSprintManager(false)} />
             </Card>
           </motion.div>
         )}
         {showReleaseManager && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-4">
-            <Card className="border-[rgba(0,102,255,0.08)] bg-[#0F1117]/60 backdrop-blur-sm">
+            <Card className="border-white/10 bg-black/40">
               <ReleaseManager onClose={() => setShowReleaseManager(false)} />
             </Card>
           </motion.div>
@@ -952,14 +949,14 @@ export function Roadmap() {
       {/* Search + Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9A9892]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
           <Input
             placeholder="Search features..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 border-[rgba(227,207,179,0.1)] bg-[#0F1117]/60 text-[#EDEBE5] placeholder:text-[#6B6A66] focus-visible:ring-[rgba(227,207,179,0.2)] focus-visible:border-[rgba(227,207,179,0.3)]"
+            className="pl-9 h-9 border-white/10 bg-black/40 text-white placeholder:text-white/30 focus-visible:ring-white/20"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className={cn("border-[rgba(227,207,179,0.12)] text-[#E3CFB3]/70 hover:bg-[rgba(227,207,179,0.08)] hover:text-[#E3CFB3] text-xs h-9", showFilters && "border-[#E3CFB3]/30 bg-[rgba(227,207,179,0.1)]")}>
+          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className={cn("border-white/20 text-white/60 hover:bg-white/10 hover:text-white text-xs h-9", showFilters && "border-white/40 bg-white/10")}>
             <Filter className="mr-1 h-3.5 w-3.5" />Filters
           </Button>
         </div>
@@ -969,12 +966,12 @@ export function Roadmap() {
       <AnimatePresence>
         {showFilters && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-4">
-            <Card className="border-[rgba(227,207,179,0.08)] bg-[#0F1117]/60 backdrop-blur-sm p-4">
+            <Card className="border-white/10 bg-black/40 p-4">
               <div className="flex flex-wrap gap-4">
                 <div className="space-y-1">
-                  <Label className="text-[10px] text-[#9A9892]">Status</Label>
+                  <Label className="text-[10px] text-white/50">Status</Label>
                   <Select value={filters.status || "all"} onValueChange={(v) => setFilters((f) => ({ ...f, status: v === "all" ? "" : v }))}>
-                    <SelectTrigger className="border-[rgba(227,207,179,0.1)] bg-[#0F1117]/60 text-[#EDEBE5] h-8 text-xs w-32"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectTrigger className="border-white/10 bg-black/40 text-white h-8 text-xs w-32"><SelectValue placeholder="All" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All</SelectItem>
                       {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
@@ -982,9 +979,9 @@ export function Roadmap() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[10px] text-[#9A9892]">Priority</Label>
+                  <Label className="text-[10px] text-white/50">Priority</Label>
                   <Select value={filters.priority || "all"} onValueChange={(v) => setFilters((f) => ({ ...f, priority: v === "all" ? "" : v }))}>
-                    <SelectTrigger className="border-[rgba(227,207,179,0.1)] bg-[#0F1117]/60 text-[#EDEBE5] h-8 text-xs w-32"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectTrigger className="border-white/10 bg-black/40 text-white h-8 text-xs w-32"><SelectValue placeholder="All" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All</SelectItem>
                       {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>)}
@@ -992,7 +989,7 @@ export function Roadmap() {
                   </Select>
                 </div>
                 <div className="flex items-end">
-                  <Button variant="ghost" size="sm" onClick={() => setFilters({})} className="text-xs text-[#9A9892] hover:text-[#EDEBE5] h-8">
+                  <Button variant="ghost" size="sm" onClick={() => setFilters({})} className="text-xs text-white/50 hover:text-white h-8">
                     <X className="mr-1 h-3 w-3" />Clear
                   </Button>
                 </div>
