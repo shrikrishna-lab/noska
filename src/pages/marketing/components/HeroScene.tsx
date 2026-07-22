@@ -48,7 +48,7 @@ export function HeroScene() {
   return (
     <div ref={ref} className="hero-scene" onMouseMove={handleMove} onMouseLeave={handleLeave}>
       <motion.div className="hero-scene-main" style={{ x: mainX, y: mainY }}>
-        <MacWindow title="noska.app" className="hero-scene-window">
+        <MacWindow title="" className="hero-scene-window">
           <div className="hero-scene-dash-stage">
             <DashboardShell mode={mode} instanceId="hero" className="dash-compact" />
           </div>
