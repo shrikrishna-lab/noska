@@ -32,7 +32,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => { flushSync(); });
 }
 
-function getUserId() {
+function getUserId(): string | null {
   try { return localStorage.getItem("noska_user_id"); } catch { return null; }
 }
 
@@ -44,17 +44,20 @@ export function storageApi() {
     async set(key, value) {
       localStorage.setItem(key, value);
 
+      const userId = getUserId();
+      if (!userId) return { ok: true };
+
       if (key === "pages") {
         try {
           const pages = JSON.parse(value);
-          scheduleSync(() => savePages(pages, getUserId()));
+          scheduleSync(() => savePages(pages, userId));
         } catch (e) { console.warn("storage: failed to sync pages", e); }
       }
 
       if (key === "aiChats") {
         try {
           const chats = JSON.parse(value);
-          scheduleSync(() => saveAIChats(chats, getUserId()));
+          scheduleSync(() => saveAIChats(chats, userId));
         } catch (e) { console.warn("storage: failed to sync chats", e); }
       }
 
