@@ -1,11 +1,37 @@
-import { forwardRef, type ElementRef, type ComponentPropsWithoutRef } from "react";
+import { forwardRef, useEffect, useRef, type ElementRef, type ComponentPropsWithoutRef } from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const Select = ({ modal = false, ...props }: ComponentPropsWithoutRef<typeof SelectPrimitive.Root> & { modal?: boolean }) => {
-  const combined = { modal, ...props } as React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>;
-  return <SelectPrimitive.Root {...combined} />;
+const Select = ({ children, onOpenChange, ...props }: ComponentPropsWithoutRef<typeof SelectPrimitive.Root>) => {
+  const wasOpenRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (wasOpenRef.current) {
+        restoreBodyPointerEvents();
+      }
+    };
+  }, []);
+
+  const restoreBodyPointerEvents = () => {
+    setTimeout(() => {
+      document.body.style.pointerEvents = "";
+    }, 0);
+  };
+
+  return (
+    <SelectPrimitive.Root
+      onOpenChange={(open) => {
+        wasOpenRef.current = open;
+        onOpenChange?.(open);
+        if (!open) restoreBodyPointerEvents();
+      }}
+      {...props}
+    >
+      {children}
+    </SelectPrimitive.Root>
+  );
 };
 const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
