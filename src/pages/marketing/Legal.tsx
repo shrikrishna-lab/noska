@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabaseAnon } from '../../lib/supabase';
 import './Legal.css';
 
 interface LegalPage {
@@ -22,7 +22,7 @@ export default function Legal() {
   useEffect(() => {
     async function fetch() {
       setLoading(true);
-      const { data, error } = await (supabase as any)
+      const { data, error } = await (supabaseAnon as any)
         .from('legal_pages')
         .select('*')
         .eq('slug', slug)

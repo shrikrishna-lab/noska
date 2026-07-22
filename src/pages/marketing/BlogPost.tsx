@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, ArrowLeft, User, Clock, Heart, Bookmark, Share2, Check, Copy, Sparkles, MessageSquare } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabaseAnon } from '../../lib/supabase';
 import './BlogPost.css';
 
 interface BlogPostData {
@@ -181,7 +181,7 @@ export default function BlogPost() {
       if (!slug) return;
       setLoading(true);
       try {
-        const { data, error } = await (supabase as any)
+        const { data, error } = await (supabaseAnon as any)
           .from('blog_posts')
           .select('*')
           .eq('slug', slug)

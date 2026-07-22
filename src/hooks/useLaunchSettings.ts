@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabaseAnon } from '../lib/supabase';
 
 export type LaunchMode = 'waitlist' | 'early_beta' | 'closed_beta' | 'open_beta' | 'public' | 'maintenance';
 
@@ -91,14 +91,14 @@ const DEFAULT_SETTINGS: LaunchSettings = {
 };
 
 function useSupabaseQuery(table: string) {
-  return supabase?.from(table as never);
+  return supabaseAnon?.from(table as never);
 }
 
 const listeners: Record<string, Set<() => void>> = {};
 let realtimeInit = false;
 
 function initRealtime() {
-  if (!supabase || realtimeInit) return;
+  if (!supabaseAnon || realtimeInit) return;
   realtimeInit = true;
 
   const tables = [
@@ -110,7 +110,7 @@ function initRealtime() {
   ];
 
   for (const { channel: name, table } of tables) {
-    supabase
+    supabaseAnon
       .channel(name)
       .on('postgres_changes' as never, { event: '*', schema: 'public', table },
         () => { listeners[name]?.forEach((fn) => fn()); })
@@ -123,7 +123,7 @@ export function useLaunchSettings(): { settings: LaunchSettings; loading: boolea
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
+    if (!supabaseAnon) { setLoading(false); return; }
     initRealtime();
 
     const fetchSettings = async () => {
@@ -176,7 +176,7 @@ export function useCTAButtons(): {
   const { settings } = useLaunchSettings();
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
+    if (!supabaseAnon) { setLoading(false); return; }
     initRealtime();
 
     const fetchCTAs = async () => {
@@ -236,7 +236,7 @@ export function useAnnouncementBar(): { bar: AnnouncementBarData | null; loading
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
+    if (!supabaseAnon) { setLoading(false); return; }
     initRealtime();
 
     const fetch = async () => {
@@ -261,7 +261,7 @@ export function useLandingContent(): { content: LandingContent[]; getSection: (s
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
+    if (!supabaseAnon) { setLoading(false); return; }
     initRealtime();
 
     const fetch = async () => {
@@ -289,7 +289,7 @@ export function useSubmitWaitlist(): { submit: (data: { email: string; name?: st
     setSubmitting(true);
     try {
       const BASE = import.meta.env.VITE_SUPABASE_URL;
-      if (!supabase || !BASE) {
+      if (!supabaseAnon || !BASE) {
         const res = await fetch(`${BASE}/functions/v1/waitlist-signup`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
@@ -320,7 +320,7 @@ export function useSocialLinks(): { links: Array<{ platform: string; url: string
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
+    if (!supabaseAnon) { setLoading(false); return; }
     initRealtime();
 
     const fetch = async () => {

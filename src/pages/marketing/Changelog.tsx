@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, ChevronDown } from 'lucide-react';
 import { Reveal } from './components/Reveal';
-import { supabase } from '../../lib/supabase';
+import { supabaseAnon } from '../../lib/supabase';
 import './Changelog.css';
 
 interface ChangelogEntry {
@@ -23,7 +23,7 @@ export default function Changelog() {
   useEffect(() => {
     async function fetch() {
       setLoading(true);
-      const { data, error } = await (supabase as any)
+      const { data, error } = await (supabaseAnon as any)
         .from('changelog_entries')
         .select('*')
         .eq('published', true)

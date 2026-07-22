@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, ArrowRight, Tag, Search, Clock, Sparkles, Mail, Check, BookOpen, TrendingUp, X } from 'lucide-react';
 import { Reveal, Stagger, staggerItem } from './components/Reveal';
-import { supabase } from '../../lib/supabase';
+import { supabaseAnon } from '../../lib/supabase';
 import './Blog.css';
 
 interface BlogPost {
@@ -102,7 +102,7 @@ export default function Blog() {
     async function fetchPosts() {
       setLoading(true);
       try {
-        const { data, error } = await (supabase as any)
+        const { data, error } = await (supabaseAnon as any)
           .from('blog_posts')
           .select('*')
           .eq('published', true)

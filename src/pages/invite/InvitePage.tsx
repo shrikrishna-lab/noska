@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
+import { supabaseAnon } from "../../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSignIn } from "@clerk/react";
 import AuthBackground from "../../components/auth/AuthBackground";
@@ -19,9 +19,9 @@ export function InvitePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!code || !supabase) return;
+    if (!code || !supabaseAnon) return;
     (async () => {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAnon
         .rpc("get_invite_by_code" as never, { p_code: code.toUpperCase() } as never) as never;
 
       if (error || !data) { setState("invalid"); return; }

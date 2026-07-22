@@ -88,90 +88,36 @@ export default function Launch() {
     if (ref) signupBody['ref'] = ref;
 
     try {
-      const { supabase } = await import('../../../lib/supabase');
-      if (supabase) {
-        const { data: existing } = await supabase
-          .from('waitlist_entries' as never)
-          .select('id')
-          .eq('email' as never, email)
-          .maybeSingle() as unknown as { data: { id: string } | null };
-
-        if (existing) {
+      const BASE = import.meta.env.VITE_SUPABASE_URL;
+      const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${BASE}/functions/v1/waitlist-signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON },
+        body: JSON.stringify({ email, name, ref: ref || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (err.error?.toLowerCase().includes('already')) {
           setWaitlistError('This email is already on the waitlist!');
-          setWaitlistSubmitting(false);
-          return;
+        } else {
+          setWaitlistError(err.error || `HTTP ${res.status}`);
         }
-
-        const { error } = await supabase
-          .from('waitlist_entries' as never)
-          .insert({
-            email, name, provider: 'launch-page', status: 'waiting',
-            joined_at: new Date().toISOString(), referral_count: 0,
-            referrer_id: undefined,
-          } as never);
-
-        if (error) {
-          console.warn('Supabase insert failed, falling back to edge function:', error);
-          const res = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/waitlist-signup`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(signupBody),
-            }
-          );
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            setWaitlistError(errData.error || 'Failed to join. Please try again.');
-            setWaitlistSubmitting(false);
-            return;
-          }
-        }
-      } else {
-        const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/waitlist-signup`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(signupBody),
-          }
-        );
-        if (!res.ok) {
-          setWaitlistError('Failed to join. Please try again.');
-          setWaitlistSubmitting(false);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('Waitlist submission error, falling back:', err);
-      try {
-        const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/waitlist-signup`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, name }),
-          }
-        );
-        if (!res.ok) {
-          setWaitlistError('Failed to join. Please try again.');
-          setWaitlistSubmitting(false);
-          return;
-        }
-      } catch (err2) {
-        setWaitlistError(err2 instanceof Error ? err2.message : 'Something went wrong');
         setWaitlistSubmitting(false);
         return;
       }
+    } catch (err) {
+      setWaitlistError(err instanceof Error ? err.message : 'Something went wrong');
+      setWaitlistSubmitting(false);
+      return;
     }
 
     setWaitlistSubmitting(false);
     setWaitlistSubmitted(true);
 
     try {
-      const { supabase } = await import('../../../lib/supabase');
-      if (supabase) {
-        const { data: entry } = await supabase
+      const { supabaseAnon } = await import('../../../lib/supabase');
+      if (supabaseAnon) {
+        const { data: entry } = await supabaseAnon
           .from('waitlist_entries' as never)
           .select('position, invite_code')
           .eq('email' as never, email)

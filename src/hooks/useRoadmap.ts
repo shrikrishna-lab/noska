@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabaseAnon } from '../lib/supabase';
 
 export interface RoadmapItem {
   id: string;
@@ -22,9 +22,9 @@ export function useRoadmap() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    if (!supabase) { setLoading(false); return; }
+    if (!supabaseAnon) { setLoading(false); return; }
 
-    const { data: itemsData } = await supabase
+    const { data: itemsData } = await supabaseAnon
       .from('roadmap_items' as never)
       .select('*')
       .order('sort_order')
@@ -32,7 +32,7 @@ export function useRoadmap() {
 
     if (itemsData) setItems(itemsData);
 
-    const { data: votesData } = await supabase
+    const { data: votesData } = await supabaseAnon
       .from('roadmap_votes' as never)
       .select('roadmap_item_id') as { data: { roadmap_item_id: string }[] | null };
 
@@ -52,9 +52,9 @@ export function useRoadmap() {
   }, [fetchData]);
 
   const submitVote = useCallback(async (roadmapItemId: string, email: string): Promise<{ success: boolean; error?: string }> => {
-    if (!supabase) return { success: false, error: 'No database connection' };
+    if (!supabaseAnon) return { success: false, error: 'No database connection' };
     try {
-      const { error } = await supabase
+      const { error } = await supabaseAnon
         .from('roadmap_votes' as never)
         .insert({ roadmap_item_id: roadmapItemId, email } as never);
       if (error) {
@@ -71,9 +71,9 @@ export function useRoadmap() {
   }, [fetchData]);
 
   const submitFeatureRequest = useCallback(async (data: { user_name: string; email: string; message: string }): Promise<{ success: boolean; error?: string }> => {
-    if (!supabase) return { success: false, error: 'No database connection' };
+    if (!supabaseAnon) return { success: false, error: 'No database connection' };
     try {
-      const { error: fbError } = await supabase
+      const { error: fbError } = await supabaseAnon
         .from('feedback' as never)
         .insert({
           user_name: data.user_name,
@@ -84,7 +84,7 @@ export function useRoadmap() {
         } as never);
       if (fbError) return { success: false, error: fbError.message };
 
-      await supabase
+      await supabaseAnon
         .from('email_queue' as never)
         .insert({
           recipient: data.email,
@@ -100,9 +100,9 @@ export function useRoadmap() {
   }, []);
 
   const subscribeToNewsletter = useCallback(async (email: string, name?: string): Promise<{ success: boolean; error?: string }> => {
-    if (!supabase) return { success: false, error: 'No database connection' };
+    if (!supabaseAnon) return { success: false, error: 'No database connection' };
     try {
-      const { data: existing } = await supabase
+      const { data: existing } = await supabaseAnon
         .from('newsletter_subscribers' as never)
         .select('id')
         .eq('email' as never, email)
@@ -112,7 +112,7 @@ export function useRoadmap() {
 
       const displayName = name || email.split('@')[0];
 
-      const { error } = await supabase
+      const { error } = await supabaseAnon
         .from('newsletter_subscribers' as never)
         .insert({
           email,
@@ -124,7 +124,7 @@ export function useRoadmap() {
         } as never);
       if (error) return { success: false, error: error.message };
 
-      await supabase
+      await supabaseAnon
         .from('email_queue' as never)
         .insert({
           recipient: email,

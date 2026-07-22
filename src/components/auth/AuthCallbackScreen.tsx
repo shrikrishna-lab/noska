@@ -2,7 +2,7 @@ import { useAuth, useUser, useClerk } from "@clerk/react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "../../lib/supabase";
+import { supabase, supabaseAnon } from "../../lib/supabase";
 import { upsertUserProfile, fetchUserProfile } from "../../lib/supabaseService";
 import { capture, identifyUser } from "../../lib/posthog";
 import { setSentryUser } from "../../lib/sentry";
@@ -98,7 +98,7 @@ export function AuthCallbackScreen() {
         let accessStatus: "approved" | "waiting" | "banned" = "approved";
 
         try {
-          const { data: banned } = await supabase
+          const { data: banned } = await supabaseAnon
             .from("banned_users" as never)
             .select("id" as never)
             .eq("email" as never, email.toLowerCase())
@@ -110,7 +110,7 @@ export function AuthCallbackScreen() {
 
         if (accessStatus !== "banned") {
           try {
-            const { data: approved } = await supabase
+            const { data: approved } = await supabaseAnon
               .from("approved_emails")
               .select("id")
               .eq("email", email.toLowerCase())
