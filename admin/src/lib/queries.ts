@@ -1410,15 +1410,9 @@ export function useCreateEmailVersion() {
 export function useEmailHistory(limit = 50) {
   return useQuery({
     queryKey: ["admin", "email-history", limit],
-    queryFn: async () => {
-      const { data, error } = await supabase!
-        .from("email_history")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      if (error) throw error;
-      return data as import("./types").EmailHistoryEntry[];
-    },
+    queryFn: () => adminSelect<import("./types").EmailHistoryEntry>(
+      "email_history", "*", { order: "created_at desc", limit }
+    ),
   });
 }
 
@@ -1426,12 +1420,13 @@ export function useEmailHistoryStats() {
   return useQuery({
     queryKey: ["admin", "email-history-stats"],
     queryFn: async () => {
-      const { data, error } = await supabase!
-        .from("email_history")
-        .select("*")
-        .order("created_at", { ascending: false });
+      if (!SUPABASE_ENABLED || !supabase) return defaultStats();
+      const { data, error } = await supabase.rpc("admin_select", {
+        p_session_token: token(), p_table: "email_history", p_select: "*",
+        p_order_col: "created_at", p_order_dir: "desc",
+      });
       if (error) throw error;
-      const entries = data as import("./types").EmailHistoryEntry[];
+      const entries = (data ?? []) as import("./types").EmailHistoryEntry[];
       const today = entries.filter((e) =>
         new Date(e.created_at).toDateString() === new Date().toDateString()
       );
@@ -1452,6 +1447,10 @@ export function useEmailHistoryStats() {
     },
     refetchInterval: 30000,
   });
+}
+
+function defaultStats() {
+  return { sentToday: 0, deliveryRate: 0, openRate: 0, clickRate: 0, bounceRate: 0, spamRate: 0 };
 }
 
 // ── Newsletter Subscriber Queries ──
@@ -1677,7 +1676,7 @@ export function useWaitlistStats() {
     queryKey: ["admin", "waitlist-stats"],
     queryFn: async () => {
       if (!SUPABASE_ENABLED || !supabase) return null;
-      const { data, error } = await supabase.rpc("get_waitlist_stats");
+      const { data, error } = await supabase.rpc("get_waitlist_stats", { p_session_token: token() });
       if (error) throw error;
       return data as WaitlistStats;
     },
