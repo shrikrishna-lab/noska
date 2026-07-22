@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useUser, useClerk } from "@clerk/react";
-import { supabase } from "../../lib/supabase";
+import { supabaseAnon } from "../../lib/supabase";
 import { motion } from "framer-motion";
 import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert } from "lucide-react";
 
@@ -26,21 +26,21 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
     const email = clerkUser.emailAddresses?.[0]?.emailAddress;
     if (!email) { setStatus("error"); return; }
 
-    if (!supabase) {
+    if (!supabaseAnon) {
       setStatus("approved");
       return;
     }
 
     (async () => {
       try {
-        const { data } = await supabase
+        const { data } = await supabaseAnon
           .from("waitlist_entries" as never)
           .select("id, status, position, joined_at, invite_expires_at, ban_reason, suspension_reason" as never)
           .eq("email" as never, email.toLowerCase())
           .maybeSingle() as never;
 
         if (!data) {
-          const { data: aeData } = await supabase
+          const { data: aeData } = await supabaseAnon
             .from("approved_emails" as never)
             .select("id, status")
             .eq("email" as never, email.toLowerCase())
@@ -59,14 +59,14 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
           aheadCount = pos - 1;
         } else {
           try {
-            const { data: rpcData } = await supabase
+            const { data: rpcData } = await supabaseAnon
               .rpc("get_waitlist_position" as never, { p_email: email.toLowerCase() } as never) as never;
             const result = rpcData as { pos: number; ahead: number; total_pending: number } | undefined;
             if (result) {
               pos = result.pos;
               aheadCount = result.ahead;
             } else if (joinedAt) {
-              const { count } = await supabase
+              const { count } = await supabaseAnon
                 .from("waitlist_entries" as never)
                 .select("id" as never, { count: "exact", head: true })
                 .lt("joined_at" as never, joinedAt)

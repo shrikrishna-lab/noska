@@ -32,3 +32,9 @@ export const supabase = createClient<Database>(supabaseUrl || "", supabaseAnonKe
     return null;
   },
 });
+
+// Anon-only client — no Clerk JWT. Used for public operations (e.g. waitlist)
+// where the anon RLS policy is sufficient and the Clerk JWT isn't trusted yet.
+export const supabaseAnon = createClient<Database>(supabaseUrl || "", supabaseAnonKey || "", {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+});
