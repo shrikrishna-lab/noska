@@ -25,10 +25,10 @@ import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 const CATEGORIES = ["all", "growth", "platform", "experimental", "ops"] as const;
 
 const categoryConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: typeof Flag }> = {
-  growth: { label: "Growth", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", icon: Zap },
-  platform: { label: "Platform", color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", icon: Layers },
-  experimental: { label: "Experimental", color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/20", icon: Sparkles },
-  ops: { label: "Ops", color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20", icon: AlertTriangle },
+  growth: { label: "Growth", color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/30", icon: Zap },
+  platform: { label: "Platform", color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/30", icon: Layers },
+  experimental: { label: "Experimental", color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/30", icon: Sparkles },
+  ops: { label: "Ops", color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/30", icon: AlertTriangle },
 };
 
 function FlagFormModal({ flag, onClose }: { flag?: DbFeatureFlag; onClose: () => void }) {
@@ -70,7 +70,7 @@ function FlagFormModal({ flag, onClose }: { flag?: DbFeatureFlag; onClose: () =>
 
   return (
     <Portal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -79,39 +79,39 @@ function FlagFormModal({ flag, onClose }: { flag?: DbFeatureFlag; onClose: () =>
           className="w-full max-w-md mx-4"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="rounded-2xl border border-white/10 bg-black/95 p-6 shadow-2xl">
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-2xl text-foreground">
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/10">
-                  <Flag className="h-4 w-4 text-white/70" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted border border-border">
+                  <Flag className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-white">{isEditing ? "Edit" : "Create"} Feature Flag</h2>
-                  <p className="text-xs text-white/50">{isEditing ? "Update flag configuration" : "Add a new feature flag"}</p>
+                  <h2 className="text-base font-bold text-foreground">{isEditing ? "Edit" : "Create"} Feature Flag</h2>
+                  <p className="text-xs text-muted-foreground">{isEditing ? "Update flag configuration" : "Add a new feature flag"}</p>
                 </div>
               </div>
-              <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-white/40 hover:bg-white/10 hover:text-white transition-colors"><X className="h-4 w-4" /></button>
+              <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted transition-colors"><X className="h-4 w-4" /></button>
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-white/50">Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dark Mode" className="border-white/10 bg-black/40 text-white placeholder:text-white/30 h-9 focus-visible:ring-white/20" />
+                  <Label className="text-xs font-semibold text-foreground">Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dark Mode" className="border-border bg-background text-foreground placeholder:text-muted-foreground h-9" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-white/50">Key</Label>
-                  <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="e.g. dark_mode" className="border-white/10 bg-black/40 text-white placeholder:text-white/30 h-9 focus-visible:ring-white/20" disabled={isEditing} />
+                  <Label className="text-xs font-semibold text-foreground">Key</Label>
+                  <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="e.g. dark_mode" className="border-border bg-background text-foreground placeholder:text-muted-foreground h-9" disabled={isEditing} />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-white/50">Description</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this flag control?" rows={2} className="border-white/10 bg-black/40 text-white placeholder:text-white/30 resize-none focus-visible:ring-white/20" />
+                <Label className="text-xs font-semibold text-foreground">Description</Label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this flag control?" rows={2} className="border-border bg-background text-foreground placeholder:text-muted-foreground resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-white/50">Category</Label>
+                  <Label className="text-xs font-semibold text-foreground">Category</Label>
                   <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="border-white/10 bg-black/40 text-white h-9"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="border-border bg-background text-foreground h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {["growth", "platform", "experimental", "ops"].map((c) => {
                         const cfg = categoryConfig[c];
@@ -129,14 +129,14 @@ function FlagFormModal({ flag, onClose }: { flag?: DbFeatureFlag; onClose: () =>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-white/50">Rollout %</Label>
+                  <Label className="text-xs font-semibold text-foreground">Rollout %</Label>
                   <div className="flex items-center gap-2">
-                    <Input type="number" value={rolloutPercent} onChange={(e) => setRolloutPercent(e.target.value)} min="0" max="100" className="border-white/10 bg-black/40 text-white h-9 focus-visible:ring-white/20" />
-                    <Progress value={parseInt(rolloutPercent) || 0} className="h-1.5 w-12 bg-white/10 [&>div]:bg-white" />
+                    <Input type="number" value={rolloutPercent} onChange={(e) => setRolloutPercent(e.target.value)} min="0" max="100" className="border-border bg-background text-foreground h-9" />
+                    <Progress value={parseInt(rolloutPercent) || 0} className="h-1.5 w-12 bg-muted" />
                   </div>
                 </div>
               </div>
-              <Button className="w-full bg-white hover:bg-white/80 text-black font-semibold border-0" onClick={handleSubmit} disabled={!key.trim() || !name.trim() || submitting}>
+              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold" onClick={handleSubmit} disabled={!key.trim() || !name.trim() || submitting}>
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {isEditing ? "Save Changes" : "Create Flag"}
               </Button>
@@ -185,10 +185,10 @@ export function FeatureFlags() {
     <div className="p-4 sm:p-6">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Feature Flags</h1>
-          <p className="text-sm text-white/50 mt-0.5">Toggle and manage feature flags across the platform</p>
+          <h1 className="text-xl font-bold text-foreground tracking-tight">Feature Flags</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Toggle and manage feature flags across the platform</p>
         </div>
-        <Button onClick={() => setShowForm(true)} className="bg-white hover:bg-white/80 text-black font-semibold border-0">
+        <Button onClick={() => setShowForm(true)} className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold">
           <Plus className="mr-1.5 h-4 w-4" /> Create Flag
         </Button>
       </div>
@@ -196,28 +196,28 @@ export function FeatureFlags() {
       {/* Filter bar */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search feature flags..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 border-white/10 bg-black/40 text-white placeholder:text-white/30 focus-visible:ring-white/20"
+            className="pl-9 h-9 border-border bg-card text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/20"
           />
         </div>
-        <div className="flex rounded-lg border border-white/10 p-0.5 bg-black/20 gap-0.5">
+        <div className="flex rounded-lg border border-border p-0.5 bg-muted/50 gap-0.5">
           {CATEGORIES.map((c) => {
             const cfg = categoryConfig[c];
             const Icon = c === "all" ? Filter : cfg?.icon || Flag;
             return (
               <button key={c} onClick={() => setCategoryFilter(c)}
                 className={cn(
-                  "flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[10px] font-medium transition-colors capitalize",
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors capitalize",
                   categoryFilter === c
-                    ? c === "all" ? "bg-white/15 text-white" : `${cfg?.bg} ${cfg?.color}`
-                    : "text-white/40 hover:text-white"
+                    ? "bg-card text-foreground shadow-sm border border-border"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Icon className={cn("h-3 w-3")} />
+                <Icon className={cn("h-3.5 w-3.5", categoryFilter === c && cfg?.color)} />
                 <span className="hidden sm:inline">{c === "all" ? "All" : cfg?.label || c}</span>
               </button>
             );
@@ -235,30 +235,29 @@ export function FeatureFlags() {
               return (
                 <motion.div key={flag.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}>
                   <Card className={cn(
-                    "border group relative overflow-hidden transition-all duration-200",
-                    enabled ? `${cfg.border.replace("border", "border")}` : "border-white/[0.06] bg-black/30 hover:border-white/[0.12]"
+                    "border border-border bg-card shadow-sm hover:shadow-md transition-all duration-200 group relative overflow-hidden",
+                    enabled && cfg.border
                   )}>
                     <CardContent className="p-4">
-                      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/[0.02] pointer-events-none" />
                       <div className="flex items-start justify-between gap-3 relative">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5">
-                            <div className={cn("flex items-center justify-center h-6 w-6 rounded-lg", enabled ? cfg.bg : "bg-white/5")}>
-                              <Icon className={cn("h-3 w-3", enabled ? cfg.color : "text-white/30")} />
+                            <div className={cn("flex items-center justify-center h-6 w-6 rounded-lg shrink-0", enabled ? cfg.bg : "bg-muted text-muted-foreground")}>
+                              <Icon className={cn("h-3.5 w-3.5", enabled ? cfg.color : "text-muted-foreground")} />
                             </div>
-                            <span className={cn("font-medium text-sm truncate", enabled ? "text-white" : "text-white/50")}>{flag.name}</span>
-                            <Badge variant="outline" className={cn("text-[9px] px-1.5 h-4 border", cfg.border, cfg.color)}>{flag.category}</Badge>
+                            <span className={cn("font-bold text-sm truncate text-foreground")}>{flag.name}</span>
+                            <Badge variant="outline" className={cn("text-[9px] px-1.5 h-4 border font-semibold", cfg.border, cfg.color)}>{flag.category}</Badge>
                           </div>
                           {flag.description && (
-                            <p className="text-xs text-white/50 line-clamp-2 mb-2 leading-relaxed">{flag.description}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2 mb-2 leading-relaxed">{flag.description}</p>
                           )}
-                          <div className="flex items-center gap-2 text-[10px] text-white/30 mb-2">
-                            <code className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/50">{flag.key}</code>
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-2">
+                            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground/80 border border-border">{flag.key}</code>
                             {flag.updated_at && <span>Updated {formatRelativeTime(flag.updated_at)}</span>}
                           </div>
                           <div className="flex items-center gap-2">
-                            <Progress value={flag.rollout_percent} className={cn("h-1 w-16", enabled ? "bg-white/10 [&>div]:bg-white" : "bg-white/5")} />
-                            <span className="text-[10px] font-mono text-white/50">{flag.rollout_percent}%</span>
+                            <Progress value={flag.rollout_percent} className="h-1.5 w-16 bg-muted" />
+                            <span className="text-[10px] font-mono text-muted-foreground font-medium">{flag.rollout_percent}%</span>
                           </div>
                         </div>
                         <div className="flex flex-col items-center gap-2 shrink-0">
@@ -274,10 +273,10 @@ export function FeatureFlags() {
                             }}
                           />
                           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditingFlag(flag)} className="flex h-6 w-6 items-center justify-center rounded text-white/40 hover:bg-white/10 hover:text-white transition-colors" title="Edit">
+                            <button onClick={() => setEditingFlag(flag)} className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Edit">
                               <Pencil className="h-3 w-3" />
                             </button>
-                            <button onClick={() => handleDelete(flag)} className="flex h-6 w-6 items-center justify-center rounded text-white/40 hover:bg-white/10 hover:text-white transition-colors" title="Delete">
+                            <button onClick={() => handleDelete(flag)} className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors" title="Delete">
                               <Trash2 className="h-3 w-3" />
                             </button>
                           </div>
