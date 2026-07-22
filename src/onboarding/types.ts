@@ -18,6 +18,7 @@ export interface OnboardingFormData {
   goals: string[];
   teammates: OnboardingTeammate[];
   template: string;
+  inviteCode: string;
 }
 
 /** Cheap { title, icon } preview shown in LivePreviewSidebar — deliberately

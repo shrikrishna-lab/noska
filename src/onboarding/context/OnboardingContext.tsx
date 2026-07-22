@@ -26,7 +26,8 @@ const initialState: OnboardingState = {
     teamSize: "",
     goals: [],
     teammates: [],
-    template: ""
+    template: "",
+    inviteCode: ""
   }
 };
 
