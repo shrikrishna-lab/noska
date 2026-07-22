@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useSupportTickets, useSupportMessages, useSendSupportMessage, useUpdateTicketStatus, useDeleteTicket, useRealtimeInvalidate, type AdminUserRow } from "@/lib/queries";
+import { useSupportTickets, useSupportMessages, useSendSupportMessage, useUpdateTicketStatus, useDeleteTicket, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime, initialsFromName } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
 import { Send, CheckCircle2, Eye, MousePointerClick, AlertTriangle, Ban, Mail, Users, TrendingUp, X, RefreshCw, Clock, MessageSquare, Fingerprint } from "lucide-react";
 
 type EmailEvent = {
@@ -254,7 +254,7 @@ export function EmailAnalytics() {
         })}
       </motion.div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="border-b border-border/50 px-6 py-4">
             <h3 className="text-sm font-semibold">Event Distribution</h3>
@@ -282,6 +282,28 @@ export function EmailAnalytics() {
                 <span className="font-medium tabular-nums">({((entry.value / total) * 100).toFixed(0)}%)</span>
               </div>
             ))}
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="border-b border-border/50 px-6 py-4">
+            <h3 className="text-sm font-semibold">Events by Count</h3>
+          </div>
+          <div className="h-72 p-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={sortedEvents.map(([name, value]) => ({ name, value }))} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={70} tickFormatter={(v) => v.charAt(0).toUpperCase() + v.slice(1)} />
+                <ReTooltip
+                  contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
+                  formatter={(value: number, name: string) => [`${value} events`, name]}
+                />
+                {sortedEvents.map(([name]) => (
+                  <Bar key={name} dataKey="value" fill={eventConfig[name]?.color ?? "#6b7280"} radius={[0, 4, 4, 0]} barSize={20} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </motion.div>
 

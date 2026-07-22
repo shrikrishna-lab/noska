@@ -29,7 +29,7 @@ export function SEOSettingsPage() {
   const [activePage, setActivePage] = useState("/");
   const { data: seo, isLoading } = useSEOSettings(activePage);
   const updateSEO = useUpdateSEOSettings();
-  useRealtimeInvalidate(["admin", "seo-settings"], "seo_settings");
+  useRealtimeInvalidate(["admin", "seo"], "seo_settings");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");

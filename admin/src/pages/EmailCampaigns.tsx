@@ -539,6 +539,12 @@ export function EmailCampaigns() {
               <Eye className="h-3.5 w-3.5" />
             </Button>
           )}
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => {
+            await navigator.clipboard.writeText(row.id);
+            toast.success("Campaign ID copied");
+          }} title="Copy ID">
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
             if (!await confirm({ title: "Delete Campaign", description: `Permanently delete campaign "${row.name}"? This cannot be undone.`, variant: "delete", confirmText: "Delete" })) return;
             setDeleting(row.id);

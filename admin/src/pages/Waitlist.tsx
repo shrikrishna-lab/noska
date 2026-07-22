@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWaitlist, useWaitlistCount, useSendWaitlistInvite, useDeleteWaitlistEntry, useRejectWaitlistEntry, useRealtimeInvalidate, type DbWaitlistEntry } from "@/lib/queries";
 import { sendWaitlistInvite } from "@/lib/email";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -542,16 +542,22 @@ export function Waitlist() {
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 h-8 text-sm" />
         </div>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="h-8 rounded-md border bg-background px-2 text-xs">
-          <option value="all">All Status</option>
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-            <option key={key} value={key}>{cfg.label}</option>
-          ))}
-        </select>
-        <select value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} className="h-8 rounded-md border bg-background px-2 text-xs">
-          <option value="all">All Countries</option>
-          {countries.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder="All Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+              <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterCountry} onValueChange={setFilterCountry}>
+          <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder="All Countries" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Countries</SelectItem>
+            {countries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-1.5 ml-auto text-xs text-muted-foreground">
           <input type="checkbox" checked={selectedIds.size === (filtered?.length ?? 0)} onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-gray-300" />
           Select all {filtered?.length ?? 0}
