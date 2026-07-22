@@ -1,18 +1,14 @@
 import { useState, useCallback, useMemo } from "react";
-import {
-  DndContext, DragOverlay, useSensor, useSensors, PointerSensor,
-  closestCorners, type DragStartEvent, type DragEndEvent,
-} from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus, X, Loader2, Pencil, Trash2, Search, Filter, GripVertical,
+  Plus, X, Loader2, Pencil, Trash2, Search, Filter,
   LayoutGrid, List, CalendarDays, Clock, ArrowUp, AlertTriangle,
   Circle, User, GitBranch, MessageSquare, CheckSquare, Paperclip,
   Sparkles, Flag, BarChart3, Eye, EyeOff, MoreHorizontal,
   ChevronDown, ChevronRight, Zap, Target, Layers, Box, Rocket,
-  Calendar, ArrowRight, Link2, Columns3, ThumbsUp,
+  Calendar, ArrowRight, Link2, ThumbsUp, ExternalLink,
+  Mail, CreditCard, Smartphone, Code, Shield, Database, Cloud,
+  Globe, WifiOff, Package,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +30,6 @@ import { Portal } from "@/components/ui/Portal";
 import {
   STATUSES, STATUS_LABELS, STATUS_COLORS, STATUS_DOT,
   PRIORITIES, PRIORITY_LABELS, PRIORITY_COLORS,
-  KANBAN_STATUSES,
   type RoadmapFeature, type RoadmapSprint, type RoadmapRelease,
   type RoadmapStats, type RoadmapSelectResult,
 } from "@/lib/roadmap/types";
@@ -48,10 +43,6 @@ import {
 } from "@/lib/roadmap/hooks";
 import { useRoadmapVoteCounts } from "@/lib/queries";
 
-type ViewMode = "board" | "list" | "timeline";
-
-// ─── Constants ───
-
 const PRIORITY_ICONS: Record<string, typeof ArrowUp> = {
   critical: AlertTriangle, high: ArrowUp, medium: ArrowUp, low: ArrowUp, nice_to_have: Circle,
 };
@@ -59,98 +50,32 @@ const PRIORITY_CLASS: Record<string, string> = {
   critical: "text-zinc-100", high: "text-zinc-300", medium: "text-zinc-400",
   low: "text-zinc-500", nice_to_have: "text-zinc-600",
 };
-const PRIORITY_BG: Record<string, string> = {
-  critical: "bg-zinc-500/15", high: "bg-zinc-500/15", medium: "bg-zinc-500/15",
-  low: "bg-zinc-500/10", nice_to_have: "bg-zinc-500/10",
-};
 
-// ─── Helpers ───
 function parseLabels(labels: unknown): string[] {
   if (Array.isArray(labels)) return labels;
   if (typeof labels === "string") { try { return JSON.parse(labels); } catch { return []; } }
   return [];
 }
 
-// ─── Sortable Card ───
-
-function SortableFeatureCard({ feature, onSelect, voteCounts }: { feature: RoadmapFeature; onSelect: (f: RoadmapFeature) => void; voteCounts: Record<string, number> }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: feature.id });
-  const style = { transform: CSS.Transform.toString(transform), transition };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <FeatureCard feature={feature} onSelect={onSelect} isDragging={isDragging} voteCounts={voteCounts} />
-    </div>
-  );
+function getItemIcon(title: string, category: string | null) {
+  const t = (title + " " + (category || "")).toLowerCase();
+  if (t.includes("email") || t.includes("mail") || t.includes("notification")) return <Mail className="h-4 w-4" />;
+  if (t.includes("pay") || t.includes("billing") || t.includes("subscription")) return <CreditCard className="h-4 w-4" />;
+  if (t.includes("vote") || t.includes("poll") || t.includes("feedback")) return <ThumbsUp className="h-4 w-4" />;
+  if (t.includes("analytics") || t.includes("stat") || t.includes("chart")) return <BarChart3 className="h-4 w-4" />;
+  if (t.includes("mobile") || t.includes("app") || t.includes("phone")) return <Smartphone className="h-4 w-4" />;
+  if (t.includes("api") || t.includes("webhook") || t.includes("sdk")) return <Code className="h-4 w-4" />;
+  if (t.includes("search") || t.includes("ai") || t.includes("intelligence")) return <Zap className="h-4 w-4" />;
+  if (t.includes("auth") || t.includes("security") || t.includes("sso")) return <Shield className="h-4 w-4" />;
+  if (t.includes("database") || t.includes("storage") || t.includes("data")) return <Database className="h-4 w-4" />;
+  if (t.includes("cloud") || t.includes("deploy") || t.includes("host")) return <Cloud className="h-4 w-4" />;
+  if (t.includes("integration") || t.includes("github") || t.includes("git")) return <GitBranch className="h-4 w-4" />;
+  if (t.includes("cms") || t.includes("content") || t.includes("layout")) return <LayoutGrid className="h-4 w-4" />;
+  if (t.includes("language") || t.includes("translat") || t.includes("i18n")) return <Globe className="h-4 w-4" />;
+  if (t.includes("offline") || t.includes("sync") || t.includes("cache")) return <WifiOff className="h-4 w-4" />;
+  if (t.includes("template") || t.includes("marketplace")) return <Package className="h-4 w-4" />;
+  return <Layers className="h-4 w-4" />;
 }
-
-function FeatureCard({ feature, onSelect, isDragging, isDraught, voteCounts }: { feature: RoadmapFeature; onSelect: (f: RoadmapFeature) => void; isDragging?: boolean; isDraught?: boolean; voteCounts?: Record<string, number> }) {
-  const PrioIcon = PRIORITY_ICONS[feature.priority] ?? ArrowUp;
-  const statusColor = STATUS_COLORS[feature.status] || STATUS_COLORS.backlog;
-  const [statusLabel] = statusColor.split(" ");
-
-  return (
-    <motion.div layout initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>
-      <Card
-        className={cn(
-          "group cursor-pointer border transition-all duration-150",
-          isDragging ? "opacity-50 scale-95 border-zinc-500/40 shadow-lg shadow-zinc-500/10" : "border-white/[0.06] hover:border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04]"
-        )}
-        onClick={() => onSelect(feature)}
-      >
-        <CardContent className="p-3">
-          <div className="flex items-start gap-2">
-            <GripVertical className="h-3.5 w-3.5 text-zinc-700 shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                <span className="text-sm font-medium text-zinc-100 truncate">{feature.title}</span>
-              </div>
-              {feature.description && (
-                <p className="text-[11px] text-zinc-500 line-clamp-2 mb-2 leading-relaxed">{feature.description}</p>
-              )}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={cn("flex items-center gap-1 text-[10px]", statusLabel || "text-zinc-400")}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[feature.status] || "bg-zinc-400")} />
-                  {STATUS_LABELS[feature.status] || feature.status}
-                </span>
-                <span className={cn("flex items-center gap-0.5 text-[10px]", PRIORITY_CLASS[feature.priority] || "text-zinc-500")}>
-                  <PrioIcon className="h-3 w-3" />
-                  {PRIORITY_LABELS[feature.priority] || feature.priority}
-                </span>
-                {feature.owner && (
-                  <span className="flex items-center gap-1 text-[10px] text-zinc-500">
-                    <User className="h-3 w-3" />{feature.owner}
-                  </span>
-                )}
-                {voteCounts && voteCounts[feature.id] > 0 && (
-                  <span className="flex items-center gap-1 text-[10px] text-zinc-400">
-                    <ThumbsUp className="h-3 w-3" />{voteCounts[feature.id]}
-                  </span>
-                )}
-              </div>
-              {parseLabels(feature.labels).length > 0 && (
-                <div className="flex gap-1 mt-1.5 flex-wrap">
-                  {parseLabels(feature.labels).slice(0, 3).map((l) => (
-                    <span key={l} className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10">{l}</span>
-                  ))}
-                  {parseLabels(feature.labels).length > 3 && <span className="text-[9px] text-zinc-600">+{parseLabels(feature.labels).length - 3}</span>}
-                </div>
-              )}
-              {feature.progress > 0 && (
-                <div className="mt-2 flex items-center gap-2">
-                  <Progress value={feature.progress} className="h-1 flex-1 bg-white/5 [&>div]:bg-gradient-to-r [&>div]:from-zinc-400 [&>div]:to-zinc-600" />
-                  <span className="text-[9px] font-mono text-zinc-500">{feature.progress}%</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
-
-// ─── Dashboard Analytics ───
 
 function StatsCards({ stats }: { stats: RoadmapStats | null | undefined }) {
   if (!stats) return null;
@@ -228,190 +153,99 @@ function SprintReleaseBar({ stats, sprints, releases }: { stats: RoadmapStats | 
   );
 }
 
-// ─── Board View (Kanban) ───
-
-function BoardView({
-  features, onSelect, onRefresh, voteCounts,
+function FeatureCard({
+  feature, onSelect, onEdit, onDelete, voteCounts,
 }: {
-  features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void; onRefresh: () => void; voteCounts: Record<string, number>;
+  feature: RoadmapFeature; onSelect: (f: RoadmapFeature) => void; onEdit: (f: RoadmapFeature) => void; onDelete: (f: RoadmapFeature) => void; voteCounts: Record<string, number>;
 }) {
-  const updateStatus = useUpdateRoadmapStatus();
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
-
-  const grouped = useMemo(() => {
-    const map: Record<string, RoadmapFeature[]> = {};
-    for (const s of KANBAN_STATUSES) map[s] = [];
-    for (const f of features) {
-      if (map[f.status]) map[f.status].push(f);
-    }
-    return map;
-  }, [features]);
-
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  }, []);
-
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    setActiveId(null);
-    const { active, over } = event;
-    if (!over) return;
-    const featureId = active.id as string;
-    const targetColumn = over.id as string;
-    if (KANBAN_STATUSES.includes(targetColumn as never) && featureId !== targetColumn) {
-      const feature = features.find((f) => f.id === featureId);
-      if (feature && feature.status !== targetColumn) {
-        updateStatus.mutate({ id: featureId, status: targetColumn });
-      }
-    }
-  }, [features, updateStatus]);
-
-  const activeFeature = activeId ? features.find((f) => f.id === activeId) : null;
+  const labels = parseLabels(feature.labels);
+  const voteCount = voteCounts[feature.id] || 0;
+  const IconEl = getItemIcon(feature.title, feature.category);
+  const PrioIcon = PRIORITY_ICONS[feature.priority] ?? ArrowUp;
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: "60vh" }}>
-        {KANBAN_STATUSES.map((status) => {
-          const items = grouped[status] || [];
-          return (
-            <div key={status} className="flex-shrink-0 w-64">
-              <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl mb-2 border", STATUS_COLORS[status] || "text-zinc-400 bg-zinc-500/10 border-zinc-500/20")}>
-                <span className={cn("h-2 w-2 rounded-full", STATUS_DOT[status] || "bg-zinc-400")} />
-                <span className="text-xs font-semibold">{STATUS_LABELS[status] || status}</span>
-                <span className="ml-auto text-[10px] font-mono opacity-60">{items.length}</span>
-              </div>
-              <SortableContext items={items.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2 min-h-[100px]">
-                  <AnimatePresence>
-                    {items.map((feature) => (
-                      <SortableFeatureCard key={feature.id} feature={feature} onSelect={onSelect} voteCounts={voteCounts} />
-                    ))}
-                  </AnimatePresence>
-                  {items.length === 0 && (
-                    <div className="h-20 rounded-xl border border-dashed border-white/5 flex items-center justify-center">
-                      <p className="text-[10px] text-zinc-600">Drop items here</p>
-                    </div>
-                  )}
-                </div>
-              </SortableContext>
+    <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+      <Card
+        className="group border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04] transition-all duration-200 cursor-pointer"
+        onClick={() => onSelect(feature)}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-500/10 border border-white/10 text-zinc-400">
+              {IconEl}
             </div>
-          );
-        })}
-      </div>
-      <DragOverlay>
-        {activeFeature && <div className="w-64 opacity-90"><FeatureCard feature={activeFeature} onSelect={() => {}} isDraught={true} voteCounts={voteCounts} /></div>}
-      </DragOverlay>
-    </DndContext>
-  );
-}
-
-// ─── List View ───
-
-function ListView({ features, onSelect, voteCounts }: { features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void; voteCounts: Record<string, number> }) {
-  return (
-    <div className="space-y-1">
-      {features.map((f) => {
-        const PrioIcon = PRIORITY_ICONS[f.priority] ?? ArrowUp;
-        return (
-          <motion.div
-            key={f.id} layout
-            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 px-4 py-2.5 rounded-lg cursor-pointer hover:bg-white/[0.03] transition-colors border border-transparent hover:border-white/[0.06] group"
-            onClick={() => onSelect(f)}
-          >
-            <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT[f.status] || "bg-zinc-400")} />
-            <span className="flex-1 text-sm text-zinc-100 truncate">{f.title}</span>
-            <div className="flex items-center gap-2 shrink-0">
-              {parseLabels(f.labels).length > 0 && (
-                <div className="hidden md:flex gap-1">
-                  {parseLabels(f.labels).slice(0, 2).map((l) => (
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-sm font-medium text-zinc-100 truncate">{feature.title}</h3>
+                <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onEdit(feature); }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-300 transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(feature); }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className={cn("flex items-center gap-1 text-[10px]", STATUS_DOT[feature.status] ? "text-zinc-300" : "text-zinc-400")}>
+                  <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[feature.status] || "bg-zinc-400")} />
+                  {STATUS_LABELS[feature.status] || feature.status}
+                </span>
+                <span className={cn("flex items-center gap-0.5 text-[10px]", PRIORITY_CLASS[feature.priority] || "text-zinc-500")}>
+                  <PrioIcon className="h-3 w-3" />
+                  {PRIORITY_LABELS[feature.priority] || feature.priority}
+                </span>
+                {voteCount > 0 && (
+                  <span className="flex items-center gap-1 text-[10px] text-amber-400/70">
+                    <ThumbsUp className="h-3 w-3" />{voteCount}
+                  </span>
+                )}
+              </div>
+              {feature.description && (
+                <p className="text-[11px] text-zinc-500 mt-2 line-clamp-2 leading-relaxed">{feature.description}</p>
+              )}
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                {feature.owner && (
+                  <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                    <User className="h-3 w-3" />{feature.owner}
+                  </span>
+                )}
+                {feature.eta && (
+                  <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                    <Clock className="h-3 w-3" />{feature.eta}
+                  </span>
+                )}
+                {feature.category && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-500/10 text-zinc-400 border border-white/10">{feature.category}</span>
+                )}
+              </div>
+              {labels.length > 0 && (
+                <div className="flex gap-1 mt-2 flex-wrap">
+                  {labels.slice(0, 4).map((l) => (
                     <span key={l} className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10">{l}</span>
                   ))}
+                  {labels.length > 4 && <span className="text-[9px] text-zinc-600">+{labels.length - 4}</span>}
                 </div>
               )}
-              {f.progress > 0 && (
-                <span className="hidden sm:inline text-[10px] font-mono text-zinc-500 w-8 text-right">{f.progress}%</span>
-              )}
-              <span className={cn("flex items-center gap-0.5 text-[10px]", PRIORITY_CLASS[f.priority] || "text-zinc-500")}>
-                <PrioIcon className="h-3 w-3" />
-                <span className="hidden sm:inline">{PRIORITY_LABELS[f.priority] || f.priority}</span>
-              </span>
-              {f.owner && (
-                <span className="hidden lg:flex items-center gap-1 text-[10px] text-zinc-500">
-                  <User className="h-3 w-3" />{f.owner}
-                </span>
-              )}
-              {voteCounts[f.id] > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-zinc-400">
-                  <ThumbsUp className="h-3 w-3" />{voteCounts[f.id]}
-                </span>
-              )}
-              <span className={cn("text-[10px] px-1.5 py-0.5 rounded", STATUS_COLORS[f.status]?.split(" ")[0] || "text-zinc-400")}>
-                {STATUS_LABELS[f.status] || f.status}
-              </span>
-            </div>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Timeline View ───
-
-function TimelineView({ features, onSelect, voteCounts }: { features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void; voteCounts: Record<string, number> }) {
-  const withDates = useMemo(() => features.filter((f) => f.start_date || f.target_date), [features]);
-  const sorted = useMemo(() => [...withDates].sort((a, b) => {
-    const aDate = a.start_date || a.target_date || a.created_at;
-    const bDate = b.start_date || b.target_date || b.created_at;
-    return new Date(aDate).getTime() - new Date(bDate).getTime();
-  }), [withDates]);
-
-  const minDate = sorted.length > 0 ? new Date(sorted[0].start_date || sorted[0].created_at) : new Date();
-  const maxDate = sorted.length > 0 ? new Date(sorted[sorted.length - 1].target_date || sorted[sorted.length - 1].created_at) : new Date();
-  const range = Math.max(1, (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
-  const months: Date[] = [];
-  const d = new Date(minDate);
-  d.setDate(1);
-  while (d <= maxDate) {
-    months.push(new Date(d));
-    d.setMonth(d.getMonth() + 1);
-  }
-
-  return (
-    <div className="space-y-4">
-      {sorted.length === 0 && <EmptyState title="No features with dates" description="Add start or target dates to features to see them on a timeline." />}
-      {sorted.map((f) => {
-        const start = f.start_date ? new Date(f.start_date) : minDate;
-        const end = f.target_date ? new Date(f.target_date) : new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000);
-        const leftPct = ((start.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) / range * 100;
-        const widthPct = Math.max(2, ((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) / range * 100);
-        return (
-          <div key={f.id} className="flex items-center gap-3 cursor-pointer hover:bg-white/[0.03] rounded-lg px-3 py-2 transition-colors" onClick={() => onSelect(f)}>
-            <div className="w-48 shrink-0">
-              <p className="text-sm text-zinc-100 truncate">{f.title}</p>
-            </div>
-            <div className="flex-1 h-8 relative">
-              <div className="absolute inset-0 border-t border-white/5" style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: "20px" }}>
-                <div className={cn("h-2 rounded-full mt-3", PRIORITY_BG[f.priority] || "bg-zinc-500/20")}>
-                  <div className={cn("h-full rounded-full", f.progress > 0 ? `w-[${f.progress}%]` : "w-0", f.status === "shipped" ? "bg-zinc-400" : "bg-zinc-600")} style={f.progress > 0 ? { width: `${f.progress}%` } : {}} />
+              {feature.progress > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                  <Progress value={feature.progress} className="h-1 flex-1 bg-white/5 [&>div]:bg-gradient-to-r [&>div]:from-zinc-400 [&>div]:to-zinc-600" />
+                  <span className="text-[9px] font-mono text-zinc-500">{feature.progress}%</span>
                 </div>
-              </div>
-            </div>
-            <div className="w-24 shrink-0 text-right">
-              <span className="text-[10px] text-zinc-500">
-                {f.start_date ? new Date(f.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
-                {f.target_date ? ` - ${new Date(f.target_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
-              </span>
+              )}
             </div>
           </div>
-        );
-      })}
-    </div>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
-
-// ─── Feature Detail Side Panel ───
 
 function FeatureDetailPanel({
   feature, onClose, onRefresh, voteCounts,
@@ -494,213 +328,206 @@ function FeatureDetailPanel({
             className="w-full max-w-xl bg-[#0a0a0a] border-l border-white/10 h-full overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", PRIORITY_BG[feature.priority] || "bg-zinc-500/10")}>
-                  {(() => { const Icon = PRIORITY_ICONS[feature.priority] ?? ArrowUp; return <Icon className={cn("h-4 w-4", PRIORITY_CLASS[feature.priority])} />; })()}
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-sm font-semibold text-white truncate">{feature.title}</h2>
-                  <span className={cn("text-[10px]", STATUS_COLORS[feature.status]?.split(" ")[0] || "text-zinc-400")}>{STATUS_LABELS[feature.status] || feature.status}</span>
-                </div>
+              <div className="flex items-center gap-3">
+                <span className={cn("h-2.5 w-2.5 rounded-full", STATUS_DOT[feature.status] || "bg-zinc-400")} />
+                <span className="text-sm font-semibold text-zinc-100">{feature.title}</span>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={() => setEditing(!editing)} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/5 hover:text-zinc-300 transition-colors">
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={handleDelete} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-red-500/10 hover:text-red-400 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/5 hover:text-zinc-300 transition-colors">
-                  <X className="h-4 w-4" />
-                </button>
+                <Button variant="ghost" size="sm" onClick={() => setEditing(!editing)} className="h-8 text-xs text-zinc-400 hover:text-zinc-200">
+                  <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleDelete} className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+                </Button>
+                <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/5 hover:text-zinc-300 transition-colors"><X className="h-4 w-4" /></button>
               </div>
             </div>
-
-            {/* Tabs */}
-            <div className="border-b border-white/10 px-5">
-              <div className="flex gap-4 text-xs">
-                {["details", "checklist", "comments", "activity"].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={cn(
-                      "py-3 border-b-2 transition-colors capitalize",
-                      activeTab === tab ? "text-white border-zinc-400" : "text-zinc-500 border-transparent hover:text-zinc-300"
-                    )}
-                  >
-                    {tab === "details" && "Details"}
-                    {tab === "checklist" && `Checklist (${checklists?.length || 0})`}
-                    {tab === "comments" && `Comments (${comments?.length || 0})`}
-                    {tab === "activity" && "Activity"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Content */}
             <ScrollArea className="flex-1">
-              <div className="p-5 space-y-5">
-                {activeTab === "details" && (
+              <div className="p-5 space-y-6">
+                {editing ? (
+                  <div className="space-y-4">
+                    <Section label="Title"><Input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="border-white/10 bg-white/5 text-white h-9" /></Section>
+                    <Section label="Description"><Textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} rows={3} className="border-white/10 bg-white/5 text-white resize-none" /></Section>
+                    <Section label="Priority">
+                      <Select value={editForm.priority} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
+                        <SelectTrigger className="border-white/10 bg-white/5 text-white h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {PRIORITIES.map((p) => (
+                            <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Section>
+                    <Section label="Owner"><Input value={editForm.owner} onChange={(e) => setEditForm({ ...editForm, owner: e.target.value })} className="border-white/10 bg-white/5 text-white h-9" /></Section>
+                    <Section label="ETA"><Input value={editForm.eta} onChange={(e) => setEditForm({ ...editForm, eta: e.target.value })} className="border-white/10 bg-white/5 text-white h-9" /></Section>
+                    <Section label="Progress %"><Input type="number" min={0} max={100} value={editForm.progress} onChange={(e) => setEditForm({ ...editForm, progress: Number(e.target.value) })} className="border-white/10 bg-white/5 text-white h-9" /></Section>
+                    <div className="flex gap-2 pt-2">
+                      <Button variant="outline" size="sm" onClick={() => setEditing(false)} className="border-white/10 text-zinc-300 hover:bg-white/5 flex-1">Cancel</Button>
+                      <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !editForm.title.trim()} className="bg-gradient-to-r from-zinc-500 to-zinc-700 hover:from-blue-600 hover:to-purple-700 text-white border-0 flex-1">
+                        {updateMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
                   <>
-                    {editing ? (
-                      <div className="space-y-3">
-                        <div><Label className="text-xs text-zinc-400">Title</Label><Input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="border-white/10 bg-white/5 text-white h-9" /></div>
-                        <div><Label className="text-xs text-zinc-400">Description</Label><Textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} rows={3} className="border-white/10 bg-white/5 text-white resize-none" /></div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div><Label className="text-xs text-zinc-400">Priority</Label>
-                            <Select value={editForm.priority} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
-                              <SelectTrigger className="border-white/10 bg-white/5 text-white h-9"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {PRIORITIES.map((p) => (
-                                  <SelectItem key={p} value={p}><span className={cn(PRIORITY_COLORS[p])}>{PRIORITY_LABELS[p]}</span></SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div><Label className="text-xs text-zinc-400">Owner</Label><Input value={editForm.owner} onChange={(e) => setEditForm({ ...editForm, owner: e.target.value })} className="border-white/10 bg-white/5 text-white h-9" /></div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div><Label className="text-xs text-zinc-400">ETA</Label><Input value={editForm.eta} onChange={(e) => setEditForm({ ...editForm, eta: e.target.value })} className="border-white/10 bg-white/5 text-white h-9" /></div>
-                          <div><Label className="text-xs text-zinc-400">Progress %</Label><Input type="number" value={editForm.progress} onChange={(e) => setEditForm({ ...editForm, progress: Number(e.target.value) })} className="border-white/10 bg-white/5 text-white h-9" /></div>
-                        </div>
-                        <div className="flex gap-2 pt-2">
-                          <Button variant="outline" onClick={() => setEditing(false)} className="border-white/10 text-zinc-300 flex-1">Cancel</Button>
-                          <Button onClick={handleSave} disabled={!editForm.title.trim() || updateMutation.isPending} className="flex-1 bg-gradient-to-r from-zinc-500 to-zinc-700 text-white border-0">
-                            {updateMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Save
-                          </Button>
-                        </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Status</p>
+                        <span className={cn("text-xs", STATUS_COLORS[feature.status]?.split(" ")[0] || "text-zinc-400")}>{STATUS_LABELS[feature.status] || feature.status}</span>
                       </div>
-                    ) : (
-                      <>
-                        <Section label="Description">
-                          <p className="text-sm text-zinc-300 leading-relaxed">{feature.description || "No description."}</p>
-                        </Section>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Section label="Priority">
-                            <span className={cn("text-sm font-medium", PRIORITY_CLASS[feature.priority])}>{PRIORITY_LABELS[feature.priority] || feature.priority}</span>
-                          </Section>
-                          <Section label="Owner"><span className="text-sm text-zinc-300">{feature.owner || "Unassigned"}</span></Section>
-                          <Section label="Progress">
-                            <div className="flex items-center gap-2">
-                              <Progress value={feature.progress} className="h-1.5 flex-1 bg-white/5 [&>div]:bg-gradient-to-r [&>div]:from-zinc-400 [&>div]:to-zinc-600" />
-                              <span className="text-xs font-mono text-zinc-400">{feature.progress}%</span>
-                            </div>
-                          </Section>
-                          <Section label="ETA"><span className="text-sm text-zinc-300">{feature.eta || "Not set"}</span></Section>
-                          <Section label="Status"><span className={cn("text-sm font-medium", STATUS_COLORS[feature.status]?.split(" ")[0])}>{STATUS_LABELS[feature.status] || feature.status}</span></Section>
-                          <Section label="Votes"><span className="text-sm text-zinc-300">{voteCounts?.[feature.id] ?? 0}</span></Section>
-                          <Section label="Category"><span className="text-sm text-zinc-300">{feature.category || "Uncategorized"}</span></Section>
-                          {parseLabels(feature.labels).length > 0 && (
-                            <div className="col-span-2">
-                              <SectionLabel>Labels</SectionLabel>
-                              <div className="flex gap-1.5 mt-1 flex-wrap">
-                                {parseLabels(feature.labels).map((l) => (
-                                  <span key={l} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-300 border border-white/10">{l}</span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {deps && deps.length > 0 && (
-                            <div className="col-span-2">
-                              <SectionLabel>Dependencies</SectionLabel>
-                              <div className="space-y-1 mt-1">
-                                {deps.map((d) => (
-                                  <div key={d.id} className="flex items-center gap-2 text-xs text-zinc-400">
-                                    <Link2 className="h-3 w-3" />{d.depends_on_title} <Badge variant="outline" className="text-[9px] border-white/10">{d.dependency_type}</Badge>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                      <div>
+                        <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Priority</p>
+                        <span className={cn("text-xs", PRIORITY_CLASS[feature.priority] || "text-zinc-400")}>{PRIORITY_LABELS[feature.priority] || feature.priority}</span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Owner</p>
+                        <span className="text-xs text-zinc-300">{feature.owner || "—"}</span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">ETA</p>
+                        <span className="text-xs text-zinc-300">{feature.eta || "—"}</span>
+                      </div>
+                      {feature.category && (
+                        <div>
+                          <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Category</p>
+                          <span className="text-xs text-zinc-300">{feature.category}</span>
                         </div>
-                        {feature.acceptance_criteria && (
-                          <Section label="Acceptance Criteria">
-                            <p className="text-sm text-zinc-300 whitespace-pre-wrap">{feature.acceptance_criteria}</p>
-                          </Section>
-                        )}
-                      </>
+                      )}
+                      {feature.progress > 0 && (
+                        <div>
+                          <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Progress</p>
+                          <div className="flex items-center gap-2">
+                            <Progress value={feature.progress} className="h-1.5 flex-1 bg-white/5 [&>div]:bg-zinc-500" />
+                            <span className="text-[10px] font-mono text-zinc-400">{feature.progress}%</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {feature.description && (
+                      <Section label="Description">
+                        <p className="text-sm text-zinc-300 leading-relaxed">{feature.description}</p>
+                      </Section>
+                    )}
+                    {feature.acceptance_criteria && (
+                      <Section label="Acceptance Criteria">
+                        <p className="text-sm text-zinc-300 leading-relaxed">{feature.acceptance_criteria}</p>
+                      </Section>
+                    )}
+                    {parseLabels(feature.labels).length > 0 && (
+                      <Section label="Labels">
+                        <div className="flex gap-1.5 flex-wrap">
+                          {parseLabels(feature.labels).map((l) => (
+                            <span key={l} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-300 border border-white/10">{l}</span>
+                          ))}
+                        </div>
+                      </Section>
+                    )}
+                    {feature.sprint_id && (
+                      <Section label="Sprint ID">
+                        <span className="text-xs text-zinc-400">{feature.sprint_id}</span>
+                      </Section>
+                    )}
+                    {feature.release_id && (
+                      <Section label="Release ID">
+                        <span className="text-xs text-zinc-400">{feature.release_id}</span>
+                      </Section>
+                    )}
+                    {(feature.target_version || feature.estimated_time) && (
+                      <Section label="Planning">
+                        <div className="grid grid-cols-2 gap-2">
+                          {feature.target_version && <div><p className="text-[10px] text-zinc-500">Target Version</p><p className="text-xs text-zinc-300">{feature.target_version}</p></div>}
+                          {feature.estimated_time && <div><p className="text-[10px] text-zinc-500">Estimated Time</p><p className="text-xs text-zinc-300">{feature.estimated_time}</p></div>}
+                        </div>
+                      </Section>
+                    )}
+                    {voteCounts[feature.id] > 0 && (
+                      <Section label="Votes">
+                        <span className="flex items-center gap-1 text-sm text-amber-400/70"><ThumbsUp className="h-4 w-4" />{voteCounts[feature.id]}</span>
+                      </Section>
                     )}
                   </>
                 )}
-
-                {activeTab === "checklist" && (
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <Input value={checklistTitle} onChange={(e) => setChecklistTitle(e.target.value)} placeholder="Add checklist item..." className="border-white/10 bg-white/5 text-white placeholder:text-zinc-600 h-9 text-sm flex-1"
-                        onKeyDown={(e) => { if (e.key === "Enter") handleAddChecklist(); }}
-                      />
-                      <Button size="sm" onClick={handleAddChecklist} disabled={!checklistTitle.trim()} className="bg-zinc-600 hover:bg-zinc-700 text-white border-0 h-9">
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {(checklists ?? []).map((item) => (
-                      <div key={item.id} className="flex items-center gap-2.5 group">
-                        <input
-                          type="checkbox" checked={item.completed} onChange={() => toggleChecklist.mutate({ id: item.id, completed: !item.completed })}
-                          className="h-4 w-4 rounded border-white/20 bg-white/5 accent-blue-500 cursor-pointer"
-                        />
-                        <span className={cn("text-sm flex-1", item.completed && "line-through text-zinc-600")}>{item.title}</span>
-                        <Badge variant="outline" className="text-[9px] border-white/10 text-zinc-500">{item.section}</Badge>
-                      </div>
-                    ))}
-                    {(!checklists || checklists.length === 0) && <p className="text-xs text-zinc-500">No checklist items yet.</p>}
-                  </div>
-                )}
-
-                {activeTab === "comments" && (
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <Textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Write a comment..."
-                        rows={2} className="border-white/10 bg-white/5 text-white placeholder:text-zinc-600 resize-none text-sm"
-                      />
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={handleAddComment} disabled={!commentText.trim()} className="bg-zinc-600 hover:bg-zinc-700 text-white border-0 h-8 text-xs">
-                          {addComment.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}Send
-                        </Button>
-                      </div>
-                    </div>
-                    {(comments ?? []).map((c) => (
-                      <div key={c.id} className="border-l-2 border-white/10 pl-3 py-2">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="h-5 w-5 rounded-full bg-gradient-to-br from-zinc-500 to-zinc-700 flex items-center justify-center text-[8px] font-bold text-white">
-                            {c.author_name.charAt(0)}
+                {!editing && (
+                  <>
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="!mt-8">
+                      <TabsList className="bg-white/5 border border-white/10">
+                        <TabsTrigger value="details" className="text-xs data-[state=active]:bg-zinc-500/20">Details</TabsTrigger>
+                        <TabsTrigger value="checklist" className="text-xs data-[state=active]:bg-zinc-500/20">Checklist ({(checklists ?? []).length})</TabsTrigger>
+                        <TabsTrigger value="comments" className="text-xs data-[state=active]:bg-zinc-500/20">Comments ({(comments ?? []).length})</TabsTrigger>
+                        <TabsTrigger value="dependencies" className="text-xs data-[state=active]:bg-zinc-500/20">Dependencies</TabsTrigger>
+                        <TabsTrigger value="activity" className="text-xs data-[state=active]:bg-zinc-500/20">Activity</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                    {activeTab === "checklist" && (
+                      <div className="space-y-1.5">
+                        {checklists?.map((item) => (
+                          <div key={item.id} className="flex items-center gap-2 py-1">
+                            <button onClick={() => toggleChecklist.mutate(item.id)} className={cn("h-4 w-4 rounded border transition-colors flex items-center justify-center shrink-0", item.done ? "bg-zinc-500 border-zinc-500" : "border-white/20 hover:border-white/40")}>
+                              {item.done && <CheckSquare className="h-3 w-3 text-white" />}
+                            </button>
+                            <span className={cn("text-xs", item.done ? "text-zinc-500 line-through" : "text-zinc-300")}>{item.title}</span>
                           </div>
-                          <span className="text-xs font-medium text-zinc-200">{c.author_name}</span>
-                          <span className="text-[10px] text-zinc-500">{new Date(c.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <p className="text-sm text-zinc-300">{c.content}</p>
-                      </div>
-                    ))}
-                    {(!comments || comments.length === 0) && <p className="text-xs text-zinc-500">No comments yet.</p>}
-                  </div>
-                )}
-
-                {activeTab === "activity" && (
-                  <div className="space-y-3">
-                    {(activity ?? []).map((a) => (
-                      <div key={a.id} className="flex items-start gap-3 text-xs">
-                        <div className={cn(
-                          "h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                          a.action === "created" ? "bg-zinc-500/10" : a.action === "moved" ? "bg-zinc-500/10" : "bg-zinc-500/10"
-                        )}>
-                          {a.action === "created" ? <Sparkles className="h-3 w-3 text-zinc-400" /> :
-                           a.action === "moved" ? <ArrowRight className="h-3 w-3 text-zinc-400" /> : <Pencil className="h-3 w-3 text-zinc-400" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-zinc-300">{a.actor_name} </span>
-                          <span className="text-zinc-500">
-                            {a.action === "created" ? "created this feature" :
-                             a.action === "moved" ? `moved from "${a.old_value || "?"}" to "${a.new_value || "?"}"` :
-                             `updated ${a.field_name}`}
-                          </span>
-                          <p className="text-zinc-600 mt-0.5">{new Date(a.created_at).toLocaleString()}</p>
+                        ))}
+                        <div className="flex gap-2 pt-2">
+                          <Input value={checklistTitle} onChange={(e) => setChecklistTitle(e.target.value)} placeholder="Add checklist item..." className="border-white/10 bg-white/5 text-white h-8 text-xs placeholder:text-zinc-600"
+                            onKeyDown={(e) => { if (e.key === "Enter") handleAddChecklist(); }}
+                          />
+                          <Button size="sm" onClick={handleAddChecklist} disabled={!checklistTitle.trim()} className="h-8 text-xs bg-zinc-600 hover:bg-zinc-700 text-white border-0"><Plus className="h-3 w-3" /></Button>
                         </div>
                       </div>
-                    ))}
-                    {(!activity || activity.length === 0) && <p className="text-xs text-zinc-500">No activity yet.</p>}
-                  </div>
+                    )}
+                    {activeTab === "comments" && (
+                      <div className="space-y-3">
+                        {comments?.map((c) => (
+                          <div key={c.id} className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                            <p className="text-xs text-zinc-300">{c.content}</p>
+                            <p className="text-[10px] text-zinc-500 mt-1">{new Date(c.created_at).toLocaleString()}</p>
+                          </div>
+                        ))}
+                        <div className="flex gap-2">
+                          <Input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Add a comment..." className="border-white/10 bg-white/5 text-white h-8 text-xs placeholder:text-zinc-600"
+                            onKeyDown={(e) => { if (e.key === "Enter") handleAddComment(); }}
+                          />
+                          <Button size="sm" onClick={handleAddComment} disabled={!commentText.trim()} className="h-8 text-xs bg-zinc-600 hover:bg-zinc-700 text-white border-0"><MessageSquare className="h-3 w-3" /></Button>
+                        </div>
+                      </div>
+                    )}
+                    {activeTab === "dependencies" && (
+                      <div className="space-y-2">
+                        {deps?.map((d) => (
+                          <div key={d.id} className="flex items-center gap-2 text-xs text-zinc-300 p-2 rounded-lg bg-white/[0.02] border border-white/5">
+                            <Link2 className="h-3 w-3 text-zinc-500" />
+                            <span>{d.depends_on_id}</span>
+                            <Badge variant="outline" className="text-[9px] border-white/10">{d.dep_type}</Badge>
+                          </div>
+                        ))}
+                        <p className="text-[10px] text-zinc-500">Add dependency:</p>
+                        <div className="flex gap-2">
+                          <Select onValueChange={(v) => addDep.mutate({ feature_id: feature.id, depends_on_id: v, dep_type: "blocks" })}>
+                            <SelectTrigger className="border-white/10 bg-white/5 text-white h-8 text-xs flex-1"><SelectValue placeholder="Select feature..." /></SelectTrigger>
+                            <SelectContent>
+                              {(allFeatures?.data ?? []).filter((f: RoadmapFeature) => f.id !== feature.id).map((f: RoadmapFeature) => (
+                                <SelectItem key={f.id} value={f.id} className="text-xs">{f.title}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                    {activeTab === "activity" && (
+                      <div className="space-y-2">
+                        {activity?.map((a) => (
+                          <div key={a.id} className="flex items-start gap-2 text-xs text-zinc-400 py-1.5">
+                            <span className="text-zinc-500 shrink-0">{new Date(a.created_at).toLocaleDateString()}</span>
+                            <span>{a.action}</span>
+                          </div>
+                        ))}
+                        {(!activity || activity.length === 0) && <p className="text-xs text-zinc-500">No activity yet.</p>}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </ScrollArea>
@@ -714,17 +541,11 @@ function FeatureDetailPanel({
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <SectionLabel>{label}</SectionLabel>
-      <div className="mt-1">{children}</div>
+      <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">{label}</p>
+      <div>{children}</div>
     </div>
   );
 }
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">{children}</p>;
-}
-
-// ─── Create/Edit Modal ───
 
 function FeatureFormModal({ feature, onClose, onRefresh }: { feature?: RoadmapFeature | null; onClose: () => void; onRefresh: () => void }) {
   const island = useIslandNotification();
@@ -946,8 +767,6 @@ function FeatureFormModal({ feature, onClose, onRefresh }: { feature?: RoadmapFe
   );
 }
 
-// ─── Sprint/Release Quick Managers ───
-
 function SprintManager({ onClose }: { onClose: () => void }) {
   const { data: sprints } = useRoadmapSprints();
   const createSprint = useCreateSprint();
@@ -1029,12 +848,9 @@ function ReleaseManager({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Main Page ───
-
 export function Roadmap() {
   const { confirm } = useConfirmDialog();
   const island = useIslandNotification();
-  const [view, setView] = useState<ViewMode>("board");
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingFeature, setEditingFeature] = useState<RoadmapFeature | null>(null);
@@ -1134,7 +950,7 @@ export function Roadmap() {
       <StatsCards stats={stats} />
       <SprintReleaseBar stats={stats} sprints={sprints ?? []} releases={releases ?? []} />
 
-      {/* Search + Filters + View Toggle */}
+      {/* Search + Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
@@ -1147,21 +963,6 @@ export function Roadmap() {
           <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className={cn("border-white/10 text-zinc-300 hover:bg-white/5 text-xs h-9", showFilters && "border-zinc-500/40 bg-zinc-500/10")}>
             <Filter className="mr-1 h-3.5 w-3.5" />Filters
           </Button>
-          <div className="flex rounded-lg border border-white/10 p-0.5 bg-white/[0.02]">
-            {(["board", "list", "timeline"] as ViewMode[]).map((v) => (
-              <button key={v} onClick={() => setView(v)}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[10px] transition-colors",
-                  view === v ? "bg-white/10 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
-                {v === "board" && <LayoutGrid className="h-3 w-3" />}
-                {v === "list" && <List className="h-3 w-3" />}
-                {v === "timeline" && <CalendarDays className="h-3 w-3" />}
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -1202,13 +1003,22 @@ export function Roadmap() {
         )}
       </AnimatePresence>
 
-      {/* Content */}
+      {/* Card Grid */}
       {filtered.length > 0 ? (
-        <>
-          {view === "board" && <BoardView features={filtered} onSelect={setSelectedFeature} onRefresh={handleRefresh} voteCounts={voteCounts ?? {}} />}
-          {view === "list" && <ListView features={filtered} onSelect={setSelectedFeature} voteCounts={voteCounts ?? {}} />}
-          {view === "timeline" && <TimelineView features={filtered} onSelect={setSelectedFeature} voteCounts={voteCounts ?? {}} />}
-        </>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <AnimatePresence mode="popLayout">
+            {filtered.map((feature) => (
+              <FeatureCard
+                key={feature.id}
+                feature={feature}
+                onSelect={setSelectedFeature}
+                onEdit={setEditingFeature}
+                onDelete={handleDelete}
+                voteCounts={voteCounts ?? {}}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
       ) : (
         <div>
           <EmptyState
@@ -1238,4 +1048,3 @@ export function Roadmap() {
     </div>
   );
 }
-
