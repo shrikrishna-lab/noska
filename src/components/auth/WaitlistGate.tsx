@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { supabase } from "../../lib/supabase";
 import { motion } from "framer-motion";
-import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert } from "lucide-react";
 
 type GateStatus = "checking" | "approved" | "waiting" | "expired" | "banned" | "suspended" | "error";
 
@@ -11,8 +11,13 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
   const clerk = useClerk();
   const [status, setStatus] = useState<GateStatus>("checking");
   const [entryData, setEntryData] = useState<{
-    position?: number; joined_at?: string; status?: string;
-    invite_expires_at?: string; ban_reason?: string; suspension_reason?: string;
+    position?: number; 
+    ahead_count?: number;
+    joined_at?: string; 
+    status?: string;
+    invite_expires_at?: string; 
+    ban_reason?: string; 
+    suspension_reason?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -44,9 +49,35 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
         }
 
         const entry = data as Record<string, unknown>;
+        let pos = entry.position as number | undefined;
+        let aheadCount: number | undefined = undefined;
+
+        const joinedAt = entry.joined_at as string | undefined;
+
+        // If position is not explicit, calculate how many pending entries joined before this user
+        if (!pos && joinedAt) {
+          try {
+            const { count } = await supabase
+              .from("waitlist_entries" as never)
+              .select("id" as never, { count: "exact", head: true })
+              .lt("joined_at" as never, joinedAt)
+              .eq("status" as never, "pending");
+
+            if (typeof count === "number") {
+              aheadCount = count;
+              pos = count + 1;
+            }
+          } catch {
+            // ignore fallback
+          }
+        } else if (pos && pos > 0) {
+          aheadCount = pos - 1;
+        }
+
         setEntryData({
-          position: entry.position as number | undefined,
-          joined_at: entry.joined_at as string | undefined,
+          position: pos,
+          ahead_count: aheadCount,
+          joined_at: joinedAt,
           status: entry.status as string | undefined,
           invite_expires_at: entry.invite_expires_at as string | undefined,
           ban_reason: entry.ban_reason as string | undefined,
@@ -157,12 +188,9 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
           onClick={() => clerk.signOut()} 
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px',
-            borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc',
-            color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            transition: 'all 0.15s'
+            borderRadius: 12, border: '1px solid #e2e8f0', background: '#ffffff',
+            color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer'
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
         >
           <LogOut style={{ width: 16, height: 16 }} /> Sign out
         </button>
@@ -186,7 +214,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
           onClick={() => clerk.signOut()} 
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px',
-            borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc',
+            borderRadius: 12, border: '1px solid #e2e8f0', background: '#ffffff',
             color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer'
           }}
         >
@@ -212,7 +240,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
           onClick={() => clerk.signOut()} 
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px',
-            borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc',
+            borderRadius: 12, border: '1px solid #e2e8f0', background: '#ffffff',
             color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer'
           }}
         >
@@ -222,8 +250,8 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const position = entryData?.position;
-  const joinedDate = entryData?.joined_at ? new Date(entryData.joined_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+  const effectivePosition = entryData?.position || 1;
+  const aheadCount = entryData?.ahead_count;
 
   return renderContainer(
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
@@ -250,26 +278,47 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
       }}>
         You're on the Noska Waitlist!
       </h1>
-      <p style={{ fontSize: 13.5, color: '#64748b', margin: '0 0 20px 0' }}>
+      <p style={{ fontSize: 13.5, color: '#64748b', margin: '0 0 18px 0' }}>
         Thanks for your interest in Noska
       </p>
 
-      {/* Status Card — clean, no queue position */}
+      {/* Queue Position Card */}
       <div style={{
-        width: '100%', borderRadius: 14, padding: '16px 20px',
-        background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 12,
-        textAlign: 'center'
+        width: '100%', borderRadius: 16, padding: '18px 20px',
+        background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+        border: '1px solid #e9e5ff', marginBottom: 12,
+        textAlign: 'center', boxShadow: '0 4px 14px rgba(124, 58, 237, 0.06)'
       }}>
-        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 4 }}>
-          Status
+        <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#7c3aed', marginBottom: 4 }}>
+          Your Queue Position
         </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Pending Approval</div>
-        <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, marginBottom: 0 }}>Our team is reviewing applications.</p>
+        <div style={{ fontSize: 38, fontWeight: 900, color: '#4c1d95', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+          #{effectivePosition}
+        </div>
+        <p style={{ fontSize: 12, color: '#6d28d9', marginTop: 4, marginBottom: 0, fontWeight: 500 }}>
+          {aheadCount !== undefined && aheadCount > 0
+            ? `${aheadCount} account${aheadCount === 1 ? '' : 's'} pending ahead of you`
+            : "You're next in line for access!"}
+        </p>
       </div>
 
-      {/* Email Pill — Centered */}
+      {/* Status Pill */}
       <div style={{
-        width: '100%', borderRadius: 14, padding: '12px 16px',
+        width: '100%', borderRadius: 12, padding: '10px 16px',
+        background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 12,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>
+          Status:
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+          Pending Approval
+        </span>
+      </div>
+
+      {/* Centered Email Pill */}
+      <div style={{
+        width: '100%', borderRadius: 12, padding: '10px 16px',
         background: '#f8fafc', border: '1px solid #f1f5f9',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         gap: 8, marginBottom: 16
