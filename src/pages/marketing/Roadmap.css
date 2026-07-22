@@ -1,0 +1,634 @@
+/* Roadmap Page Styles — Scoped under .marketing to match Noska's light paper-white design system */
+
+.marketing .roadmap-wrapper {
+  position: relative;
+  padding-bottom: 120px;
+  background-color: var(--mkt-bg-primary);
+  color: var(--mkt-text-primary);
+  min-height: 100vh;
+}
+
+/* Faint dot backdrop styling matching Noska marketing pages */
+.marketing .roadmap-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image: radial-gradient(circle, var(--mkt-text-muted) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, #000 30%, transparent 90%);
+}
+
+.marketing .roadmap-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 24px 0 24px;
+  position: relative;
+  z-index: 10;
+  max-width: var(--mkt-max-width);
+  margin: 0 auto;
+}
+
+.marketing .roadmap-brand {
+  font-family: var(--mkt-font-heading);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .roadmap-notify-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mkt-text-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s, transform 0.15s;
+}
+
+.marketing .roadmap-notify-link:hover {
+  color: var(--mkt-text-secondary);
+  transform: translateX(2px);
+}
+
+.marketing .roadmap-hero {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 80px 24px 40px 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.marketing .roadmap-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--mkt-accent-purple);
+  background-color: var(--mkt-accent-purple-tint);
+  padding: 6px 14px;
+  border-radius: 30px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(136, 116, 168, 0.15);
+}
+
+.marketing .roadmap-title {
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin-bottom: 12px;
+  color: var(--mkt-text-primary);
+  font-family: var(--mkt-font-heading);
+}
+
+.marketing .roadmap-title-serif {
+  font-family: var(--mkt-font-serif);
+  font-style: italic;
+  font-weight: 400;
+  margin-right: 4px;
+}
+
+.marketing .roadmap-subtitle {
+  font-size: 18px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+}
+
+/* Filters Dropdown Styles */
+.marketing .roadmap-filters-wrapper {
+  position: relative;
+  z-index: 10;
+  padding: 0 24px 44px 24px;
+  text-align: center;
+  max-width: var(--mkt-max-width);
+  margin: 0 auto;
+}
+
+.marketing .filter-dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.marketing .filter-dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  color: var(--mkt-text-primary);
+  padding: 10px 22px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--mkt-card-shadow);
+  transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.marketing .filter-dropdown-btn:hover,
+.marketing .filter-dropdown-btn.active {
+  background-color: var(--mkt-bg-secondary);
+  border-color: var(--mkt-border-strong);
+  box-shadow: var(--mkt-card-shadow-hover);
+}
+
+.marketing .dropdown-chevron {
+  color: var(--mkt-text-muted);
+  transition: transform 0.2s;
+}
+
+.marketing .dropdown-chevron.open {
+  transform: rotate(180deg);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 14px;
+  padding: 6px;
+  min-width: 180px;
+  box-shadow: 0 12px 36px -6px rgba(23, 22, 27, 0.12);
+  z-index: 50;
+}
+
+.marketing .dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--mkt-text-secondary);
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.marketing .dropdown-item:hover {
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .dropdown-item.selected {
+  background-color: var(--mkt-accent-purple-tint);
+  color: var(--mkt-accent-purple);
+  font-weight: 600;
+}
+
+.marketing .dropdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+/* Grid of Roadmap Feature Cards */
+.marketing .roadmap-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  max-width: var(--mkt-max-width);
+  margin: 0 auto 80px auto;
+  padding: 0 24px;
+}
+
+.marketing .roadmap-card {
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 18px;
+  padding: 24px 24px 28px 24px;
+  cursor: pointer;
+  box-shadow: var(--mkt-card-shadow);
+  transition: border-color 0.25s, background-color 0.25s, box-shadow 0.25s, transform 0.2s;
+  overflow: hidden;
+  height: max-content;
+  display: flex;
+  flex-direction: column;
+}
+
+.marketing .roadmap-card:hover {
+  border-color: var(--mkt-border-strong);
+  box-shadow: var(--mkt-card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.marketing .roadmap-card.expanded {
+  border-color: var(--mkt-accent-purple);
+  background-color: var(--mkt-bg-cream);
+}
+
+.marketing .card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.marketing .icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+  border: 1px solid var(--mkt-border-color);
+}
+
+.marketing .badge-and-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketing .status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.marketing .badge-shipped {
+  background-color: var(--mkt-accent-sage-tint);
+  color: var(--mkt-accent-sage);
+}
+
+.marketing .badge-in-progress {
+  background-color: var(--mkt-accent-orange-tint);
+  color: var(--mkt-accent-orange);
+}
+
+.marketing .badge-planned {
+  background-color: var(--mkt-accent-purple-tint);
+  color: var(--mkt-accent-purple);
+}
+
+.marketing .expand-toggle-btn {
+  background: none;
+  border: 1px solid var(--mkt-border-color);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mkt-text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, transform 0.2s;
+}
+
+.marketing .expand-toggle-btn:hover {
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .toggle-icon.rotate-45 {
+  transform: rotate(45deg);
+  color: var(--mkt-accent-purple);
+}
+
+.marketing .card-item-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--mkt-text-primary);
+  margin-bottom: 4px;
+  letter-spacing: -0.02em;
+}
+
+.marketing .estimated-date {
+  font-size: 12.5px;
+  color: var(--mkt-text-muted);
+  font-weight: 500;
+}
+
+.marketing .card-description {
+  font-size: 14px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--mkt-border-color);
+}
+
+/* Call to Action (CTA) Cards Section */
+.marketing .roadmap-cta-section {
+  position: relative;
+  z-index: 1;
+  max-width: var(--mkt-max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.marketing .cta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.marketing .cta-card {
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+  padding: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  box-shadow: var(--mkt-card-shadow);
+}
+
+.marketing .cta-card h2 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .cta-card p {
+  font-size: 15px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.marketing .cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+  padding: 13px 26px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s, transform 0.1s;
+  border: none;
+  width: max-content;
+}
+
+.marketing .cta-btn:active {
+  transform: scale(0.98);
+}
+
+.marketing .cta-btn.primary {
+  background-color: var(--mkt-bg-charcoal);
+  color: #fff;
+}
+
+.marketing .cta-btn.primary:hover {
+  background-color: var(--mkt-brand-color-hover);
+}
+
+/* Subscribe form */
+.marketing .cta-subscribe-form {
+  width: 100%;
+}
+
+.marketing .cta-subscribe-form .input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 10px;
+  padding: 4px;
+  width: 100%;
+  box-shadow: var(--mkt-card-shadow);
+}
+
+.marketing .cta-subscribe-form .mail-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--mkt-text-muted);
+}
+
+.marketing .cta-subscribe-form input {
+  flex-grow: 1;
+  background: none;
+  border: none;
+  color: var(--mkt-text-primary);
+  padding: 10px 12px 10px 42px;
+  font-size: 14.5px;
+  outline: none;
+}
+
+.marketing .cta-subscribe-form input::placeholder {
+  color: var(--mkt-text-muted);
+}
+
+.marketing .cta-submit-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: var(--mkt-bg-charcoal);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.marketing .cta-submit-btn:hover {
+  background-color: var(--mkt-brand-color-hover);
+}
+
+.marketing .success-text {
+  font-size: 13.5px;
+  color: var(--mkt-accent-sage);
+  margin-top: 10px;
+  font-weight: 600;
+}
+
+/* Modal Styling */
+.marketing .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(23, 22, 27, 0.4);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.marketing .modal-container {
+  background-color: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 520px;
+  overflow: hidden;
+  box-shadow: 0 25px 60px -12px rgba(23, 22, 27, 0.2);
+}
+
+.marketing .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 28px 12px 28px;
+}
+
+.marketing .modal-header h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .modal-subtitle {
+  padding: 0 28px 16px 28px;
+  font-size: 14.5px;
+  color: var(--mkt-text-secondary);
+  border-bottom: 1px solid var(--mkt-border-color);
+}
+
+.marketing .modal-close {
+  background: none;
+  border: none;
+  color: var(--mkt-text-muted);
+  font-size: 26px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.marketing .modal-close:hover {
+  color: var(--mkt-text-primary);
+}
+
+.marketing .modal-form {
+  padding: 24px 28px 28px 28px;
+}
+
+.marketing .form-group {
+  margin-bottom: 18px;
+}
+
+.marketing .form-group label {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--mkt-text-secondary);
+  margin-bottom: 8px;
+}
+
+.marketing .form-group input,
+.marketing .form-group textarea {
+  width: 100%;
+  background-color: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--mkt-text-primary);
+  font-size: 14.5px;
+  outline: none;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.marketing .form-group input:focus,
+.marketing .form-group textarea:focus {
+  border-color: var(--mkt-accent-purple);
+  background-color: var(--mkt-bg-primary);
+}
+
+.marketing .form-success {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--mkt-accent-sage-tint);
+  color: var(--mkt-accent-sage);
+  border: 1px solid rgba(110, 138, 108, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.marketing .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.marketing .btn-cancel {
+  background-color: transparent;
+  border: 1px solid var(--mkt-border-color);
+  color: var(--mkt-text-secondary);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.marketing .btn-cancel:hover {
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+}
+
+.marketing .btn-submit {
+  background-color: var(--mkt-bg-charcoal);
+  color: #fff;
+  border: none;
+  padding: 10px 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.marketing .btn-submit:hover {
+  background-color: var(--mkt-brand-color-hover);
+}
+
+/* Responsive styles */
+@media (max-width: 992px) {
+  .marketing .roadmap-hero h1 {
+    font-size: 48px;
+  }
+  
+  .marketing .roadmap-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  
+  .marketing .cta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .marketing .roadmap-hero h1 {
+    font-size: 36px;
+  }
+  
+  .marketing .roadmap-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .marketing .cta-card {
+    padding: 32px;
+  }
+  
+  .marketing .cta-card h2 {
+    font-size: 26px;
+  }
+}
