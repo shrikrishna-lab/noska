@@ -141,33 +141,33 @@ export const STATUS_LABELS: Record<string, string> = {
 };
 
 export const STATUS_COLORS: Record<string, string> = {
-  idea: "text-zinc-400 bg-zinc-500/10 border-zinc-500/20",
-  backlog: "text-zinc-500 bg-zinc-500/10 border-zinc-500/20",
-  planned: "text-zinc-300 bg-zinc-500/10 border-zinc-500/20",
-  design: "text-zinc-400 bg-zinc-500/10 border-zinc-500/20",
-  development: "text-zinc-200 bg-zinc-500/10 border-zinc-500/20",
-  testing: "text-zinc-400 bg-zinc-500/10 border-zinc-500/20",
-  review: "text-zinc-300 bg-zinc-500/10 border-zinc-500/20",
-  blocked: "text-zinc-500 bg-zinc-500/10 border-zinc-500/20",
-  ready: "text-zinc-200 bg-zinc-500/10 border-zinc-500/20",
-  shipped: "text-zinc-100 bg-zinc-500/10 border-zinc-500/20",
-  archived: "text-zinc-600 bg-zinc-500/10 border-zinc-500/20",
-  cancelled: "text-zinc-500 bg-zinc-500/10 border-zinc-500/20",
+  idea: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+  backlog: "text-slate-400 bg-slate-500/10 border-slate-500/20",
+  planned: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+  design: "text-violet-400 bg-violet-500/10 border-violet-500/20",
+  development: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+  testing: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+  review: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+  blocked: "text-red-400 bg-red-500/10 border-red-500/20",
+  ready: "text-teal-400 bg-teal-500/10 border-teal-500/20",
+  shipped: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  archived: "text-zinc-500 bg-zinc-500/10 border-zinc-500/20",
+  cancelled: "text-rose-400 bg-rose-500/10 border-rose-500/20",
 };
 
 export const STATUS_DOT: Record<string, string> = {
-  idea: "bg-zinc-400",
-  backlog: "bg-zinc-500",
-  planned: "bg-zinc-300",
-  design: "bg-zinc-400",
-  development: "bg-zinc-200",
-  testing: "bg-zinc-400",
-  review: "bg-zinc-300",
-  blocked: "bg-zinc-500",
-  ready: "bg-zinc-200",
-  shipped: "bg-zinc-100",
-  archived: "bg-zinc-600",
-  cancelled: "bg-zinc-500",
+  idea: "bg-purple-400",
+  backlog: "bg-slate-400",
+  planned: "bg-blue-400",
+  design: "bg-violet-400",
+  development: "bg-amber-400",
+  testing: "bg-cyan-400",
+  review: "bg-indigo-400",
+  blocked: "bg-red-400",
+  ready: "bg-teal-400",
+  shipped: "bg-emerald-400",
+  archived: "bg-zinc-500",
+  cancelled: "bg-rose-400",
 };
 
 export const PRIORITIES = ["critical", "high", "medium", "low", "nice_to_have"] as const;
@@ -179,11 +179,11 @@ export const PRIORITY_LABELS: Record<string, string> = {
   nice_to_have: "Nice to Have",
 };
 export const PRIORITY_COLORS: Record<string, string> = {
-  critical: "text-zinc-100",
-  high: "text-zinc-300",
-  medium: "text-zinc-400",
-  low: "text-zinc-500",
-  nice_to_have: "text-zinc-600",
+  critical: "text-red-400",
+  high: "text-orange-400",
+  medium: "text-yellow-400",
+  low: "text-blue-400",
+  nice_to_have: "text-slate-400",
 };
 
 export const KANBAN_STATUSES = ["idea", "backlog", "planned", "design", "development", "testing", "review", "blocked", "ready", "shipped", "archived"];

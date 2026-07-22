@@ -47,8 +47,8 @@ const PRIORITY_ICONS: Record<string, typeof ArrowUp> = {
   critical: AlertTriangle, high: ArrowUp, medium: ArrowUp, low: ArrowUp, nice_to_have: Circle,
 };
 const PRIORITY_CLASS: Record<string, string> = {
-  critical: "text-white", high: "text-white/80", medium: "text-white/60",
-  low: "text-white/40", nice_to_have: "text-white/30",
+  critical: "text-red-400", high: "text-orange-400", medium: "text-yellow-400",
+  low: "text-blue-400", nice_to_have: "text-slate-400",
 };
 
 function parseLabels(labels: unknown): string[] {
@@ -461,10 +461,10 @@ function FeatureDetailPanel({
                       <div className="space-y-1.5">
                         {checklists?.map((item) => (
                           <div key={item.id} className="flex items-center gap-2 py-1">
-                            <button onClick={() => toggleChecklist.mutate(item.id)} className={cn("h-4 w-4 rounded border transition-colors flex items-center justify-center shrink-0", item.done ? "bg-zinc-500 border-zinc-500" : "border-white/20 hover:border-white/40")}>
-                              {item.done && <CheckSquare className="h-3 w-3 text-white" />}
+                            <button onClick={() => toggleChecklist.mutate({ id: item.id, completed: !item.completed })} className={cn("h-4 w-4 rounded border transition-colors flex items-center justify-center shrink-0", item.completed ? "bg-zinc-500 border-zinc-500" : "border-white/20 hover:border-white/40")}>
+                              {item.completed && <CheckSquare className="h-3 w-3 text-white" />}
                             </button>
-                            <span className={cn("text-xs", item.done ? "text-zinc-500 line-through" : "text-zinc-300")}>{item.title}</span>
+                            <span className={cn("text-xs", item.completed ? "text-zinc-500 line-through" : "text-zinc-300")}>{item.title}</span>
                           </div>
                         ))}
                         <div className="flex gap-2 pt-2">
@@ -496,13 +496,13 @@ function FeatureDetailPanel({
                         {deps?.map((d) => (
                           <div key={d.id} className="flex items-center gap-2 text-xs text-zinc-300 p-2 rounded-lg bg-white/[0.02] border border-white/5">
                             <Link2 className="h-3 w-3 text-zinc-500" />
-                            <span>{d.depends_on_id}</span>
-                            <Badge variant="outline" className="text-[9px] border-white/10">{d.dep_type}</Badge>
+                            <span>{d.depends_on_title || d.depends_on_id}</span>
+                            <Badge variant="outline" className="text-[9px] border-white/10">{d.dependency_type}</Badge>
                           </div>
                         ))}
                         <p className="text-[10px] text-zinc-500">Add dependency:</p>
                         <div className="flex gap-2">
-                          <Select onValueChange={(v) => addDep.mutate({ feature_id: feature.id, depends_on_id: v, dep_type: "blocks" })}>
+                          <Select onValueChange={(v) => addDep.mutate({ feature_id: feature.id, depends_on_id: v, type: "blocks" })}>
                             <SelectTrigger className="border-white/10 bg-white/5 text-white h-8 text-xs flex-1"><SelectValue placeholder="Select feature..." /></SelectTrigger>
                             <SelectContent>
                               {(allFeatures?.data ?? []).filter((f: RoadmapFeature) => f.id !== feature.id).map((f: RoadmapFeature) => (
