@@ -3,7 +3,10 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const Select = SelectPrimitive.Root;
+const Select = ({ modal = false, ...props }: ComponentPropsWithoutRef<typeof SelectPrimitive.Root> & { modal?: boolean }) => {
+  const combined = { modal, ...props } as React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>;
+  return <SelectPrimitive.Root {...combined} />;
+};
 const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
