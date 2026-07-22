@@ -38,6 +38,7 @@ const AUTH_FLOW_RPC_ALLOWLIST = [
   "validate_admin_session",
   "setup_first_admin",
   "check_admin_exists",
+  "get_waitlist_stats",
 ];
 
 function isAuthFlowRpc(requestUrl: string): boolean {

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { useWaitlist, useWaitlistCount, useSendWaitlistInvite, useDeleteWaitlistEntry, useRejectWaitlistEntry, useWaitlistStats, type DbWaitlistEntry } from "@/lib/queries";
+import { useWaitlist, useWaitlistCount, useSendWaitlistInvite, useDeleteWaitlistEntry, useRejectWaitlistEntry, type DbWaitlistEntry } from "@/lib/queries";
 import { sendWaitlistInvite } from "@/lib/email";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -196,7 +196,6 @@ export function Waitlist() {
   const { confirm } = useConfirmDialog();
   const { data: entries, isLoading } = useWaitlist();
   const { data: count } = useWaitlistCount();
-  const { data: stats } = useWaitlistStats();
   const sendInvite = useSendWaitlistInvite();
   const deleteEntry = useDeleteWaitlistEntry();
   const rejectEntry = useRejectWaitlistEntry();
@@ -251,6 +250,7 @@ export function Waitlist() {
       if (!token) { toast.error("No session"); return; }
       await supabase?.functions.invoke("approve-waitlist", {
         body: { waitlist_id: row.id, admin_name: row.name },
+        headers: { Authorization: `Bearer ${token}` },
       });
       toast.success(`${row.name} approved & invited`);
     } catch { toast.error("Failed to approve"); }
@@ -422,7 +422,7 @@ export function Waitlist() {
           <div className="rounded-lg border p-4"><div className="text-2xl font-bold">{approved}</div><div className="text-xs text-muted-foreground">Approvals</div></div>
           <div className="rounded-lg border p-4"><div className="text-2xl font-bold">{conversion}%</div><div className="text-xs text-muted-foreground">Conversion Rate</div></div>
           <div className="rounded-lg border p-4"><div className="text-2xl font-bold">{accepted}</div><div className="text-xs text-muted-foreground">Accepted Invites</div></div>
-          <div className="rounded-lg border p-4"><div className="text-2xl font-bold">{statusCounts["waiting"] ?? 0 + (statusCounts["pending"] ?? 0)}</div><div className="text-xs text-muted-foreground">Pending</div></div>
+          <div className="rounded-lg border p-4"><div className="text-2xl font-bold">{(statusCounts["waiting"] ?? 0) + (statusCounts["pending"] ?? 0)}</div><div className="text-xs text-muted-foreground">Pending</div></div>
           <div className="rounded-lg border p-4"><div className="text-2xl font-bold">{Object.keys(countryData).length}</div><div className="text-xs text-muted-foreground">Countries</div></div>
           <div className="rounded-lg border p-4"><div className="text-2xl font-bold">{topReferrers.length}</div><div className="text-xs text-muted-foreground">Top Referrers</div></div>
         </div>
@@ -504,7 +504,7 @@ export function Waitlist() {
     <div className="p-6">
       <PageHeader
         title="Waitlist"
-        description={`${count ?? 0} total · ${statusCounts["waiting"] ?? 0 + (statusCounts["pending"] ?? 0)} pending · ${statusCounts["accepted"] ?? 0} accepted`}
+        description={`${count ?? 0} total · ${(statusCounts["waiting"] ?? 0) + (statusCounts["pending"] ?? 0)} pending · ${statusCounts["accepted"] ?? 0} accepted`}
         actions={
           <div className="flex gap-2">
             {selectedIds.size > 0 && (

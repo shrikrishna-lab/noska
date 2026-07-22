@@ -137,7 +137,7 @@ export function EmailTemplates() {
     });
   }, [templates, search, categoryFilter]);
 
-  const handleDuplicate = async (t: typeof templates[0]) => {
+  const handleDuplicate = async (t: NonNullable<typeof templates>[0]) => {
     if (!user) return;
     const newName = `${t.name} (Copy)`;
     await create.mutateAsync({
@@ -149,7 +149,7 @@ export function EmailTemplates() {
     toast.success("Template duplicated");
   };
 
-  const handleCreateVersion = async (t: typeof templates[0]) => {
+  const handleCreateVersion = async (t: NonNullable<typeof templates>[0]) => {
     await createVersion.mutateAsync({
       template_id: t.id, version_number: t.version + 1,
       html_content: t.html_content, blocks: JSON.stringify(t.blocks),

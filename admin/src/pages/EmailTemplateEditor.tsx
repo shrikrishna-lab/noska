@@ -217,7 +217,7 @@ export function EmailTemplateEditor() {
   const update = useUpdateEmailTemplate();
   const createVersion = useCreateEmailVersion();
   const { data: branding } = useEmailBranding();
-  useRealtimeInvalidate(["admin", "email-templates", id], "email_templates");
+  useRealtimeInvalidate(["admin", "email-templates", id ?? ""], "email_templates");
 
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");

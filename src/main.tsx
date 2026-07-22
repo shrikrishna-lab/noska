@@ -21,6 +21,7 @@ import Legal from "./pages/marketing/Legal";
 import Docs from "./pages/marketing/Docs";
 import Referrals from "./pages/marketing/Referrals";
 import Roadmap from "./pages/marketing/Roadmap";
+import NewUpdated from "./pages/marketing/NewUpdated";
 import Launch from "./pages/marketing/launch/Launch";
 import ControlCenter from "./ControlCenter";
 import { AuthCallbackScreen } from "./components/auth/AuthCallbackScreen";
@@ -67,6 +68,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/docs" element={<MarketingLayout><Docs /></MarketingLayout>} />
           <Route path="/referrals" element={<MarketingLayout><Referrals /></MarketingLayout>} />
           <Route path="/roadmap" element={<MarketingLayout><Roadmap /></MarketingLayout>} />
+          <Route path="/new-updated" element={<MarketingLayout><NewUpdated /></MarketingLayout>} />
           {/* Standalone pre-launch waitlist page — ships its own navbar,
               footer, and smooth-scroll setup, so it deliberately skips
               MarketingLayout (which would double up both). */}

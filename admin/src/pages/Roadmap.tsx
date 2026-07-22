@@ -341,6 +341,11 @@ function ListView({ features, onSelect, voteCounts }: { features: RoadmapFeature
                   <User className="h-3 w-3" />{f.owner}
                 </span>
               )}
+              {voteCounts[f.id] > 0 && (
+                <span className="flex items-center gap-1 text-[10px] text-zinc-400">
+                  <ThumbsUp className="h-3 w-3" />{voteCounts[f.id]}
+                </span>
+              )}
               <span className={cn("text-[10px] px-1.5 py-0.5 rounded", STATUS_COLORS[f.status]?.split(" ")[0] || "text-zinc-400")}>
                 {STATUS_LABELS[f.status] || f.status}
               </span>
@@ -354,7 +359,7 @@ function ListView({ features, onSelect, voteCounts }: { features: RoadmapFeature
 
 // ─── Timeline View ───
 
-function TimelineView({ features, onSelect }: { features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void }) {
+function TimelineView({ features, onSelect, voteCounts }: { features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void; voteCounts: Record<string, number> }) {
   const withDates = useMemo(() => features.filter((f) => f.start_date || f.target_date), [features]);
   const sorted = useMemo(() => [...withDates].sort((a, b) => {
     const aDate = a.start_date || a.target_date || a.created_at;
@@ -409,9 +414,9 @@ function TimelineView({ features, onSelect }: { features: RoadmapFeature[]; onSe
 // ─── Feature Detail Side Panel ───
 
 function FeatureDetailPanel({
-  feature, onClose, onRefresh,
+  feature, onClose, onRefresh, voteCounts,
 }: {
-  feature: RoadmapFeature; onClose: () => void; onRefresh: () => void;
+  feature: RoadmapFeature; onClose: () => void; onRefresh: () => void; voteCounts: Record<string, number>;
 }) {
   const island = useIslandNotification();
   const { confirm } = useConfirmDialog();
@@ -585,6 +590,7 @@ function FeatureDetailPanel({
                           </Section>
                           <Section label="ETA"><span className="text-sm text-zinc-300">{feature.eta || "Not set"}</span></Section>
                           <Section label="Status"><span className={cn("text-sm font-medium", STATUS_COLORS[feature.status]?.split(" ")[0])}>{STATUS_LABELS[feature.status] || feature.status}</span></Section>
+                          <Section label="Votes"><span className="text-sm text-zinc-300">{voteCounts?.[feature.id] ?? 0}</span></Section>
                           <Section label="Category"><span className="text-sm text-zinc-300">{feature.category || "Uncategorized"}</span></Section>
                           {parseLabels(feature.labels).length > 0 && (
                             <div className="col-span-2">
@@ -1226,7 +1232,7 @@ export function Roadmap() {
           <FeatureFormModal key="edit" feature={editingFeature} onClose={() => setEditingFeature(null)} onRefresh={handleRefresh} />
         )}
         {selectedFeature && (
-          <FeatureDetailPanel feature={selectedFeature} onClose={() => setSelectedFeature(null)} onRefresh={handleRefresh} />
+          <FeatureDetailPanel feature={selectedFeature} onClose={() => setSelectedFeature(null)} onRefresh={handleRefresh} voteCounts={voteCounts ?? {}} />
         )}
       </AnimatePresence>
     </div>

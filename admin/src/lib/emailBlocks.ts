@@ -236,7 +236,7 @@ export function blocksToHtml(blocks: Array<{ type: EmailBlockType; content: Reco
 </body></html>`;
 }
 
-function renderBlock(block: { type: EmailBlockType; content: Record<string, unknown> }, theme: Record<string, string>): string {
+function renderBlock(block: { type: EmailBlockType; content: Record<string, unknown> }, theme: Record<string, string | undefined>): string {
   const c = block.content;
   switch (block.type) {
     case "logo": {
@@ -293,7 +293,7 @@ function renderBlock(block: { type: EmailBlockType; content: Record<string, unkn
       return '<tr><td style="padding:16px 24px;text-align:center;font-size:13px;">' + links.join("") + "</td></tr>";
     }
     case "footer":
-      return '<tr><td style="padding:20px 24px;background-color:' + (c.bg_color as string || "#f9fafb") + ';text-align:center;font-size:12px;color:#999;">' + esc(c.text as string || theme.footer) + (c.show_unsubscribe ? '<br/><a href="#" style="color:#999;text-decoration:underline;font-size:11px;">Unsubscribe</a>' : "") + "</td></tr>";
+      return '<tr><td style="padding:20px 24px;background-color:' + (c.bg_color as string || "#f9fafb") + ';text-align:center;font-size:12px;color:#999;">' + esc(c.text as string || theme.footer || "") + (c.show_unsubscribe ? '<br/><a href="#" style="color:#999;text-decoration:underline;font-size:11px;">Unsubscribe</a>' : "") + "</td></tr>";
     case "signature":
       return '<tr><td style="padding:16px 24px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr>' + (c.avatar_url ? '<td width="40" style="padding-right:10px;"><img src="' + c.avatar_url + '" style="width:40px;height:40px;border-radius:50%;" /></td>' : "") + '<td><p style="margin:0;font-weight:600;font-size:14px;">' + esc(c.name as string) + '</p>' + (c.title ? '<p style="margin:0;font-size:12px;color:#666;">' + esc(c.title as string) + "</p>" : "") + (c.email ? '<p style="margin:0;font-size:12px;color:' + theme.primary + ';">' + esc(c.email as string) + "</p>" : "") + "</td></tr></table></td></tr>";
     default:

@@ -12,11 +12,15 @@ import {
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Users, Search, Mail, Download, UserPlus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { cn } from "@/lib/utils";
+
+const SOURCES = ["all", "waitlist", "signup", "manual", "import", "referral"];
 
 export function Subscribers() {
   const { data: subscribers, isLoading } = useNewsletterSubscribers();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   useRealtimeInvalidate(["admin", "newsletter-subscribers"], "newsletter_subscribers");
 
   const filtered = useMemo(() => {
@@ -24,9 +28,10 @@ export function Subscribers() {
     return subscribers.filter((s) => {
       if (search && !s.email.toLowerCase().includes(search.toLowerCase()) && !(s.name || "").toLowerCase().includes(search.toLowerCase())) return false;
       if (statusFilter !== "all" && s.status !== statusFilter) return false;
+      if (sourceFilter !== "all" && s.source !== sourceFilter) return false;
       return true;
     });
-  }, [subscribers, search, statusFilter]);
+  }, [subscribers, search, statusFilter, sourceFilter]);
 
   const stats = useMemo(() => {
     if (!subscribers) return { total: 0, active: 0, unsubscribed: 0, bounced: 0 };
@@ -69,6 +74,20 @@ export function Subscribers() {
           <option value="unsubscribed">Unsubscribed</option>
           <option value="bounced">Bounced</option>
         </select>
+        <div className="flex gap-1 rounded-lg border border-input bg-transparent p-0.5">
+          {SOURCES.map((src) => (
+            <button
+              key={src}
+              onClick={() => setSourceFilter(src)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-xs font-medium transition-colors capitalize",
+                sourceFilter === src ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {src === "signup" ? "Roadmap" : src === "all" ? "All" : src}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card>
@@ -94,7 +113,7 @@ export function Subscribers() {
                   <span className="w-20">
                     <Badge variant="outline" className="text-[10px] capitalize">{s.status}</Badge>
                   </span>
-                  <span className="w-24 text-muted-foreground text-xs capitalize">{s.source}</span>
+                  <span className="w-24 text-muted-foreground text-xs capitalize">{s.source === "signup" ? "Roadmap" : s.source}</span>
                   <span className="w-28 text-xs text-muted-foreground">{new Date(s.subscribed_at).toLocaleDateString()}</span>
                 </div>
               ))}
