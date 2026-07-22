@@ -161,20 +161,24 @@ export default function Navbar() {
                           <p className="item-desc">Real keyboard shortcuts & feature guides</p>
                         </div>
                       </Link>
-                      <Link to="/docs" className="dropdown-item">
-                        <div className="mkt-avatar tint-blue">📚</div>
-                        <div className="item-content">
-                          <p className="item-title">Documentation</p>
-                          <p className="item-desc">Guides, API reference & tutorials</p>
-                        </div>
-                      </Link>
-                      <Link to="/changelog" className="dropdown-item">
-                        <div className="mkt-avatar tint-purple">📖</div>
-                        <div className="item-content">
-                          <p className="item-title">Changelog</p>
-                          <p className="item-desc">What's actually shipped, dated</p>
-                        </div>
-                      </Link>
+                      {settings.show_docs && (
+                        <Link to="/docs" className="dropdown-item">
+                          <div className="mkt-avatar tint-blue">📚</div>
+                          <div className="item-content">
+                            <p className="item-title">Documentation</p>
+                            <p className="item-desc">Guides, API reference & tutorials</p>
+                          </div>
+                        </Link>
+                      )}
+                      {settings.show_changelog && (
+                        <Link to="/changelog" className="dropdown-item">
+                          <div className="mkt-avatar tint-purple">📖</div>
+                          <div className="item-content">
+                            <p className="item-title">Changelog</p>
+                            <p className="item-desc">What's actually shipped, dated</p>
+                          </div>
+                        </Link>
+                      )}
                       <Link to="/login" className="dropdown-item">
                         <div className="mkt-avatar tint-red">🛟</div>
                         <div className="item-content">
@@ -188,12 +192,16 @@ export default function Navbar() {
               </AnimatePresence>
             </div>
 
-            <Link to="/pricing" className={`nav-link ${location.pathname === '/pricing' ? 'active' : ''}`}>
-              <AnimatedUnderline active={location.pathname === '/pricing'}>Pricing</AnimatedUnderline>
-            </Link>
-            <Link to="/changelog" className={`nav-link ${location.pathname === '/changelog' ? 'active' : ''}`}>
-              <AnimatedUnderline active={location.pathname === '/changelog'}>Changelog</AnimatedUnderline>
-            </Link>
+            {settings.show_pricing && (
+              <Link to="/pricing" className={`nav-link ${location.pathname === '/pricing' ? 'active' : ''}`}>
+                <AnimatedUnderline active={location.pathname === '/pricing'}>Pricing</AnimatedUnderline>
+              </Link>
+            )}
+            {settings.show_changelog && (
+              <Link to="/changelog" className={`nav-link ${location.pathname === '/changelog' ? 'active' : ''}`}>
+                <AnimatedUnderline active={location.pathname === '/changelog'}>Changelog</AnimatedUnderline>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -203,10 +211,10 @@ export default function Navbar() {
             <Link to={navDemoBtn.destination} className="nav-action-text hide-mobile">{navDemoBtn.button_text}</Link>
           )}
           {navDemoBtn.visible && navDemoBtn.enabled && <div className="divider-vertical hide-mobile"></div>}
-          {navLoginBtn.visible && navLoginBtn.enabled && (
+          {navLoginBtn.visible && navLoginBtn.enabled && settings.show_login && (
             <Link to={navLoginBtn.destination} className="nav-action-text hide-mobile">{navLoginBtn.button_text}</Link>
           )}
-          {navCtaBtn.visible && navCtaBtn.enabled && (
+          {navCtaBtn.visible && navCtaBtn.enabled && settings.show_signup && (
             <Link to={navCtaBtn.destination} className="btn btn-primary btn-nav-cta hide-mobile">{navCtaBtn.button_text}</Link>
           )}
           <button className="mobile-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -237,23 +245,23 @@ export default function Navbar() {
               <div className="mobile-group">
                 <p className="mobile-group-title">Resources</p>
                 <Link to="/resources" className="mobile-item">Guides & shortcuts</Link>
-                <Link to="/docs" className="mobile-item">Documentation</Link>
-                <Link to="/changelog" className="mobile-item">Changelog</Link>
+                {settings.show_docs && <Link to="/docs" className="mobile-item">Documentation</Link>}
+                {settings.show_changelog && <Link to="/changelog" className="mobile-item">Changelog</Link>}
                 <Link to="/login" className="mobile-item">Help Center</Link>
               </div>
 
               <div className="mobile-flat-links">
-                <Link to="/pricing" className="mobile-flat-item">Pricing</Link>
+                {settings.show_pricing && <Link to="/pricing" className="mobile-flat-item">Pricing</Link>}
                 <Link to="/enterprise" className="mobile-flat-item">Enterprise</Link>
                 {navDemoBtn.visible && navDemoBtn.enabled && (
                   <Link to={navDemoBtn.destination} className="mobile-flat-item">{navDemoBtn.button_text}</Link>
                 )}
-                {mobileLoginBtn.visible && mobileLoginBtn.enabled && (
+                {mobileLoginBtn.visible && mobileLoginBtn.enabled && settings.show_login && (
                   <Link to={mobileLoginBtn.destination} className="mobile-flat-item">{mobileLoginBtn.button_text}</Link>
                 )}
               </div>
 
-              {mobileCtaBtn.visible && mobileCtaBtn.enabled && (
+              {mobileCtaBtn.visible && mobileCtaBtn.enabled && settings.show_signup && (
                 <Link to={mobileCtaBtn.destination} className="btn btn-primary mobile-cta-btn">
                   {mobileCtaBtn.button_text} <ArrowRight size={16} />
                 </Link>

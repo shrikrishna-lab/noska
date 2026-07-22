@@ -107,6 +107,7 @@ function initRealtime() {
     { channel: 'announcement-bar-changes', table: 'announcement_bar' },
     { channel: 'landing-content-changes', table: 'landing_content' },
     { channel: 'social-links-changes', table: 'social_links' },
+    { channel: 'waitlist-settings-changes', table: 'waitlist_settings' },
   ];
 
   for (const { channel: name, table } of tables) {
@@ -322,6 +323,50 @@ export function useSubmitWaitlist(): { submit: (data: { email: string; name?: st
   }, []);
 
   return { submit, submitting };
+}
+
+export interface WaitlistSettingsData {
+  enabled: boolean;
+  collect_name: boolean;
+  collect_company: boolean;
+  collect_role: boolean;
+  collect_country: boolean;
+  collect_referral_code: boolean;
+  collect_phone: boolean;
+  email_verification: boolean;
+  double_opt_in: boolean;
+  auto_approve: boolean;
+  confirmation_title: string;
+  confirmation_message: string;
+}
+
+export function useWaitlistSettingsData(): { waitlistSettings: WaitlistSettingsData | null; loading: boolean } {
+  const [data, setData] = useState<WaitlistSettingsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabaseAnon) { setLoading(false); return; }
+    initRealtime();
+
+    const fetch = async () => {
+      const { data: result } = await useSupabaseQuery('waitlist_settings')?.select('*').limit(1).single() ?? {};
+      if (result) setData(result as unknown as WaitlistSettingsData);
+      setLoading(false);
+    };
+
+    fetch();
+
+    const key = 'waitlist-settings-changes';
+    if (!listeners[key]) listeners[key] = new Set();
+    const refetch = async () => {
+      const { data: result } = await useSupabaseQuery('waitlist_settings')?.select('*').limit(1).single() ?? {};
+      if (result) setData(result as unknown as WaitlistSettingsData);
+    };
+    listeners[key].add(refetch);
+    return () => { listeners[key].delete(refetch); };
+  }, []);
+
+  return { waitlistSettings: data, loading };
 }
 
 export function useSocialLinks(): { links: Array<{ platform: string; url: string; label: string | null; active: boolean }>; loading: boolean } {

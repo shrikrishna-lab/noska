@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Lenis from 'lenis';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import { useLaunchSettings } from '../../hooks/useLaunchSettings';
+import { ShieldAlert } from 'lucide-react';
 import './marketing-theme.css';
 
 /**
@@ -21,6 +24,9 @@ import './marketing-theme.css';
 export default function MarketingLayout({ children }) {
   const wrapperRef = useRef(null);
   const contentRef = useRef(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { settings, loading } = useLaunchSettings();
 
   useEffect(() => {
     if (typeof window === 'undefined' || !wrapperRef.current || !contentRef.current) return;
@@ -47,6 +53,27 @@ export default function MarketingLayout({ children }) {
       lenis.destroy();
     };
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const p = location.pathname;
+    if (p === '/pricing' && !settings.show_pricing) { navigate('/', { replace: true }); return; }
+    if (p.startsWith('/blog') && !settings.show_blog) { navigate('/', { replace: true }); return; }
+    if (p === '/docs' && !settings.show_docs) { navigate('/', { replace: true }); return; }
+    if (p === '/changelog' && !settings.show_changelog) { navigate('/', { replace: true }); return; }
+  }, [loading, location.pathname, settings, navigate]);
+
+  if (settings.launch_mode === 'maintenance') {
+    return (
+      <div className="marketing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
+        <div>
+          <ShieldAlert size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
+          <h1 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.75rem' }}>{settings.maintenance_title || 'Scheduled Maintenance'}</h1>
+          <p style={{ color: 'var(--muted)', maxWidth: 480, margin: '0 auto' }}>{settings.maintenance_message || 'We are performing scheduled maintenance. We will be back shortly.'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="marketing" ref={wrapperRef}>

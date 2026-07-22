@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Lenis from 'lenis';
 import { motion } from 'framer-motion';
-import { Sparkles, PlayCircle, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, PlayCircle, ArrowRight, CheckCircle2, AlertCircle, ShieldAlert } from 'lucide-react';
 
 import { Preloader } from '../components/Preloader';
 import { LaunchNavbar } from './components/LaunchNavbar';
+import { useLaunchSettings, useWaitlistSettingsData } from '../../../hooks/useLaunchSettings';
 import { LiquidBackground } from './components/LiquidBackground';
 import { ShinyText } from './components/ShinyText';
 import { Typewriter } from './components/Typewriter';
@@ -47,13 +48,18 @@ const TYPEWRITER_WORDS = [
  * npm package, reproducing the same visual behavior as owned code.
  */
 export default function Launch() {
+  const { settings } = useLaunchSettings();
+  const { waitlistSettings } = useWaitlistSettingsData();
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistError, setWaitlistError] = useState('');
   const [searchParams] = useSearchParams();
   const [waitlistName, setWaitlistName] = useState('');
-  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
+  const [waitlistCompany, setWaitlistCompany] = useState('');
+  const [waitlistRole, setWaitlistRole] = useState('');
+  const [waitlistCountry, setWaitlistCountry] = useState('');
+  const [waitlistPhone, setWaitlistPhone] = useState('');
   const [waitlistReferralCode, setWaitlistReferralCode] = useState<string | null>(null);
   const scratchSectionRef = useRef(null);
 
@@ -82,10 +88,11 @@ export default function Launch() {
 
     const email = waitlistEmail.trim().toLowerCase();
     const name = waitlistName.trim() || null;
+    const company = waitlistCompany.trim() || null;
+    const role = waitlistRole.trim() || null;
+    const country = waitlistCountry.trim() || null;
+    const phone = waitlistPhone.trim() || null;
     const ref = searchParams.get('ref') || null;
-
-    const signupBody = { email, name };
-    if (ref) signupBody['ref'] = ref;
 
     try {
       const BASE = import.meta.env.VITE_SUPABASE_URL;
@@ -93,7 +100,7 @@ export default function Launch() {
       const res = await fetch(`${BASE}/functions/v1/waitlist-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON },
-        body: JSON.stringify({ email, name, ref: ref || undefined }),
+        body: JSON.stringify({ email, name, company, role, country, phone, ref: ref || undefined }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -133,6 +140,18 @@ export default function Launch() {
   const scrollToScratch = () => {
     document.getElementById('scratch')?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  if (settings.launch_mode === 'maintenance') {
+    return (
+      <div className="marketing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
+        <div>
+          <ShieldAlert size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
+          <h1 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.75rem' }}>{settings.maintenance_title || 'Scheduled Maintenance'}</h1>
+          <p style={{ color: 'var(--muted)', maxWidth: 480, margin: '0 auto' }}>{settings.maintenance_message || 'We are performing scheduled maintenance. We will be back shortly.'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="noska-launch" id="nl-top">
@@ -219,7 +238,7 @@ export default function Launch() {
 
             {waitlistSubmitted ? (
               <div className="nl-waitlist-success">
-                <CheckCircle2 size={18} /> You're on the list — we'll be in touch.
+                <CheckCircle2 size={18} /> {waitlistSettings?.confirmation_title || "You're on the list — we'll be in touch."}
                 {waitlistPosition && (
                   <p className="mt-2 text-sm text-zinc-400">
                     Your queue position: <strong className="text-[#7c3aed]">#{waitlistPosition}</strong>
@@ -245,17 +264,62 @@ export default function Launch() {
                     </div>
                   </div>
                 )}
+                {waitlistSettings?.confirmation_message && (
+                  <p className="mt-3 text-sm text-zinc-400">{waitlistSettings.confirmation_message}</p>
+                )}
               </div>
             ) : (
               <form className="nl-waitlist-form" onSubmit={handleWaitlistSubmit}>
-                <input
-                  type="text"
-                  placeholder="Your name (optional)"
-                  className="nl-waitlist-input"
-                  value={waitlistName}
-                  onChange={(e) => setWaitlistName(e.target.value)}
-                  aria-label="Your name"
-                />
+                {(!waitlistSettings || waitlistSettings.collect_name) && (
+                  <input
+                    type="text"
+                    placeholder="Your name"
+                    className="nl-waitlist-input"
+                    value={waitlistName}
+                    onChange={(e) => setWaitlistName(e.target.value)}
+                    aria-label="Your name"
+                  />
+                )}
+                {waitlistSettings?.collect_company && (
+                  <input
+                    type="text"
+                    placeholder="Company"
+                    className="nl-waitlist-input"
+                    value={waitlistCompany}
+                    onChange={(e) => setWaitlistCompany(e.target.value)}
+                    aria-label="Company"
+                  />
+                )}
+                {waitlistSettings?.collect_role && (
+                  <input
+                    type="text"
+                    placeholder="Role"
+                    className="nl-waitlist-input"
+                    value={waitlistRole}
+                    onChange={(e) => setWaitlistRole(e.target.value)}
+                    aria-label="Role"
+                  />
+                )}
+                {waitlistSettings?.collect_country && (
+                  <input
+                    type="text"
+                    placeholder="Country"
+                    className="nl-waitlist-input"
+                    value={waitlistCountry}
+                    onChange={(e) => setWaitlistCountry(e.target.value)}
+                    aria-label="Country"
+                  />
+                )}
+                {waitlistSettings?.collect_phone && (
+                  <input
+                    type="tel"
+                    placeholder="Phone number"
+                    className="nl-waitlist-input"
+                    value={waitlistPhone}
+                    onChange={(e) => setWaitlistPhone(e.target.value)}
+                    aria-label="Phone number"
+                  />
+                )}
                 <input
                   type="email"
                   required

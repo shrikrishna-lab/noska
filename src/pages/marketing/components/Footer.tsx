@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Globe } from 'lucide-react';
-import { useSocialLinks, useCTAButtons } from '../../../hooks/useLaunchSettings';
+import { useSocialLinks, useCTAButtons, useLaunchSettings } from '../../../hooks/useLaunchSettings';
 import './Footer.css';
 
 const SOCIAL_ICONS: Record<string, JSX.Element> = {
@@ -13,7 +13,8 @@ const SOCIAL_ICONS: Record<string, JSX.Element> = {
 
 export default function Footer() {
   const { links } = useSocialLinks();
-  const { getButton } = useCTAButtons();
+  const { getButton, getButtonText } = useCTAButtons();
+  const { settings } = useLaunchSettings();
   const footerCta = getButton('footer_cta');
   const finalCtaPrimary = getButton('final_cta_primary');
   const finalCtaSecondary = getButton('final_cta_secondary');
@@ -54,7 +55,7 @@ export default function Footer() {
             <li><Link to="/product">Noska AI</Link></li>
             <li><Link to="/product">Docs</Link></li>
             <li><Link to="/product">Databases</Link></li>
-            <li><Link to="/changelog">What's new</Link></li>
+            {settings.show_changelog && <li><Link to="/changelog">What's new</Link></li>}
           </ul>
         </div>
 
@@ -70,20 +71,20 @@ export default function Footer() {
         <div className="footer-links-col">
           <p className="footer-col-title">Resources</p>
           <ul>
-            <li><Link to="/docs">Documentation</Link></li>
-            <li><Link to="/blog">Blog</Link></li>
-            <li><Link to="/changelog">Changelog</Link></li>
+            {settings.show_docs && <li><Link to="/docs">Documentation</Link></li>}
+            {settings.show_blog && <li><Link to="/blog">Blog</Link></li>}
+            {settings.show_changelog && <li><Link to="/changelog">Changelog</Link></li>}
             <li><Link to="/resources">Guides & shortcuts</Link></li>
-            <li><Link to="/login">Help center</Link></li>
+            {settings.show_login && <li><Link to="/login">Help center</Link></li>}
           </ul>
         </div>
 
         <div className="footer-links-col">
           <p className="footer-col-title">Company</p>
           <ul>
-            <li><Link to="/pricing">Pricing</Link></li>
+            {settings.show_pricing && <li><Link to="/pricing">Pricing</Link></li>}
             <li><Link to="/enterprise">Enterprise</Link></li>
-            <li><Link to="/blog">Blog</Link></li>
+            {settings.show_blog && <li><Link to="/blog">Blog</Link></li>}
             <li><Link to="/launch">What's new</Link></li>
           </ul>
         </div>
@@ -91,10 +92,10 @@ export default function Footer() {
         <div className="footer-links-col">
           <p className="footer-col-title">Developers</p>
           <ul>
-            <li><Link to="/docs">API Reference</Link></li>
-            <li><Link to="/changelog">Changelog</Link></li>
-            <li><Link to="/docs">Documentation</Link></li>
-            <li><Link to="/login">Status</Link></li>
+            {settings.show_docs && <li><Link to="/docs">API Reference</Link></li>}
+            {settings.show_changelog && <li><Link to="/changelog">Changelog</Link></li>}
+            {settings.show_docs && <li><Link to="/docs">Documentation</Link></li>}
+            {settings.show_login && <li><Link to="/login">Status</Link></li>}
           </ul>
         </div>
       </div>

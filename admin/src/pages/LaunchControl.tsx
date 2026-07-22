@@ -352,15 +352,15 @@ export function LaunchControl() {
       <Card>
         <CardHeader><CardTitle className="text-base">Feature Flags</CardTitle></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <ToggleCard title="Pricing" description="Show pricing page" enabled={merged.show_pricing} onToggle={(v) => set("show_pricing", v)} />
-          <ToggleCard title="Blog" description="Show blog section" enabled={merged.show_blog} onToggle={(v) => set("show_blog", v)} />
-          <ToggleCard title="Docs" description="Show documentation" enabled={merged.show_docs} onToggle={(v) => set("show_docs", v)} />
-          <ToggleCard title="Changelog" description="Show changelog" enabled={merged.show_changelog} onToggle={(v) => set("show_changelog", v)} />
-          <ToggleCard title="Login" description="Show login page" enabled={merged.show_login} onToggle={(v) => set("show_login", v)} />
-          <ToggleCard title="Signup" description="Show signup page" enabled={merged.show_signup} onToggle={(v) => set("show_signup", v)} />
-          <ToggleCard title="Waitlist" description="Show waitlist page" enabled={merged.show_waitlist} onToggle={(v) => set("show_waitlist", v)} />
-          <ToggleCard title="Discord" description="Show Discord link" enabled={merged.show_discord} onToggle={(v) => set("show_discord", v)} />
-          <ToggleCard title="Community" description="Show community section" enabled={merged.show_community} onToggle={(v) => set("show_community", v)} />
+          <ToggleCard title="Pricing" description="Show pricing page" enabled={merged.show_pricing} onToggle={(v) => { set("show_pricing", v); updateSettings.mutate({ show_pricing: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Blog" description="Show blog section" enabled={merged.show_blog} onToggle={(v) => { set("show_blog", v); updateSettings.mutate({ show_blog: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Docs" description="Show documentation" enabled={merged.show_docs} onToggle={(v) => { set("show_docs", v); updateSettings.mutate({ show_docs: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Changelog" description="Show changelog" enabled={merged.show_changelog} onToggle={(v) => { set("show_changelog", v); updateSettings.mutate({ show_changelog: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Login" description="Show login page" enabled={merged.show_login} onToggle={(v) => { set("show_login", v); updateSettings.mutate({ show_login: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Signup" description="Show signup page" enabled={merged.show_signup} onToggle={(v) => { set("show_signup", v); updateSettings.mutate({ show_signup: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Waitlist" description="Show waitlist page" enabled={merged.show_waitlist} onToggle={(v) => { set("show_waitlist", v); updateSettings.mutate({ show_waitlist: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Discord" description="Show Discord link" enabled={merged.show_discord} onToggle={(v) => { set("show_discord", v); updateSettings.mutate({ show_discord: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Community" description="Show community section" enabled={merged.show_community} onToggle={(v) => { set("show_community", v); updateSettings.mutate({ show_community: v, admin_name: user?.name }); }} />
         </CardContent>
       </Card>
 
@@ -368,7 +368,7 @@ export function LaunchControl() {
         <CardHeader><CardTitle className="text-base">Countdown / Launch Date</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
-            <Switch checked={merged.countdown_enabled} onCheckedChange={(v) => set("countdown_enabled", v)} />
+            <Switch checked={merged.countdown_enabled} onCheckedChange={(v) => { set("countdown_enabled", v); updateSettings.mutate({ countdown_enabled: v, admin_name: user?.name }); }} />
             <div>
               <p className="text-sm font-medium">Enable Countdown</p>
               <p className="text-xs text-muted-foreground">Show countdown timer on the site</p>
