@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { motion } from "framer-motion";
 import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert } from "lucide-react";
 
-type GateStatus = "checking" | "approved" | "waiting" | "expired" | "banned" | "suspended" | "error";
+type GateStatus = "checking" | "approved" | "waiting" | "not_on_waitlist" | "expired" | "banned" | "suspended" | "error";
 
 export function WaitlistGate({ children }: { children: React.ReactNode }) {
   const { user: clerkUser } = useUser();
@@ -19,6 +19,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
     ban_reason?: string; 
     suspension_reason?: string;
   } | null>(null);
+  const [joining, setJoining] = useState(false);
 
   useEffect(() => {
     if (!clerkUser) { setStatus("error"); return; }
@@ -44,7 +45,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
             .select("id, status")
             .eq("email" as never, email.toLowerCase())
             .maybeSingle() as never;
-          setStatus(aeData ? "approved" : "waiting");
+          setStatus(aeData ? "approved" : "not_on_waitlist");
           return;
         }
 
@@ -251,6 +252,95 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
           }}
         >
           <LogOut style={{ width: 16, height: 16 }} /> Sign out
+        </button>
+      </div>
+    );
+  }
+
+  if (status === "not_on_waitlist") {
+    const handleJoinWaitlist = async () => {
+      if (!clerkUser || joining) return;
+      const email = clerkUser.emailAddresses?.[0]?.emailAddress;
+      if (!email) return;
+      setJoining(true);
+      try {
+        const { error } = await supabase!
+          .from("waitlist_entries" as never)
+          .insert({ email: email.toLowerCase(), name: clerkUser.fullName ?? "", status: "pending" } as never);
+        if (error) throw error;
+        setStatus("checking");
+        setEntryData(null);
+      } catch (e) {
+        setJoining(false);
+      }
+    };
+
+    return renderContainer(
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        <div style={{ position: 'relative', marginBottom: 18 }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#ffffff',
+            boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)',
+            padding: 10
+          }}>
+            <img src="/logo.png" alt="Noska Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          </div>
+        </div>
+
+        <h1 style={{
+          fontSize: 24, fontWeight: 800, color: '#0f172a',
+          margin: '0 0 4px 0', letterSpacing: '-0.025em'
+        }}>
+          Not on the Waitlist Yet
+        </h1>
+        <p style={{ fontSize: 13.5, color: '#64748b', margin: '0 0 18px 0' }}>
+          This email hasn't joined the Noska waitlist
+        </p>
+
+        <div style={{
+          width: '100%', borderRadius: 12, padding: '10px 16px',
+          background: '#f8fafc', border: '1px solid #f1f5f9',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 8, marginBottom: 20
+        }}>
+          <Mail style={{ width: 14, height: 14, color: '#94a3b8', flexShrink: 0 }} />
+          <span style={{ color: '#475569', fontWeight: 500, fontSize: 13 }}>
+            {clerkUser?.emailAddresses?.[0]?.emailAddress}
+          </span>
+        </div>
+
+        <button
+          onClick={handleJoinWaitlist}
+          disabled={joining}
+          style={{
+            width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '12px 24px', borderRadius: 12,
+            border: 'none', background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+            color: '#ffffff', fontSize: 14, fontWeight: 700, cursor: joining ? 'not-allowed' : 'pointer',
+            boxShadow: '0 4px 14px rgba(124, 58, 237, 0.3)', opacity: joining ? 0.6 : 1,
+            transition: 'all 0.15s', marginBottom: 12
+          }}
+          onMouseEnter={(e) => { if (!joining) { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(124, 58, 237, 0.4)'; }}}
+          onMouseLeave={(e) => { if (!joining) { e.currentTarget.style.opacity = '1'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(124, 58, 237, 0.3)'; }}}
+        >
+          <Sparkles style={{ width: 16, height: 16 }} />
+          {joining ? "Joining..." : "Join Waitlist"}
+        </button>
+
+        <button
+          onClick={() => clerk.signOut()}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '9px 22px', borderRadius: 10,
+            border: '1px solid #e2e8f0', background: '#ffffff',
+            color: '#475569', fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
+            transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+        >
+          <LogOut style={{ width: 14, height: 14 }} /> Sign out
         </button>
       </div>
     );
