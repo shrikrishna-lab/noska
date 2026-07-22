@@ -101,31 +101,22 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
         userSelect: 'none'
       }}>
-        {/* Background Image — Light dreamy landscape */}
+        {/* Background Image — High quality, sharp, no blur */}
         <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
           <img 
             src="/waitlist-bg.png" 
             alt="Background" 
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{
+              width: '100%', height: '100%', objectFit: 'cover',
+              imageRendering: 'auto'
+            }}
           />
-          {/* Soft white vignette overlay to blend with card */}
+          {/* Very subtle edge fade only — keep image sharp and vivid */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'radial-gradient(circle at center, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.5) 60%, rgba(245,240,255,0.85) 100%)'
-          }} />
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(to bottom, rgba(255,255,255,0.3) 0%, transparent 40%, rgba(245,240,255,0.6) 100%)'
+            background: 'radial-gradient(ellipse 120% 120% at center, transparent 40%, rgba(255,255,255,0.35) 85%, rgba(248,245,255,0.6) 100%)'
           }} />
         </div>
-
-        {/* Soft ambient glow behind card */}
-        <div style={{
-          position: 'absolute', left: '50%', top: '50%', zIndex: 0,
-          width: 420, height: 420, transform: 'translate(-50%, -50%)',
-          borderRadius: '50%', background: 'rgba(124, 58, 237, 0.06)',
-          filter: 'blur(100px)', pointerEvents: 'none'
-        }} />
 
         {/* Main Glass Card */}
         <motion.div 
@@ -134,13 +125,13 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           style={{
             position: 'relative', zIndex: 10,
-            width: '100%', maxWidth: 440,
-            borderRadius: 24, padding: 36,
-            background: 'rgba(255, 255, 255, 0.82)',
-            backdropFilter: 'blur(24px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-            border: '1px solid rgba(255, 255, 255, 0.6)',
-            boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0,0,0,0.03)',
+            width: '100%', maxWidth: 420,
+            borderRadius: 24, padding: '32px 28px',
+            background: 'rgba(255, 255, 255, 0.88)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            border: '1px solid rgba(255, 255, 255, 0.7)',
+            boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.02)',
             margin: 16
           }}
         >
@@ -237,82 +228,59 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
   return renderContainer(
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       {/* Icon Badge */}
-      <div style={{ position: 'relative', marginBottom: 20 }}>
+      <div style={{ position: 'relative', marginBottom: 18 }}>
         <div style={{
-          width: 60, height: 60, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'linear-gradient(135deg, #ede9fe, #ddd6fe)',
-          boxShadow: '0 8px 24px -6px rgba(124, 58, 237, 0.2)'
+          boxShadow: '0 6px 20px -4px rgba(124, 58, 237, 0.2)'
         }}>
-          <Sparkles style={{ width: 28, height: 28, color: '#7c3aed' }} />
+          <Sparkles style={{ width: 26, height: 26, color: '#7c3aed' }} />
         </div>
         <span style={{
-          position: 'absolute', top: -2, right: -2,
-          width: 14, height: 14, borderRadius: '50%',
+          position: 'absolute', top: -1, right: -1,
+          width: 13, height: 13, borderRadius: '50%',
           background: '#22c55e', border: '2.5px solid white',
           boxShadow: '0 2px 6px rgba(34, 197, 94, 0.4)'
         }} />
       </div>
 
       <h1 style={{
-        fontSize: 26, fontWeight: 800, color: '#0f172a',
-        margin: '0 0 6px 0', letterSpacing: '-0.025em'
+        fontSize: 24, fontWeight: 800, color: '#0f172a',
+        margin: '0 0 4px 0', letterSpacing: '-0.025em'
       }}>
-        You're on the Waitlist!
+        You're on the Noska Waitlist!
       </h1>
-      <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px 0' }}>
+      <p style={{ fontSize: 13.5, color: '#64748b', margin: '0 0 20px 0' }}>
         Thanks for your interest in Noska
       </p>
 
-      {/* Position or Status Card */}
-      {position ? (
-        <div style={{
-          width: '100%', borderRadius: 16, padding: '20px 24px',
-          background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)',
-          border: '1px solid #e9e5ff', marginBottom: 16, textAlign: 'center'
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7c3aed', marginBottom: 6 }}>
-            Your Queue Position
-          </div>
-          <div style={{ fontSize: 42, fontWeight: 900, color: '#4c1d95', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-            #{position}
-          </div>
-          <p style={{ fontSize: 12, color: '#8b5cf6', marginTop: 6 }}>We're letting people in in batches</p>
-        </div>
-      ) : (
-        <div style={{
-          width: '100%', borderRadius: 16, padding: '18px 24px',
-          background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 16
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginBottom: 4 }}>
-            Status
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Pending Approval</div>
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Our team is reviewing applications</p>
-        </div>
-      )}
-
-      {/* Details Box */}
+      {/* Status Card — clean, no queue position */}
       <div style={{
-        width: '100%', borderRadius: 14, padding: '14px 18px',
-        background: '#f8fafc', border: '1px solid #f1f5f9',
-        display: 'flex', flexDirection: 'column', gap: 10,
-        marginBottom: 20
+        width: '100%', borderRadius: 14, padding: '16px 20px',
+        background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 12,
+        textAlign: 'center'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-          <Mail style={{ width: 15, height: 15, color: '#94a3b8', flexShrink: 0 }} />
-          <span style={{ color: '#475569', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {clerkUser?.emailAddresses?.[0]?.emailAddress}
-          </span>
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 4 }}>
+          Status
         </div>
-        {joinedDate && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-            <Calendar style={{ width: 15, height: 15, color: '#94a3b8', flexShrink: 0 }} />
-            <span style={{ color: '#475569' }}>Applied on {joinedDate}</span>
-          </div>
-        )}
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Pending Approval</div>
+        <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, marginBottom: 0 }}>Our team is reviewing applications.</p>
       </div>
 
-      <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6, maxWidth: 300, marginBottom: 24 }}>
+      {/* Email Pill — Centered */}
+      <div style={{
+        width: '100%', borderRadius: 14, padding: '12px 16px',
+        background: '#f8fafc', border: '1px solid #f1f5f9',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        gap: 8, marginBottom: 16
+      }}>
+        <Mail style={{ width: 14, height: 14, color: '#94a3b8', flexShrink: 0 }} />
+        <span style={{ color: '#475569', fontWeight: 500, fontSize: 13 }}>
+          {clerkUser?.emailAddresses?.[0]?.emailAddress}
+        </span>
+      </div>
+
+      <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6, maxWidth: 280, margin: '0 auto 20px auto' }}>
         An admin needs to approve your access. You'll receive a confirmation email when you're approved.
       </p>
 
@@ -321,15 +289,15 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
         onClick={() => clerk.signOut()} 
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '10px 24px', borderRadius: 12,
+          padding: '9px 22px', borderRadius: 10,
           border: '1px solid #e2e8f0', background: '#ffffff',
-          color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          color: '#475569', fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
           transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
         }}
         onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
       >
-        <LogOut style={{ width: 15, height: 15 }} /> Sign out
+        <LogOut style={{ width: 14, height: 14 }} /> Sign out
       </button>
     </div>
   );
