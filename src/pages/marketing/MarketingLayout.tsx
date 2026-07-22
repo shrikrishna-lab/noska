@@ -4,6 +4,7 @@ import Lenis from 'lenis';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import { useLaunchSettings } from '../../hooks/useLaunchSettings';
+import SEOHead from '../../components/SEOHead';
 import { ShieldAlert } from 'lucide-react';
 import './marketing-theme.css';
 
@@ -63,25 +64,26 @@ export default function MarketingLayout({ children }) {
     if (p === '/changelog' && !settings.show_changelog) { navigate('/', { replace: true }); return; }
   }, [loading, location.pathname, settings, navigate]);
 
-  if (settings.launch_mode === 'maintenance') {
-    return (
-      <div className="marketing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
-        <div>
-          <ShieldAlert size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
-          <h1 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.75rem' }}>{settings.maintenance_title || 'Scheduled Maintenance'}</h1>
-          <p style={{ color: 'var(--muted)', maxWidth: 480, margin: '0 auto' }}>{settings.maintenance_message || 'We are performing scheduled maintenance. We will be back shortly.'}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="marketing" ref={wrapperRef}>
-      <div ref={contentRef}>
-        <Navbar />
-        <main>{children}</main>
-        <Footer />
-      </div>
-    </div>
+    <>
+      <SEOHead path={location.pathname} />
+      {settings.launch_mode === 'maintenance' ? (
+        <div className="marketing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
+          <div>
+            <ShieldAlert size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
+            <h1 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.75rem' }}>{settings.maintenance_title || 'Scheduled Maintenance'}</h1>
+            <p style={{ color: 'var(--muted)', maxWidth: 480, margin: '0 auto' }}>{settings.maintenance_message || 'We are performing scheduled maintenance. We will be back shortly.'}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="marketing" ref={wrapperRef}>
+          <div ref={contentRef}>
+            <Navbar />
+            <main>{children}</main>
+            <Footer />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

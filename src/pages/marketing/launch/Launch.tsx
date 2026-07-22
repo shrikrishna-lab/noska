@@ -6,6 +6,7 @@ import { Sparkles, PlayCircle, ArrowRight, CheckCircle2, AlertCircle, ShieldAler
 
 import { Preloader } from '../components/Preloader';
 import { LaunchNavbar } from './components/LaunchNavbar';
+import SEOHead from '../../../components/SEOHead';
 import { useLaunchSettings, useWaitlistSettingsData } from '../../../hooks/useLaunchSettings';
 import { LiquidBackground } from './components/LiquidBackground';
 import { ShinyText } from './components/ShinyText';
@@ -143,18 +144,22 @@ export default function Launch() {
 
   if (settings.launch_mode === 'maintenance') {
     return (
-      <div className="marketing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
-        <div>
-          <ShieldAlert size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
-          <h1 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.75rem' }}>{settings.maintenance_title || 'Scheduled Maintenance'}</h1>
-          <p style={{ color: 'var(--muted)', maxWidth: 480, margin: '0 auto' }}>{settings.maintenance_message || 'We are performing scheduled maintenance. We will be back shortly.'}</p>
+      <>
+        <SEOHead path="/launch" />
+        <div className="marketing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
+          <div>
+            <ShieldAlert size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
+            <h1 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.75rem' }}>{settings.maintenance_title || 'Scheduled Maintenance'}</h1>
+            <p style={{ color: 'var(--muted)', maxWidth: 480, margin: '0 auto' }}>{settings.maintenance_message || 'We are performing scheduled maintenance. We will be back shortly.'}</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <div className="noska-launch" id="nl-top">
+      <SEOHead path="/launch" />
       <Preloader persistKey={null} />
       <LaunchNavbar />
 

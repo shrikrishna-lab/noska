@@ -108,6 +108,7 @@ function initRealtime() {
     { channel: 'landing-content-changes', table: 'landing_content' },
     { channel: 'social-links-changes', table: 'social_links' },
     { channel: 'waitlist-settings-changes', table: 'waitlist_settings' },
+    { channel: 'seo-settings-changes', table: 'seo_settings' },
   ];
 
   for (const { channel: name, table } of tables) {
@@ -338,6 +339,49 @@ export interface WaitlistSettingsData {
   auto_approve: boolean;
   confirmation_title: string;
   confirmation_message: string;
+}
+
+export interface SEOSettingsData {
+  page_path: string;
+  title: string | null;
+  description: string | null;
+  og_image: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  twitter_card: string | null;
+  twitter_site: string | null;
+  keywords: string | null;
+  robots: string | null;
+  canonical_url: string | null;
+}
+
+export function useSEOSettings(pagePath: string): { seo: SEOSettingsData | null; loading: boolean } {
+  const [data, setData] = useState<SEOSettingsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabaseAnon) { setLoading(false); return; }
+    initRealtime();
+
+    const fetchSEO = async () => {
+      const { data: result } = await useSupabaseQuery('seo_settings')?.select('*').eq('page_path' as never, pagePath).maybeSingle() ?? {};
+      if (result) setData(result as unknown as SEOSettingsData);
+      setLoading(false);
+    };
+
+    fetchSEO();
+
+    const key = 'seo-settings-changes';
+    if (!listeners[key]) listeners[key] = new Set();
+    const refetch = async () => {
+      const { data: result } = await useSupabaseQuery('seo_settings')?.select('*').eq('page_path' as never, pagePath).maybeSingle() ?? {};
+      if (result) setData(result as unknown as SEOSettingsData);
+    };
+    listeners[key].add(refetch);
+    return () => { listeners[key].delete(refetch); };
+  }, [pagePath]);
+
+  return { seo: data, loading };
 }
 
 export function useWaitlistSettingsData(): { waitlistSettings: WaitlistSettingsData | null; loading: boolean } {
