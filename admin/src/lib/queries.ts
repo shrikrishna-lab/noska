@@ -221,11 +221,16 @@ export function useWaitlist() {
   return useQuery({
     queryKey: ["admin", "waitlist"],
     queryFn: () => adminSelect<DbWaitlistEntry>("waitlist_entries", "*", { order: "position asc" }),
+    refetchInterval: 15_000,
   });
 }
 
 export function useWaitlistCount() {
-  return useQuery({ queryKey: ["admin", "waitlist", "count"], queryFn: () => adminCount("waitlist_entries") });
+  return useQuery({
+    queryKey: ["admin", "waitlist", "count"],
+    queryFn: () => adminCount("waitlist_entries"),
+    refetchInterval: 15_000,
+  });
 }
 
 // ── Admin Users ──

@@ -194,7 +194,7 @@ function NotesModal({ entry, onClose }: { entry: DbWaitlistEntry; onClose: () =>
 export function Waitlist() {
   const navigate = useNavigate();
   const { confirm } = useConfirmDialog();
-  const { data: entries, isLoading } = useWaitlist();
+  const { data: entries, isLoading, refetch, isRefetching } = useWaitlist();
   const { data: count } = useWaitlistCount();
   const sendInvite = useSendWaitlistInvite();
   const deleteEntry = useDeleteWaitlistEntry();
@@ -524,6 +524,7 @@ export function Waitlist() {
               </>
             )}
             <Button variant="outline" size="sm" onClick={() => navigate("/admin/waitlist-analytics")}><BarChart3 className="mr-1 h-3.5 w-3.5" /> Analytics</Button>
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}><RefreshCw className={`mr-1 h-3.5 w-3.5 ${isRefetching ? "animate-spin" : ""}`} /> Refresh</Button>
             <Button variant="outline" size="sm" onClick={downloadCSV}><Download className="mr-1 h-3.5 w-3.5" /> Export CSV</Button>
           </div>
         }
