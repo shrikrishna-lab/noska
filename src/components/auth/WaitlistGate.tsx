@@ -54,24 +54,30 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
 
         const joinedAt = entry.joined_at as string | undefined;
 
-        // If position is not explicit, calculate how many pending entries joined before this user
-        if (!pos && joinedAt) {
+        if (pos && pos > 0) {
+          aheadCount = pos - 1;
+        } else {
           try {
-            const { count } = await supabase
-              .from("waitlist_entries" as never)
-              .select("id" as never, { count: "exact", head: true })
-              .lt("joined_at" as never, joinedAt)
-              .eq("status" as never, "pending");
-
-            if (typeof count === "number") {
-              aheadCount = count;
-              pos = count + 1;
+            const { data: rpcData } = await supabase
+              .rpc("get_waitlist_position" as never, { p_email: email.toLowerCase() }) as never;
+            const result = rpcData as { pos: number; ahead: number; total_pending: number } | undefined;
+            if (result) {
+              pos = result.pos;
+              aheadCount = result.ahead;
+            } else if (joinedAt) {
+              const { count } = await supabase
+                .from("waitlist_entries" as never)
+                .select("id" as never, { count: "exact", head: true })
+                .lt("joined_at" as never, joinedAt)
+                .eq("status" as never, "pending");
+              if (typeof count === "number") {
+                aheadCount = count;
+                pos = count + 1;
+              }
             }
           } catch {
             // ignore fallback
           }
-        } else if (pos && pos > 0) {
-          aheadCount = pos - 1;
         }
 
         setEntryData({
@@ -250,7 +256,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const effectivePosition = entryData?.position || 1;
+  const effectivePosition = entryData?.position ?? (entryData?.ahead_count !== undefined ? entryData.ahead_count + 1 : 1);
   const aheadCount = entryData?.ahead_count;
 
   return renderContainer(
