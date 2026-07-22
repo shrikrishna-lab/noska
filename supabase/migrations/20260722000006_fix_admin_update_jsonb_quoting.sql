@@ -7,6 +7,7 @@ CREATE OR REPLACE FUNCTION public.admin_update(
 )
  RETURNS jsonb
  LANGUAGE plpgsql
+ SECURITY DEFINER
 AS $function$
 DECLARE
   v_admin_id UUID;
