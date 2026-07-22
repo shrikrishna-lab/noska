@@ -39,6 +39,7 @@ import { auditEngine } from "./lib/auditEngine";
 import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
 import { supabase, setClerkSessionToken } from "./lib/supabase";
 import { WaitlistGate } from "./components/auth/WaitlistGate";
+import LoginGate from "./components/auth/LoginGate";
 import { TEST_MODE } from "./lib/envGuard";
 import { capture, identifyUser, resetIdentity } from "./lib/posthog";
 import { setSentryUser, captureException } from "./lib/sentry";
@@ -2188,7 +2189,9 @@ function App() {
         </div>
       )}
       {appFlowState === "auth" && (
-        <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
+        <LoginGate>
+          <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
+        </LoginGate>
       )}
       {(appFlowState === "onboarding" || appFlowState === "workspace") && location.pathname !== "/banned" && (
         <WaitlistGate>

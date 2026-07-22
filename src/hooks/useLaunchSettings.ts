@@ -133,6 +133,15 @@ export function useLaunchSettings(): { settings: LaunchSettings; loading: boolea
     };
 
     fetchSettings();
+
+    const key = 'launch-settings-changes';
+    if (!listeners[key]) listeners[key] = new Set();
+    const refetch = async () => {
+      const { data } = await useSupabaseQuery('launch_settings')?.select('*').limit(1).single() ?? {};
+      if (data) setSettings({ ...DEFAULT_SETTINGS, ...data as unknown as LaunchSettings });
+    };
+    listeners[key].add(refetch);
+    return () => { listeners[key].delete(refetch); };
   }, []);
 
   return { settings, loading };
