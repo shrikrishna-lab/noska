@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
 import type { SupportTicket, SupportMessage, BannedUser, DeletedAccount } from "./types";
@@ -824,16 +824,19 @@ export function useDeleteTicket() {
 // ── Realtime subscription hook ──
 export function useRealtimeInvalidate(queryKey: string[], table: string, event: "INSERT" | "UPDATE" | "DELETE" | "*" = "*") {
   const qc = useQueryClient();
+  const queryKeyRef = useRef(queryKey);
+  queryKeyRef.current = queryKey;
+  const channelName = useMemo(() => `realtime-${table}-${event}`, [table, event]);
   useEffect(() => {
     if (!SUPABASE_ENABLED || !supabase) return;
     const channel = supabase
-      .channel(`realtime-${table}-${Date.now()}`)
+      .channel(channelName)
       .on("postgres_changes" as never, { event, schema: "public", table }, () => {
-        qc.invalidateQueries({ queryKey });
+        qc.invalidateQueries({ queryKey: queryKeyRef.current });
       })
       .subscribe();
     return () => { supabase?.removeChannel(channel); };
-  }, [qc, queryKey.join(","), table, event]);
+  }, [qc, channelName, table, event]);
 }
 
 export function useRealtimeAuditFeed(limit = 20) {
@@ -1732,7 +1735,18 @@ export function useUpdateSocialLink() {
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "social-links"] }),
+    onMutate: async ({ id, ...data }) => {
+      await qc.cancelQueries({ queryKey: ["admin", "social-links"] });
+      const previous = qc.getQueryData<SocialLink[]>(["admin", "social-links"]);
+      qc.setQueryData<SocialLink[]>(["admin", "social-links"], (old) =>
+        old?.map((link) => link.id === id ? { ...link, ...data } : link)
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["admin", "social-links"], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["admin", "social-links"] }),
   });
 }
 
