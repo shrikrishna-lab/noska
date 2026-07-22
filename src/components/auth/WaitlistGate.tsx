@@ -264,10 +264,23 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
       if (!email) return;
       setJoining(true);
       try {
-        const { error } = await supabase!
-          .from("waitlist_entries" as never)
-          .insert({ email: email.toLowerCase(), name: clerkUser.fullName ?? "", status: "pending" } as never);
-        if (error) throw error;
+        const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const res = await fetch(`${baseUrl}/functions/v1/waitlist-signup`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": anonKey,
+          },
+          body: JSON.stringify({
+            email: email.toLowerCase(),
+            name: clerkUser.fullName ?? "",
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
         setStatus("checking");
         setEntryData(null);
       } catch (e) {
