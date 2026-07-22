@@ -99,7 +99,10 @@ export default function NewUpdated() {
     <div className="hanzo-wrapper">
       {/* Top Navbar */}
       <header className="hanzo-nav mkt-container">
-        <div className="nav-brand-pill">Noska</div>
+        <div className="nav-brand-pill">
+          <img src="/logo.png" alt="Noska Logo" style={{ width: 18, height: 18, display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />
+          <span>Noska</span>
+        </div>
         <div className="nav-menu-btn">
           <span className="menu-bar" />
           <span className="menu-bar" />

@@ -59,7 +59,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
         } else {
           try {
             const { data: rpcData } = await supabase
-              .rpc("get_waitlist_position" as never, { p_email: email.toLowerCase() }) as never;
+              .rpc("get_waitlist_position" as never, { p_email: email.toLowerCase() } as never) as never;
             const result = rpcData as { pos: number; ahead: number; total_pending: number } | undefined;
             if (result) {
               pos = result.pos;
