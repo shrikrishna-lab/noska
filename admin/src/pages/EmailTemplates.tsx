@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Link } from "react-router-dom";
-import { LayoutTemplate, Plus, Copy, Eye, RotateCcw, Archive, Trash2, Search, FileText, CheckCircle2, Edit } from "lucide-react";
+import { LayoutTemplate, Plus, Copy, Eye, RotateCcw, Archive, Trash2, Search, FileText, CheckCircle2, Edit, Upload, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { TemplateCategory, TemplateStatus } from "@/lib/types";
 
@@ -126,7 +126,54 @@ export function EmailTemplates() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   useRealtimeInvalidate(["admin", "email-templates"], "email_templates");
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      if (ext === "json") {
+        const items = JSON.parse(text);
+        const arr = Array.isArray(items) ? items : [items];
+        let count = 0;
+        for (const item of arr) {
+          if (!item.name) continue;
+          await create.mutateAsync({
+            name: item.name, subject: item.subject || "{{subject}}",
+            category: item.category || "custom",
+            html_content: item.html_content || "", plain_text: item.plain_text || "",
+            blocks: "[]", variables: "{}",
+            status: item.status || "draft", version: 1, created_by: user.id,
+          });
+          count++;
+        }
+        toast.success(`${count} templates imported`);
+      } else if (ext === "html" || ext === "htm") {
+        const name = file.name.replace(/\.(html|htm)$/i, "");
+        const subjectMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i);
+        const subject = subjectMatch ? subjectMatch[1].trim() : name;
+        await create.mutateAsync({
+          name, subject,
+          category: "custom",
+          html_content: text, plain_text: "",
+          blocks: "[]", variables: "{}",
+          status: "draft", version: 1, created_by: user.id,
+        });
+        toast.success(`Imported "${name}" from HTML file`);
+      } else {
+        throw new Error(`Unsupported format: .${ext}. Use .json or .html`);
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Invalid file format");
+    }
+    setImporting(false);
+  };
 
   const filtered = useMemo(() => {
     if (!templates) return [];
@@ -165,7 +212,14 @@ export function EmailTemplates() {
   return (
     <div className="space-y-6">
       <PageHeader title="Email Templates" description="Create and manage email templates">
-        <Button onClick={() => setShowCreate(true)}><Plus className="mr-1 h-4 w-4" /> New Template</Button>
+        <div className="flex gap-2">
+          <input ref={fileInputRef} type="file" accept=".json,.html,.htm" className="hidden" onChange={handleImport} />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+            {importing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Upload className="mr-1 h-4 w-4" />}
+            Import
+          </Button>
+          <Button onClick={() => setShowCreate(true)}><Plus className="mr-1 h-4 w-4" /> New Template</Button>
+        </div>
       </PageHeader>
 
       <div className="flex gap-3 items-center">

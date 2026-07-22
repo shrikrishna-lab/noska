@@ -172,20 +172,37 @@ export function ContentTemplates() {
     setImporting(true);
     try {
       const text = await file.text();
-      const items = JSON.parse(text);
-      const arr = Array.isArray(items) ? items : [items];
-      let count = 0;
-      for (const item of arr) {
-        if (!item.name || !item.subject) continue;
+      const ext = file.name.split(".").pop()?.toLowerCase();
+
+      if (ext === "json") {
+        const items = JSON.parse(text);
+        const arr = Array.isArray(items) ? items : [items];
+        let count = 0;
+        for (const item of arr) {
+          if (!item.name || !item.subject) continue;
+          await createTemplate.mutateAsync({
+            name: item.name, subject: item.subject,
+            description: item.description || undefined, category: item.category || "custom",
+            html_content: item.html_content || undefined, plain_text: item.plain_text || undefined,
+            status: item.status || "draft", version: 1,
+          });
+          count++;
+        }
+        toast.success(`${count} templates imported`);
+      } else if (ext === "html" || ext === "htm") {
+        const name = file.name.replace(/\.(html|htm)$/i, "");
+        const subjectMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i);
+        const subject = subjectMatch ? subjectMatch[1].trim() : name;
         await createTemplate.mutateAsync({
-          name: item.name, subject: item.subject,
-          description: item.description || undefined, category: item.category || "custom",
-          html_content: item.html_content || undefined, plain_text: item.plain_text || undefined,
-          status: item.status || "draft", version: 1,
+          name, subject,
+          category: "custom",
+          html_content: text,
+          status: "draft", version: 1,
         });
-        count++;
+        toast.success(`Imported "${name}" from HTML file`);
+      } else {
+        throw new Error(`Unsupported file format: .${ext}. Use .json or .html files.`);
       }
-      toast.success(`${count} templates imported`);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Invalid file format");
@@ -202,7 +219,7 @@ export function ContentTemplates() {
         description="Email templates for campaigns"
         actions={
           <div className="flex gap-2">
-            <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+            <input ref={fileInputRef} type="file" accept=".json,.html,.htm" className="hidden" onChange={handleImport} />
             <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
               Import
