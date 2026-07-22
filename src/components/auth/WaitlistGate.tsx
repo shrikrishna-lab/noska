@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { supabase } from "../../lib/supabase";
 import { motion } from "framer-motion";
-import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert } from "lucide-react";
+import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert, CheckCircle2 } from "lucide-react";
 
 type GateStatus = "checking" | "approved" | "waiting" | "expired" | "banned" | "suspended" | "error";
 
@@ -73,11 +73,20 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
 
   if (status === "checking") {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0a0a0a]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#7c3aed] border-t-transparent" />
-          <p className="text-sm text-zinc-500 font-medium tracking-wide">Checking access...</p>
+      <div style={{
+        display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(135deg, #f0f4f8 0%, #e8f0fe 50%, #f5f0ff 100%)',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 36, height: 36, border: '3px solid #e2e8f0',
+            borderTopColor: '#7c3aed', borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+          <p style={{ fontSize: 14, color: '#94a3b8', fontWeight: 500 }}>Checking access...</p>
         </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -86,32 +95,55 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
 
   const renderContainer = (content: React.ReactNode) => {
     return (
-      <div className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-black p-4 font-sans select-none">
-        {/* Background Image with elegant vignette and color overlays */}
-        <div className="absolute inset-0 z-0">
+      <div style={{
+        position: 'relative', display: 'flex', height: '100vh', width: '100vw',
+        alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        userSelect: 'none'
+      }}>
+        {/* Background Image — Light dreamy landscape */}
+        <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
           <img 
             src="/waitlist-bg.png" 
-            alt="Waitlist Background" 
-            className="h-full w-full object-cover opacity-80"
+            alt="Background" 
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
-          {/* Subtle Radial Gradient overlay to focus eye on the center */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.3)_0%,rgba(0,0,0,0.85)_80%,#000_100%)]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/80" />
+          {/* Soft white vignette overlay to blend with card */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'radial-gradient(circle at center, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.5) 60%, rgba(245,240,255,0.85) 100%)'
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to bottom, rgba(255,255,255,0.3) 0%, transparent 40%, rgba(245,240,255,0.6) 100%)'
+          }} />
         </div>
 
-        {/* Floating gradient glow behind card */}
-        <div className="absolute left-1/2 top-1/2 z-0 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600/10 blur-[120px] pointer-events-none" />
+        {/* Soft ambient glow behind card */}
+        <div style={{
+          position: 'absolute', left: '50%', top: '50%', zIndex: 0,
+          width: 420, height: 420, transform: 'translate(-50%, -50%)',
+          borderRadius: '50%', background: 'rgba(124, 58, 237, 0.06)',
+          filter: 'blur(100px)', pointerEvents: 'none'
+        }} />
 
-        {/* Main Content Card */}
+        {/* Main Glass Card */}
         <motion.div 
-          initial={{ opacity: 0, y: 30, scale: 0.98 }} 
+          initial={{ opacity: 0, y: 24, scale: 0.97 }} 
           animate={{ opacity: 1, y: 0, scale: 1 }} 
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-black/60 p-8 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+          style={{
+            position: 'relative', zIndex: 10,
+            width: '100%', maxWidth: 440,
+            borderRadius: 24, padding: 36,
+            background: 'rgba(255, 255, 255, 0.82)',
+            backdropFilter: 'blur(24px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            border: '1px solid rgba(255, 255, 255, 0.6)',
+            boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0,0,0,0.03)',
+            margin: 16
+          }}
         >
-          {/* Top subtle highlight border */}
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-          
           {content}
         </motion.div>
       </div>
@@ -120,17 +152,28 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
 
   if (status === "expired") {
     return renderContainer(
-      <div className="flex flex-col items-center text-center">
-        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
-          <Clock className="h-6 w-6" />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(135deg, #fef3c7, #fde68a)', marginBottom: 20,
+          boxShadow: '0 8px 24px -6px rgba(245, 158, 11, 0.25)'
+        }}>
+          <Clock style={{ width: 26, height: 26, color: '#b45309' }} />
         </div>
-        <h1 className="mb-2 text-2xl font-bold tracking-tight text-white font-sans">Invite Expired</h1>
-        <p className="mb-6 text-sm leading-relaxed text-zinc-400">Your invitation has expired. Please request a new one.</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1e293b', margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Invite Expired</h1>
+        <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 28 }}>Your invitation has expired. Please request a new one from our team.</p>
         <button 
           onClick={() => clerk.signOut()} 
-          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 border border-zinc-800 px-6 py-2.5 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px',
+            borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc',
+            color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            transition: 'all 0.15s'
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
         >
-          <LogOut className="h-4 w-4" /> Sign out
+          <LogOut style={{ width: 16, height: 16 }} /> Sign out
         </button>
       </div>
     );
@@ -138,17 +181,25 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
 
   if (status === "banned") {
     return renderContainer(
-      <div className="flex flex-col items-center text-center">
-        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 text-red-400">
-          <ShieldAlert className="h-6 w-6" />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(135deg, #fee2e2, #fecaca)', marginBottom: 20,
+          boxShadow: '0 8px 24px -6px rgba(239, 68, 68, 0.2)'
+        }}>
+          <ShieldAlert style={{ width: 26, height: 26, color: '#dc2626' }} />
         </div>
-        <h1 className="mb-2 text-2xl font-bold tracking-tight text-white font-sans">Access Restricted</h1>
-        <p className="mb-6 text-sm leading-relaxed text-zinc-400">{entryData?.ban_reason ?? "Your account has been banned."}</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1e293b', margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Access Restricted</h1>
+        <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 28 }}>{entryData?.ban_reason ?? "Your account has been restricted from accessing this workspace."}</p>
         <button 
           onClick={() => clerk.signOut()} 
-          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 border border-zinc-800 px-6 py-2.5 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px',
+            borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc',
+            color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer'
+          }}
         >
-          <LogOut className="h-4 w-4" /> Sign out
+          <LogOut style={{ width: 16, height: 16 }} /> Sign out
         </button>
       </div>
     );
@@ -156,81 +207,129 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
 
   if (status === "suspended") {
     return renderContainer(
-      <div className="flex flex-col items-center text-center">
-        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400">
-          <Clock className="h-6 w-6" />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(135deg, #fef9c3, #fef08a)', marginBottom: 20,
+          boxShadow: '0 8px 24px -6px rgba(234, 179, 8, 0.2)'
+        }}>
+          <Clock style={{ width: 26, height: 26, color: '#a16207' }} />
         </div>
-        <h1 className="mb-2 text-2xl font-bold tracking-tight text-white font-sans">Account Suspended</h1>
-        <p className="mb-6 text-sm leading-relaxed text-zinc-400">{entryData?.suspension_reason ?? "Your account has been temporarily suspended."}</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1e293b', margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Account Suspended</h1>
+        <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 28 }}>{entryData?.suspension_reason ?? "Your account has been temporarily suspended."}</p>
         <button 
           onClick={() => clerk.signOut()} 
-          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 border border-zinc-800 px-6 py-2.5 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px',
+            borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc',
+            color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer'
+          }}
         >
-          <LogOut className="h-4 w-4" /> Sign out
+          <LogOut style={{ width: 16, height: 16 }} /> Sign out
         </button>
       </div>
     );
   }
 
   const position = entryData?.position;
-  const joinedDate = entryData?.joined_at ? new Date(entryData.joined_at).toLocaleDateString() : null;
+  const joinedDate = entryData?.joined_at ? new Date(entryData.joined_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 
   return renderContainer(
-    <div className="flex flex-col items-center text-center">
-      {/* Celebration Icon with elegant gradient background */}
-      <div className="relative mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-violet-600/10 border border-violet-500/20 text-violet-400">
-        <Sparkles className="h-7 w-7" />
-        <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75"></span>
-          <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-violet-500"></span>
-        </span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      {/* Icon Badge */}
+      <div style={{ position: 'relative', marginBottom: 20 }}>
+        <div style={{
+          width: 60, height: 60, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(135deg, #ede9fe, #ddd6fe)',
+          boxShadow: '0 8px 24px -6px rgba(124, 58, 237, 0.2)'
+        }}>
+          <Sparkles style={{ width: 28, height: 28, color: '#7c3aed' }} />
+        </div>
+        <span style={{
+          position: 'absolute', top: -2, right: -2,
+          width: 14, height: 14, borderRadius: '50%',
+          background: '#22c55e', border: '2.5px solid white',
+          boxShadow: '0 2px 6px rgba(34, 197, 94, 0.4)'
+        }} />
       </div>
 
-      <h1 className="mb-2 text-2xl font-bold tracking-tight text-white font-sans">
-        You're on the Noska Waitlist!
+      <h1 style={{
+        fontSize: 26, fontWeight: 800, color: '#0f172a',
+        margin: '0 0 6px 0', letterSpacing: '-0.025em'
+      }}>
+        You're on the Waitlist!
       </h1>
+      <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px 0' }}>
+        Thanks for your interest in Noska
+      </p>
 
-      {/* Position Badge & Counter */}
+      {/* Position or Status Card */}
       {position ? (
-        <div className="my-4 w-full rounded-xl bg-violet-500/5 border border-violet-500/10 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wider text-violet-400/80">Your Queue Position</div>
-          <div className="mt-1.5 text-4xl font-extrabold text-white tracking-tight">
+        <div style={{
+          width: '100%', borderRadius: 16, padding: '20px 24px',
+          background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)',
+          border: '1px solid #e9e5ff', marginBottom: 16, textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7c3aed', marginBottom: 6 }}>
+            Your Queue Position
+          </div>
+          <div style={{ fontSize: 42, fontWeight: 900, color: '#4c1d95', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
             #{position}
           </div>
-          <p className="mt-1 text-xs text-zinc-500">We're letting people in in batches.</p>
+          <p style={{ fontSize: 12, color: '#8b5cf6', marginTop: 6 }}>We're letting people in in batches</p>
         </div>
       ) : (
-        <div className="my-4 w-full rounded-xl bg-white/5 border border-white/5 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Status</div>
-          <div className="mt-1 text-base font-bold text-zinc-200">Pending Approval</div>
-          <p className="mt-1 text-xs text-zinc-500">Our team is reviewing applications.</p>
+        <div style={{
+          width: '100%', borderRadius: 16, padding: '18px 24px',
+          background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 16
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginBottom: 4 }}>
+            Status
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Pending Approval</div>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Our team is reviewing applications</p>
         </div>
       )}
 
       {/* Details Box */}
-      <div className="mt-2 w-full space-y-2.5 rounded-xl bg-zinc-900/30 border border-zinc-800/40 p-4 text-left text-sm">
-        <div className="flex items-center gap-3 text-zinc-400">
-          <Mail className="h-4 w-4 shrink-0 text-zinc-500" />
-          <span className="truncate text-zinc-300 font-medium">{clerkUser?.emailAddresses?.[0]?.emailAddress}</span>
+      <div style={{
+        width: '100%', borderRadius: 14, padding: '14px 18px',
+        background: '#f8fafc', border: '1px solid #f1f5f9',
+        display: 'flex', flexDirection: 'column', gap: 10,
+        marginBottom: 20
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+          <Mail style={{ width: 15, height: 15, color: '#94a3b8', flexShrink: 0 }} />
+          <span style={{ color: '#475569', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {clerkUser?.emailAddresses?.[0]?.emailAddress}
+          </span>
         </div>
         {joinedDate && (
-          <div className="flex items-center gap-3 text-zinc-400">
-            <Calendar className="h-4 w-4 shrink-0 text-zinc-500" />
-            <span className="text-zinc-300">Applied on {joinedDate}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+            <Calendar style={{ width: 15, height: 15, color: '#94a3b8', flexShrink: 0 }} />
+            <span style={{ color: '#475569' }}>Applied on {joinedDate}</span>
           </div>
         )}
       </div>
 
-      <p className="mt-6 mb-8 text-xs leading-relaxed text-zinc-500 max-w-[280px]">
+      <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6, maxWidth: 300, marginBottom: 24 }}>
         An admin needs to approve your access. You'll receive a confirmation email when you're approved.
       </p>
 
       {/* Sign Out Button */}
       <button 
         onClick={() => clerk.signOut()} 
-        className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 border border-zinc-800 px-6 py-2.5 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '10px 24px', borderRadius: 12,
+          border: '1px solid #e2e8f0', background: '#ffffff',
+          color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
       >
-        <LogOut className="h-4 w-4" /> Sign out
+        <LogOut style={{ width: 15, height: 15 }} /> Sign out
       </button>
     </div>
   );
