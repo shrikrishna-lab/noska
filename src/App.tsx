@@ -36,8 +36,8 @@ import { initializeMemory } from "./ai/memory";
 import { realtimeCollab } from "./lib/realtimeCollab";
 (window as any).realtimeCollab = realtimeCollab;
 import { auditEngine } from "./lib/auditEngine";
-import { useAuth, useUser, useClerk } from "@clerk/react";
-import { supabase } from "./lib/supabase";
+import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
+import { supabase, setClerkSessionToken } from "./lib/supabase";
 import { WaitlistGate } from "./components/auth/WaitlistGate";
 import { TEST_MODE } from "./lib/envGuard";
 import { capture, identifyUser, resetIdentity } from "./lib/posthog";
@@ -199,6 +199,7 @@ function App() {
   // Clerk auth hooks — replaces Supabase auth session management
   const { isLoaded: clerkLoaded, isSignedIn } = useAuth();
   const { user: clerkUser } = useUser();
+  const { session } = useSession();
   const clerk = useClerk();
 
   useEffect(() => {
@@ -361,6 +362,14 @@ function App() {
       setSentryUser(null);
     }
   }, [isSignedIn, clerkUser]);
+
+  useEffect(() => {
+    if (session) {
+      setClerkSessionToken(() => session.getToken());
+    } else {
+      setClerkSessionToken(() => Promise.resolve(null));
+    }
+  }, [session]);
 
   useEffect(() => {
     let mounted = true;
