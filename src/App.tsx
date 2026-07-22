@@ -618,6 +618,7 @@ function App() {
       realtimeCollab.initUser(u.id, uname, u.imageUrl || '👤');
       setWorkspaceName(prev => prev === 'My Workspace' ? `${uname}'s Workspace` : prev);
       setCurrentUserId(u.id);
+      try { localStorage.setItem("noska_user_id", u.id); } catch {}
       setCurrentUserEmail(u.primaryEmailAddress?.emailAddress || null);
       loadCollabData(u.id);
 
