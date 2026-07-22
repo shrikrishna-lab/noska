@@ -18,7 +18,7 @@
 /* 1. Hero                                                           */
 /* ---------------------------------------------------------------- */
 .marketing .hero-section {
-  padding: 64px 0 40px 0;
+  padding: 80px 0 48px 0;
 }
 
 .marketing .hero-grid {
@@ -44,9 +44,9 @@
 }
 
 .marketing .hero-title {
-  font-size: 58px;
+  font-size: 56px;
   letter-spacing: -0.03em;
-  line-height: 1.06;
+  line-height: 1.12;
   margin-bottom: 24px;
   font-weight: 600;
   overflow: visible;
@@ -57,6 +57,7 @@
   font-style: italic;
   font-weight: 500;
   color: var(--mkt-text-secondary);
+  letter-spacing: 0.01em;
 }
 
 .marketing .word-reveal {

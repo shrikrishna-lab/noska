@@ -34,6 +34,7 @@ import ApiConsole from "./features/api/ApiConsole";
 import { aiManager } from "./ai/AIManager";
 import { initializeMemory } from "./ai/memory";
 import { realtimeCollab } from "./lib/realtimeCollab";
+(window as any).realtimeCollab = realtimeCollab;
 import { auditEngine } from "./lib/auditEngine";
 import { useAuth, useUser, useClerk } from "@clerk/react";
 import { supabase } from "./lib/supabase";

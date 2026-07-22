@@ -9,18 +9,27 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { FeedbackItem } from "@/lib/types";
 import { Star, MessageSquare, Archive, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import toast from "react-hot-toast";
 
 const statusColors: Record<string, "secondary" | "warning" | "default" | "success" | "destructive"> = {
   new: "secondary", in_review: "warning", planned: "default", shipped: "success", archived: "destructive",
 };
 
+const CATEGORIES = ["all", "ui", "performance", "feature", "bug", "praise"];
+
 export function Feedback() {
   const { data: feedback, isLoading } = useFeedback();
   const updateStatus = useUpdateFeedbackStatus();
   const [archiving, setArchiving] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState("all");
   useRealtimeInvalidate(["admin", "feedback"], "feedback");
+
+  const filtered = useMemo(() => {
+    if (!feedback) return [];
+    if (categoryFilter === "all") return feedback;
+    return feedback.filter((row) => row.category === categoryFilter);
+  }, [feedback, categoryFilter]);
 
   const columns: Column<FeedbackItem>[] = [
     { key: "user_name", label: "User", sortable: true, render: (row) => (
@@ -66,8 +75,24 @@ export function Feedback() {
   return (
     <div className="p-6">
       <PageHeader title="Feedback" description="User feedback and ratings" />
-      {feedback && feedback.length > 0 ? (
-        <DataTable columns={columns} data={feedback} searchPlaceholder="Search feedback..." />
+      <div className="mb-4 flex gap-2">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setCategoryFilter(cat)}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize",
+              categoryFilter === cat
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            )}
+          >
+            {cat === "feature" ? "Feature Request" : cat}
+          </button>
+        ))}
+      </div>
+      {filtered.length > 0 ? (
+        <DataTable columns={columns} data={filtered} searchPlaceholder="Search feedback..." />
       ) : (
         <EmptyState title="No feedback yet" description="User feedback will appear here once collected." />
       )}

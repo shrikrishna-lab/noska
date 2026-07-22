@@ -82,7 +82,7 @@ export function ScrollShowcase() {
         </div>
 
         <div className="scroll-showcase-sticky">
-          <MacWindow title="noska.app" className="scroll-showcase-window">
+          <MacWindow title="" className="scroll-showcase-window">
             <div className="scroll-showcase-dash-stage">
               <DashboardShell mode={STEPS[activeStep].id} instanceId="showcase" />
             </div>

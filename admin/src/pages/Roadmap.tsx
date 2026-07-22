@@ -12,7 +12,7 @@ import {
   Circle, User, GitBranch, MessageSquare, CheckSquare, Paperclip,
   Sparkles, Flag, BarChart3, Eye, EyeOff, MoreHorizontal,
   ChevronDown, ChevronRight, Zap, Target, Layers, Box, Rocket,
-  Calendar, ArrowRight, Link2, Columns3,
+  Calendar, ArrowRight, Link2, Columns3, ThumbsUp,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,7 @@ import {
   useRoadmapChecklists, useToggleChecklist, useAddChecklistItem,
   useRoadmapActivity, useRoadmapDependencies, useAddDependency,
 } from "@/lib/roadmap/hooks";
+import { useRoadmapVoteCounts } from "@/lib/queries";
 
 type ViewMode = "board" | "list" | "timeline";
 
@@ -72,18 +73,18 @@ function parseLabels(labels: unknown): string[] {
 
 // ─── Sortable Card ───
 
-function SortableFeatureCard({ feature, onSelect }: { feature: RoadmapFeature; onSelect: (f: RoadmapFeature) => void }) {
+function SortableFeatureCard({ feature, onSelect, voteCounts }: { feature: RoadmapFeature; onSelect: (f: RoadmapFeature) => void; voteCounts: Record<string, number> }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: feature.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <FeatureCard feature={feature} onSelect={onSelect} isDragging={isDragging} />
+      <FeatureCard feature={feature} onSelect={onSelect} isDragging={isDragging} voteCounts={voteCounts} />
     </div>
   );
 }
 
-function FeatureCard({ feature, onSelect, isDragging, isDraught }: { feature: RoadmapFeature; onSelect: (f: RoadmapFeature) => void; isDragging?: boolean; isDraught?: boolean }) {
+function FeatureCard({ feature, onSelect, isDragging, isDraught, voteCounts }: { feature: RoadmapFeature; onSelect: (f: RoadmapFeature) => void; isDragging?: boolean; isDraught?: boolean; voteCounts?: Record<string, number> }) {
   const PrioIcon = PRIORITY_ICONS[feature.priority] ?? ArrowUp;
   const statusColor = STATUS_COLORS[feature.status] || STATUS_COLORS.backlog;
   const [statusLabel] = statusColor.split(" ");
@@ -119,6 +120,11 @@ function FeatureCard({ feature, onSelect, isDragging, isDraught }: { feature: Ro
                 {feature.owner && (
                   <span className="flex items-center gap-1 text-[10px] text-zinc-500">
                     <User className="h-3 w-3" />{feature.owner}
+                  </span>
+                )}
+                {voteCounts && voteCounts[feature.id] > 0 && (
+                  <span className="flex items-center gap-1 text-[10px] text-zinc-400">
+                    <ThumbsUp className="h-3 w-3" />{voteCounts[feature.id]}
                   </span>
                 )}
               </div>
@@ -225,9 +231,9 @@ function SprintReleaseBar({ stats, sprints, releases }: { stats: RoadmapStats | 
 // ─── Board View (Kanban) ───
 
 function BoardView({
-  features, onSelect, onRefresh,
+  features, onSelect, onRefresh, voteCounts,
 }: {
-  features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void; onRefresh: () => void;
+  features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void; onRefresh: () => void; voteCounts: Record<string, number>;
 }) {
   const updateStatus = useUpdateRoadmapStatus();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -278,7 +284,7 @@ function BoardView({
                 <div className="space-y-2 min-h-[100px]">
                   <AnimatePresence>
                     {items.map((feature) => (
-                      <SortableFeatureCard key={feature.id} feature={feature} onSelect={onSelect} />
+                      <SortableFeatureCard key={feature.id} feature={feature} onSelect={onSelect} voteCounts={voteCounts} />
                     ))}
                   </AnimatePresence>
                   {items.length === 0 && (
@@ -293,7 +299,7 @@ function BoardView({
         })}
       </div>
       <DragOverlay>
-        {activeFeature && <div className="w-64 opacity-90"><FeatureCard feature={activeFeature} onSelect={() => {}} isDraught={true} /></div>}
+        {activeFeature && <div className="w-64 opacity-90"><FeatureCard feature={activeFeature} onSelect={() => {}} isDraught={true} voteCounts={voteCounts} /></div>}
       </DragOverlay>
     </DndContext>
   );
@@ -301,7 +307,7 @@ function BoardView({
 
 // ─── List View ───
 
-function ListView({ features, onSelect }: { features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void }) {
+function ListView({ features, onSelect, voteCounts }: { features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void; voteCounts: Record<string, number> }) {
   return (
     <div className="space-y-1">
       {features.map((f) => {
@@ -335,6 +341,11 @@ function ListView({ features, onSelect }: { features: RoadmapFeature[]; onSelect
                   <User className="h-3 w-3" />{f.owner}
                 </span>
               )}
+              {voteCounts[f.id] > 0 && (
+                <span className="flex items-center gap-1 text-[10px] text-zinc-400">
+                  <ThumbsUp className="h-3 w-3" />{voteCounts[f.id]}
+                </span>
+              )}
               <span className={cn("text-[10px] px-1.5 py-0.5 rounded", STATUS_COLORS[f.status]?.split(" ")[0] || "text-zinc-400")}>
                 {STATUS_LABELS[f.status] || f.status}
               </span>
@@ -348,7 +359,7 @@ function ListView({ features, onSelect }: { features: RoadmapFeature[]; onSelect
 
 // ─── Timeline View ───
 
-function TimelineView({ features, onSelect }: { features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void }) {
+function TimelineView({ features, onSelect, voteCounts }: { features: RoadmapFeature[]; onSelect: (f: RoadmapFeature) => void; voteCounts: Record<string, number> }) {
   const withDates = useMemo(() => features.filter((f) => f.start_date || f.target_date), [features]);
   const sorted = useMemo(() => [...withDates].sort((a, b) => {
     const aDate = a.start_date || a.target_date || a.created_at;
@@ -403,9 +414,9 @@ function TimelineView({ features, onSelect }: { features: RoadmapFeature[]; onSe
 // ─── Feature Detail Side Panel ───
 
 function FeatureDetailPanel({
-  feature, onClose, onRefresh,
+  feature, onClose, onRefresh, voteCounts,
 }: {
-  feature: RoadmapFeature; onClose: () => void; onRefresh: () => void;
+  feature: RoadmapFeature; onClose: () => void; onRefresh: () => void; voteCounts: Record<string, number>;
 }) {
   const island = useIslandNotification();
   const { confirm } = useConfirmDialog();
@@ -579,6 +590,7 @@ function FeatureDetailPanel({
                           </Section>
                           <Section label="ETA"><span className="text-sm text-zinc-300">{feature.eta || "Not set"}</span></Section>
                           <Section label="Status"><span className={cn("text-sm font-medium", STATUS_COLORS[feature.status]?.split(" ")[0])}>{STATUS_LABELS[feature.status] || feature.status}</span></Section>
+                          <Section label="Votes"><span className="text-sm text-zinc-300">{voteCounts?.[feature.id] ?? 0}</span></Section>
                           <Section label="Category"><span className="text-sm text-zinc-300">{feature.category || "Uncategorized"}</span></Section>
                           {parseLabels(feature.labels).length > 0 && (
                             <div className="col-span-2">
@@ -1041,6 +1053,7 @@ export function Roadmap() {
   const { data: sprints } = useRoadmapSprints();
   const { data: releases } = useRoadmapReleases();
   const deleteFeature = useDeleteRoadmapFeature();
+  const { data: voteCounts } = useRoadmapVoteCounts();
 
   const features = result?.data ?? [];
 
@@ -1192,9 +1205,9 @@ export function Roadmap() {
       {/* Content */}
       {filtered.length > 0 ? (
         <>
-          {view === "board" && <BoardView features={filtered} onSelect={setSelectedFeature} onRefresh={handleRefresh} />}
-          {view === "list" && <ListView features={filtered} onSelect={setSelectedFeature} />}
-          {view === "timeline" && <TimelineView features={filtered} onSelect={setSelectedFeature} />}
+          {view === "board" && <BoardView features={filtered} onSelect={setSelectedFeature} onRefresh={handleRefresh} voteCounts={voteCounts ?? {}} />}
+          {view === "list" && <ListView features={filtered} onSelect={setSelectedFeature} voteCounts={voteCounts ?? {}} />}
+          {view === "timeline" && <TimelineView features={filtered} onSelect={setSelectedFeature} voteCounts={voteCounts ?? {}} />}
         </>
       ) : (
         <div>
@@ -1219,7 +1232,7 @@ export function Roadmap() {
           <FeatureFormModal key="edit" feature={editingFeature} onClose={() => setEditingFeature(null)} onRefresh={handleRefresh} />
         )}
         {selectedFeature && (
-          <FeatureDetailPanel feature={selectedFeature} onClose={() => setSelectedFeature(null)} onRefresh={handleRefresh} />
+          <FeatureDetailPanel feature={selectedFeature} onClose={() => setSelectedFeature(null)} onRefresh={handleRefresh} voteCounts={voteCounts ?? {}} />
         )}
       </AnimatePresence>
     </div>

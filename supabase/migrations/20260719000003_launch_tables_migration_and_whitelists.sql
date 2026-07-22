@@ -251,7 +251,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.cta_buttons LIMIT 1);
 -- Landing content (7 sections)
 INSERT INTO public.landing_content (section, title, subtitle, body, cta_text, cta_link, sort_order, active)
 SELECT * FROM (VALUES
-  ('hero', 'The smartest place to think.', 'A calmer way to think on a page', NULL, 'Get started free', '/login', 1, true),
+   ('hero', 'The smartest place. to think', 'A calmer way to think on a page', NULL, 'Get started free', '/login', 1, true),
   ('features', 'Inside the workspace', 'Every way you work, in one place.', 'Consolidate docs, structured data, and AI into a single, quiet interface.', NULL, NULL, 2, true),
   ('faq', 'Good to know before you start.', NULL, NULL, NULL, NULL, 3, true),
   ('final_cta', 'Start writing in less than a minute.', NULL, 'No credit card. No fake trial countdown. Just a workspace that is ready when you are.', 'Get Noska free', '/login', 4, true),

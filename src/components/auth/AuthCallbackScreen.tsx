@@ -99,10 +99,10 @@ export function AuthCallbackScreen() {
 
         try {
           const { data: banned } = await supabase
-            .from("banned_users")
-            .select("id")
-            .eq("email", email.toLowerCase())
-            .maybeSingle();
+            .from("banned_users" as never)
+            .select("id" as never)
+            .eq("email" as never, email.toLowerCase())
+            .maybeSingle() as never;
           if (banned) {
             accessStatus = "banned";
           }

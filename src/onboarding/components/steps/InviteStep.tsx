@@ -1,17 +1,47 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Check, ChevronRight, Copy, X } from "lucide-react";
 import { C } from "../../theme";
 import { useOnboarding } from "../../hooks/useOnboarding";
 import { PrimaryBtn, SecondaryBtn } from "../Buttons";
+import { supabase } from "../../../lib/supabase";
 
 export default function InviteStep() {
   const { form, setFormField, next, back } = useOnboarding();
   const [email, setEmail] = useState("");
   const [copied, setCopied] = useState(false);
   const teammates = form.teammates || [];
-  // Stable per-mount invite code preview — not persisted, purely cosmetic
-  // until a real invite system exists.
-  const inviteCode = useMemo(() => crypto.randomUUID().replace(/-/g, "").slice(0, 12), []);
+
+  // Stable invite code — persisted in form state so it survives remounts
+  // and is available during onboarding finalization.
+  const inviteCode = useRef<string | null>(null);
+  if (!inviteCode.current) {
+    inviteCode.current = (form.inviteCode || crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase());
+    if (!form.inviteCode) {
+      queueMicrotask(() => setFormField("inviteCode", inviteCode.current!));
+    }
+  }
+
+  // Persist the invite code in the database (idempotent, runs once)
+  const persistInviteCode = useCallback(async () => {
+    const code = inviteCode.current;
+    if (!code) return;
+    try {
+      const user = (window as any).realtimeCollab as any;
+      const userId = user?.getUser?.()?.userId || localStorage.getItem("noska_user_id");
+      const userName = user?.getUser?.()?.userName || "New User";
+      if (!userId) return;
+      await supabase.rpc("create_user_invite_code" as never, {
+        p_code: code,
+        p_user_id: userId,
+        p_user_name: userName,
+      } as never);
+    } catch (e) {
+      // Non-critical — code is still valid client-side
+    }
+  }, []);
+
+  // Persist once on mount
+  useEffect(() => { persistInviteCode(); }, []);
 
   const add = () => {
     const t = email.trim();
@@ -22,10 +52,13 @@ export default function InviteStep() {
 
   const remove = (id) => setFormField("teammates", teammates.filter((m) => m.id !== id));
 
+  const codeStr = inviteCode.current || "";
+
   const copyLink = () => {
-    const link = `${window.location.origin}/invite/${inviteCode}`;
+    const link = `${window.location.origin}/invite/${codeStr}`;
     navigator.clipboard?.writeText(link).catch(() => {});
     setCopied(true);
+    persistInviteCode();
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -86,7 +119,7 @@ export default function InviteStep() {
           <p className="text-xs" style={{ color: C.muted }}>Or share your invite link</p>
           <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl" style={{ background: C.gray, border: `1px solid ${C.border}` }}>
             <span className="text-xs flex-1 truncate font-mono" style={{ color: C.muted }}>
-              noska.app/invite/{inviteCode}
+              {window.location.host}/invite/{codeStr}
             </span>
             <button
               onClick={copyLink}

@@ -143,7 +143,7 @@ export default function Home() {
             <h1 className="hero-title">
               <WordReveal text={hero?.title ? hero.title.split('.').slice(0, -1).join('.') || hero.title : "The smartest place"} delay={0.1} />
               <br />
-              <ShinyText className="hero-title-italic">{hero?.title?.includes('.') ? hero.title.split('.').pop() : "to think."}</ShinyText>
+              <ShinyText className="hero-title-italic">{hero?.title?.includes('.') ? hero.title.split('.').pop()?.trim() || "to think" : "to think"}</ShinyText>
             </h1>
 
             <div className="hero-typewriter-row">

@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Home, Sparkles, Calendar, Bell, Star, ChevronDown,
   PanelLeft, ArrowLeft, ArrowRight, LayoutGrid, Plus, Lock,
-  Link2, Bookmark, Settings, Undo2, Redo2, Sun, Check, GitBranch,
+  Link2, Bookmark, Undo2, Redo2, Sun, Check, GitBranch,
 } from 'lucide-react';
 import './DashboardShell.css';
 
@@ -78,7 +78,6 @@ function DashSidebar() {
           <span className="dash-logo-box"><img src="/logo.png" alt="" /></span>
           <span className="dash-ws-info">
             <span className="dash-ws-name">My Workspace</span>
-            <span className="dash-ws-sub">Noska Workspace</span>
           </span>
           <ChevronDown size={10} />
         </button>
@@ -204,7 +203,6 @@ function DashTopbar({ mode, instanceId }) {
       <button className={`dash-ai-btn ${mode === 'ai' ? 'active' : ''}`} tabIndex={-1}>
         <Sparkles size={11} /> Ask AI
       </button>
-      <span className="dash-icon-btn hide-sm"><Settings size={12} /></span>
       <span className="dash-icon-btn hide-sm"><Undo2 size={12} /></span>
       <span className="dash-icon-btn hide-sm"><Redo2 size={12} /></span>
       <span className="dash-icon-btn"><Sun size={12} /></span>

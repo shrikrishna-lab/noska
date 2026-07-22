@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEmailTemplates, useCreateEmailTemplate, useUpdateEmailTemplate, useDeleteEmailTemplate, useRealtimeInvalidate } from "@/lib/queries";
-import type { EmailTemplateRow } from "@/lib/queries";
+import type { EmailTemplate } from "@/lib/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, Pencil, Trash2, X, Loader2, LayoutTemplate, Download, Upload, Copy, Check } from "lucide-react";
@@ -21,7 +21,7 @@ const statusColors: Record<string, "default" | "secondary" | "success" | "warnin
   draft: "secondary", published: "success", archived: "default",
 };
 
-const columns: Column<EmailTemplateRow>[] = [
+const columns: Column<EmailTemplate>[] = [
   { key: "name", label: "Name", sortable: true, render: (row) => <span className="font-medium">{row.name}</span> },
   { key: "subject", label: "Subject", sortable: true, className: "text-muted-foreground max-w-[200px] truncate hidden md:table-cell" },
   { key: "category", label: "Category", sortable: true, render: (row) => <Badge variant="secondary">{row.category}</Badge> },
@@ -30,7 +30,7 @@ const columns: Column<EmailTemplateRow>[] = [
   { key: "created_at", label: "Created", sortable: true, render: (row) => formatRelativeTime(row.created_at) },
 ];
 
-function TemplateForm({ template, onClose }: { template?: EmailTemplateRow; onClose: () => void }) {
+function TemplateForm({ template, onClose }: { template?: EmailTemplate; onClose: () => void }) {
   const [name, setName] = useState(template?.name ?? "");
   const [subject, setSubject] = useState(template?.subject ?? "");
   const [description, setDescription] = useState(template?.description ?? "");
@@ -80,7 +80,7 @@ function TemplateForm({ template, onClose }: { template?: EmailTemplateRow; onCl
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={category} onValueChange={setCategory}>
+                <Select value={category} onValueChange={(v) => setCategory(v as typeof category)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["custom", "welcome", "marketing", "transactional", "notification", "newsletter"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
@@ -89,7 +89,7 @@ function TemplateForm({ template, onClose }: { template?: EmailTemplateRow; onCl
               </div>
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={status} onValueChange={setStatus}>
+                <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["draft", "published", "archived"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -120,12 +120,12 @@ export function ContentTemplates() {
   const { confirm } = useConfirmDialog();
   useRealtimeInvalidate(["admin", "templates"], "email_templates", "*");
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<EmailTemplateRow | null>(null);
+  const [editing, setEditing] = useState<EmailTemplate | null>(null);
   const [importing, setImporting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleDelete = async (template: EmailTemplateRow) => {
+  const handleDelete = async (template: EmailTemplate) => {
     const confirmed = await confirm({
       title: "Delete Template",
       description: `Are you sure you want to delete "${template.name}"? This action cannot be undone.`,
@@ -139,7 +139,7 @@ export function ContentTemplates() {
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to delete"); }
   };
 
-  const handleDuplicate = async (template: EmailTemplateRow) => {
+  const handleDuplicate = async (template: EmailTemplate) => {
     try {
       await createTemplate.mutateAsync({
         name: `${template.name} (Copy)`, subject: template.subject,
