@@ -255,18 +255,19 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
 
   return renderContainer(
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      {/* Icon Badge */}
+      {/* Noska Logo Badge */}
       <div style={{ position: 'relative', marginBottom: 18 }}>
         <div style={{
-          width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'linear-gradient(135deg, #ede9fe, #ddd6fe)',
-          boxShadow: '0 6px 20px -4px rgba(124, 58, 237, 0.2)'
+          width: 60, height: 60, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#ffffff',
+          boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)',
+          padding: 10
         }}>
-          <Sparkles style={{ width: 26, height: 26, color: '#7c3aed' }} />
+          <img src="/logo.png" alt="Noska Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
         <span style={{
-          position: 'absolute', top: -1, right: -1,
-          width: 13, height: 13, borderRadius: '50%',
+          position: 'absolute', top: 0, right: 0,
+          width: 14, height: 14, borderRadius: '50%',
           background: '#22c55e', border: '2.5px solid white',
           boxShadow: '0 2px 6px rgba(34, 197, 94, 0.4)'
         }} />
