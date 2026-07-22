@@ -430,7 +430,32 @@ export function LaunchControl() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Login Button Mode</Label>
+            <div className="flex items-center justify-between">
+              <Label>Login Button Mode</Label>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await updateSettings.mutateAsync({ login_mode: merged.login_mode, admin_name: user?.name });
+                    setLocal((p) => {
+                      const { login_mode, ...rest } = p;
+                      return rest;
+                    });
+                    if (!Object.keys(local).filter(k => k !== "login_mode").length) {
+                      setDirty(false);
+                    }
+                    toast.success("Login button mode saved");
+                  } catch (e) {
+                    toast.error("Failed to save: " + (e instanceof Error ? e.message : "Unknown"));
+                  }
+                }}
+                disabled={updateSettings.isPending}
+              >
+                {updateSettings.isPending ? <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+                Save
+              </Button>
+            </div>
             <Select value={merged.login_mode} onValueChange={(v) => set("login_mode", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
