@@ -78,7 +78,6 @@ function DashSidebar() {
           <span className="dash-logo-box"><img src="/logo.png" alt="" /></span>
           <span className="dash-ws-info">
             <span className="dash-ws-name">My Workspace</span>
-            <span className="dash-ws-sub">Noska Workspace</span>
           </span>
           <ChevronDown size={10} />
         </button>
