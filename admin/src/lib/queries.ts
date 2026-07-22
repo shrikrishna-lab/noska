@@ -298,6 +298,20 @@ export function useRoadmap() {
   });
 }
 
+export function useRoadmapVoteCounts() {
+  return useQuery({
+    queryKey: ["admin", "roadmap", "votes"],
+    queryFn: async () => {
+      const votes = await adminSelect<{ roadmap_item_id: string; email: string }>("roadmap_votes", "roadmap_item_id, email");
+      const map: Record<string, number> = {};
+      for (const v of votes) {
+        map[v.roadmap_item_id] = (map[v.roadmap_item_id] || 0) + 1;
+      }
+      return map;
+    },
+  });
+}
+
 export function useCreateRoadmapItem() {
   const qc = useQueryClient();
   return useMutation({
