@@ -19,13 +19,13 @@ import { getBlockDefinition, blocksToHtml, BLOCK_DEFINITIONS, SYSTEM_VARIABLES }
 import { sendEmail } from "@/lib/email";
 import {
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, Send, History, RotateCcw, ArrowUp, ArrowDown,
-  Copy, CheckCircle2, Archive,
+  Copy, CheckCircle2, Archive, Globe, Languages,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import type { EmailBlock, EmailBlockType, TemplateCategory } from "@/lib/types";
+import type { EmailBlock, EmailBlockType, TemplateCategory, TemplateLocale } from "@/lib/types";
+import { SUPPORTED_LOCALES } from "@/lib/types";
 
 const CATEGORIES: { value: TemplateCategory; label: string }[] = [
-  // ... same as EmailTemplates.tsx
   { value: "waitlist_confirmation", label: "Waitlist Confirmation" },
   { value: "waitlist_approved", label: "Waitlist Approved" },
   { value: "invitation", label: "Invitation" },
@@ -222,6 +222,9 @@ export function EmailTemplateEditor() {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState<TemplateCategory>("custom");
+  const [locale, setLocale] = useState<TemplateLocale>("en");
+  const [description, setDescription] = useState("");
+  const [plainText, setPlainText] = useState("");
   const [blocks, setBlocks] = useState<EmailBlock[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -233,6 +236,9 @@ export function EmailTemplateEditor() {
       setName(template.name);
       setSubject(template.subject || "");
       setCategory(template.category);
+      setLocale(template.locale || "en");
+      setDescription(template.description || "");
+      setPlainText(template.plain_text || "");
       setBlocks(Array.isArray(template.blocks) ? template.blocks : []);
     }
   }, [template]);
@@ -250,7 +256,8 @@ export function EmailTemplateEditor() {
     });
     await update.mutateAsync({
       id,
-      name, subject, category,
+      name, subject, category, locale, description: description || undefined,
+      plain_text: plainText || undefined,
       html_content: html,
       blocks: JSON.stringify(blocks),
       version: (template.version || 1) + 1,
@@ -258,7 +265,7 @@ export function EmailTemplateEditor() {
     setDirty(false);
     setSaving(false);
     toast.success("Template saved");
-  }, [id, template, user, name, subject, category, html, blocks, createVersion, update]);
+  }, [id, template, user, name, subject, category, locale, description, plainText, html, blocks, createVersion, update]);
 
   const handleTestSend = useCallback(async () => {
     if (!testEmail) { toast.error("Enter a test email address"); return; }
@@ -345,22 +352,43 @@ export function EmailTemplateEditor() {
                 <Input value={name} onChange={(e) => { setName(e.target.value); setDirty(true); }} />
               </div>
               <div className="space-y-1">
+                <Label className="text-xs">Description</Label>
+                <Textarea value={description} onChange={(e) => { setDescription(e.target.value); setDirty(true); }} placeholder="Brief description" rows={2} />
+              </div>
+              <div className="space-y-1">
                 <Label className="text-xs">Subject Line</Label>
                 <div className="flex gap-2">
                   <Input value={subject} onChange={(e) => { setSubject(e.target.value); setDirty(true); }} placeholder="Enter subject line" />
                   <VariableInserter onInsert={(v) => setSubject(subject + v)} />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Category</Label>
+                  <Select value={category} onValueChange={(v) => { setCategory(v as TemplateCategory); setDirty(true); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Language</Label>
+                  <Select value={locale} onValueChange={(v) => { setLocale(v as TemplateLocale); setDirty(true); }}>
+                    <SelectTrigger><Globe className="mr-1 h-3 w-3" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SUPPORTED_LOCALES.map((l) => (
+                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="space-y-1">
-                <Label className="text-xs">Category</Label>
-                <Select value={category} onValueChange={(v) => { setCategory(v as TemplateCategory); setDirty(true); }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">Plain Text</Label>
+                <Textarea value={plainText} onChange={(e) => { setPlainText(e.target.value); setDirty(true); }} placeholder="Plain text fallback..." rows={2} />
               </div>
             </CardContent>
           </Card>
@@ -417,7 +445,7 @@ export function EmailTemplateEditor() {
           <Card>
             <CardHeader><CardTitle className="text-sm">Preview</CardTitle></CardHeader>
             <CardContent>
-              <EmailPreview html={html} plainText={template.plain_text} />
+              <EmailPreview html={html} plainText={plainText || template.plain_text} />
             </CardContent>
           </Card>
         </div>

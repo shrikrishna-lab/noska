@@ -9,10 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEmailTemplates, useCreateEmailTemplate, useUpdateEmailTemplate, useDeleteEmailTemplate, useRealtimeInvalidate } from "@/lib/queries";
-import type { EmailTemplate } from "@/lib/types";
+import type { EmailTemplate, TemplateLocale } from "@/lib/types";
+import { SUPPORTED_LOCALES } from "@/lib/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Plus, Pencil, Trash2, X, Loader2, LayoutTemplate, Download, Upload, Copy, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Loader2, LayoutTemplate, Download, Upload, Copy, Check, Globe } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 import { formatRelativeTime } from "@/lib/utils";
@@ -35,6 +36,7 @@ function TemplateForm({ template, onClose }: { template?: EmailTemplate; onClose
   const [subject, setSubject] = useState(template?.subject ?? "");
   const [description, setDescription] = useState(template?.description ?? "");
   const [category, setCategory] = useState(template?.category ?? "custom");
+  const [locale, setLocale] = useState<TemplateLocale>(template?.locale ?? "en");
   const [htmlContent, setHtmlContent] = useState(template?.html_content ?? "");
   const [plainText, setPlainText] = useState(template?.plain_text ?? "");
   const [status, setStatus] = useState(template?.status ?? "draft");
@@ -47,7 +49,7 @@ function TemplateForm({ template, onClose }: { template?: EmailTemplate; onClose
     setSubmitting(true);
     try {
       const data = {
-        name, subject, description: description || undefined, category,
+        name, subject, description: description || undefined, category, locale,
         html_content: htmlContent || undefined, plain_text: plainText || undefined, status,
         version: template ? template.version + 1 : 1,
       };
@@ -93,6 +95,17 @@ function TemplateForm({ template, onClose }: { template?: EmailTemplate; onClose
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["draft", "published", "archived"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Language</Label>
+                <Select value={locale} onValueChange={(v) => setLocale(v as TemplateLocale)}>
+                  <SelectTrigger><Globe className="mr-1 h-3 w-3" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SUPPORTED_LOCALES.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -144,6 +157,7 @@ export function ContentTemplates() {
       await createTemplate.mutateAsync({
         name: `${template.name} (Copy)`, subject: template.subject,
         description: template.description, category: template.category,
+        locale: template.locale || "en",
         html_content: template.html_content, plain_text: template.plain_text,
         status: "draft", version: 1,
       });
@@ -183,6 +197,7 @@ export function ContentTemplates() {
           await createTemplate.mutateAsync({
             name: item.name, subject: item.subject,
             description: item.description || undefined, category: item.category || "custom",
+            locale: item.locale || "en",
             html_content: item.html_content || undefined, plain_text: item.plain_text || undefined,
             status: item.status || "draft", version: 1,
           });

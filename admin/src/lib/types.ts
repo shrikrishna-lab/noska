@@ -476,6 +476,55 @@ export interface EmailBlock {
   sort_order: number;
 }
 
+export type TemplateLocale =
+  | "en" | "es" | "fr" | "de" | "it" | "pt" | "pt-BR"
+  | "ru" | "ja" | "ko" | "zh" | "zh-TW" | "ar" | "hi"
+  | "nl" | "pl" | "sv" | "da" | "fi" | "nb" | "tr"
+  | "th" | "vi" | "id" | "ms" | "fil" | "uk" | "ro"
+  | "cs" | "hu" | "el" | "he" | "sk";
+
+export const SUPPORTED_LOCALES: { value: TemplateLocale; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+  { value: "it", label: "Italian" },
+  { value: "pt", label: "Portuguese" },
+  { value: "pt-BR", label: "Portuguese (Brazil)" },
+  { value: "ru", label: "Russian" },
+  { value: "ja", label: "Japanese" },
+  { value: "ko", label: "Korean" },
+  { value: "zh", label: "Chinese (Simplified)" },
+  { value: "zh-TW", label: "Chinese (Traditional)" },
+  { value: "ar", label: "Arabic" },
+  { value: "hi", label: "Hindi" },
+  { value: "nl", label: "Dutch" },
+  { value: "pl", label: "Polish" },
+  { value: "sv", label: "Swedish" },
+  { value: "da", label: "Danish" },
+  { value: "fi", label: "Finnish" },
+  { value: "nb", label: "Norwegian" },
+  { value: "tr", label: "Turkish" },
+  { value: "th", label: "Thai" },
+  { value: "vi", label: "Vietnamese" },
+  { value: "id", label: "Indonesian" },
+  { value: "ms", label: "Malay" },
+  { value: "fil", label: "Filipino" },
+  { value: "uk", label: "Ukrainian" },
+  { value: "ro", label: "Romanian" },
+  { value: "cs", label: "Czech" },
+  { value: "hu", label: "Hungarian" },
+  { value: "el", label: "Greek" },
+  { value: "he", label: "Hebrew" },
+  { value: "sk", label: "Slovak" },
+];
+
+export interface EmailTemplateTranslation {
+  subject: string;
+  html_content?: string;
+  plain_text?: string;
+}
+
 export interface EmailTemplate {
   id: string;
   name: string;
@@ -489,6 +538,8 @@ export interface EmailTemplate {
   thumbnail?: string;
   status: TemplateStatus;
   version: number;
+  locale: TemplateLocale;
+  translations: Record<string, EmailTemplateTranslation>;
   created_by?: string;
   created_at: string;
   updated_at: string;

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,14 @@ import {
 import { useAuth } from "@/lib/auth";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Link } from "react-router-dom";
-import { LayoutTemplate, Plus, Copy, Eye, RotateCcw, Archive, Trash2, Search, FileText, CheckCircle2, Edit, Upload, Loader2 } from "lucide-react";
+import {
+  LayoutTemplate, Plus, Copy, Eye, RotateCcw, Archive, Trash2, Search, FileText,
+  CheckCircle2, Edit, Upload, Loader2, Globe, Languages, AlertCircle, Download,
+} from "lucide-react";
 import toast from "react-hot-toast";
-import type { TemplateCategory, TemplateStatus } from "@/lib/types";
+import type { TemplateCategory, TemplateStatus, TemplateLocale, EmailBlock } from "@/lib/types";
+import { SUPPORTED_LOCALES } from "@/lib/types";
+import { getBlockDefinition } from "@/lib/emailBlocks";
 
 const CATEGORIES: { value: TemplateCategory; label: string }[] = [
   { value: "waitlist_confirmation", label: "Waitlist Confirmation" },
@@ -44,31 +49,122 @@ const STATUS_COLORS: Record<TemplateStatus, string> = {
   archived: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
 };
 
+function getLocaleLabel(locale: string): string {
+  return SUPPORTED_LOCALES.find((l) => l.value === locale)?.label ?? locale;
+}
+
+function buildStarterBlocks(templateType: string): EmailBlock[] {
+  const makeBlock = (type: string, overrides: Record<string, unknown> = {}): EmailBlock => {
+    const def = getBlockDefinition(type as any);
+    return {
+      id: crypto.randomUUID?.() ?? Math.random().toString(36),
+      type: type as any,
+      content: { ...(def?.defaultContent ?? {}), ...overrides },
+      sort_order: 0,
+    };
+  };
+  switch (templateType) {
+    case "welcome":
+      return [
+        makeBlock("logo", { alignment: "center" }),
+        makeBlock("hero", { image_url: "https://placehold.co/600x300/6366f1/ffffff?text=Welcome" }),
+        makeBlock("heading", { text: "Welcome aboard!", level: "h1", align: "center" }),
+        makeBlock("paragraph", { text: "We're thrilled to have you with us. Here's what you can expect next." }),
+        makeBlock("button", { text: "Get Started", url: "https://noska.dev" }),
+        makeBlock("divider", {}),
+        makeBlock("signature", {}),
+        makeBlock("footer", {}),
+      ];
+    case "waitlist_confirmation":
+      return [
+        makeBlock("logo", { alignment: "center" }),
+        makeBlock("heading", { text: "You're on the list!", level: "h1", align: "center" }),
+        makeBlock("paragraph", { text: "Thanks for joining the waitlist. We'll keep you posted on our progress and let you know as soon as we launch." }),
+        makeBlock("referral_card", {}),
+        makeBlock("divider", {}),
+        makeBlock("social_links", {}),
+        makeBlock("footer", {}),
+      ];
+    case "waitlist_approved":
+      return [
+        makeBlock("logo", { alignment: "center" }),
+        makeBlock("heading", { text: "You're in! 🎉", level: "h1", align: "center" }),
+        makeBlock("paragraph", { text: "Great news — you've been approved for early access! Click the button below to create your account and get started." }),
+        makeBlock("button", { text: "Create Account", url: "{{invite.link}}" }),
+        makeBlock("divider", {}),
+        makeBlock("signature", {}),
+        makeBlock("footer", {}),
+      ];
+    case "password_reset":
+      return [
+        makeBlock("logo", { alignment: "center" }),
+        makeBlock("heading", { text: "Reset your password", align: "center" }),
+        makeBlock("paragraph", { text: "We received a request to reset your password. Click the button below to set a new one." }),
+        makeBlock("button", { text: "Reset Password", url: "{{reset.link}}" }),
+        makeBlock("divider", {}),
+        makeBlock("paragraph", { text: "If you didn't request this, you can safely ignore this email.", font_size: 13 }),
+        makeBlock("footer", {}),
+      ];
+    case "newsletter":
+      return [
+        makeBlock("logo", { alignment: "center" }),
+        makeBlock("heading", { text: "Monthly Update", align: "center" }),
+        makeBlock("paragraph", { text: "Here's what's new this month at Noska." }),
+        makeBlock("feature_grid", { columns: "2", items: [
+          { icon: "🚀", title: "New Feature", desc: "Check out our latest release" },
+          { icon: "🐛", title: "Bug Fixes", desc: "Squashed some pesky bugs" },
+          { icon: "⚡", title: "Performance", desc: "Faster than ever" },
+          { icon: "💡", title: "Tips & Tricks", desc: "Get the most out of Noska" },
+        ] }),
+        makeBlock("divider", {}),
+        makeBlock("social_links", {}),
+        makeBlock("footer", {}),
+      ];
+    default:
+      return [
+        makeBlock("logo", { alignment: "center" }),
+        makeBlock("heading", { text: "Hello!", align: "center" }),
+        makeBlock("paragraph", { text: "Your email content goes here." }),
+        makeBlock("button", { text: "Learn More", url: "https://noska.dev" }),
+        makeBlock("footer", {}),
+      ];
+  }
+}
+
 function CreateTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { user } = useAuth();
   const create = useCreateEmailTemplate();
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
   const [category, setCategory] = useState<TemplateCategory>("custom");
+  const [locale, setLocale] = useState<TemplateLocale>("en");
+  const [plainText, setPlainText] = useState("");
+  const [starterType, setStarterType] = useState("none");
 
   const handleCreate = async () => {
     if (!name) { toast.error("Template name is required"); return; }
     if (!user) return;
+    const blocks = starterType !== "none" ? buildStarterBlocks(starterType) : [];
     await create.mutateAsync({
-      name, subject: subject || "{{subject}}", category,
-      html_content: "", plain_text: "", blocks: JSON.stringify([]),
-      variables: "{}", status: "draft", version: 1, created_by: user.id,
+      name, subject: subject || "{{subject}}", description: description || undefined,
+      category, locale,
+      html_content: "", plain_text: plainText || "",
+      blocks: JSON.stringify(blocks), variables: "{}",
+      translations: JSON.stringify({}),
+      status: "draft", version: 1, created_by: user.id,
     });
     toast.success("Template created");
     onOpenChange(false);
-    setName(""); setSubject(""); setCategory("custom");
+    setName(""); setSubject(""); setDescription(""); setCategory("custom");
+    setLocale("en"); setPlainText(""); setStarterType("none");
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>Create Template</DialogTitle></DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
           <div className="space-y-2">
             <Label>Template Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Welcome Email" />
@@ -78,15 +174,50 @@ function CreateTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenCha
             <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g., Welcome to Noska!" />
           </div>
           <div className="space-y-2">
-            <Label>Category</Label>
-            <Select value={category} onValueChange={(v) => setCategory(v as TemplateCategory)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Label>Description</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of this template" rows={2} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={category} onValueChange={(v) => setCategory(v as TemplateCategory)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Language</Label>
+              <Select value={locale} onValueChange={(v) => setLocale(v as TemplateLocale)}>
+                <SelectTrigger><Globe className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_LOCALES.map((l) => (
+                    <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Starter Content</Label>
+            <Select value={starterType} onValueChange={setStarterType}>
+              <SelectTrigger><SelectValue placeholder="Start from scratch" /></SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                ))}
+                <SelectItem value="none">Start from scratch</SelectItem>
+                <SelectItem value="welcome">Welcome Email</SelectItem>
+                <SelectItem value="waitlist_confirmation">Waitlist Confirmation</SelectItem>
+                <SelectItem value="waitlist_approved">Waitlist Approved</SelectItem>
+                <SelectItem value="password_reset">Password Reset</SelectItem>
+                <SelectItem value="newsletter">Newsletter</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Plain Text (optional)</Label>
+            <Textarea value={plainText} onChange={(e) => setPlainText(e.target.value)} placeholder="Plain text fallback for email clients..." rows={2} />
           </div>
           <Button onClick={handleCreate} disabled={create.isPending} className="w-full">
             {create.isPending ? "Creating..." : "Create Template"}
@@ -116,6 +247,49 @@ function PreviewDialog({ html, subject }: { html?: string; subject?: string }) {
   );
 }
 
+function ImportDropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const files = Array.from(e.dataTransfer.files).filter(
+      (f) => f.name.endsWith(".json") || f.name.endsWith(".html") || f.name.endsWith(".htm")
+    );
+    if (files.length === 0) { toast.error("Drop .json or .html files only"); return; }
+    onFiles(files);
+  }, [onFiles]);
+
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+      onClick={() => inputRef.current?.click()}
+      className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+        dragging ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
+      }`}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".json,.html,.htm"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = e.target.files ? Array.from(e.target.files) : [];
+          if (files.length) onFiles(files);
+          e.target.value = "";
+        }}
+      />
+      <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+      <p className="text-sm font-medium">Drop files here or click to browse</p>
+      <p className="text-xs text-muted-foreground mt-1">Accepts .json and .html/.htm files</p>
+    </div>
+  );
+}
+
 export function EmailTemplates() {
   const { user } = useAuth();
   const { data: templates, isLoading } = useEmailTemplates();
@@ -125,53 +299,59 @@ export function EmailTemplates() {
   const createVersion = useCreateEmailVersion();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [localeFilter, setLocaleFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [importing, setImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   useRealtimeInvalidate(["admin", "email-templates"], "email_templates");
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+  const handleImportFiles = async (files: File[]) => {
+    if (!user) return;
     setImporting(true);
-    try {
-      const text = await file.text();
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      if (ext === "json") {
-        const items = JSON.parse(text);
-        const arr = Array.isArray(items) ? items : [items];
-        let count = 0;
-        for (const item of arr) {
-          if (!item.name) continue;
+    let total = 0;
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        const ext = file.name.split(".").pop()?.toLowerCase();
+        if (ext === "json") {
+          const items = JSON.parse(text);
+          const arr = Array.isArray(items) ? items : [items];
+          for (const item of arr) {
+            if (!item.name) continue;
+            await create.mutateAsync({
+              name: item.name, subject: item.subject || "{{subject}}",
+              description: item.description || undefined,
+              category: item.category || "custom",
+              locale: item.locale || "en",
+              html_content: item.html_content || "", plain_text: item.plain_text || "",
+              blocks: item.blocks ? JSON.stringify(item.blocks) : "[]",
+              variables: "{}",
+              translations: item.translations ? JSON.stringify(item.translations) : "{}",
+              status: item.status || "draft", version: 1, created_by: user.id,
+            });
+            total++;
+          }
+        } else if (ext === "html" || ext === "htm") {
+          const name = file.name.replace(/\.(html|htm)$/i, "");
+          const subjectMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i);
+          const subject = subjectMatch ? subjectMatch[1].trim() : name;
+          if (!text.toLowerCase().includes("<html") && !text.toLowerCase().includes("<!doctype")) {
+            toast.error(`"${name}" doesn't look like a valid HTML file — missing <html> or DOCTYPE`);
+            continue;
+          }
           await create.mutateAsync({
-            name: item.name, subject: item.subject || "{{subject}}",
-            category: item.category || "custom",
-            html_content: item.html_content || "", plain_text: item.plain_text || "",
+            name, subject, category: "custom", locale: "en",
+            html_content: text, plain_text: "",
             blocks: "[]", variables: "{}",
-            status: item.status || "draft", version: 1, created_by: user.id,
+            translations: JSON.stringify({}),
+            status: "draft", version: 1, created_by: user.id,
           });
-          count++;
+          total++;
         }
-        toast.success(`${count} templates imported`);
-      } else if (ext === "html" || ext === "htm") {
-        const name = file.name.replace(/\.(html|htm)$/i, "");
-        const subjectMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i);
-        const subject = subjectMatch ? subjectMatch[1].trim() : name;
-        await create.mutateAsync({
-          name, subject,
-          category: "custom",
-          html_content: text, plain_text: "",
-          blocks: "[]", variables: "{}",
-          status: "draft", version: 1, created_by: user.id,
-        });
-        toast.success(`Imported "${name}" from HTML file`);
-      } else {
-        throw new Error(`Unsupported format: .${ext}. Use .json or .html`);
+      } catch (e) {
+        toast.error(`Failed to import "${file.name}": ${e instanceof Error ? e.message : "Invalid format"}`);
       }
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Invalid file format");
     }
+    if (total > 0) toast.success(`${total} template${total > 1 ? "s" : ""} imported`);
     setImporting(false);
   };
 
@@ -180,17 +360,19 @@ export function EmailTemplates() {
     return templates.filter((t) => {
       if (search && !t.name.toLowerCase().includes(search.toLowerCase()) && !(t.subject || "").toLowerCase().includes(search.toLowerCase())) return false;
       if (categoryFilter !== "all" && t.category !== categoryFilter) return false;
+      if (localeFilter !== "all" && t.locale !== localeFilter) return false;
       return true;
     });
-  }, [templates, search, categoryFilter]);
+  }, [templates, search, categoryFilter, localeFilter]);
 
   const handleDuplicate = async (t: NonNullable<typeof templates>[0]) => {
     if (!user) return;
     const newName = `${t.name} (Copy)`;
     await create.mutateAsync({
-      name: newName, subject: t.subject, category: t.category,
-      html_content: t.html_content, plain_text: t.plain_text,
+      name: newName, subject: t.subject, category: t.category, locale: t.locale,
+      description: t.description, html_content: t.html_content, plain_text: t.plain_text,
       blocks: JSON.stringify(t.blocks), variables: JSON.stringify(t.variables),
+      translations: JSON.stringify(t.translations ?? {}),
       status: "draft", version: 1, created_by: user.id,
     });
     toast.success("Template duplicated");
@@ -207,22 +389,35 @@ export function EmailTemplates() {
     toast.success(`Version ${t.version + 1} created`);
   };
 
+  const handleExport = () => {
+    if (!templates || templates.length === 0) return;
+    const exportData = templates.map(({ id, created_at, updated_at, ...rest }) => rest);
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `templates-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${templates.length} templates exported`);
+  };
+
   if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Email Templates" description="Create and manage email templates">
         <div className="flex gap-2">
-          <input ref={fileInputRef} type="file" accept=".json,.html,.htm" className="hidden" onChange={handleImport} />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-            {importing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Upload className="mr-1 h-4 w-4" />}
-            Import
+          <Button variant="outline" onClick={handleExport} disabled={!templates?.length}>
+            <Download className="mr-1 h-4 w-4" /> Export
           </Button>
           <Button onClick={() => setShowCreate(true)}><Plus className="mr-1 h-4 w-4" /> New Template</Button>
         </div>
       </PageHeader>
 
-      <div className="flex gap-3 items-center">
+      <ImportDropZone onFiles={handleImportFiles} />
+
+      <div className="flex gap-3 items-center flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -238,6 +433,15 @@ export function EmailTemplates() {
             <SelectItem value="all">All Categories</SelectItem>
             {CATEGORIES.map((c) => (
               <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={localeFilter} onValueChange={setLocaleFilter}>
+          <SelectTrigger className="w-40"><Languages className="mr-1 h-3.5 w-3.5" /><SelectValue placeholder="All Languages" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Languages</SelectItem>
+            {SUPPORTED_LOCALES.map((l) => (
+              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -261,7 +465,12 @@ export function EmailTemplates() {
                 <div className="flex items-start justify-between">
                   <div className="space-y-1 min-w-0">
                     <CardTitle className="text-sm truncate">{t.name}</CardTitle>
-                    <Badge variant="outline" className="text-[10px]">{CATEGORIES.find(c => c.value === t.category)?.label || t.category}</Badge>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <Badge variant="outline" className="text-[10px]">{CATEGORIES.find(c => c.value === t.category)?.label || t.category}</Badge>
+                      {t.locale && t.locale !== "en" && (
+                        <Badge variant="secondary" className="text-[10px]"><Globe className="mr-0.5 h-2.5 w-2.5" />{getLocaleLabel(t.locale)}</Badge>
+                      )}
+                    </div>
                   </div>
                   <Badge className={`text-[10px] ${STATUS_COLORS[t.status]}`}>{t.status}</Badge>
                 </div>

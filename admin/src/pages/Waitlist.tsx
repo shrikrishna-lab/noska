@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Portal } from "@/components/ui/Portal";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -14,7 +14,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Download, Mail, Trash2, Loader2, Check, X, Search, MessageSquare, ClipboardList, Clock, Eye, Link2, Copy, BarChart3, RefreshCw, Ban, UserX, AlertTriangle } from "lucide-react";
+import { Download, Mail, Trash2, Loader2, Check, X, Search, MessageSquare, ClipboardList, Clock, Eye, Link2, Copy, BarChart3, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 import { supabase, getAdminToken } from "@/lib/supabase";
@@ -151,6 +151,7 @@ function InvitePreviewModal({ entry, onClose }: { entry: DbWaitlistEntry; onClos
 }
 
 function NotesModal({ entry, onClose }: { entry: DbWaitlistEntry; onClose: () => void }) {
+  const qc = useQueryClient();
   const [notes, setNotes] = useState(entry.notes ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -159,10 +160,15 @@ function NotesModal({ entry, onClose }: { entry: DbWaitlistEntry; onClose: () =>
     try {
       const token = getAdminToken();
       if (!token || !supabase) { toast.error("No session"); return; }
-      await supabase.rpc("admin_update", {
+      const { error } = await supabase.rpc("admin_update", {
         p_session_token: token, p_table: "waitlist_entries", p_id: entry.id,
         p_data: { notes },
       });
+      if (error) throw error;
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
+        old?.map((e) => e.id === entry.id ? { ...e, notes } : e)
+      );
+      qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
       toast.success("Notes saved");
       onClose();
     } catch { toast.error("Failed to save notes"); }
@@ -248,30 +254,34 @@ export function Waitlist() {
   };
 
   const handleApprove = async (row: DbWaitlistEntry) => {
-    try {
-      const token = getAdminToken();
-      if (!token) { toast.error("No session"); return; }
-      await supabase?.functions.invoke("approve-waitlist", {
-        body: { waitlist_id: row.id, admin_name: row.name },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
-        old?.map((e) => e.id === row.id ? { ...e, status: "invited", approved_at: new Date().toISOString() } : e)
-      );
-      qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
-      toast.success(`${row.name} approved & invited`);
-    } catch { toast.error("Failed to approve"); }
+    const token = getAdminToken();
+    if (!token) { toast.error("No session"); return false; }
+    const { error } = await supabase!.functions.invoke("approve-waitlist", {
+      body: { waitlist_id: row.id, admin_name: row.name },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (error) { toast.error(error.message || "Failed to approve"); return false; }
+    qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
+      old?.map((e) => e.id === row.id ? { ...e, status: "invited", approved_at: new Date().toISOString(), invite_sent: true } : e)
+    );
+    qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
+    toast.success(`${row.name} approved & invited`);
+    return true;
   };
 
   const handleBulkApprove = async () => {
     if (!selectedIds.size) return;
     setBulkAction("approve");
     const ids = Array.from(selectedIds);
+    let success = 0;
     for (const id of ids) {
       const entry = entries?.find((e) => e.id === id);
-      if (entry) await handleApprove(entry);
+      if (entry && (await handleApprove(entry))) success++;
     }
-    toast.success(`Approved ${ids.length} entries`);
+    const msg = success === ids.length
+      ? `Approved ${ids.length} entries`
+      : `${success}/${ids.length} entries approved`;
+    toast.success(msg);
     setSelectedIds(new Set());
     setBulkAction(null);
   };
@@ -281,10 +291,11 @@ export function Waitlist() {
     if (!await confirm({ title: "Reject entries", description: `Reject ${selectedIds.size} selected entries?`, variant: "delete", confirmText: "Reject All", destructive: true })) return;
     setBulkAction("reject");
     const ids = Array.from(selectedIds);
+    let success = 0;
     for (const id of ids) {
-      try { await rejectEntry.mutateAsync(id); } catch { /* skip */ }
+      try { await rejectEntry.mutateAsync(id); success++; } catch { /* skip */ }
     }
-    toast.success(`Rejected ${ids.length} entries`);
+    toast.success(`${success}/${ids.length} entries rejected`);
     setSelectedIds(new Set());
     setBulkAction(null);
   };
@@ -294,10 +305,11 @@ export function Waitlist() {
     if (!await confirm({ title: "Delete entries", description: `Permanently delete ${selectedIds.size} selected entries?`, variant: "delete", confirmText: "Delete All" })) return;
     setBulkAction("delete");
     const ids = Array.from(selectedIds);
+    let success = 0;
     for (const id of ids) {
-      try { await deleteEntry.mutateAsync(id); } catch { /* skip */ }
+      try { await deleteEntry.mutateAsync(id); success++; } catch { /* skip */ }
     }
-    toast.success(`Deleted ${ids.length} entries`);
+    toast.success(`${success}/${ids.length} entries deleted`);
     setSelectedIds(new Set());
     setBulkAction(null);
   };
