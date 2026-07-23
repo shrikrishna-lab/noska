@@ -55,6 +55,8 @@ Deno.serve(async (req: Request) => {
 
     if (deleteErr) return respond({ error: "Database delete failed" }, 500)
 
+    await supabase.rpc("recalculate_waitlist_positions")
+
     return respond({ success: true })
   } catch (err) {
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), {
