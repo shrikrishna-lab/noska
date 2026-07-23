@@ -61,6 +61,7 @@ export default function Launch() {
   const [waitlistRole, setWaitlistRole] = useState('');
   const [waitlistCountry, setWaitlistCountry] = useState('');
   const [waitlistPhone, setWaitlistPhone] = useState('');
+  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
   const [waitlistReferralCode, setWaitlistReferralCode] = useState<string | null>(null);
   const scratchSectionRef = useRef(null);
 
