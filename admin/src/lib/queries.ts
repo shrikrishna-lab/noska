@@ -1133,10 +1133,12 @@ export function useDeleteWaitlistEntry() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_delete", {
-        p_session_token: token(), p_table: "waitlist_entries", p_id: id, p_min_role: "support",
+      const token = getAdminToken();
+      const { error } = await supabase.functions.invoke("delete-waitlist", {
+        body: { waitlist_id: id },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (error) throw error;
+      if (error) throw new Error(error.message || "Delete failed");
     },
     onMutate: async (id: string) => {
       await qc.cancelQueries({ queryKey: ["admin", "waitlist"] });
