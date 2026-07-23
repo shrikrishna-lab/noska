@@ -93,7 +93,7 @@ const MODE_CTA_PRESETS: Record<string, Record<string, { text: string; dest: stri
     final_cta_secondary: { text: "Learn more", dest: "/product" },
     mobile_login: { text: "Log in", dest: "/login" },
     mobile_cta: { text: "Join Waitlist", dest: "/launch" },
-    launch_navbar_login: { text: "Log in", dest: "/login" },
+    launch_navbar_login: { text: "Log in", dest: "/launch" },
     launch_navbar_cta: { text: "Join Waitlist", dest: "/launch" },
     launch_hero_primary: { text: "Join Waitlist", dest: "/launch" },
     launch_hero_secondary: { text: "Watch Demo", dest: "#demo" },
@@ -223,6 +223,7 @@ export function LaunchControl() {
         updates.show_docs = false;
         updates.show_login = false;
         updates.show_signup = false;
+        updates.login_mode = "launch";
         break;
       case "early_beta":
         updates.show_waitlist = false;
@@ -231,6 +232,7 @@ export function LaunchControl() {
         updates.show_docs = true;
         updates.show_login = true;
         updates.show_signup = false;
+        updates.login_mode = "login";
         break;
       case "closed_beta":
         updates.show_waitlist = false;
@@ -239,6 +241,7 @@ export function LaunchControl() {
         updates.show_docs = true;
         updates.show_login = true;
         updates.show_signup = false;
+        updates.login_mode = "login";
         break;
       case "open_beta":
         updates.show_waitlist = false;
@@ -247,6 +250,7 @@ export function LaunchControl() {
         updates.show_docs = true;
         updates.show_login = true;
         updates.show_signup = true;
+        updates.login_mode = "login";
         break;
       case "public":
         updates.show_waitlist = false;
@@ -255,6 +259,7 @@ export function LaunchControl() {
         updates.show_docs = true;
         updates.show_login = true;
         updates.show_signup = true;
+        updates.login_mode = "login";
         break;
       case "maintenance":
         updates.show_waitlist = false;
@@ -263,6 +268,7 @@ export function LaunchControl() {
         updates.show_docs = false;
         updates.show_login = false;
         updates.show_signup = false;
+        updates.login_mode = "launch";
         break;
     }
     setLocal((p) => ({ ...p, ...updates }));

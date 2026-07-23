@@ -11,7 +11,7 @@ const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY") ?? ""
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
 }
 
 Deno.serve(async (req: Request) => {
