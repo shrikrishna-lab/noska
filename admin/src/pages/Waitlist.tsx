@@ -361,6 +361,7 @@ export function Waitlist() {
         );
       },
     },
+    { key: "position", label: "#", sortable: true, className: "text-right w-14", render: (row) => <span className="tabular-nums">{row.position ?? "—"}</span> },
     { key: "referral_count", label: "Refs", sortable: true, className: "text-right", hideOnMobile: true },
     {
       key: "invite_code", label: "Code", hideOnMobile: true,
