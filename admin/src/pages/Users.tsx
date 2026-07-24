@@ -2,7 +2,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useUsers, useBanUser, useDeleteUserData, useRealtimeInvalidate, type AdminUserRow } from "@/lib/queries";
+import { useUsers, useBanUser, useHardBanUser, useDeleteUserData, useRealtimeInvalidate, type AdminUserRow } from "@/lib/queries";
 import { formatRelativeTime, initialsFromName } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -37,6 +37,7 @@ export function Users() {
   const canBan = user ? hasRole(user, "admin") : false;
 
   const banUser = useBanUser();
+  const hardBanUser = useHardBanUser();
   const deleteUser = useDeleteUserData();
 
   useRealtimeInvalidate(["admin", "users"], "user_profiles");
@@ -55,7 +56,12 @@ export function Users() {
               meta: { email: row.email || row.username || "User Account" },
               onConfirm: async (payload) => {
                 const reason = payload?.input || "No reason specified";
-                await banUser.mutateAsync({ user_id: row.id, reason, ban_type: payload?.duration === "permanent" ? "hard" : "soft" });
+                const isPermanent = payload?.duration === "permanent";
+                if (isPermanent) {
+                  await hardBanUser.mutateAsync({ user_id: row.id, reason });
+                } else {
+                  await banUser.mutateAsync({ user_id: row.id, reason, ban_type: "soft", expires_at: payload?.duration === "7_days" ? new Date(Date.now() + 7 * 86400000).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString() });
+                }
                 showSuccess(`Banned user ${row.user_name || row.email}`);
               }
             });

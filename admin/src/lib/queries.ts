@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
+import { adminApi } from "./admin-api";
 import type { SupportTicket, SupportMessage, BannedUser, DeletedAccount } from "./types";
 import type { FeatureFlag, FeedbackItem, EmailCampaign, RoadmapItem, Integration, ApiKey, NotificationItem } from "./types";
 
@@ -673,12 +674,7 @@ export function useBanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ user_id, reason, ban_type, expires_at }: { user_id: string; reason: string; ban_type: string; expires_at?: string | null }) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("ban_user", {
-        p_user_id: user_id, p_reason: reason, p_ban_type: ban_type,
-        p_expires_at: expires_at ?? null, p_session_token: token(),
-      });
-      if (error) throw error;
+      await adminApi.users.ban(user_id, reason, ban_type, expires_at);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "banned-users"] });
@@ -691,11 +687,7 @@ export function useHardBanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ user_id, reason }: { user_id: string; reason: string }) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("hard_ban_user", {
-        p_user_id: user_id, p_reason: reason, p_session_token: token(),
-      });
-      if (error) throw error;
+      await adminApi.users.hardBan(user_id, reason);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "banned-users"] });
@@ -708,9 +700,7 @@ export function useUnbanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (user_id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("unban_user", { p_user_id: user_id, p_session_token: token() });
-      if (error) throw error;
+      await adminApi.users.unban(user_id);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "banned-users"] });
@@ -723,9 +713,7 @@ export function useDeleteUserData() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (user_id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("delete_user_data", { p_user_id: user_id, p_session_token: token() });
-      if (error) throw error;
+      await adminApi.users.delete(user_id);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "users"] }); },
   });
@@ -744,9 +732,7 @@ export function useRestoreAccount() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (account_id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("restore_account", { p_account_id: account_id, p_session_token: token() });
-      if (error) throw error;
+      await adminApi.users.restore(account_id);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "deleted-accounts"] }); },
   });
@@ -756,9 +742,7 @@ export function usePermanentDeleteAccount() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (account_id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("permanently_delete_account", { p_account_id: account_id, p_session_token: token() });
-      if (error) throw error;
+      await adminApi.users.permanentDelete(account_id);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "deleted-accounts"] }); },
   });

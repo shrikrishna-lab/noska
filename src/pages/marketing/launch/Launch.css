@@ -1123,6 +1123,9 @@
 /* ============================================================
    Scratch reveal
    ============================================================ */
+/* ============================================================
+   Scratch reveal (Premium Apple / Framer PaintReveal styling)
+   ============================================================ */
 .noska-launch .nl-scratch-section {
   padding: 90px 0 60px 0;
   display: flex;
@@ -1132,83 +1135,187 @@
 .noska-launch .nl-scratch-card {
   position: relative;
   width: 100%;
-  max-width: 520px;
-  border-radius: var(--nl-radius-lg);
+  max-width: 540px;
+  min-height: 280px;
+  border-radius: 24px;
   overflow: hidden;
-  box-shadow: var(--nl-shadow-lg);
-  border: 1px solid var(--nl-border);
+  box-shadow: 0 20px 60px -15px rgba(109, 92, 255, 0.22), 0 8px 24px rgba(17, 17, 17, 0.06);
+  border: 1px solid rgba(226, 226, 222, 0.9);
   background-color: var(--nl-card);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
+.noska-launch .nl-scratch-card:hover {
+  box-shadow: 0 24px 70px -12px rgba(109, 92, 255, 0.28), 0 10px 30px rgba(17, 17, 17, 0.08);
+}
+
+.noska-launch .nl-scratch-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  cursor: grab;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.noska-launch .nl-scratch-canvas-wrap:active {
+  cursor: grabbing;
+}
+
+.noska-launch .nl-scratch-canvas-wrap canvas {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Underlying reveal card (positioned behind canvas) */
+.noska-launch .nl-scratch-under-reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 40%, rgba(109, 92, 255, 0.12) 0%, rgba(63, 166, 107, 0.08) 50%, var(--nl-card) 100%);
+  padding: 32px;
+}
+
+.noska-launch .nl-scratch-under-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.noska-launch .nl-scratch-under-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(109, 92, 255, 0.18) 0%, rgba(63, 166, 107, 0.18) 100%);
+  border: 1px solid rgba(109, 92, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nl-accent-ink);
+  box-shadow: 0 0 20px rgba(109, 92, 255, 0.2);
+}
+
+.noska-launch .nl-scratch-under-card h4 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nl-accent-ink);
+  margin: 0;
+}
+
+.noska-launch .nl-scratch-under-card p {
+  font-size: 13.5px;
+  color: var(--nl-text-secondary);
+  margin: 0;
+}
+
+/* Glassmorphic progress pill */
+.noska-launch .nl-scratch-progress-pill {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 226, 222, 0.8);
+  box-shadow: 0 4px 14px rgba(17, 17, 17, 0.08);
+  pointer-events: none;
+  overflow: hidden;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.noska-launch .nl-scratch-progress-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(109, 92, 255, 0.15) 0%, rgba(63, 166, 107, 0.2) 100%);
+  transition: width 0.15s ease-out;
+}
+
+.noska-launch .nl-scratch-progress-text {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nl-text);
+  letter-spacing: -0.01em;
+}
+
+/* Unlocked Revealed State Content */
 .noska-launch .nl-scratch-reveal-content {
   position: relative;
-  padding: 64px 40px;
+  padding: 54px 36px;
   text-align: center;
-  background: linear-gradient(160deg, var(--nl-accent-tint) 0%, var(--nl-bg-alt) 60%);
+  background: radial-gradient(circle at 50% 30%, rgba(109, 92, 255, 0.12) 0%, var(--nl-card) 80%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
 }
 
-.noska-launch .nl-scratch-reveal-emoji {
-  font-size: 40px;
+.noska-launch .nl-scratch-badge-wrapper {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.noska-launch .nl-scratch-badge-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(109, 92, 255, 0.28) 0%, rgba(63, 166, 107, 0.18) 70%, transparent 100%);
+  animation: nl-pulse-glow 3s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.noska-launch .nl-scratch-badge-icon {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(109, 92, 255, 0.18) 0%, rgba(63, 166, 107, 0.18) 100%);
+  border: 1px solid rgba(109, 92, 255, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nl-accent-ink);
+  box-shadow: 0 0 24px rgba(109, 92, 255, 0.25);
 }
 
 .noska-launch .nl-scratch-reveal-content h3 {
   font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--nl-text);
+  margin: 0;
 }
 
 .noska-launch .nl-scratch-reveal-content p {
   font-size: 15px;
   color: var(--nl-text-secondary);
-  max-width: 34ch;
-}
-
-.noska-launch .nl-scratch-canvas-wrap {
-  position: absolute;
-  inset: 0;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.noska-launch .nl-scratch-canvas-wrap canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.noska-launch .nl-scratch-hint {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  pointer-events: none;
-  color: var(--nl-text-secondary);
-  font-weight: 600;
-  font-size: 15px;
-  text-align: center;
-}
-
-.noska-launch .nl-scratch-hint .sparkle {
-  font-size: 26px;
-}
-
-.noska-launch .nl-scratch-progress {
-  position: absolute;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--nl-text-muted);
-  background-color: var(--nl-bg-alt);
-  border: 1px solid var(--nl-border);
-  padding: 4px 10px;
-  border-radius: 20px;
+  max-width: 36ch;
+  margin: 0 0 6px 0;
+  line-height: 1.5;
 }
 
 /* ============================================================
