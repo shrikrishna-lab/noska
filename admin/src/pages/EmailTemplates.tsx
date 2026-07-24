@@ -328,8 +328,9 @@ export function EmailTemplates() {
     await create.mutateAsync({
       name: newName, subject: t.subject, category: t.category, locale: t.locale,
       description: t.description, html_content: t.html_content, plain_text: t.plain_text,
-      blocks: JSON.stringify(t.blocks), variables: JSON.stringify(t.variables),
-      translations: JSON.stringify(t.translations ?? {}),
+      blocks: typeof t.blocks === "string" ? t.blocks : JSON.stringify(t.blocks ?? []),
+      variables: typeof t.variables === "string" ? t.variables : JSON.stringify(t.variables ?? {}),
+      translations: typeof t.translations === "string" ? t.translations : JSON.stringify(t.translations ?? {}),
       status: "draft", version: 1, created_by: user.id,
     });
     toast.success("Template duplicated");
