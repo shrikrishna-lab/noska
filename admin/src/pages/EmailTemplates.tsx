@@ -325,11 +325,16 @@ export function EmailTemplates() {
   const handleDuplicate = async (t: NonNullable<typeof templates>[0]) => {
     if (!user) return;
     const newName = `${t.name} (Copy)`;
+    const fmtVariables = (v: unknown): string => {
+      if (typeof v === "string") return v;
+      if (Array.isArray(v)) return v.length === 0 ? "{}" : `{${v.map(x => typeof x === "string" ? x : JSON.stringify(x)).join(",")}}`;
+      return "{}";
+    };
     await create.mutateAsync({
       name: newName, subject: t.subject, category: t.category, locale: t.locale,
       description: t.description, html_content: t.html_content, plain_text: t.plain_text,
       blocks: typeof t.blocks === "string" ? t.blocks : JSON.stringify(t.blocks ?? []),
-      variables: typeof t.variables === "string" ? t.variables : JSON.stringify(t.variables ?? {}),
+      variables: fmtVariables(t.variables),
       translations: typeof t.translations === "string" ? t.translations : JSON.stringify(t.translations ?? {}),
       status: "draft", version: 1, created_by: user.id,
     });
