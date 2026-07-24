@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import posthog from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { initPosthog } from "./lib/posthog";
 import { initSentry, Sentry } from "./lib/sentry";
 import App from "./App.jsx";
@@ -50,6 +51,7 @@ createRoot(document.getElementById("root")!).render(
             </div>
           </div>
         )}>
+        <SpeedInsights />
         <Routes>
           {/* Public marketing site — never runs the auth/session bootstrap.
               Each page shares the Navbar/Footer via MarketingLayout. */}
