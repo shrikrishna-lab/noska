@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Link } from "react-router-dom";
 import {
   LayoutTemplate, Plus, Copy, Eye, RotateCcw, Archive, Trash2, Search, FileText,
-  CheckCircle2, Edit, Upload, Loader2, Globe, Languages, AlertCircle, Download,
+  CheckCircle2, Edit, Upload, Loader2, Globe, Languages, Download,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { TemplateCategory, TemplateStatus, TemplateLocale, EmailBlock } from "@/lib/types";
@@ -247,49 +247,6 @@ function PreviewDialog({ html, subject }: { html?: string; subject?: string }) {
   );
 }
 
-function ImportDropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
-  const [dragging, setDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const files = Array.from(e.dataTransfer.files).filter(
-      (f) => f.name.endsWith(".json") || f.name.endsWith(".html") || f.name.endsWith(".htm")
-    );
-    if (files.length === 0) { toast.error("Drop .json or .html files only"); return; }
-    onFiles(files);
-  }, [onFiles]);
-
-  return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={handleDrop}
-      onClick={() => inputRef.current?.click()}
-      className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-        dragging ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
-      }`}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".json,.html,.htm"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          const files = e.target.files ? Array.from(e.target.files) : [];
-          if (files.length) onFiles(files);
-          e.target.value = "";
-        }}
-      />
-      <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-      <p className="text-sm font-medium">Drop files here or click to browse</p>
-      <p className="text-xs text-muted-foreground mt-1">Accepts .json and .html/.htm files</p>
-    </div>
-  );
-}
-
 export function EmailTemplates() {
   const { user } = useAuth();
   const { data: templates, isLoading } = useEmailTemplates();
@@ -408,14 +365,22 @@ export function EmailTemplates() {
     <div className="space-y-6">
       <PageHeader title="Email Templates" description="Create and manage email templates">
         <div className="flex gap-2">
+          <label className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent cursor-pointer transition-colors">
+            <Upload className="mr-1 h-4 w-4" /> Import
+            <input type="file" accept=".json,.html,.htm" multiple className="hidden"
+              onChange={(e) => {
+                const files = e.target.files ? Array.from(e.target.files) : [];
+                if (files.length) handleImportFiles(files);
+                e.target.value = "";
+              }}
+            />
+          </label>
           <Button variant="outline" onClick={handleExport} disabled={!templates?.length}>
             <Download className="mr-1 h-4 w-4" /> Export
           </Button>
           <Button onClick={() => setShowCreate(true)}><Plus className="mr-1 h-4 w-4" /> New Template</Button>
         </div>
       </PageHeader>
-
-      <ImportDropZone onFiles={handleImportFiles} />
 
       <div className="flex gap-3 items-center flex-wrap">
         <div className="relative flex-1 max-w-sm">
