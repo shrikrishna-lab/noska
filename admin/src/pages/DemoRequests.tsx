@@ -27,7 +27,7 @@ export function DemoRequests() {
   const { data: requests, isLoading } = useDemoRequests();
   const updateMutation = useUpdateDemoRequest();
   const deleteMutation = useDeleteDemoRequest();
-  const confirm = useConfirmDialog();
+  const { confirm } = useConfirmDialog();
   useRealtimeInvalidate(["admin", "demo-requests"], "demo_requests");
 
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
@@ -74,9 +74,9 @@ export function DemoRequests() {
   const handleDelete = async (id: string, name: string) => {
     const confirmed = await confirm({
       title: "Delete Demo Request",
-      message: `Delete request from ${name}? This cannot be undone.`,
-      confirmLabel: "Delete",
-      variant: "destructive",
+      description: `Delete request from ${name}? This cannot be undone.`,
+      confirmText: "Delete",
+      variant: "delete",
     });
     if (!confirmed) return;
     try {

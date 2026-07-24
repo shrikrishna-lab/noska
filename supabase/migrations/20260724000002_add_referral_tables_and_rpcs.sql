@@ -95,7 +95,8 @@ DECLARE
     'demo_requests',
     'email_templates', 'email_branding', 'email_segments',
     'email_versions', 'email_history', 'newsletter_subscribers',
-    'referral_rewards'
+    'referral_rewards',
+    'workspaces', 'teams'
   ];
 BEGIN
   v_admin_id := require_admin_role(p_session_token, p_min_role);
@@ -150,7 +151,8 @@ DECLARE
     'demo_requests',
     'email_templates', 'email_branding', 'email_segments',
     'email_versions', 'email_history', 'newsletter_subscribers',
-    'referral_rewards'
+    'referral_rewards',
+    'workspaces', 'teams'
   ];
 BEGIN
   v_admin_id := require_admin_role(p_session_token, p_min_role);
