@@ -641,3 +641,17 @@ export interface BroadcastCampaign {
   created_at: string;
   updated_at: string;
 }
+
+export interface DemoRequest {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+  employees: string;
+  message: string | null;
+  status: string;
+  notes: string | null;
+  assigned_to: string | null;
+  created_at: string;
+  updated_at: string;
+}

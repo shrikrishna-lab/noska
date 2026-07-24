@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AlertCircle } from 'lucide-react';
 import {
   Building2, Shield, Key, CheckCircle,
   ArrowRight, Lock, Globe2, Send, Terminal, History, UserCog, FileClock,
@@ -24,15 +25,41 @@ export default function Enterprise() {
     message: ''
   });
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.company) return;
+    setFormSubmitting(true);
+    setFormError('');
+
+    try {
+      const BASE = import.meta.env.VITE_SUPABASE_URL;
+      const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${BASE}/functions/v1/demo-request-submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON },
+        body: JSON.stringify(formData),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setFormError(err.error || `HTTP ${res.status}`);
+        setFormSubmitting(false);
+        return;
+      }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Something went wrong');
+      setFormSubmitting(false);
+      return;
+    }
+
+    setFormSubmitting(false);
     setFormSubmitted(true);
   };
 
@@ -323,8 +350,13 @@ export default function Enterprise() {
                     placeholder="Tell us what you are hoping to solve..."
                   />
                 </div>
-                <button type="submit" className="btn btn-primary submit-btn">
-                  Submit <Send size={14} />
+                {formError && (
+                  <div className="form-error" style={{ color: '#ef4444', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <AlertCircle size={14} /> {formError}
+                  </div>
+                )}
+                <button type="submit" className="btn btn-primary submit-btn" disabled={formSubmitting}>
+                  {formSubmitting ? 'Submitting...' : <><Send size={14} /> Submit</>}
                 </button>
               </form>
             )}

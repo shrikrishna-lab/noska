@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
 import { adminApi } from "./admin-api";
-import type { SupportTicket, SupportMessage, BannedUser, DeletedAccount } from "./types";
+import type { SupportTicket, SupportMessage, BannedUser, DeletedAccount, DemoRequest } from "./types";
 import type { FeatureFlag, FeedbackItem, EmailCampaign, RoadmapItem, Integration, ApiKey, NotificationItem } from "./types";
 
 function token(): string {
@@ -1873,6 +1873,51 @@ export function useDeleteReferralReward() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "referral-rewards"] }),
+  });
+}
+
+// ── Demo Requests ──
+export function useDemoRequests() {
+  return useQuery({
+    queryKey: ["admin", "demo-requests"],
+    queryFn: () => adminSelect<DemoRequest>("demo_requests", "*", { order: "created_at desc" }),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useUpdateDemoRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "demo_requests", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "demo-requests"] }),
+  });
+}
+
+export function useDeleteDemoRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "demo_requests", p_id: id,
+      });
+      if (error) throw error;
+    },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "demo-requests"] });
+      const previous = qc.getQueryData<DemoRequest[]>(["admin", "demo-requests"]);
+      qc.setQueryData<DemoRequest[]>(["admin", "demo-requests"], (old) => old?.filter((e) => e.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "demo-requests"], context.previous); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "demo-requests"] }),
   });
 }
 

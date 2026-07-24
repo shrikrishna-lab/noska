@@ -30,6 +30,7 @@ import { AnnouncementBarPage } from "@/pages/AnnouncementBar";
 import { WaitlistSettingsPage } from "@/pages/WaitlistSettings";
 import { SEOSettingsPage } from "@/pages/SEOSettings";
 import { SocialLinksPage } from "@/pages/SocialLinks";
+import { DemoRequests } from "@/pages/DemoRequests";
 
 import { Feedback } from "@/pages/Feedback";
 import { Support } from "@/pages/Support";
@@ -151,6 +152,7 @@ export default function App() {
                   <Route path="announcement-bar" element={<AnnouncementBarPage />} />
                   <Route path="waitlist-analytics" element={<WaitlistAnalyticsPage />} />
                   <Route path="waitlist-settings" element={<WaitlistSettingsPage />} />
+                  <Route path="demo-requests" element={<DemoRequests />} />
                   <Route path="seo-settings" element={<SEOSettingsPage />} />
                   <Route path="social-links" element={<SocialLinksPage />} />
                   <Route path="pages" element={<ContentPages />} />

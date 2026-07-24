@@ -76,6 +76,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/files", label: "Files", icon: HardDrive, group: "content" },
   { to: "/templates", label: "Templates", icon: LayoutTemplate, group: "content" },
   { to: "/waitlist", label: "Waitlist", icon: ListChecks, group: "growth" },
+  { to: "/demo-requests", label: "Demo Requests", icon: MessageSquare, group: "growth" },
   { to: "/users", label: "Users", icon: Users, group: "people" },
   { to: "/banned-users", label: "Banned Users", icon: Ban, group: "people", requiresRole: "admin" },
   { to: "/trash", label: "Trash", icon: Trash2, group: "people", requiresRole: "admin" },
