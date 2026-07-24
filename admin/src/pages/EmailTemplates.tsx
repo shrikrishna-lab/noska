@@ -228,6 +228,95 @@ function CreateTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   );
 }
 
+function PasteHtmlDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { user } = useAuth();
+  const create = useCreateEmailTemplate();
+  const [html, setHtml] = useState("");
+  const [name, setName] = useState("");
+  const [subject, setSubject] = useState("");
+  const [category, setCategory] = useState<TemplateCategory>("custom");
+  const [locale, setLocale] = useState<TemplateLocale>("en");
+
+  const handleCreate = async () => {
+    const trimmed = html.trim();
+    if (!trimmed) { toast.error("Paste HTML code first"); return; }
+    if (!user) return;
+    const finalName = name || (trimmed.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || "Imported Template");
+    const finalSubject = subject || finalName;
+    await create.mutateAsync({
+      name: finalName, subject: finalSubject, category, locale,
+      html_content: trimmed, plain_text: "",
+      blocks: "[]", variables: "{}",
+      translations: JSON.stringify({}),
+      status: "draft", version: 1, created_by: user.id,
+    });
+    toast.success("Template created from HTML");
+    onOpenChange(false);
+    setHtml(""); setName(""); setSubject(""); setCategory("custom"); setLocale("en");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader><DialogTitle>Paste HTML</DialogTitle></DialogHeader>
+        <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+          <div className="space-y-2">
+            <Label>HTML Code</Label>
+            <Textarea value={html} onChange={(e) => {
+              setHtml(e.target.value);
+              if (!name) {
+                const m = e.target.value.match(/<title[^>]*>([^<]*)<\/title>/i);
+                if (m) setName(m[1].trim());
+              }
+              if (!subject) {
+                const m = e.target.value.match(/<title[^>]*>([^<]*)<\/title>/i);
+                if (m) setSubject(m[1].trim());
+              }
+            }} placeholder="Paste your HTML email code here..." rows={14} className="font-mono text-sm" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Template Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Auto-detected from HTML" />
+            </div>
+            <div className="space-y-2">
+              <Label>Subject</Label>
+              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Auto-detected from &lt;title&gt;" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={category} onValueChange={(v) => setCategory(v as TemplateCategory)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Language</Label>
+              <Select value={locale} onValueChange={(v) => setLocale(v as TemplateLocale)}>
+                <SelectTrigger><Globe className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_LOCALES.map((l) => (
+                    <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button onClick={handleCreate} disabled={create.isPending} className="w-full">
+            {create.isPending ? "Creating..." : "Create Template"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PreviewDialog({ html, subject }: { html?: string; subject?: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -258,6 +347,7 @@ export function EmailTemplates() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [localeFilter, setLocaleFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [showPasteHtml, setShowPasteHtml] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   useRealtimeInvalidate(["admin", "email-templates"], "email_templates");
@@ -382,6 +472,9 @@ export function EmailTemplates() {
               e.target.value = "";
             }}
           />
+          <Button variant="outline" onClick={() => setShowPasteHtml(true)}>
+            <FileText className="mr-1 h-4 w-4" /> Paste HTML
+          </Button>
           <Button variant="outline" onClick={handleExport} disabled={!templates?.length}>
             <Download className="mr-1 h-4 w-4" /> Export
           </Button>
@@ -478,6 +571,7 @@ export function EmailTemplates() {
       )}
 
       <CreateTemplateDialog open={showCreate} onOpenChange={setShowCreate} />
+      <PasteHtmlDialog open={showPasteHtml} onOpenChange={setShowPasteHtml} />
     </div>
   );
 }
