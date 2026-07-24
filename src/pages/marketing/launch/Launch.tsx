@@ -25,6 +25,7 @@ import { UseCases } from './components/UseCases';
 import { FaqDrawers } from './components/FaqDrawers';
 import { ScratchReveal } from './components/ScratchReveal';
 import { LaunchFooter } from './components/LaunchFooter';
+import { WaitlistSuccessCard } from './components/WaitlistSuccessCard';
 import './Launch.css';
 
 const TYPEWRITER_WORDS = [
@@ -133,10 +134,16 @@ export default function Launch() {
           .maybeSingle() as any;
         if (entry) {
           setWaitlistPosition(entry.position as number);
-          setWaitlistReferralCode(entry.invite_code as string | null);
+          setWaitlistReferralCode((entry.invite_code as string) || email.split('@')[0]);
+        } else {
+          setWaitlistReferralCode(email.split('@')[0]);
         }
+      } else {
+        setWaitlistReferralCode(email.split('@')[0]);
       }
-    } catch {}
+    } catch {
+      setWaitlistReferralCode(email.split('@')[0]);
+    }
   };
 
   const scrollToScratch = () => {
@@ -243,37 +250,17 @@ export default function Launch() {
             <p>Notes, documents, databases, AI, projects, and collaboration—all in one beautiful workspace.</p>
 
             {waitlistSubmitted ? (
-              <div className="nl-waitlist-success">
-                <CheckCircle2 size={18} /> {waitlistSettings?.confirmation_title || "You're on the list — we'll be in touch."}
-                {waitlistPosition && (
-                  <p className="mt-2 text-sm text-zinc-400">
-                    Your queue position: <strong className="text-[#7c3aed]">#{waitlistPosition}</strong>
-                  </p>
-                )}
-                {waitlistReferralCode && (
-                  <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-900 p-4 text-left">
-                    <p className="mb-2 text-sm text-zinc-300 font-medium">Share & move up the queue</p>
-                    <p className="mb-2 text-xs text-zinc-500">Share your referral link — for each friend who joins, you move up one spot.</p>
-                    <div className="flex items-center gap-2">
-                      <input
-                        readOnly
-                        value={`${window.location.origin}/launch?ref=${waitlistReferralCode}`}
-                        className="flex-1 rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300"
-                        onClick={(e) => (e.target as HTMLInputElement).select()}
-                      />
-                      <button
-                        onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/launch?ref=${waitlistReferralCode}`)}
-                        className="rounded bg-[#7c3aed] px-3 py-1.5 text-xs text-white hover:bg-[#6d28d9]"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {waitlistSettings?.confirmation_message && (
-                  <p className="mt-3 text-sm text-zinc-400">{waitlistSettings.confirmation_message}</p>
-                )}
-              </div>
+              <WaitlistSuccessCard
+                confirmationTitle={waitlistSettings?.confirmation_title}
+                confirmationMessage={waitlistSettings?.confirmation_message}
+                position={waitlistPosition}
+                referralCode={waitlistReferralCode}
+                userEmail={waitlistEmail}
+                onReset={() => {
+                  setWaitlistSubmitted(false);
+                  setWaitlistEmail('');
+                }}
+              />
             ) : (
               <form className="nl-waitlist-form" onSubmit={handleWaitlistSubmit}>
                 {(!waitlistSettings || waitlistSettings.collect_name) && (

@@ -1301,18 +1301,335 @@
 }
 
 .noska-launch .nl-waitlist-success {
+  margin: 0 auto;
+  max-width: 460px;
+}
+
+/* ============================================================
+   Waitlist Success Confirmation UI Card
+   ============================================================ */
+
+.noska-launch .nl-waitlist-success-card {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 460px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px 26px;
+  border-radius: var(--nl-radius-md);
+  background-color: var(--nl-card);
+  border: 1px solid var(--nl-border);
+  box-shadow: var(--nl-shadow-lg);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.noska-launch .nl-waitlist-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.noska-launch .nl-waitlist-icon-wrapper {
+  position: relative;
+  width: 54px;
+  height: 54px;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 2px;
+}
+
+.noska-launch .nl-waitlist-icon-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(63, 166, 107, 0.25) 0%, rgba(109, 92, 255, 0.15) 70%, transparent 100%);
+  animation: nl-pulse-glow 3s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes nl-pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.4;
+  }
+}
+
+.noska-launch .nl-waitlist-icon-badge {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(63, 166, 107, 0.15) 0%, rgba(109, 92, 255, 0.15) 100%);
+  border: 1px solid rgba(63, 166, 107, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nl-success);
+}
+
+.noska-launch .nl-waitlist-card-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--nl-text);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.noska-launch .nl-waitlist-card-subtitle {
+  font-size: 14px;
+  color: var(--nl-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 380px;
+}
+
+/* Queue Position Card */
+.noska-launch .nl-waitlist-position-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px;
+  border-radius: var(--nl-radius-sm);
+  background: linear-gradient(180deg, var(--nl-bg) 0%, var(--nl-accent-tint) 100%);
+  border: 1px solid var(--nl-border-strong);
+  position: relative;
+}
+
+.noska-launch .nl-waitlist-position-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.noska-launch .nl-waitlist-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--nl-success);
+  box-shadow: 0 0 8px var(--nl-success);
+  animation: nl-blink 1.8s infinite ease-in-out;
+}
+
+@keyframes nl-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.noska-launch .nl-waitlist-position-tagline {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nl-text-muted);
+}
+
+.noska-launch .nl-waitlist-position-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
   gap: 8px;
+}
+
+.noska-launch .nl-waitlist-position-number {
+  font-size: 38px;
+  font-weight: 800;
+  font-family: var(--nl-font-heading);
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--nl-text) 0%, var(--nl-accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1;
+}
+
+.noska-launch .nl-waitlist-position-sub {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--nl-text-secondary);
+}
+
+.noska-launch .nl-waitlist-position-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--nl-text-secondary);
+  margin-top: 2px;
+}
+
+/* Referral Box */
+.noska-launch .nl-waitlist-referral-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--nl-radius-sm);
+  background-color: var(--nl-bg);
+  border: 1px solid var(--nl-border);
+  text-align: left;
+}
+
+.noska-launch .nl-waitlist-referral-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.noska-launch .nl-waitlist-referral-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nl-accent-ink);
+  background-color: var(--nl-accent-tint);
+  padding: 3px 8px;
+  border-radius: 6px;
+  width: fit-content;
+  margin-bottom: 2px;
+}
+
+.noska-launch .nl-waitlist-referral-header h4 {
   font-size: 14.5px;
   font-weight: 600;
-  color: var(--nl-success);
-  background-color: var(--nl-success-tint);
-  padding: 12px 20px;
-  border-radius: 12px;
-  max-width: 420px;
-  margin: 0 auto;
+  color: var(--nl-text);
+  margin: 0;
+}
+
+.noska-launch .nl-waitlist-referral-header p {
+  font-size: 12.5px;
+  color: var(--nl-text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Copy Link Input Bar */
+.noska-launch .nl-waitlist-copy-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--nl-card);
+  border: 1px solid var(--nl-border-strong);
+  border-radius: 10px;
+  padding: 4px 4px 4px 12px;
+  transition: border-color 0.2s ease;
+}
+
+.noska-launch .nl-waitlist-copy-bar:focus-within {
+  border-color: var(--nl-accent);
+}
+
+.noska-launch .nl-waitlist-copy-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--nl-text);
+  outline: none;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noska-launch .nl-waitlist-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #FFFFFF;
+  background-color: var(--nl-accent);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.noska-launch .nl-waitlist-copy-btn:hover {
+  background-color: var(--nl-accent-ink);
+}
+
+.noska-launch .nl-waitlist-copy-btn:active {
+  transform: scale(0.97);
+}
+
+.noska-launch .nl-waitlist-copy-btn.is-copied {
+  background-color: var(--nl-success);
+}
+
+/* Social Share Row */
+.noska-launch .nl-waitlist-social-share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.noska-launch .nl-waitlist-share-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--nl-text-muted);
+}
+
+.noska-launch .nl-waitlist-social-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.noska-launch .nl-social-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--nl-border-strong);
+  background-color: var(--nl-card);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--nl-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.noska-launch .nl-social-btn:hover {
+  border-color: var(--nl-accent);
+  background-color: var(--nl-accent-tint);
+  color: var(--nl-accent-ink);
+}
+
+/* Reset / Change email button */
+.noska-launch .nl-waitlist-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--nl-text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-top: -4px;
+  transition: color 0.15s ease;
+}
+
+.noska-launch .nl-waitlist-reset-btn:hover {
+  color: var(--nl-text);
 }
 
 /* ============================================================
