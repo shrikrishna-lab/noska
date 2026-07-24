@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDemoRequests, useRealtimeInvalidate, useUpdateDemoRequest, useDeleteDemoRequest } from "@/lib/queries";
+import type { DemoRequest } from "@/lib/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Mail, Trash2, Loader2, Check, X, Search, MessageSquare, Clock, Eye, ExternalLink, Copy, RefreshCw } from "lucide-react";
@@ -87,30 +88,30 @@ export function DemoRequests() {
     }
   };
 
-  const columns: Column[] = [
-    { key: "created_at", label: "Date", sortable: true, render: (v: string) => new Date(v).toLocaleDateString() },
+  const columns: Column<DemoRequest>[] = [
+    { key: "created_at", label: "Date", sortable: true, render: (row) => new Date(row.created_at).toLocaleDateString() },
     { key: "name", label: "Name", sortable: true },
     { key: "email", label: "Email", sortable: true },
     { key: "company", label: "Company", sortable: true },
     {
       key: "employees", label: "Size", sortable: true,
-      render: (v: string) => <span className="text-muted-foreground text-sm">{v} emp.</span>,
+      render: (row) => <span className="text-muted-foreground text-sm">{row.employees} emp.</span>,
     },
     {
       key: "status", label: "Status", sortable: true,
-      render: (v: string) => {
-        const cfg = STATUS_CONFIG[v] ?? { label: v, variant: "secondary" as const, color: "" };
+      render: (row) => {
+        const cfg = STATUS_CONFIG[row.status] ?? { label: row.status, variant: "secondary" as const, color: "" };
         return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
       },
     },
     {
       key: "id", label: "", sortable: false,
-      render: (_v: unknown, row: Record<string, unknown>) => (
+      render: (row) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="icon" onClick={() => setSelectedRequest(row.id as string)}>
+          <Button variant="ghost" size="icon" onClick={() => setSelectedRequest(row.id)}>
             <Eye className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => handleDelete(row.id as string, row.name as string)}>
+          <Button variant="ghost" size="icon" onClick={() => handleDelete(row.id, row.name)}>
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
         </div>
