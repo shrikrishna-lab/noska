@@ -386,13 +386,96 @@ export function useNotifications() {
 
 // ── Teams ──
 export interface DbTeam {
-  id: string; name: string; lead_name: string | null;
+  id: string; name: string; description: string | null; lead_name: string | null;
   member_count: number; workspace_count: number; created_at: string | null;
 }
 export function useTeams() {
   return useQuery({
     queryKey: ["admin", "teams"],
     queryFn: () => adminSelect<DbTeam>("teams", "*", { order: "name asc" }),
+  });
+}
+
+export function useUpdateTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "teams", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "teams"] }),
+  });
+}
+
+export function useDeleteTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "teams", p_id: id,
+      });
+      if (error) throw error;
+    },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "teams"] });
+      const previous = qc.getQueryData<DbTeam[]>(["admin", "teams"]);
+      qc.setQueryData<DbTeam[]>(["admin", "teams"], (old) => old?.filter((e) => e.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "teams"], context.previous); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "teams"] }),
+  });
+}
+
+// ── Workspaces ──
+export interface DbWorkspace {
+  id: string; name: string; owner_id: string | null; created_at: string; updated_at: string;
+}
+export function useWorkspaces() {
+  return useQuery({
+    queryKey: ["admin", "workspaces"],
+    queryFn: () => adminSelect<DbWorkspace>("workspaces", "*", { order: "created_at desc" }),
+  });
+}
+
+export function useUpdateWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "workspaces", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "workspaces"] }),
+  });
+}
+
+export function useDeleteWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "workspaces", p_id: id,
+      });
+      if (error) throw error;
+    },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "workspaces"] });
+      const previous = qc.getQueryData<DbWorkspace[]>(["admin", "workspaces"]);
+      qc.setQueryData<DbWorkspace[]>(["admin", "workspaces"], (old) => old?.filter((e) => e.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "workspaces"], context.previous); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "workspaces"] }),
   });
 }
 
@@ -1798,6 +1881,27 @@ export interface DbReferralCode {
   created_at: string; updated_at: string;
 }
 
+export interface AdminReferralCode extends DbReferralCode {
+  email: string | null;
+  user_name: string | null;
+}
+
+export interface AdminUserReferral {
+  id: string;
+  referrer_id: string;
+  referrer_email: string | null;
+  referrer_name: string | null;
+  referred_id: string;
+  referred_email: string | null;
+  referred_name: string | null;
+  referral_code_id: string | null;
+  status: string;
+  reward_claimed: boolean;
+  reward_id: string | null;
+  joined_at: string | null;
+  created_at: string;
+}
+
 export interface DbReferralReward {
   id: string; name: string; description: string | null;
   type: string; value: number; min_referrals: number;
@@ -1816,7 +1920,12 @@ export interface DbUserReferral {
 export function useReferralCodes() {
   return useQuery({
     queryKey: ["admin", "referral-codes"],
-    queryFn: () => adminSelect<DbReferralCode>("referral_codes", "*", { order: "created_at desc" }),
+    queryFn: async () => {
+      if (!SUPABASE_ENABLED || !supabase) return [];
+      const { data, error } = await supabase.rpc("get_admin_referral_codes", { p_session_token: token() });
+      if (error) throw error;
+      return (data ?? []) as AdminReferralCode[];
+    },
   });
 }
 
@@ -1830,7 +1939,12 @@ export function useReferralRewards() {
 export function useUserReferrals() {
   return useQuery({
     queryKey: ["admin", "user-referrals"],
-    queryFn: () => adminSelect<DbUserReferral>("user_referrals", "*", { order: "created_at desc" }),
+    queryFn: async () => {
+      if (!SUPABASE_ENABLED || !supabase) return [];
+      const { data, error } = await supabase.rpc("get_admin_user_referrals", { p_session_token: token() });
+      if (error) throw error;
+      return (data ?? []) as AdminUserReferral[];
+    },
   });
 }
 

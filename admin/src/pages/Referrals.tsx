@@ -233,11 +233,12 @@ export function Referrals() {
                     <div key={ref.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600">
-                          {ref.referred_id.slice(0, 2).toUpperCase()}
+                          {(ref.referred_name ?? ref.referred_id).slice(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{ref.referred_id.slice(0, 8)}...</p>
-                          <p className="text-xs text-gray-400">{new Date(ref.created_at).toLocaleDateString()}</p>
+                          <p className="text-sm font-medium text-gray-900">{ref.referred_name ?? "Unknown"}</p>
+                          <p className="text-xs text-gray-400">{ref.referred_email ?? ""}</p>
+                          <p className="text-xs text-gray-400">Referred by: {ref.referrer_name ?? "Unknown"} ({ref.referrer_email ?? ""})</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -269,6 +270,8 @@ export function Referrals() {
                           {code.code}
                         </div>
                         <div>
+                          <p className="text-sm font-medium text-gray-900">{code.user_name ?? "Unknown"}</p>
+                          <p className="text-xs text-gray-400">{code.email ?? ""}</p>
                           <p className="text-xs text-gray-400">Level {code.level} · {code.xp} XP</p>
                         </div>
                       </div>
