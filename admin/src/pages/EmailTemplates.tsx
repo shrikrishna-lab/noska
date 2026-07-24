@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -259,6 +259,7 @@ export function EmailTemplates() {
   const [localeFilter, setLocaleFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   useRealtimeInvalidate(["admin", "email-templates"], "email_templates");
 
   const handleImportFiles = async (files: File[]) => {
@@ -371,16 +372,16 @@ export function EmailTemplates() {
     <div className="space-y-6">
       <PageHeader title="Email Templates" description="Create and manage email templates">
         <div className="flex gap-2">
-          <label className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent cursor-pointer transition-colors">
-            <Upload className="mr-1 h-4 w-4" /> Import
-            <input type="file" accept=".json,.html,.htm" multiple className="hidden"
-              onChange={(e) => {
-                const files = e.target.files ? Array.from(e.target.files) : [];
-                if (files.length) handleImportFiles(files);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+            <Upload className="mr-1 h-4 w-4" /> {importing ? "Importing..." : "Import"}
+          </Button>
+          <input ref={fileInputRef} type="file" accept=".json,.html,.htm" multiple className="hidden"
+            onChange={(e) => {
+              const files = e.target.files ? Array.from(e.target.files) : [];
+              if (files.length) handleImportFiles(files);
+              e.target.value = "";
+            }}
+          />
           <Button variant="outline" onClick={handleExport} disabled={!templates?.length}>
             <Download className="mr-1 h-4 w-4" /> Export
           </Button>
