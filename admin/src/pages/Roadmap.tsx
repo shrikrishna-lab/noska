@@ -38,7 +38,7 @@ import {
   useRoadmapChecklists, useToggleChecklist, useAddChecklistItem,
   useRoadmapActivity, useRoadmapDependencies, useAddDependency,
 } from "@/lib/roadmap/hooks";
-import { useRoadmapVoteCounts } from "@/lib/queries";
+import { useRoadmapVoteCounts, useRealtimeInvalidate } from "@/lib/queries";
 
 const PRIORITY_ICONS: Record<string, typeof ArrowUp> = {
   critical: AlertTriangle, high: ArrowUp, medium: ArrowUp, low: ArrowUp, nice_to_have: Circle,
@@ -767,6 +767,8 @@ export function Roadmap() {
   const { data: releases } = useRoadmapReleases();
   const deleteFeature = useDeleteRoadmapFeature();
   const { data: voteCounts } = useRoadmapVoteCounts();
+  useRealtimeInvalidate(["roadmap", "features"], "roadmap_items");
+  useRealtimeInvalidate(["roadmap", "stats"], "roadmap_items");
 
   const features = result?.data ?? [];
 
