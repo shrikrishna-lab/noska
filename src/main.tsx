@@ -1,5 +1,5 @@
 import { ClerkProvider } from "@clerk/react";
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import posthog from "posthog-js";
@@ -10,28 +10,41 @@ import { initPosthog } from "./lib/posthog";
 import { initSentry, Sentry } from "./lib/sentry";
 import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
-import MarketingHome from "./pages/marketing/Home";
-import MarketingPricing from "./pages/marketing/Pricing";
-import MarketingEnterprise from "./pages/marketing/Enterprise";
-import MarketingProduct from "./pages/marketing/Product";
-import MarketingSolutions from "./pages/marketing/Solutions";
-import MarketingResources from "./pages/marketing/Resources";
-import MarketingChangelog from "./pages/marketing/Changelog";
-import MarketingBlog from "./pages/marketing/Blog";
-import BlogPost from "./pages/marketing/BlogPost";
-import Legal from "./pages/marketing/Legal";
-import Docs from "./pages/marketing/Docs";
-import Referrals from "./pages/marketing/Referrals";
-import Roadmap from "./pages/marketing/Roadmap";
-import NewUpdated from "./pages/marketing/NewUpdated";
-import Launch from "./pages/marketing/launch/Launch";
 import ControlCenter from "./ControlCenter";
-import { AuthCallbackScreen } from "./components/auth/AuthCallbackScreen";
-import { InvitePage } from "./pages/invite/InvitePage";
 import "./index.css";
 
-initPosthog();
-initSentry();
+const MarketingHome = lazy(() => import("./pages/marketing/Home"));
+const MarketingPricing = lazy(() => import("./pages/marketing/Pricing"));
+const MarketingEnterprise = lazy(() => import("./pages/marketing/Enterprise"));
+const MarketingProduct = lazy(() => import("./pages/marketing/Product"));
+const MarketingSolutions = lazy(() => import("./pages/marketing/Solutions"));
+const MarketingResources = lazy(() => import("./pages/marketing/Resources"));
+const MarketingChangelog = lazy(() => import("./pages/marketing/Changelog"));
+const MarketingBlog = lazy(() => import("./pages/marketing/Blog"));
+const BlogPost = lazy(() => import("./pages/marketing/BlogPost"));
+const Legal = lazy(() => import("./pages/marketing/Legal"));
+const Docs = lazy(() => import("./pages/marketing/Docs"));
+const Referrals = lazy(() => import("./pages/marketing/Referrals"));
+const Roadmap = lazy(() => import("./pages/marketing/Roadmap"));
+const NewUpdated = lazy(() => import("./pages/marketing/NewUpdated"));
+const Launch = lazy(() => import("./pages/marketing/launch/Launch"));
+const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
+const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
+
+const RouteFallback = () => (
+  <div className="flex min-h-screen items-center justify-center bg-white">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900" />
+  </div>
+);
+
+const preloader = document.getElementById("preloader");
+if (preloader) {
+  preloader.classList.add("hidden");
+  setTimeout(() => preloader.remove(), 500);
+}
+
+const deferInit = typeof requestIdleCallback !== "undefined" ? requestIdleCallback : (fn: () => void, opts?: { timeout: number }) => setTimeout(fn, opts?.timeout ?? 200);
+deferInit(() => { initPosthog(); initSentry(); }, { timeout: 500 });
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -54,9 +67,8 @@ createRoot(document.getElementById("root")!).render(
         )}>
         <SpeedInsights />
         <Analytics />
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
-          {/* Public marketing site — never runs the auth/session bootstrap.
-              Each page shares the Navbar/Footer via MarketingLayout. */}
           <Route path="/" element={<MarketingLayout><MarketingHome /></MarketingLayout>} />
           <Route path="/pricing" element={<MarketingLayout><MarketingPricing /></MarketingLayout>} />
           <Route path="/enterprise" element={<MarketingLayout><MarketingEnterprise /></MarketingLayout>} />
@@ -73,20 +85,10 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/referrals" element={<MarketingLayout><Referrals /></MarketingLayout>} />
           <Route path="/roadmap" element={<MarketingLayout><Roadmap /></MarketingLayout>} />
           <Route path="/new-updated" element={<MarketingLayout><NewUpdated /></MarketingLayout>} />
-          {/* Standalone pre-launch waitlist page — ships its own navbar,
-              footer, and smooth-scroll setup, so it deliberately skips
-              MarketingLayout (which would double up both). */}
           <Route path="/launch" element={<Launch />} />
           <Route path="/invite/:code" element={<InvitePage />} />
-          {/* SSO callback handler — branded Noska loading screen.
-              Processes the OAuth redirect, syncs user to Supabase, checks
-              waitlist status, then redirects to the appropriate destination. */}
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
-          {/* Admin portal — full-page redirect to the separate admin SPA */}
           <Route path="/control" element={<ControlCenter />} />
-          {/* Everything else (login, onboarding, and the workspace itself) is
-              handled by App, which reads the current route to decide what to
-              show and keeps the URL in sync as auth/onboarding state resolves. */}
           <Route path="/login" element={<App />} />
           <Route path="/onboarding" element={<App />} />
           <Route path="/waitlist" element={<App />} />
@@ -94,6 +96,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/:workspaceSlug" element={<App />} />
           <Route path="/:workspaceSlug/:pageId" element={<App />} />
         </Routes>
+        </Suspense>
         </Sentry.ErrorBoundary>
       </ClerkProvider>
       </PostHogProvider>

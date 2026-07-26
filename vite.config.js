@@ -30,6 +30,22 @@ export default defineConfig({
   },
   build: {
     sourcemap: process.env.SENTRY_AUTH_TOKEN ? true : false,
-    chunkSizeWarningLimit: 1200
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom") || id.includes("node_modules/react-router") || id.includes("node_modules/scheduler")) return "vendor";
+          if (id.includes("node_modules/framer-motion")) return "motion";
+          if (id.includes("node_modules/@clerk")) return "clerk";
+          if (id.includes("node_modules/@sentry")) return "sentry";
+          if (id.includes("node_modules/posthog")) return "posthog";
+          if (id.includes("node_modules/@supabase")) return "supabase";
+          if (id.includes("node_modules/@dnd-kit")) return "dnd";
+          if (id.includes("node_modules/lucide-react")) return "icons";
+          if (id.includes("node_modules/@radix-ui")) return "ui";
+          if (id.includes("node_modules")) return "vendor";
+        }
+      }
+    }
   }
 });

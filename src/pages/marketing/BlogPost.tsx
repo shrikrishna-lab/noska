@@ -436,7 +436,7 @@ export default function BlogPost() {
           {/* Cover Image */}
           {post.cover_image && (
             <div className="blog-post-cover">
-              <img src={post.cover_image} alt={post.title} />
+              <img src={post.cover_image} alt={post.title} loading="lazy" />
             </div>
           )}
 

@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import hljs from "highlight.js";
-import "highlight.js/styles/github-dark.css";
 import { Copy, Check, ChevronDown } from "lucide-react";
 import type { CodeBlockData } from "../../../types/blocks";
 
@@ -36,14 +34,33 @@ interface CodeBlockProps {
   onDelete?: () => void;
 }
 
+let _hljs: any = null;
+let _hljsPromise: Promise<void> | null = null;
+function ensureHljs(): Promise<void> {
+  if (!_hljsPromise) {
+    _hljsPromise = import("highlight.js").then((m) => {
+      _hljs = m.default;
+      import("highlight.js/styles/github-dark.css").catch(() => {});
+    });
+  }
+  return _hljsPromise;
+}
+
 export default function CodeBlock({ block, onPatch, isLocked, onDelete }: CodeBlockProps) {
   const [language, setLanguage] = useState(block.language || "javascript");
   const [copied, setCopied] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const codeRef = useRef<HTMLPreElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
+  const [hljsReady, setHljsReady] = useState(!!_hljs);
 
-  const highlighted = block.text ? hljs.highlight(block.text, { language: language === "plaintext" ? "plaintext" : language }).value : "";
+  useEffect(() => {
+    if (!_hljs) ensureHljs().then(() => setHljsReady(true));
+  }, []);
+
+  const highlighted = block.text && hljsReady
+    ? _hljs.highlight(block.text, { language: language === "plaintext" ? "plaintext" : language }).value
+    : block.text?.replace(/</g, "&lt;").replace(/>/g, "&gt;") || "";
 
   useEffect(() => {
     if (!langOpen) return;

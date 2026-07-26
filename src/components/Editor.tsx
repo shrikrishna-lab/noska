@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { SPRING_PRESETS } from "../features/motion/MotionSystem";
@@ -1498,7 +1498,7 @@ interface BlockProps {
   onSelectBlock: (e: React.PointerEvent) => void;
 }
 
-function Block({
+const Block = memo(function Block({
   block,
   index,
   page,
@@ -2498,7 +2498,7 @@ function Block({
       </div>
     </motion.div>
   );
-}
+});
 
 const QUICK_BLOCKS = [
   { type: "text", icon: Edit3, label: "Text" },
