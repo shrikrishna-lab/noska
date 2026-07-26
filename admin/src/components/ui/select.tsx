@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, type ElementRef, type ComponentPropsWithoutRef } from "react";
+import { forwardRef, type ElementRef, type ComponentPropsWithoutRef } from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,57 +19,24 @@ const SelectTrigger = forwardRef<ElementRef<typeof SelectPrimitive.Trigger>, Com
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
 const SelectContent = forwardRef<ElementRef<typeof SelectPrimitive.Content>, ComponentPropsWithoutRef<typeof SelectPrimitive.Content>>(
-  ({ className, children, position = "popper", ...props }, ref) => {
-    const contentRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      const el = contentRef.current;
-      if (!el) return;
-
-      const observer = new MutationObserver(() => {
-        if (document.body.style.pointerEvents === "none") {
-          document.body.style.pointerEvents = "";
-        }
-      });
-      observer.observe(document.body, { attributes: true, attributeFilter: ["style"] });
-
-      const handlePointerDown = (e: PointerEvent) => {
-        if (el && !el.contains(e.target as Node)) {
-          document.body.style.pointerEvents = "";
-        }
-      };
-      document.addEventListener("pointerdown", handlePointerDown, true);
-
-      return () => {
-        observer.disconnect();
-        document.removeEventListener("pointerdown", handlePointerDown, true);
-        document.body.style.pointerEvents = "";
-      };
-    }, []);
-
-    return (
-      <SelectPrimitive.Portal>
-        <SelectPrimitive.Content ref={(node) => {
-          if (typeof ref === "function") ref(node);
-          else if (ref) ref.current = node;
-          (contentRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        }}
-          className={cn(
-            "z-[100] max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md animate-fade-in data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-            position === "popper" && "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
-            className
-          )}
-          position={position}
-          onCloseAutoFocus={(e) => e.preventDefault()}
-          {...props}
-        >
-          <SelectPrimitive.Viewport className={cn("p-1", position === "popper" && "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]")}>
-            {children}
-          </SelectPrimitive.Viewport>
-        </SelectPrimitive.Content>
-      </SelectPrimitive.Portal>
-    );
-  }
+  ({ className, children, position = "popper", ...props }, ref) => (
+    <SelectPrimitive.Portal>
+      <SelectPrimitive.Content
+        ref={ref}
+        className={cn(
+          "z-[100] max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+          position === "popper" && "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+          className
+        )}
+        position={position}
+        {...props}
+      >
+        <SelectPrimitive.Viewport className={cn("p-1", position === "popper" && "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]")}>
+          {children}
+        </SelectPrimitive.Viewport>
+      </SelectPrimitive.Content>
+    </SelectPrimitive.Portal>
+  )
 );
 SelectContent.displayName = SelectPrimitive.Content.displayName;
 
