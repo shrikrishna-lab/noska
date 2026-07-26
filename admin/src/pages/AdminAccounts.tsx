@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "@/lib/supabase";
 import { useAdminUsers, useInviteAdmin, useDeleteAdmin, useUpdateAdminRole, type DbAdminUser, useRealtimeInvalidate } from "@/lib/queries";
+import { useAuth } from "@/lib/auth";
 import { initialsFromName } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -87,6 +88,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 export function AdminAccounts() {
   const { confirm } = useConfirmDialog();
   const { data: admins, isLoading } = useAdminUsers();
+  const { user: currentUser } = useAuth();
   const deleteAdmin = useDeleteAdmin();
   const updateRole = useUpdateAdminRole();
   const [showInvite, setShowInvite] = useState(false);
@@ -139,6 +141,7 @@ export function AdminAccounts() {
       render: (row) => (
         <div className="flex justify-end gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
+            if (currentUser?.id === row.id) { toast.error("You cannot delete your own account"); return; }
             if (!await confirm({ title: "Delete Admin", description: `Are you sure you want to delete "${row.name}"? This action cannot be undone.`, variant: "delete", confirmText: "Delete" })) return;
             try { await deleteAdmin.mutateAsync(row.id); toast.success("Admin deleted"); }
             catch { toast.error("Failed to delete admin"); }
