@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Confetti, Toast } from "./components/ui";
 import Sidebar from "./components/Sidebar";
@@ -11,31 +11,32 @@ import AuthPage from "./components/auth/AuthPage";
 import ClaimUsernameModal from "./components/auth/ClaimUsernameModal";
 import OnboardingPage from "./onboarding/pages/OnboardingPage";
 import { starterPageForTemplate } from "./onboarding/services/onboardingService";
-import AIPanel from "./components/AIPanel";
-import AIRightPanel from "./components/AIRightPanel";
 import CommandPalette from "./components/CommandPalette";
 import { SettingsModal, TrashModal, ShareModal, HelpModal, CustomDialog } from "./components/Modals";
 import FocusZoom from "./features/focus/FocusZoom";
 import StackedColumn from "./features/stacking/StackedColumn";
 import ReadingMode from "./features/reading/ReadingMode";
 import { motion, AnimatePresence } from "framer-motion";
-import CanvasView from "./features/canvas/CanvasView";
-import GraphView from "./features/graph/GraphView";
-
-// Phase 3-5 Feature Imports
-import ExportPanel from "./features/export/ExportPanel";
-import WebClipper from "./features/clipper/WebClipper";
-import VoiceCapture from "./features/voice/VoiceCapture";
-import SpacedRepetition from "./features/spaced/SpacedRepetition";
-import NoteLineage from "./features/lineage/NoteLineage";
-import CoThinking from "./features/collab/CoThinking";
-import { LockPageModal, encryptData, decryptData } from "./features/encryption/Encryption";
-import ApiConsole from "./features/api/ApiConsole";
+import { encryptData, decryptData } from "./features/encryption/Encryption";
 import { aiManager } from "./ai/AIManager";
 import { initializeMemory } from "./ai/memory";
 import { realtimeCollab } from "./lib/realtimeCollab";
 (window as any).realtimeCollab = realtimeCollab;
 import { auditEngine } from "./lib/auditEngine";
+
+const AIPanel = lazy(() => import("./components/AIPanel"));
+const AIRightPanel = lazy(() => import("./components/AIRightPanel"));
+const CanvasView = lazy(() => import("./features/canvas/CanvasView"));
+const GraphView = lazy(() => import("./features/graph/GraphView"));
+const ExportPanel = lazy(() => import("./features/export/ExportPanel"));
+const WebClipper = lazy(() => import("./features/clipper/WebClipper"));
+const VoiceCapture = lazy(() => import("./features/voice/VoiceCapture"));
+const SpacedRepetition = lazy(() => import("./features/spaced/SpacedRepetition"));
+const NoteLineage = lazy(() => import("./features/lineage/NoteLineage"));
+const CoThinking = lazy(() => import("./features/collab/CoThinking"));
+const LockPageModal = lazy(() => import("./features/encryption/Encryption").then(m => ({ default: m.LockPageModal })));
+const ApiConsole = lazy(() => import("./features/api/ApiConsole"));
+
 import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
 import { supabase, setClerkSessionToken } from "./lib/supabase";
 import { WaitlistGate } from "./components/auth/WaitlistGate";
@@ -1064,7 +1065,7 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const commitPages = (next: Page[]) => {
+  const commitPages = useCallback((next: Page[]) => {
     setHistory((h) => [...h.slice(-24), pages]);
     setFuture([]);
     setPages(next);
@@ -1074,7 +1075,7 @@ function App() {
         return p;
       })));
     } catch {}
-  };
+  }, [pages, setHistory, setFuture, setPages]);
 
   const normalizePageTree = (sourcePages: Page[], orderHints: Map<string, string[]> = new Map()) => normalizePages(sourcePages, orderHints);
 
@@ -1207,7 +1208,7 @@ function App() {
     commitPages(nextPages);
   };
 
-  const setThemeWithTransition = (nextTheme: string) => {
+  const setThemeWithTransition = useCallback((nextTheme: string) => {
     const animation = createThemeAnimation(themeFx.variant, themeFx.start, themeFx.blur, themeFx.gifUrl);
     ensureThemeTransitionStyles(animation.css);
     const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
@@ -1222,14 +1223,14 @@ function App() {
     } else {
       switchTheme();
     }
-  };
+  }, [themeFx, createThemeAnimation, ensureThemeTransitionStyles, setTheme]);
 
   interface PageSelectOptions {
     altKey?: boolean;
     sidePeek?: boolean;
   }
 
-  const handlePageSelect = (pageId: string, options: PageSelectOptions = {}) => {
+  const handlePageSelect = useCallback((pageId: string, options: PageSelectOptions = {}) => {
     setAppView("page");
     if (options.altKey || options.sidePeek) {
       setStackedPageIds((prev) => prev.includes(pageId) ? prev : [...prev, pageId]);
@@ -1243,9 +1244,9 @@ function App() {
       });
       setActiveId(pageId);
     }
-  };
+  }, [setAppView, setStackedPageIds, setActiveId]);
 
-  const navigateToChildPage = (pageId: string, options: PageSelectOptions = {}) => {
+  const navigateToChildPage = useCallback((pageId: string, options: PageSelectOptions = {}) => {
     setAppView("page");
     setActiveId(pageId);
     setStackedPageIds((prev) => {
@@ -1254,7 +1255,7 @@ function App() {
       if (options.altKey || options.sidePeek) return [...prev, pageId];
       return [...prev.slice(0, -1), pageId];
     });
-  };
+  }, [setAppView, setActiveId, setStackedPageIds]);
 
   const closeStackedColumn = (pageId: string) => {
     setStackedPageIds((prev) => {
@@ -1339,7 +1340,7 @@ function App() {
     });
   };
 
-  const updatePage = (id: string, patch: Partial<Page>) => {
+  const updatePage = useCallback((id: string, patch: Partial<Page>) => {
     // Route to the shared-page pipeline for ANY page id that's shared-not-
     // owned (not just the active page) — a shared page can also be open
     // in a background stacked column (see stackedPageIds.map above).
@@ -1422,16 +1423,16 @@ function App() {
         return p;
       });
     commitPages(patch.parentId !== undefined || patch.content !== undefined ? normalizePageTree(nextPages) : nextPages);
-  };
+  }, [pages, sharedPages, updateSharedPage, trashPageSubtree, restorePageSubtree, closeStackedColumn, auditEngine, realtimeCollab, stampBlockAttribution, now, commitPages, normalizePageTree]);
 
-  const updateBlocks = (blocks: Block[]) => {
+  const updateBlocks = useCallback((blocks: Block[]) => {
     const prev = pages.find(p => p.id === activePage.id);
     auditEngine.log({
       pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'system', userName: realtimeCollab.getUser()?.userName || 'System',
       action: 'edit', blockType: null, contentBefore: { blocks: prev?.blocks }, contentAfter: { blocks }, detail: 'Blocks updated'
     });
     updatePage(activePage.id, { blocks });
-  };
+  }, [pages, activePage, auditEngine, realtimeCollab, updatePage]);
 
   const openAIChat = (chatId: string | null = null) => {
     setActiveChatId(chatId);
@@ -1453,7 +1454,7 @@ function App() {
     updateBlocks(activePage.blocks.map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
   };
 
-  const undo = () => {
+  const undo = useCallback(() => {
     setHistory((h) => {
       if (!h.length) return h;
       const previous = h[h.length - 1];
@@ -1461,9 +1462,9 @@ function App() {
       setPages(previous);
       return h.slice(0, -1);
     });
-  };
+  }, [pages, setHistory, setFuture, setPages]);
 
-  const redo = () => {
+  const redo = useCallback(() => {
     setFuture((f) => {
       if (!f.length) return f;
       const next = f[0];
@@ -1471,7 +1472,7 @@ function App() {
       setPages(next);
       return f.slice(1);
     });
-  };
+  }, [pages, setFuture, setHistory, setPages]);
 
   interface AddPageOptions {
     modal?: boolean;
@@ -1872,7 +1873,7 @@ function App() {
     setAppView("page");
   };
 
-  const showToast = (message: string) => setToast(message);
+  const showToast = useCallback((message: string) => setToast(message), [setToast]);
 
   const handleUnlockPage = async (pageId: string, passphrase: string) => {
     const page = pages.find((p) => p.id === pageId);
@@ -1949,7 +1950,7 @@ function App() {
   // which page a block belongs to. `pageId`/`blockId`/`patch` are typed
   // loosely (`string | Record<string, unknown> | undefined`) to cover
   // both shapes; the runtime shuffle below narrows them per call.
-  const handleBlockPatchByPage = (pageIdOrBlockId: string, blockIdOrPatch: string | Record<string, unknown>, maybePatch?: Record<string, unknown>) => {
+  const handleBlockPatchByPage = useCallback((pageIdOrBlockId: string, blockIdOrPatch: string | Record<string, unknown>, maybePatch?: Record<string, unknown>) => {
     let pageId: string | null = pageIdOrBlockId;
     let blockId: string = blockIdOrPatch as string;
     let patch: Record<string, unknown> | undefined = maybePatch;
@@ -2001,7 +2002,7 @@ function App() {
         return page;
       })
     );
-  };
+  }, [pages, commitPages, now, stampBlockAttribution]);
 
   const renamePage = (pageId: string) => {
     setActiveId(pageId);
@@ -2318,7 +2319,7 @@ function App() {
                 >
                   {appView === "page" ? (
                     pageMode === "canvas" ? (
-                      <CanvasView
+                      <Suspense fallback={null}><CanvasView
                         page={activePage}
                         onBlockPatch={(blockId, patch) => {
                           if (!activePage?.blocks) return;
@@ -2335,13 +2336,13 @@ function App() {
                             blocks: [...activePage.blocks.slice(0, index + 1), block, ...activePage.blocks.slice(index + 1)]
                           });
                         }}
-                      />
+                      /></Suspense>
                     ) : pageMode === "graph" ? (
-                      <GraphView
+                      <Suspense fallback={null}><GraphView
                         pages={pages}
                         activeId={activeId}
                         onSelect={handlePageSelect}
-                      />
+                      /></Suspense>
                     ) : (
                       <div className="flex-1 flex overflow-x-auto overflow-y-hidden divide-x divide-[var(--border)]">
                         <AnimatePresence mode="popLayout">
@@ -2495,7 +2496,7 @@ function App() {
               onToast={showToast}
             />
           )}
-          <AIPanel
+          <Suspense fallback={null}><AIPanel
             open={aiOpen}
             onClose={() => setAiOpen(false)}
             page={activePage}
@@ -2517,8 +2518,8 @@ function App() {
             onReplaceText={(text) => updateBlocks([{ id: uid(), type: "callout", text, meta: { tone: "tip", icon: "✦" } }, ...activePage.blocks])}
             onToast={showToast}
             toolContext={toolContext}
-          />
-          <AIRightPanel
+          /></Suspense>
+          <Suspense fallback={null}><AIRightPanel
             open={aiRightOpen}
             onClose={() => setAiRightOpen(false)}
             page={activePage}
@@ -2542,7 +2543,7 @@ function App() {
             onReplaceText={(text) => updateBlocks([{ id: uid(), type: "callout", text, meta: { tone: "tip", icon: "✦" } }, ...activePage.blocks])}
             onToast={showToast}
             toolContext={toolContext}
-          />
+          /></Suspense>
           <AnimatePresence>
             {paletteOpen && (
               // IMPORTANT — do not "fix" by adding `open={paletteOpen}` here.
@@ -2636,87 +2637,80 @@ function App() {
             {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
             
             {/* Phase 3-5 Feature Modals */}
-            {exportOpen && (
-              <ExportPanel
-                page={activePage}
-                pages={pages}
-                onClose={() => setExportOpen(false)}
-                onToast={showToast}
-              />
-            )}
-            {clipperOpen && (
-              <WebClipper
-                onClose={() => setClipperOpen(false)}
-                onAppendBlocks={(blocks) => updateBlocks([...activePage.blocks, ...blocks])}
-                apiKey={apiKey}
-                aiProvider={aiProvider}
-                nvidiaKey={nvidiaKey}
-                onToast={showToast}
-                pageTitle={activePage?.title}
-              />
-            )}
-            {voiceOpen && (
-              <VoiceCapture
-                onAppendBlocks={(blocks) => updateBlocks([...activePage.blocks, ...blocks])}
-                onClose={() => setVoiceOpen(false)}
-                apiKey={apiKey}
-                aiProvider={aiProvider}
-                nvidiaKey={nvidiaKey}
-                onToast={showToast}
-              />
-            )}
-            {reviewOpen && (
-              <SpacedRepetition
-                pages={pages}
-                onBlockPatch={handleBlockPatchByPage}
-                onClose={() => setReviewOpen(false)}
-                onToast={showToast}
-              />
-            )}
-            {lineageOpen && (
-              <NoteLineage
-                page={activePage}
-                pages={pages}
-                onClose={() => setLineageOpen(false)}
-              />
-            )}
-            {collabOpen && (
-              // Real gap found here: CoThinking.jsx genuinely calls
-              // `onBlockPatch(blockId, patch)` (to attach comments to a
-              // block) but this call site never passed it — every
-              // comment attempt in CoThinking would throw
-              // ("onBlockPatch is not a function"). handleBlockPatchByPage
-              // already supports exactly this 2-arg calling convention
-              // (see its own comment), so it's the correct handler to
-              // wire up here, matching how it's used at every other
-              // 2-arg call site (SpacedRepetition, WorkspaceView).
-              <CoThinking
-                page={activePage}
-                onBlockPatch={handleBlockPatchByPage}
-                onClose={() => setCollabOpen(false)}
-                onToast={showToast}
-              />
-            )}
-            {encryptOpen && (
-              <LockPageModal
-                pageTitle={activePage.title}
-                onLock={async (passphrase) => {
-                  await handleLockPage(activePage.id, passphrase);
-                }}
-                onClose={() => setEncryptOpen(false)}
-                onToast={showToast}
-              />
-            )}
-            {apiConsoleOpen && (
-              <ApiConsole
-                pages={pages}
-                activePageId={activeId}
-                addPage={addPage}
-                updatePage={updatePage}
-                onClose={() => setApiConsoleOpen(false)}
-                onToast={showToast}
-              />
-            )}
+            <Suspense fallback={null}>
+              {exportOpen && (
+                <ExportPanel
+                  page={activePage}
+                  pages={pages}
+                  onClose={() => setExportOpen(false)}
+                  onToast={showToast}
+                />
+              )}
+              {clipperOpen && (
+                <WebClipper
+                  onClose={() => setClipperOpen(false)}
+                  onAppendBlocks={(blocks) => updateBlocks([...activePage.blocks, ...blocks])}
+                  apiKey={apiKey}
+                  aiProvider={aiProvider}
+                  nvidiaKey={nvidiaKey}
+                  onToast={showToast}
+                  pageTitle={activePage?.title}
+                />
+              )}
+              {voiceOpen && (
+                <VoiceCapture
+                  onAppendBlocks={(blocks) => updateBlocks([...activePage.blocks, ...blocks])}
+                  onClose={() => setVoiceOpen(false)}
+                  apiKey={apiKey}
+                  aiProvider={aiProvider}
+                  nvidiaKey={nvidiaKey}
+                  onToast={showToast}
+                />
+              )}
+              {reviewOpen && (
+                <SpacedRepetition
+                  pages={pages}
+                  onBlockPatch={handleBlockPatchByPage}
+                  onClose={() => setReviewOpen(false)}
+                  onToast={showToast}
+                />
+              )}
+              {lineageOpen && (
+                <NoteLineage
+                  page={activePage}
+                  pages={pages}
+                  onClose={() => setLineageOpen(false)}
+                />
+              )}
+              {collabOpen && (
+                <CoThinking
+                  page={activePage}
+                  onBlockPatch={handleBlockPatchByPage}
+                  onClose={() => setCollabOpen(false)}
+                  onToast={showToast}
+                />
+              )}
+              {encryptOpen && (
+                <LockPageModal
+                  pageTitle={activePage.title}
+                  onLock={async (passphrase) => {
+                    await handleLockPage(activePage.id, passphrase);
+                  }}
+                  onClose={() => setEncryptOpen(false)}
+                  onToast={showToast}
+                />
+              )}
+              {apiConsoleOpen && (
+                <ApiConsole
+                  pages={pages}
+                  activePageId={activeId}
+                  addPage={addPage}
+                  updatePage={updatePage}
+                  onClose={() => setApiConsoleOpen(false)}
+                  onToast={showToast}
+                />
+              )}
+            </Suspense>
             {dialogState.open && (
               <CustomDialog
                 open={dialogState.open}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronDown,
@@ -66,7 +66,7 @@ interface TopbarProps {
 // is out of scope for this migration pass.
 const asLucideIcon = (icon: unknown) => icon as LucideIcon;
 
-export default function Topbar({
+const Topbar = memo(function Topbar({
   page,
   sidebarOpen,
   saveState,
@@ -175,4 +175,6 @@ export default function Topbar({
       </button>
     </header>
   );
-}
+});
+
+export default Topbar;

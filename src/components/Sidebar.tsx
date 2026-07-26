@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, memo } from "react";
 import type { ReactNode, ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -117,7 +117,7 @@ interface SidebarProps {
   currentUserEmail?: string | null;
 }
 
-export default function Sidebar({
+const Sidebar = memo(function Sidebar({
   open,
   pages,
   trashCount,
@@ -547,7 +547,7 @@ export default function Sidebar({
       </div>
     </motion.aside>
   );
-}
+});
 
 interface RecentsPageItemProps {
   page: Page;
@@ -760,3 +760,5 @@ export function SidebarAction({ icon: Icon, label, hint, onClick }: SidebarActio
     </button>
   );
 }
+
+export default Sidebar;

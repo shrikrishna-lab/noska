@@ -1,10 +1,6 @@
-import React from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles, GripHorizontal } from "lucide-react";
-import katex from "katex";
-import "katex/dist/katex.min.css";
-import hljs from "highlight.js";
-import "highlight.js/styles/github-dark.css";
 import { TextArea } from "../ui";
 import RichTextEditor from "./RichTextEditor";
 import { BlockRegistry } from "../../registry/BlockRegistry";
@@ -16,9 +12,10 @@ import PagePeek from "./PagePeek";
 import MediaUploadPlaceholder from "./MediaUploadPlaceholder";
 import CodeBlock from "./CodeBlock";
 import ChartBlock from "./ChartBlock";
-import MermaidBlock from "./MermaidBlock";
 import SimpleTable from "./SimpleTable";
 import ColumnsBlock from "./ColumnsBlock";
+import LazyBlockEquation from "./LazyBlockEquation";
+import LazyMermaidBlock from "./LazyMermaidBlock";
 import DatabaseBlock from "../DatabaseBlock";
 import LinkedViewBlock from "./LinkedViewBlock";
 import FormsBlock from "../FormsBlock";
@@ -703,7 +700,6 @@ export default function renderBlockEditor(
   }
 
   if (block.type === "block-equation") {
-    const html = block.text ? katex.renderToString(block.text, { throwOnError: false, displayMode: true }) : "";
     return (
       <div className={cls}>
         {isFocused || !block.text ? (
@@ -719,14 +715,12 @@ export default function renderBlockEditor(
             placeholder="E = mc^2"
           />
         ) : (
-          <div
+          <LazyBlockEquation
+            text={block.text}
+            displayMode={true}
+            onFocus={() => { ref.current?.focus(); onFocus?.(); }}
+            isFocused={isFocused}
             className="py-2 cursor-text select-none"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              ref.current?.focus();
-              onFocus();
-            }}
-            dangerouslySetInnerHTML={{ __html: html }}
           />
         )}
       </div>
@@ -771,7 +765,7 @@ export default function renderBlockEditor(
 
   if (block.type === "mermaid") {
     return (
-      <MermaidBlock
+      <LazyMermaidBlock
         block={block}
         onPatch={onPatch}
         onKeyDown={onKeyDown}

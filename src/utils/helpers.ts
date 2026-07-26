@@ -6,7 +6,6 @@ import {
   getPagePermission, resolvePermission
 } from './blockModel';
 import type { TreeBlock } from './blockModel';
-import katex from 'katex';
 import type {
   Block, DatabaseBlock, TableBlock, CodeBlockData, ColumnsBlock,
   TabsBlock, FormBlock, TemplateButtonBlock, PageListBlock, GenericBlock,
@@ -372,8 +371,21 @@ export function textToBlocks(text: string | null | undefined): Block[] {
   return blocks;
 }
 
+let _katexLazy: any = null;
+let _katexLoadPromise: Promise<void> | null = null;
+function ensureKatex(): Promise<void> {
+  if (!_katexLoadPromise) {
+    _katexLoadPromise = import("katex").then((m) => {
+      _katexLazy = m.default;
+      import("katex/dist/katex.min.css").catch(() => {});
+    });
+  }
+  return _katexLoadPromise;
+}
+
 export function renderInlineMarkdown(text: string | null | undefined): string {
   if (!text) return '';
+  if (!_katexLoadPromise) ensureKatex();
   let html = text
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -381,11 +393,12 @@ export function renderInlineMarkdown(text: string | null | undefined): string {
     .replace(/~~(.+?)~~/g, '<s>$1</s>')
     .replace(/`(.+?)`/g, '<code class="inline-code">$1</code>')
     .replace(/\$\$(.+?)\$\$/g, (_, eq) => {
-      try {
-        return katex.renderToString(eq, { throwOnError: false, displayMode: false });
-      } catch {
-        return `<span class="inline-equation">${eq}</span>`;
+      if (_katexLazy) {
+        try {
+          return _katexLazy.renderToString(eq, { throwOnError: false, displayMode: false });
+        } catch {}
       }
+      return `<span class="inline-equation">${eq}</span>`;
     });
   const colorNames = ["red","blue","green","orange","purple","pink","brown","gray","yellow","teal","indigo","coral","rose","lime","mint","sky","lavender","peach","charcoal"];
   colorNames.forEach(c => {

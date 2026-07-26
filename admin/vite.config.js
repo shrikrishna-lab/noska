@@ -18,6 +18,21 @@ export default defineConfig({
     strictPort: true
   },
   build: {
-    chunkSizeWarningLimit: 1200
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          motion: ["framer-motion"],
+          supabase: ["@supabase/supabase-js"],
+          query: ["@tanstack/react-query", "@tanstack/react-table"],
+          recharts: ["recharts"],
+          radix: ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-select", "@radix-ui/react-tabs", "@radix-ui/react-tooltip", "@radix-ui/react-avatar", "@radix-ui/react-checkbox", "@radix-ui/react-popover", "@radix-ui/react-progress", "@radix-ui/react-scroll-area", "@radix-ui/react-separator", "@radix-ui/react-slot", "@radix-ui/react-switch"],
+          forms: ["react-hook-form", "zod"],
+          dnd: ["@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities"],
+          icons: ["lucide-react"],
+        }
+      }
+    }
   }
 });

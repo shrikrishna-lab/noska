@@ -127,7 +127,7 @@ export default function NewUpdated() {
           <h1 className="hanzo-hero-title">
             <span className="title-bold">Unlimited</span>
             <span className="inline-badge-preview">
-              <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80" alt="Preview Badge" />
+              <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80" alt="Preview Badge" loading="lazy" />
             </span>
             <span className="title-muted">Power</span>
             <br />
@@ -149,10 +149,10 @@ export default function NewUpdated() {
             </a>
             <div className="social-proof-wrap">
               <div className="avatar-stack">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="User 1" />
-                <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80" alt="User 2" />
-                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" alt="User 3" />
-                <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80" alt="User 4" />
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="User 1" loading="lazy" />
+                <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80" alt="User 2" loading="lazy" />
+                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" alt="User 3" loading="lazy" />
+                <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80" alt="User 4" loading="lazy" />
               </div>
               <span className="proof-label">Trusted by Leaders</span>
             </div>
@@ -175,7 +175,7 @@ export default function NewUpdated() {
               <motion.div key={item.id} variants={staggerItem}>
                 <div className="work-card" onClick={() => setActiveWorkItem(item)}>
                   <div className="work-card-img-wrap">
-                    <img src={item.image} alt={item.title} />
+                    <img src={item.image} alt={item.title} loading="lazy" />
                     <span className="work-metric">{item.metrics}</span>
                   </div>
                   <div className="work-card-body">
@@ -196,7 +196,7 @@ export default function NewUpdated() {
           <Reveal delay={0.1}>
             <div className="founder-card">
               <div className="founder-image-wrap">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80" alt="Founder Portrait" />
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80" alt="Founder Portrait" loading="lazy" />
               </div>
               <div className="founder-info">
                 <h3>Krishna H.</h3>
