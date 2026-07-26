@@ -893,7 +893,7 @@ export function useRealtimeInvalidate(queryKey: string[], table: string, event: 
   const qc = useQueryClient();
   const queryKeyRef = useRef(queryKey);
   queryKeyRef.current = queryKey;
-  const channelName = useMemo(() => `realtime-${table}-${event}`, [table, event]);
+  const channelName = useMemo(() => `realtime-${queryKey.join(":")}-${table}-${event}`, [queryKey.join(":"), table, event]);
   useEffect(() => {
     if (!SUPABASE_ENABLED || !supabase) return;
     const channel = supabase
