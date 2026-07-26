@@ -21,16 +21,17 @@ export default defineConfig({
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "react-router-dom"],
-          motion: ["framer-motion"],
-          supabase: ["@supabase/supabase-js"],
-          query: ["@tanstack/react-query", "@tanstack/react-table"],
-          recharts: ["recharts"],
-          radix: ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-select", "@radix-ui/react-tabs", "@radix-ui/react-tooltip", "@radix-ui/react-avatar", "@radix-ui/react-checkbox", "@radix-ui/react-popover", "@radix-ui/react-progress", "@radix-ui/react-scroll-area", "@radix-ui/react-separator", "@radix-ui/react-slot", "@radix-ui/react-switch"],
-          forms: ["react-hook-form", "zod"],
-          dnd: ["@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities"],
-          icons: ["lucide-react"],
+        manualChunks(id) {
+          if (id.includes("node_modules/react-dom") || id.includes("node_modules/react-router")) return "vendor";
+          if (id.includes("node_modules/react")) return "vendor";
+          if (id.includes("node_modules/framer-motion")) return "motion";
+          if (id.includes("node_modules/@supabase/supabase-js")) return "supabase";
+          if (id.includes("node_modules/@tanstack/react-query") || id.includes("node_modules/@tanstack/react-table")) return "query";
+          if (id.includes("node_modules/recharts")) return "recharts";
+          if (id.includes("node_modules/@radix-ui")) return "radix";
+          if (id.includes("node_modules/react-hook-form") || id.includes("node_modules/zod")) return "forms";
+          if (id.includes("node_modules/@dnd-kit")) return "dnd";
+          if (id.includes("node_modules/lucide-react")) return "icons";
         }
       }
     }
