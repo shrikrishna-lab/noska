@@ -69,12 +69,12 @@ function relativeTime(dateStr: string): string {
 const container = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.05 } },
-};
+} as const;
 
 const item = {
   hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
-};
+} as const;
 
 function EventBadge({ event }: { event: string }) {
   const cfg = eventConfig[event];
