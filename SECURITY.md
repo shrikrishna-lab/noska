@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please send an email to [INSERT EMAIL].
+If you discover a security vulnerability, please send an email to security@noska.me.
 
 Please do not create a public GitHub issue for security vulnerabilities.
 

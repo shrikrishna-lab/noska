@@ -18,15 +18,15 @@
 | `clerk-webhook` | false | Svix signature | ✅ Signs verified with Svix |
 | `waitlist-signup` | false | None | ⚠ Public endpoint — rate limiting recommended |
 | `webhook-receiver` | false | None | ⚠ Public endpoint — relies on webhook secrecy |
-| `resend-webhook` | false | HMAC-SHA256 | ✅ Signature verified |
+| `resend-webhook` | false | Svix (HMAC-SHA256 via `npm:svix`) | ✅ Signature verified |
 
 ## 3. Webhook Signatures
 
 | Webhook | Verification | Status |
 |---------|-------------|--------|
 | Clerk webhook | Svix (HMAC-SHA256 via `npm:svix`) | ✅ |
-| Resend webhook | HMAC-SHA256 (custom) | ✅ |
-| Internal webhook receiver | Raw secret in header | ⚠ Sends raw secret — should use HMAC |
+| Resend webhook | Svix (HMAC-SHA256 via `npm:svix`) | ✅ |
+| Internal webhook receiver | HMAC-SHA256 (signed) + rate limiting | ✅ |
 
 ## 4. Admin RPC System
 
@@ -45,10 +45,10 @@
 
 | Secret | Location | Status |
 |--------|----------|-------|
-| Clerk Secret Key | `.env` (git-tracked) | ❌ **Committed to repo** — revoke and rotate immediately |
+| Clerk Secret Key | `.env` (gitignored) | ✅ Not committed — `.env*` in `.gitignore`; secret only appeared in renamed commit message, never in tracked file content |
 | Supabase Service Role Key | Not in `.env` | ⚠ Must be set in Supabase Edge Function secrets |
 | Resend API Key | `platform_settings` DB | ✅ Stored in DB, encrypted at rest |
-| Resend Webhook Secret | `.env` | ✅ Configured — used for HMAC verification |
+| Resend Webhook Secret | `.env` | ✅ Configured — used for Svix verification |
 | Sentry Auth Token | `.env` | ✅ Not hardcoded — loaded from `SENTRY_AUTH_TOKEN` env var |
 | Trigger.dev API Key | `.env` | ⚠ Not yet configured |
 
@@ -68,7 +68,8 @@
 | Endpoint | Limit | Status |
 |----------|-------|--------|
 | Admin login | 5 attempts / 15 min | ✅ |
-| Email sending | None | ❌ Need to implement — max 1 broadcast/min, 10 test emails/hr/admin |
+| Email sending | 1 campaign/broadcast/min | ✅ In-memory rate limiting in `send-email` edge function |
+| Webhook receiver | 10 req/min/endpoint | ✅ Added in-memory rate limiting |
 | Waitlist signup | None | ⚠ Should add rate limiting |
 | Edge functions | None | ⚠ Supabase handles at infrastructure level |
 
@@ -91,11 +92,10 @@
 
 ## 10. Known Security Gaps (accepted risk)
 
-1. **🔴** `CLERK_SECRET_KEY` committed in `.env` — revoke and rotate immediately
-2. **🟡** `unsafe-inline` in CSP — requires `vite-plugin-csp` build-time nonce pipeline to fix
-3. **🟡** Clerk webhook has no signature verification — `CLERK_WEBHOOK_SECRET` exists but isn't validated in the edge function
-4. **🟡** Admin edge function `send-email` uses `quote_ident()` for table/column names — SQL injection surface if payload format changes
-5. **🟡** No rate limiting on email sending
-6. **🟡** Webhook receiver sends raw secret in header instead of HMAC
-7. **🟡** Secret scanning, code scanning, push protection — all require GitHub Advanced Security (paid plan)
-8. **🟡** Duplicate CSP in `admin/index.html` meta tag and `vercel.json` headers — needs dedup
+1. **🟡** `unsafe-inline` in CSP — requires `vite-plugin-csp` build-time nonce pipeline to fix
+2. **🟡** Admin edge function `send-email` uses `quote_ident()` for table/column names — SQL injection surface if payload format changes
+3. **🟡** Secret scanning, code scanning, push protection — all require GitHub Advanced Security (paid plan)
+4. **🟡** Duplicate CSP in `admin/index.html` meta tag and `vercel.json` headers — needs dedup
+5. **🟡** Admin API CORS sets `Access-Control-Allow-Origin: *` — should restrict to admin domain
+6. **🟡** `admin-api/lib/auth.ts` does not enforce minimum role check (unlike `monitoring-utils/auth.ts`) — delegates to caller
+7. **🟡** Rate limiter in `webhook-receiver` is in-memory only (per edge function instance) — resets on cold start
