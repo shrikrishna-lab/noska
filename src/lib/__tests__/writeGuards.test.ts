@@ -1,4 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("../supabase", () => ({
+  supabase: {},
+  setClerkSessionToken: vi.fn(),
+}));
+
 import { savePage, savePages, saveAIChat, saveAIChats, upsertUserProfile, saveAgent, setOnboardingComplete } from "../supabaseService";
 
 // Property 6: no null-owner writes in app.

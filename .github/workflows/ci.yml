@@ -40,6 +40,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
+      - run: npm ci
+        working-directory: admin
       - run: npm run typecheck
         working-directory: admin
         env:
@@ -58,3 +60,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || '' }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || '' }}
