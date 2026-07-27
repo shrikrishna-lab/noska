@@ -269,11 +269,7 @@ export function EmailAnalytics() {
                 </Pie>
                 <ReTooltip
                   contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
-<<<<<<< HEAD
-                  formatter={(value: number, name: string) => [`${value} events`, name]}
-=======
                   formatter={((value: number, name: string) => [`${value} events`, name]) as any}
->>>>>>> bfef9c4 (fix: recharts v3 formatter type compat with TS7)
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -301,11 +297,7 @@ export function EmailAnalytics() {
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={70} tickFormatter={(v) => v.charAt(0).toUpperCase() + v.slice(1)} />
                 <ReTooltip
                   contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
-<<<<<<< HEAD
-                  formatter={(value: number, name: string) => [`${value} events`, name]}
-=======
                   formatter={((value: number, name: string) => [`${value} events`, name]) as any}
->>>>>>> bfef9c4 (fix: recharts v3 formatter type compat with TS7)
                 />
                 {sortedEvents.map(([name]) => (
                   <Bar key={name} dataKey="value" fill={eventConfig[name]?.color ?? "#6b7280"} radius={[0, 4, 4, 0]} barSize={20} />
