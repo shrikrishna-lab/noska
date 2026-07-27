@@ -69,12 +69,12 @@ function relativeTime(dateStr: string): string {
 const container = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.05 } },
-};
+} as const;
 
 const item = {
   hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
-};
+} as const;
 
 function EventBadge({ event }: { event: string }) {
   const cfg = eventConfig[event];
@@ -269,7 +269,7 @@ export function EmailAnalytics() {
                 </Pie>
                 <ReTooltip
                   contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
-                  formatter={(value: number, name: string) => [`${value} events`, name]}
+                  formatter={(value: number, name: string, ...rest: any[]) => [`${value} events`, name]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -297,7 +297,7 @@ export function EmailAnalytics() {
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={70} tickFormatter={(v) => v.charAt(0).toUpperCase() + v.slice(1)} />
                 <ReTooltip
                   contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
-                  formatter={(value: number, name: string) => [`${value} events`, name]}
+                  formatter={(value: number, name: string, ...rest: any[]) => [`${value} events`, name]}
                 />
                 {sortedEvents.map(([name]) => (
                   <Bar key={name} dataKey="value" fill={eventConfig[name]?.color ?? "#6b7280"} radius={[0, 4, 4, 0]} barSize={20} />
