@@ -4,7 +4,6 @@ import { ChevronDown, Menu, X, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedUnderline } from './AnimatedUnderline';
 import { useCTAButtons, useLaunchSettings } from '../../../hooks/useLaunchSettings';
-import { AnnouncementBar } from './AnnouncementBar';
 import './Navbar.css';
 
 const drawerMotion = {
@@ -42,7 +41,6 @@ export default function Navbar() {
 
   return (
     <nav className="navbar-container">
-      <AnnouncementBar />
       <div className="navbar-content mkt-container">
         {/* Left Side: Logo & Main Navigation */}
         <div className="navbar-left">

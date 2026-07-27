@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { supabase, getAdminToken } from "@/lib/supabase";
 import { sendCampaign, queueCampaign } from "@/lib/email";
 import type { EmailCampaign, CampaignStatus } from "@/lib/types";
-import { Plus, Copy, Trash2, Loader2, Send, X, Eye, Clock, Ban, ListOrdered, Users, User, Target, Mail, Search } from "lucide-react";
+import { Plus, Copy, Trash2, Loader2, Send, X, Eye, Clock, Ban, ListOrdered, Users, User, Target, Mail, Search, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
@@ -493,7 +493,7 @@ export function EmailCampaigns() {
   const columns: Column<EmailCampaign>[] = [
     { key: "name", label: "Campaign", sortable: true, render: (row) => <span className="font-medium">{row.name}</span> },
     { key: "status", label: "Status", sortable: true, render: (row) => <Badge variant={statusColors[row.status] ?? "secondary"}>{row.status}</Badge> },
-    { key: "recipients", label: "Recipients", sortable: true, className: "text-right" },
+    { key: "recipients", label: "Recipients", sortable: true, className: "text-right", hideOnMobile: true },
     { key: "sent", label: "Sent", sortable: true, className: "text-right", hideOnMobile: true },
     { key: "open_rate", label: "Open Rate", sortable: true, className: "text-right", render: (row) => `${row.open_rate}%`, hideOnMobile: true },
     { key: "sent_at", label: "Sent", sortable: true, render: (row) => {
@@ -531,7 +531,7 @@ export function EmailCampaigns() {
           )}
           {(row.status === "draft" || row.status === "scheduled") && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(row); setShowForm(true); }} title="Edit">
-              <Eye className="h-3.5 w-3.5" />
+              <Pencil className="h-3.5 w-3.5" />
             </Button>
           )}
           {row.html_content && (
@@ -559,7 +559,7 @@ export function EmailCampaigns() {
     },
   ];
 
-  if (isLoading) return <div className="p-6"><PageHeader title="Email Campaigns" description="Manage email campaigns" /><LoadingState count={4} /></div>;
+  if (isLoading) return <div className="p-6"><PageHeader title="Email Campaigns" description="Manage email campaigns and newsletters" /><LoadingState count={4} /></div>;
 
   return (
     <div className="p-6">

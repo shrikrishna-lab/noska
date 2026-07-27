@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Lenis from 'lenis';
 import { motion } from 'framer-motion';
-import { Sparkles, PlayCircle, ArrowRight, CheckCircle2, AlertCircle, ShieldAlert } from 'lucide-react';
+import { Sparkles, PlayCircle, ArrowRight, ShieldAlert } from 'lucide-react';
 
 import { Preloader } from '../components/Preloader';
 import { LaunchNavbar } from './components/LaunchNavbar';
@@ -65,6 +65,7 @@ export default function Launch() {
   const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
   const [waitlistReferralCode, setWaitlistReferralCode] = useState<string | null>(null);
   const scratchSectionRef = useRef(null);
+  const lenisRef = useRef<Lenis | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -75,13 +76,31 @@ export default function Launch() {
       wheelMultiplier: 1.0,
       touchMultiplier: 1.5,
     });
+    lenisRef.current = lenis;
+
     function raf(time) {
       lenis.raf(time);
       requestAnimationFrame(raf);
     }
     requestAnimationFrame(raf);
-    return () => lenis.destroy();
+    return () => {
+      lenis.destroy();
+      lenisRef.current = null;
+    };
   }, []);
+
+  // Auto-scroll to the success card when form is submitted & recalculate scroll height for footer
+  useEffect(() => {
+    if (waitlistSubmitted) {
+      setTimeout(() => {
+        lenisRef.current?.resize();
+        window.dispatchEvent(new Event('resize'));
+        if (scratchSectionRef.current) {
+          (scratchSectionRef.current as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+    }
+  }, [waitlistSubmitted]);
 
   const handleWaitlistSubmit = async (e) => {
     e.preventDefault();
@@ -108,10 +127,13 @@ export default function Launch() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         if (err.error?.toLowerCase().includes('already')) {
-          setWaitlistError('This email is already on the waitlist!');
-        } else {
-          setWaitlistError(err.error || `HTTP ${res.status}`);
+          setWaitlistSubmitting(false);
+          setWaitlistSubmitted(true);
+          setWaitlistError('');
+          await lookupWaitlistEntry(email);
+          return;
         }
+        setWaitlistError(err.error || `HTTP ${res.status}`);
         setWaitlistSubmitting(false);
         return;
       }
@@ -123,7 +145,10 @@ export default function Launch() {
 
     setWaitlistSubmitting(false);
     setWaitlistSubmitted(true);
+    await lookupWaitlistEntry(email);
+  };
 
+  const lookupWaitlistEntry = async (email: string) => {
     try {
       const { supabaseAnon } = await import('../../../lib/supabase');
       if (supabaseAnon) {
@@ -232,109 +257,45 @@ export default function Launch() {
       <HowItWorks />
       <UseCases />
       <FaqDrawers />
-      <div ref={scratchSectionRef}>
-        <ScratchReveal onJoin={scrollToScratch} />
-      </div>
-
-      {/* Final CTA */}
-      <section className="nl-final-cta nl-container">
-        <div className="nl-cta-banner">
-          <div className="nl-cta-banner-bg" aria-hidden="true" />
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-60px' }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <h2>Build your next idea inside Noska.</h2>
-            <p>Notes, documents, databases, AI, projects, and collaboration—all in one beautiful workspace.</p>
-
-            {waitlistSubmitted ? (
+      <div ref={scratchSectionRef} id="scratch">
+        {waitlistSubmitted ? (
+          <section className="nl-container" style={{ padding: '40px 0 60px' }}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            >
               <WaitlistSuccessCard
                 confirmationTitle={waitlistSettings?.confirmation_title}
                 confirmationMessage={waitlistSettings?.confirmation_message}
                 position={waitlistPosition}
                 referralCode={waitlistReferralCode}
                 userEmail={waitlistEmail}
+                userName={waitlistName}
                 onReset={() => {
                   setWaitlistSubmitted(false);
                   setWaitlistEmail('');
                 }}
               />
-            ) : (
-              <form className="nl-waitlist-form" onSubmit={handleWaitlistSubmit}>
-                {(!waitlistSettings || waitlistSettings.collect_name) && (
-                  <input
-                    type="text"
-                    placeholder="Your name"
-                    className="nl-waitlist-input"
-                    value={waitlistName}
-                    onChange={(e) => setWaitlistName(e.target.value)}
-                    aria-label="Your name"
-                  />
-                )}
-                {waitlistSettings?.collect_company && (
-                  <input
-                    type="text"
-                    placeholder="Company"
-                    className="nl-waitlist-input"
-                    value={waitlistCompany}
-                    onChange={(e) => setWaitlistCompany(e.target.value)}
-                    aria-label="Company"
-                  />
-                )}
-                {waitlistSettings?.collect_role && (
-                  <input
-                    type="text"
-                    placeholder="Role"
-                    className="nl-waitlist-input"
-                    value={waitlistRole}
-                    onChange={(e) => setWaitlistRole(e.target.value)}
-                    aria-label="Role"
-                  />
-                )}
-                {waitlistSettings?.collect_country && (
-                  <input
-                    type="text"
-                    placeholder="Country"
-                    className="nl-waitlist-input"
-                    value={waitlistCountry}
-                    onChange={(e) => setWaitlistCountry(e.target.value)}
-                    aria-label="Country"
-                  />
-                )}
-                {waitlistSettings?.collect_phone && (
-                  <input
-                    type="tel"
-                    placeholder="Phone number"
-                    className="nl-waitlist-input"
-                    value={waitlistPhone}
-                    onChange={(e) => setWaitlistPhone(e.target.value)}
-                    aria-label="Phone number"
-                  />
-                )}
-                <input
-                  type="email"
-                  required
-                  placeholder="you@company.com"
-                  className="nl-waitlist-input"
-                  value={waitlistEmail}
-                  onChange={(e) => setWaitlistEmail(e.target.value)}
-                  aria-label="Email address"
-                />
-                {waitlistError && (
-                  <div className="nl-waitlist-error">
-                    <AlertCircle size={14} /> {waitlistError}
-                  </div>
-                )}
-                <button type="submit" className="nl-btn nl-btn-primary" disabled={waitlistSubmitting}>
-                  {waitlistSubmitting ? 'Joining...' : <>Join Waitlist <ArrowRight size={16} /></>}
-                </button>
-              </form>
-            )}
-          </motion.div>
-        </div>
-      </section>
+            </motion.div>
+          </section>
+        ) : (
+          <ScratchReveal
+            onJoin={scrollToScratch}
+            waitlistEmail={waitlistEmail}
+            setWaitlistEmail={setWaitlistEmail}
+            waitlistName={waitlistName}
+            setWaitlistName={setWaitlistName}
+            waitlistCountry={waitlistCountry}
+            setWaitlistCountry={setWaitlistCountry}
+            waitlistError={waitlistError}
+            waitlistSubmitting={waitlistSubmitting}
+            handleWaitlistSubmit={handleWaitlistSubmit}
+            collectName={waitlistSettings?.collect_name}
+            collectCountry={waitlistSettings?.collect_country}
+          />
+        )}
+      </div>
 
       <LaunchFooter />
     </div>

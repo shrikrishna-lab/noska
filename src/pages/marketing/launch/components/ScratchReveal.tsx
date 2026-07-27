@@ -1,32 +1,47 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, ArrowRight, PartyPopper } from 'lucide-react';
+import { Sparkles, ArrowRight, Mail, User, Globe, AlertCircle, Loader2 } from 'lucide-react';
 
-const STORAGE_KEY = 'noska_launch_scratch_revealed';
-const REVEAL_THRESHOLD = 0.3; // 30% threshold for auto-reveal
+const REVEAL_THRESHOLD = 0.3;
 
-/**
- * A canvas-based scratch card: a solid "foil" layer sits over the reveal
- * message, and dragging (mouse or touch) erases it via
- * destination-out compositing. Once 30% of the pixels are cleared, the
- * card triggers a cinematic dissolve & shimmer burst animation into the
- * full CTA unlocked state, persisting in localStorage.
- */
-export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
+interface ScratchRevealProps {
+  onJoin: () => void;
+  waitlistEmail: string;
+  setWaitlistEmail: (v: string) => void;
+  waitlistName: string;
+  setWaitlistName: (v: string) => void;
+  waitlistCountry: string;
+  setWaitlistCountry: (v: string) => void;
+  waitlistError: string;
+  waitlistSubmitting: boolean;
+  handleWaitlistSubmit: (e: React.FormEvent) => Promise<void>;
+  collectName?: boolean;
+  collectCountry?: boolean;
+}
+
+export function ScratchReveal({
+  onJoin,
+  waitlistEmail,
+  setWaitlistEmail,
+  waitlistName,
+  setWaitlistName,
+  waitlistCountry,
+  setWaitlistCountry,
+  waitlistError,
+  waitlistSubmitting,
+  handleWaitlistSubmit,
+  collectName,
+  collectCountry,
+}: ScratchRevealProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [showForm, setShowForm] = useState(false);
   const scratchedRef = useRef(new Set<string>());
   const isDrawing = useRef(false);
   const animatingRef = useRef(false);
-
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(STORAGE_KEY) === 'true') setRevealed(true);
-    } catch {}
-  }, []);
 
   useEffect(() => {
     if (revealed) return;
@@ -46,28 +61,25 @@ export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
       canvas.height = rect.height * dpr;
       ctx.scale(dpr, dpr);
 
-      // Base foil gradient (iridescent metallic pastel finish)
       const grad = ctx.createLinearGradient(0, 0, rect.width, rect.height);
-      grad.addColorStop(0, '#C7D2FE');
-      grad.addColorStop(0.35, '#E0E7FF');
-      grad.addColorStop(0.7, '#DDD6FE');
-      grad.addColorStop(1, '#BAE6FD');
+      grad.addColorStop(0, '#EAD4A6');
+      grad.addColorStop(0.35, '#F7E7C4');
+      grad.addColorStop(0.7, '#D8B36E');
+      grad.addColorStop(1, '#B89246');
 
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, rect.width, rect.height);
 
-      // Sheen reflection
       ctx.save();
       const sheen = ctx.createLinearGradient(0, 0, rect.width, 0);
       sheen.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      sheen.addColorStop(0.5, 'rgba(255, 255, 255, 0.45)');
+      sheen.addColorStop(0.5, 'rgba(255, 255, 255, 0.55)');
       sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.fillStyle = sheen;
       ctx.fillRect(0, 0, rect.width, rect.height);
       ctx.restore();
 
-      // Foil border outline
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
       ctx.lineWidth = 1.5;
       if (typeof ctx.roundRect === 'function') {
         ctx.beginPath();
@@ -77,15 +89,14 @@ export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
         ctx.strokeRect(10, 10, rect.width - 20, rect.height - 20);
       }
 
-      // Typography on canvas foil
-      ctx.font = '600 15px Inter, system-ui, -apple-system, sans-serif';
-      ctx.fillStyle = '#3730A3';
+      ctx.font = '700 15px "JetBrains Mono", SFMono-Regular, Monaco, monospace';
+      ctx.fillStyle = '#3B2E1E';
       ctx.textAlign = 'center';
-      ctx.fillText('✨ Something is waiting beneath...', rect.width / 2, rect.height / 2 - 10);
+      ctx.fillText('NOSKA EARLY ACCESS PASS', rect.width / 2, rect.height / 2 - 10);
 
-      ctx.font = '500 13px Inter, system-ui, -apple-system, sans-serif';
-      ctx.fillStyle = '#4F46E5';
-      ctx.fillText('Scratch 30% to unlock Early Access', rect.width / 2, rect.height / 2 + 14);
+      ctx.font = '600 12.5px Inter, system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = '#6B5336';
+      ctx.fillText('✨ Scratch to reveal your VIP ticket slot ✨', rect.width / 2, rect.height / 2 + 14);
     };
 
     setup();
@@ -113,7 +124,6 @@ export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
     ctx.arc(x, y, 28, 0, Math.PI * 2);
     ctx.fill();
 
-    // Sample coarse grid to estimate cleared percentage
     const rect = canvas.getBoundingClientRect();
     const gridX = Math.floor((x / rect.width) * 12);
     const gridY = Math.floor((y / rect.height) * 12);
@@ -122,7 +132,6 @@ export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
     const currentPct = Math.min(1, pct);
     setProgress(currentPct);
 
-    // Auto-reveal when 30% threshold is reached with smooth dissolve animation
     if (currentPct >= REVEAL_THRESHOLD && !animatingRef.current) {
       animatingRef.current = true;
       setIsUnlocking(true);
@@ -139,9 +148,6 @@ export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
           requestAnimationFrame(fadeStep);
         } else {
           setRevealed(true);
-          try {
-            localStorage.setItem(STORAGE_KEY, 'true');
-          } catch {}
         }
       };
       requestAnimationFrame(fadeStep);
@@ -164,39 +170,143 @@ export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
     isDrawing.current = false;
   };
 
+  const handleClaimClick = () => {
+    setShowForm(true);
+  };
+
   return (
     <section id="scratch" className="nl-scratch-section nl-container">
       <div className="nl-scratch-card">
         <AnimatePresence mode="wait">
           {revealed ? (
             <motion.div
-              key="revealed"
-              className="nl-scratch-reveal-content"
-              initial={{ opacity: 0, scale: 0.88, y: 15 }}
+              key="receipt-container"
+              className="nl-receipt-card-container"
+              initial={{ opacity: 0, scale: 0.94, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{
-                type: 'spring',
-                stiffness: 280,
-                damping: 20,
-              }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
             >
-              <motion.div
-                className="nl-scratch-badge-wrapper"
-                initial={{ scale: 0.4, rotate: -15 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', stiffness: 320, damping: 16, delay: 0.1 }}
-              >
-                <div className="nl-scratch-badge-pulse" />
-                <div className="nl-scratch-badge-icon">
-                  <PartyPopper size={32} />
+              {/* 3D Gold Metallic Dispenser Mouth (Fixed at Top) */}
+              <div className="nl-receipt-dispenser">
+                <div className="nl-dispenser-hardware">
+                  <div className="nl-dispenser-mouth" />
                 </div>
-              </motion.div>
+              </div>
 
-              <h3>VIP Early Access Unlocked!</h3>
-              <p>You've unlocked Noska's exclusive pre-launch workspace program.</p>
-              <button className="nl-btn nl-btn-primary nl-btn-lg" onClick={onJoin}>
-                <Sparkles size={16} /> Claim Your Spot <ArrowRight size={16} />
-              </button>
+              {/* Mask for Paper Rolling Out from Inside Dispenser Slit */}
+              <div className="nl-paper-roll-mask">
+                <motion.div
+                  className="nl-receipt-paper"
+                  initial={{ y: '-100%', opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                >
+                  <div className="nl-receipt-header-row">
+                    <div>
+                      <motion.div
+                        className="nl-receipt-status-title"
+                        initial={{ opacity: 0, scale: 0.9, letterSpacing: '0.22em' }}
+                        animate={{ opacity: 1, scale: 1, letterSpacing: '0.12em' }}
+                        transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        EARLY ACCESS PASS
+                      </motion.div>
+                      <div className="nl-receipt-sub-tag">
+                        {waitlistEmail ? `RESERVED FOR: ${waitlistEmail.toUpperCase()}` : 'NOSKA VIP EARLY ACCESS'}
+                      </div>
+                    </div>
+                    <div className="nl-receipt-stamp-badge">
+                      <span className="nl-receipt-stamp-logo">noska</span>
+                      <span className="nl-receipt-stamp-tag">VIP ACCESS</span>
+                    </div>
+                  </div>
+
+                  <div className="nl-receipt-dashed-line" />
+
+                  {/* Form Inputs directly ON the Thermal Paper Pass */}
+                  <form className="nl-apple-form" onSubmit={handleWaitlistSubmit}>
+                    {collectName && (
+                      <div className="nl-apple-field">
+                        <label htmlFor="scratch-name" className="nl-apple-label">Full name</label>
+                        <div className="nl-apple-input-wrap">
+                          <User size={14} className="nl-apple-input-icon" />
+                          <input
+                            id="scratch-name"
+                            type="text"
+                            placeholder="Jane Smith"
+                            className="nl-apple-input"
+                            value={waitlistName}
+                            onChange={(e) => setWaitlistName(e.target.value)}
+                            autoComplete="name"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="nl-apple-field">
+                      <label htmlFor="scratch-email" className="nl-apple-label">Email address</label>
+                      <div className="nl-apple-input-wrap">
+                        <Mail size={14} className="nl-apple-input-icon" />
+                        <input
+                          id="scratch-email"
+                          type="email"
+                          required
+                          placeholder="you@company.com"
+                          className="nl-apple-input"
+                          value={waitlistEmail}
+                          onChange={(e) => setWaitlistEmail(e.target.value)}
+                          autoComplete="email"
+                        />
+                      </div>
+                    </div>
+
+                    {collectCountry && (
+                      <div className="nl-apple-field">
+                        <label htmlFor="scratch-country" className="nl-apple-label">Country</label>
+                        <div className="nl-apple-input-wrap">
+                          <Globe size={14} className="nl-apple-input-icon" />
+                          <input
+                            id="scratch-country"
+                            type="text"
+                            placeholder="United States"
+                            className="nl-apple-input"
+                            value={waitlistCountry}
+                            onChange={(e) => setWaitlistCountry(e.target.value)}
+                            autoComplete="country-name"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {waitlistError && (
+                      <motion.div
+                        className="nl-apple-error"
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <AlertCircle size={13} />
+                        <span>{waitlistError}</span>
+                      </motion.div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="nl-apple-submit"
+                      disabled={waitlistSubmitting}
+                    >
+                      {waitlistSubmitting ? (
+                        <Loader2 size={15} className="nl-spin" />
+                      ) : (
+                        <Sparkles size={15} />
+                      )}
+                    </button>
+                  </form>
+
+                  <div className="nl-receipt-dashed-line" />
+
+                  <div className="nl-receipt-footer-text">WELCOME TO NOSKA</div>
+                </motion.div>
+              </div>
             </motion.div>
           ) : (
             <motion.div
@@ -206,17 +316,16 @@ export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
               style={{ position: 'relative', height: 280 }}
               exit={{ opacity: 0, transition: { duration: 0.3 } }}
             >
-              {/* Flash Burst Overlay during 30% unlock */}
               {isUnlocking && <div className="nl-scratch-flash-burst" />}
 
-              {/* Underlying reveal card layer under erased pixels */}
               <div className="nl-scratch-under-reveal" aria-hidden="true">
                 <div className="nl-scratch-under-card">
                   <div className="nl-scratch-under-icon">
-                    <Sparkles size={28} />
+                    <img src="/logo.png" alt="Noska" style={{ width: 24, height: 24, borderRadius: 6 }} />
                   </div>
-                  <h4>EARLY ACCESS UNLOCKED</h4>
-                  <p>Revealing your private invitation...</p>
+                  <div className="nl-scratch-under-badge">VIP TICKET DISPENSER</div>
+                  <h4 className="nl-scratch-under-title">EARLY ACCESS UNLOCKED</h4>
+                  <p className="nl-scratch-under-sub">Dispensing your early access pass...</p>
                 </div>
               </div>
 
@@ -238,7 +347,7 @@ export function ScratchReveal({ onJoin }: { onJoin: () => void }) {
                   style={{ width: `${Math.min(100, Math.round((progress / 0.3) * 100))}%` }}
                 />
                 <span className="nl-scratch-progress-text">
-                  {progress >= 0.3 ? '✨ Unlocking!' : `${Math.round(progress * 100)}% / 30% scratched`}
+                  {progress >= 0.3 ? 'Unlocked' : ''}
                 </span>
               </div>
             </motion.div>

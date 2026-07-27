@@ -5,6 +5,10 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
+const VITAL_COLORS: Record<string, string> = {
+  good: "text-green-600", "needs-improvement": "text-amber-600", poor: "text-red-600",
+};
+
 export default function PerfDashboard() {
   const [snap, setSnap] = useState<PerfSnapshot>(getSnapshot);
 
@@ -16,16 +20,39 @@ export default function PerfDashboard() {
 
   const totalRpcMs = snap.rpcs.reduce((s, r) => s + r.totalMs, 0);
 
+  const memoryMb = snap.jsHeapUsed > 0 ? (snap.jsHeapUsed / 1048576).toFixed(0) : "—";
+
   return (
     <div className="p-6 space-y-6">
-      <PageHeader title="Performance Insights" description="Real-time rendering, RPC, and chunk analysis" />
+      <PageHeader title="Performance Insights" description="Real-time Web Vitals, renders, RPCs, and resource analysis" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Slow Renders (16ms+)" value={snap.renders.length} />
-        <KpiCard title="Avg Render Time" value={`${avgRender.toFixed(1)}ms`} />
-        <KpiCard title="Slow RPCs Tracked" value={snap.rpcs.length} />
+        <KpiCard title="FPS" value={`${snap.fps}`} />
+        <KpiCard title="JS Heap" value={`${memoryMb} MB`} />
+        <KpiCard title="Avg Render" value={`${avgRender.toFixed(1)}ms`} />
+        <KpiCard title="Longest Task" value={`${snap.longestTask.toFixed(0)}ms`} />
+        <KpiCard title="Total Blocking" value={`${snap.totalBlockingTime.toFixed(0)}ms`} />
+        <KpiCard title="Slow Renders" value={snap.renders.length} />
+        <KpiCard title="Slow RPCs" value={snap.rpcs.length} />
         <KpiCard title="Total RPC Time" value={`${totalRpcMs.toFixed(0)}ms`} />
       </div>
+
+      {snap.webVitals.length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-semibold mb-3">Web Vitals</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {snap.webVitals.map((v) => (
+              <div key={v.name} className="rounded-lg border bg-muted/30 p-3">
+                <div className="text-xs text-muted-foreground mb-1">{v.name}</div>
+                <div className={`text-lg font-bold font-mono ${VITAL_COLORS[v.rating]}`}>
+                  {v.name === "CLS" ? v.value.toFixed(3) : `${v.value.toFixed(0)}${v.name === "LCP" || v.name === "FID" || v.name === "TBT" ? "ms" : ""}`}
+                </div>
+                <div className={`text-[10px] mt-0.5 font-medium ${VITAL_COLORS[v.rating]}`}>{v.rating}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-xl border bg-card p-4">

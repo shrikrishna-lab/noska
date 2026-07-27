@@ -54,15 +54,17 @@ export function Users() {
             trigger({
               type: "ban_user",
               meta: { email: row.email || row.username || "User Account" },
-              onConfirm: async (payload) => {
-                const reason = payload?.input || "No reason specified";
-                const isPermanent = payload?.duration === "permanent";
-                if (isPermanent) {
-                  await hardBanUser.mutateAsync({ user_id: row.id, reason });
-                } else {
-                  await banUser.mutateAsync({ user_id: row.id, reason, ban_type: "soft", expires_at: payload?.duration === "7_days" ? new Date(Date.now() + 7 * 86400000).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString() });
-                }
-                showSuccess(`Banned user ${row.user_name || row.email}`);
+                onConfirm: async (payload) => {
+                try {
+                  const reason = payload?.input || "No reason specified";
+                  const isPermanent = payload?.duration === "permanent";
+                  if (isPermanent) {
+                    await hardBanUser.mutateAsync({ user_id: row.id, reason });
+                  } else {
+                    await banUser.mutateAsync({ user_id: row.id, reason, ban_type: "soft", expires_at: payload?.duration === "7_days" ? new Date(Date.now() + 7 * 86400000).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString() });
+                  }
+                  showSuccess(`Banned user ${row.user_name || row.email}`);
+                } catch { showSuccess("Ban failed"); }
               }
             });
           }}
@@ -78,8 +80,10 @@ export function Users() {
               type: "delete_user",
               meta: { email: row.email || row.username || "User Account" },
               onConfirm: async () => {
-                await deleteUser.mutateAsync(row.id);
-                showSuccess(`Deleted user data for ${row.user_name || row.email}`);
+                try {
+                  await deleteUser.mutateAsync(row.id);
+                  showSuccess(`Deleted user data for ${row.user_name || row.email}`);
+                } catch { showSuccess("Delete failed"); }
               }
             });
           }}
