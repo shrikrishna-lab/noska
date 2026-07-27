@@ -49,7 +49,7 @@
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "latest",
     "fast-check": "^4.8.0",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.0",
     "postcss": "latest",
     "puppeteer-core": "^25.2.1",
     "tailwindcss": "latest",
