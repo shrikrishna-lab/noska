@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
+import { UIProvider, useUI } from "./contexts/UIContext";
+import { WorkspaceProvider, useWorkspace } from "./contexts/WorkspaceContext";
+import { AIProvider, useAI } from "./contexts/AIContext";
 import { Confetti, Toast } from "./components/ui";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
@@ -70,7 +74,6 @@ import {
   fetchPageInvites, acceptPageInvite, declinePageInvite, fetchSharedPages, updateSharedPage as updateSharedPageRemote
 } from "./lib/supabaseService";
 import type { Page, AIChat } from "./lib/supabaseService";
-import type { Tables } from "../types/supabase";
 import type { Block, LineageEntry } from "../types/blocks";
 import type { OnboardingFormData, OnboardingPagePreview } from "./onboarding/types";
 
@@ -102,101 +105,58 @@ function purgeExpiredTrash(sourcePages: Page[], referenceTime: number = Date.now
 }
 
 function App() {
+  return (
+    <ThemeProvider>
+      <UIProvider>
+        <WorkspaceProvider>
+          <AIProvider>
+            <AppContent />
+          </AIProvider>
+        </WorkspaceProvider>
+      </UIProvider>
+    </ThemeProvider>
+  );
+}
+
+function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const routeParams = useParams();
   const [appFlowState, setAppFlowState] = useState<"loading" | "auth" | "onboarding" | "workspace">("loading");
-  // The signed-in user's id/username — threaded into OnboardingPage so
-  // UsernameStep can (a) pre-fill an already-chosen username when
-  // replaying onboarding from Settings, and (b) exclude the user's own
-  // row from the availability check (see isUsernameAvailable's
-  // excludeUserId param in supabaseService.ts).
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
-  // Real signed-in email (Supabase auth session / user_profiles.email) —
-  // shown in the Sidebar's account popover and Settings' Account tab
-  // instead of the previous fake multi-account email list.
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
-  // True only once we've actually checked the profile and confirmed no
-  // username is set — starts false so the claim modal never flashes
-  // before fetchUserProfile resolves.
-  const [needsUsernameClaim, setNeedsUsernameClaim] = useState(false);
-  // Pages shared TO the current user (fetchSharedPages) — deliberately
-  // kept in a SEPARATE array from `pages`, never merged into it. `pages`
-  // is what the auto-save pipeline (utils/storage.ts -> savePages) syncs
-  // on every change, stamping every row with the CURRENT user's id — if
-  // a shared page ever ended up in that array, the very next auto-save
-  // would silently reassign its ownership to whoever's viewing it. See
-  // sharedActivePage/handleSharedBlockPatch below for how edits to a
-  // shared page are routed to savePage() directly instead.
-  const [sharedPages, setSharedPages] = useState<Page[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<Tables<"page_invites">[]>([]);
-  const [pages, setPages] = useState<Page[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [workspaceName, setWorkspaceName] = useState('My Workspace');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiRightOpen, setAiRightOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState("General");
-  const [templateOpen, setTemplateOpen] = useState(false);
-  const [newPageOpen, setNewPageOpen] = useState(false);
-  const [newPageDraft, setNewPageDraft] = useState<Page | null>(null);
-  const [trashOpen, setTrashOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [appView, setAppView] = useState("page");
-  const [pageMode, setPageMode] = useState("doc"); // "doc" | "canvas" | "graph"
-  const [theme, setTheme] = useState("light");
-  const [themeFx, setThemeFx] = useState({
-    variant: "rectangle",
-    start: "bottom-up",
-    blur: false,
-    gifType: "1",
-    gifUrl: "https://media.giphy.com/media/KBbr4hHl9DSahKvInO/giphy.gif?cid=790b76112m5eeeydoe7et0cr3j3ekb1erunxozyshuhxx2vl&ep=v1_stickers_search&rid=giphy.gif&ct=s"
-  });
-  const [saveState, setSaveState] = useState("Saved");
-  const [query, setQuery] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [aiProvider, setAiProvider] = useState("nvidia");
-  const [nvidiaKey, setNvidiaKey] = useState("");
-  const [aiChats, setAiChats] = useState<AIChat[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [history, setHistory] = useState<Page[][]>([]);
-  const [future, setFuture] = useState<Page[][]>([]);
-  const [confetti, setConfetti] = useState(false);
-  const [toast, setToast] = useState("");
-  const [renameFocusId, setRenameFocusId] = useState<string | null>(null);
-  const [collapsedPages, setCollapsedPages] = useState<Set<string>>(() => new Set());
-  const [exportOpen, setExportOpen] = useState(false);
-  const [clipperOpen, setClipperOpen] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [lineageOpen, setLineageOpen] = useState(false);
-  const [collabOpen, setCollabOpen] = useState(false);
-  const [encryptOpen, setEncryptOpen] = useState(false);
-  const [apiConsoleOpen, setApiConsoleOpen] = useState(false);
-  const [ghostWriterEnabled, setGhostWriterEnabled] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("noska_ghost_writer_enabled");
-      return saved ? JSON.parse(saved) : false;
-    } catch {
-      return false;
-    }
-  });
-  const [decryptionKeys, setDecryptionKeys] = useState<Record<string, string>>({});
 
-  interface DialogState {
-    open: boolean;
-    type: "prompt" | "confirm";
-    title: string;
-    placeholder: string;
-    defaultValue: string;
-    resolve: ((value: string | boolean | null) => void) | null;
-  }
-  const [dialogState, setDialogState] = useState<DialogState>({ open: false, type: "prompt", title: "", placeholder: "", defaultValue: "", resolve: null });
+  const [
+    { pages, sharedPages, activeId, workspaceName, pendingInvites, collapsedPages,
+      renameFocusId, appView, pageMode, stackedPageIds, readingPage, focusedBlock,
+      decryptionKeys, saveState, query, needsUsernameClaim, onboardingOpen, history, future },
+    { setPages, setSharedPages, setActiveId, setWorkspaceName, setPendingInvites,
+      setCollapsedPages, setRenameFocusId, setAppView, setPageMode, setStackedPageIds,
+      setReadingPage, setFocusedBlock, setDecryptionKeys, setSaveState, setQuery,
+      setNeedsUsernameClaim, setOnboardingOpen, commitPages, togglePageCollapse, undo, redo }
+  ] = useWorkspace();
+
+  const [
+    { sidebarOpen, paletteOpen, settingsOpen, settingsInitialTab, templateOpen,
+      newPageOpen, newPageDraft, trashOpen, shareOpen, helpOpen, exportOpen,
+      clipperOpen, voiceOpen, reviewOpen, lineageOpen, collabOpen, encryptOpen,
+      apiConsoleOpen, confetti, toast, dialogState },
+    { setSidebarOpen, setPaletteOpen, setSettingsOpen, setSettingsInitialTab,
+      setTemplateOpen, setNewPageOpen, setNewPageDraft, setTrashOpen,
+      setShareOpen, setHelpOpen, setExportOpen, setClipperOpen, setVoiceOpen,
+      setReviewOpen, setLineageOpen, setCollabOpen, setEncryptOpen,
+      setApiConsoleOpen, setConfetti, setToast, setDialogState, showToast }
+  ] = useUI();
+
+  const [{ theme, themeFx }, { setTheme, setThemeFx }] = useTheme();
+
+  const [
+    { aiOpen, aiRightOpen, apiKey, aiProvider, nvidiaKey, aiChats, activeChatId, ghostWriterEnabled },
+    { setAiOpen, setAiRightOpen, setApiKey, setAiProvider, setNvidiaKey,
+      setAiChats, setActiveChatId, setGhostWriterEnabled }
+  ] = useAI();
 
   // Clerk auth hooks — replaces Supabase auth session management
   const { isLoaded: clerkLoaded, isSignedIn } = useAuth();
@@ -236,9 +196,6 @@ function App() {
     localStorage.setItem("noska_ghost_writer_enabled", JSON.stringify(ghostWriterEnabled));
   }, [ghostWriterEnabled]);
 
-  const [focusedBlock, setFocusedBlock] = useState<Block | null>(null);
-  const [stackedPageIds, setStackedPageIds] = useState<string[]>([]);
-  const [readingPage, setReadingPage] = useState<Page | null>(null);
   const hydrated = useRef(false);
 
   // Real bug, fixed: this used to match `activeId` against ANY page
@@ -879,8 +836,6 @@ function App() {
     setOnboardingOpen(true);
   }, []);
 
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
-
   // Logout handler — clears cache, resets state, redirects to auth
   const handleLogout = useCallback(async () => {
     capture("logout");
@@ -1064,18 +1019,6 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
-
-  const commitPages = useCallback((next: Page[]) => {
-    setHistory((h) => [...h.slice(-24), pages]);
-    setFuture([]);
-    setPages(next);
-    try {
-      localStorage.setItem("pages", JSON.stringify(next.map(p => {
-        if (p.isEncrypted) return { ...p, blocks: [] };
-        return p;
-      })));
-    } catch {}
-  }, [pages, setHistory, setFuture, setPages]);
 
   const normalizePageTree = (sourcePages: Page[], orderHints: Map<string, string[]> = new Map()) => normalizePages(sourcePages, orderHints);
 
@@ -1453,26 +1396,6 @@ function App() {
     if (!activePage?.blocks) return;
     updateBlocks(activePage.blocks.map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
   };
-
-  const undo = useCallback(() => {
-    setHistory((h) => {
-      if (!h.length) return h;
-      const previous = h[h.length - 1];
-      setFuture((f) => [pages, ...f]);
-      setPages(previous);
-      return h.slice(0, -1);
-    });
-  }, [pages, setHistory, setFuture, setPages]);
-
-  const redo = useCallback(() => {
-    setFuture((f) => {
-      if (!f.length) return f;
-      const next = f[0];
-      setHistory((h) => [...h, pages]);
-      setPages(next);
-      return f.slice(1);
-    });
-  }, [pages, setFuture, setHistory, setPages]);
 
   interface AddPageOptions {
     modal?: boolean;
@@ -1873,8 +1796,6 @@ function App() {
     setAppView("page");
   };
 
-  const showToast = useCallback((message: string) => setToast(message), [setToast]);
-
   const handleUnlockPage = async (pageId: string, passphrase: string) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
@@ -2021,13 +1942,6 @@ function App() {
     updatePage(pageId, { offline: !page.offline });
     showToast(page.offline ? "Removed from offline" : "Available offline");
   };
-
-  const togglePageCollapse = (pageId: string) => setCollapsedPages((prev) => {
-    const next = new Set(prev);
-    if (next.has(pageId)) next.delete(pageId);
-    else next.add(pageId);
-    return next;
-  });
 
   useEffect(() => {
     if (!activeId) return;
