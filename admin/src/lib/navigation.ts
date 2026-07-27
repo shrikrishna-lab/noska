@@ -123,6 +123,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/monitoring/deployments", label: "Deployments", icon: Rocket, group: "monitoring", requiresRole: "admin" },
   { to: "/monitoring/logs", label: "Logs", icon: ScrollText, group: "monitoring", requiresRole: "admin" },
   { to: "/monitoring/integrations", label: "Integrations", icon: Puzzle, group: "monitoring", requiresRole: "admin" },
+  { to: "/perf", label: "Performance Dashboard", icon: Gauge, group: "monitoring", requiresRole: "admin" },
   { to: "/sentry", label: "Sentry", icon: AlertTriangle, group: "monitoring", requiresRole: "admin" },
   { to: "/posthog", label: "PostHog", icon: BarChart4, group: "monitoring", requiresRole: "admin" },
   { to: "/monitoring", label: "Monitoring", icon: Activity, group: "monitoring", requiresRole: "admin" },

@@ -334,6 +334,130 @@ interface EditorProps {
   onTrashPage?: (pageId: string) => void;
 }
 
+interface EditorCallbackContext {
+  onBlockPatch: (id: string, patch: Partial<BlockType>) => void;
+  onBlocks: (blocks: EditorBlock[]) => void;
+  onMoveBlock: (id: string, dir: number) => void;
+  onAskAI?: (blockId: string, text: string) => void;
+  onFocusBlock?: (blockId: string | null) => void;
+  onToast?: (message: string) => void;
+  onUpdatePage?: (pageId: string, patch: Record<string, unknown>) => void;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+  onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+  page?: Page;
+}
+
+function createBlockRefs(blockCtx: React.MutableRefObject<EditorCallbackContext>) {
+  return {
+    onBlockPatch: (id: string, patch: Partial<BlockType>) => blockCtx.current.onBlockPatch(id, patch),
+    onBlocks: (blocks: EditorBlock[]) => blockCtx.current.onBlocks(blocks),
+    onAddBlock: (type: string, text: string, afterId: string, customId?: string) => {
+      const nextBlock = blockFor(type, text);
+      if (customId) nextBlock.id = customId;
+      blockCtx.current.onBlocks(insertBlockAfterTree(blockCtx.current.page?.blocks || [], afterId, nextBlock));
+    },
+    onAddAbove: (type: string, text: string, beforeId: string, customId?: string) => {
+      const nextBlock = blockFor(type, text);
+      if (customId) nextBlock.id = customId;
+      blockCtx.current.onBlocks(insertBlockBeforeTree(blockCtx.current.page?.blocks || [], beforeId, nextBlock));
+    },
+    onDelete: (blockId: string) => {
+      blockCtx.current.onBlocks(softDelete((blockCtx.current.page?.blocks || []) as unknown as TreeBlock[], blockId) as unknown as EditorBlock[]);
+    },
+    onDuplicate: (blockId: string) => {
+      blockCtx.current.onBlocks(duplicateBlockTree(blockCtx.current.page?.blocks || [], blockId));
+    },
+    onMove: (blockId: string, dir: number) => blockCtx.current.onMoveBlock(blockId, dir),
+    onSwapBlocks: (fromId: string, toId: string) => {
+      const blocks = [...(blockCtx.current.page?.blocks || [])];
+      const fromIdx = blocks.findIndex(b => b.id === fromId);
+      const toIdx = blocks.findIndex(b => b.id === toId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [moved] = blocks.splice(fromIdx, 1);
+      blocks.splice(toIdx, 0, moved);
+      blockCtx.current.onBlocks(blocks);
+    },
+  };
+}
+
+const EditorBlockList = memo(function EditorBlockList({
+  renderedBlocks, page, pages, selectedBlockIds,
+  openSlashForBlockId, onClearOpenSlash, setOpenSlashForBlockId,
+  blockCtx,
+  handlePointerDown, activeCommentBlockId, setActiveCommentBlockId,
+  pageComments, handleAddComment, handleResolveComment,
+  onAskAI, onFocusBlock, ghostWriterEnabled, apiKey, aiProvider, nvidiaKey,
+  onToast, onUpdatePage, onPagePatch, onCreateSubpage, onNavigate,
+}: {
+  renderedBlocks: EditorBlock[];
+  page: Page;
+  pages: Page[];
+  selectedBlockIds: Set<unknown>;
+  openSlashForBlockId: string | null;
+  onClearOpenSlash: () => void;
+  setOpenSlashForBlockId: React.Dispatch<React.SetStateAction<string | null>>;
+  blockCtx: React.MutableRefObject<EditorCallbackContext>;
+  handlePointerDown: (e: React.PointerEvent, blockId: string, index: number) => void;
+  activeCommentBlockId: string | null;
+  setActiveCommentBlockId: React.Dispatch<React.SetStateAction<string | null>>;
+  pageComments: Array<Record<string, unknown>>;
+  handleAddComment: (comment: Record<string, unknown>) => void;
+  handleResolveComment: (commentId: string) => void;
+  onAskAI?: () => void;
+  onFocusBlock?: (blockId: string | null) => void;
+  ghostWriterEnabled?: boolean;
+  apiKey?: string;
+  aiProvider?: string;
+  nvidiaKey?: string;
+  onToast?: (message: string) => void;
+  onUpdatePage?: (pageId: string, patch: Record<string, unknown>) => void;
+  onPagePatch?: (patch: Record<string, unknown>) => void;
+  onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+}) {
+  const refs = useMemo(() => createBlockRefs(blockCtx), [blockCtx]);
+
+  return renderedBlocks.map((block, index) => (
+    <Block
+      key={block.id}
+      block={block}
+      index={index}
+      page={page}
+      pages={pages}
+      isSelected={selectedBlockIds.has(block.id)}
+      onSelectBlock={(e) => handlePointerDown(e, block.id, index)}
+      onPatch={(patch) => refs.onBlockPatch(block.id, patch)}
+      onAdd={(type, text, customId) => refs.onAddBlock(type, text, block.id, customId)}
+      onAddAbove={(type, text, customId) => refs.onAddAbove(type, text, block.id, customId)}
+      onDelete={() => refs.onDelete(block.id)}
+      onDuplicate={() => refs.onDuplicate(block.id)}
+      onMove={(dir) => refs.onMove(block.id, dir)}
+      onSwapBlocks={(fromId, toId) => refs.onSwapBlocks(fromId, toId)}
+      onAskAI={onAskAI}
+      onFocusBlock={onFocusBlock}
+      ghostWriterEnabled={ghostWriterEnabled}
+      apiKey={apiKey}
+      aiProvider={aiProvider}
+      nvidiaKey={nvidiaKey}
+      onToast={onToast}
+      onUpdatePage={onUpdatePage}
+      onPagePatch={onPagePatch}
+      onBlocks={refs.onBlocks}
+      openSlash={openSlashForBlockId === block.id}
+      onClearOpenSlash={onClearOpenSlash}
+      onSetOpenSlashBlockId={setOpenSlashForBlockId}
+      onCreateSubpage={onCreateSubpage}
+      onNavigate={onNavigate}
+      activeCommentBlockId={activeCommentBlockId}
+      setActiveCommentBlockId={setActiveCommentBlockId}
+      pageComments={pageComments}
+      handleAddComment={handleAddComment}
+      handleResolveComment={handleResolveComment}
+    />
+  ));
+});
+
 export default function Editor({
   page,
   pages,
@@ -363,6 +487,7 @@ export default function Editor({
   const titleRef = useRef(null);
   const editorContainerRef = useRef(null);
   const pageOptionsRef = useRef<HTMLDivElement>(null);
+  const blockCtx = useRef<EditorCallbackContext>({ onBlockPatch: () => {}, onBlocks: () => {}, onMoveBlock: () => {} });
 
   interface SelectionState {
     text: string;
@@ -394,6 +519,7 @@ export default function Editor({
   const [activeId, setActiveId] = useState(null);
   const [titleEmojiOpen, setTitleEmojiOpen] = useState(false);
   const titleEmojiRef = useRef(null);
+  const handleClearOpenSlash = useCallback(() => setOpenSlashForBlockId(null), []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const {
@@ -430,6 +556,8 @@ export default function Editor({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [handleSelectAll, hasSelection, clearSelection, commandPaletteOpen, page?.isLocked]);
+
+  blockCtx.current = { onBlockPatch, onBlocks, onMoveBlock, onAskAI, onFocusBlock, onToast, onUpdatePage, onPagePatch, onCreateSubpage, onNavigate, page };
 
   const wordCount = React.useMemo(() => {
     if (!page?.blocks) return 0;
@@ -524,20 +652,20 @@ export default function Editor({
     onBlocks(reordered.map(b => { const { _depth, ...rest } = b; return rest; }));
   }, [page?.blocks, onBlocks]);
 
-  const handleAddComment = (comment) => {
+  const handleAddComment = useCallback((comment) => {
     const existing = page.comments || [];
     onPagePatch?.({ comments: [...existing, comment] });
     capture("comment_added", { surface: comment.blockId === "__title__" ? "title" : "block" });
     onToast?.("Comment added");
-  };
+  }, [page.comments, onPagePatch, onToast]);
 
-  const handleResolveComment = (commentId) => {
+  const handleResolveComment = useCallback((commentId) => {
     const existing = page.comments || [];
     onPagePatch?.({
       comments: existing.map(c => c.id === commentId ? { ...c, resolvedAt: new Date().toISOString(), resolvedBy: "You" } : c)
     });
     onToast?.("Comment resolved");
-  };
+  }, [page.comments, onPagePatch, onToast]);
   const loadVersionHistory = React.useCallback(() => {
     try {
       const auditKey = `audit_${page.id}`;
@@ -1041,66 +1169,33 @@ export default function Editor({
               }}
             />
           )}
-          {renderedBlocks.map((block, index) => (
-            <Block
-              key={block.id}
-              block={block}
-              index={index}
-              page={page}
-              pages={pages}
-              isSelected={selectedBlockIds.has(block.id)}
-              onSelectBlock={(e) => handlePointerDown(e, block.id, index)}
-              onPatch={(patch) => onBlockPatch(block.id, patch)}
-              onAdd={(type, text, customId) => {
-                const nextBlock = blockFor(type, text);
-                if (customId) nextBlock.id = customId;
-                onBlocks(insertBlockAfterTree(page.blocks || [], block.id, nextBlock));
-              }}
-              onAddAbove={(type, text, customId) => {
-                const nextBlock = blockFor(type, text);
-                if (customId) nextBlock.id = customId;
-                onBlocks(insertBlockBeforeTree(page.blocks || [], block.id, nextBlock));
-              }}
-              // softDelete (blockModel.ts) expects TreeBlock[] (parentId
-              // required); Block (types/blocks.ts) declares parentId
-              // optional via BaseBlock. Every real block always has a
-              // parentId (possibly null) at runtime — this is a type-only
-              // gap between the two independently-evolved shapes, not a
-              // real missing-field risk.
-              onDelete={() => onBlocks(softDelete((page.blocks || []) as unknown as TreeBlock[], block.id) as unknown as EditorBlock[])}
-              onDuplicate={() => onBlocks(duplicateBlockTree(page.blocks || [], block.id))}
-              onMove={(dir) => onMoveBlock(block.id, dir)}
-              onSwapBlocks={(fromId, toId) => {
-                const blocks = [...(page.blocks || [])];
-                const fromIdx = blocks.findIndex(b => b.id === fromId);
-                const toIdx = blocks.findIndex(b => b.id === toId);
-                if (fromIdx < 0 || toIdx < 0) return;
-                const [moved] = blocks.splice(fromIdx, 1);
-                blocks.splice(toIdx, 0, moved);
-                onBlocks(blocks);
-              }}
-              onAskAI={onAskAI}
-              onFocusBlock={onFocusBlock}
-              ghostWriterEnabled={ghostWriterEnabled}
-              apiKey={apiKey}
-              aiProvider={aiProvider}
-              nvidiaKey={nvidiaKey}
-              onToast={onToast}
-              onUpdatePage={onUpdatePage}
-              onPagePatch={onPagePatch}
-              onBlocks={onBlocks}
-              openSlash={openSlashForBlockId === block.id}
-              onClearOpenSlash={() => setOpenSlashForBlockId(null)}
-              onSetOpenSlashBlockId={setOpenSlashForBlockId}
-              onCreateSubpage={onCreateSubpage}
-              onNavigate={onNavigate}
-              activeCommentBlockId={activeCommentBlockId}
-              setActiveCommentBlockId={setActiveCommentBlockId}
-              pageComments={page.comments || []}
-              handleAddComment={handleAddComment}
-              handleResolveComment={handleResolveComment}
-            />
-          ))}
+          <EditorBlockList
+            renderedBlocks={renderedBlocks}
+            page={page}
+            pages={pages}
+            selectedBlockIds={selectedBlockIds}
+            openSlashForBlockId={openSlashForBlockId}
+            onClearOpenSlash={handleClearOpenSlash}
+            setOpenSlashForBlockId={setOpenSlashForBlockId}
+            blockCtx={blockCtx}
+            handlePointerDown={handlePointerDown}
+            activeCommentBlockId={activeCommentBlockId}
+            setActiveCommentBlockId={setActiveCommentBlockId}
+            pageComments={page.comments || []}
+            handleAddComment={handleAddComment}
+            handleResolveComment={handleResolveComment}
+            onAskAI={onAskAI}
+            onFocusBlock={onFocusBlock}
+            ghostWriterEnabled={ghostWriterEnabled}
+            apiKey={apiKey}
+            aiProvider={aiProvider}
+            nvidiaKey={nvidiaKey}
+            onToast={onToast}
+            onUpdatePage={onUpdatePage}
+            onPagePatch={onPagePatch}
+            onCreateSubpage={onCreateSubpage}
+            onNavigate={onNavigate}
+          />
           </div>
           </SortableContext>
           <DragOverlay>

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Lenis from 'lenis';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import { AnnouncementBar } from './components/AnnouncementBar';
 import { useLaunchSettings } from '../../hooks/useLaunchSettings';
 import SEOHead from '../../components/SEOHead';
 import { ShieldAlert } from 'lucide-react';
@@ -78,8 +79,10 @@ export default function MarketingLayout({ children }) {
       ) : (
         <div className="marketing" ref={wrapperRef}>
           <div ref={contentRef}>
+            <AnnouncementBar placement="top" />
             <Navbar />
             <main>{children}</main>
+            <AnnouncementBar placement="bottom" />
             <Footer />
           </div>
         </div>
