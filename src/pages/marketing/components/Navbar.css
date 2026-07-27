@@ -351,6 +351,16 @@
   top: 0;
 }
 
+.marketing .announcement-bar.announcement-placement-bottom {
+  position: relative;
+}
+
+.marketing .announcement-bar.announcement-placement-bottom.announcement-sticky {
+  position: sticky;
+  bottom: 0;
+  top: auto;
+}
+
 .marketing .announcement-bar-content {
   display: flex;
   align-items: center;
@@ -385,6 +395,15 @@
   opacity: 1;
 }
 
+.marketing .announcement-link-secondary {
+  opacity: 0.8;
+  font-weight: 400;
+}
+
+.marketing .announcement-link-secondary:hover {
+  opacity: 1;
+}
+
 .marketing .announcement-dismiss {
   background: none;
   border: none;
@@ -397,6 +416,76 @@
 
 .marketing .announcement-dismiss:hover {
   opacity: 1;
+}
+
+/* Animation: Slide */
+@keyframes announcement-slide-in {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.marketing .announcement-bar.announcement-anim-slide {
+  animation: announcement-slide-in 0.4s ease-out;
+}
+
+/* Animation: Fade */
+@keyframes announcement-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.marketing .announcement-bar.announcement-anim-fade {
+  animation: announcement-fade-in 0.5s ease-out;
+}
+
+/* Animation: Bounce */
+@keyframes announcement-bounce-in {
+  0% { transform: translateY(-100%); opacity: 0; }
+  60% { transform: translateY(6px); opacity: 1; }
+  100% { transform: translateY(0); }
+}
+
+.marketing .announcement-bar.announcement-anim-bounce {
+  animation: announcement-bounce-in 0.6s ease-out;
+}
+
+/* Font Sizes */
+.marketing .announcement-bar.announcement-fs-sm {
+  font-size: 11px;
+  padding: 6px 16px;
+}
+
+.marketing .announcement-bar.announcement-fs-md {
+  font-size: 13px;
+  padding: 8px 16px;
+}
+
+.marketing .announcement-bar.announcement-fs-lg {
+  font-size: 15px;
+  padding: 10px 16px;
+}
+
+/* Border Styles */
+.marketing .announcement-bar.announcement-border-none {
+  border: none;
+}
+
+.marketing .announcement-bar.announcement-border-bottom {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.marketing .announcement-bar.announcement-border-rounded {
+  border-radius: 0;
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .marketing .announcement-bar.announcement-border-rounded {
+    border-radius: 12px;
+    margin: 8px auto;
+    width: calc(100% - 32px);
+    max-width: 1200px;
+  }
 }
 
 @media (max-width: 992px) {

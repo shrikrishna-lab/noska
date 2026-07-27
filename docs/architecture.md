@@ -218,6 +218,32 @@ Tables enabled for real-time subscriptions:
 7. Token stored in `sessionStorage`, sent with every admin RPC call
 8. `require_admin_role()` checks session validity + minimum role rank
 
+## Performance Optimizations
+
+### Lazy Loading (applied Jul 2026)
+
+All heavy components are lazy-loaded with `React.lazy()` + `<Suspense>`:
+
+**Main SPA** — 12 features lazy-loaded: GraphView (cytoscape), CanvasView, AIPanel, AIRightPanel, ExportPanel, WebClipper, VoiceCapture, SpacedRepetition, NoteLineage, CoThinking, LockPageModal (encryption), ApiConsole
+
+**Admin SPA** — All 39 admin pages lazy-loaded with unified `PageLoading` fallback component
+
+### Chunk Splitting (applied Jul 2026)
+
+Custom Rollup output chunks splitting:
+- `react-vendor` (41KB gzip): React, React Router, Scheduler
+- `vendor`: remaining node_modules
+- `graph` (190KB gzip): cytoscape (lazy)
+- `icons` (157KB gzip): lucide-react
+- `motion`: framer-motion
+- Admin: radix (133KB), recharts (417KB), motion (114KB), icons (41KB), vendor, supabase (204KB)
+
+### Code Optimizations (applied Jul 2026)
+
+- All callbacks wrapped in `useCallback` to prevent re-render cascades
+- Keyboard event handler uses `useRef` pattern (avoids re-registering on every render)
+- React Query: staleTime 60s, gcTime 300s for reduced network traffic
+
 ## Security Architecture
 
 - **Admin RPCs** use `SECURITY DEFINER` with explicit `search_path` to prevent search-path injection
@@ -227,4 +253,12 @@ Tables enabled for real-time subscriptions:
 - **Session expiry** — admin sessions have configurable expiry, password change invalidates all sessions
 - **Audit logging** on all admin CRUD operations
 - **Test mode guard** — `VITE_TEST_MODE=true` + production Supabase URL throws a startup error
-- **CSP headers** set in `vercel.json` with strict allowlists for Clerk, Supabase, Resend, etc.
+- **CSP headers** set in `vercel.json` with strict allowlists for Clerk, Supabase, Resend, etc. (⚠ still uses `unsafe-inline` — blocked on Vite CSP nonce plugin)
+- **CSP reporting** enabled via `Content-Security-Policy-Report-Only` header with `report-uri` + `report-to`
+- **Error boundary** wraps all admin routes (`admin/src/components/ui/ErrorBoundary.tsx`)
+
+### Known Security Gaps (accepted risk)
+- `unsafe-inline` in CSP — requires build-time nonce generation pipeline
+- Clerk webhook has no signature verification — Clerk webhook secret is configured but not validated in the edge function
+- Admin edge function uses `quote_ident()` for table/column names — SQL injection surface if payload format changes
+- Secret scanning, code scanning, push protection all require GitHub Advanced Security (paid plan)
