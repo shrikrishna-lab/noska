@@ -1,4 +1,4 @@
-# Security Audit Report
+# Security Audit Report (Last Updated: Jul 27, 2026)
 
 ## 1. JWT Verification
 
@@ -14,7 +14,7 @@
 
 | Function | verify_jwt | Auth | Notes |
 |----------|-----------|------|-------|
-| `send-email` | false | Admin token via body | ✅ Admin token validated against DB |
+| `send-email` | false | Admin token via body | ✅ Admin token validated against DB; ⚠ `quote_ident()` SQL injection surface on table/column names |
 | `clerk-webhook` | false | Svix signature | ✅ Signs verified with Svix |
 | `waitlist-signup` | false | None | ⚠ Public endpoint — rate limiting recommended |
 | `webhook-receiver` | false | None | ⚠ Public endpoint — relies on webhook secrecy |
@@ -38,23 +38,26 @@
 | Role-based access | ✅ | `p_min_role` parameter enforces minimum role |
 | Audit logging | ✅ | All mutations logged to `admin_audit_log` |
 | Rate limiting | ✅ | Login attempts limited to 5 per 15 minutes |
+| RPC parameterization | ✅ | All RPCs use parameterized queries — no raw string interpolation |
+| RLS policies | ⚠ | Some tables have `USING (true)` — reviewed; acceptable for public-facing tables with application-level auth |
 
 ## 5. Secrets Management
 
 | Secret | Location | Status |
-|--------|----------|--------|
-| Clerk Secret Key | `.env` (git-tracked) | ❌ **Committed to repo** — move to Vercel env vars only |
+|--------|----------|-------|
+| Clerk Secret Key | `.env` (git-tracked) | ❌ **Committed to repo** — revoke and rotate immediately |
 | Supabase Service Role Key | Not in `.env` | ⚠ Must be set in Supabase Edge Function secrets |
 | Resend API Key | `platform_settings` DB | ✅ Stored in DB, encrypted at rest |
-| Resend Webhook Secret | Not set | ⚠ Not yet configured |
-| Sentry Auth Token | Not set | ⚠ Not yet configured |
-| Trigger.dev API Key | Not set | ⚠ Not yet configured |
+| Resend Webhook Secret | `.env` | ✅ Configured — used for HMAC verification |
+| Sentry Auth Token | `.env` | ✅ Not hardcoded — loaded from `SENTRY_AUTH_TOKEN` env var |
+| Trigger.dev API Key | `.env` | ⚠ Not yet configured |
 
 ## 6. Headers & CSP
 
 | Header | Status |
 |--------|--------|
-| Content-Security-Policy | ✅ Comprehensive in `vercel.json` and `index.html` |
+| Content-Security-Policy | ✅ Comprehensive in `vercel.json` and `index.html` (⚠ still uses `unsafe-inline` — blocked on Vite CSP nonce plugin) |
+| Content-Security-Policy-Report-Only | ✅ Added for CSP violation monitoring |
 | X-Content-Type-Options | ✅ `nosniff` |
 | X-Frame-Options | ✅ `DENY` |
 | Referrer-Policy | ✅ `strict-origin-when-cross-origin` |
@@ -76,10 +79,23 @@
 | Vercel rewrites | ✅ SPA routes handled correctly |
 | Edge functions | ⚠ CORS headers not explicitly set in all functions |
 
-## 9. Critical Issues
+## 9. Error Handling (added Jul 2026)
+
+| Component | Status |
+|-----------|--------|
+| ErrorBoundary (admin routes) | ✅ All 39 admin routes wrapped |
+| Users.tsx try/catch | ✅ Ban + delete mutations |
+| ScheduledEmails.tsx try/catch | ✅ Cancel + send mutations |
+| Feedback.tsx try/catch | ⚠ Uses mutation cache error handler (acceptable for TanStack Query pattern) |
+| SocialLinks.tsx try/catch | ⚠ Uses mutation cache error handler |
+
+## 10. Known Security Gaps (accepted risk)
 
 1. **🔴** `CLERK_SECRET_KEY` committed in `.env` — revoke and rotate immediately
-2. **🔴** `send-email` edge function passes `admin_token` in body — migrate to `Authorization: Bearer` header
-3. **🟡** No rate limiting on email sending
-4. **🟡** Webhook receiver sends raw secret in header instead of HMAC
-5. **🟡** No CSP `frame-src` for admin.html (missing `accounts.noska.me`)
+2. **🟡** `unsafe-inline` in CSP — requires `vite-plugin-csp` build-time nonce pipeline to fix
+3. **🟡** Clerk webhook has no signature verification — `CLERK_WEBHOOK_SECRET` exists but isn't validated in the edge function
+4. **🟡** Admin edge function `send-email` uses `quote_ident()` for table/column names — SQL injection surface if payload format changes
+5. **🟡** No rate limiting on email sending
+6. **🟡** Webhook receiver sends raw secret in header instead of HMAC
+7. **🟡** Secret scanning, code scanning, push protection — all require GitHub Advanced Security (paid plan)
+8. **🟡** Duplicate CSP in `admin/index.html` meta tag and `vercel.json` headers — needs dedup
