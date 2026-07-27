@@ -91,7 +91,6 @@
 | SocialLinks.tsx try/catch | ⚠ Uses mutation cache error handler |
 
 ## 10. Known Security Gaps (accepted risk)
-
 1. **🟡** `unsafe-inline` in CSP — requires `vite-plugin-csp` build-time nonce pipeline to fix
 2. **🟡** Admin edge function `send-email` uses `quote_ident()` for table/column names — SQL injection surface if payload format changes
 3. **🟡** Secret scanning, code scanning, push protection — all require GitHub Advanced Security (paid plan)
