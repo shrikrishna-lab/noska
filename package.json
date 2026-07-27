@@ -41,20 +41,20 @@
     "vite": "latest"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.1",
+    "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "^22.13.0",
+    "@types/node": "^26.1.1",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "latest",
-    "fast-check": "^4.8.0",
+    "fast-check": "^4.9.0",
     "jsdom": "^29.1.1",
     "postcss": "latest",
-    "puppeteer-core": "^25.2.1",
+    "puppeteer-core": "^25.4.0",
     "tailwindcss": "latest",
     "typescript": "^5.7.3",
     "vite-plugin-image-optimizer": "^2.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   }
 }
