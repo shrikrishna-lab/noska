@@ -22,13 +22,17 @@ export function ScheduledEmails() {
   );
 
   const handleCancel = async (id: string) => {
-    await update.mutateAsync({ id, status: "draft", scheduled_for: undefined });
-    toast.success("Campaign unscheduled");
+    try {
+      await update.mutateAsync({ id, status: "draft", scheduled_for: undefined });
+      toast.success("Campaign unscheduled");
+    } catch { toast.error("Failed to unschedule campaign"); }
   };
 
   const handleSendNow = async (id: string) => {
-    await update.mutateAsync({ id, status: "sending" });
-    toast.success("Campaign sending...");
+    try {
+      await update.mutateAsync({ id, status: "sending" });
+      toast.success("Campaign sending...");
+    } catch { toast.error("Failed to send campaign"); }
   };
 
   if (isLoading) return <LoadingState />;

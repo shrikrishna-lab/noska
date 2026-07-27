@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryCache, MutationCache, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
@@ -137,6 +138,7 @@ export default function App() {
           <AuthGate>
             <TooltipProvider delayDuration={200}>
               <DialogProvider>
+                <ErrorBoundary>
                 <Routes>
                   <Route element={<Shell />}>
                     <Route index element={<Dashboard />} />
@@ -211,6 +213,7 @@ export default function App() {
                   <Route path="/403" element={<Forbidden />} />
                   <Route path="*" element={<Forbidden />} />
                 </Routes>
+                </ErrorBoundary>
               </DialogProvider>
               <Toaster
                 position="bottom-right"

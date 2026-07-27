@@ -8,7 +8,7 @@ interface KpiCardProps {
   title: string;
   value: string | number;
   trend?: number;
-  icon: ComponentType<{ className?: string }>;
+  icon?: ComponentType<{ className?: string }>;
   subtitle?: string;
   className?: string;
 }
@@ -26,9 +26,11 @@ export function KpiCard({ title, value, trend, icon: Icon, subtitle, className }
               <p className="text-2xl font-bold tracking-tight">{value}</p>
               {subtitle && <p className="text-[11px] text-muted-foreground">{subtitle}</p>}
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors">
-              <Icon className="h-4 w-4" />
-            </div>
+            {Icon && (
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors">
+                <Icon className="h-4 w-4" />
+              </div>
+            )}
           </div>
           {trend != null && (
             <div className="mt-3 flex items-center gap-1">

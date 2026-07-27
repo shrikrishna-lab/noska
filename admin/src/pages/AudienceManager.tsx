@@ -4,28 +4,71 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useEmailCampaigns } from "@/lib/queries";
-import { useRealtimeInvalidate } from "@/lib/queries";
-import { Users, Search, Filter, ArrowRight, Clock, Send, CheckCircle2, AlertTriangle } from "lucide-react";
+import { useUserCount, useWaitlistCount, useWaitlist, useAdminUsers, useWorkspaces, useSubscriptions, useEmailCampaigns, useRealtimeInvalidate } from "@/lib/queries";
+import { Users, Search, Send } from "lucide-react";
 
-const AUDIENCES = [
-  { id: "everyone", label: "Everyone", count: 1240, desc: "All users in the system" },
-  { id: "waitlist", label: "Waitlist", count: 342, desc: "Users on the waitlist" },
-  { id: "approved", label: "Approved Users", count: 856, desc: "Users who have been approved" },
-  { id: "active", label: "Active Users", count: 623, desc: "Active workspace members" },
-  { id: "admins", label: "Admins", count: 12, desc: "Administrator accounts" },
-  { id: "workspace_owners", label: "Workspace Owners", count: 98, desc: "Users who own a workspace" },
-  { id: "premium", label: "Premium Users", count: 156, desc: "Users on paid plans" },
+const AUDIENCE_META = [
+  { id: "everyone", label: "Everyone", icon: Users, desc: "All users in the system" },
+  { id: "waitlist", label: "Waitlist", icon: Users, desc: "Users on the waitlist" },
+  { id: "approved", label: "Approved Users", icon: Users, desc: "Users who have been approved" },
+  { id: "active", label: "Active Users", icon: Users, desc: "Active workspace members" },
+  { id: "admins", label: "Admins", icon: Users, desc: "Administrator accounts" },
+  { id: "workspace_owners", label: "Workspace Owners", icon: Users, desc: "Users who own a workspace" },
+  { id: "premium", label: "Premium Users", icon: Users, desc: "Users on paid plans" },
 ];
 
 export function AudienceManager() {
+  const { data: userCount } = useUserCount();
+  const { data: waitlistCount } = useWaitlistCount();
+  const { data: waitlist } = useWaitlist();
+  const { data: adminUsers } = useAdminUsers();
+  const { data: workspaces } = useWorkspaces();
+  const { data: subscriptions } = useSubscriptions();
   const { data: campaigns } = useEmailCampaigns();
   const [search, setSearch] = useState("");
+
+  useRealtimeInvalidate(["admin", "users", "count"], "user_profiles");
+  useRealtimeInvalidate(["admin", "waitlist"], "waitlist_entries");
+  useRealtimeInvalidate(["admin", "waitlist", "count"], "waitlist_entries");
+  useRealtimeInvalidate(["admin", "admin-users"], "admin_users");
+  useRealtimeInvalidate(["admin", "workspaces"], "workspaces");
+  useRealtimeInvalidate(["admin", "subscriptions"], "subscriptions");
   useRealtimeInvalidate(["admin", "campaigns"], "email_campaigns");
 
+  const workspaceOwners = useMemo(() => {
+    if (!workspaces) return 0;
+    return new Set(workspaces.map((w) => w.owner_id).filter(Boolean)).size;
+  }, [workspaces]);
+
+  const approvedCount = useMemo(() => {
+    if (!waitlist) return 0;
+    return waitlist.filter((w) => w.status === "accepted").length;
+  }, [waitlist]);
+
+  const premiumCount = useMemo(() => {
+    if (!subscriptions) return 0;
+    return subscriptions.filter((s) => s.plan !== "free" && s.status === "active").length;
+  }, [subscriptions]);
+
+  const audiences = useMemo(() => {
+    const counts: Record<string, number> = {
+      everyone: userCount ?? 0,
+      waitlist: waitlistCount ?? 0,
+      approved: approvedCount,
+      active: workspaces?.length ?? 0,
+      admins: adminUsers?.length ?? 0,
+      workspace_owners: workspaceOwners,
+      premium: premiumCount,
+    };
+    return AUDIENCE_META.map((meta) => ({
+      ...meta,
+      count: counts[meta.id],
+    }));
+  }, [userCount, waitlistCount, approvedCount, workspaces, adminUsers, workspaceOwners, premiumCount]);
+
   const filtered = useMemo(() =>
-    AUDIENCES.filter((a) => a.label.toLowerCase().includes(search.toLowerCase())),
-    [search]
+    audiences.filter((a) => a.label.toLowerCase().includes(search.toLowerCase())),
+    [search, audiences]
   );
 
   return (
