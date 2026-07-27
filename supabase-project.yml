@@ -1,0 +1,27 @@
+- generic [active] [ref=f23e1]:
+  - generic [ref=f23e299]:
+    - link "Skip to content" [ref=f23e300] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=f23e302]:
+      - generic [ref=f23e303]:
+        - generic [ref=f23e304]:
+          - link "Supabase Back to organization home" [ref=f23e305] [cursor=pointer]:
+            - /url: /dashboard/org/itxubemmvuuvdqaslrdn
+          - generic [ref=f23e308]
+          - button "Connect" [ref=f23e359] [cursor=pointer]
+        - generic [ref=f23e364]:
+          - button "Feedback" [ref=f23e365] [cursor=pointer]
+          - generic [ref=f23e367]
+          - button "Not-krrish" [ref=f23e401] [cursor=pointer]
+    - generic [ref=f23e404]:
+      - generic [ref=f23e408]:
+        - navigation [ref=f23e410]:
+          - list [ref=f23e412]
+          - list [ref=f23e426]
+          - list [ref=f23e453]
+          - list [ref=f23e478]
+        - button "Sidebar control" [ref=f23e486] [cursor=pointer]
+      - main [ref=f23e493]:
+        - main [ref=f23e498]:
+          - generic [ref=f23e499]
+  - alert [ref=f23e298]: Supabase
