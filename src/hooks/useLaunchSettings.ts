@@ -24,6 +24,7 @@ export interface LaunchSettings {
   show_waitlist: boolean;
   show_discord: boolean;
   show_community: boolean;
+  show_social_links: boolean;
   page_visibility: Record<string, boolean>;
   route_protection: Record<string, unknown>;
   updated_at: string | null;
@@ -63,6 +64,19 @@ export interface AnnouncementBarData {
   dismissible: boolean;
   sticky: boolean;
   animation: string;
+  position: string;
+  bg_style: string;
+  gradient_start: string | null;
+  gradient_end: string | null;
+  font_size: string;
+  border_style: string;
+  page_target: string;
+  auto_dismiss_seconds: number | null;
+  start_at: string | null;
+  end_at: string | null;
+  secondary_link_url: string | null;
+  secondary_link_text: string | null;
+  show_close_button: boolean;
 }
 
 export interface LandingContent {
@@ -85,7 +99,7 @@ const DEFAULT_SETTINGS: LaunchSettings = {
   maintenance_title: 'Scheduled Maintenance', maintenance_message: 'We are performing scheduled maintenance. We will be back shortly.',
   registration_enabled: true, show_pricing: true, show_blog: true, show_docs: true,
   show_changelog: true, show_login: true, show_signup: true, show_waitlist: true,
-  show_discord: true, show_community: true,
+  show_discord: true, show_community: true, show_social_links: true,
   page_visibility: { blog: true, pricing: true, templates: true, roadmap: true, careers: true, community: true },
   route_protection: {}, updated_at: null, published: true,
 };

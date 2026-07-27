@@ -391,6 +391,19 @@ export interface AnnouncementBar {
   dismissible: boolean;
   sticky: boolean;
   animation: string;
+  position: string;
+  bg_style: string;
+  gradient_start: string | null;
+  gradient_end: string | null;
+  font_size: string;
+  border_style: string;
+  page_target: string;
+  auto_dismiss_seconds: number | null;
+  start_at: string | null;
+  end_at: string | null;
+  secondary_link_url: string | null;
+  secondary_link_text: string | null;
+  show_close_button: boolean;
   updated_at: string | null;
   updated_by: string | null;
 }
