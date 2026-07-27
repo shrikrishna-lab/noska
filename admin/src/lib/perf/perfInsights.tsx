@@ -24,12 +24,24 @@ interface SlowImage {
 
 type PerfListener = (data: PerfSnapshot) => void;
 
+export interface WebVitalMetric {
+  name: string;
+  value: number;
+  rating: "good" | "needs-improvement" | "poor";
+}
+
 export interface PerfSnapshot {
   renders: RenderEvent[];
   rpcs: RpcMetric[];
   slowImages: SlowImage[];
   componentRanking: { id: string; totalMs: number; count: number; avgMs: number }[];
   largestChunks: { name: string; size: number }[];
+  webVitals: WebVitalMetric[];
+  fps: number;
+  jsHeapSize: number;
+  jsHeapUsed: number;
+  longestTask: number;
+  totalBlockingTime: number;
   ts: number;
 }
 
@@ -136,7 +148,7 @@ export function onPerfUpdate(cb: PerfListener): () => void {
 }
 
 function notifyListeners() {
-  const data = snapshot();
+  const data = snapshotWithMetrics();
   listeners.forEach((cb) => cb(data));
 }
 
@@ -185,6 +197,113 @@ export function withProfiler<P extends Record<string, unknown>>(
   return Profiled;
 }
 
+// ── Web Vitals ──
+let webVitals: WebVitalMetric[] = [];
+try {
+  const observer = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      const name = entry.name || entry.entryType;
+      let value = 0;
+      let rating: WebVitalMetric["rating"] = "good";
+      if (entry instanceof PerformanceLargestContentfulPaint) {
+        value = entry.renderTime || entry.loadTime || 0;
+        rating = value < 2500 ? "good" : value < 4000 ? "needs-improvement" : "poor";
+        webVitals = webVitals.filter((v) => v.name !== "LCP");
+        webVitals.push({ name: "LCP", value, rating });
+      } else if (entry instanceof PerformanceFirstInput) {
+        value = entry.processingStart - entry.startTime;
+        rating = value < 100 ? "good" : value < 300 ? "needs-improvement" : "poor";
+        webVitals = webVitals.filter((v) => v.name !== "FID");
+        webVitals.push({ name: "FID", value, rating });
+      } else if (entry instanceof PerformanceElementTiming) {
+        value = entry.renderTime || 0;
+      }
+    }
+  });
+  observer.observe({ type: "largest-contentful-paint", buffered: true });
+  observer.observe({ type: "first-input", buffered: true });
+  observer.observe({ type: "element", buffered: true });
+} catch {}
+
+// ── FPS tracking ──
+let lastFrameTime = performance.now();
+let frameCount = 0;
+let currentFps = 60;
+function tickFps() {
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFrameTime >= 1000) {
+    currentFps = Math.round((frameCount * 1000) / (now - lastFrameTime));
+    frameCount = 0;
+    lastFrameTime = now;
+  }
+  requestAnimationFrame(tickFps);
+}
+requestAnimationFrame(tickFps);
+
+// ── Long Tasks ──
+let lastLongTaskDuration = 0;
+let totalBlockingTime = 0;
+try {
+  const ltObserver = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      const duration = entry.duration;
+      lastLongTaskDuration = Math.max(lastLongTaskDuration, duration);
+      totalBlockingTime += Math.max(duration - 50, 0);
+    }
+  });
+  ltObserver.observe({ type: "longtask", buffered: true });
+} catch {}
+
+// ── Layout Shifts (CLS) ──
+let cumulativeLayoutShift = 0;
+try {
+  const clsObserver = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      if (!entry.hadRecentInput) {
+        cumulativeLayoutShift += (entry as any).value || 0;
+      }
+    }
+  });
+  clsObserver.observe({ type: "layout-shift", buffered: true });
+} catch {}
+
+function getMemoryInfo(): { heapSize: number; heapUsed: number } {
+  const perf = (performance as any);
+  if (perf.memory) {
+    return { heapSize: perf.memory.jsHeapSizeLimit, heapUsed: perf.memory.usedJSHeapSize };
+  }
+  return { heapSize: 0, heapUsed: 0 };
+}
+
+function getWebVitals(): WebVitalMetric[] {
+  const clsRating = cumulativeLayoutShift < 0.1 ? "good" : cumulativeLayoutShift < 0.25 ? "needs-improvement" : "poor";
+  const clsIndex = webVitals.findIndex((v) => v.name === "CLS");
+  if (clsIndex >= 0) webVitals[clsIndex] = { name: "CLS", value: cumulativeLayoutShift, rating: clsRating };
+  else webVitals.push({ name: "CLS", value: cumulativeLayoutShift, rating: clsRating });
+
+  const tbtRating = totalBlockingTime < 200 ? "good" : totalBlockingTime < 600 ? "needs-improvement" : "poor";
+  const tbtIndex = webVitals.findIndex((v) => v.name === "TBT");
+  if (tbtIndex >= 0) webVitals[tbtIndex] = { name: "TBT", value: totalBlockingTime, rating: tbtRating };
+  else webVitals.push({ name: "TBT", value: totalBlockingTime, rating: tbtRating });
+
+  return webVitals;
+}
+
+function snapshotWithMetrics(): PerfSnapshot {
+  const base = snapshot();
+  const mem = getMemoryInfo();
+  return {
+    ...base,
+    webVitals: getWebVitals(),
+    fps: currentFps,
+    jsHeapSize: mem.heapSize,
+    jsHeapUsed: mem.heapUsed,
+    longestTask: lastLongTaskDuration,
+    totalBlockingTime,
+  };
+}
+
 export function getSnapshot(): PerfSnapshot {
-  return snapshot();
+  return snapshotWithMetrics();
 }

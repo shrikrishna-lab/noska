@@ -1011,59 +1011,61 @@ function App() {
     }
   }, [appFlowState, activeId, workspaceName, location.pathname]);
 
+  const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  onKeyRef.current = (e: KeyboardEvent) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      setPaletteOpen(true);
+    }
+    if (mod && e.key.toLowerCase() === "n") {
+      e.preventDefault();
+      openNewPage();
+    }
+    if (e.key === "?") setHelpOpen(true);
+    if (mod && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    }
+    if (mod && e.key.toLowerCase() === "d") {
+      e.preventDefault();
+      duplicatePage(activePage.id);
+    }
+    if (mod && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      redo();
+    }
+    if (mod && e.shiftKey && e.key.toLowerCase() === "e") {
+      e.preventDefault();
+      setExportOpen(true);
+    }
+    if (mod && e.shiftKey && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      setClipperOpen(true);
+    }
+    if (mod && e.shiftKey && e.key.toLowerCase() === "v") {
+      e.preventDefault();
+      setVoiceOpen(true);
+    }
+    if (mod && e.key === "\\") {
+      e.preventDefault();
+      setSidebarOpen(!sidebarOpen);
+    }
+    if (e.altKey && e.key === "ArrowLeft") {
+      e.preventDefault();
+      selectByOffset(-1);
+    }
+    if (e.altKey && e.key === "ArrowRight") {
+      e.preventDefault();
+      selectByOffset(1);
+    }
+  };
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen(true);
-      }
-      if (mod && e.key.toLowerCase() === "n") {
-        e.preventDefault();
-        openNewPage();
-      }
-      if (e.key === "?") setHelpOpen(true);
-      if (mod && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) redo();
-        else undo();
-      }
-      if (mod && e.key.toLowerCase() === "d") {
-        e.preventDefault();
-        duplicatePage(activePage.id);
-      }
-      if (mod && e.key.toLowerCase() === "y") {
-        e.preventDefault();
-        redo();
-      }
-      if (mod && e.shiftKey && e.key.toLowerCase() === "e") {
-        e.preventDefault();
-        setExportOpen(true);
-      }
-      if (mod && e.shiftKey && e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        setClipperOpen(true);
-      }
-      if (mod && e.shiftKey && e.key.toLowerCase() === "v") {
-        e.preventDefault();
-        setVoiceOpen(true);
-      }
-      if (mod && e.key === "\\") {
-        e.preventDefault();
-        setSidebarOpen(!sidebarOpen);
-      }
-      if (e.altKey && e.key === "ArrowLeft") {
-        e.preventDefault();
-        selectByOffset(-1);
-      }
-      if (e.altKey && e.key === "ArrowRight") {
-        e.preventDefault();
-        selectByOffset(1);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+    const handler = (e: KeyboardEvent) => onKeyRef.current(e);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const commitPages = useCallback((next: Page[]) => {
     setHistory((h) => [...h.slice(-24), pages]);
