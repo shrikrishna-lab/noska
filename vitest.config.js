@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
+    pool: "threads",
     globals: true,
     setupFiles: ["./src/test/setup.js"],
     exclude: ["**/node_modules/**", "**/dist/**", "**/e2e/**"],
