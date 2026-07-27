@@ -54,7 +54,7 @@ let originalRpc: ((method: string, ...args: unknown[]) => unknown) | null = null
 const SLOW_THRESHOLD_MS = 16;
 const IMAGE_SLOW_THRESHOLD = 500;
 
-function snapshot(): PerfSnapshot {
+function snapshot() {
   const renders = Array.from(renderLog.values()).filter(
     (r) => Date.now() - r.lastReported < 60000
   );
@@ -82,7 +82,7 @@ function snapshot(): PerfSnapshot {
     componentRanking,
     largestChunks: listLargeChunks(),
     ts: Date.now(),
-  };
+  } as Omit<PerfSnapshot, 'webVitals' | 'fps' | 'jsHeapSize' | 'jsHeapUsed' | 'longestTask' | 'totalBlockingTime'>;
 }
 
 function listLargeChunks(): { name: string; size: number }[] {
@@ -117,7 +117,7 @@ window.fetch = async (input, init) => {
       } else {
         rpcLog.set(method, { method, count: 1, totalMs: elapsed, maxMs: elapsed });
       }
-      if (elapsed > SLOW_THRESHOLD * 5) {
+      if (elapsed > SLOW_THRESHOLD_MS * 5) {
         console.warn(`[PerfInsights] Slow RPC: ${method} (${elapsed.toFixed(0)}ms)`);
       }
     }
@@ -127,7 +127,7 @@ window.fetch = async (input, init) => {
   }
 };
 
-export function usePerfSnapshot(intervalMs = 30000): () => PerfSnapshot {
+export function usePerfSnapshot(intervalMs = 30000) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -138,12 +138,12 @@ export function usePerfSnapshot(intervalMs = 30000): () => PerfSnapshot {
     };
   }, [intervalMs]);
 
-  return snapshot;
+  return snapshotWithMetrics;
 }
 
 export function onPerfUpdate(cb: PerfListener): () => void {
   listeners.add(cb);
-  cb(snapshot());
+  cb(snapshotWithMetrics());
   return () => listeners.delete(cb);
 }
 
@@ -160,7 +160,7 @@ export function trackRender(
   startTime: number,
   commitTime: number
 ) {
-  if (actualDuration < SLOW_THRESHOLD) return;
+  if (actualDuration < SLOW_THRESHOLD_MS) return;
   const key = `${id}::${phase}`;
   renderLog.set(key, { id, phase, actualDuration, baseDuration, startTime, commitTime, lastReported: Date.now() });
   if (renderLog.size > 200) {
@@ -186,7 +186,7 @@ export function withProfiler<P extends Record<string, unknown>>(
       <Profiler
         id={displayName}
         onRender={(_id, phase, actualDuration, baseDuration, startTime, commitTime) => {
-          trackRender(displayName, phase, actualDuration, baseDuration, startTime, commitTime);
+          trackRender(displayName, phase as "mount" | "update", actualDuration, baseDuration, startTime, commitTime);
         }}
       >
         <WrappedComponent {...props} />
@@ -205,18 +205,21 @@ try {
       const name = entry.name || entry.entryType;
       let value = 0;
       let rating: WebVitalMetric["rating"] = "good";
-      if (entry instanceof PerformanceLargestContentfulPaint) {
-        value = entry.renderTime || entry.loadTime || 0;
+      if (entry instanceof (performance.getEntriesByType('largest-contentful-paint')[0]?.constructor ?? Object)) {
+        const lcp = entry as unknown as { renderTime?: number; loadTime?: number; startTime?: number };
+        value = lcp.renderTime || lcp.loadTime || lcp.startTime || 0;
         rating = value < 2500 ? "good" : value < 4000 ? "needs-improvement" : "poor";
         webVitals = webVitals.filter((v) => v.name !== "LCP");
         webVitals.push({ name: "LCP", value, rating });
-      } else if (entry instanceof PerformanceFirstInput) {
-        value = entry.processingStart - entry.startTime;
+      } else if (entry.entryType === 'first-input') {
+        const fi = entry as unknown as { processingStart: number; startTime: number };
+        value = fi.processingStart - fi.startTime;
         rating = value < 100 ? "good" : value < 300 ? "needs-improvement" : "poor";
         webVitals = webVitals.filter((v) => v.name !== "FID");
         webVitals.push({ name: "FID", value, rating });
-      } else if (entry instanceof PerformanceElementTiming) {
-        value = entry.renderTime || 0;
+      } else if (entry.entryType === 'element') {
+        const el = entry as unknown as { renderTime?: number };
+        value = el.renderTime || 0;
       }
     }
   });
@@ -260,7 +263,7 @@ let cumulativeLayoutShift = 0;
 try {
   const clsObserver = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
-      if (!entry.hadRecentInput) {
+      if (!(entry as any).hadRecentInput) {
         cumulativeLayoutShift += (entry as any).value || 0;
       }
     }

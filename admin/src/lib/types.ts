@@ -327,6 +327,7 @@ export interface LaunchSettings {
   show_waitlist: boolean;
   show_discord: boolean;
   show_community: boolean;
+  show_social_links: boolean;
   page_visibility: Record<string, boolean>;
   route_protection: Record<string, unknown>;
   updated_at: string | null;
