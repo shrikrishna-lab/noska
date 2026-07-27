@@ -1,4 +1,4 @@
-# Security Audit Report
+# Security Audit Report (Last Updated: Jul 27, 2026)
 
 ## 1. JWT Verification
 
@@ -80,8 +80,17 @@
 | Vercel rewrites | ✅ SPA routes handled correctly |
 | Edge functions | ⚠ CORS headers not explicitly set in all functions |
 
-## 9. Known Security Gaps (accepted risk)
+## 9. Error Handling (added Jul 2026)
 
+| Component | Status |
+|-----------|--------|
+| ErrorBoundary (admin routes) | ✅ All 39 admin routes wrapped |
+| Users.tsx try/catch | ✅ Ban + delete mutations |
+| ScheduledEmails.tsx try/catch | ✅ Cancel + send mutations |
+| Feedback.tsx try/catch | ⚠ Uses mutation cache error handler (acceptable for TanStack Query pattern) |
+| SocialLinks.tsx try/catch | ⚠ Uses mutation cache error handler |
+
+## 10. Known Security Gaps (accepted risk)
 1. **🟡** `unsafe-inline` in CSP — requires `vite-plugin-csp` build-time nonce pipeline to fix
 2. **🟡** Admin edge function `send-email` uses `quote_ident()` for table/column names — SQL injection surface if payload format changes
 3. **🟡** Secret scanning, code scanning, push protection — all require GitHub Advanced Security (paid plan)

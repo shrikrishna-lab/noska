@@ -15,6 +15,7 @@ export default function Footer() {
   const { links } = useSocialLinks();
   const { getButton, getButtonText } = useCTAButtons();
   const { settings } = useLaunchSettings();
+  const showSocial = settings.show_social_links ?? true;
   const footerCta = getButton('footer_cta');
   const finalCtaPrimary = getButton('final_cta_primary');
   const finalCtaSecondary = getButton('final_cta_secondary');
@@ -28,13 +29,15 @@ export default function Footer() {
             <img src="/logo.png" alt="Noska Logo" className="navbar-brand-logo" />
             <span className="logo-text">Noska</span>
           </Link>
-          <div className="social-links">
-            {links.filter(l => l.active).map((link) => (
-              <a key={link.platform} href={link.url} target="_blank" rel="noreferrer" aria-label={link.label ?? link.platform}>
-                {SOCIAL_ICONS[link.platform] ?? <span title={link.platform}>🔗</span>}
-              </a>
-            ))}
-          </div>
+          {showSocial && (
+            <div className="social-links">
+              {links.filter(l => l.active).map((link) => (
+                <a key={link.platform} href={link.url} target="_blank" rel="noreferrer" aria-label={link.label ?? link.platform}>
+                  {SOCIAL_ICONS[link.platform] ?? <span title={link.platform}>🔗</span>}
+                </a>
+              ))}
+            </div>
+          )}
           <div className="language-selector">
             <Globe size={14} />
             <select aria-label="Select Language">

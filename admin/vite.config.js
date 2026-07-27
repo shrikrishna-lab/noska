@@ -32,6 +32,9 @@ export default defineConfig({
           if (id.includes("node_modules/react-hook-form") || id.includes("node_modules/zod")) return "forms";
           if (id.includes("node_modules/@dnd-kit")) return "dnd";
           if (id.includes("node_modules/lucide-react")) return "icons";
+          if (id.includes("node_modules/tiptap") || id.includes("node_modules/@tiptap")) return "editor";
+          if (id.includes("node_modules/katex") || id.includes("node_modules/mermaid") || id.includes("node_modules/highlight.js")) return "markup";
+          if (id.includes("node_modules/encoding") || id.includes("node_modules/crypto-js")) return "crypto";
         }
       }
     }

@@ -25,6 +25,7 @@ export function Settings() {
   const updateSetting = useUpdatePlatformSetting();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [deleting, setDeleting] = useState(false);
   useRealtimeInvalidate(["admin", "settings"], "platform_settings");
 
   useEffect(() => {
@@ -346,19 +347,31 @@ export function Settings() {
                     toast.success("Export downloaded");
                   } catch { toast.error("Export failed"); }
                 }}><CheckCircle2 className="mr-1 h-4 w-4" /> Export</Button>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-destructive/20 p-4">
-                <div>
-                  <p className="font-medium text-destructive">Delete Platform</p>
-                  <p className="text-sm text-muted-foreground">Permanently delete all data and disable the platform</p>
-                </div>
-                <Button variant="destructive" onClick={async () => {
-                  if (!await confirm({ title: "Delete Platform", description: "This will permanently delete ALL platform data. This CANNOT be undone. Are you sure?", variant: "delete", confirmText: "Delete Everything" })) return;
-                  if (!await confirm({ title: "Final Confirmation", description: "Type DELETE to confirm destroying ALL data.", variant: "delete", confirmText: "Delete", requireTyping: "DELETE" })) return;
-                  toast.error("Platform deletion is not implemented for safety. Run manual DB cleanup.");
-                }}><Trash2 className="mr-1 h-4 w-4" /> Delete Everything</Button>
-              </div>
-            </CardContent>
+               </div>
+               <div className="flex items-center justify-between rounded-lg border border-destructive/20 p-4">
+                 <div>
+                   <p className="font-medium text-destructive">Delete Platform</p>
+                   <p className="text-sm text-muted-foreground">Permanently delete all data and disable the platform</p>
+                 </div>
+                 <Button variant="destructive" disabled={deleting} onClick={async () => {
+                   if (!await confirm({ title: "Delete Platform", description: "This will permanently delete ALL platform data. This CANNOT be undone. Are you sure?", variant: "delete", confirmText: "Delete Everything" })) return;
+                   if (!await confirm({ title: "Final Confirmation", description: "Type DELETE to confirm destroying ALL data.", variant: "delete", confirmText: "Delete", requireTyping: "DELETE" })) return;
+                   setDeleting(true);
+                   try {
+                     const token = getAdminToken();
+                     if (!token || !supabase) { toast.error("No admin session"); return; }
+                     const { data, error } = await supabase.rpc("admin_purge_platform", { p_session_token: token });
+                     if (error) throw error;
+                     toast.success("Platform deleted successfully. All data has been permanently removed.");
+                     sessionStorage.removeItem("noska_admin_token");
+                     setTimeout(() => window.location.href = "/admin/login", 2000);
+                   } catch (e) {
+                     toast.error("Purge failed: " + (e instanceof Error ? e.message : "Unknown error"));
+                     setDeleting(false);
+                   }
+                 }}>{deleting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />} Delete Everything</Button>
+               </div>
+             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>

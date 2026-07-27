@@ -367,6 +367,7 @@ export function LaunchControl() {
           <ToggleCard title="Waitlist" description="Show waitlist page" enabled={merged.show_waitlist} onToggle={(v) => { set("show_waitlist", v); updateSettings.mutate({ show_waitlist: v, admin_name: user?.name }); }} />
           <ToggleCard title="Discord" description="Show Discord link" enabled={merged.show_discord} onToggle={(v) => { set("show_discord", v); updateSettings.mutate({ show_discord: v, admin_name: user?.name }); }} />
           <ToggleCard title="Community" description="Show community section" enabled={merged.show_community} onToggle={(v) => { set("show_community", v); updateSettings.mutate({ show_community: v, admin_name: user?.name }); }} />
+          <ToggleCard title="Social Links" description="Show social media links in footer" enabled={merged.show_social_links} onToggle={(v) => { set("show_social_links", v); updateSettings.mutate({ show_social_links: v, admin_name: user?.name }); }} />
         </CardContent>
       </Card>
 
