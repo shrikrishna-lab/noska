@@ -48,6 +48,7 @@ export default function AuthPage(_props: AuthPageProps) {
     if (provider === "google") capture("google_login");
     if (provider === "microsoft") capture("microsoft_login");
     try {
+      signIn.reset();
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
       const { error } = await signIn.sso({
         strategy,

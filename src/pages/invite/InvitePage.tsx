@@ -39,6 +39,7 @@ export function InvitePage() {
     setIsConnecting(true);
     try {
       if (!signIn) return;
+      signIn.reset();
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
       const { error } = await signIn.sso({
         strategy,
