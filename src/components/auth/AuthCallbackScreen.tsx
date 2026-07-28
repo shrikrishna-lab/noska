@@ -129,12 +129,19 @@ export function AuthCallbackScreen() {
 
         await new Promise((r) => setTimeout(r, 600));
 
+        const go = (path: string) => {
+          if (window.opener) {
+            window.close();
+          } else {
+            navigate(path, { replace: true });
+          }
+        };
         if (accessStatus === "approved") {
-          navigate("/login", { replace: true });
+          go("/login");
         } else if (accessStatus === "banned") {
-          navigate("/banned", { replace: true });
+          go("/banned");
         } else {
-          navigate("/waitlist", { replace: true });
+          go("/waitlist");
         }
       } catch (e) {
         if (!mountedRef.current) return;

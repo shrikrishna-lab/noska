@@ -769,6 +769,25 @@ function App() {
     }
   }, []);
 
+  // Post-OAuth routing — after the OAuth popup completes, isSignedIn
+  // becomes true but the main bootstrap effect only runs on [clerkLoaded],
+  // so the app would stay stuck on AuthPage's "Connecting..." screen.
+  // This effect bridges that gap: once the user is fully signed in and
+  // the app is waiting on the auth screen, route them into the workspace
+  // or onboarding flow.
+  useEffect(() => {
+    if (!clerkLoaded) return;
+    if (appFlowState !== "auth") return;
+    if (!isSignedIn || !clerkUser) return;
+
+    handleAuthSuccess({
+      userId: clerkUser.id,
+      userName: clerkUser.fullName || clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Workspace User',
+      email: clerkUser.primaryEmailAddress?.emailAddress,
+      avatarUrl: clerkUser.imageUrl,
+    });
+  }, [clerkLoaded, isSignedIn, clerkUser, appFlowState, handleAuthSuccess]);
+
   // Build starter pages (local state, no DB dependency). The onboarding
   // flow lets the user pick one starter template — build that page, falling
   // back to a default "Getting Started" page if none was picked.
