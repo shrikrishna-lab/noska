@@ -49,10 +49,10 @@ export default function AuthPage(_props: AuthPageProps) {
     if (provider === "microsoft") capture("microsoft_login");
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      await signIn.sso({
+      await signIn.authenticateWithRedirect({
         strategy,
         redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
+        redirectUrlComplete: `${window.location.origin}/sso-callback`,
       });
     } catch (e) {
       setError((e as Error).message || "Failed to sign in. Please try again.");

@@ -40,10 +40,10 @@ export function InvitePage() {
     try {
       if (!signIn) return;
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      await signIn.sso({
+      await signIn.authenticateWithRedirect({
         strategy,
         redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
+        redirectUrlComplete: `${window.location.origin}/sso-callback`,
       });
     } catch (e) {
       setError((e as Error).message || "Failed to sign up. Please try again.");
