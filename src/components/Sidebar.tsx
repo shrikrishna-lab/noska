@@ -43,6 +43,7 @@ import { timeAgo, plainText, emojis } from "../utils/helpers";
 import PageTree from "./PageTree";
 import type { PageSelectOptions } from "./PageTree";
 import type { Page } from "../lib/supabaseService";
+import TeamSwitcher from "./teams/TeamSwitcher";
 
 // IconButton (src/components/ui/index.tsx) types its `icon` prop as
 // lucide-react's `LucideIcon`, but several calls below pass this
@@ -466,10 +467,11 @@ const Sidebar = memo(function Sidebar({
             <NoskaNavItem icon={AnimatedPlus} label="Add new document" onClick={() => onNew("blank")} muted compact />
           </NoskaSection>
 
-          {/* 6. Teamspaces HQ */}
-          <NoskaSection title="Teamspaces" defaultExpanded={false}>
-            <NoskaNavItem icon={AnimatedFolder} label={workspaceName} onClick={() => onView("teamspace")} active={appView === "teamspace"} />
-            <NoskaNavItem icon={AnimatedPlus} label="New teamspace" onClick={() => onNew("blank")} muted compact />
+          {/* 6. Teams */}
+          <NoskaSection title="Teams" defaultExpanded={true}>
+            <div className="px-2 py-1">
+              <TeamSwitcher workspaceName={workspaceName} onView={onView} />
+            </div>
           </NoskaSection>
 
           {/* 7. Collaboration Space */}

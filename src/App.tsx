@@ -12,6 +12,7 @@ import ClaimUsernameModal from "./components/auth/ClaimUsernameModal";
 import OnboardingPage from "./onboarding/pages/OnboardingPage";
 import { starterPageForTemplate } from "./onboarding/services/onboardingService";
 import CommandPalette from "./components/CommandPalette";
+import { TeamProvider } from "./lib/TeamContext";
 import { SettingsModal, TrashModal, ShareModal, HelpModal, CustomDialog } from "./components/Modals";
 import FocusZoom from "./features/focus/FocusZoom";
 import StackedColumn from "./features/stacking/StackedColumn";
@@ -2177,6 +2178,7 @@ function App() {
   };
 
   return (
+    <TeamProvider>
     <AnimatePresence mode="wait">
       {appFlowState === "loading" && !TEST_MODE && !isSignedIn && (
         <LoadingScreen key="loader" onComplete={() => setAppFlowState("auth")} />
@@ -2783,6 +2785,7 @@ function App() {
         </motion.div>
       )}
     </AnimatePresence>
+    </TeamProvider>
   );
 }
 
