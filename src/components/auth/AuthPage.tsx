@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { useSignIn } from "@clerk/react";
 import AuthBackground from "./AuthBackground";
@@ -39,10 +39,6 @@ export default function AuthPage(_props: AuthPageProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (signIn) signIn.reset();
-  }, [signIn]);
 
   const handleProviderClick = async (provider: "github" | "google" | "microsoft") => {
     setError(null);
