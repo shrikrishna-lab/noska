@@ -45,11 +45,16 @@ export function InvitePage() {
     }
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      await signIn.authenticateWithRedirect({
+      const { error } = await signIn.sso({
         strategy,
         redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectUrlComplete: `${window.location.origin}/login`,
+        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
       });
+      if (error) {
+        setError(error.message || "Failed to sign up. Please try again.");
+        setLoadingProvider(null);
+        setIsConnecting(false);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to sign up. Please try again.");
       setLoadingProvider(null);
