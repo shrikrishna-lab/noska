@@ -35,7 +35,7 @@ interface AuthPageProps {
 }
 
 export default function AuthPage(_props: AuthPageProps) {
-  const { signIn, isLoaded } = useSignIn();
+  const { signIn } = useSignIn();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export default function AuthPage(_props: AuthPageProps) {
     capture("signup_started");
     if (provider === "google") capture("google_login");
     if (provider === "microsoft") capture("microsoft_login");
-    if (!isLoaded || !signIn) {
+    if (!signIn) {
       setError("Authentication not ready. Please try again.");
       setLoadingProvider(null);
       setIsConnecting(false);
