@@ -46,11 +46,18 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const id = localStorage.getItem("noska_user_id")
     if (id) setUserId(id)
-    const unsub = supabase.auth.onAuthStateChange((event, session) => {
-      const uid = session?.user?.id ?? localStorage.getItem("noska_user_id")
-      setUserId(uid)
-    })
-    return () => { unsub?.data?.subscription?.unsubscribe() }
+    const onStorage = () => {
+      setUserId(localStorage.getItem("noska_user_id"))
+    }
+    window.addEventListener("storage", onStorage)
+    const check = setInterval(() => {
+      const uid = localStorage.getItem("noska_user_id")
+      if (uid !== userId) setUserId(uid)
+    }, 2000)
+    return () => {
+      window.removeEventListener("storage", onStorage)
+      clearInterval(check)
+    }
   }, [])
 
   const refreshTeams = useCallback(async () => {
