@@ -50,16 +50,15 @@ export function AuthCallbackScreen() {
     if (!isLoaded) return;
     if (processedRef.current) return;
 
-    const hasCallbackParams = window.location.href.includes("__clerk_status") ||
-      window.location.search.includes("code=") ||
-      window.location.search.includes("state=");
+    const isCallbackRoute = window.location.pathname === "/sso-callback";
 
-    if (!isSignedIn && !hasCallbackParams) {
+    if (!isSignedIn) {
+      if (isCallbackRoute) return;
       navigate("/login", { replace: true });
       return;
     }
 
-    if (!isSignedIn || !user) return;
+    if (!user) return;
 
     processedRef.current = true;
 

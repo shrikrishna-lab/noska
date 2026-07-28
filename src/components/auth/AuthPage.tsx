@@ -35,7 +35,7 @@ interface AuthPageProps {
 }
 
 export default function AuthPage(_props: AuthPageProps) {
-  const { signIn } = useSignIn();
+  const { signIn, isLoaded } = useSignIn();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,21 +47,21 @@ export default function AuthPage(_props: AuthPageProps) {
     capture("signup_started");
     if (provider === "google") capture("google_login");
     if (provider === "microsoft") capture("microsoft_login");
+    if (!isLoaded || !signIn) {
+      setError("Authentication not ready. Please try again.");
+      setLoadingProvider(null);
+      setIsConnecting(false);
+      return;
+    }
     try {
-      signIn.reset();
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      const { error } = await signIn.sso({
+      await signIn.authenticateWithRedirect({
         strategy,
         redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
+        redirectUrlComplete: `${window.location.origin}/login`,
       });
-      if (error) {
-        setError(error.message || "Failed to sign in. Please try again.");
-        setLoadingProvider(null);
-        setIsConnecting(false);
-      }
-    } catch (e) {
-      setError((e as Error).message || "Failed to sign in. Please try again.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to sign in. Please try again.");
       setLoadingProvider(null);
       setIsConnecting(false);
     }

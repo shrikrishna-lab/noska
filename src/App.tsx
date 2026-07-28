@@ -375,6 +375,7 @@ function App() {
   }, [session]);
 
   useEffect(() => {
+    hydrated.current = false;
     let mounted = true;
     (async () => {
       const store = storageApi();
@@ -689,7 +690,7 @@ function App() {
       }
     })();
     return () => { mounted = false; };
-  }, [clerkLoaded]);
+  }, [clerkLoaded, isSignedIn, clerkUser]);
 
   interface AuthUserData {
     userId: string;
