@@ -13,6 +13,10 @@ export function InvitePage() {
   const navigate = useNavigate();
   const { signIn } = useSignIn();
   const [state, setState] = useState<"loading" | "valid" | "expired" | "used" | "invalid">("loading");
+
+  useEffect(() => {
+    if (signIn) signIn.reset();
+  }, [signIn]);
   const [invitee, setInvitee] = useState<{ name: string; email: string } | null>(null);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
