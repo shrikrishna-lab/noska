@@ -1,7 +1,0 @@
-- generic [ref=f3e21]:
-  - generic [ref=f3e22]:
-    - img "Noska Logo"
-  - generic [ref=f3e24]:
-    - button "Continue with GitHub" [ref=f3e25] [cursor=pointer]
-    - button "Continue with Google" [ref=f3e30] [cursor=pointer]
-    - button "Continue with Microsoft" [ref=f3e38] [cursor=pointer]

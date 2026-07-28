@@ -1,9 +1,0 @@
-- generic [ref=f9e11]:
-  - generic [ref=f9e12]:
-    - img "Noska Logo"
-  - generic [ref=f9e14]:
-    - button "Continue with GitHub" [ref=f9e15] [cursor=pointer]
-    - button "Continue with Google" [active] [ref=f9e20] [cursor=pointer]
-    - button "Continue with Microsoft" [ref=f9e28] [cursor=pointer]
-  - alert [ref=f9e37]:
-    - generic [ref=f9e40]: t.authenticateWithRedirect is not a function
