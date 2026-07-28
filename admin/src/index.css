@@ -165,6 +165,18 @@
     background-clip: content-box;
     border: 2px solid transparent;
   }
+
+  /* ─── Admin table consistency ─── */
+  table[style*="table-layout: fixed"] th,
+  table[style*="table-layout: fixed"] td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  table[style*="table-layout: fixed"] thead tr {
+    border-bottom: 1px solid hsl(var(--border));
+  }
 }
 
 @layer utilities {

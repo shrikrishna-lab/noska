@@ -68,19 +68,19 @@ export function Trash() {
   };
 
   const columns: Column<DeletedAccount>[] = [
-    { key: "name", label: "Account", sortable: true, render: (row) => (
+    { key: "name", label: "Account", sortable: true, className: "w-[200px]", render: (row) => (
       <div>
         <p className="font-medium">{row.name || "Unknown"}</p>
         <p className="text-xs text-muted-foreground">{row.email || row.original_id}</p>
       </div>
     )},
-    { key: "account_type", label: "Type", sortable: true, render: (row) => <Badge variant={accountTypeColors[row.account_type]}>{row.account_type}</Badge> },
-    { key: "role", label: "Role", sortable: true, render: (row) => row.role ? <span className="text-xs text-muted-foreground capitalize">{row.role.replace(/_/g, " ")}</span> : <span className="text-xs text-muted-foreground">—</span> },
-    { key: "deleted_by_name", label: "Deleted By", sortable: true, render: (row) => <span className="text-muted-foreground">{row.deleted_by_name || "Unknown"}</span> },
-    { key: "deleted_at", label: "Deleted At", sortable: true, render: (row) => <span className="text-muted-foreground">{formatRelativeTime(row.deleted_at)}</span> },
-    { key: "restored_at", label: "Status", sortable: true, render: (row) => row.restored_at ? <Badge variant="success">Restored {row.restored_at ? formatRelativeTime(row.restored_at) : ""}</Badge> : <Badge variant="destructive">Deleted</Badge> },
+    { key: "account_type", label: "Type", sortable: true, className: "w-[90px]", render: (row) => <Badge variant={accountTypeColors[row.account_type]}>{row.account_type}</Badge> },
+    { key: "role", label: "Role", sortable: true, className: "w-[100px]", render: (row) => row.role ? <span className="text-xs text-muted-foreground capitalize">{row.role.replace(/_/g, " ")}</span> : <span className="text-xs text-muted-foreground">—</span> },
+    { key: "deleted_by_name", label: "Deleted By", sortable: true, className: "w-[120px]", render: (row) => <span className="text-muted-foreground">{row.deleted_by_name || "Unknown"}</span> },
+    { key: "deleted_at", label: "Deleted At", sortable: true, className: "w-[110px]", render: (row) => <span className="text-muted-foreground">{formatRelativeTime(row.deleted_at)}</span> },
+    { key: "restored_at", label: "Status", sortable: true, className: "w-[110px]", render: (row) => row.restored_at ? <Badge variant="success">Restored {row.restored_at ? formatRelativeTime(row.restored_at) : ""}</Badge> : <Badge variant="destructive">Deleted</Badge> },
     {
-      key: "id", label: "", sortable: false,
+      key: "id", label: "", sortable: false, className: "w-[110px] text-right",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
           <Button variant="ghost" size="icon" onClick={() => setSelectedId(row.id)}>
@@ -136,7 +136,7 @@ export function Trash() {
       {filtered.length === 0 ? (
         <EmptyState icon={TrashIcon} title="Trash is empty" description="Deleted accounts will appear here when users or admins are deleted from the platform." />
       ) : (
-        <DataTable columns={columns} data={filtered} />
+        <DataTable columns={columns} data={filtered} searchable={false} />
       )}
 
       {selected && (

@@ -108,7 +108,7 @@ export function DataTable<T>({
       </div>
       <div className="relative isolate overflow-hidden rounded-xl border">
         <div ref={containerRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "65vh" }}>
-          <table className="w-full">
+          <table className="w-full" style={{ tableLayout: "fixed" }}>
             <thead className="sticky top-0 z-10">
               <tr className="border-b bg-muted/50">
                 {columns.map((col) => (
@@ -135,7 +135,7 @@ export function DataTable<T>({
               </tr>
             </thead>
             <tbody
-              style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}
+              style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative", display: "table-row-group" }}
             >
               {paged.length === 0 && (
                 <tr>
@@ -156,9 +156,11 @@ export function DataTable<T>({
                       width: "100%",
                       height: `${virtualItem.size}px`,
                       transform: `translateY(${virtualItem.start}px)`,
+                      display: "table",
+                      tableLayout: "fixed",
                     }}
                     className={cn(
-                      "transition-colors hover:bg-muted/30",
+                      "border-b border-border/50 transition-colors hover:bg-muted/30",
                       onRowClick && "cursor-pointer"
                     )}
                     onClick={() => onRowClick?.(row)}

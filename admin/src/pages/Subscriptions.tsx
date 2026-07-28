@@ -20,13 +20,13 @@ const statusColors: Record<string, "default" | "secondary" | "success" | "warnin
 };
 
 const columns: Column<DbSubscription>[] = [
-  { key: "customer_name", label: "Customer", sortable: true, render: (row) => <span className="font-medium">{row.customer_name}</span> },
-  { key: "email", label: "Email", sortable: true, render: (row) => row.email || "—", hideOnMobile: true },
-  { key: "plan", label: "Plan", sortable: true, render: (row) => <Badge variant={row.plan === "enterprise" ? "success" : row.plan === "pro" ? "default" : "secondary"}>{row.plan}</Badge> },
-  { key: "mrr", label: "MRR", sortable: true, render: (row) => formatCurrency(row.mrr ?? 0), className: "text-right" },
-  { key: "status", label: "Status", sortable: true, render: (row) => <Badge variant={statusColors[row.status] ?? "secondary"}>{row.status}</Badge> },
-  { key: "started_at", label: "Started", sortable: true, render: (row) => row.started_at ? <span className="text-muted-foreground">{formatRelativeTime(row.started_at)}</span> : "—", hideOnMobile: true },
-  { key: "renews_at", label: "Renews", sortable: true, render: (row) => row.renews_at ? <span className="text-muted-foreground">{formatRelativeTime(row.renews_at)}</span> : "—", hideOnMobile: true },
+  { key: "customer_name", label: "Customer", sortable: true, className: "w-[160px]", render: (row) => <span className="font-medium">{row.customer_name}</span> },
+  { key: "email", label: "Email", sortable: true, className: "w-[200px]", render: (row) => row.email || "—", hideOnMobile: true },
+  { key: "plan", label: "Plan", sortable: true, className: "w-[100px]", render: (row) => <Badge variant={row.plan === "enterprise" ? "success" : row.plan === "pro" ? "default" : "secondary"}>{row.plan}</Badge> },
+  { key: "mrr", label: "MRR", sortable: true, render: (row) => formatCurrency(row.mrr ?? 0), className: "text-right w-[80px]" },
+  { key: "status", label: "Status", sortable: true, className: "w-[100px]", render: (row) => <Badge variant={statusColors[row.status] ?? "secondary"}>{row.status}</Badge> },
+  { key: "started_at", label: "Started", sortable: true, className: "w-[110px]", render: (row) => row.started_at ? <span className="text-muted-foreground">{formatRelativeTime(row.started_at)}</span> : "—", hideOnMobile: true },
+  { key: "renews_at", label: "Renews", sortable: true, className: "w-[110px]", render: (row) => row.renews_at ? <span className="text-muted-foreground">{formatRelativeTime(row.renews_at)}</span> : "—", hideOnMobile: true },
 ];
 
 function ProvisionModal({ onClose }: { onClose: () => void }) {

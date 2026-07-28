@@ -77,7 +77,7 @@ export function Workspaces() {
 
   const columns: Column<WorkspaceRow>[] = [
     {
-      key: "name", label: "Workspace", sortable: true,
+      key: "name", label: "Workspace", sortable: true, className: "w-[200px]",
       render: (row) => editingId === row.id ? (
         <div className="flex items-center gap-2">
           <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 w-48 text-sm" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); if (e.key === "Escape") setEditingId(null); }} />
@@ -86,11 +86,11 @@ export function Workspaces() {
         </div>
       ) : <span className="font-medium">{row.name}</span>,
     },
-    { key: "owner_name", label: "Owner", sortable: true, render: (row) => <span className="text-muted-foreground">{row.owner_name}</span> },
-    { key: "documents", label: "Pages", sortable: true, className: "text-right" },
-    { key: "created_at", label: "Created", sortable: true, render: (row) => <span className="text-muted-foreground">{formatRelativeTime(row.created_at)}</span>, hideOnMobile: true },
+    { key: "owner_name", label: "Owner", sortable: true, className: "w-[150px]", render: (row) => <span className="text-muted-foreground">{row.owner_name}</span> },
+    { key: "documents", label: "Pages", sortable: true, className: "text-right w-[80px]" },
+    { key: "created_at", label: "Created", sortable: true, className: "w-[110px]", render: (row) => <span className="text-muted-foreground">{formatRelativeTime(row.created_at)}</span>, hideOnMobile: true },
     {
-      key: "id", label: "", sortable: false,
+      key: "id", label: "", sortable: false, className: "w-[110px] text-right",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
           <Button variant="ghost" size="icon" onClick={() => { handleStartEdit(row); }}>

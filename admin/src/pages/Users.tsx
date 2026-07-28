@@ -13,7 +13,7 @@ import { useCommandCenter } from "@/components/ui/AdminCommandCenter";
 
 const columns: Column<AdminUserRow>[] = [
   {
-    key: "user_name", label: "User", sortable: true,
+    key: "user_name", label: "User", sortable: true, className: "w-[220px]",
     render: (row) => (
       <div className="flex items-center gap-3">
         <Avatar className="h-8 w-8">
@@ -26,8 +26,8 @@ const columns: Column<AdminUserRow>[] = [
       </div>
     ),
   },
-  { key: "username", label: "Username", sortable: true, render: (row) => row.username || <span className="text-muted-foreground">—</span>, hideOnMobile: true },
-  { key: "created_at", label: "Joined", sortable: true, render: (row) => row.created_at ? <span className="text-muted-foreground">{formatRelativeTime(row.created_at)}</span> : "—" },
+  { key: "username", label: "Username", sortable: true, className: "w-[150px]", render: (row) => row.username || <span className="text-muted-foreground">—</span>, hideOnMobile: true },
+  { key: "created_at", label: "Joined", sortable: true, className: "w-[120px]", render: (row) => row.created_at ? <span className="text-muted-foreground">{formatRelativeTime(row.created_at)}</span> : "—" },
 ];
 
 export function Users() {

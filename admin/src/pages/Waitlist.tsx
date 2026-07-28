@@ -341,9 +341,9 @@ export function Waitlist() {
         <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} className="h-4 w-4 rounded border-gray-300" />
       ),
     },
-    { key: "name", label: "Name", sortable: true, render: (row) => <span className="font-medium">{row.name}</span> },
-    { key: "email", label: "Email", sortable: true },
-    { key: "provider", label: "Provider", sortable: true, hideOnMobile: true },
+    { key: "name", label: "Name", sortable: true, className: "w-[140px]", render: (row) => <span className="font-medium">{row.name}</span> },
+    { key: "email", label: "Email", sortable: true, className: "w-[200px]" },
+    { key: "provider", label: "Provider", sortable: true, className: "w-[80px]", hideOnMobile: true },
     {
       key: "status", label: "Status", sortable: true,
       render: (row) => {
@@ -361,14 +361,14 @@ export function Waitlist() {
         );
       },
     },
-    { key: "position", label: "#", sortable: true, className: "text-right w-14", render: (row) => <span className="tabular-nums">{row.position ?? "—"}</span> },
-    { key: "referral_count", label: "Refs", sortable: true, className: "text-right", hideOnMobile: true },
+    { key: "position", label: "#", sortable: true, className: "text-right w-[50px]", render: (row) => <span className="tabular-nums">{row.position ?? "—"}</span> },
+    { key: "referral_count", label: "Refs", sortable: true, className: "text-right w-[50px]", hideOnMobile: true },
     {
       key: "invite_code", label: "Code", hideOnMobile: true,
       render: (row) => <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{row.invite_code ?? "—"}</code>,
     },
     {
-      key: "actions", label: "", className: "text-right",
+      key: "actions", label: "", className: "text-right w-[180px]",
       render: (row) => {
         const expired = row.status === "invited" && isExpired(row);
         return (
@@ -578,7 +578,7 @@ export function Waitlist() {
       </div>
 
       {filtered && filtered.length > 0 ? (
-        <DataTable columns={columns} data={filtered} searchPlaceholder="" />
+        <DataTable columns={columns} data={filtered} searchable={false} />
       ) : (
         <EmptyState title={searchTerm || filterStatus !== "all" || filterCountry !== "all" ? "No matches" : "Waitlist is empty"} description="Try different filters or wait for new signups." />
       )}

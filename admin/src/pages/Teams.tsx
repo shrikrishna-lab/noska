@@ -79,18 +79,18 @@ export function Teams() {
 
   const columns: Column<DbTeam>[] = [
     {
-      key: "name", label: "Team", sortable: true,
+      key: "name", label: "Team", sortable: true, className: "w-[180px]",
       render: (row) => inlineEdit(row, "name", row.name),
     },
     {
-      key: "lead_name", label: "Lead", sortable: true,
+      key: "lead_name", label: "Lead", sortable: true, className: "w-[150px]",
       render: (row) => inlineEdit(row, "lead_name", row.lead_name ?? ""),
     },
-    { key: "member_count", label: "Members", sortable: true, className: "text-right" },
-    { key: "workspace_count", label: "Workspaces", sortable: true, className: "text-right", hideOnMobile: true },
-    { key: "created_at", label: "Created", sortable: true, render: (row) => row.created_at ? <span className="text-muted-foreground">{formatRelativeTime(row.created_at)}</span> : "—", hideOnMobile: true },
+    { key: "member_count", label: "Members", sortable: true, className: "text-right w-[90px]" },
+    { key: "workspace_count", label: "Workspaces", sortable: true, className: "text-right w-[110px]", hideOnMobile: true },
+    { key: "created_at", label: "Created", sortable: true, className: "w-[110px]", render: (row) => row.created_at ? <span className="text-muted-foreground">{formatRelativeTime(row.created_at)}</span> : "—", hideOnMobile: true },
     {
-      key: "id", label: "", sortable: false,
+      key: "id", label: "", sortable: false, className: "w-[80px] text-right",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
           <Button variant="ghost" size="icon" onClick={() => setSelectedId(row.id)}>

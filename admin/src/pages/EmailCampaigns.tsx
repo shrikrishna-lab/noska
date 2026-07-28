@@ -493,10 +493,10 @@ export function EmailCampaigns() {
   const columns: Column<EmailCampaign>[] = [
     { key: "name", label: "Campaign", sortable: true, render: (row) => <span className="font-medium">{row.name}</span> },
     { key: "status", label: "Status", sortable: true, render: (row) => <Badge variant={statusColors[row.status] ?? "secondary"}>{row.status}</Badge> },
-    { key: "recipients", label: "Recipients", sortable: true, className: "text-right" },
-    { key: "sent", label: "Sent", sortable: true, className: "text-right", hideOnMobile: true },
-    { key: "open_rate", label: "Open Rate", sortable: true, className: "text-right", render: (row) => `${row.open_rate}%`, hideOnMobile: true },
-    { key: "sent_at", label: "Sent", sortable: true, render: (row) => {
+    { key: "recipients", label: "Recipients", sortable: true, className: "text-right w-[90px]" },
+    { key: "sent", label: "Sent", sortable: true, className: "text-right w-[70px]", hideOnMobile: true },
+    { key: "open_rate", label: "Open Rate", sortable: true, className: "text-right w-[90px]", render: (row) => `${row.open_rate}%`, hideOnMobile: true },
+    { key: "sent_at", label: "Sent", sortable: true, className: "w-[110px]", render: (row) => {
       if (row.status === "scheduled" && row.scheduled_for) {
         return (
           <div className="flex flex-col items-end gap-0.5">
@@ -508,7 +508,7 @@ export function EmailCampaigns() {
       return row.sent_at ? <span className="text-muted-foreground">{formatRelativeTime(row.sent_at)}</span> : <span className="text-muted-foreground">—</span>;
     }, hideOnMobile: true },
     {
-      key: "actions", label: "", className: "text-right",
+      key: "actions", label: "", className: "text-right w-[180px]",
       render: (row) => (
         <div className="flex justify-end gap-1">
           {row.status === "draft" && (
