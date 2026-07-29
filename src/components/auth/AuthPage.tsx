@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { useSignIn } from "@clerk/react";
+import { useNavigate } from "react-router-dom";
 import AuthBackground from "./AuthBackground";
 import AuthProviders from "./AuthProviders";
 import AuthError from "./AuthError";
@@ -35,10 +36,30 @@ interface AuthPageProps {
 }
 
 export default function AuthPage(_props: AuthPageProps) {
-  const { signIn } = useSignIn();
+  const { signIn, errors, fetchStatus } = useSignIn();
+  const navigate = useNavigate();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [authStep, setAuthStep] = useState<"credentials" | "mfa">("credentials");
+  const [mfaMethod, setMfaMethod] = useState<"totp" | "backup_code" | "email_code" | "phone_code">("totp");
   const [error, setError] = useState<string | null>(null);
+
+  const finishSignIn = async () => {
+    const { error: finalizeError } = await signIn.finalize({
+      navigate: async ({ decorateUrl }) => {
+        const url = decorateUrl("/dashboard");
+        if (url.startsWith("http")) {
+          window.location.href = url;
+        } else {
+          navigate(url, { replace: true });
+        }
+      },
+    });
+    if (finalizeError) throw finalizeError;
+  };
 
   const handleProviderClick = async (provider: "github" | "google" | "microsoft") => {
     setError(null);
@@ -55,15 +76,73 @@ export default function AuthPage(_props: AuthPageProps) {
     }
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      await signIn.authenticateWithRedirect({
+      const { error } = await signIn.sso({
         strategy,
-        redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectUrlComplete: `${window.location.origin}/login`,
+        redirectUrl: `${window.location.origin}/dashboard`,
+        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
       });
+      if (error) throw error;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to sign in. Please try again.");
       setLoadingProvider(null);
       setIsConnecting(false);
+    }
+  };
+
+  const handlePasswordSignIn = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setIsConnecting(true);
+    try {
+      const { error: passwordError } = await signIn.password({ identifier: email, password });
+      if (passwordError) throw passwordError;
+      if (signIn.status === "needs_second_factor" || signIn.status === "needs_client_trust") {
+        setAuthStep("mfa");
+        return;
+      }
+      if (signIn.status === "complete") await finishSignIn();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to sign in. Please try again.");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleMfaSignIn = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setIsConnecting(true);
+    try {
+      const result = mfaMethod === "totp"
+        ? await signIn.mfa.verifyTOTP({ code: mfaCode })
+        : mfaMethod === "backup_code"
+          ? await signIn.mfa.verifyBackupCode({ code: mfaCode })
+          : mfaMethod === "email_code"
+            ? await signIn.mfa.verifyEmailCode({ code: mfaCode })
+            : await signIn.mfa.verifyPhoneCode({ code: mfaCode });
+      if (result.error) throw result.error;
+      if (signIn.status === "complete") await finishSignIn();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "MFA verification failed. Please try again.");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const selectMfaMethod = async (method: "totp" | "backup_code" | "email_code" | "phone_code") => {
+    setMfaMethod(method);
+    setError(null);
+    try {
+      if (method === "email_code") {
+        const { error: sendError } = await signIn.mfa.sendEmailCode();
+        if (sendError) throw sendError;
+      }
+      if (method === "phone_code") {
+        const { error: sendError } = await signIn.mfa.sendPhoneCode();
+        if (sendError) throw sendError;
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not send the verification code.");
     }
   };
 
@@ -99,11 +178,69 @@ export default function AuthPage(_props: AuthPageProps) {
             />
           </div>
 
+          <div className="relative flex items-center justify-center my-6 select-none">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
+            <span className="relative px-3 bg-[#f8fafc] text-[10px] font-mono tracking-widest text-slate-400 uppercase">or</span>
+          </div>
+
+          {authStep === "credentials" ? (
+            <form onSubmit={handlePasswordSignIn} className="w-full flex flex-col gap-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Email"
+                autoComplete="email"
+                required
+                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Password"
+                autoComplete="current-password"
+                required
+                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
+              />
+              <button
+                type="submit"
+                disabled={isConnecting || fetchStatus === "fetching"}
+                className="w-full h-11 rounded-[8px] bg-slate-800 text-white text-xs font-semibold transition hover:bg-slate-700 disabled:opacity-40"
+              >
+                {isConnecting ? "Signing in..." : "Sign in with Email"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleMfaSignIn} className="w-full flex flex-col gap-3">
+              <p className="text-xs text-slate-500 text-center">Enter your verification code to continue.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {(["totp", "backup_code", "email_code", "phone_code"] as const).map((method) => (
+                  <button key={method} type="button" onClick={() => selectMfaMethod(method)} className={`h-9 rounded-md text-xs ${mfaMethod === method ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>
+                    {method === "totp" ? "Authenticator" : method === "backup_code" ? "Backup code" : method === "email_code" ? "Email code" : "Phone code"}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                placeholder="Verification code"
+                autoComplete="one-time-code"
+                required
+                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
+              />
+              <button type="submit" disabled={isConnecting} className="w-full h-11 rounded-[8px] bg-slate-800 text-white text-xs font-semibold transition hover:bg-slate-700 disabled:opacity-40">
+                {isConnecting ? "Verifying..." : "Verify and continue"}
+              </button>
+            </form>
+          )}
+
           {/* Error notifications */}
           <AnimatePresence mode="wait">
-            {error && (
+            {(error || errors?.global?.[0]?.message) && (
               <div className="w-full mt-4">
-                <AuthError message={error} />
+                <AuthError message={error || errors?.global?.[0]?.message} />
               </div>
             )}
           </AnimatePresence>

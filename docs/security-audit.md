@@ -82,4 +82,4 @@
 2. **🔴** `send-email` edge function passes `admin_token` in body — migrate to `Authorization: Bearer` header
 3. **🟡** No rate limiting on email sending
 4. **🟡** Webhook receiver sends raw secret in header instead of HMAC
-5. **🟡** No CSP `frame-src` for admin.html (missing `accounts.noska.me`)
+5. **🟢** Main-app CSP does not permit Clerk-hosted authentication frames; the admin app has a separate non-Clerk authentication flow.

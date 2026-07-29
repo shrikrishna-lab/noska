@@ -21,11 +21,10 @@ User visits site (unauthenticated)
   │
   ├─→ Marketing pages (public, no auth needed)
   │
-  ├─→ /login → Clerk UI renders sign-in form
+  ├─→ /login → Noska custom React sign-in form
   │         │
-  │         ├─→ Google OAuth → redirect to Google → callback at /sso-callback
-  │         ├─→ Microsoft OAuth → redirect to Microsoft → callback at /sso-callback
-  │         └─→ Email/password → Clerk validates credentials
+  │         ├─→ Google/GitHub/Microsoft → Clerk headless SSO → callback at /sso-callback
+  │         └─→ Email/password → Clerk headless password flow → optional MFA
   │
   └─→ Clerk sets session cookie → app reads useAuth() / useUser()
         │
@@ -44,7 +43,7 @@ Clerk Webhooks (clerk-webhook edge function):
 ```tsx
 <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/login">
   <Routes>
-    <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback signInForceRedirectUrl="/login" />} />
+    <Route path="/sso-callback" element={<AuthCallbackScreen />} />
     <Route path="/login" element={<App />} />
     <Route path="/onboarding" element={<App />} />
     <Route path="/:workspaceSlug" element={<App />} />
@@ -52,6 +51,8 @@ Clerk Webhooks (clerk-webhook edge function):
   </Routes>
 </ClerkProvider>
 ```
+
+The main app does not render Clerk's `SignIn` component or redirect users to a Clerk-hosted sign-in page. OAuth is initiated with `signIn.sso()`, email/password with `signIn.password()`, and completed sessions with `signIn.finalize()`.
 
 **`src/App.tsx` usage:**
 ```tsx

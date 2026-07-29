@@ -45,22 +45,12 @@ export function InvitePage() {
     }
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      const redirectUrl = `${window.location.origin}/sso-callback`;
-      const { error } = await signIn.create({ strategy, redirectUrl });
-      if (error) {
-        setError(error.message || "Failed to sign up. Please try again.");
-        setLoadingProvider(null);
-        setIsConnecting(false);
-        return;
-      }
-      const oauthUrl = (window as any).Clerk?.client?.signIn?.firstFactorVerification?.externalVerificationRedirectURL;
-      if (oauthUrl) {
-        window.location.href = oauthUrl.toString();
-      } else {
-        setError("Failed to initiate sign up. Please try again.");
-        setLoadingProvider(null);
-        setIsConnecting(false);
-      }
+      const { error } = await signIn.sso({
+        strategy,
+        redirectUrl: `${window.location.origin}/dashboard`,
+        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
+      });
+      if (error) throw error;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to sign up. Please try again.");
       setLoadingProvider(null);

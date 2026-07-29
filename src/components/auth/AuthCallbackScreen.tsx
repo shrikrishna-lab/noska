@@ -161,7 +161,7 @@ export function AuthCallbackScreen() {
           }
         };
         if (accessStatus === "approved") {
-          go("/login");
+          go("/dashboard");
         } else if (accessStatus === "banned") {
           go("/banned");
         } else {

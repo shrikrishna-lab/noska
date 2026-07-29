@@ -90,6 +90,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           <Route path="/control" element={<ControlCenter />} />
           <Route path="/login" element={<App />} />
+          <Route path="/dashboard" element={<App />} />
           <Route path="/onboarding" element={<App />} />
           <Route path="/waitlist" element={<App />} />
           <Route path="/banned" element={<App />} />
