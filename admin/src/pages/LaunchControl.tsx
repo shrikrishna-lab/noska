@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Portal } from "@/components/ui/Portal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useLaunchSettings, useUpdateLaunchSettings, useWaitlistStats, useRealtimeInvalidate, useLaunchAuditLogs, useCTAButtons, useUpdateCTAButton } from "@/lib/queries";
+import { useLaunchSettings, useUpdateLaunchSettings, useCreateLaunchSettings, useWaitlistStats, useRealtimeInvalidate, useLaunchAuditLogs, useCTAButtons, useUpdateCTAButton } from "@/lib/queries";
 import { useAuth } from "@/lib/auth";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { formatRelativeTime } from "@/lib/utils";
@@ -293,8 +293,35 @@ export function LaunchControl() {
     toast.success("Changes discarded");
   };
 
+  const createSettings = useCreateLaunchSettings();
+  const [creating, setCreating] = useState(false);
+
   if (isLoading) return <div className="p-6"><PageHeader title="Launch Control" description="Manage launch mode and global settings" /><LoadingState count={3} /></div>;
-  if (!merged) return <div className="p-6"><PageHeader title="Launch Control" description="Manage launch mode and global settings" /><p className="text-muted-foreground">No launch settings found.</p></div>;
+  if (!merged) return (
+    <div className="p-6">
+      <PageHeader title="Launch Control" description="Manage launch mode and global settings" />
+      <div className="flex flex-col items-center gap-4 py-16">
+        <Megaphone className="h-12 w-12 text-muted-foreground/40" />
+        <p className="text-muted-foreground">No launch settings found.</p>
+        <Button
+          disabled={creating}
+          onClick={async () => {
+            setCreating(true);
+            try {
+              await createSettings.mutateAsync({ admin_name: user?.name });
+              toast.success("Default launch settings created");
+            } catch (e) {
+              toast.error("Failed to create: " + (e instanceof Error ? e.message : "Unknown"));
+            }
+            setCreating(false);
+          }}
+        >
+          {creating ? <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+          Create Default Settings
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-6 space-y-6">

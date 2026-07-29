@@ -1645,6 +1645,41 @@ export function useUpdateLaunchSettings() {
   });
 }
 
+export function useCreateLaunchSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { admin_name?: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "launch_settings",
+        p_data: {
+          launch_mode: "waitlist", login_mode: "login",
+          show_pricing: true, show_blog: true, show_docs: true,
+          show_changelog: true, show_login: true, show_signup: true,
+          show_waitlist: true, show_discord: true, show_community: true,
+          countdown_enabled: false, registration_enabled: true, published: true,
+          maintenance_title: "Scheduled Maintenance",
+          maintenance_message: "We are performing scheduled maintenance. We will be back shortly.",
+          page_visibility: JSON.stringify({
+            blog: true, pricing: true, templates: true,
+            roadmap: true, careers: true, community: true,
+          }),
+          route_protection: JSON.stringify({
+            public: { routes: { "/login": "/login", "/signup": "/signup" }, enabled: false },
+            waitlist: { routes: { "/login": "/launch", "/signup": "/launch" }, enabled: true },
+            early_beta: { routes: { "/login": "/login", "/signup": "/signup" }, enabled: false },
+          }),
+        },
+        p_min_role: "super_admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "launch-settings"] });
+    },
+  });
+}
+
 export function useLandingContent() {
   return useQuery({
     queryKey: ["admin", "landing-content"],
