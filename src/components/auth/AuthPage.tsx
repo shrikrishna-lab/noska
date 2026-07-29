@@ -55,22 +55,11 @@ export default function AuthPage(_props: AuthPageProps) {
     }
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      const redirectUrl = `${window.location.origin}/sso-callback`;
-      const { error } = await signIn.create({ strategy, redirectUrl });
-      if (error) {
-        setError(error.message || "Failed to sign in. Please try again.");
-        setLoadingProvider(null);
-        setIsConnecting(false);
-        return;
-      }
-      const oauthUrl = (window as any).Clerk?.client?.signIn?.firstFactorVerification?.externalVerificationRedirectURL;
-      if (oauthUrl) {
-        window.location.href = oauthUrl.toString();
-      } else {
-        setError("Failed to initiate sign in. Please try again.");
-        setLoadingProvider(null);
-        setIsConnecting(false);
-      }
+      await signIn.authenticateWithRedirect({
+        strategy,
+        redirectUrl: `${window.location.origin}/sso-callback`,
+        redirectUrlComplete: `${window.location.origin}/login`,
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to sign in. Please try again.");
       setLoadingProvider(null);

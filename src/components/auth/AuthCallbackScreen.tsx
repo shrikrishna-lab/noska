@@ -33,6 +33,7 @@ export function AuthCallbackScreen() {
   const [dots, setDots] = useState("");
   const mountedRef = useRef(true);
   const processedRef = useRef(false);
+  const callbackStartedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -45,6 +46,16 @@ export function AuthCallbackScreen() {
     }, 400);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!isLoaded || window.location.pathname !== "/sso-callback" || callbackStartedRef.current) return;
+    callbackStartedRef.current = true;
+    clerk.handleRedirectCallback().catch((error) => {
+      if (!mountedRef.current) return;
+      setStage("error");
+      setErrorMessage(error instanceof Error ? error.message : "Authentication failed. Please try again.");
+    });
+  }, [clerk, isLoaded]);
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
