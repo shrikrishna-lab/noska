@@ -46,6 +46,8 @@ export function AuthCallbackScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!isLoaded) return;
     if (processedRef.current) return;
@@ -53,9 +55,21 @@ export function AuthCallbackScreen() {
     const isCallbackRoute = window.location.pathname === "/sso-callback";
 
     if (!isSignedIn) {
-      if (isCallbackRoute) return;
+      if (isCallbackRoute) {
+        timeoutRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
+          setStage("error");
+          setErrorMessage("Sign-in timed out. Please try again.");
+        }, 15000);
+        return;
+      }
       navigate("/login", { replace: true });
       return;
+    }
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
 
     if (!user) return;
