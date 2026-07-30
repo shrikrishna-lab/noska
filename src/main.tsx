@@ -28,7 +28,6 @@ const Referrals = lazy(() => import("./pages/marketing/Referrals"));
 const Roadmap = lazy(() => import("./pages/marketing/Roadmap"));
 const NewUpdated = lazy(() => import("./pages/marketing/NewUpdated"));
 const Launch = lazy(() => import("./pages/marketing/launch/Launch"));
-const Support = lazy(() => import("./pages/support/Support"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
 
@@ -87,7 +86,6 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/roadmap" element={<MarketingLayout><Roadmap /></MarketingLayout>} />
           <Route path="/new-updated" element={<MarketingLayout><NewUpdated /></MarketingLayout>} />
           <Route path="/launch" element={<Launch />} />
-          <Route path="/support" element={<Support />} />
           <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           <Route path="/control" element={<ControlCenter />} />
