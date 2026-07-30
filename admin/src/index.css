@@ -165,6 +165,18 @@
     background-clip: content-box;
     border: 2px solid transparent;
   }
+
+  /* ─── Admin table consistency ─── */
+  table[style*="table-layout: fixed"] th,
+  table[style*="table-layout: fixed"] td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  table[style*="table-layout: fixed"] thead tr {
+    border-bottom: 1px solid hsl(var(--border));
+  }
 }
 
 @layer utilities {
@@ -183,3 +195,223 @@
     text-wrap: balance;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Noska Toast — Framer "Dynamic Info" inspired notification cards
+   Theme-adaptive: uses CSS variables so they look native in both
+   light and dark modes. Applied via the global <Toaster> in App.tsx.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─── Container ─── */
+.noska-toast-card {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 320px;
+  max-width: 400px;
+  border-radius: 14px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  box-shadow:
+    0 8px 24px hsl(var(--foreground) / 0.06),
+    0 2px 8px hsl(var(--foreground) / 0.04);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  pointer-events: auto;
+  animation: noska-toast-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── Enter / Exit animations ─── */
+@keyframes noska-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* react-hot-toast applies [data-leave] during exit */
+.noska-toast-card[data-leave] {
+  animation: noska-toast-exit 0.2s ease-in forwards;
+}
+
+@keyframes noska-toast-exit {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+
+/* ─── Left accent bar ─── */
+.noska-toast-card__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 3px;
+  flex-shrink: 0;
+}
+
+.noska-toast-card__bar[data-type="success"] {
+  background: hsl(var(--success));
+}
+
+.noska-toast-card__bar[data-type="error"] {
+  background: hsl(var(--destructive));
+}
+
+.noska-toast-card__bar[data-type="warning"] {
+  background: hsl(var(--warning));
+}
+
+.noska-toast-card__bar[data-type="info"] {
+  background: hsl(var(--primary));
+}
+
+/* ─── Body row ─── */
+.noska-toast-card__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px 12px 14px;
+  width: 100%;
+}
+
+/* ─── Icon chip ─── */
+.noska-toast-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  margin-left: 3px; /* offset from the accent bar */
+}
+
+.noska-toast-card__icon[data-type="success"] {
+  background: hsl(var(--success) / 0.12);
+  color: hsl(var(--success));
+}
+
+.noska-toast-card__icon[data-type="error"] {
+  background: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+}
+
+.noska-toast-card__icon[data-type="warning"] {
+  background: hsl(var(--warning) / 0.12);
+  color: hsl(var(--warning));
+}
+
+.noska-toast-card__icon[data-type="info"] {
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+
+/* ─── Content (title + description) ─── */
+.noska-toast-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.noska-toast-card__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: hsl(var(--popover-foreground));
+}
+
+.noska-toast-card__desc {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ─── Action button ─── */
+.noska-toast-card__action {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  align-self: center;
+  margin-top: 2px;
+}
+
+.noska-toast-card__action:hover {
+  background: hsl(var(--muted));
+  box-shadow: 0 1px 4px hsl(var(--foreground) / 0.06);
+}
+
+.noska-toast-card__action:active {
+  transform: scale(0.97);
+}
+
+/* ─── react-hot-toast global overrides ─── */
+/* Disable the default status icon (we render our own in the card). */
+[data-sonner-toaster] [data-icon],
+[data-styled="true"] > [data-icon] {
+  display: none;
+}
+
+/* Ensure the react-hot-toast wrapper doesn't add extra padding or icons */
+.noska-toaster > div > div[data-testid] {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Subtle hover lift on cards that the user can interact with */
+.noska-toast-card:hover {
+  box-shadow:
+    0 12px 32px hsl(var(--foreground) / 0.08),
+    0 4px 12px hsl(var(--foreground) / 0.05);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Admin Command Center & Apple Dynamic Island styles
+   ══════════════════════════════════════════════════════════════ */
+
+.bg-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  pointer-events: none;
+}
+
+@keyframes acc-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-acc-shake {
+  animation: acc-shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+.glass-spotlight {
+  background: radial-gradient(800px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(255, 255, 255, 0.06), transparent 40%);
+}
+
+.dark .glass-spotlight {
+  background: radial-gradient(800px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(255, 255, 255, 0.03), transparent 40%);
+}
+
