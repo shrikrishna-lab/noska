@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { onPerfUpdate, getSnapshot } from "@/lib/perf/perfInsights";
 import type { PerfSnapshot } from "@/lib/perf/perfInsights";
-import { Activity } from "lucide-react";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -22,10 +21,10 @@ export default function PerfDashboard() {
       <PageHeader title="Performance Insights" description="Real-time rendering, RPC, and chunk analysis" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Slow Renders (16ms+)" value={snap.renders.length} icon={Activity} />
-        <KpiCard title="Avg Render Time" value={`${avgRender.toFixed(1)}ms`} icon={Activity} />
-        <KpiCard title="Slow RPCs Tracked" value={snap.rpcs.length} icon={Activity} />
-        <KpiCard title="Total RPC Time" value={`${totalRpcMs.toFixed(0)}ms`} icon={Activity} />
+        <KpiCard title="Slow Renders (16ms+)" value={snap.renders.length} />
+        <KpiCard title="Avg Render Time" value={`${avgRender.toFixed(1)}ms`} />
+        <KpiCard title="Slow RPCs Tracked" value={snap.rpcs.length} />
+        <KpiCard title="Total RPC Time" value={`${totalRpcMs.toFixed(0)}ms`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

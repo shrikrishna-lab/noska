@@ -15,8 +15,12 @@ import { supabase, getAdminToken } from "@/lib/supabase";
 import { sendEmail } from "@/lib/email";
 import { Save, Trash2, AlertTriangle, Loader2, CheckCircle2, Mail } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
+import { useIslandNotification } from "@/components/ui/DynamicIslandNotification";
 
 export function Settings() {
+  const { confirm } = useConfirmDialog();
+  const island = useIslandNotification();
   const { data: settings, isLoading } = useAllPlatformSettings();
   const updateSetting = useUpdatePlatformSetting();
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -300,7 +304,7 @@ export function Settings() {
                 </div>
                 <Button variant="destructive" onClick={async () => {
                   await updateSetting.mutateAsync({ key: "maintenance_mode", value: true });
-                  toast.success("Maintenance mode enabled");
+                  island.warning("Maintenance Started", "The platform is now in read-only maintenance mode.");
                 }}>
                   {getBool("maintenance_mode") ? "Enabled" : "Enable"}
                 </Button>
@@ -312,7 +316,7 @@ export function Settings() {
                 </div>
                 <Button variant="destructive" onClick={async () => {
                   await updateSetting.mutateAsync({ key: "registration_enabled", value: false });
-                  toast.success("Registration disabled");
+                  island.warning("Registration Disabled", "New user registrations are now disabled.");
                 }}>
                   {getBool("registration_enabled") ? "Disable" : "Disabled"}
                 </Button>
@@ -348,9 +352,9 @@ export function Settings() {
                   <p className="font-medium text-destructive">Delete Platform</p>
                   <p className="text-sm text-muted-foreground">Permanently delete all data and disable the platform</p>
                 </div>
-                <Button variant="destructive" onClick={() => {
-                  if (!confirm("This will permanently delete ALL platform data. This CANNOT be undone. Are you sure?")) return;
-                  if (!confirm("Really? This will destroy EVERYTHING. Type 'yes' in the next prompt to confirm.")) return;
+                <Button variant="destructive" onClick={async () => {
+                  if (!await confirm({ title: "Delete Platform", description: "This will permanently delete ALL platform data. This CANNOT be undone. Are you sure?", variant: "delete", confirmText: "Delete Everything" })) return;
+                  if (!await confirm({ title: "Final Confirmation", description: "Type DELETE to confirm destroying ALL data.", variant: "delete", confirmText: "Delete", requireTyping: "DELETE" })) return;
                   toast.error("Platform deletion is not implemented for safety. Run manual DB cleanup.");
                 }}><Trash2 className="mr-1 h-4 w-4" /> Delete Everything</Button>
               </div>

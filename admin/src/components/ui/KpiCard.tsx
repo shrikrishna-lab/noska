@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 interface KpiCardProps {
   title: string;
   value: string | number;
-  trend?: number | null;
+  trend?: number;
   icon: ComponentType<{ className?: string }>;
   subtitle?: string;
   className?: string;

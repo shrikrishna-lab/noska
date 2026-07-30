@@ -1,9 +1,13 @@
-import { supabase, SUPABASE_ENABLED } from "./supabase";
+import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
 
 class AdminApi {
   private async request<T>(service: string, action: string, payload?: Record<string, unknown>): Promise<T> {
     if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+    const token = getAdminToken();
+    if (!token) throw new Error("No admin session");
     const { data, error } = await supabase.functions.invoke("admin-api", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
       body: { service, action, payload },
     });
     if (error) throw error;
@@ -21,6 +25,18 @@ class AdminApi {
     get: (userId: string) => this.request<unknown>("users", "user", { userId }),
     sessions: (userId: string) => this.request<unknown>("users", "sessions", { userId }),
     organizations: (userId: string) => this.request<unknown>("users", "organizations", { userId }),
+    ban: (userId: string, reason: string, banType: string, expiresAt?: string | null) =>
+      this.request<{ success: boolean }>("users", "ban", { userId, reason, banType, expiresAt, sessionToken: getAdminToken() }),
+    hardBan: (userId: string, reason: string) =>
+      this.request<{ success: boolean }>("users", "hard_ban", { userId, reason, sessionToken: getAdminToken() }),
+    unban: (userId: string) =>
+      this.request<{ success: boolean }>("users", "unban", { userId, sessionToken: getAdminToken() }),
+    delete: (userId: string) =>
+      this.request<{ success: boolean }>("users", "delete", { userId, sessionToken: getAdminToken() }),
+    restore: (accountId: string) =>
+      this.request<{ success: boolean }>("users", "restore", { accountId, sessionToken: getAdminToken() }),
+    permanentDelete: (accountId: string) =>
+      this.request<{ success: boolean }>("users", "permanent_delete", { accountId, sessionToken: getAdminToken() }),
   };
 
   analytics = {

@@ -10,7 +10,8 @@ export function AiUsage() {
   const { data: chats, isLoading: chatsLoading } = useAiChats();
   const { data: totalChats } = useAiChatCount();
   const { data: aiEvents, isLoading: eventsLoading } = useAiUsageFromAudit();
-  useRealtimeInvalidate(["admin", "ai-usage"], "audit_logs");
+  useRealtimeInvalidate(["admin", "ai-usage"], "audit_events");
+  useRealtimeInvalidate(["admin", "ai-usage"], "ai_chats");
 
   const totalCost = (aiEvents ?? []).reduce((s: number, e: any) => s + (e.ai_cost ?? 0), 0);
   const avgLatency = (aiEvents ?? []).length

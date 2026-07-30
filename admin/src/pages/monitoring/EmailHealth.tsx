@@ -71,14 +71,14 @@ export function MonitoringEmailHealth() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        <KpiCard title="Sent" value={formatNumber(emailMetrics.sent)} trend={null} icon={Send} />
-        <KpiCard title="Delivered" value={formatNumber(emailMetrics.delivered)} trend={null} icon={CheckCircle} />
-        <KpiCard title="Opened" value={formatNumber(emailMetrics.opened)} trend={null} icon={Eye} />
-        <KpiCard title="Clicked" value={formatNumber(emailMetrics.clicked)} trend={null} icon={MousePointerClick} />
-        <KpiCard title="Failed" value={formatNumber(emailMetrics.failed)} trend={null} icon={XCircle} />
-        <KpiCard title="Bounced" value={formatNumber(emailMetrics.bounced)} trend={null} icon={AlertTriangle} />
-        <KpiCard title="Complaints" value={formatNumber(emailMetrics.complaint)} trend={null} icon={AlertTriangle} />
-        <KpiCard title="Spam" value={formatNumber(emailMetrics.spam)} trend={null} icon={AlertTriangle} />
+        <KpiCard title="Sent" value={formatNumber(emailMetrics.sent)} trend={5} icon={Send} />
+        <KpiCard title="Delivered" value={formatNumber(emailMetrics.delivered)} trend={3} icon={CheckCircle} />
+        <KpiCard title="Opened" value={formatNumber(emailMetrics.opened)} trend={8} icon={Eye} />
+        <KpiCard title="Clicked" value={formatNumber(emailMetrics.clicked)} trend={12} icon={MousePointerClick} />
+        <KpiCard title="Failed" value={formatNumber(emailMetrics.failed)} trend={-20} icon={XCircle} />
+        <KpiCard title="Bounced" value={formatNumber(emailMetrics.bounced)} trend={-10} icon={AlertTriangle} />
+        <KpiCard title="Complaints" value={formatNumber(emailMetrics.complaint)} trend={0} icon={AlertTriangle} />
+        <KpiCard title="Spam" value={formatNumber(emailMetrics.spam)} trend={0} icon={AlertTriangle} />
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-4">

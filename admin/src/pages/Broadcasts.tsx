@@ -16,6 +16,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, Pencil, Trash2, X, Loader2, Send, Play, Ban } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 const typeBadgeVariants: Record<string, "default" | "secondary" | "destructive" | "warning" | "success"> = {
   info: "default", warning: "warning", announcement: "secondary", alert: "destructive",
@@ -170,6 +171,7 @@ function BroadcastForm({ broadcast, onClose }: BroadcastFormProps) {
 }
 
 export function Broadcasts() {
+  const { confirm } = useConfirmDialog();
   const { data: broadcasts, isLoading } = useBroadcasts();
   const deleteBroadcast = useDeleteBroadcast();
   const updateBroadcast = useUpdateBroadcast();
@@ -225,7 +227,7 @@ export function Broadcasts() {
           )}
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(row); setShowForm(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
-            if (!confirm(`Delete broadcast "${row.title}"?`)) return;
+            if (!await confirm({ title: "Delete Broadcast", description: `Permanently delete "${row.title}"? This cannot be undone.`, variant: "delete", confirmText: "Delete" })) return;
             try { await deleteBroadcast.mutateAsync(row.id); toast.success("Deleted"); } catch { toast.error("Failed to delete"); }
           }}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>

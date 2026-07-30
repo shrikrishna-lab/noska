@@ -1,7 +1,7 @@
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { usePayments } from "@/lib/queries";
+import { usePayments, useRealtimeInvalidate } from "@/lib/queries";
 import { formatRelativeTime, formatCurrency } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -21,6 +21,7 @@ const columns: Column<DbPayment>[] = [
 
 export function Payments() {
   const { data: payments, isLoading } = usePayments();
+  useRealtimeInvalidate(["admin", "payments"], "payments");
 
   if (isLoading) return <div className="p-6"><PageHeader title="Payments" description="View all payment transactions" /><LoadingState count={4} /></div>;
 

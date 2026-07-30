@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { toast } from "react-hot-toast";
+import notify from "@/lib/notify";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import {
   useNotification, useMarkRead, useMarkUnread,
@@ -37,14 +37,14 @@ export function NotificationDetail() {
 
   const handleCopyLink = useCallback(() => {
     navigator.clipboard.writeText(window.location.href);
-    toast.success("Link copied to clipboard");
+    notify.success("Link copied", "Notification URL saved to clipboard");
   }, []);
 
   const handleDelete = useCallback(() => {
     if (!notif) return;
     deleteNotif(notif.id, {
       onSuccess: () => {
-        toast.success("Notification deleted");
+        notify.success("Deleted", "Notification has been permanently removed");
         navigate("/notifications");
       },
     });
@@ -114,7 +114,7 @@ export function NotificationDetail() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => archive(notif.id, { onSuccess: () => toast.success("Archived") })}
+              onClick={() => archive(notif.id, { onSuccess: () => notify.success("Archived", "Notification moved to archive") })}
             >
               <Archive className="mr-1.5 h-3.5 w-3.5" /> Archive
             </Button>

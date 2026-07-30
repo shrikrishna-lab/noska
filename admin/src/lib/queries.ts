@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
-import type { SupportTicket, SupportMessage, BannedUser, DemoRequest } from "./types";
+import { adminApi } from "./admin-api";
+import type { SupportTicket, SupportMessage, BannedUser, DeletedAccount, DemoRequest } from "./types";
 import type { FeatureFlag, FeedbackItem, EmailCampaign, RoadmapItem, Integration, ApiKey, NotificationItem } from "./types";
-import type { LaunchSettings, LandingContent, CTAButton, AnnouncementBar, WaitlistSettings, SocialLink, SEOSettings, LaunchAuditLog, WaitlistStats } from "./types";
 
 function token(): string {
   const t = getAdminToken();
@@ -162,6 +162,35 @@ export function useToggleFeatureFlag() {
   });
 }
 
+export function useUpdateFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "feature_flags", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "feature-flags"] }); },
+  });
+}
+
+export function useDeleteFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "feature_flags", p_id: id, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "feature-flags"] }); },
+  });
+}
+
 // ── Waitlist ──
 export interface DbWaitlistEntry {
   id: string; name: string; email: string; provider: string;
@@ -171,16 +200,38 @@ export interface DbWaitlistEntry {
   invite_code: string | null; notes: string | null;
   approved_by: string | null; approved_at: string | null;
   rejected_by: string | null; rejected_at: string | null;
+  invite_expires_at: string | null;
+  email_status: string | null;
+  email_queued_at: string | null;
+  email_sent_at: string | null;
+  email_delivered_at: string | null;
+  email_opened_at: string | null;
+  email_clicked_at: string | null;
+  first_login_at: string | null;
+  workspace_created_at: string | null;
+  github_id: string | null;
+  google_id: string | null;
+  microsoft_id: string | null;
+  referrer_id: string | null;
+  banned_at: string | null;
+  ban_reason: string | null;
+  suspended_at: string | null;
+  suspension_reason: string | null;
 }
 export function useWaitlist() {
   return useQuery({
     queryKey: ["admin", "waitlist"],
     queryFn: () => adminSelect<DbWaitlistEntry>("waitlist_entries", "*", { order: "position asc" }),
+    refetchInterval: 15_000,
   });
 }
 
 export function useWaitlistCount() {
-  return useQuery({ queryKey: ["admin", "waitlist", "count"], queryFn: () => adminCount("waitlist_entries") });
+  return useQuery({
+    queryKey: ["admin", "waitlist", "count"],
+    queryFn: () => adminCount("waitlist_entries"),
+    refetchInterval: 15_000,
+  });
 }
 
 // ── Admin Users ──
@@ -253,6 +304,62 @@ export function useRoadmap() {
   });
 }
 
+export function useRoadmapVoteCounts() {
+  return useQuery({
+    queryKey: ["admin", "roadmap", "votes"],
+    queryFn: async () => {
+      const votes = await adminSelect<{ roadmap_item_id: string; email: string }>("roadmap_votes", "roadmap_item_id, email");
+      const map: Record<string, number> = {};
+      for (const v of votes) {
+        map[v.roadmap_item_id] = (map[v.roadmap_item_id] || 0) + 1;
+      }
+      return map;
+    },
+  });
+}
+
+export function useCreateRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "roadmap_items", p_data: data,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "roadmap"] }),
+  });
+}
+
+export function useUpdateRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; [key: string]: unknown }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "roadmap_items", p_id: id, p_data: data,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "roadmap"] }),
+  });
+}
+
+export function useDeleteRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "roadmap_items", p_id: id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "roadmap"] }),
+  });
+}
+
 // ── Integrations ──
 export function useIntegrations() {
   return useQuery({
@@ -279,13 +386,96 @@ export function useNotifications() {
 
 // ── Teams ──
 export interface DbTeam {
-  id: string; name: string; lead_name: string | null;
+  id: string; name: string; description: string | null; lead_name: string | null;
   member_count: number; workspace_count: number; created_at: string | null;
 }
 export function useTeams() {
   return useQuery({
     queryKey: ["admin", "teams"],
     queryFn: () => adminSelect<DbTeam>("teams", "*", { order: "name asc" }),
+  });
+}
+
+export function useUpdateTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "teams", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "teams"] }),
+  });
+}
+
+export function useDeleteTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "teams", p_id: id,
+      });
+      if (error) throw error;
+    },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "teams"] });
+      const previous = qc.getQueryData<DbTeam[]>(["admin", "teams"]);
+      qc.setQueryData<DbTeam[]>(["admin", "teams"], (old) => old?.filter((e) => e.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "teams"], context.previous); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "teams"] }),
+  });
+}
+
+// ── Workspaces ──
+export interface DbWorkspace {
+  id: string; name: string; owner_id: string | null; created_at: string; updated_at: string;
+}
+export function useWorkspaces() {
+  return useQuery({
+    queryKey: ["admin", "workspaces"],
+    queryFn: () => adminSelect<DbWorkspace>("workspaces", "*", { order: "created_at desc" }),
+  });
+}
+
+export function useUpdateWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "workspaces", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "workspaces"] }),
+  });
+}
+
+export function useDeleteWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "workspaces", p_id: id,
+      });
+      if (error) throw error;
+    },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "workspaces"] });
+      const previous = qc.getQueryData<DbWorkspace[]>(["admin", "workspaces"]);
+      qc.setQueryData<DbWorkspace[]>(["admin", "workspaces"], (old) => old?.filter((e) => e.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "workspaces"], context.previous); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "workspaces"] }),
   });
 }
 
@@ -567,12 +757,7 @@ export function useBanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ user_id, reason, ban_type, expires_at }: { user_id: string; reason: string; ban_type: string; expires_at?: string | null }) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("ban_user", {
-        p_user_id: user_id, p_reason: reason, p_ban_type: ban_type,
-        p_expires_at: expires_at ?? null, p_session_token: token(),
-      });
-      if (error) throw error;
+      await adminApi.users.ban(user_id, reason, ban_type, expires_at);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "banned-users"] });
@@ -585,11 +770,7 @@ export function useHardBanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ user_id, reason }: { user_id: string; reason: string }) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("hard_ban_user", {
-        p_user_id: user_id, p_reason: reason, p_session_token: token(),
-      });
-      if (error) throw error;
+      await adminApi.users.hardBan(user_id, reason);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "banned-users"] });
@@ -602,9 +783,7 @@ export function useUnbanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (user_id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("unban_user", { p_user_id: user_id, p_session_token: token() });
-      if (error) throw error;
+      await adminApi.users.unban(user_id);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "banned-users"] });
@@ -617,11 +796,38 @@ export function useDeleteUserData() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (user_id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("delete_user_data", { p_user_id: user_id, p_session_token: token() });
-      if (error) throw error;
+      await adminApi.users.delete(user_id);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "users"] }); },
+  });
+}
+
+// ── Deleted Accounts (Trash) ──
+export function useDeletedAccounts() {
+  return useQuery({
+    queryKey: ["admin", "deleted-accounts"],
+    queryFn: () => adminSelect<DeletedAccount>("deleted_accounts", "*", { order: "deleted_at desc" }),
+    refetchInterval: 30000,
+  });
+}
+
+export function useRestoreAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (account_id: string) => {
+      await adminApi.users.restore(account_id);
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "deleted-accounts"] }); },
+  });
+}
+
+export function usePermanentDeleteAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (account_id: string) => {
+      await adminApi.users.permanentDelete(account_id);
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "deleted-accounts"] }); },
   });
 }
 
@@ -685,16 +891,19 @@ export function useDeleteTicket() {
 // ── Realtime subscription hook ──
 export function useRealtimeInvalidate(queryKey: string[], table: string, event: "INSERT" | "UPDATE" | "DELETE" | "*" = "*") {
   const qc = useQueryClient();
+  const queryKeyRef = useRef(queryKey);
+  queryKeyRef.current = queryKey;
+  const channelName = useMemo(() => `realtime-${queryKey.join(":")}-${table}-${event}`, [queryKey.join(":"), table, event]);
   useEffect(() => {
     if (!SUPABASE_ENABLED || !supabase) return;
     const channel = supabase
-      .channel(`realtime-${table}-${Date.now()}`)
+      .channel(channelName)
       .on("postgres_changes" as never, { event, schema: "public", table }, () => {
-        qc.invalidateQueries({ queryKey });
+        qc.invalidateQueries({ queryKey: queryKeyRef.current });
       })
       .subscribe();
     return () => { supabase?.removeChannel(channel); };
-  }, [qc, queryKey.join(","), table, event]);
+  }, [qc, channelName, table, event]);
 }
 
 export function useRealtimeAuditFeed(limit = 20) {
@@ -991,11 +1200,20 @@ export function useDeleteWaitlistEntry() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_delete", {
-        p_session_token: token(), p_table: "waitlist_entries", p_id: id, p_min_role: "support",
+      const token = getAdminToken();
+      const { error } = await supabase.functions.invoke("delete-waitlist", {
+        body: { waitlist_id: id },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (error) throw error;
+      if (error) throw new Error(error.message || "Delete failed");
     },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "waitlist"] });
+      const previous = qc.getQueryData<DbWaitlistEntry[]>(["admin", "waitlist"]);
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) => old?.filter((e) => e.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "waitlist"], context.previous); },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
   });
 }
@@ -1012,6 +1230,15 @@ export function useSendWaitlistInvite() {
       });
       if (error) throw error;
     },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "waitlist"] });
+      const previous = qc.getQueryData<DbWaitlistEntry[]>(["admin", "waitlist"]);
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
+        old?.map((e) => e.id === id ? { ...e, status: "invited", invite_sent: true } : e)
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "waitlist"], context.previous); },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
   });
 }
@@ -1042,6 +1269,15 @@ export function useRejectWaitlistEntry() {
       });
       if (error) throw error;
     },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "waitlist"] });
+      const previous = qc.getQueryData<DbWaitlistEntry[]>(["admin", "waitlist"]);
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
+        old?.map((e) => e.id === id ? { ...e, status: "rejected", rejected_at: new Date().toISOString() } : e)
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "waitlist"], context.previous); },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
   });
 }
@@ -1125,58 +1361,22 @@ export function useDeleteEmailCampaign() {
   });
 }
 
-// ── Integration Mutations ──
-export function useSyncIntegration() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_update", {
-        p_session_token: token(), p_table: "integrations", p_id: id,
-        p_data: { last_sync_at: new Date().toISOString() }, p_min_role: "admin",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "integrations"] }),
-  });
-}
-
-export function useDisconnectIntegration() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_update", {
-        p_session_token: token(), p_table: "integrations", p_id: id,
-        p_data: { status: "disconnected" }, p_min_role: "admin",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "integrations"] }),
-  });
-}
-
-// ── Feedback Mutations ──
-export function useUpdateFeedbackStatus() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_update", {
-        p_session_token: token(), p_table: "feedback", p_id: id,
-        p_data: { status }, p_min_role: "support",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "feedback"] }),
-  });
-}
-
 // ── Email Template Queries ──
 export function useEmailTemplates() {
   return useQuery({
     queryKey: ["admin", "email-templates"],
     queryFn: () => adminSelect<import("./types").EmailTemplate>("email_templates", "*", { order: "updated_at desc" }),
+  });
+}
+
+export function useEmailTemplate(id: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "email-templates", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const data = await adminSelect<import("./types").EmailTemplate>("email_templates", "*");
+      return data?.find((t) => t.id === id) ?? null;
+    },
   });
 }
 
@@ -1283,6 +1483,31 @@ export function useDeleteEmailSegment() {
   });
 }
 
+// ── Email Version Queries ──
+export function useEmailVersions(templateId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "email-versions", templateId],
+    enabled: !!templateId,
+    queryFn: () => adminSelect<import("./types").EmailVersion>(
+      "email_versions", "*", { order: "version_number desc" }
+    ).then((rows) => rows?.filter((v) => v.template_id === templateId) ?? []),
+  });
+}
+
+export function useCreateEmailVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "email_versions", p_data: data, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-versions"] }),
+  });
+}
+
 // ── Email History Queries ──
 export function useEmailHistory(limit = 50) {
   return useQuery({
@@ -1340,7 +1565,40 @@ export function useNewsletterSubscribers() {
   });
 }
 
+// ── Integration Mutations ──
+export function useSyncIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "integrations", p_id: id,
+        p_data: { last_sync_at: new Date().toISOString() }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "integrations"] }),
+  });
+}
+
+export function useDisconnectIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "integrations", p_id: id,
+        p_data: { status: "disconnected" }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "integrations"] }),
+  });
+}
+
 // ── Launch Control ──
+import type { LaunchSettings, LandingContent, CTAButton, AnnouncementBar, WaitlistSettings, SocialLink, SEOSettings, LaunchAuditLog, WaitlistStats } from "./types";
+
 export function useLaunchSettings() {
   return useQuery({
     queryKey: ["admin", "launch-settings"],
@@ -1348,6 +1606,103 @@ export function useLaunchSettings() {
       const data = await adminSelect<LaunchSettings>("launch_settings", "*");
       return data?.[0] ?? null;
     },
+  });
+}
+
+export function useUpdateLaunchSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<LaunchSettings> & { admin_name?: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const existing = await adminSelect<LaunchSettings>("launch_settings", "*");
+      const id = existing?.[0]?.id;
+      if (!id) throw new Error("No launch settings found");
+      const { admin_name, ...updates } = data;
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "launch_settings", p_id: id,
+        p_data: { ...updates, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "super_admin",
+      });
+      if (error) throw error;
+      // Log audit
+      for (const [key, newVal] of Object.entries(updates)) {
+        const oldVal = existing[0]?.[key as keyof LaunchSettings];
+        if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+          try { await supabase.rpc("log_launch_audit", {
+            p_admin_name: admin_name ?? "Unknown",
+            p_action: "update",
+            p_entity_type: "launch_settings",
+            p_entity_id: id,
+            p_field: key,
+            p_old_value: JSON.parse(JSON.stringify(oldVal ?? null)),
+            p_new_value: JSON.parse(JSON.stringify(newVal)),
+          }); } catch {}
+        }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "launch-settings"] });
+    },
+  });
+}
+
+export function useCreateLaunchSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { admin_name?: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "launch_settings",
+        p_data: {
+          launch_mode: "waitlist", login_mode: "login",
+          show_pricing: true, show_blog: true, show_docs: true,
+          show_changelog: true, show_login: true, show_signup: true,
+          show_waitlist: true, show_discord: true, show_community: true,
+          countdown_enabled: false, registration_enabled: true, published: true,
+          maintenance_title: "Scheduled Maintenance",
+          maintenance_message: "We are performing scheduled maintenance. We will be back shortly.",
+          page_visibility: JSON.stringify({
+            blog: true, pricing: true, templates: true,
+            roadmap: true, careers: true, community: true,
+          }),
+          route_protection: JSON.stringify({
+            public: { routes: { "/login": "/login", "/signup": "/signup" }, enabled: false },
+            waitlist: { routes: { "/login": "/launch", "/signup": "/launch" }, enabled: true },
+            early_beta: { routes: { "/login": "/login", "/signup": "/signup" }, enabled: false },
+          }),
+        },
+        p_min_role: "super_admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "launch-settings"] });
+    },
+  });
+}
+
+export function useLandingContent() {
+  return useQuery({
+    queryKey: ["admin", "landing-content"],
+    queryFn: () => adminSelect<LandingContent>("landing_content", "*", { order: "sort_order asc" }),
+  });
+}
+
+export function useUpdateLandingContent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, admin_name, ...data }: { id: string; admin_name?: string } & Record<string, unknown>) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "landing_content", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+      try { await supabase.rpc("log_launch_audit", {
+        p_admin_name: admin_name ?? "Unknown",
+        p_action: "update", p_entity_type: "landing_content", p_entity_id: id,
+      }); } catch {}
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "landing-content"] }),
   });
 }
 
@@ -1453,6 +1808,18 @@ export function useUpdateWaitlistSettings() {
   });
 }
 
+export function useWaitlistStats() {
+  return useQuery({
+    queryKey: ["admin", "waitlist-stats"],
+    queryFn: async () => {
+      if (!SUPABASE_ENABLED || !supabase) return null;
+      const { data, error } = await supabase.rpc("get_waitlist_stats", { p_session_token: token() });
+      if (error) throw error;
+      return data as WaitlistStats;
+    },
+  });
+}
+
 // ── Social Links ──
 export function useSocialLinks() {
   return useQuery({
@@ -1523,6 +1890,14 @@ export function useUpdateSEOSettings() {
   });
 }
 
+// ── Launch Audit Log ──
+export function useLaunchAuditLogs(limit = 50) {
+  return useQuery({
+    queryKey: ["admin", "launch-audit", limit],
+    queryFn: () => adminSelect<LaunchAuditLog>("launch_audit_log", "*", { order: "created_at desc", limit }),
+  });
+}
+
 // Helper to get admin ID from session
 function getAdminId(): string | null {
   try {
@@ -1533,49 +1908,33 @@ function getAdminId(): string | null {
   } catch { return null; }
 }
 
-// ── Demo Requests ──
-export function useDemoRequests() {
-  return useQuery({
-    queryKey: ["admin", "demo-requests"],
-    queryFn: () => adminSelect<DemoRequest>("demo_requests", "*", { order: "created_at desc" }),
-    refetchInterval: 15_000,
-  });
+// ── Referral Types ──
+export interface DbReferralCode {
+  id: string; user_id: string; code: string;
+  total_referrals: number; active_referrals: number;
+  rewards_earned: number; ai_credits: number; xp: number; level: number;
+  created_at: string; updated_at: string;
 }
 
-export function useUpdateDemoRequest() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_update", {
-        p_session_token: token(), p_table: "demo_requests", p_id: id,
-        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "demo-requests"] }),
-  });
+export interface AdminReferralCode extends DbReferralCode {
+  email: string | null;
+  user_name: string | null;
 }
 
-export function useDeleteDemoRequest() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_delete", {
-        p_session_token: token(), p_table: "demo_requests", p_id: id,
-      });
-      if (error) throw error;
-    },
-    onMutate: async (id: string) => {
-      await qc.cancelQueries({ queryKey: ["admin", "demo-requests"] });
-      const previous = qc.getQueryData<DemoRequest[]>(["admin", "demo-requests"]);
-      qc.setQueryData<DemoRequest[]>(["admin", "demo-requests"], (old) => old?.filter((e) => e.id !== id));
-      return { previous };
-    },
-    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "demo-requests"], context.previous); },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "demo-requests"] }),
-  });
+export interface AdminUserReferral {
+  id: string;
+  referrer_id: string;
+  referrer_email: string | null;
+  referrer_name: string | null;
+  referred_id: string;
+  referred_email: string | null;
+  referred_name: string | null;
+  referral_code_id: string | null;
+  status: string;
+  reward_claimed: boolean;
+  reward_id: string | null;
+  joined_at: string | null;
+  created_at: string;
 }
 
 export interface DbReferralReward {
@@ -1585,185 +1944,12 @@ export interface DbReferralReward {
   created_at: string;
 }
 
-export interface DeletedAccount {
-  id: string; original_id: string; account_type: string;
-  name: string | null; email: string | null; role: string | null;
-  deleted_by_name: string | null; deleted_at: string; reason: string | null;
-  restored_at: string | null; restored_by_admin_id: string | null;
-  metadata: Record<string, unknown> | null;
-}
-
-// ── Email Template (singleton) ──
-export function useEmailTemplate(id: string | undefined) {
-  return useQuery({
-    queryKey: ["admin", "email-templates", id],
-    enabled: !!id,
-    queryFn: async () => {
-      const data = await adminSelect<import("./types").EmailTemplate>("email_templates", "*");
-      return data?.find((t) => t.id === id) ?? null;
-    },
-  });
-}
-
-// ── Email Version Queries ──
-export function useEmailVersions(templateId: string | undefined) {
-  return useQuery({
-    queryKey: ["admin", "email-versions", templateId],
-    enabled: !!templateId,
-    queryFn: () => adminSelect<import("./types").EmailVersion>(
-      "email_versions", "*", { order: "version_number desc" }
-    ).then((rows) => rows?.filter((v) => v.template_id === templateId) ?? []),
-  });
-}
-
-export function useCreateEmailVersion() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_insert", {
-        p_session_token: token(), p_table: "email_versions", p_data: data, p_min_role: "marketing",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-versions"] }),
-  });
-}
-
-// ── Launch Settings Mutations ──
-export function useUpdateLaunchSettings() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (data: Partial<LaunchSettings> & { admin_name?: string }) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const existing = await adminSelect<LaunchSettings>("launch_settings", "*");
-      const id = existing?.[0]?.id;
-      if (!id) throw new Error("No launch settings found");
-      const { admin_name, ...updates } = data;
-      const { error } = await supabase.rpc("admin_update", {
-        p_session_token: token(), p_table: "launch_settings", p_id: id,
-        p_data: { ...updates, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "super_admin",
-      });
-      if (error) throw error;
-      for (const [key, newVal] of Object.entries(updates)) {
-        const oldVal = existing[0]?.[key as keyof LaunchSettings];
-        if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-          try { await supabase.rpc("log_launch_audit", {
-            p_admin_name: admin_name ?? "Unknown",
-            p_action: "update",
-            p_entity_type: "launch_settings",
-            p_entity_id: id,
-            p_field: key,
-            p_old_value: JSON.parse(JSON.stringify(oldVal ?? null)),
-            p_new_value: JSON.parse(JSON.stringify(newVal)),
-          }); } catch {}
-        }
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin", "launch-settings"] });
-    },
-  });
-}
-
-export function useCreateLaunchSettings() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (_data?: { admin_name?: string }) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_insert", {
-        p_session_token: token(), p_table: "launch_settings",
-        p_data: {
-          launch_mode: "waitlist", login_mode: "login",
-          show_pricing: true, show_blog: true, show_docs: true,
-          show_changelog: true, show_login: true, show_signup: true,
-          show_waitlist: true, show_discord: true, show_community: true,
-          countdown_enabled: false, registration_enabled: true, published: true,
-          maintenance_title: "Scheduled Maintenance",
-          maintenance_message: "We are performing scheduled maintenance. We will be back shortly.",
-          page_visibility: JSON.stringify({
-            blog: true, pricing: true, templates: true,
-            roadmap: true, careers: true, community: true,
-          }),
-          route_protection: JSON.stringify({
-            public: { routes: { "/login": "/login", "/signup": "/signup" }, enabled: false },
-            waitlist: { routes: { "/login": "/launch", "/signup": "/launch" }, enabled: true },
-            early_beta: { routes: { "/login": "/login", "/signup": "/signup" }, enabled: false },
-          }),
-        },
-        p_min_role: "super_admin",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin", "launch-settings"] });
-    },
-  });
-}
-
-// ── Landing Content ──
-export function useLandingContent() {
-  return useQuery({
-    queryKey: ["admin", "landing-content"],
-    queryFn: () => adminSelect<LandingContent>("landing_content", "*", { order: "sort_order asc" }),
-  });
-}
-
-export function useUpdateLandingContent() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, admin_name, ...data }: { id: string; admin_name?: string } & Record<string, unknown>) => {
-      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_update", {
-        p_session_token: token(), p_table: "landing_content", p_id: id,
-        p_data: { ...data, updated_at: new Date().toISOString(), updated_by: getAdminId() }, p_min_role: "marketing",
-      });
-      if (error) throw error;
-      try { await supabase.rpc("log_launch_audit", {
-        p_admin_name: admin_name ?? "Unknown",
-        p_action: "update", p_entity_type: "landing_content", p_entity_id: id,
-      }); } catch {}
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "landing-content"] }),
-  });
-}
-
-// ── Waitlist Stats ──
-export function useWaitlistStats() {
-  return useQuery({
-    queryKey: ["admin", "waitlist-stats"],
-    queryFn: async () => {
-      if (!SUPABASE_ENABLED || !supabase) return null;
-      const { data, error } = await supabase.rpc("get_waitlist_stats", { p_session_token: token() });
-      if (error) throw error;
-      return data as WaitlistStats;
-    },
-  });
-}
-
-// ── Launch Audit Log ──
-export function useLaunchAuditLogs(limit = 50) {
-  return useQuery({
-    queryKey: ["admin", "launch-audit", limit],
-    queryFn: () => adminSelect<LaunchAuditLog>("launch_audit_log", "*", { order: "created_at desc", limit }),
-  });
-}
-
-// ── Referral Types & Hooks ──
-export interface AdminReferralCode {
-  id: string; user_id: string; code: string;
-  total_referrals: number; active_referrals: number;
-  rewards_earned: number; ai_credits: number; xp: number; level: number;
-  created_at: string; updated_at: string;
-  email: string | null; user_name: string | null;
-}
-
-export interface AdminUserReferral {
-  id: string; referrer_id: string; referrer_email: string | null;
-  referrer_name: string | null; referred_id: string; referred_email: string | null;
-  referred_name: string | null; referral_code_id: string | null;
-  status: string; reward_claimed: boolean; reward_id: string | null;
-  joined_at: string | null; created_at: string;
+export interface DbUserReferral {
+  id: string; referrer_id: string; referred_id: string;
+  referral_code_id: string | null;
+  status: string; reward_claimed: boolean;
+  reward_id: string | null; joined_at: string | null;
+  created_at: string;
 }
 
 export function useReferralCodes() {
@@ -1839,35 +2025,64 @@ export function useDeleteReferralReward() {
   });
 }
 
-// ── Deleted Accounts (Trash) ──
-export function useDeletedAccounts() {
+// ── Demo Requests ──
+export function useDemoRequests() {
   return useQuery({
-    queryKey: ["admin", "deleted-accounts"],
-    queryFn: () => adminSelect<DeletedAccount>("deleted_accounts", "*", { order: "deleted_at desc" }),
-    refetchInterval: 30000,
+    queryKey: ["admin", "demo-requests"],
+    queryFn: () => adminSelect<DemoRequest>("demo_requests", "*", { order: "created_at desc" }),
+    refetchInterval: 15_000,
   });
 }
 
-export function useRestoreAccount() {
+export function useUpdateDemoRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (account_id: string) => {
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("restore_account", { p_account_id: account_id, p_session_token: token() });
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "demo_requests", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "deleted-accounts"] }); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "demo-requests"] }),
   });
 }
 
-export function usePermanentDeleteAccount() {
+export function useDeleteDemoRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (account_id: string) => {
+    mutationFn: async (id: string) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("permanently_delete_account", { p_account_id: account_id, p_session_token: token() });
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "demo_requests", p_id: id,
+      });
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "deleted-accounts"] }); },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["admin", "demo-requests"] });
+      const previous = qc.getQueryData<DemoRequest[]>(["admin", "demo-requests"]);
+      qc.setQueryData<DemoRequest[]>(["admin", "demo-requests"], (old) => old?.filter((e) => e.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => { if (context?.previous) qc.setQueryData(["admin", "demo-requests"], context.previous); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "demo-requests"] }),
   });
 }
+
+// ── Feedback Mutations ──
+export function useUpdateFeedbackStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "feedback", p_id: id,
+        p_data: { status }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "feedback"] }),
+  });
+}
+

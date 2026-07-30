@@ -19,7 +19,7 @@ const columns: Column<AuditEventRow>[] = [
 export function AuditLogs() {
   const { data: events, isLoading } = useAuditEvents(100);
   const { data: total } = useAuditCount();
-  useRealtimeInvalidate(["admin", "audit-logs"], "audit_logs");
+  useRealtimeInvalidate(["admin", "audit-logs"], "audit_events");
 
   if (isLoading) return <div className="p-6"><PageHeader title="Audit Logs" description="Track all administrative actions" /><LoadingState count={8} /></div>;
 
