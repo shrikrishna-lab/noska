@@ -21,10 +21,8 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
   const [newName, setNewName] = useState("")
   const [newIcon, setNewIcon] = useState("👥")
   const [settingsTeam, setSettingsTeam] = useState<string | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  useOutsideDismiss(ref, () => { setOpen(false); setCreating(false) })
+  const ref = useOutsideDismiss<HTMLDivElement>(open, () => { setOpen(false); setCreating(false) })
 
   useEffect(() => {
     if (creating && inputRef.current) inputRef.current.focus()

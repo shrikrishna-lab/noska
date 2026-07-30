@@ -24,6 +24,16 @@ Deno.serve(async (req: Request) => {
   try {
     const respond = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers })
 
+    const authHeader = req.headers.get("Authorization") ?? ""
+    const sessionToken = authHeader.replace(/^Bearer\s+/i, "").trim()
+    if (!sessionToken) return respond({ error: "Unauthorized" }, 401)
+
+    const { error: authErr } = await supabase.rpc("require_admin_role", {
+      p_session_token: sessionToken,
+      p_min_role: "admin",
+    })
+    if (authErr) return respond({ error: "Forbidden" }, 403)
+
     const body = await req.json()
     const waitlistId = body.waitlist_id as string | undefined
     if (!waitlistId) return respond({ error: "waitlist_id is required" }, 400)

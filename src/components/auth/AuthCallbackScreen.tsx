@@ -50,7 +50,7 @@ export function AuthCallbackScreen() {
   useEffect(() => {
     if (!isLoaded || window.location.pathname !== "/sso-callback" || callbackStartedRef.current) return;
     callbackStartedRef.current = true;
-    clerk.handleRedirectCallback().catch((error) => {
+    clerk.handleRedirectCallback({}).catch((error) => {
       if (!mountedRef.current) return;
       setStage("error");
       setErrorMessage(error instanceof Error ? error.message : "Authentication failed. Please try again.");

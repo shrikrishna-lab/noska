@@ -83,7 +83,7 @@ export function NotificationCenter() {
     sortDir,
   }), [debouncedSearch, statusFilter, severityFilter, sourceFilter, page, sortBy, sortDir]);
 
-  const { data, isLoading, isError, error, refetch } = useNotificationsList(filters);
+  const { data, isLoading, isError } = useNotificationsList(filters);
   const { mutate: markRead } = useMarkRead();
   const { mutate: markAllRead, isPending: markingAll } = useMarkAllRead();
   const { mutate: archive } = useArchiveNotification();
@@ -246,26 +246,10 @@ export function NotificationCenter() {
       {isLoading ? (
         <LoadingState count={5} />
       ) : isError ? (
-        <div className="noska-toast-card noska-toast-card--accent mx-auto max-w-md" data-accent="error">
-          <div className="noska-toast-card__bar" data-type="error" />
-          <div className="noska-toast-card__body">
-            <span className="noska-toast-card__icon" data-type="error">
-              <XCircle className="h-4 w-4" />
-            </span>
-            <div className="noska-toast-card__content">
-              <p className="noska-toast-card__title">Failed to load notifications</p>
-              <p className="noska-toast-card__desc">
-                {error instanceof Error ? error.message : "An unexpected error occurred. Please try again."}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="noska-toast-card__action"
-              onClick={() => refetch()}
-            >
-              Retry
-            </button>
-          </div>
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-8 text-center">
+          <AlertTriangle className="mx-auto mb-2 h-8 w-8 text-destructive" />
+          <p className="text-sm font-medium text-destructive">Failed to load notifications</p>
+          <p className="mt-1 text-xs text-muted-foreground">Please try refreshing the page.</p>
         </div>
       ) : notifications.length === 0 ? (
         <EmptyState

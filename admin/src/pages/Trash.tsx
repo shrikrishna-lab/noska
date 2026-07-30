@@ -10,7 +10,7 @@ import { formatRelativeTime } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
-import type { DeletedAccount } from "@/lib/types";
+import type { DeletedAccount } from "@/lib/queries";
 import { RotateCcw, Trash2, Loader2, Eye, X, Search, Trash2 as TrashIcon } from "lucide-react";
 import toast from "react-hot-toast";
 

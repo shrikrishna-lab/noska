@@ -76,6 +76,7 @@ export default function Footer() {
             {settings.show_changelog && <li><Link to="/changelog">Changelog</Link></li>}
             <li><Link to="/resources">Guides & shortcuts</Link></li>
             {settings.show_login && <li><Link to="/login">Help center</Link></li>}
+            <li><Link to="/support">Support</Link></li>
           </ul>
         </div>
 

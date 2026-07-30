@@ -105,7 +105,7 @@ window.fetch = async (input, init) => {
       } else {
         rpcLog.set(method, { method, count: 1, totalMs: elapsed, maxMs: elapsed });
       }
-      if (elapsed > SLOW_THRESHOLD * 5) {
+      if (elapsed > SLOW_THRESHOLD_MS * 5) {
         console.warn(`[PerfInsights] Slow RPC: ${method} (${elapsed.toFixed(0)}ms)`);
       }
     }
@@ -142,15 +142,16 @@ function notifyListeners() {
 
 export function trackRender(
   id: string,
-  phase: "mount" | "update",
+  phase: "mount" | "update" | "nested-update",
   actualDuration: number,
   baseDuration: number,
   startTime: number,
   commitTime: number
 ) {
-  if (actualDuration < SLOW_THRESHOLD) return;
-  const key = `${id}::${phase}`;
-  renderLog.set(key, { id, phase, actualDuration, baseDuration, startTime, commitTime, lastReported: Date.now() });
+  if (actualDuration < SLOW_THRESHOLD_MS) return;
+  const p = phase as "mount" | "update";
+  const key = `${id}::${p}`;
+  renderLog.set(key, { id, phase: p, actualDuration, baseDuration, startTime, commitTime, lastReported: Date.now() });
   if (renderLog.size > 200) {
     const oldest = Array.from(renderLog.entries()).sort((a, b) => a[1].lastReported - b[1].lastReported)[0];
     if (oldest) renderLog.delete(oldest[0]);
@@ -174,7 +175,8 @@ export function withProfiler<P extends Record<string, unknown>>(
       <Profiler
         id={displayName}
         onRender={(_id, phase, actualDuration, baseDuration, startTime, commitTime) => {
-          trackRender(displayName, phase, actualDuration, baseDuration, startTime, commitTime);
+          const p = phase as "mount" | "update";
+          trackRender(displayName, p, actualDuration, baseDuration, startTime, commitTime);
         }}
       >
         <WrappedComponent {...props} />

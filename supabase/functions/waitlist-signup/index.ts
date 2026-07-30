@@ -8,31 +8,21 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 const CLERK_API = "https://api.clerk.com/v1"
 const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY") ?? ""
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
-}
-
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders })
-  }
-
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
+      headers: { "Content-Type": "application/json" },
     })
   }
 
-  let body: { email?: string; name?: string; ref?: string }
+  let body: { email?: string; name?: string }
   try {
     body = await req.json()
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
       status: 400,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
+      headers: { "Content-Type": "application/json" },
     })
   }
 
@@ -40,12 +30,11 @@ Deno.serve(async (req: Request) => {
   if (!email) {
     return new Response(JSON.stringify({ error: "Email is required" }), {
       status: 400,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
+      headers: { "Content-Type": "application/json" },
     })
   }
 
   const name = body.name?.trim() || email.split("@")[0]
-  const referralCode = body.ref?.trim()?.toUpperCase()
 
   let clerkEntryId: string | null = null
   if (CLERK_SECRET_KEY) {
@@ -56,7 +45,7 @@ Deno.serve(async (req: Request) => {
           Authorization: `Bearer ${CLERK_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email_address: email }),
+        body: JSON.stringify({ email }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -70,52 +59,30 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // Resolve referral code to referrer
-  let referrerId: string | null = null
-  if (referralCode) {
-    const { data: refEntry } = await supabase
-      .from("waitlist_entries")
-      .select("id, referral_count")
-      .eq("invite_code", referralCode)
-      .maybeSingle()
-    if (refEntry) {
-      referrerId = refEntry.id as string
-      // Bump referrer's referral_count
-      await supabase
-        .from("waitlist_entries")
-        .update({ referral_count: ((refEntry.referral_count as number) || 0) + 1 })
-        .eq("id", referrerId)
-    }
-  }
-
-  const upsertData: Record<string, unknown> = {
-    name,
-    email,
-    provider: "clerk",
-    status: "waiting",
-    country: null,
-    joined_at: new Date().toISOString(),
-    referral_count: 0,
-    invite_sent: false,
-    accepted: false,
-  }
-  if (clerkEntryId) upsertData.clerk_entry_id = clerkEntryId
-  if (referrerId) upsertData.referrer_id = referrerId
-
   const { error: dbError } = await supabase
     .from("waitlist_entries")
-    .upsert(upsertData, { onConflict: "email" })
+    .upsert({
+      name,
+      email,
+      provider: "clerk",
+      status: "waiting",
+      country: null,
+      joined_at: new Date().toISOString(),
+      referral_count: 0,
+      invite_sent: false,
+      accepted: false,
+    }, { onConflict: "email" })
 
   if (dbError) {
     console.error("Failed to insert waitlist entry:", dbError)
     return new Response(JSON.stringify({ error: "Database error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
+      headers: { "Content-Type": "application/json" },
     })
   }
 
   return new Response(JSON.stringify({ success: true, clerk_entry_id: clerkEntryId }), {
     status: 200,
-    headers: { "Content-Type": "application/json", ...corsHeaders },
+    headers: { "Content-Type": "application/json" },
   })
 })

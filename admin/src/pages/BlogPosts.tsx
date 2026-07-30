@@ -14,7 +14,6 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, Pencil, Trash2, X, Loader2, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
-import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 interface BlogFormProps {
   post?: BlogPost;
@@ -99,7 +98,6 @@ function BlogForm({ post, onClose }: BlogFormProps) {
 }
 
 export function BlogPosts() {
-  const { confirm } = useConfirmDialog();
   const { data: posts, isLoading } = useBlogPosts();
   const deletePost = useDeleteBlogPost();
   const [showForm, setShowForm] = useState(false);
@@ -129,7 +127,7 @@ export function BlogPosts() {
           <a href={`/blog/${row.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center h-7 w-7 rounded-lg hover:bg-accent"><ExternalLink className="h-3.5 w-3.5" /></a>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(row); setShowForm(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
-            if (!await confirm({ title: "Delete Blog Post", description: `Permanently delete "${row.title}"? This cannot be undone.`, variant: "delete", confirmText: "Delete" })) return;
+            if (!confirm(`Delete "${row.title}"?`)) return;
             try { await deletePost.mutateAsync(row.id); toast.success("Deleted"); } catch { toast.error("Failed to delete"); }
           }}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>

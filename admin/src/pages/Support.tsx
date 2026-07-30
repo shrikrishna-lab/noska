@@ -7,14 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useSupportTickets, useSupportMessages, useSendSupportMessage, useUpdateTicketStatus, useDeleteTicket, useRealtimeInvalidate } from "@/lib/queries";
+import { useSupportTickets, useSupportMessages, useSendSupportMessage, useUpdateTicketStatus, useDeleteTicket, useRealtimeInvalidate, type AdminUserRow } from "@/lib/queries";
 import { formatRelativeTime, initialsFromName } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { SupportTicket, SupportMessage } from "@/lib/types";
 import { MessageSquare, Send, Monitor, Gamepad2, X, Loader2, Trash2, UserCheck, Clock } from "lucide-react";
 import toast from "react-hot-toast";
-import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 const priorityColors: Record<string, "secondary" | "warning" | "destructive" | "default"> = {
   low: "secondary", medium: "default", high: "warning", urgent: "destructive",
@@ -103,9 +102,8 @@ function ChatPanel({ ticket, onClose }: { ticket: SupportTicket; onClose: () => 
     }
   };
 
-  const { confirm } = useConfirmDialog();
   const handleDelete = async () => {
-    if (!await confirm({ title: "Delete Ticket", description: "Delete this support ticket and all messages? This cannot be undone.", variant: "delete", confirmText: "Delete" })) return;
+    if (!confirm("Delete this ticket and all messages?")) return;
     try {
       await deleteTicket.mutateAsync(ticket.id);
       toast.success("Ticket deleted");

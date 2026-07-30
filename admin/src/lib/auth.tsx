@@ -1,11 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
-import type { QueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED, setAdminToken, getAdminToken } from "./supabase";
-import {
-  useSessionExpiredListener,
-  resetSessionExpiredFlag,
-  type SessionExpiredDetail,
-} from "./session-expired";
 import type { AdminRole } from "./rbac";
 
 export interface AuthUser {
@@ -30,17 +24,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-interface AuthProviderProps {
-  children: ReactNode;
-  /**
-   * The shared React Query client. When a session-expired event fires,
-   * the provider clears the cache so stale "authenticated" data doesn't
-   * briefly re-render after the user has been logged out.
-   */
-  queryClient?: QueryClient;
-}
-
-export function AuthProvider({ children, queryClient }: AuthProviderProps) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,20 +52,6 @@ export function AuthProvider({ children, queryClient }: AuthProviderProps) {
     })();
   }, []);
 
-  // ─── React to session-expired events fired by the fetch wrapper ───
-  // The fetch wrapper in supabase.ts detects 42501/UNAUTHORIZED and routes
-  // it through session-expired.ts, which fires SESSION_EXPIRED_EVENT.
-  // Here we flip user → null so AuthGate renders <Login />, and clear the
-  // query cache so no stale data lingers.
-  const handleSessionExpired = useCallback((_detail: SessionExpiredDetail) => {
-    setUser(null);
-    setError(null);
-    if (queryClient) {
-      queryClient.clear();
-    }
-  }, [queryClient]);
-  useSessionExpiredListener(handleSessionExpired);
-
   const setupFirstAdmin = useCallback(async (email: string, password: string, name: string) => {
     setError(null);
     if (!SUPABASE_ENABLED || !supabase) {
@@ -106,7 +76,6 @@ export function AuthProvider({ children, queryClient }: AuthProviderProps) {
       setAdminToken(loginData.token);
       setUser(loginData.user as AuthUser);
       setNeedsSetup(false);
-      resetSessionExpiredFlag();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     }
@@ -130,8 +99,6 @@ export function AuthProvider({ children, queryClient }: AuthProviderProps) {
       }
       setAdminToken(data.token);
       setUser(data.user as AuthUser);
-      // After a fresh login, allow future session-expiry detection again
-      resetSessionExpiredFlag();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     }
