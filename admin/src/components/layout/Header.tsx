@@ -28,11 +28,17 @@ export function Header({ onMenuClick, onSearchOpen }: HeaderProps) {
       <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuClick}>
         <Menu className="h-4 w-4" />
       </Button>
-      <div className="hidden sm:flex items-center gap-1">
-        <Button variant="ghost" size="icon" onClick={onSearchOpen}>
-          <Search className="h-4 w-4" />
-        </Button>
-        <kbd className="flex items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground cursor-pointer" onClick={onSearchOpen}>
+      <Button variant="ghost" size="icon" className="hidden sm:flex" onClick={onSearchOpen}>
+        <Search className="h-4 w-4" />
+      </Button>
+      <div className="hidden sm:flex relative w-full max-w-sm">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search users, workspaces, logs... (Ctrl+K)"
+          className="pl-9 h-9 text-sm"
+          onFocus={(e) => { e.target.blur(); onSearchOpen(); }}
+        />
+        <kbd className="absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground lg:flex">
           <span className="text-[9px]">&#8984;</span>K
         </kbd>
       </div>

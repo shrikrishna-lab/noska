@@ -1,9 +1,28 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js";
+import { crypto } from "jsr:@std/crypto";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+const WEBHOOK_API_KEY = Deno.env.get("WEBHOOK_API_KEY");
+if (!WEBHOOK_API_KEY) {
+  console.error("FATAL: WEBHOOK_API_KEY environment variable is not configured. Webhook receiver will not start.");
+}
+
+async function hmacSha256(secret: string, payload: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  )
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))
+  const hex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("")
+  return hex
+}
 
 const ALLOWED_METHODS = ["POST", "PUT", "PATCH"];
 
@@ -11,6 +30,22 @@ Deno.serve(async (req: Request) => {
   if (!ALLOWED_METHODS.includes(req.method)) {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!WEBHOOK_API_KEY) {
+    return new Response(JSON.stringify({ error: "Server configuration error: WEBHOOK_API_KEY not set" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!bearerToken || bearerToken !== WEBHOOK_API_KEY) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -65,15 +100,18 @@ Deno.serve(async (req: Request) => {
   let errorMsg: string | null = null;
 
   try {
+    const rawBody = JSON.stringify(body)
+    const signature = endpoint.secret ? await hmacSha256(endpoint.secret, rawBody) : ""
+
     const response = await fetch(endpoint.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Webhook-ID": deliveryId,
         "X-Webhook-Event": event,
-        ...(endpoint.secret ? { "X-Webhook-Signature": endpoint.secret } : {}),
+        ...(endpoint.secret ? { "X-Webhook-Signature": signature } : {}),
       },
-      body: JSON.stringify(body),
+      body: rawBody,
     });
     responseStatus = response.status;
     responseBody = await response.text();

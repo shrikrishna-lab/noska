@@ -14,17 +14,17 @@ import toast from "react-hot-toast";
 const banTypeColors: Record<string, "destructive" | "warning"> = { hard: "destructive", soft: "warning" };
 
 const columns: Column<BannedUser>[] = [
-  { key: "email", label: "User", sortable: true, className: "w-[200px]", render: (row) => (
+  { key: "email", label: "User", sortable: true, render: (row) => (
     <div>
       <p className="font-medium">{row.user_name || "Unknown"}</p>
       <p className="text-xs text-muted-foreground">{row.email}</p>
     </div>
   )},
-  { key: "ban_type", label: "Type", sortable: true, className: "w-[90px]", render: (row) => <Badge variant={banTypeColors[row.ban_type] ?? "default"}>{row.ban_type}</Badge> },
-  { key: "reason", label: "Reason", sortable: true, className: "w-[180px]", render: (row) => <span className="max-w-[180px] truncate block">{row.reason}</span> },
-  { key: "expires_at", label: "Expires", sortable: true, className: "w-[110px]", render: (row) => row.expires_at ? <span className="text-muted-foreground">{formatRelativeTime(row.expires_at)}</span> : <span className="text-muted-foreground">Permanent</span> },
-  { key: "created_at", label: "Banned At", sortable: true, className: "w-[110px]", render: (row) => <span className="text-muted-foreground">{formatRelativeTime(row.created_at)}</span> },
-  { key: "lifted_at", label: "Status", sortable: true, className: "w-[90px]", render: (row) => row.lifted_at ? <Badge variant="success">Lifted</Badge> : <Badge variant="destructive">Active</Badge> },
+  { key: "ban_type", label: "Type", sortable: true, render: (row) => <Badge variant={banTypeColors[row.ban_type] ?? "default"}>{row.ban_type}</Badge> },
+  { key: "reason", label: "Reason", sortable: true, render: (row) => <span className="max-w-[200px] truncate">{row.reason}</span> },
+  { key: "expires_at", label: "Expires", sortable: true, render: (row) => row.expires_at ? <span className="text-muted-foreground">{formatRelativeTime(row.expires_at)}</span> : <span className="text-muted-foreground">Permanent</span> },
+  { key: "created_at", label: "Banned At", sortable: true, render: (row) => <span className="text-muted-foreground">{formatRelativeTime(row.created_at)}</span> },
+  { key: "lifted_at", label: "Status", sortable: true, render: (row) => row.lifted_at ? <Badge variant="success">Lifted</Badge> : <Badge variant="destructive">Active</Badge> },
 ];
 
 export function BannedUsers() {
@@ -32,7 +32,6 @@ export function BannedUsers() {
   const unbanUser = useUnbanUser();
   const [unbanning, setUnbanning] = useState<string | null>(null);
   useRealtimeInvalidate(["admin", "banned-users"], "user_profiles");
-  useRealtimeInvalidate(["admin", "banned-users"], "banned_users");
 
   const handleUnban = async (userId: string) => {
     setUnbanning(userId);

@@ -1,5 +1,4 @@
-import { useState, useMemo, useRef } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useState, useMemo } from "react";
 import { ChevronDown, ChevronUp, ChevronsUpDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -29,11 +28,9 @@ interface DataTableProps<T> {
   filter?: (row: T) => boolean;
 }
 
-const ROW_HEIGHT = 53;
-
 export function DataTable<T>({
   columns, data, searchable = true, searchPlaceholder = "Search...",
-  pageSize = 50, pageSizeOptions = [25, 50, 100, 200],
+  pageSize = 10, pageSizeOptions = [10, 25, 50, 100],
   onRowClick, actions, filter,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
@@ -72,14 +69,6 @@ export function DataTable<T>({
   const totalPages = Math.ceil(sorted.length / size);
   const paged = sorted.slice(page * size, (page + 1) * size);
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const virtualizer = useVirtualizer({
-    count: paged.length,
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 5,
-  });
-
   const toggleSort = (key: string) => {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -107,9 +96,9 @@ export function DataTable<T>({
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
       <div className="relative isolate overflow-hidden rounded-xl border">
-        <div ref={containerRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "65vh" }}>
-          <table className="w-full" style={{ tableLayout: "fixed" }}>
-            <thead className="sticky top-0 z-10">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
               <tr className="border-b bg-muted/50">
                 {columns.map((col) => (
                   <th
@@ -134,9 +123,7 @@ export function DataTable<T>({
                 ))}
               </tr>
             </thead>
-            <tbody
-              style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative", display: "table-row-group" }}
-            >
+            <tbody className="divide-y">
               {paged.length === 0 && (
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-12 text-center text-sm text-muted-foreground">
@@ -144,42 +131,29 @@ export function DataTable<T>({
                   </td>
                 </tr>
               )}
-              {virtualizer.getVirtualItems().map((virtualItem) => {
-                const row = paged[virtualItem.index];
-                return (
-                  <tr
-                    key={((row as any).id as string) || virtualItem.index}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: `${virtualItem.size}px`,
-                      transform: `translateY(${virtualItem.start}px)`,
-                      display: "table",
-                      tableLayout: "fixed",
-                    }}
-                    className={cn(
-                      "border-b border-border/50 transition-colors hover:bg-muted/30",
-                      onRowClick && "cursor-pointer"
-                    )}
-                    onClick={() => onRowClick?.(row)}
-                  >
-                    {columns.map((col) => (
-                      <td
-                        key={col.key}
-                        className={cn(
-                          "px-4 py-3 text-sm",
-                          col.className,
-                          col.hideOnMobile && "hidden md:table-cell"
-                        )}
-                      >
-                        {col.render ? col.render(row) : String((row as any)[col.key] ?? "")}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
+              {paged.map((row, i) => (
+                <tr
+                  key={((row as any).id as string) || i}
+                  className={cn(
+                    "transition-colors hover:bg-muted/30",
+                    onRowClick && "cursor-pointer"
+                  )}
+                  onClick={() => onRowClick?.(row)}
+                >
+                  {columns.map((col) => (
+                    <td
+                      key={col.key}
+                      className={cn(
+                        "px-4 py-3 text-sm",
+                        col.className,
+                        col.hideOnMobile && "hidden md:table-cell"
+                      )}
+                    >
+                      {col.render ? col.render(row) : String((row as any)[col.key] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -200,7 +174,7 @@ export function DataTable<T>({
         </div>
         <div className="flex items-center gap-2">
           <span>
-            {sorted.length === 0 ? "0" : `${page * size + 1}–${Math.min((page + 1) * size, sorted.length)}`} of {sorted.length}
+            {page * size + 1}–{Math.min((page + 1) * size, sorted.length)} of {sorted.length}
           </span>
           <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Prev</Button>

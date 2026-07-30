@@ -183,7 +183,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
   }, [userId, refreshInvites])
 
   return (
-    <TeamContext value={{
+    <TeamContext.Provider value={{
       teams,
       currentTeam,
       members,
@@ -202,7 +202,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
       refreshInvites,
     }}>
       {children}
-    </TeamContext>
+    </TeamContext.Provider>
   )
 }
 

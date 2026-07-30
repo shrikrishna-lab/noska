@@ -26,13 +26,13 @@ export function MonitoringSessions() {
   if (!session) return null;
 
   const kpis = [
-    { title: "Live Users", value: formatNumber(session.liveUsers), trend: Math.round(Math.random() * 20 - 10), icon: Users },
-    { title: "Today's Sessions", value: formatNumber(session.todaySessions), trend: Math.round(Math.random() * 15 - 5), icon: Play },
-    { title: "Returning Users", value: formatNumber(session.returningUsers), trend: Math.round(Math.random() * 10 - 3), icon: Users },
+    { title: "Live Users", value: formatNumber(session.liveUsers), trend: null, icon: Users },
+    { title: "Today's Sessions", value: formatNumber(session.todaySessions), trend: null, icon: Play },
+    { title: "Returning Users", value: formatNumber(session.returningUsers), trend: null, icon: Users },
     { title: "Retention", value: `${session.retention}%`, trend: session.retention > 60 ? 1 : -1, icon: Users },
     { title: "Bounce Rate", value: `${session.bounceRate}%`, trend: session.bounceRate < 30 ? 1 : -1, icon: Users },
-    { title: "Avg Session Duration", value: `${Math.floor(session.avgSessionDuration / 60)}m ${session.avgSessionDuration % 60}s`, trend: 0, icon: Play },
-    { title: "Replay Count", value: formatNumber(session.replayCount), trend: Math.round(Math.random() * 10), icon: Play },
+    { title: "Avg Session Duration", value: `${Math.floor(session.avgSessionDuration / 60)}m ${session.avgSessionDuration % 60}s`, trend: null, icon: Play },
+    { title: "Replay Count", value: formatNumber(session.replayCount), trend: null, icon: Play },
   ];
 
   return (

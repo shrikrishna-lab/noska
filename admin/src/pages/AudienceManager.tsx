@@ -1,31 +1,49 @@
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useEmailCampaigns } from "@/lib/queries";
-import { useRealtimeInvalidate } from "@/lib/queries";
-import { Users, Search, Filter, ArrowRight, Clock, Send, CheckCircle2, AlertTriangle } from "lucide-react";
-
-const AUDIENCES = [
-  { id: "everyone", label: "Everyone", count: 1240, desc: "All users in the system" },
-  { id: "waitlist", label: "Waitlist", count: 342, desc: "Users on the waitlist" },
-  { id: "approved", label: "Approved Users", count: 856, desc: "Users who have been approved" },
-  { id: "active", label: "Active Users", count: 623, desc: "Active workspace members" },
-  { id: "admins", label: "Admins", count: 12, desc: "Administrator accounts" },
-  { id: "workspace_owners", label: "Workspace Owners", count: 98, desc: "Users who own a workspace" },
-  { id: "premium", label: "Premium Users", count: 156, desc: "Users on paid plans" },
-];
+import { useEmailCampaigns, useRealtimeInvalidate } from "@/lib/queries";
+import { supabase, SUPABASE_ENABLED, getAdminToken } from "@/lib/supabase";
+import { Users, Search, Send } from "lucide-react";
 
 export function AudienceManager() {
   const { data: campaigns } = useEmailCampaigns();
   const [search, setSearch] = useState("");
   useRealtimeInvalidate(["admin", "campaigns"], "email_campaigns");
 
+  function useAdminCount(key: string[], table: string) {
+    return useQuery({
+      queryKey: key,
+      queryFn: async () => {
+        if (!SUPABASE_ENABLED || !supabase) return 0;
+        const token = getAdminToken();
+        if (!token) return 0;
+        const { data, error } = await supabase.rpc("admin_count", {
+          p_session_token: token,
+          p_table: table,
+        });
+        if (error) throw error;
+        return data ?? 0;
+      },
+    });
+  }
+
+  const { data: userCount } = useAdminCount(["admin", "user_count"], "user_profiles");
+  const { data: waitlistCount } = useAdminCount(["admin", "waitlist_count"], "waitlist_entries");
+  const { data: workspaceCount } = useAdminCount(["admin", "workspace_count"], "workspaces");
+
+  const AUDIENCES = useMemo(() => [
+    { id: "everyone", label: "Everyone", count: userCount ?? 0, desc: "All users in the system" },
+    { id: "waitlist", label: "Waitlist", count: waitlistCount ?? 0, desc: "Users on the waitlist" },
+    { id: "workspaces", label: "Workspaces", count: workspaceCount ?? 0, desc: "Active workspace members" },
+  ], [userCount, waitlistCount, workspaceCount]);
+
   const filtered = useMemo(() =>
     AUDIENCES.filter((a) => a.label.toLowerCase().includes(search.toLowerCase())),
-    [search]
+    [search, AUDIENCES]
   );
 
   return (
