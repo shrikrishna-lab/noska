@@ -36,7 +36,7 @@
     "posthog-js": "^1.404.1",
     "react": "latest",
     "react-dom": "latest",
-    "react-router-dom": "7.18.1",
+    "react-router-dom": "7.18.2",
     "resend": "^6.17.2",
     "vite": "latest"
   },
