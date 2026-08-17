@@ -8,6 +8,7 @@ export default defineConfig({
     pool: "threads",
     globals: true,
     setupFiles: ["./src/test/setup.js"],
-    exclude: ["**/node_modules/**", "**/dist/**", "**/e2e/**"],
+include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
+    exclude: ["node_modules/**", "dist/**", "e2e/**", ".opencode/**", "admin/**"],
   },
 });

@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { useNotifications, useRealtimeInvalidate } from "@/lib/queries";
+import { useNotifications } from "@/lib/queries";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,7 +12,6 @@ const typeLabels: Record<string, string> = { invitation: "Invitation", error: "E
 
 export function Notifications() {
   const { data: notifs, isLoading } = useNotifications();
-  useRealtimeInvalidate(["admin", "notifications"], "notifications");
 
   if (isLoading) return <div className="p-6"><PageHeader title="Notifications" description="System notifications" /><LoadingState count={5} /></div>;
 

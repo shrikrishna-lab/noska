@@ -25,10 +25,10 @@ const statusColors: Record<string, "default" | "secondary" | "success" | "warnin
 const columns: Column<EmailTemplate>[] = [
   { key: "name", label: "Name", sortable: true, render: (row) => <span className="font-medium">{row.name}</span> },
   { key: "subject", label: "Subject", sortable: true, className: "text-muted-foreground max-w-[200px] truncate hidden md:table-cell" },
-  { key: "category", label: "Category", sortable: true, render: (row) => <Badge variant="secondary">{row.category}</Badge> },
-  { key: "status", label: "Status", sortable: true, render: (row) => <Badge variant={statusColors[row.status] ?? "secondary"}>{row.status}</Badge> },
-  { key: "version", label: "Version", sortable: true, className: "text-right" },
-  { key: "created_at", label: "Created", sortable: true, render: (row) => formatRelativeTime(row.created_at) },
+  { key: "category", label: "Category", sortable: true, className: "w-[100px]", render: (row) => <Badge variant="secondary">{row.category}</Badge> },
+  { key: "status", label: "Status", sortable: true, className: "w-[90px]", render: (row) => <Badge variant={statusColors[row.status] ?? "secondary"}>{row.status}</Badge> },
+  { key: "version", label: "Version", sortable: true, className: "text-right w-[80px]" },
+  { key: "created_at", label: "Created", sortable: true, className: "w-[100px]", render: (row) => formatRelativeTime(row.created_at) },
 ];
 
 function TemplateForm({ template, onClose }: { template?: EmailTemplate; onClose: () => void }) {

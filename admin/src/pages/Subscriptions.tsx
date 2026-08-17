@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useSubscriptions, useProvisionSubscription, useRealtimeInvalidate, type DbSubscription } from "@/lib/queries";
+import { useSubscriptions, useProvisionSubscription, type DbSubscription } from "@/lib/queries";
 import { formatRelativeTime, formatCurrency } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -87,8 +87,7 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="space-y-2"><Label>Duration (days)</Label><Input type="number" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} placeholder="30" /></div>
           <p className="text-xs text-muted-foreground">
-            Creates a {durationDays || "30"}-day subscription starting now, renewing on {new Date(Date.now() + parseInt(durationDays || "30") * 86400000).toLocaleDateString()}. 
-            Useful for testing, internal users, and special access grants.
+            Creates a {durationDays || "30"}-day subscription starting now, renewing on {new Date(Date.now() + parseInt(durationDays || "30") * 86400000).toLocaleDateString()}.
           </p>
           <Button className="w-full" onClick={handleProvision} disabled={!name.trim() || submitting}>
             {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
@@ -103,7 +102,6 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
 
 export function Subscriptions() {
   const { data: subs, isLoading } = useSubscriptions();
-  useRealtimeInvalidate(["admin", "subscriptions"], "subscriptions");
   const [showProvision, setShowProvision] = useState(false);
   const totalMrr = (subs ?? []).reduce((s, sub) => s + (sub.mrr ?? 0), 0);
   const activeCount = (subs ?? []).filter((s) => s.status === "active").length;

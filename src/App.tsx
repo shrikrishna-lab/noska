@@ -16,6 +16,7 @@ import ClaimUsernameModal from "./components/auth/ClaimUsernameModal";
 import OnboardingPage from "./onboarding/pages/OnboardingPage";
 import { starterPageForTemplate } from "./onboarding/services/onboardingService";
 import CommandPalette from "./components/CommandPalette";
+import { TeamProvider } from "./lib/TeamContext";
 import { SettingsModal, TrashModal, ShareModal, HelpModal, CustomDialog } from "./components/Modals";
 import ProfileModal from "./components/ProfileModal";
 import FocusZoom from "./features/focus/FocusZoom";
@@ -337,6 +338,7 @@ function AppContent() {
   }, [session]);
 
   useEffect(() => {
+    hydrated.current = false;
     let mounted = true;
     (async () => {
       const store = storageApi();
@@ -740,6 +742,25 @@ function AppContent() {
       setAppFlowState("onboarding");
     }
   }, []);
+
+  // Post-OAuth routing — after the OAuth popup completes, isSignedIn
+  // becomes true but the main bootstrap effect only runs on [clerkLoaded],
+  // so the app would stay stuck on AuthPage's "Connecting..." screen.
+  // This effect bridges that gap: once the user is fully signed in and
+  // the app is waiting on the auth screen, route them into the workspace
+  // or onboarding flow.
+  useEffect(() => {
+    if (!clerkLoaded) return;
+    if (appFlowState !== "auth") return;
+    if (!isSignedIn || !clerkUser) return;
+
+    handleAuthSuccess({
+      userId: clerkUser.id,
+      userName: clerkUser.fullName || clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Workspace User',
+      email: clerkUser.primaryEmailAddress?.emailAddress,
+      avatarUrl: clerkUser.imageUrl,
+    });
+  }, [clerkLoaded, isSignedIn, clerkUser, appFlowState, handleAuthSuccess]);
 
   // Build starter pages (local state, no DB dependency). The onboarding
   // flow lets the user pick one starter template — build that page, falling
@@ -2109,6 +2130,7 @@ function AppContent() {
   };
 
   return (
+    <TeamProvider>
     <AnimatePresence mode="wait">
       {appFlowState === "loading" && !TEST_MODE && !isSignedIn && (
         <LoadingScreen key="loader" onComplete={() => setAppFlowState("auth")} />
@@ -2733,6 +2755,7 @@ onLineage={() => setLineageOpen(true)}
         </motion.div>
       )}
     </AnimatePresence>
+    </TeamProvider>
   );
 }
 

@@ -89,12 +89,12 @@ export function DemoRequests() {
   };
 
   const columns: Column<DemoRequest>[] = [
-    { key: "created_at", label: "Date", sortable: true, render: (row) => new Date(row.created_at).toLocaleDateString() },
-    { key: "name", label: "Name", sortable: true },
-    { key: "email", label: "Email", sortable: true },
-    { key: "company", label: "Company", sortable: true },
+    { key: "created_at", label: "Date", sortable: true, className: "w-[100px]", render: (row) => new Date(row.created_at).toLocaleDateString() },
+    { key: "name", label: "Name", sortable: true, className: "w-[120px]" },
+    { key: "email", label: "Email", sortable: true, className: "w-[220px]" },
+    { key: "company", label: "Company", sortable: true, className: "w-[150px]" },
     {
-      key: "employees", label: "Size", sortable: true,
+      key: "employees", label: "Size", sortable: true, className: "w-[100px]",
       render: (row) => <span className="text-muted-foreground text-sm">{row.employees} emp.</span>,
     },
     {
@@ -105,7 +105,7 @@ export function DemoRequests() {
       },
     },
     {
-      key: "id", label: "", sortable: false,
+      key: "id", label: "", sortable: false, className: "w-[80px] text-right",
       render: (row) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon" onClick={() => setSelectedRequest(row.id)}>
@@ -159,7 +159,7 @@ export function DemoRequests() {
       {filtered.length === 0 ? (
         <EmptyState icon={Mail} title="No demo requests" description="Requests from the enterprise page will appear here." />
       ) : (
-        <DataTable columns={columns} data={filtered} />
+        <DataTable columns={columns} data={filtered} searchable={false} />
       )}
 
       {detail && (

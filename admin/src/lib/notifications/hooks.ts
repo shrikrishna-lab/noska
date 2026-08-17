@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import notify from "@/lib/notify";
+import toast from "react-hot-toast";
 import { supabase, getAdminToken, SUPABASE_ENABLED } from "@/lib/supabase";
 import { subscribeRealtime } from "@/lib/realtime";
 import { useIslandNotification } from "@/components/ui/DynamicIslandNotification";
@@ -173,21 +173,6 @@ export function useTopNotifications(limit = 5) {
   });
 }
 
-// ─── Helpers for optimistic updates ───
-
-/**
- * Type guard: returns true when the cached value is an array of
- * notifications or a paginated response object ({ data, total, ... }).
- *
- * `setQueriesData({ queryKey: ["notifications"] })` matches ALL keys
- * starting with "notifications" — including `["notifications", "unread-count"]`
- * which stores a plain number.  The `"data" in old` check throws on primitives,
- * so we must guard first.
- */
-function isNotificationData(old: unknown): old is AppNotification[] | { data: AppNotification[]; total?: number; page_size?: number } {
-  return typeof old === "object" && old !== null;
-}
-
 // ─── Mutations (with optimistic updates) ───
 
 export function useMarkRead() {
@@ -202,7 +187,7 @@ export function useMarkRead() {
       queryClient.setQueriesData<{ data: AppNotification[] } | AppNotification[]>(
         { queryKey: ["notifications"] },
         (old) => {
-          if (!isNotificationData(old)) return old;
+          if (!old) return old;
           const now = new Date().toISOString();
           if (Array.isArray(old)) {
             return old.map((n: AppNotification) =>
@@ -229,17 +214,8 @@ export function useMarkRead() {
 
       return { previousData };
     },
-    onSuccess: () => {
-      notify.success("Marked as read");
-    },
-    onError: (err, id, context) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      notify.error("Couldn't mark as read", msg, {
-        action: {
-          label: "Retry",
-          onClick: () => queryClient.invalidateQueries({ queryKey: NOTIF_KEYS.detail(id) }),
-        },
-      });
+    onError: (_err, _id, context) => {
+      toast.error("Failed to mark notification as read");
       if (context?.previousData) {
         for (const [key, data] of context.previousData) {
           if (data !== undefined) queryClient.setQueryData(key, data);
@@ -267,7 +243,7 @@ export function useMarkUnread() {
       queryClient.setQueriesData<{ data: AppNotification[] } | AppNotification[]>(
         { queryKey: ["notifications"] },
         (old) => {
-          if (!isNotificationData(old)) return old;
+          if (!old) return old;
           if (Array.isArray(old)) {
             return old.map((n: AppNotification) =>
               n.id === id ? { ...n, status: "unread" as const, read_at: null } : n
@@ -293,17 +269,8 @@ export function useMarkUnread() {
 
       return { previousData };
     },
-    onSuccess: () => {
-      notify.success("Marked as unread");
-    },
-    onError: (err, id, context) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      notify.error("Couldn't mark as unread", msg, {
-        action: {
-          label: "Retry",
-          onClick: () => queryClient.invalidateQueries({ queryKey: NOTIF_KEYS.detail(id) }),
-        },
-      });
+    onError: (_err, _id, context) => {
+      toast.error("Failed to mark notification as unread");
       if (context?.previousData) {
         for (const [key, data] of context.previousData) {
           if (data !== undefined) queryClient.setQueryData(key, data);
@@ -333,7 +300,7 @@ export function useMarkAllRead() {
       queryClient.setQueriesData<{ data: AppNotification[] } | AppNotification[]>(
         { queryKey: ["notifications"] },
         (old) => {
-          if (!isNotificationData(old)) return old;
+          if (!old) return old;
           const now = new Date().toISOString();
           if (Array.isArray(old)) {
             return old.map((n: AppNotification) =>
@@ -356,12 +323,8 @@ export function useMarkAllRead() {
 
       return { previousData, previousUnread };
     },
-    onSuccess: () => {
-      notify.success("All notifications marked as read");
-    },
-    onError: (err, _vars, context) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      notify.error("Couldn't mark all as read", msg);
+    onError: (_err, _vars, context) => {
+      toast.error("Failed to mark all notifications as read");
       if (context?.previousData) {
         for (const [key, data] of context.previousData) {
           if (data !== undefined) queryClient.setQueryData(key, data);
@@ -389,7 +352,7 @@ export function useArchiveNotification() {
       queryClient.setQueriesData<{ data: AppNotification[]; total?: number; page_size?: number } | AppNotification[]>(
         { queryKey: ["notifications"] },
         (old) => {
-          if (!isNotificationData(old)) return old;
+          if (!old) return old;
           if (Array.isArray(old)) {
             return old.filter((n: AppNotification) => n.id !== id);
           }
@@ -411,17 +374,8 @@ export function useArchiveNotification() {
 
       return { previousData, prevUnread };
     },
-    onSuccess: () => {
-      notify.success("Notification archived");
-    },
-    onError: (err, id, context) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      notify.error("Couldn't archive", msg, {
-        action: {
-          label: "Retry",
-          onClick: () => queryClient.invalidateQueries({ queryKey: NOTIF_KEYS.detail(id) }),
-        },
-      });
+    onError: (_err, _id, context) => {
+      toast.error("Failed to archive notification");
       if (context?.previousData) {
         for (const [key, data] of context.previousData) {
           if (data !== undefined) queryClient.setQueryData(key, data);
@@ -452,7 +406,7 @@ export function useDeleteNotification() {
       queryClient.setQueriesData<{ data: AppNotification[]; total?: number; page_size?: number } | AppNotification[]>(
         { queryKey: ["notifications"] },
         (old) => {
-          if (!isNotificationData(old)) return old;
+          if (!old) return old;
           if (Array.isArray(old)) {
             return old.filter((n: AppNotification) => n.id !== id);
           }
@@ -474,17 +428,8 @@ export function useDeleteNotification() {
 
       return { previousData, prevUnread };
     },
-    onSuccess: () => {
-      notify.success("Notification deleted");
-    },
-    onError: (err, id, context) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      notify.error("Couldn't delete notification", msg, {
-        action: {
-          label: "Retry",
-          onClick: () => queryClient.invalidateQueries({ queryKey: NOTIF_KEYS.detail(id) }),
-        },
-      });
+    onError: (_err, _id, context) => {
+      toast.error("Failed to delete notification");
       if (context?.previousData) {
         for (const [key, data] of context.previousData) {
           if (data !== undefined) queryClient.setQueryData(key, data);

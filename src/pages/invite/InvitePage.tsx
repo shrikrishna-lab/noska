@@ -37,16 +37,22 @@ export function InvitePage() {
     setError(null);
     setLoadingProvider(provider);
     setIsConnecting(true);
+    if (!signIn) {
+      setError("Authentication not ready. Please try again.");
+      setLoadingProvider(null);
+      setIsConnecting(false);
+      return;
+    }
     try {
-      if (!signIn) return;
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      await signIn.sso({
+      const { error } = await signIn.sso({
         strategy,
-        redirectUrl: `${window.location.origin}/sso-callback`,
+        redirectUrl: `${window.location.origin}/dashboard`,
         redirectCallbackUrl: `${window.location.origin}/sso-callback`,
       });
-    } catch (e) {
-      setError((e as Error).message || "Failed to sign up. Please try again.");
+      if (error) throw error;
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to sign up. Please try again.");
       setLoadingProvider(null);
       setIsConnecting(false);
     }

@@ -19,7 +19,7 @@ const columns: Column<ModelDisplay>[] = [
 
 export function Models() {
   const { data: aiEvents, isLoading } = useAiUsageFromAudit();
-  useRealtimeInvalidate(["admin", "models"], "audit_events");
+  useRealtimeInvalidate(["admin", "models"], "audit_logs");
 
   if (isLoading) return <div className="p-6"><PageHeader title="Models" description="AI model usage and performance" /><LoadingState count={3} /></div>;
 

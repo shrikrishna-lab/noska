@@ -34,7 +34,7 @@ export function AuthCallbackScreen() {
   const [dots, setDots] = useState("");
   const mountedRef = useRef(true);
   const processedRef = useRef(false);
-  const callbackHandledRef = useRef(false);
+const callbackStartedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -49,35 +49,42 @@ export function AuthCallbackScreen() {
   }, []);
 
   useEffect(() => {
+    if (!isLoaded || window.location.pathname !== "/sso-callback" || callbackStartedRef.current) return;
+    callbackStartedRef.current = true;
+    clerk.handleRedirectCallback({}).catch((error) => {
+      if (!mountedRef.current) return;
+      setStage("error");
+      setErrorMessage(error instanceof Error ? error.message : "Authentication failed. Please try again.");
+    });
+  }, [clerk, isLoaded]);
+
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
     if (!isLoaded) return;
     if (processedRef.current) return;
 
-    const hasCallbackParams = window.location.href.includes("__clerk_status") ||
-      window.location.search.includes("code=") ||
-      window.location.search.includes("state=");
+    const isCallbackRoute = window.location.pathname === "/sso-callback";
 
-    if (!isSignedIn && !hasCallbackParams) {
+    if (!isSignedIn) {
+      if (isCallbackRoute) {
+        timeoutRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
+          setStage("error");
+          setErrorMessage("Sign-in timed out. Please try again.");
+        }, 15000);
+        return;
+      }
       navigate("/login", { replace: true });
       return;
     }
 
-    // Complete the OAuth exchange before waiting for Clerk's reactive
-    // `isSignedIn` state. Without this call the callback page remains on
-    // "Completing sign-in" indefinitely because the URL params are never
-    // exchanged for a Clerk session.
-    if (!isSignedIn && hasCallbackParams && !callbackHandledRef.current) {
-      callbackHandledRef.current = true;
-      clerk.handleRedirectCallback({}, async () => {}).catch((e) => {
-        callbackHandledRef.current = false;
-        if (mountedRef.current) {
-          setStage("error");
-          setErrorMessage(e instanceof Error ? e.message : "Authentication failed. Please try again.");
-        }
-      });
-      return;
+if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
 
-    if (!isSignedIn || !user) return;
+    if (!user) return;
 
     processedRef.current = true;
 
@@ -136,17 +143,24 @@ export function AuthCallbackScreen() {
 
         await new Promise((r) => setTimeout(r, 600));
 
+        const go = (path: string) => {
+          if (window.opener) {
+            window.close();
+          } else {
+            navigate(path, { replace: true });
+          }
+        };
         if (accessStatus === "approved") {
           // Never send a completed sign-in back to /login. Route returning
           // users directly into their workspace and new users into onboarding.
           const workspaceSlug = existingProfile?.onboarding_complete
             ? slugifyWorkspaceName(existingProfile.workspace_name || `${uname}'s Workspace`)
             : null;
-          navigate(workspaceSlug ? `/${workspaceSlug}` : "/onboarding", { replace: true });
+          go(workspaceSlug ? `/${workspaceSlug}` : "/onboarding");
         } else if (accessStatus === "banned") {
-          navigate("/banned", { replace: true });
+          go("/banned");
         } else {
-          navigate("/waitlist", { replace: true });
+          go("/waitlist");
         }
       } catch (e) {
         if (!mountedRef.current) return;

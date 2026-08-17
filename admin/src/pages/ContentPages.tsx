@@ -17,10 +17,10 @@ interface PageDisplay {
 
 const columns: Column<PageDisplay>[] = [
   { key: "title", label: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title || "Untitled"}</span> },
-  { key: "user_id", label: "User ID", sortable: true, className: "text-muted-foreground text-xs max-w-[120px] truncate hidden md:table-cell" },
-  { key: "created_at", label: "Created", sortable: true, render: (row) => row.created_at ? formatRelativeTime(row.created_at) : "—" },
-  { key: "updated_at", label: "Updated", sortable: true, render: (row) => row.updated_at ? formatRelativeTime(row.updated_at) : "—" },
-  { key: "trashed", label: "Status", sortable: true, render: (row) => row.trashed ? <Badge variant="destructive">Trashed</Badge> : <Badge variant="success">Active</Badge> },
+  { key: "user_id", label: "User ID", sortable: true, className: "w-[120px] text-muted-foreground text-xs truncate hidden md:table-cell" },
+  { key: "created_at", label: "Created", sortable: true, className: "w-[110px]", render: (row) => row.created_at ? formatRelativeTime(row.created_at) : "—" },
+  { key: "updated_at", label: "Updated", sortable: true, className: "w-[110px]", render: (row) => row.updated_at ? formatRelativeTime(row.updated_at) : "—" },
+  { key: "trashed", label: "Status", sortable: true, className: "w-[90px]", render: (row) => row.trashed ? <Badge variant="destructive">Trashed</Badge> : <Badge variant="success">Active</Badge> },
 ];
 
 export function ContentPages() {

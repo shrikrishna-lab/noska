@@ -1,36 +1,30 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js";
+import { crypto } from "jsr:@std/crypto";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const WEBHOOK_API_KEY = Deno.env.get("WEBHOOK_API_KEY");
+if (!WEBHOOK_API_KEY) {
+  console.error("FATAL: WEBHOOK_API_KEY environment variable is not configured. Webhook receiver will not start.");
+}
+
+async function hmacSha256(secret: string, payload: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  )
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))
+  const hex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("")
+  return hex
+}
+
 const ALLOWED_METHODS = ["POST", "PUT", "PATCH"];
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 10;
-const requestLog = new Map<string, { count: number; windowStart: number }>();
-
-async function hmacSha256(secret: string, data: string): Promise<string> {
-  const key = new TextEncoder().encode(secret);
-  const msg = new TextEncoder().encode(data);
-  const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = await crypto.subtle.sign("HMAC", cryptoKey, msg);
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const entry = requestLog.get(key);
-  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
-    requestLog.set(key, { count: 1, windowStart: now });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count++;
-  return true;
-}
 
 Deno.serve(async (req: Request) => {
   if (!ALLOWED_METHODS.includes(req.method)) {
@@ -40,16 +34,25 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const path = new URL(req.url).pathname;
-  const endpointName = path.split("/").pop() ?? "unknown";
-  const startTime = Date.now();
-
-  if (!checkRateLimit(endpointName)) {
-    return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
-      status: 429,
+  if (!WEBHOOK_API_KEY) {
+    return new Response(JSON.stringify({ error: "Server configuration error: WEBHOOK_API_KEY not set" }), {
+      status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!bearerToken || bearerToken !== WEBHOOK_API_KEY) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const path = new URL(req.url).pathname;
+  const endpointName = path.split("/").pop() ?? "unknown";
+  const startTime = Date.now();
 
   let body: unknown;
   try {
@@ -96,22 +99,19 @@ Deno.serve(async (req: Request) => {
   let responseBody = "";
   let errorMsg: string | null = null;
 
-  const bodyStr = JSON.stringify(body);
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "X-Webhook-ID": deliveryId,
-    "X-Webhook-Event": event,
-  };
-
-  if (endpoint.secret) {
-    headers["X-Webhook-Signature-256"] = await hmacSha256(endpoint.secret, bodyStr);
-  }
-
   try {
+    const rawBody = JSON.stringify(body)
+    const signature = endpoint.secret ? await hmacSha256(endpoint.secret, rawBody) : ""
+
     const response = await fetch(endpoint.url, {
       method: "POST",
-      headers,
-      body: bodyStr,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Webhook-ID": deliveryId,
+        "X-Webhook-Event": event,
+        ...(endpoint.secret ? { "X-Webhook-Signature": signature } : {}),
+      },
+      body: rawBody,
     });
     responseStatus = response.status;
     responseBody = await response.text();

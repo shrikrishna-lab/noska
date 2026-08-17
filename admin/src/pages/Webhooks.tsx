@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useWebhookEndpoints, useWebhookDeliveries, useCreateWebhookEndpoint, useUpdateWebhookStatus, useDeleteWebhookEndpoint, useRealtimeInvalidate } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,6 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatRelativeTime } from "@/lib/utils";
 import toast from "react-hot-toast";
-import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 
 const STATUS_COLORS: Record<string, string> = {
   active: "bg-green-500/10 text-green-600 border-green-200",
@@ -38,7 +37,6 @@ const EVENT_OPTIONS = [
 ];
 
 export function Webhooks() {
-  const { confirm } = useConfirmDialog();
   const { data: endpoints, isLoading } = useWebhookEndpoints();
   const { data: deliveries } = useWebhookDeliveries();
   const createEndpoint = useCreateWebhookEndpoint();
@@ -166,7 +164,7 @@ export function Webhooks() {
                       }}><Play className="h-4 w-4" /></Button>
                     )}
                     <Button variant="ghost" size="icon" className="text-destructive" onClick={async () => {
-                      if (await confirm({ title: "Delete Webhook", description: "Permanently delete this webhook endpoint? This cannot be undone.", variant: "delete", confirmText: "Delete" })) {
+                      if (confirm("Delete this webhook endpoint?")) {
                         await deleteEndpoint.mutateAsync(ep.id);
                         toast.success("Webhook deleted");
                       }

@@ -91,10 +91,15 @@
 | SocialLinks.tsx try/catch | ⚠ Uses mutation cache error handler |
 
 ## 10. Known Security Gaps (accepted risk)
-1. **🟡** `unsafe-inline` in CSP — requires `vite-plugin-csp` build-time nonce pipeline to fix
-2. **🟡** Admin edge function `send-email` uses `quote_ident()` for table/column names — SQL injection surface if payload format changes
-3. **🟡** Secret scanning, code scanning, push protection — all require GitHub Advanced Security (paid plan)
-4. **🟡** Duplicate CSP in `admin/index.html` meta tag and `vercel.json` headers — needs dedup
-5. **🟡** Admin API CORS sets `Access-Control-Allow-Origin: *` — should restrict to admin domain
-6. **🟡** `admin-api/lib/auth.ts` does not enforce minimum role check (unlike `monitoring-utils/auth.ts`) — delegates to caller
-7. **🟡** Rate limiter in `webhook-receiver` is in-memory only (per edge function instance) — resets on cold start
+1. **🔴** `CLERK_SECRET_KEY` committed in `.env` — revoke and rotate immediately
+2. **🔴** `send-email` edge function passes `admin_token` in body — migrate to `Authorization: Bearer` header
+3. **🟡** No rate limiting on email sending
+4. **🟡** Webhook receiver sends raw secret in header instead of HMAC
+5. **🟢** Main-app CSP does not permit Clerk-hosted authentication frames; the admin app has a separate non-Clerk authentication flow.
+6. **🟡** `unsafe-inline` in CSP — requires `vite-plugin-csp` build-time nonce pipeline to fix
+7. **🟡** Admin edge function `send-email` uses `quote_ident()` for table/column names — SQL injection surface if payload format changes
+8. **🟡** Secret scanning, code scanning, push protection — all require GitHub Advanced Security (paid plan)
+9. **🟡** Duplicate CSP in `admin/index.html` meta tag and `vercel.json` headers — needs dedup
+10. **🟡** Admin API CORS sets `Access-Control-Allow-Origin: *` — should restrict to admin domain
+11. **🟡** `admin-api/lib/auth.ts` does not enforce minimum role check (unlike `monitoring-utils/auth.ts`) — delegates to caller
+12. **🟡** Rate limiter in `webhook-receiver` is in-memory only (per edge function instance) — resets on cold start
