@@ -46,27 +46,46 @@ export function useOverviewMetrics() {
   return useQuery({
     queryKey: ["monitoring", "overview"],
     queryFn: async () => {
+      const supabaseOk = isSupabaseAvailable();
       const out: OverviewMetrics = {
-        systemStatus: "healthy", usersOnline: 0, todayUsers: 0,
+        systemStatus: "degraded", usersOnline: 0, todayUsers: 0,
         workspaces: 0, pages: 0, aiRequests: 0,
         errorsToday: 0, errorsCritical: 0, errorsHigh: 0, errorsMedium: 0, errorsLow: 0,
-        emailsDelivered: 0, avgApiResponse: 0, storageUsed: "0 B",
-        databaseStatus: "healthy", currentVersion: APP_VERSION,
-        environment: "production", realtimeStatus: "connected",
-        supabaseStatus: "operational", clerkStatus: "operational",
-        resendStatus: "operational", sentryStatus: "operational", posthogStatus: "operational",
+        emailsDelivered: 0, avgApiResponse: 0, storageUsed: "—",
+        databaseStatus: "degraded", currentVersion: APP_VERSION,
+        environment: "production", realtimeStatus: "disconnected",
+        supabaseStatus: "unknown", clerkStatus: "unknown",
+        resendStatus: "unknown", sentryStatus: "unknown", posthogStatus: "unknown",
       };
 
       const results = await Promise.allSettled([
-        isSupabaseAvailable()
-          ? (async () => { try { const r = await supabase!.rpc("get_total_users_count"); if (!r.error) out.usersOnline = Number(r.data) || out.usersOnline; } catch {} })()
-          : Promise.resolve(),
-        isSupabaseAvailable()
-          ? (async () => { try { const r = await supabase!.from("workspaces").select("id", { count: "exact", head: true }); out.workspaces = r.count ?? 0; } catch {} })()
-          : Promise.resolve(),
-        isSupabaseAvailable()
-          ? (async () => { try { const r = await supabase!.from("pages").select("id", { count: "exact", head: true }); out.pages = r.count ?? 0; } catch {} })()
-          : Promise.resolve(),
+        (async () => {
+          if (!supabaseOk) return;
+          const token = getAdminToken();
+          if (!token) return;
+          try { const r = await supabase!.rpc("admin_count", { p_session_token: token, p_table: "user_profiles" }); if (!r.error) out.usersOnline = Number(r.data) || 0; } catch {}
+        })(),
+        (async () => {
+          if (!supabaseOk) return;
+          const token = getAdminToken();
+          if (!token) return;
+          try { const r = await supabase!.rpc("admin_count", { p_session_token: token, p_table: "workspaces" }); if (!r.error) out.workspaces = Number(r.data) || 0; } catch {}
+        })(),
+        (async () => {
+          if (!supabaseOk) return;
+          const token = getAdminToken();
+          if (!token) return;
+          try { const r = await supabase!.rpc("admin_count", { p_session_token: token, p_table: "pages" }); if (!r.error) out.pages = Number(r.data) || 0; } catch {}
+        })(),
+        (async () => {
+          if (!supabaseOk) return;
+          try {
+            const token = getAdminToken();
+            if (!token) return;
+            const { data, error } = await supabase!.rpc("get_ai_events_today_count", { p_session_token: token });
+            if (!error) out.aiRequests = Number(data) || 0;
+          } catch {}
+        })(),
         sentry.issueCounts().then((r) => {
           out.errorsToday = r.total ?? 0;
           out.errorsCritical = r.fatal ?? 0;
@@ -101,24 +120,58 @@ export function useOverviewMetrics() {
         }),
       ]);
 
-      if (isSupabaseAvailable()) {
+      if (supabaseOk) {
         try {
-          const { data: sessions } = await supabase!.from("collaboration_sessions")
-            .select("started_at, last_activity")
-            .not("last_activity", "is", null)
-            .limit(100);
-          if (sessions && sessions.length > 0) {
-            const durations = sessions
-              .map((r: Record<string, unknown>) => new Date(String(r.last_activity)).getTime() - new Date(String(r.started_at)).getTime())
-              .filter((d: number) => d > 0 && d < 3600000);
-            if (durations.length > 0) {
-              out.avgApiResponse = Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length / 10);
+          const token = getAdminToken();
+          if (token) {
+            const { data: sessions } = await supabase!.rpc("admin_select", {
+              p_session_token: token, p_table: "collaboration_sessions",
+              p_select: "started_at, last_activity", p_limit: 500,
+            });
+            const rows = (sessions ?? []) as Array<Record<string, unknown>>;
+            if (rows.length > 0) {
+              const durations = rows
+                .map((r) => new Date(String(r.last_activity ?? "")).getTime() - new Date(String(r.started_at ?? "")).getTime())
+                .filter((d: number) => Number.isFinite(d) && d > 0 && d < 3600000);
+              if (durations.length > 0) {
+                out.avgApiResponse = Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length / 10);
+              }
             }
           }
         } catch {}
       }
-      if (out.supabaseStatus === "operational" && out.usersOnline === 0) {
-        out.supabaseStatus = "unknown";
+      if (supabaseOk) {
+        try {
+          const token = getAdminToken();
+          if (token) {
+            const [w, p, c] = await Promise.all([
+              supabase!.rpc("admin_count", { p_session_token: token, p_table: "workspaces" }),
+              supabase!.rpc("admin_count", { p_session_token: token, p_table: "pages" }),
+              supabase!.rpc("admin_count", { p_session_token: token, p_table: "ai_chats" }),
+            ]);
+            const rows = (Number(w.data) || 0) + (Number(p.data) || 0) + (Number(c.data) || 0);
+            out.storageUsed = rows > 0 ? `${(rows * 0.002).toFixed(1)} MB` : "0 MB";
+          }
+        } catch {}
+      }
+      if (supabaseOk) {
+        out.supabaseStatus = "operational";
+        out.databaseStatus = "healthy";
+        out.realtimeStatus = "connected";
+      } else {
+        out.databaseStatus = "degraded";
+        out.realtimeStatus = "disconnected";
+      }
+
+      const serviceStatuses = [
+        out.supabaseStatus, out.clerkStatus, out.resendStatus, out.sentryStatus, out.posthogStatus,
+      ];
+      if (serviceStatuses.some((s) => s === "outage")) {
+        out.systemStatus = "critical";
+      } else if (serviceStatuses.some((s) => s === "degraded")) {
+        out.systemStatus = "degraded";
+      } else if (serviceStatuses.every((s) => s === "operational")) {
+        out.systemStatus = "healthy";
       }
 
       return out;
@@ -158,24 +211,36 @@ export function usePerformanceMetrics() {
         (async () => {
           if (isSupabaseAvailable()) {
             try {
-              const { count } = await supabase!.from("collaboration_sessions")
-                .select("id", { count: "exact", head: true })
-                .gte("last_activity", new Date(Date.now() - 300000).toISOString());
-              out.realtimeConnections = count ?? 0;
+              const token = getAdminToken();
+              if (!token) return;
+              const { data } = await supabase!.rpc("admin_select", {
+                p_session_token: token, p_table: "collaboration_sessions",
+                p_select: "started_at, last_activity", p_limit: 500,
+              });
+              const rows = (data ?? []) as Array<Record<string, unknown>>;
+              const since = Date.now() - 300000;
+              const active = rows.filter((r) => {
+                const t = new Date(String(r.last_activity ?? "")).getTime();
+                return Number.isFinite(t) && t >= since;
+              });
+              out.realtimeConnections = active.length;
             } catch {}
           }
         })(),
         (async () => {
           if (isSupabaseAvailable()) {
             try {
-              const { data } = await supabase!.from("collaboration_sessions")
-                .select("started_at, last_activity")
-                .not("last_activity", "is", null)
-                .limit(500);
-              if (data && data.length > 0) {
-                const durations = data
-                  .map((r: Record<string, unknown>) => new Date(String(r.last_activity)).getTime() - new Date(String(r.started_at)).getTime())
-                  .filter((d: number) => d > 0 && d < 3600000);
+              const token = getAdminToken();
+              if (!token) return;
+              const { data } = await supabase!.rpc("admin_select", {
+                p_session_token: token, p_table: "collaboration_sessions",
+                p_select: "started_at, last_activity", p_limit: 500,
+              });
+              const rows = (data ?? []) as Array<Record<string, unknown>>;
+              if (rows.length > 0) {
+                const durations = rows
+                  .map((r) => new Date(String(r.last_activity ?? "")).getTime() - new Date(String(r.started_at ?? "")).getTime())
+                  .filter((d: number) => Number.isFinite(d) && d > 0 && d < 3600000);
                 if (durations.length > 0) {
                   const avg = Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length);
                   out.avgApiTime = Math.round(avg / 10);
@@ -193,19 +258,28 @@ export function usePerformanceMetrics() {
         (async () => {
           if (isSupabaseAvailable()) {
             try {
-              const { count } = await supabase!.from("page_versions")
-                .select("id", { count: "exact", head: true })
-                .gte("created_at", new Date(Date.now() - 86400000).toISOString());
-              out.slowQueries = count ?? 0;
+              const token = getAdminToken();
+              if (!token) return;
+              const { data } = await supabase!.rpc("admin_select", {
+                p_session_token: token, p_table: "page_versions",
+                p_select: "created_at", p_limit: 2000,
+              });
+              const rows = (data ?? []) as Array<Record<string, unknown>>;
+              const since = Date.now() - 86400000;
+              out.slowQueries = rows.filter((r) => {
+                const t = new Date(String(r.created_at ?? "")).getTime();
+                return Number.isFinite(t) && t >= since;
+              }).length;
             } catch {}
           }
         })(),
         (async () => {
           if (isSupabaseAvailable()) {
             try {
-              const { count } = await supabase!.from("pages")
-                .select("id", { count: "exact", head: true });
-              out.slowPages = count ?? 0;
+              const token = getAdminToken();
+              if (!token) return;
+              const { data } = await supabase!.rpc("admin_count", { p_session_token: token, p_table: "pages" });
+              out.slowPages = Number(data) || 0;
             } catch {}
           }
         })(),
@@ -254,19 +328,22 @@ export function usePerformanceHistory(range: "1h" | "24h" | "7d") {
       const points: PerformancePoint[] = [];
       if (isSupabaseAvailable()) {
         try {
+          const token = getAdminToken();
+          if (!token) return points;
           const since = range === "1h" ? new Date(Date.now() - 3600000).toISOString()
             : range === "24h" ? new Date(Date.now() - 86400000).toISOString()
             : new Date(Date.now() - 604800000).toISOString();
-          const { data } = await supabase!.from("page_versions")
-            .select("created_at")
-            .gte("created_at", since)
-            .order("created_at", { ascending: true })
-            .limit(2000);
-          if (data && data.length > 0) {
+          const { data } = await supabase!.rpc("admin_select", {
+            p_session_token: token, p_table: "page_versions",
+            p_select: "created_at", p_order_col: "created_at", p_order_dir: "asc", p_limit: 2000,
+          });
+          const rows = (data ?? []) as Array<Record<string, unknown>>;
+          if (rows.length > 0) {
             const bucketMs = range === "1h" ? 60000 : range === "24h" ? 300000 : 3600000;
             const buckets = new Map<number, number>();
-            for (const row of data) {
+            for (const row of rows) {
               const ts = new Date(String(row.created_at)).getTime();
+              if (!Number.isFinite(ts)) continue;
               const bucket = Math.floor(ts / bucketMs) * bucketMs;
               buckets.set(bucket, (buckets.get(bucket) || 0) + 1);
             }
@@ -305,16 +382,23 @@ export function useSessionData() {
         (async () => {
           if (isSupabaseAvailable()) {
             try {
-              const yesterday = new Date(Date.now() - 86400000).toISOString();
-              const { data } = await supabase!.from("collaboration_sessions")
-                .select("started_at, last_activity")
-                .gte("started_at", yesterday)
-                .limit(500);
-              if (data) {
-                out.todaySessions = data.length;
-                const durations = data
-                  .map((r: Record<string, unknown>) => new Date(String(r.last_activity)).getTime() - new Date(String(r.started_at)).getTime())
-                  .filter((d: number) => d > 0 && d < 86400000);
+              const token = getAdminToken();
+              if (!token) return;
+              const { data } = await supabase!.rpc("admin_select", {
+                p_session_token: token, p_table: "collaboration_sessions",
+                p_select: "started_at, last_activity", p_limit: 500,
+              });
+              const rows = (data ?? []) as Array<Record<string, unknown>>;
+              const yesterday = Date.now() - 86400000;
+              const recent = rows.filter((r) => {
+                const t = new Date(String(r.started_at ?? "")).getTime();
+                return Number.isFinite(t) && t >= yesterday;
+              });
+              if (rows.length > 0) {
+                out.todaySessions = recent.length;
+                const durations = rows
+                  .map((r) => new Date(String(r.last_activity ?? "")).getTime() - new Date(String(r.started_at ?? "")).getTime())
+                  .filter((d: number) => Number.isFinite(d) && d > 0 && d < 86400000);
                 if (durations.length > 0) {
                   out.avgSessionDuration = Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length / 1000);
                   const bounced = durations.filter((d: number) => d < 30000).length;
@@ -327,25 +411,31 @@ export function useSessionData() {
         (async () => {
           if (isSupabaseAvailable()) {
             try {
-              const twoDaysAgo = new Date(Date.now() - 172800000).toISOString();
-              const yesterday = new Date(Date.now() - 86400000).toISOString();
-              const { data } = await supabase!.from("collaboration_sessions")
-                .select("user_id")
-                .lt("started_at", yesterday)
-                .gte("started_at", twoDaysAgo)
-                .limit(500);
-              if (data && data.length > 0) {
-                const previousUsers = new Set(data.map((r: Record<string, unknown>) => String(r.user_id)));
+              const token = getAdminToken();
+              if (!token) return;
+              const twoDaysAgo = Date.now() - 172800000;
+              const yesterday = Date.now() - 86400000;
+              const { data } = await supabase!.rpc("admin_select", {
+                p_session_token: token, p_table: "collaboration_sessions",
+                p_select: "user_id, started_at", p_limit: 1000,
+              });
+              const rows = (data ?? []) as Array<Record<string, unknown>>;
+              if (rows.length > 0) {
+                const previousUsers = new Set(
+                  rows.filter((r) => {
+                    const t = new Date(String(r.started_at ?? "")).getTime();
+                    return Number.isFinite(t) && t >= twoDaysAgo && t < yesterday;
+                  }).map((r) => String(r.user_id ?? ""))
+                );
                 if (previousUsers.size > 0) {
-                  const { data: current } = await supabase!.from("collaboration_sessions")
-                    .select("user_id")
-                    .gte("started_at", yesterday)
-                    .limit(500);
-                  if (current) {
-                    const currentUsers = new Set(current.map((r: Record<string, unknown>) => String(r.user_id)));
-                    const returned = [...previousUsers].filter((u) => currentUsers.has(u)).length;
-                    out.retention = Math.round((returned / previousUsers.size) * 100);
-                  }
+                  const currentUsers = new Set(
+                    rows.filter((r) => {
+                      const t = new Date(String(r.started_at ?? "")).getTime();
+                      return Number.isFinite(t) && t >= yesterday;
+                    }).map((r) => String(r.user_id ?? ""))
+                  );
+                  const returned = [...previousUsers].filter((u) => u && currentUsers.has(u)).length;
+                  out.retention = Math.round((returned / previousUsers.size) * 100);
                 }
               }
             } catch {}
@@ -354,16 +444,27 @@ export function useSessionData() {
         (async () => {
           if (isSupabaseAvailable()) {
             try {
-              const { data } = await supabase!.from("pages")
-                .select("title, updated_at")
-                .order("updated_at", { ascending: false })
-                .limit(6);
-              if (data) {
-                out.topPages = data.map((p: Record<string, unknown>, i: number) => {
+              const token = getAdminToken();
+              if (!token) return;
+              const { data: sessions } = await supabase!.rpc("admin_select", {
+                p_session_token: token, p_table: "collaboration_sessions",
+                p_select: "page_id", p_limit: 2000,
+              });
+              const counts = new Map<string, number>();
+              for (const row of (sessions ?? []) as Array<Record<string, unknown>>) {
+                const pid = String(row.page_id ?? "");
+                if (pid) counts.set(pid, (counts.get(pid) || 0) + 1);
+              }
+              const { data: pages } = await supabase!.rpc("admin_select", {
+                p_session_token: token, p_table: "pages",
+                p_select: "id, title", p_limit: 6,
+              });
+              if (Array.isArray(pages)) {
+                out.topPages = (pages as Array<Record<string, unknown>>).map((p, i) => {
                   const title = String(p.title ?? "");
                   const path = title ? "/" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "/page-" + i;
-                  return { path, views: 0 };
-                });
+                  return { path, views: counts.get(String(p.id)) || 0 };
+                }).sort((a, b) => b.views - a.views);
               }
             } catch {}
           }
@@ -474,9 +575,14 @@ export function useServiceStatuses() {
         (async () => {
           startTimes["Supabase"] = Date.now();
           if (isSupabaseAvailable()) {
-            const r = await supabase!.from("workspaces").select("id", { count: "exact", head: true });
-            const latency = Date.now() - startTimes["Supabase"];
-            services[1] = { ...services[1], status: "operational", latency, health: Math.max(90, 100 - Math.round(latency / 10)), version: "—", lastIncident: null };
+            const token = getAdminToken();
+            if (token) {
+              const r = await supabase!.rpc("admin_count", { p_session_token: token, p_table: "workspaces" });
+              const latency = Date.now() - startTimes["Supabase"];
+              if (!r.error) {
+                services[1] = { ...services[1], status: "operational", latency, health: Math.max(90, 100 - Math.round(latency / 10)), version: "—", lastIncident: null };
+              }
+            }
           }
         })(),
         (async () => {
@@ -549,7 +655,7 @@ export function useRecentEmails() {
         to: e.to,
         subject: e.subject,
         status: e.status,
-        sentAt: e.sentAt,
+        sentAt: e.createdAt ?? e.sentAt,
       })) as RecentEmail[];
     },
     staleTime: 30000,
@@ -594,16 +700,20 @@ export function useDeployments() {
     queryKey: ["monitoring", "deployments"],
     queryFn: async () => {
       const data = await vercel.deployments("20");
-      return data.map((d) => ({
-        id: String(d.id ?? ""),
-        version: String(d.version ?? "unknown"),
-        commitSha: String(d.commitSha ?? ""),
-        branch: String(d.branch ?? "unknown"),
-        status: (d.status as Deployment["status"]) ?? "unknown",
-        deployedAt: String(d.deployedAt ?? new Date().toISOString()),
-        previousDeployments: Number(d.previousDeployments ?? 0),
-        rollbackAvailable: Boolean(d.rollbackAvailable ?? false),
-      })) as Deployment[];
+      return data.map((d) => {
+        const meta = (d.meta ?? {}) as Record<string, unknown>;
+        const commitSha = String(meta.githubCommitSha ?? d.commitSha ?? "");
+        return {
+          id: String(d.id ?? ""),
+          version: String(meta.githubCommitSha ?? d.version ?? "unknown").slice(0, 7),
+          commitSha,
+          branch: String(meta.githubCommitRef ?? d.branch ?? "main"),
+          status: (d.status as Deployment["status"]) ?? "unknown",
+          deployedAt: String(d.readyAt ?? d.createdAt ?? d.deployedAt ?? new Date().toISOString()),
+          previousDeployments: Number(d.previousDeployments ?? 0),
+          rollbackAvailable: Boolean(d.rollbackAvailable ?? false),
+        };
+      }) as Deployment[];
     },
     refetchInterval: 60000,
     staleTime: 30000,
@@ -617,34 +727,53 @@ export function useLogEntries(filters?: { level?: string; source?: string; searc
     queryKey: ["monitoring", "logs", filters],
     queryFn: async () => {
       if (!isSupabaseAvailable()) return [] as LogEntry[];
+      const token = getAdminToken();
+      if (!token) return [] as LogEntry[];
 
-      let query = supabase!
-        .from("audit_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (filters?.level && filters.level !== "all") {
-        query = query.eq("level", filters.level);
-      }
-      if (filters?.source && filters.source !== "all") {
-        query = query.eq("source", filters.source);
-      }
-      if (filters?.search) {
-        query = query.or(`message.ilike.%${filters.search}%,source.ilike.%${filters.search}%`);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase!.rpc("admin_select", {
+        p_session_token: token,
+        p_table: "audit_events",
+        p_select: "id, action, user_name, detail, block_type, page_id, created_at",
+        p_order_col: "created_at",
+        p_order_dir: "desc",
+        p_limit: 200,
+      });
       if (error) throw error;
 
-      return (data ?? []).map((row: Record<string, unknown>) => ({
-        id: String(row.id ?? ""),
-        timestamp: String(row.created_at ?? new Date().toISOString()),
-        level: (row.level as LogEntry["level"]) ?? "info",
-        source: (row.source as LogEntry["source"]) ?? "application",
-        message: String(row.message ?? ""),
-        detail: row.detail ? String(row.detail) : undefined,
-      })) as LogEntry[];
+      const rows = (data ?? []) as Array<Record<string, unknown>>;
+      const ERROR_ACTIONS = new Set(["delete", "trashed"]);
+      const WARN_ACTIONS = new Set(["ai_generated"]);
+      const search = (filters?.search ?? "").toLowerCase();
+
+      return rows
+        .filter((row) => {
+          const action = String(row.action ?? "");
+          const message = `${action} ${String(row.block_type ?? "").trim()}`.trim();
+          if (filters?.level && filters.level !== "all") {
+            const level = ERROR_ACTIONS.has(action) ? "error" : WARN_ACTIONS.has(action) ? "warn" : "info";
+            if (level !== filters.level) return false;
+          }
+          if (search) {
+            const hay = `${action} ${String(row.user_name ?? "")} ${String(row.detail ?? "")} ${String(row.block_type ?? "")}`.toLowerCase();
+            if (!hay.includes(search)) return false;
+          }
+          return true;
+        })
+        .slice(0, 50)
+        .map((row) => {
+          const action = String(row.action ?? "");
+          const blockType = String(row.block_type ?? "").trim();
+          const user = String(row.user_name ?? "");
+          const level: LogEntry["level"] = ERROR_ACTIONS.has(action) ? "error" : WARN_ACTIONS.has(action) ? "warn" : "info";
+          return {
+            id: String(row.id ?? ""),
+            timestamp: String(row.created_at ?? new Date().toISOString()),
+            level,
+            source: "audit" as const,
+            message: blockType ? `${action} ${blockType}` : action,
+            detail: user ? `${user}${row.detail ? ` · ${row.detail}` : ""}` : (row.detail ? String(row.detail) : undefined),
+          } as LogEntry;
+        });
     },
     staleTime: 10000,
     refetchInterval: 15000,

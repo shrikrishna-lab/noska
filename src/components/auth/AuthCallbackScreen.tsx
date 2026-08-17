@@ -7,6 +7,7 @@ import { upsertUserProfile, fetchUserProfile } from "../../lib/supabaseService";
 import { capture, identifyUser } from "../../lib/posthog";
 import { setSentryUser } from "../../lib/sentry";
 import AuthBackground from "./AuthBackground";
+import { slugifyWorkspaceName } from "../../utils/helpers";
 
 type Stage = "signing_in" | "syncing" | "checking" | "redirecting" | "error";
 
@@ -33,6 +34,7 @@ export function AuthCallbackScreen() {
   const [dots, setDots] = useState("");
   const mountedRef = useRef(true);
   const processedRef = useRef(false);
+  const callbackHandledRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -56,6 +58,22 @@ export function AuthCallbackScreen() {
 
     if (!isSignedIn && !hasCallbackParams) {
       navigate("/login", { replace: true });
+      return;
+    }
+
+    // Complete the OAuth exchange before waiting for Clerk's reactive
+    // `isSignedIn` state. Without this call the callback page remains on
+    // "Completing sign-in" indefinitely because the URL params are never
+    // exchanged for a Clerk session.
+    if (!isSignedIn && hasCallbackParams && !callbackHandledRef.current) {
+      callbackHandledRef.current = true;
+      clerk.handleRedirectCallback({}, async () => {}).catch((e) => {
+        callbackHandledRef.current = false;
+        if (mountedRef.current) {
+          setStage("error");
+          setErrorMessage(e instanceof Error ? e.message : "Authentication failed. Please try again.");
+        }
+      });
       return;
     }
 
@@ -108,20 +126,9 @@ export function AuthCallbackScreen() {
           }
         } catch {}
 
-        if (accessStatus !== "banned") {
-          try {
-            const { data: approved } = await supabaseAnon
-              .from("approved_emails")
-              .select("id")
-              .eq("email", email.toLowerCase())
-              .maybeSingle();
-            if (!approved) {
-              accessStatus = "waiting";
-            }
-          } catch {
-            accessStatus = "approved";
-          }
-        }
+        // Waitlist membership is a separate marketing workflow. It must not
+        // block a successful application sign-in; new users should continue
+        // into Noska's own onboarding UI. Only an explicit ban blocks access.
 
         setStage("redirecting");
 
@@ -130,7 +137,12 @@ export function AuthCallbackScreen() {
         await new Promise((r) => setTimeout(r, 600));
 
         if (accessStatus === "approved") {
-          navigate("/login", { replace: true });
+          // Never send a completed sign-in back to /login. Route returning
+          // users directly into their workspace and new users into onboarding.
+          const workspaceSlug = existingProfile?.onboarding_complete
+            ? slugifyWorkspaceName(existingProfile.workspace_name || `${uname}'s Workspace`)
+            : null;
+          navigate(workspaceSlug ? `/${workspaceSlug}` : "/onboarding", { replace: true });
         } else if (accessStatus === "banned") {
           navigate("/banned", { replace: true });
         } else {

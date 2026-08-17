@@ -5,12 +5,18 @@ import { Header } from "./Header";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { CommandCenterProvider, AdminCommandCenter, useCommandCenter } from "@/components/ui/AdminCommandCenter";
 import { DynamicIslandNotificationProvider } from "@/components/ui/DynamicIslandNotification";
+import { useRealtimeNotificationPopups } from "@/lib/notifications/hooks";
+import { Forbidden } from "@/pages/Forbidden";
+import { requiredRoleForPath } from "@/lib/navigation";
+import { hasRole } from "@/lib/rbac";
+import { useAuth } from "@/lib/auth";
 
 function ShellInner() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
   const { trigger } = useCommandCenter();
 
   useEffect(() => {
@@ -39,7 +45,10 @@ function ShellInner() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setMobileOpen(true)} onSearchOpen={() => setSearchOpen(true)} />
         <main className="flex-1 overflow-y-auto isolate">
-          <Outlet />
+          {(() => {
+            const requiredRole = requiredRoleForPath(location.pathname);
+            return requiredRole && !hasRole(user, requiredRole) ? <Forbidden /> : <Outlet />;
+          })()}
         </main>
       </div>
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -52,9 +61,15 @@ export function Shell() {
   return (
     <DynamicIslandNotificationProvider>
       <CommandCenterProvider>
+        <RealtimePopupsBridge />
         <ShellInner />
       </CommandCenterProvider>
     </DynamicIslandNotificationProvider>
   );
+}
+
+function RealtimePopupsBridge() {
+  useRealtimeNotificationPopups();
+  return null;
 }
 

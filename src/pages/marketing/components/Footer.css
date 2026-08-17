@@ -1,144 +1,484 @@
-.marketing .footer-container {
-  background-color: var(--mkt-bg-primary);
-  border-top: 1px solid var(--mkt-border-color);
-  padding: 60px 0 32px 0;
-  color: var(--mkt-text-secondary);
+/* ==========================================================================
+   ULTRA LIQUID GLASS FOOTER STYLING
+   State-of-the-art Glassmorphic Design for Noska Marketing
+   ========================================================================== */
+
+.marketing .liquid-glass-footer-section {
+  position: relative;
+  width: 100%;
+  padding: 48px 0 56px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  isolation: isolate;
 }
 
-.marketing .footer-content {
-  display: grid;
-  grid-template-columns: 2fr repeat(4, 1fr);
-  gap: 40px;
-  align-items: start;
+.marketing .liquid-glass-footer-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  padding: 0 20px;
+  box-sizing: border-box;
 }
 
-.marketing .footer-brand-col {
+/* Ambient Liquid Light Blooms behind the glass container */
+.marketing .liquid-glass-footer-wrap::before {
+  content: "";
+  position: absolute;
+  top: 15%;
+  left: 10%;
+  width: 45%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(140, 160, 220, 0.15) 0%, rgba(200, 180, 230, 0.08) 50%, transparent 75%);
+  filter: blur(50px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.marketing .liquid-glass-footer-wrap::after {
+  content: "";
+  position: absolute;
+  bottom: 10%;
+  right: 8%;
+  width: 40%;
+  height: 55%;
+  background: radial-gradient(circle, rgba(180, 220, 240, 0.18) 0%, rgba(220, 200, 240, 0.06) 50%, transparent 75%);
+  filter: blur(55px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Outer Specular Double Bezel Shell with Prismatic Edge Highlight */
+.marketing .liquid-glass-shell {
+  position: relative;
+  width: 100%;
+  padding: 2.5px;
+  border-radius: 40px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(230, 232, 240, 0.8) 12%,
+    rgba(195, 200, 215, 0.4) 35%,
+    rgba(160, 165, 185, 0.25) 65%,
+    rgba(220, 225, 240, 0.6) 88%,
+    rgba(255, 255, 255, 0.95) 100%
+  );
+  box-shadow:
+    0 2px 8px -2px rgba(20, 20, 30, 0.03),
+    0 12px 24px -6px rgba(20, 20, 30, 0.04),
+    0 30px 60px -12px rgba(20, 20, 30, 0.07),
+    0 60px 100px -20px rgba(20, 20, 30, 0.08);
+  transition: all var(--mkt-transition-normal);
+  z-index: 1;
+}
+
+/* Inner Frosted Glass Card Container */
+.marketing .liquid-glass-content {
+  position: relative;
+  border-radius: 37.5px;
+  background: linear-gradient(
+    145deg,
+    rgba(248, 248, 252, 0.82) 0%,
+    rgba(255, 255, 255, 0.94) 40%,
+    rgba(244, 245, 250, 0.88) 100%
+  );
+  backdrop-filter: blur(36px) saturate(200%);
+  -webkit-backdrop-filter: blur(36px) saturate(200%);
+  padding: 46px 48px 34px 48px;
+  box-shadow:
+    inset 0px 2px 2.5px 0px rgba(255, 255, 255, 1),
+    inset 0px -2px 3px 0px rgba(0, 0, 0, 0.05),
+    inset 2px 0px 3px 0px rgba(255, 255, 255, 0.7),
+    inset -2px 0px 3px 0px rgba(255, 255, 255, 0.7);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 34px;
+  box-sizing: border-box;
 }
 
-.marketing .footer-logo {
+/* Top Row: Brand & Links Grid */
+.marketing .liquid-glass-top-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 52px;
+  width: 100%;
+}
+
+/* Brand Column */
+.marketing .liquid-glass-brand-col {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 310px;
+  flex-shrink: 0;
+}
+
+.marketing .liquid-glass-logo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  width: max-content;
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .liquid-glass-logo-link:hover {
+  transform: translateY(-1px);
+}
+
+.marketing .liquid-glass-logo-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(240, 242, 248, 0.8));
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 1),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.marketing .liquid-glass-logo-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.marketing .liquid-glass-logo-text {
+  font-family: var(--mkt-font-heading);
+  font-size: 21px;
   font-weight: 700;
-  font-size: 18px;
   color: var(--mkt-text-primary);
+  letter-spacing: -0.02em;
 }
 
-.marketing .social-links {
+/* Liquid Glass Newsletter Form */
+.marketing .liquid-glass-newsletter-form {
+  width: 100%;
+}
+
+.marketing .liquid-glass-input-capsule {
   display: flex;
-  gap: 16px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  padding: 4px 4px 4px 16px;
+  box-shadow:
+    inset 0px 1.5px 2px 0px rgba(255, 255, 255, 0.95),
+    inset 0px -1px 1.5px 0px rgba(0, 0, 0, 0.04),
+    0 6px 16px rgba(0, 0, 0, 0.03);
+  transition: all var(--mkt-transition-fast);
+  backdrop-filter: blur(12px);
 }
 
-.marketing .social-links a {
-  color: var(--mkt-text-secondary);
-  transition: color var(--mkt-transition-fast);
+.marketing .liquid-glass-input-capsule:focus-within {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(23, 22, 27, 0.28);
+  box-shadow:
+    inset 0px 1.5px 2px 0px rgba(255, 255, 255, 1),
+    0 0 0 4px rgba(23, 22, 27, 0.06),
+    0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
-.marketing .social-links a:hover {
+.marketing .liquid-glass-email-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: var(--mkt-font-sans);
+  font-size: 13px;
   color: var(--mkt-text-primary);
+  outline: none;
+  min-width: 0;
 }
 
-.marketing .language-selector {
-  display: flex;
+.marketing .liquid-glass-email-input::placeholder {
+  color: var(--mkt-text-muted);
+}
+
+.marketing .liquid-glass-submit-btn {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--mkt-border-color);
-  padding: 6px 12px;
-  border-radius: 6px;
-  width: max-content;
-  background-color: var(--mkt-bg-secondary);
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: linear-gradient(180deg, #2c2934 0%, #17161b 100%);
+  color: #ffffff;
+  font-family: var(--mkt-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.3),
+    0 3px 8px rgba(0, 0, 0, 0.18);
+  transition: all var(--mkt-transition-fast);
+  white-space: nowrap;
 }
 
-.marketing .language-selector select {
-  background: none;
+.marketing .liquid-glass-submit-btn:hover {
+  background: linear-gradient(180deg, #3d3947 0%, #201e26 100%);
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.45),
+    0 6px 16px rgba(0, 0, 0, 0.22);
+}
+
+.marketing .liquid-glass-submit-btn.subscribed {
+  background: #10b981;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Language Selector Pill */
+.marketing .liquid-glass-pills-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.marketing .liquid-glass-lang-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.9),
+    0 2px 6px rgba(0, 0, 0, 0.02);
+  transition: all var(--mkt-transition-fast);
+}
+
+.marketing .liquid-glass-lang-pill:hover {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(255, 255, 255, 1);
+}
+
+.marketing .liquid-glass-lang-pill select {
   border: none;
-  font-size: 13px;
+  background: transparent;
+  font-family: var(--mkt-font-sans);
+  font-size: 12px;
+  font-weight: 500;
   color: var(--mkt-text-secondary);
   cursor: pointer;
   outline: none;
-  font-weight: 500;
 }
 
-.marketing .footer-links-col {
+/* Link Columns Grid */
+.marketing .liquid-glass-links-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(100px, 1fr));
+  gap: 32px;
+  flex: 1;
+}
+
+.marketing .liquid-glass-link-col {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.marketing .footer-col-title {
-  font-size: 12px;
+.marketing .liquid-glass-col-header {
+  font-family: var(--mkt-font-sans);
+  font-size: 11.5px;
   font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--mkt-text-primary);
-  letter-spacing: 0.05em;
+  color: var(--mkt-text-muted);
+  margin: 0;
 }
 
-.marketing .footer-links-col ul {
+.marketing .liquid-glass-link-list {
   list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-.marketing .footer-links-col a {
+.marketing .liquid-link-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13.5px;
   color: var(--mkt-text-secondary);
-  transition: color var(--mkt-transition-fast);
+  text-decoration: none;
+  transition: all var(--mkt-transition-fast);
+  width: max-content;
 }
 
-.marketing .footer-links-col a:hover {
+.marketing .liquid-link-item:hover {
   color: var(--mkt-text-primary);
-  text-decoration: underline;
+  transform: translateX(3px);
 }
 
-.marketing .footer-bottom {
-  border-top: 1px solid var(--mkt-border-color);
-  margin-top: 48px;
-  padding-top: 24px;
+.marketing .liquid-link-item.with-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.marketing .liquid-glass-mini-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: 6px;
+  background: rgba(23, 22, 27, 0.08);
+  color: var(--mkt-text-primary);
+  letter-spacing: 0.02em;
+}
+
+/* Liquid Hairline Divider */
+.marketing .liquid-glass-divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(23, 22, 27, 0.09) 20%,
+    rgba(23, 22, 27, 0.09) 80%,
+    transparent 100%
+  );
+}
+
+/* Bottom Row: Legal & Social Pebbles */
+.marketing .liquid-glass-bottom-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 20px;
   flex-wrap: wrap;
-  gap: 12px;
 }
 
-.marketing .footer-bottom-links {
+.marketing .liquid-glass-legal-side {
   display: flex;
-  gap: 16px;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
 }
 
-.marketing .footer-bottom-links a {
-  font-size: 12px;
+.marketing .liquid-glass-copyright {
+  font-size: 12.5px;
   color: var(--mkt-text-muted);
+  margin: 0;
+}
+
+.marketing .liquid-glass-legal-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.marketing .liquid-glass-legal-links a {
+  font-size: 12.5px;
+  color: var(--mkt-text-muted);
+  text-decoration: none;
   transition: color var(--mkt-transition-fast);
 }
 
-.marketing .footer-bottom-links a:hover {
+.marketing .liquid-glass-legal-links a:hover {
   color: var(--mkt-text-primary);
-  text-decoration: underline;
 }
 
-.marketing .copyright-text {
-  font-size: 12px;
-  color: var(--mkt-text-muted);
+.marketing .liquid-legal-sep {
+  font-size: 10px;
+  color: var(--mkt-border-strong);
 }
 
-/* Responsive Footer */
-@media (max-width: 768px) {
-  .marketing .footer-content {
-    grid-template-columns: 1fr;
-    gap: 32px;
+/* Liquid Glass Social Action Buttons (Pebbles) */
+.marketing .liquid-glass-social-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.marketing .liquid-glass-social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  color: var(--mkt-text-secondary);
+  text-decoration: none;
+  box-shadow:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.95),
+    0 3px 8px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all var(--mkt-transition-fast);
+  backdrop-filter: blur(10px);
+}
+
+.marketing .liquid-glass-social-btn:hover {
+  color: var(--mkt-text-primary);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 1);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 1),
+    0 8px 20px rgba(0, 0, 0, 0.09);
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN (Desktop -> Tablet -> Mobile)
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .marketing .liquid-glass-top-row {
+    flex-direction: column;
+    gap: 38px;
   }
 
-  .marketing .footer-brand-col {
-    border-bottom: 1px solid var(--mkt-border-color);
-    padding-bottom: 24px;
+  .marketing .liquid-glass-brand-col {
+    max-width: 100%;
   }
 
-  .marketing .footer-bottom {
-    margin-top: 32px;
+  .marketing .liquid-glass-links-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .marketing .liquid-glass-footer-wrap {
+    padding: 0 12px;
+  }
+
+  .marketing .liquid-glass-shell {
+    border-radius: 30px;
+    padding: 2px;
+  }
+
+  .marketing .liquid-glass-content {
+    border-radius: 28px;
+    padding: 30px 22px 24px 22px;
+    gap: 26px;
+  }
+
+  .marketing .liquid-glass-links-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+
+  .marketing .liquid-glass-bottom-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+  }
+
+  .marketing .liquid-glass-social-row {
+    width: 100%;
+    justify-content: flex-start;
   }
 }

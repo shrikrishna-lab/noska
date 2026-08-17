@@ -77,7 +77,10 @@ export function Settings() {
           <TabsTrigger value="auth">Authentication</TabsTrigger>
           <TabsTrigger value="billing">Billing</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="localization">Localization</TabsTrigger>
           <TabsTrigger value="email">Email</TabsTrigger>
+          <TabsTrigger value="system">System</TabsTrigger>
           <TabsTrigger value="danger">Danger Zone</TabsTrigger>
         </TabsList>
 
@@ -245,6 +248,59 @@ export function Settings() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="notifications" className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Notifications</CardTitle><CardDescription>Control which system notifications admins receive</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { key: "notify_new_user", label: "New User Signups", desc: "Email admins when a new user registers" },
+                { key: "notify_waitlist", label: "Waitlist Activity", desc: "Email admins on new waitlist entries" },
+                { key: "notify_payment", label: "Payment Events", desc: "Email admins on successful or failed payments" },
+                { key: "notify_error", label: "System Errors", desc: "Email admins on critical system errors" },
+                { key: "notify_weekly_digest", label: "Weekly Digest", desc: "Send a weekly summary of platform activity" },
+              ].map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <div><p className="font-medium">{label}</p><p className="text-sm text-muted-foreground">{desc}</p></div>
+                  <Switch checked={getBool(key)} onCheckedChange={(val) => setValues((v) => ({ ...v, [key]: val }))} />
+                </div>
+              ))}
+              <Button onClick={() => handleSaveMultiple(
+                ["notify_new_user", "notify_waitlist", "notify_payment", "notify_error", "notify_weekly_digest"],
+                "Notification settings"
+              )} disabled={saving["notify_new_user"]}>
+                {saving["notify_new_user"] ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+                Save Changes
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="localization" className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Localization</CardTitle><CardDescription>Default region and language for location-based targeting</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Default Country</Label>
+                <Input value={getStr("default_country")} onChange={(e) => setValues((v) => ({ ...v, default_country: e.target.value }))} placeholder="e.g., India" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Default Timezone</Label>
+                  <Input value={getStr("timezone")} onChange={(e) => setValues((v) => ({ ...v, timezone: e.target.value }))} placeholder="e.g., Asia/Kolkata" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Default Language</Label>
+                  <Input value={getStr("default_language")} onChange={(e) => setValues((v) => ({ ...v, default_language: e.target.value }))} placeholder="e.g., en" />
+                </div>
+              </div>
+              <Button onClick={() => handleSaveMultiple(["default_country", "timezone", "default_language"], "Localization settings")} disabled={saving["default_country"]}>
+                {saving["default_country"] ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+                Save Changes
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="email" className="space-y-6">
           <Card>
             <CardHeader><CardTitle>Email Settings</CardTitle><CardDescription>Configure Resend integration for transactional and campaign emails</CardDescription></CardHeader>
@@ -284,6 +340,22 @@ export function Settings() {
               }} disabled={!getStr("test_recipient")}>
                 <Mail className="mr-1 h-4 w-4" /> Send Test Email
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="system" className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle>System Information</CardTitle><CardDescription>Runtime details about this deployment</CardDescription></CardHeader>
+            <CardContent>
+              <dl className="space-y-3 text-sm">
+                <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Admin Version</dt><dd className="font-mono">{import.meta.env.VITE_APP_VERSION || "2.1.0"}</dd></div>
+                <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Environment</dt><dd className="font-mono capitalize">{import.meta.env.DEV ? "development" : "production"}</dd></div>
+                <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Node Environment</dt><dd className="font-mono">{import.meta.env.MODE}</dd></div>
+                <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Database</dt><dd className="font-mono">PostgreSQL (Supabase)</dd></div>
+                <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Email Provider</dt><dd className="font-mono">Resend</dd></div>
+                <div className="flex justify-between pb-2"><dt className="text-muted-foreground">Feature Flags</dt><dd className="font-mono">{Object.keys(values).filter((k) => k.startsWith("flag_")).length} flags</dd></div>
+              </dl>
             </CardContent>
           </Card>
         </TabsContent>

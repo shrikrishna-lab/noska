@@ -3,7 +3,7 @@ import { Check, ChevronRight, Loader2, X } from "lucide-react";
 import { C } from "../../theme";
 import { useOnboarding } from "../../hooks/useOnboarding";
 import { PrimaryBtn } from "../Buttons";
-import { isUsernameAvailable, isValidUsernameFormat, normalizeUsername } from "../../../lib/supabaseService";
+import { isUsernameAvailable, isValidUsernameFormat, normalizeUsername, suggestAvailableUsernames } from "../../../lib/supabaseService";
 
 type CheckState = "idle" | "checking" | "available" | "taken" | "invalid";
 
@@ -23,6 +23,7 @@ export default function UsernameStep() {
   const { form, setFormField, next, currentUserId } = useOnboarding();
   const [state, setState] = useState<CheckState>(form.username ? "checking" : "idle");
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guards against a slow, stale availability check resolving after the
   // user has already typed something else — without this, an in-flight
@@ -37,6 +38,7 @@ export default function UsernameStep() {
     if (!value) {
       setState("idle");
       setError(null);
+      setSuggestions([]);
       return;
     }
     if (!isValidUsernameFormat(value)) {
@@ -47,6 +49,7 @@ export default function UsernameStep() {
 
     setState("checking");
     setError(null);
+    setSuggestions([]);
     const requestId = ++requestIdRef.current;
     debounceRef.current = setTimeout(async () => {
       try {
@@ -56,11 +59,15 @@ export default function UsernameStep() {
         const available = await isUsernameAvailable(value, currentUserId);
         if (requestIdRef.current !== requestId) return; // superseded by a newer check
         setState(available ? "available" : "taken");
-        if (!available) setError("That username is already taken.");
+        if (!available) {
+          setError("That username is already taken. Try one of these:");
+          setSuggestions(await suggestAvailableUsernames(value, currentUserId));
+        }
       } catch {
         if (requestIdRef.current !== requestId) return;
         setState("idle");
         setError("Couldn't check availability — check your connection and try again.");
+        setSuggestions([]);
       }
     }, DEBOUNCE_MS);
 
@@ -119,7 +126,20 @@ export default function UsernameStep() {
           </span>
         </div>
         {error ? (
-          <p className="text-xs" style={{ color: "#ef4444" }}>{error}</p>
+          <div className="text-xs" style={{ color: "#ef4444" }}>
+            <p>{error}</p>
+            {suggestions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {suggestions.map((suggestion) => (
+                  <button key={suggestion} type="button" onClick={() => setFormField("username", suggestion)}
+                    className="rounded-full border px-2.5 py-1 font-medium transition-colors hover:bg-[#f0eaff]"
+                    style={{ borderColor: "#c4b5fd", color: C.accent }}>
+                    @{suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <p className="text-xs" style={{ color: C.muted }}>
             {state === "available" ? `noska.app/@${form.username} is yours` : "Lowercase letters, numbers, and underscores only."}

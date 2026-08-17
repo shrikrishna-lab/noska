@@ -20,6 +20,8 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
     suspension_reason?: string;
   } | null>(null);
   const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     if (!clerkUser) { setStatus("error"); return; }
@@ -107,7 +109,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
         setStatus("approved");
       }
     })();
-  }, [clerkUser]);
+  }, [clerkUser, refreshNonce]);
 
   if (status === "checking") {
     return (
@@ -263,6 +265,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
       const email = clerkUser.emailAddresses?.[0]?.emailAddress;
       if (!email) return;
       setJoining(true);
+      setJoinError(null);
       try {
         const baseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -281,9 +284,12 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || `HTTP ${res.status}`);
         }
+        setJoining(false);
         setStatus("checking");
         setEntryData(null);
+        setRefreshNonce((value) => value + 1);
       } catch (e) {
+        setJoinError(e instanceof Error ? e.message : "Could not join the waitlist. Please try again.");
         setJoining(false);
       }
     };
@@ -340,6 +346,9 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
           <Sparkles style={{ width: 16, height: 16 }} />
           {joining ? "Joining..." : "Join Waitlist"}
         </button>
+        {joinError && (
+          <p style={{ color: '#b91c1c', fontSize: 12, margin: '0 0 12px 0' }}>{joinError}</p>
+        )}
 
         <button
           onClick={() => clerk.signOut()}

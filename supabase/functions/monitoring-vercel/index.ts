@@ -1,6 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { verifyAdminSession, handleCors, res, resError } from "../monitoring-utils/auth.ts";
 
+function iso(ts: unknown): string | undefined {
+  if (ts === undefined || ts === null) return undefined;
+  const n = typeof ts === "number" ? ts : Number(ts);
+  if (!Number.isFinite(n)) return undefined;
+  const ms = n > 1e12 ? n : n * 1000;
+  return new Date(ms).toISOString();
+}
+
 serve(async (req: Request) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -30,11 +38,15 @@ serve(async (req: Request) => {
       if (!r.ok) throw new Error(`Vercel API ${r.status}`);
       const data = await r.json();
       const deployments = data?.deployments ?? [];
-      return res(deployments.map((d: Record<string, unknown>) => ({
-        id: d.uid, name: d.name, url: d.url, state: d.state, readyState: d.readyState,
-        createdAt: d.createdAt, buildingAt: d.buildingAt, readyAt: d.readyAt,
-        meta: d.meta, target: d.target,
-      })));
+      return res(deployments.map((d: Record<string, unknown>) => {
+        const rawStatus = String(d.readyState ?? d.state ?? "").toLowerCase();
+        const status = rawStatus === "ready" || rawStatus === "building" || rawStatus === "error" || rawStatus === "canceled" ? rawStatus : "unknown";
+        return {
+          id: d.uid, name: d.name, url: d.url, status,
+          createdAt: iso(d.created), buildingAt: iso(d.buildingAt), readyAt: iso(d.ready),
+          meta: d.meta, target: d.target,
+        };
+      }));
     }
 
     return resError("Unknown path", 400);

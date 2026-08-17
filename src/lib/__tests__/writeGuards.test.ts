@@ -5,7 +5,7 @@ vi.mock("../supabase", () => ({
   setClerkSessionToken: vi.fn(),
 }));
 
-import { savePage, savePages, saveAIChat, saveAIChats, upsertUserProfile, saveAgent, setOnboardingComplete } from "../supabaseService";
+import { savePage, savePages, saveAIChat, saveAIChats, upsertUserProfile, saveAgent, setOnboardingComplete, updateUserProfile } from "../supabaseService";
 
 // Property 6: no null-owner writes in app.
 // requireOwner throws before any Supabase call, so these reject without network.
@@ -60,6 +60,12 @@ describe("owner-required write guards (Property 6)", () => {
 
   it("setOnboardingComplete rejects missing userId", async () => {
     await expect(setOnboardingComplete(null, "notes", "WS")).rejects.toThrow(
+      /without an authenticated user/
+    );
+  });
+
+  it("updateUserProfile rejects missing userId", async () => {
+    await expect(updateUserProfile("", { userName: "x" })).rejects.toThrow(
       /without an authenticated user/
     );
   });

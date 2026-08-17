@@ -8,8 +8,10 @@ import { DialogProvider } from "@/components/ui/ConfirmationDialog";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { isUnauthorizedError, triggerSessionExpired } from "@/lib/session-expired";
 import { Shell } from "@/components/layout/Shell";
+import { RouteGuard } from "@/components/layout/RouteGuard";
 import { Dashboard } from "@/pages/Dashboard";
 import { Forbidden } from "@/pages/Forbidden";
+import { RoleDashboard } from "@/pages/RoleDashboard";
 import { Login } from "@/pages/Login";
 import { Loader2 } from "lucide-react";
 
@@ -17,6 +19,7 @@ const Analytics = lazy(() => import("@/pages/Analytics").then((m) => ({ default:
 const Waitlist = lazy(() => import("@/pages/Waitlist").then((m) => ({ default: m.Waitlist })));
 const WaitlistAnalyticsPage = lazy(() => import("@/pages/WaitlistAnalyticsPage"));
 const Users = lazy(() => import("@/pages/Users").then((m) => ({ default: m.Users })));
+const UserDetail = lazy(() => import("@/pages/UserDetail").then((m) => ({ default: m.UserDetail })));
 const BannedUsers = lazy(() => import("@/pages/BannedUsers").then((m) => ({ default: m.BannedUsers })));
 const Trash = lazy(() => import("@/pages/Trash").then((m) => ({ default: m.Trash })));
 const Workspaces = lazy(() => import("@/pages/Workspaces").then((m) => ({ default: m.Workspaces })));
@@ -52,6 +55,7 @@ const SystemHealth = lazy(() => import("@/pages/SystemHealth").then((m) => ({ de
 const EmailAnalytics = lazy(() => import("@/pages/EmailAnalytics").then((m) => ({ default: m.EmailAnalytics })));
 const Settings = lazy(() => import("@/pages/Settings").then((m) => ({ default: m.Settings })));
 const AdminAccounts = lazy(() => import("@/pages/AdminAccounts").then((m) => ({ default: m.AdminAccounts })));
+const RoutesManager = lazy(() => import("@/pages/RoutesManager").then((m) => ({ default: m.RoutesManager })));
 const Webhooks = lazy(() => import("@/pages/Webhooks").then((m) => ({ default: m.Webhooks })));
 const ContentPages = lazy(() => import("@/pages/ContentPages").then((m) => ({ default: m.ContentPages })));
 const ContentFiles = lazy(() => import("@/pages/ContentFiles").then((m) => ({ default: m.ContentFiles })));
@@ -141,10 +145,13 @@ export default function App() {
                 <ErrorBoundary>
                 <Routes>
                   <Route element={<Shell />}>
+                    <Route element={<RouteGuard />}>
                     <Route index element={<Dashboard />} />
+                    <Route path="my-dashboard" element={<RoleDashboard />} />
                     <Route path="analytics" element={<Suspense fallback={<PageLoading />}><Analytics /></Suspense>} />
                     <Route path="waitlist" element={<Suspense fallback={<PageLoading />}><Waitlist /></Suspense>} />
                     <Route path="users" element={<Suspense fallback={<PageLoading />}><Users /></Suspense>} />
+                    <Route path="users/:id" element={<Suspense fallback={<PageLoading />}><UserDetail /></Suspense>} />
                     <Route path="banned-users" element={<Suspense fallback={<PageLoading />}><BannedUsers /></Suspense>} />
                     <Route path="trash" element={<Suspense fallback={<PageLoading />}><Trash /></Suspense>} />
                     <Route path="workspaces" element={<Suspense fallback={<PageLoading />}><Workspaces /></Suspense>} />
@@ -195,6 +202,7 @@ export default function App() {
                     <Route path="system-health" element={<Suspense fallback={<PageLoading />}><SystemHealth /></Suspense>} />
                     <Route path="settings" element={<Suspense fallback={<PageLoading />}><Settings /></Suspense>} />
                     <Route path="admin-accounts" element={<Suspense fallback={<PageLoading />}><AdminAccounts /></Suspense>} />
+                    <Route path="routes-manager" element={<Suspense fallback={<PageLoading />}><RoutesManager /></Suspense>} />
                     <Route path="webhooks" element={<Suspense fallback={<PageLoading />}><Webhooks /></Suspense>} />
                     <Route path="sentry" element={<Suspense fallback={<PageLoading />}><Sentry /></Suspense>} />
                     <Route path="posthog" element={<Suspense fallback={<PageLoading />}><PostHog /></Suspense>} />
@@ -209,6 +217,7 @@ export default function App() {
                     <Route path="monitoring/logs" element={<Suspense fallback={<PageLoading />}><MonitoringLogs /></Suspense>} />
                     <Route path="monitoring/integrations" element={<Suspense fallback={<PageLoading />}><MonitoringIntegrations /></Suspense>} />
                     <Route path="perf" element={<Suspense fallback={<PageLoading />}><PerfDashboard /></Suspense>} />
+                    </Route>
                   </Route>
                   <Route path="/403" element={<Forbidden />} />
                   <Route path="*" element={<Forbidden />} />

@@ -4,9 +4,13 @@ import {
   Trash2, Ban, Folder, Star, Mail, Megaphone, Cloud, RotateCcw,
   ShieldAlert, FileText, BarChart2, Zap, CheckCircle2, AlertCircle, Loader2, X
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber, formatRelativeTime } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useIslandNotification } from "./DynamicIslandNotification";
+import { hasRole, type AdminRole } from "@/lib/rbac";
+import { useNavigate } from "react-router-dom";
+import { useEmailCampaigns, useAdminAuditLog, useAdminLoginAttempts, useDashboardKpis, useAuditEvents, useLogAdminAction } from "@/lib/queries";
+import { useOverviewMetrics, useSessionData } from "@/lib/monitoring/hooks";
 
 export type CommandCenterType =
   | "delete_user"
@@ -114,6 +118,7 @@ export function AdminCommandCenter() {
   const { state, close, trigger, showSuccess, showError, setStatus } = useCommandCenter();
   const { isOpen, isPill, options, status, successMessage, errorMessage } = state;
   const { user } = useAuth();
+  const navigate = useNavigate();
   const island = useIslandNotification();
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -121,8 +126,16 @@ export function AdminCommandCenter() {
   const [inputValue, setInputValue] = useState("");
   const [duration, setDuration] = useState("permanent");
   const [role, setRole] = useState("admin");
-  const [backupProgress, setBackupProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState("");
+
+  const { data: campaigns } = useEmailCampaigns();
+  const { data: adminAudit } = useAdminAuditLog(10);
+  const { data: loginAttempts } = useAdminLoginAttempts(20);
+  const { data: auditEvents } = useAuditEvents(1);
+  const { data: kpis } = useDashboardKpis();
+  const { data: overview } = useOverviewMetrics();
+  const { data: session } = useSessionData();
+  const logAdminAction = useLogAdminAction();
 
   useEffect(() => {
     const updateTime = () => {
@@ -163,33 +176,10 @@ export function AdminCommandCenter() {
 
   useEffect(() => {
     if (isOpen && options?.type === "backup" && status === "loading") {
-      setBackupProgress(0);
-      island.progress("Backup Running...", 0, "Generating PostgreSQL snapshot... 0%", "db-backup");
-
-      const interval = setInterval(() => {
-        setBackupProgress((prev) => {
-          const next = prev + Math.floor(Math.random() * 12) + 6;
-          const currentProgress = Math.min(next, 100);
-
-          if (currentProgress < 100) {
-            island.progress(
-              "Backup Running...",
-              currentProgress,
-              `Generating PostgreSQL snapshot... ${currentProgress}%`,
-              "db-backup"
-            );
-          } else {
-            clearInterval(interval);
-            showSuccess("Backup Snapshot Created Successfully");
-            island.success("Backup Completed", "Database backup completed successfully.", { taskId: "db-backup" });
-            return 100;
-          }
-          return currentProgress;
-        });
-      }, 200);
-      return () => clearInterval(interval);
+      island.progress("Recording Backup...", 60, "Recording backup action in audit log...", "db-backup");
+      return () => {};
     }
-  }, [isOpen, options?.type, status, showSuccess, island]);
+  }, [isOpen, options?.type, status, island]);
 
   const startHold = () => {
     if (status === "loading" || status === "success") return;
@@ -217,10 +207,44 @@ export function AdminCommandCenter() {
     try {
       if (options.type === "backup") {
         setStatus("loading");
-        await options.onConfirm({ progress: 100 });
+        try {
+          await logAdminAction.mutateAsync({
+            action: "backup_created",
+            target_type: "system",
+            target_name: "Database",
+            detail: { requested_at: new Date().toISOString() },
+          });
+          await options.onConfirm({ progress: 100 });
+          showSuccess("Backup recorded in audit log");
+          island.success("Backup Recorded", "Backup action logged successfully.", { taskId: "db-backup" });
+        } catch (err: any) {
+          showError(err?.message || "Backup failed. Please try again.");
+          setStatus("idle");
+          return;
+        }
         return;
       }
-      
+
+      if (options.type === "restore") {
+        setStatus("loading");
+        try {
+          await logAdminAction.mutateAsync({
+            action: "restore_initiated",
+            target_type: "system",
+            target_name: options.meta?.snapshot || "Backup",
+            detail: { requested_at: new Date().toISOString() },
+          });
+          await options.onConfirm();
+          showSuccess("Restore request recorded in audit log");
+          island.success("Restore Recorded", "Restore request logged successfully.", { taskId: "db-restore" });
+        } catch (err: any) {
+          showError(err?.message || "Restore failed. Please try again.");
+          setStatus("idle");
+          return;
+        }
+        return;
+      }
+
       setStatus("loading");
       const payload = {
         input: inputValue,
@@ -253,7 +277,7 @@ export function AdminCommandCenter() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-zinc-100">🗑 Delete User</h3>
-                <p className="text-xs text-zinc-400">{options.meta?.email || "john@example.com"}</p>
+                <p className="text-xs text-zinc-400">{options.meta?.email || "User Account"}</p>
               </div>
             </div>
             <div className="p-3.5 bg-white/[0.03] rounded-2xl border border-white/[0.05]">
@@ -295,7 +319,7 @@ export function AdminCommandCenter() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-zinc-100">🚫 Ban User</h3>
-                <p className="text-xs text-zinc-400">{options.meta?.email || "user@example.com"}</p>
+                <p className="text-xs text-zinc-400">{options.meta?.email || "User Account"}</p>
               </div>
             </div>
             <div className="space-y-3.5">
@@ -349,12 +373,12 @@ export function AdminCommandCenter() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-zinc-100">🗂 Delete Workspace</h3>
-                <p className="text-xs text-zinc-400">Workspace: {options.meta?.name || "Marketing Team"}</p>
+                <p className="text-xs text-zinc-400">Workspace: {options.meta?.name || "—"}</p>
               </div>
             </div>
             <div className="p-3.5 bg-white/[0.03] rounded-2xl text-xs text-zinc-400 border border-white/[0.05] flex justify-between items-center">
               <span>Workspace Owner:</span>
-              <span className="font-semibold text-zinc-200">{options.meta?.owner || "Alex"}</span>
+              <span className="font-semibold text-zinc-200">{options.meta?.owner || "—"}</span>
             </div>
             <div className="flex gap-2.5 pt-1">
               <button onClick={close} className="flex-1 py-2 text-xs font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white transition-colors">
@@ -434,17 +458,17 @@ export function AdminCommandCenter() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-zinc-100">📧 Send Campaign</h3>
-                <p className="text-xs text-zinc-400">{options.meta?.name || "Weekly Newsletter"}</p>
+                <p className="text-xs text-zinc-400">{options.meta?.name || campaigns?.[0]?.name || "No campaign selected"}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3.5 p-3.5 bg-white/[0.03] border border-white/[0.05] rounded-2xl text-xs">
               <div>
                 <span className="text-zinc-450 block mb-0.5">Recipients</span>
-                <span className="font-semibold text-zinc-200">12,483</span>
+                <span className="font-semibold text-zinc-200">{formatNumber(options.meta?.recipients ?? campaigns?.[0]?.recipients ?? 0)}</span>
               </div>
               <div>
-                <span className="text-zinc-450 block mb-0.5">Estimated Time</span>
-                <span className="font-semibold text-zinc-200">22 seconds</span>
+                <span className="text-zinc-450 block mb-0.5">Status</span>
+                <span className="font-semibold text-zinc-200">{options.meta?.status || campaigns?.[0]?.status || "—"}</span>
               </div>
             </div>
             <div className="flex gap-2.5 pt-1">
@@ -502,30 +526,23 @@ export function AdminCommandCenter() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-sky-500/10 rounded-2xl border border-sky-500/20">
-                <Cloud className="h-6 w-6 text-sky-400 animate-pulse" />
+                <Cloud className="h-6 w-6 text-sky-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-zinc-100">☁ Creating Backup</h3>
-                <p className="text-xs text-zinc-400">Generating live PostgreSQL snap...</p>
+                <h3 className="text-sm font-semibold text-zinc-100">☁ Database Backup</h3>
+                <p className="text-xs text-zinc-400">Record a backup request in the admin audit log</p>
               </div>
             </div>
             {status === "loading" ? (
               <div className="space-y-3 bg-white/[0.02] border border-white/[0.04] p-4 rounded-2xl">
-                <div className="flex justify-between text-xs text-zinc-300 font-medium">
-                  <span>Backing up files & database</span>
-                  <span className="font-mono">{backupProgress}%</span>
+                <div className="flex items-center gap-2 text-xs text-zinc-300 font-medium">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Recording backup action in audit log...</span>
                 </div>
-                <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-sky-400 to-blue-550"
-                    style={{ width: `${backupProgress}%` }}
-                  />
-                </div>
-                <p className="text-[10px] text-red-400 text-center font-bold animate-pulse">Do not close this panel or refresh the page.</p>
               </div>
             ) : (
               <div className="space-y-3.5">
-                <p className="text-xs text-zinc-400 leading-relaxed">Start a full system backup snapshot. This includes database states, user files, and session configurations.</p>
+                <p className="text-xs text-zinc-400 leading-relaxed">This records a backup action in the admin audit log with the current admin identity and timestamp. No database changes are made.</p>
                 <button
                   onClick={handleConfirm}
                   className="w-full py-2.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25 hover:brightness-110 active:scale-[0.98] transition-all"
@@ -551,12 +568,12 @@ export function AdminCommandCenter() {
             </div>
             <div className="grid grid-cols-2 gap-3 p-3.5 bg-white/[0.03] border border-white/[0.05] rounded-2xl text-xs">
               <div>
-                <span className="text-zinc-450 block mb-0.5">Backup Date</span>
-                <span className="font-semibold text-zinc-200">July 18, 2026</span>
+                <span className="text-zinc-450 block mb-0.5">Restore Point</span>
+                <span className="font-semibold text-zinc-200">{options.meta?.date || "—"}</span>
               </div>
               <div>
-                <span className="text-zinc-450 block mb-0.5">Backup Size</span>
-                <span className="font-semibold text-zinc-200">2.4 GB</span>
+                <span className="text-zinc-450 block mb-0.5">Snapshot</span>
+                <span className="font-semibold text-zinc-200">{options.meta?.snapshot || "—"}</span>
               </div>
             </div>
             <div className="flex gap-2.5 pt-1">
@@ -579,12 +596,12 @@ export function AdminCommandCenter() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-zinc-100">🛡 Suspicious Activity</h3>
-                <p className="text-xs text-red-450 font-medium">17 failed login attempts in 60s</p>
+                <p className="text-xs text-red-450 font-medium">{(loginAttempts ?? []).length} failed login attempts recorded</p>
               </div>
             </div>
             <div className="p-3.5 bg-red-500/[0.02] border border-red-500/20 rounded-2xl text-xs space-y-2">
-              <div className="flex justify-between items-center"><span className="text-zinc-400">Target Account:</span><span className="font-mono font-semibold text-zinc-200">admin@noska.me</span></div>
-              <div className="flex justify-between items-center"><span className="text-zinc-400">Origin IP:</span><span className="font-mono text-zinc-200 font-semibold">95.122.18.2 (Germany)</span></div>
+              <div className="flex justify-between items-center"><span className="text-zinc-400">Target Account:</span><span className="font-mono font-semibold text-zinc-200">{loginAttempts?.[0]?.email || "—"}</span></div>
+              <div className="flex justify-between items-center"><span className="text-zinc-400">Last Attempt:</span><span className="font-mono text-zinc-200 font-semibold">{loginAttempts?.[0]?.attempted_at ? formatRelativeTime(loginAttempts[0].attempted_at) : "—"}</span></div>
             </div>
             <div className="flex gap-2.5 pt-1">
               <button onClick={close} className="flex-1 py-2 text-xs font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white transition-colors">
@@ -606,13 +623,13 @@ export function AdminCommandCenter() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-zinc-100">📜 Audit Log Event</h3>
-                <p className="text-xs text-zinc-400">Template deletion logged</p>
+                <p className="text-xs text-zinc-400">Latest recorded action</p>
               </div>
             </div>
             <div className="p-3.5 bg-white/[0.03] border border-white/[0.05] rounded-2xl text-xs space-y-2">
-              <div className="flex justify-between items-center"><span className="text-zinc-400">Actor:</span><span className="font-semibold text-zinc-250">krishna@noska.me</span></div>
-              <div className="flex justify-between items-center"><span className="text-zinc-400">Action:</span><span className="font-semibold text-red-400">Deleted 23 templates</span></div>
-              <div className="flex justify-between items-center"><span className="text-zinc-400">Time:</span><span className="font-semibold text-zinc-300">2 minutes ago</span></div>
+              <div className="flex justify-between items-center"><span className="text-zinc-400">Actor:</span><span className="font-semibold text-zinc-250">{auditEvents?.[0]?.user_name || adminAudit?.[0]?.admin_name || "—"}</span></div>
+              <div className="flex justify-between items-center"><span className="text-zinc-400">Action:</span><span className="font-semibold text-red-400">{auditEvents?.[0]?.action || adminAudit?.[0]?.action || "—"}</span></div>
+              <div className="flex justify-between items-center"><span className="text-zinc-400">Time:</span><span className="font-semibold text-zinc-300">{auditEvents?.[0]?.created_at ? formatRelativeTime(auditEvents[0].created_at) : adminAudit?.[0]?.created_at ? formatRelativeTime(adminAudit[0].created_at) : "—"}</span></div>
             </div>
             <button onClick={close} className="w-full py-2 text-xs font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white transition-colors">
               Close Detail
@@ -634,16 +651,16 @@ export function AdminCommandCenter() {
             </div>
             <div className="grid grid-cols-3 gap-2.5">
               <div className="p-3 bg-white/[0.03] border border-white/[0.04] rounded-2xl text-center">
-                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider mb-1">Online</span>
-                <span className="text-lg font-bold text-emerald-400 font-mono">582</span>
+                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider mb-1">Live Users</span>
+                <span className="text-lg font-bold text-emerald-400 font-mono">{formatNumber(session?.liveUsers ?? overview?.usersOnline ?? 0)}</span>
               </div>
               <div className="p-3 bg-white/[0.03] border border-white/[0.04] rounded-2xl text-center">
-                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider mb-1">Traffic</span>
-                <span className="text-lg font-bold text-zinc-200 font-mono">183/s</span>
+                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider mb-1">AI Today</span>
+                <span className="text-lg font-bold text-zinc-200 font-mono">{formatNumber(kpis?.aiEventsToday ?? 0)}</span>
               </div>
               <div className="p-3 bg-white/[0.03] border border-white/[0.04] rounded-2xl text-center">
-                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider mb-1">CPU</span>
-                <span className="text-lg font-bold text-blue-400 font-mono">23%</span>
+                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider mb-1">Avg API</span>
+                <span className="text-lg font-bold text-blue-400 font-mono">{overview?.avgApiResponse ? `${overview.avgApiResponse}ms` : "—"}</span>
               </div>
             </div>
             <button onClick={close} className="w-full py-2 text-xs font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white transition-colors">
@@ -665,40 +682,24 @@ export function AdminCommandCenter() {
               </div>
             </div>
             <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1">
-              {[
-                {
+              {[{
                   label: "Create Admin Account",
-                  action: () => trigger({
-                    type: "promote_user",
-                    meta: { name: "New Admin Invitee" },
-                    onConfirm: async (payload) => {
-                      await new Promise((resolve) => setTimeout(resolve, 1200));
-                      showSuccess(`Invited new administrator with role ${payload?.role || "moderator"}`);
-                    }
-                  })
+                  requiresRole: "super_admin" as AdminRole,
+                  action: () => { close(); navigate("/admin-accounts"); }
                 },
                 {
                   label: "Send Broadcast Notice",
-                  action: () => trigger({
-                    type: "broadcast",
-                    onConfirm: async (payload) => {
-                      await new Promise((resolve) => setTimeout(resolve, 1000));
-                      showSuccess(`Broadcast notice successfully sent to all active users`);
-                    }
-                  })
+                  requiresRole: "admin" as AdminRole,
+                  action: () => { close(); navigate("/broadcasts"); }
                 },
                 {
                   label: "Start Database Backup",
-                  action: () => trigger({
-                    type: "backup",
-                    onConfirm: async () => {
-                      await new Promise((resolve) => setTimeout(resolve, 3500));
-                    }
-                  })
+                  requiresRole: "admin" as AdminRole,
+                  action: () => { close(); navigate("/system-health"); }
                 },
                 { label: "Show Live Analytics", action: () => trigger({ type: "analytics" }) },
-                { label: "View Audit Event Log", action: () => trigger({ type: "audit_log" }) },
-              ].map((item, idx) => (
+                { label: "View Audit Event Log", requiresRole: "developer" as AdminRole, action: () => { close(); navigate("/audit-logs"); } },
+              ].filter((item) => !item.requiresRole || hasRole(user, item.requiresRole)).map((item, idx) => (
                 <button
                   key={idx}
                   onClick={item.action}

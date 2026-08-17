@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
@@ -54,6 +54,57 @@ export default function Legal() {
     );
   }
 
+  function renderInline(text: string) {
+    const parts: Array<{ type: 'text' | 'strong' | 'link'; value: string; href?: string }> = [];
+    const regex = /(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text))) {
+      if (m.index > last) parts.push({ type: 'text', value: text.slice(last, m.index) });
+      const token = m[0];
+      if (token.startsWith('**')) {
+        parts.push({ type: 'strong', value: token.slice(2, -2) });
+      } else {
+        const inner = token.slice(1, -1);
+        const split = inner.indexOf('](');
+        parts.push({ type: 'link', value: inner.slice(0, split), href: inner.slice(split + 2) });
+      }
+      last = m.index + token.length;
+    }
+    if (last < text.length) parts.push({ type: 'text', value: text.slice(last) });
+    return parts.map((p, i) =>
+      p.type === 'strong' ? <strong key={i}>{p.value}</strong>
+      : p.type === 'link' ? <a key={i} href={p.href} target="_blank" rel="noreferrer">{p.value}</a>
+      : <span key={i}>{p.value}</span>
+    );
+  }
+
+  const lines = page.content?.replace(/\\n/g, '\n').split('\n') ?? [];
+  const blocks: ReactNode[] = [];
+  let list: { type: 'ul' | 'ol'; items: string[] } | null = null;
+  const flushList = (key: number) => {
+    if (!list) return;
+    blocks.push(list.type === 'ul'
+      ? <ul key={key}>{list.items.map((it, i) => <li key={i}>{renderInline(it)}</li>)}</ul>
+      : <ol key={key}>{list.items.map((it, i) => <li key={i}>{renderInline(it)}</li>)}</ol>);
+    list = null;
+  };
+  lines.forEach((line, i) => {
+    if (line.startsWith('## ')) { flushList(i); blocks.push(<h2 key={i}>{renderInline(line.slice(3))}</h2>); }
+    else if (line.startsWith('### ')) { flushList(i); blocks.push(<h3 key={i}>{renderInline(line.slice(4))}</h3>); }
+    else if (/^\s*[-*] /.test(line)) {
+      if (!list) list = { type: 'ul', items: [] };
+      list.items.push(line.replace(/^\s*[-*] /, ''));
+    }
+    else if (/^\s*\d+\.\s+/.test(line)) {
+      if (!list) list = { type: 'ol', items: [] };
+      list.items.push(line.replace(/^\s*\d+\.\s+/, ''));
+    }
+    else if (line.trim() === '') { flushList(i); }
+    else { flushList(i); blocks.push(<p key={i}>{renderInline(line)}</p>); }
+  });
+  flushList(lines.length);
+
   return (
     <div className="legal-wrapper">
       <motion.section
@@ -64,14 +115,7 @@ export default function Legal() {
       >
         <Link to="/" className="legal-back"><ArrowLeft size={14} /> Back to Home</Link>
         <h1>{page.title}</h1>
-        <div className="legal-body">
-          {page.content?.replace(/\\n/g, '\n').split('\n').map((line, i) => {
-            if (line.startsWith('## ')) return <h2 key={i}>{line.slice(3)}</h2>;
-            if (line.startsWith('### ')) return <h3 key={i}>{line.slice(4)}</h3>;
-            if (line.trim() === '') return <br key={i} />;
-            return <p key={i}>{line}</p>;
-          })}
-        </div>
+        <div className="legal-body">{blocks}</div>
       </motion.section>
     </div>
   );

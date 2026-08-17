@@ -18,6 +18,8 @@ import { Download, Mail, Trash2, Loader2, Check, X, Search, MessageSquare, Clipb
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
 import { supabase, getAdminToken } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
+import { hasRole } from "@/lib/rbac";
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "secondary" | "default" | "success" | "warning" | "destructive" | "outline"; color: string }> = {
   pending: { label: "Pending", variant: "secondary", color: "text-gray-500" },
@@ -202,6 +204,9 @@ export function Waitlist() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { confirm } = useConfirmDialog();
+  const { user } = useAuth();
+  const canOperate = hasRole(user, "support");
+  const canDelete = hasRole(user, "admin");
   const { data: entries, isLoading, refetch, isRefetching } = useWaitlist();
   const { data: count } = useWaitlistCount();
   const sendInvite = useSendWaitlistInvite();
@@ -256,11 +261,31 @@ export function Waitlist() {
   const handleApprove = async (row: DbWaitlistEntry) => {
     const token = getAdminToken();
     if (!token) { toast.error("No session"); return false; }
-    const { error } = await supabase!.functions.invoke("approve-waitlist", {
+    const { data, error } = await supabase!.functions.invoke("approve-waitlist", {
       body: { waitlist_id: row.id, admin_name: row.name },
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (error) { toast.error(error.message || "Failed to approve"); return false; }
+    if (error || !data?.success) {
+      // Keep approval functional if the optional email Edge Function is not
+      // deployed or temporarily unavailable: the secured admin RPC still
+      // records the invite state and code, and the admin can resend email
+      // once the email integration is healthy.
+      const inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
+      const fallback = await supabase!.rpc("admin_update", {
+        p_session_token: token,
+        p_table: "waitlist_entries",
+        p_id: row.id,
+        p_data: {
+          status: "invited",
+          invite_sent: true,
+          invite_code: inviteCode,
+          approved_at: new Date().toISOString(),
+        },
+        p_min_role: "support",
+      });
+      if (fallback.error) { toast.error(fallback.error.message || error?.message || "Failed to approve"); return false; }
+      toast.success(`${row.name} approved; invite email pending`);
+    }
     qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
       old?.map((e) => e.id === row.id ? { ...e, status: "invited", approved_at: new Date().toISOString(), invite_sent: true } : e)
     );
@@ -373,19 +398,19 @@ export function Waitlist() {
         const expired = row.status === "invited" && isExpired(row);
         return (
           <div className="flex justify-end gap-1">
-            {(row.status === "waiting" || row.status === "pending") && (
+            {canOperate && (row.status === "waiting" || row.status === "pending") && (
               <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={() => handleApprove(row)} title="Approve & invite">
                 <Check className="h-3.5 w-3.5" />
               </Button>
             )}
-            {(row.status === "waiting" || row.status === "pending") && (
+            {canOperate && (row.status === "waiting" || row.status === "pending") && (
               <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
                 try { await rejectEntry.mutateAsync(row.id); toast.success(`${row.name} rejected`); } catch { toast.error("Failed to reject"); }
               }} title="Reject">
                 <X className="h-3.5 w-3.5" />
               </Button>
             )}
-            {(row.status === "invited" || expired) && (
+            {canOperate && (row.status === "invited" || expired) && (
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => {
                 setSending(row.id);
                 try {
@@ -402,10 +427,10 @@ export function Waitlist() {
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreviewEntry(row)} title="Preview invitation">
               <Eye className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setNotesEntry(row)} title="Notes">
+            {canOperate && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setNotesEntry(row)} title="Notes">
               <MessageSquare className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
+            </Button>}
+            {canDelete && <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
               if (!await confirm({ title: "Remove from Waitlist", description: `Remove "${row.name}" from the waitlist? They will lose their spot.`, variant: "delete", confirmText: "Remove" })) return;
               setDeleting(row.id);
               try { await deleteEntry.mutateAsync(row.id); toast.success("Entry removed"); }
@@ -413,7 +438,7 @@ export function Waitlist() {
               setDeleting(null);
             }} disabled={deleting === row.id} title="Delete">
               {deleting === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            </Button>
+            </Button>}
           </div>
         );
       },
@@ -527,7 +552,7 @@ export function Waitlist() {
         description={`${count ?? 0} total · ${(statusCounts["waiting"] ?? 0) + (statusCounts["pending"] ?? 0)} pending · ${statusCounts["accepted"] ?? 0} accepted`}
         actions={
           <div className="flex gap-2">
-            {selectedIds.size > 0 && (
+            {canOperate && selectedIds.size > 0 && (
               <>
                 <Button variant="default" size="sm" className="text-green-600" onClick={handleBulkApprove} disabled={bulkAction === "approve"}>
                   {bulkAction === "approve" ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1 h-3.5 w-3.5" />}
@@ -537,10 +562,10 @@ export function Waitlist() {
                   {bulkAction === "reject" ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <X className="mr-1 h-3.5 w-3.5" />}
                   Reject ({selectedIds.size})
                 </Button>
-                <Button variant="outline" size="sm" className="text-destructive" onClick={handleBulkDelete} disabled={bulkAction === "delete"}>
+                {canDelete && <Button variant="outline" size="sm" className="text-destructive" onClick={handleBulkDelete} disabled={bulkAction === "delete"}>
                   {bulkAction === "delete" ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1 h-3.5 w-3.5" />}
                   Delete ({selectedIds.size})
-                </Button>
+                </Button>}
               </>
             )}
             <Button variant="outline" size="sm" onClick={() => navigate("/admin/waitlist-analytics")}><BarChart3 className="mr-1 h-3.5 w-3.5" /> Analytics</Button>

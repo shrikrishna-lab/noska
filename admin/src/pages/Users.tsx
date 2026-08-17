@@ -8,8 +8,9 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/rbac";
-import { Ban, Trash2 } from "lucide-react";
+import { Ban, Trash2, ExternalLink } from "lucide-react";
 import { useCommandCenter } from "@/components/ui/AdminCommandCenter";
+import { useNavigate } from "react-router-dom";
 
 const columns: Column<AdminUserRow>[] = [
   {
@@ -20,7 +21,7 @@ const columns: Column<AdminUserRow>[] = [
           <AvatarFallback className="text-[10px]">{initialsFromName(row.user_name || row.email || "?")}</AvatarFallback>
         </Avatar>
         <div>
-          <p className="font-medium">{row.user_name || "Unnamed"}</p>
+          <p className="font-medium hover:underline">{row.user_name || "Unnamed"}</p>
           <p className="text-xs text-muted-foreground">{row.email || row.username || "No email"}</p>
         </div>
       </div>
@@ -33,6 +34,7 @@ const columns: Column<AdminUserRow>[] = [
 export function Users() {
   const { data: users, isLoading } = useUsers();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { trigger, showSuccess } = useCommandCenter();
   const canBan = user ? hasRole(user, "admin") : false;
 
@@ -43,9 +45,18 @@ export function Users() {
   useRealtimeInvalidate(["admin", "users"], "user_profiles");
 
   const actionColumn: Column<AdminUserRow> = {
-    key: "actions", label: "", className: "text-right w-[180px]",
-    render: (row) => canBan ? (
+    key: "actions", label: "", className: "text-right w-[260px]",
+    render: (row) => (
       <div className="flex justify-end gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => navigate(`/users/${row.id}`)}
+        >
+          <ExternalLink className="mr-1 h-3.5 w-3.5" /> Manage
+        </Button>
+        {canBan ? (<>
         <Button
           variant="ghost"
           size="sm"
@@ -90,8 +101,9 @@ export function Users() {
         >
           <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
         </Button>
+        </>) : null}
       </div>
-    ) : null,
+    ),
   };
 
   if (isLoading) return <div className="p-6"><PageHeader title="Users" description="Manage all platform users — updates in real time" /><LoadingState count={6} /></div>;
@@ -100,7 +112,12 @@ export function Users() {
     <div className="p-6">
       <PageHeader title="Users" description="Manage all platform users — ban, hard ban, or delete user data" />
       {users && users.length > 0 ? (
-        <DataTable columns={[...columns, actionColumn]} data={users} searchPlaceholder="Search users..." />
+        <DataTable
+          columns={[...columns, actionColumn]}
+          data={users}
+          searchPlaceholder="Search users..."
+          onRowClick={(row) => navigate(`/users/${row.id}`)}
+        />
       ) : (
         <EmptyState title="No users found" description="User profiles will appear here once users sign up." />
       )}

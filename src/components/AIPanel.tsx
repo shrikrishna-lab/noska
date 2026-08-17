@@ -197,6 +197,7 @@ export default function AIPanel({
       });
       const systemPrompt = buildAgentPrompt(activeAgent, contextString, { tools: true });
 
+      const startedAt = Date.now();
       const result = await aiManager.stream({
         system: systemPrompt,
         prompt: text,
@@ -215,12 +216,16 @@ export default function AIPanel({
           });
         }
       });
+      const latencyMs = Date.now() - startedAt;
 
       const responseText = result || "";
       setMessages(prev => {
         const next = [...prev];
         const last = { ...next[next.length - 1] };
         last.text = responseText || last.text;
+        last.model = modelName;
+        last.provider = providerName;
+        last.latencyMs = latencyMs;
         next[next.length - 1] = last;
         return next;
       });
@@ -254,7 +259,7 @@ export default function AIPanel({
             auditEngine.log({
               pageId: page?.id, userId: realtimeCollab.getUser()?.userId || 'ai',
               userName: currentAgent.name, action: 'ai_edit',
-              aiProvider: providerName, aiModel: 'default',
+              aiProvider: providerName, aiModel: modelName, aiLatencyMs: latencyMs,
               detail: `${r.name}: ${r.result?.count || 0} blocks`
             });
           }
@@ -264,7 +269,7 @@ export default function AIPanel({
       setExecutingTools(false);
 
       // Save to chat list
-      const finalMessages: ChatPanelMessage[] = [...messages, userMsg, { role: "ai", text: responseText }];
+      const finalMessages: ChatPanelMessage[] = [...messages, userMsg, { role: "ai", text: responseText, model: modelName, provider: providerName, latencyMs }];
       onChatsChange?.(prev => prev.map(c =>
         c.id === (activeChatId || chatId) ? {
           ...c, messages: finalMessages,

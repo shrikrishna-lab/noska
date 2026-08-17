@@ -17,6 +17,7 @@ import OnboardingPage from "./onboarding/pages/OnboardingPage";
 import { starterPageForTemplate } from "./onboarding/services/onboardingService";
 import CommandPalette from "./components/CommandPalette";
 import { SettingsModal, TrashModal, ShareModal, HelpModal, CustomDialog } from "./components/Modals";
+import ProfileModal from "./components/ProfileModal";
 import FocusZoom from "./features/focus/FocusZoom";
 import StackedColumn from "./features/stacking/StackedColumn";
 import ReadingMode from "./features/reading/ReadingMode";
@@ -43,7 +44,6 @@ const ApiConsole = lazy(() => import("./features/api/ApiConsole"));
 
 import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
 import { supabase, setClerkSessionToken } from "./lib/supabase";
-import { WaitlistGate } from "./components/auth/WaitlistGate";
 import LoginGate from "./components/auth/LoginGate";
 import { TEST_MODE } from "./lib/envGuard";
 import { capture, identifyUser, resetIdentity } from "./lib/posthog";
@@ -71,6 +71,7 @@ import {
 } from "./utils/pageTreeOps";
 import {
   fetchPages, fetchSettings, fetchAIChats, savePage, saveSetting, fetchUserProfile, upsertUserProfile, setOnboardingComplete,
+  detectLocationFromIp,
   fetchPageInvites, acceptPageInvite, declinePageInvite, fetchSharedPages, updateSharedPage as updateSharedPageRemote
 } from "./lib/supabaseService";
 import type { Page, AIChat } from "./lib/supabaseService";
@@ -127,6 +128,7 @@ function AppContent() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const [
     { pages, sharedPages, activeId, workspaceName, pendingInvites, collapsedPages,
@@ -266,7 +268,7 @@ function AppContent() {
       },
       renamePage: (title: string) => updatePage(activePage.id, { title }),
       appendBlocks: (blocks: Block[]) => {
-        auditEngine.log({ pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'ai', userName: 'AI', action: 'ai_generated', contentBefore: { blockCount: activePage.blocks.length }, contentAfter: { blockCount: activePage.blocks.length + blocks.length }, detail: `AI appended ${blocks.length} blocks` });
+        auditEngine.log({ pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'ai', userName: 'AI', action: 'ai_generated', aiProvider: aiManager.getActiveProviderName(), aiModel: aiManager.getActiveModelName(), contentBefore: { blockCount: activePage.blocks.length }, contentAfter: { blockCount: activePage.blocks.length + blocks.length }, detail: `AI appended ${blocks.length} blocks` });
         updatePage(activePage.id, { blocks: [...activePage.blocks, ...blocks] });
       },
       setPageTags: (tags: unknown[]) => updatePage(activePage.id, { tags }),
@@ -324,7 +326,11 @@ function AppContent() {
 
   useEffect(() => {
     if (session) {
-      setClerkSessionToken(() => session.getToken());
+      // Supabase verifies the Clerk JWT template named `supabase` (issuer,
+      // audience, and claims configured for the database/RLS policies).
+      // The default Clerk session token is not accepted by Supabase's JWT
+      // verifier and causes authenticated reads/writes to fail with 401.
+      setClerkSessionToken(() => session.getToken({ template: "supabase" }));
     } else {
       setClerkSessionToken(() => Promise.resolve(null));
     }
@@ -416,8 +422,10 @@ function AppContent() {
       }
 
       // 1. Check session FIRST — determines user isolation (Clerk replaces Supabase auth)
-      if (hydrated.current) return;
       if (!clerkLoaded) return;
+      // Clerk may report isSignedIn before useSession has produced the token
+      // Supabase needs for RLS. Wait for the session before the first read.
+      if (isSignedIn && !session) return;
       if (!mounted) return;
 
       const userId = isSignedIn && clerkUser ? clerkUser.id : null;
@@ -425,9 +433,13 @@ function AppContent() {
       // 2. Fetch data from Supabase (filtered by user_id if logged in)
       try {
         const [remotePages, remoteSettings, remoteChats] = await Promise.all([
-          fetchPages(userId),
-          fetchSettings(),
-          fetchAIChats(userId)
+          // Anonymous visitors only need the auth screen. Avoid querying
+          // owner-scoped tables before Clerk has supplied a session token;
+          // those requests are expected to be rejected by Supabase RLS and
+          // otherwise surface a misleading startup warning in production.
+          userId ? fetchPages(userId) : Promise.resolve([]),
+          userId ? fetchSettings() : Promise.resolve({}),
+          userId ? fetchAIChats(userId) : Promise.resolve([])
         ]);
         if (!mounted) return;
         loadedPages = remotePages;
@@ -645,7 +657,7 @@ function AppContent() {
       }
     })();
     return () => { mounted = false; };
-  }, [clerkLoaded]);
+  }, [clerkLoaded, isSignedIn, clerkUser?.id, session?.id]);
 
   interface AuthUserData {
     userId: string;
@@ -674,6 +686,7 @@ function AppContent() {
     }
 
     try {
+      const location = !existingProfile?.country ? await detectLocationFromIp() : null;
       await upsertUserProfile({
         userId: userData.userId,
         userName: uname,
@@ -684,7 +697,10 @@ function AppContent() {
         // returning users on every login.
         onboardingComplete: existingProfile?.onboarding_complete ?? false,
         useCase: existingProfile?.use_case,
-        workspaceName: existingProfile?.workspace_name
+        workspaceName: existingProfile?.workspace_name,
+        // Seed location from IP on first login so the admin panel can do
+        // city/state/area/country-wise email targeting.
+        ...location,
       });
     } catch (e) {
       console.warn("App: failed to save user profile", e);
@@ -1344,7 +1360,7 @@ function AppContent() {
                 timestamp: now(),
                 detail: `AI added ${added} block${added !== 1 ? 's' : ''}`
               });
-              auditEngine.log({ pageId: id, userId: realtimeCollab.getUser()?.userId || 'system', userName: realtimeCollab.getUser()?.userName || 'System', action: 'ai_generated', contentBefore: { blockCount: p.blocks.length }, contentAfter: { blockCount: patch.blocks.length }, detail: `AI added ${added} blocks` });
+              auditEngine.log({ pageId: id, userId: realtimeCollab.getUser()?.userId || 'system', userName: realtimeCollab.getUser()?.userName || 'System', action: 'ai_generated', aiProvider: aiManager.getActiveProviderName(), aiModel: aiManager.getActiveModelName(), contentBefore: { blockCount: p.blocks.length }, contentAfter: { blockCount: patch.blocks.length }, detail: `AI added ${added} blocks` });
             } else if (added < 0) {
               nextLineage.push({
                 action: "edited",
@@ -2111,7 +2127,7 @@ function AppContent() {
         </LoginGate>
       )}
       {(appFlowState === "onboarding" || appFlowState === "workspace") && location.pathname !== "/banned" && (
-        <WaitlistGate>
+        <>
           {appFlowState === "onboarding" && !onboardingOpen && (
             <OnboardingPage
               key="onboarding"
@@ -2166,6 +2182,7 @@ function AppContent() {
             onSearch={() => setPaletteOpen(true)}
             onTrash={() => setTrashOpen(true)}
             onSettings={handleOpenSettings}
+            onProfile={() => setProfileOpen(true)}
             onAI={openRightPanel}
             onAIFull={startAIChat}
             onHelp={() => setHelpOpen(true)}
@@ -2506,7 +2523,7 @@ function AppContent() {
                 onClipper={() => setClipperOpen(true)}
                 onVoice={() => setVoiceOpen(true)}
                 onReview={() => setReviewOpen(true)}
-                onLineage={() => setLineageOpen(true)}
+onLineage={() => setLineageOpen(true)}
                 onAPI={() => setApiConsoleOpen(true)}
                 onSettings={handleOpenSettings}
                 onCollab={() => { setPaletteOpen(false); setCollabOpen(true); }}
@@ -2539,6 +2556,23 @@ function AppContent() {
                 onUsernameChanged={setCurrentUsername}
               />
             )}
+            <ProfileModal
+              open={profileOpen}
+              onClose={() => setProfileOpen(false)}
+              currentUserId={currentUserId}
+              currentUsername={currentUsername}
+              currentUserEmail={currentUserEmail}
+              onUsernameChanged={setCurrentUsername}
+              onNameChanged={(name) => {
+                const avatar = realtimeCollab.getUser()?.userAvatar || "👤";
+                realtimeCollab.initUser(currentUserId || "", name, avatar);
+              }}
+              onAvatarChanged={(avatarUrl) => {
+                const name = realtimeCollab.getUser()?.userName || "Workspace User";
+                realtimeCollab.initUser(currentUserId || "", name, avatarUrl || "👤");
+              }}
+              onToast={showToast}
+            />
             {trashOpen && <TrashModal pages={trashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} />}
             {shareOpen && (
               <ShareModal
@@ -2667,7 +2701,7 @@ function AppContent() {
           )}
         </motion.div>
       )}
-      </WaitlistGate>
+        </>
       )}
       {location.pathname === "/banned" && (
         <motion.div

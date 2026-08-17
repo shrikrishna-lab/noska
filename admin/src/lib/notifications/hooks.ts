@@ -1,7 +1,9 @@
-import { useRef, useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import notify from "@/lib/notify";
 import { supabase, getAdminToken, SUPABASE_ENABLED } from "@/lib/supabase";
+import { subscribeRealtime } from "@/lib/realtime";
+import { useIslandNotification } from "@/components/ui/DynamicIslandNotification";
 import type { AppNotification, NotificationsResponse, NotificationFilters } from "./types";
 
 function token(): string {
@@ -502,32 +504,65 @@ export function useDeleteNotification() {
 }
 
 // ─── Realtime Subscription ──
+//
+// Subscribes to the `admin_realtime_outbox` relay (RLS-protected tables
+// never deliver events to the anon-key client).  On any `notifications`
+// row change it invalidates all notification queries.
 
 export function useRealtimeNotifications() {
   const queryClient = useQueryClient();
-  const channelRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const sb = supabase;
-    if (!SUPABASE_ENABLED || !sb || channelRef.current) return;
-
-    const id = "notifications-rt-" + Math.random().toString(36).slice(2, 10);
-    channelRef.current = id;
-
-    const channel = sb
-      .channel(id)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["notifications"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      sb.removeChannel(channel);
-      channelRef.current = null;
-    };
+    return subscribeRealtime((row) => {
+      if (row.table_name !== "notifications") return;
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    });
   }, [queryClient]);
+}
+
+// ─── Realtime Notification Popups (Dynamic Island) ──
+//
+// Mounted once at the Shell level.  When a NEW notification row is
+// inserted anywhere in the system, it fetches the row via the admin RPC
+// and pops an app-notch-style Dynamic Island notification in real time.
+
+export function useRealtimeNotificationPopups() {
+  const island = useIslandNotification();
+  const islandRef = useRef(island);
+  islandRef.current = island;
+
+  useEffect(() => {
+    return subscribeRealtime(async (row) => {
+      if (row.table_name !== "notifications" || row.event !== "INSERT" || !row.record_id) return;
+
+      try {
+        const notif = await getNotification(row.record_id);
+        const current = islandRef.current;
+        const sev = notif.severity ?? "info";
+        const meta: Record<string, string | number> = {
+          source: notif.source ?? "system",
+          category: notif.category ?? "system",
+          severity: sev,
+        };
+
+        const description = notif.message || notif.description || undefined;
+        const opts = {
+          icon: sev === "critical" ? ("error" as const) : (sev as "info" | "warning" | "success"),
+          metadata: meta,
+        };
+
+        if (sev === "critical") {
+          current.error(notif.title, description, opts);
+        } else if (sev === "warning") {
+          current.warning(notif.title, description, opts);
+        } else if (sev === "success") {
+          current.success(notif.title, description, opts);
+        } else {
+          current.info(notif.title, description, opts);
+        }
+      } catch {
+        // row may have been deleted between the relay event and the fetch
+      }
+    });
+  }, []);
 }

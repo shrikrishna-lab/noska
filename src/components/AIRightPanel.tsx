@@ -95,6 +95,9 @@ interface AIChatMessage {
   text?: string;
   html?: string;
   createdAt?: string;
+  model?: string;
+  provider?: string;
+  latencyMs?: number;
 }
 
 /** Shape of `toolContext`, passed straight through to
@@ -245,17 +248,19 @@ export default function AIRightPanel({
     onChatsChange?.(chats);
 
     try {
+      const startedAt = Date.now();
       const result = await aiManager.sendConversation({
         messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
         page, pages,
       });
+      const latencyMs = Date.now() - startedAt;
 
       let processedMessages = updatedMessages;
 
       if (hasToolCalls(result)) {
         const cleaned = stripToolCalls(result);
         if (cleaned?.trim()) {
-          const toolMsg: AIChatMessage = { id: uid(), role: "assistant", content: cleaned, createdAt: now() };
+          const toolMsg: AIChatMessage = { id: uid(), role: "assistant", content: cleaned, createdAt: now(), model: modelName, provider: providerName, latencyMs };
           processedMessages = [...processedMessages, toolMsg];
           setMessages(processedMessages);
         }
@@ -272,10 +277,10 @@ export default function AIRightPanel({
           page, pages,
         });
         const finalContent = hasToolCalls(followUp) ? stripToolCalls(followUp) : followUp;
-        const finalMsg: AIChatMessage = { id: uid(), role: "assistant", content: finalContent, createdAt: now() };
+        const finalMsg: AIChatMessage = { id: uid(), role: "assistant", content: finalContent, createdAt: now(), model: modelName, provider: providerName, latencyMs };
         processedMessages = [...processedMessages, finalMsg];
       } else {
-        const aiMsg: AIChatMessage = { id: uid(), role: "assistant", content: result, createdAt: now() };
+        const aiMsg: AIChatMessage = { id: uid(), role: "assistant", content: result, createdAt: now(), model: modelName, provider: providerName, latencyMs };
         processedMessages = [...processedMessages, aiMsg];
       }
 
@@ -293,7 +298,7 @@ export default function AIRightPanel({
           : message?.includes("timeout") || message?.includes("timed out")
             ? "AI request timed out. Try again or use a different model."
             : `AI request failed. Please try again.`;
-      const errMsg: AIChatMessage = { id: uid(), role: "assistant", content: friendly, createdAt: now() };
+      const errMsg: AIChatMessage = { id: uid(), role: "assistant", content: friendly, createdAt: now(), model: modelName, provider: providerName };
       setMessages([...updatedMessages, errMsg]);
       onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: [...updatedMessages, errMsg], updatedAt: now() } : c) as unknown as AIChat[]);
     } finally {

@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
+import { subscribeRealtime } from "./realtime";
 import { adminApi } from "./admin-api";
 import type { SupportTicket, SupportMessage, BannedUser, DeletedAccount, DemoRequest } from "./types";
 import type { FeatureFlag, FeedbackItem, EmailCampaign, RoadmapItem, Integration, ApiKey, NotificationItem } from "./types";
@@ -11,7 +12,7 @@ function token(): string {
   return t;
 }
 
-async function adminSelect<T>(table: string, select = "*", options?: { order?: string; limit?: number; eq?: [string, unknown] }): Promise<T[]> {
+export async function adminSelect<T>(table: string, select = "*", options?: { order?: string; limit?: number; eq?: [string, unknown] }): Promise<T[]> {
   if (!SUPABASE_ENABLED || !supabase) return [];
   const params: Record<string, unknown> = { p_session_token: token(), p_table: table, p_select: select };
   if (options?.order) {
@@ -37,6 +38,10 @@ async function adminCount(table: string): Promise<number> {
 export interface AdminUserRow {
   id: string; user_name: string; email: string | null; avatar_url: string | null;
   created_at: string | null; username: string | null; updated_at: string | null;
+  bio?: string | null; role?: string | null;
+  country?: string | null; state?: string | null; city?: string | null; area?: string | null;
+  postal_code?: string | null; ip_address?: string | null;
+  latitude?: number | null; longitude?: number | null;
 }
 export function useUsers() {
   return useQuery({
@@ -46,7 +51,217 @@ export function useUsers() {
 }
 
 export function useUserCount() {
-  return useQuery({ queryKey: ["admin", "users", "count"], queryFn: () => adminCount("user_profiles") });
+  return useQuery({ queryKey: ["admin", "users", "count"], queryFn: () => adminCount("user_profiles"), refetchInterval: 30000 });
+}
+
+// ── Individual User Detail ──
+
+export interface UserDetailProfile extends AdminUserRow {
+  user_id: string | null;
+  avatar_url: string | null;
+  role?: string | null;
+  use_case?: string | null;
+  workspace_name?: string | null;
+  preferences?: Record<string, unknown> | null;
+  onboarding_complete?: boolean | null;
+}
+
+export interface UserSubscriptionRow {
+  id: string;
+  customer_name: string | null;
+  email: string | null;
+  plan: string | null;
+  status: string | null;
+  mrr: number | null;
+  payment_method: string | null;
+  started_at: string | null;
+  renews_at: string | null;
+  user_id: string | null;
+}
+
+export interface UserAiChatRow {
+  id: string;
+  name: string | null;
+  chat_type: string | null;
+  page_title: string | null;
+  page_id: string | null;
+  pinned: boolean | null;
+  archived: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+  messages?: Array<{ role: string | null; text?: string | null; content?: string | null; created_at?: string | null; [k: string]: unknown }> | null;
+}
+
+export interface UserAuditRow {
+  id: string;
+  action: string | null;
+  detail: string | null;
+  block_type: string | null;
+  created_at: string | null;
+}
+
+export function useUserProfile(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", userId],
+    queryFn: () => adminSelect<UserDetailProfile>("user_profiles", "*", { eq: ["id", userId ?? ""], limit: 1 }),
+    enabled: !!userId,
+  });
+}
+
+export function useUserSubscriptions(userId: string | undefined, clerkId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", userId, "subscriptions"],
+    queryFn: async () => {
+      if (!userId) return [];
+      const byUuid = await adminSelect<UserSubscriptionRow>("subscriptions", "*", { eq: ["user_id", userId], limit: 20 });
+      if (byUuid.length > 0) return byUuid;
+      return [];
+    },
+    enabled: !!userId,
+    refetchInterval: 30000,
+  });
+}
+
+export function useUserAiChats(clerkId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", clerkId, "chats"],
+    queryFn: () => adminSelect<UserAiChatRow>("ai_chats", "*", { eq: ["user_id", clerkId ?? ""], order: "updated_at desc", limit: 50 }),
+    enabled: !!clerkId,
+    refetchInterval: 30000,
+  });
+}
+
+export function useUserPages(clerkId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", clerkId, "pages"],
+    queryFn: () => adminSelect<PageRow>("pages", "id,title,trashed,created_at,updated_at", { eq: ["user_id", clerkId ?? ""], order: "updated_at desc", limit: 100 }),
+    enabled: !!clerkId,
+    refetchInterval: 30000,
+  });
+}
+
+export function useUserAuditEvents(clerkId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", clerkId, "audit"],
+    queryFn: () => adminSelect<UserAuditRow>("audit_events", "id,action,detail,block_type,created_at", { eq: ["user_id", clerkId ?? ""], order: "created_at desc", limit: 100 }),
+    enabled: !!clerkId,
+    refetchInterval: 30000,
+  });
+}
+
+// ── User Detail: rich audit feed with content / AI metadata for preview ──
+export interface UserAuditDetailRow {
+  id: string; action: string; detail: string | null; block_type: string | null;
+  page_id: string | null; block_id: string | null;
+  content_before: unknown; content_after: unknown;
+  ai_provider: string | null; ai_model: string | null;
+  ai_prompt_tokens: number | null; ai_completion_tokens: number | null;
+  ai_latency_ms: number | null; ai_cost: number | null;
+  created_at: string | null;
+}
+export function useUserAuditDetail(clerkId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", clerkId, "audit-detail"],
+    queryFn: () => adminSelect<UserAuditDetailRow>(
+      "audit_events",
+      "id,action,detail,block_type,page_id,block_id,content_before,content_after,ai_provider,ai_model,ai_prompt_tokens,ai_completion_tokens,ai_latency_ms,ai_cost,created_at",
+      { eq: ["user_id", clerkId ?? ""], order: "created_at desc", limit: 500 },
+    ),
+    enabled: !!clerkId,
+    refetchInterval: 30000,
+  });
+}
+
+// ── User Detail: is this user also a platform admin? (matched by email) ──
+export interface AdminMatchRow {
+  id: string; name: string; email: string; role: string; avatar_url: string | null; last_login: string | null;
+}
+export function useAdminMatchByEmail(email: string | null | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "admin-match", email],
+    queryFn: () => adminSelect<AdminMatchRow>("admin_users", "id,name,email,role,avatar_url,last_login", { eq: ["email", email ?? ""], limit: 1 }),
+    enabled: !!email,
+  });
+}
+
+// ── User Detail: active / historical bans for this user ──
+export interface UserBanRow {
+  id: string; user_id: string | null; email: string; user_name: string | null;
+  reason: string; ban_type: string; banned_by: string | null;
+  expires_at: string | null; lifted_at: string | null; created_at: string | null;
+}
+export function useUserBans(clerkId: string | undefined, email: string | null | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", clerkId, "bans"],
+    queryFn: async () => {
+      if (!clerkId) return [] as UserBanRow[];
+      const byUser = await adminSelect<UserBanRow>("banned_users", "*", { eq: ["user_id", clerkId], order: "created_at desc", limit: 20 });
+      if (byUser.length > 0) return byUser;
+      if (email) return adminSelect<UserBanRow>("banned_users", "*", { eq: ["email", email], order: "created_at desc", limit: 20 });
+      return [] as UserBanRow[];
+    },
+    enabled: !!clerkId,
+    refetchInterval: 30000,
+  });
+}
+
+// ── User Detail: database storage usage for this user (clerk id) ──
+export interface UserStorageRow {
+  total_bytes: number;
+  tables: Array<{ table: string; label: string; rows: number; bytes: number }>;
+}
+export function useUserStorage(clerkId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", clerkId, "storage"],
+    queryFn: async () => {
+      if (!SUPABASE_ENABLED || !supabase) return null as UserStorageRow | null;
+      const { data, error } = await supabase.rpc("admin_user_storage", {
+        p_session_token: token(), p_user_id: clerkId ?? "",
+      });
+      if (error) throw error;
+      return data as UserStorageRow | null;
+    },
+    enabled: !!clerkId,
+    refetchInterval: 30000,
+  });
+}
+
+// ── User Detail: admin actions targeting this user (profile uuid) ──
+export interface AdminUserActionRow {
+  id: string; admin_id: string; admin_name: string; action: string;
+  target_type: string | null; target_id: string | null; target_name: string | null;
+  detail: unknown; created_at: string;
+}
+export function useUserAdminActions(profileId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", profileId, "admin-actions"],
+    queryFn: async () => {
+      if (!SUPABASE_ENABLED || !supabase) return [] as AdminUserActionRow[];
+      const { data, error } = await supabase.rpc("read_admin_user_audit", {
+        p_session_token: token(), p_target_id: profileId ?? "", p_limit: 100,
+      });
+      if (error) throw error;
+      return (data ?? []) as AdminUserActionRow[];
+    },
+    enabled: !!profileId,
+    refetchInterval: 30000,
+  });
+}
+
+// ── User Detail: live collaboration sessions ──
+export interface UserSessionRow {
+  id: string; page_id: string | null; user_id: string; user_name: string;
+  user_avatar: string | null; user_color: string; status: string | null;
+  current_block_id: string | null; last_activity: string | null;
+  started_at: string | null; updated_at: string | null;
+}
+export function useUserSessions(clerkId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin", "users", "detail", clerkId, "sessions"],
+    queryFn: () => adminSelect<UserSessionRow>("collaboration_sessions", "*", { eq: ["user_id", clerkId ?? ""], order: "updated_at desc", limit: 50 }),
+    enabled: !!clerkId,
+    refetchInterval: 30000,
+  });
 }
 
 // ── Pages / Workspaces ──
@@ -63,7 +278,7 @@ export function usePages() {
 }
 
 export function usePageCount() {
-  return useQuery({ queryKey: ["admin", "pages", "count"], queryFn: () => adminCount("pages") });
+  return useQuery({ queryKey: ["admin", "pages", "count"], queryFn: () => adminCount("pages"), refetchInterval: 30000 });
 }
 
 // ── Audit Events ──
@@ -81,7 +296,64 @@ export function useAuditEvents(limit = 50) {
 }
 
 export function useAuditCount() {
-  return useQuery({ queryKey: ["admin", "audit", "count"], queryFn: () => adminCount("audit_events") });
+  return useQuery({ queryKey: ["admin", "audit", "count"], queryFn: () => adminCount("audit_events"), refetchInterval: 30000 });
+}
+
+// ── Admin audit log (admin_audit_log via read_admin_audit_log RPC) ──
+export interface AdminAuditLogRow {
+  id: string; admin_id: string; admin_name: string; action: string;
+  target_type: string | null; target_id: string | null; target_name: string | null;
+  detail: unknown; created_at: string;
+}
+export function useAdminAuditLog(limit = 10) {
+  return useQuery({
+    queryKey: ["admin", "admin-audit-log", limit],
+    queryFn: async () => {
+      if (!SUPABASE_ENABLED || !supabase) return [] as AdminAuditLogRow[];
+      const { data, error } = await supabase.rpc("read_admin_audit_log", {
+        p_session_token: token(), p_limit: limit, p_offset: 0,
+      });
+      if (error) throw error;
+      return (data ?? []) as AdminAuditLogRow[];
+    },
+    refetchInterval: 30000,
+  });
+}
+
+// ── Recent admin login attempts (admin_login_attempts) ──
+export interface AdminLoginAttemptRow {
+  id: string; email: string; attempted_at: string;
+}
+export function useAdminLoginAttempts(limit = 20) {
+  return useQuery({
+    queryKey: ["admin", "admin-login-attempts", limit],
+    queryFn: () => adminSelect<AdminLoginAttemptRow>(
+      "admin_login_attempts", "id, email, attempted_at", { order: "attempted_at desc", limit }
+    ),
+    refetchInterval: 30000,
+  });
+}
+
+// ── Record a real admin audit entry (admin_audit_log) ──
+export function useLogAdminAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { action: string; target_type?: string; target_id?: string; target_name?: string; detail?: Record<string, unknown> }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("record_admin_action", {
+        p_session_token: token(),
+        p_action: input.action,
+        p_target_type: input.target_type ?? null,
+        p_target_id: input.target_id ?? null,
+        p_target_name: input.target_name ?? null,
+        p_detail: input.detail ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "admin-audit-log"] });
+    },
+  });
 }
 
 // ── AI Chats ──
@@ -98,7 +370,7 @@ export function useAiChats() {
 }
 
 export function useAiChatCount() {
-  return useQuery({ queryKey: ["admin", "aichats", "count"], queryFn: () => adminCount("ai_chats") });
+  return useQuery({ queryKey: ["admin", "aichats", "count"], queryFn: () => adminCount("ai_chats"), refetchInterval: 30000 });
 }
 
 // ── AI Usage from audit events ──
@@ -267,6 +539,7 @@ export interface DbSubscription {
   id: string; customer_name: string; email: string | null;
   plan: string; status: string; mrr: number;
   payment_method: string | null; started_at: string | null; renews_at: string | null;
+  user_id: string | null;
 }
 export function useSubscriptions() {
   return useQuery({
@@ -498,6 +771,7 @@ export function useDashboardKpis() {
       if (aiError) throw aiError;
       return { userCount, pageCount, auditCount, chatCount, aiEventsToday: aiToday ?? 0 };
     },
+    refetchInterval: 30000,
   });
 }
 
@@ -541,6 +815,7 @@ export function useDailySignups(days = 14) {
       }
       return labels.map((d) => ({ date: d.slice(5), value: map.get(d) ?? 0 }));
     },
+    refetchInterval: 60000,
   });
 }
 
@@ -572,6 +847,7 @@ export function useDailyAuditEvents(days = 30) {
       }
       return labels.map((d) => ({ date: d.slice(5), value: map.get(d) ?? 0 }));
     },
+    refetchInterval: 60000,
   });
 }
 
@@ -888,39 +1164,56 @@ export function useDeleteTicket() {
   });
 }
 
-// ── Realtime subscription hook ──
+// ── Realtime subscription hooks ──
+//
+// These use the shared `admin_realtime_outbox` relay (see lib/realtime.ts)
+// instead of subscribing to RLS-protected tables directly — the anon-key
+// admin client can actually receive those relay events.
+
 export function useRealtimeInvalidate(queryKey: string[], table: string, event: "INSERT" | "UPDATE" | "DELETE" | "*" = "*") {
   const qc = useQueryClient();
   const queryKeyRef = useRef(queryKey);
   queryKeyRef.current = queryKey;
-  const channelName = useMemo(() => `realtime-${queryKey.join(":")}-${table}-${event}`, [queryKey.join(":"), table, event]);
+
   useEffect(() => {
-    if (!SUPABASE_ENABLED || !supabase) return;
-    const channel = supabase
-      .channel(channelName)
-      .on("postgres_changes" as never, { event, schema: "public", table }, () => {
-        qc.invalidateQueries({ queryKey: queryKeyRef.current });
-      })
-      .subscribe();
-    return () => { supabase?.removeChannel(channel); };
-  }, [qc, channelName, table, event]);
+    return subscribeRealtime((row) => {
+      if (row.table_name !== table) return;
+      if (event !== "*" && row.event !== event) return;
+      qc.invalidateQueries({ queryKey: queryKeyRef.current });
+    });
+  }, [qc, table, event]);
 }
 
 export function useRealtimeAuditFeed(limit = 20) {
   const [events, setEvents] = useState<AuditEventRow[]>([]);
   const qc = useQueryClient();
+  const limitRef = useRef(limit);
+  limitRef.current = limit;
 
   useEffect(() => {
-    if (!SUPABASE_ENABLED || !supabase) return;
-    const channel = supabase
-      .channel("realtime-audit-feed")
-      .on("postgres_changes" as never, { event: "INSERT", schema: "public", table: "audit_events" }, (payload: { new: AuditEventRow }) => {
-        setEvents((prev) => [payload.new, ...prev].slice(0, limit));
-        qc.invalidateQueries({ queryKey: ["admin", "audit"] });
-      })
-      .subscribe();
-    return () => { supabase?.removeChannel(channel); };
-  }, [limit]);
+    return subscribeRealtime(async (row) => {
+      if (row.table_name !== "audit_events" || row.event !== "INSERT" || !row.record_id) return;
+      qc.invalidateQueries({ queryKey: ["admin", "audit"] });
+      try {
+        const t = getAdminToken();
+        if (!t || !supabase) return;
+        const { data, error } = await supabase.rpc("admin_select", {
+          p_session_token: t,
+          p_table: "audit_events",
+          p_select: "*",
+          p_eq_col: "id",
+          p_eq_val: row.record_id,
+          p_limit: 1,
+        });
+        if (error) throw error;
+        const rec = (data as AuditEventRow[])[0];
+        if (!rec) return;
+        setEvents((prev) => [rec, ...prev].slice(0, limitRef.current));
+      } catch {
+        // row might have been deleted already — ignore
+      }
+    });
+  }, [qc]);
 
   return events;
 }
@@ -1322,20 +1615,41 @@ export function useCreateEmailCampaign() {
   return useMutation({
     mutationFn: async (data: { name: string; subject: string; html_content: string; status: string }) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const { error } = await supabase.rpc("admin_insert", {
+      const { data: newId, error } = await supabase.rpc("admin_insert", {
         p_session_token: token(), p_table: "email_campaigns",
-        p_data: { ...data, recipients: 0, sent: 0, open_rate: "0", click_rate: "0", bounce_rate: "0" }, p_min_role: "marketing",
+        p_data: { ...data, recipients: 0, sent: 0, open_rate: "0", click_rate: "0", bounce_rate: "0", created_by: getAdminId() }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+      return (newId ?? null) as string | null;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+  });
+}
+
+export function useCreateNewsletterSubscriber() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { email: string; name?: string; source?: string; status?: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "newsletter_subscribers",
+        p_data: {
+          email: data.email, name: data.name ?? "",
+          status: data.status ?? "active", source: data.source ?? "manual",
+          subscribed_at: new Date().toISOString(),
+        },
+        p_min_role: "marketing",
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "newsletter-subscribers"] }),
   });
 }
 
 export function useUpdateEmailCampaign() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; name?: string; subject?: string; html_content?: string; status?: string; scheduled_for?: string }) => {
+    mutationFn: async ({ id, ...data }: { id: string; name?: string; subject?: string; html_content?: string; status?: string; scheduled_for?: string | null }) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
       const { error } = await supabase.rpc("admin_update", {
         p_session_token: token(), p_table: "email_campaigns", p_id: id,
@@ -1366,6 +1680,7 @@ export function useEmailTemplates() {
   return useQuery({
     queryKey: ["admin", "email-templates"],
     queryFn: () => adminSelect<import("./types").EmailTemplate>("email_templates", "*", { order: "updated_at desc" }),
+    refetchInterval: 30000,
   });
 }
 
@@ -1481,6 +1796,126 @@ export function useDeleteEmailSegment() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-segments"] }),
   });
+}
+
+export function useUpdateEmailSegment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; name?: string; description?: string; filters?: unknown; subscriber_count?: number }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "email_segments", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email-segments"] }),
+  });
+}
+
+// ── Admin Route Registry Queries ──
+export function useAdminRoutes(area?: "admin" | "web") {
+  return useQuery({
+    queryKey: ["admin", "routes", area ?? "all"],
+    queryFn: () => adminSelect<import("./types").AdminRoute>("admin_routes", "*", { order: "area asc, section asc, path asc" }),
+    select: (rows) => (area ? (rows ?? []).filter((r) => r.area === area) : rows ?? []),
+  });
+}
+
+export function useUpdateAdminRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; enabled?: boolean; min_role?: string | null; label?: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "admin_routes", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "super_admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "routes"] }),
+  });
+}
+
+// ── User Profile Location Queries ──
+export function useUpdateUserLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: {
+      id: string;
+      country?: string | null; state?: string | null; city?: string | null; area?: string | null;
+      postal_code?: string | null; ip_address?: string | null;
+      latitude?: number | null; longitude?: number | null;
+    }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "user_profiles", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users", "detail"] });
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+// ── User Profile Edit Queries (name / username / bio / avatar / onboarding) ──
+export function useUpdateUserProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: {
+      id: string;
+      user_name?: string | null; username?: string | null; bio?: string | null;
+      avatar_url?: string | null; use_case?: string | null; workspace_name?: string | null;
+      onboarding_complete?: boolean | null; role?: string | null;
+    }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "user_profiles", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users", "detail"] });
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+// Upload an avatar for a user through the admin-upload-avatar edge function
+// (service-role storage upload bypasses bucket RLS). Returns the public URL.
+export async function adminUploadAvatar(file: File, userId: string): Promise<{ url?: string; error?: string }> {
+  if (!SUPABASE_ENABLED || !supabase) return { error: "Supabase not available" };
+  const t = getAdminToken();
+  if (!t) return { error: "No admin session" };
+  if (file.size > 2 * 1024 * 1024) return { error: "Image must be under 2 MB" };
+
+  const reader = new FileReader();
+  const base64 = await new Promise<string>((resolve, reject) => {
+    reader.onload = () => {
+      const result = reader.result as string;
+      const idx = result.indexOf(",");
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+
+  try {
+    const { data, error } = await supabase.functions.invoke("admin-upload-avatar", {
+      body: { user_id: userId, file_name: file.name || "avatar.png", base64, content_type: file.type || "image/png" },
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (error) return { error: error.message };
+    const res = data as { url?: string; error?: string } | null;
+    if (!res?.url) return { error: res?.error ?? "Upload failed" };
+    return { url: res.url };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Upload failed" };
+  }
 }
 
 // ── Email Version Queries ──
@@ -1628,6 +2063,7 @@ export function useUpdateLaunchSettings() {
         const oldVal = existing[0]?.[key as keyof LaunchSettings];
         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
           try { await supabase.rpc("log_launch_audit", {
+            p_admin_id: getAdminId(),
             p_admin_name: admin_name ?? "Unknown",
             p_action: "update",
             p_entity_type: "launch_settings",
@@ -1635,6 +2071,7 @@ export function useUpdateLaunchSettings() {
             p_field: key,
             p_old_value: JSON.parse(JSON.stringify(oldVal ?? null)),
             p_new_value: JSON.parse(JSON.stringify(newVal)),
+            p_details: null,
           }); } catch {}
         }
       }
@@ -1663,8 +2100,13 @@ export function useUpdateLandingContent() {
       });
       if (error) throw error;
       try { await supabase.rpc("log_launch_audit", {
+        p_admin_id: getAdminId(),
         p_admin_name: admin_name ?? "Unknown",
         p_action: "update", p_entity_type: "landing_content", p_entity_id: id,
+        p_field: Object.keys(data).join(", "),
+        p_old_value: null,
+        p_new_value: null,
+        p_details: null,
       }); } catch {}
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "landing-content"] }),
@@ -1690,9 +2132,13 @@ export function useUpdateCTAButton() {
       });
       if (error) throw error;
       try { await supabase.rpc("log_launch_audit", {
+        p_admin_id: getAdminId(),
         p_admin_name: admin_name ?? "Unknown",
         p_action: "update", p_entity_type: "cta_button", p_entity_id: id,
         p_field: Object.keys(data).join(", "),
+        p_old_value: null,
+        p_new_value: null,
+        p_details: null,
       }); } catch {}
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "cta-buttons"] }),

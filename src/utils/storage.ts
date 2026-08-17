@@ -1,4 +1,4 @@
-import { savePages, saveAIChats, saveSetting } from "../lib/supabaseService";
+import { savePages, saveAIChats } from "../lib/supabaseService";
 
 let syncQueue = [];
 let syncTimer = null;
@@ -59,20 +59,6 @@ export function storageApi() {
           const chats = JSON.parse(value);
           scheduleSync(() => saveAIChats(chats, userId));
         } catch (e) { console.warn("storage: failed to sync chats", e); }
-      }
-
-      if (key === "workspaceName") {
-        try {
-          const name = JSON.parse(value);
-          scheduleSync(() => saveSetting("workspaceName", name));
-        } catch (e) { console.warn("storage: failed to sync workspaceName", e); }
-      }
-
-      if (key === "theme") {
-        try {
-          const theme = JSON.parse(value);
-          scheduleSync(() => saveSetting("theme", theme));
-        } catch (e) { console.warn("storage: failed to sync theme", e); }
       }
 
       return { ok: true };

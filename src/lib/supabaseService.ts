@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Json, Tables, TablesInsert } from "../../types/supabase";
+import type { Json, Tables, TablesInsert, TablesUpdate } from "../../types/supabase";
 import type { Block, LineageEntry } from "../../types/blocks";
 import type {
   AgentAccessLevel,
@@ -440,6 +440,7 @@ export interface UserProfileInput {
   userName?: string;
   email?: string | null;
   avatarUrl?: string | null;
+  bio?: string | null;
   onboardingComplete?: boolean;
   useCase?: string | null;
   workspaceName?: string | null;
@@ -449,6 +450,16 @@ export interface UserProfileInput {
    * the existing value (e.g. App.tsx's per-login upsert) don't accidentally
    * clear a previously-set username. */
   username?: string | null;
+  /** Location details captured on the web side (profile/onboarding) and used
+   * by the admin panel for city/state/area/country-wise email targeting. */
+  country?: string | null;
+  state?: string | null;
+  city?: string | null;
+  area?: string | null;
+  postalCode?: string | null;
+  ipAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 /** Matches the DB-level CHECK constraint on user_profiles.username exactly
@@ -464,6 +475,24 @@ export function normalizeUsername(raw: string): string {
 
 export function isValidUsernameFormat(raw: string): boolean {
   return USERNAME_PATTERN.test(normalizeUsername(raw));
+}
+
+/** Return a few deterministic alternatives when a requested handle is taken. */
+export async function suggestAvailableUsernames(
+  input: string,
+  excludeUserId?: string,
+  limit = 3,
+): Promise<string[]> {
+  const base = normalizeUsername(input).replace(/[^a-z0-9_]/g, "").replace(/^([^a-z])/, "u$1").slice(0, 16) || "noska_user";
+  const candidates = Array.from(new Set([
+    `${base}_1`, `${base}_2`, `${base}_2026`, `${base}_app`, `${base}_noska`,
+  ])).filter(isValidUsernameFormat);
+  const available: string[] = [];
+  for (const candidate of candidates) {
+    if (available.length >= limit) break;
+    if (await isUsernameAvailable(candidate, excludeUserId)) available.push(candidate);
+  }
+  return available;
 }
 
 /** Checks whether `username` is free to claim (case-insensitive, matching
@@ -543,6 +572,81 @@ export async function fetchUserProfile(userId: string): Promise<Tables<"user_pro
   return data || null;
 }
 
+/** Fields a user can edit from their own Profile view (self-service,
+ * distinct from admin RPC writes). Only provided fields are updated. */
+export interface UserProfilePatch {
+  userName?: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  country?: string | null;
+  state?: string | null;
+  city?: string | null;
+  area?: string | null;
+  postalCode?: string | null;
+}
+
+/** Self-service profile update from the web app — patches only the fields
+ * the caller passes, leaving onboarding/workspace/username state untouched.
+ * RLS scopes writes to the owner's own row (user_profiles owner policies). */
+export async function updateUserProfile(
+  userId: string,
+  patch: UserProfilePatch
+): Promise<Tables<"user_profiles"> | null> {
+  requireOwner(userId);
+  const update: TablesUpdate<"user_profiles"> = { updated_at: new Date().toISOString() };
+  if (patch.userName !== undefined) update.user_name = patch.userName;
+  if (patch.avatarUrl !== undefined) update.avatar_url = patch.avatarUrl;
+  if (patch.bio !== undefined) update.bio = patch.bio;
+  if (patch.country !== undefined) update.country = patch.country;
+  if (patch.state !== undefined) update.state = patch.state;
+  if (patch.city !== undefined) update.city = patch.city;
+  if (patch.area !== undefined) update.area = patch.area;
+  if (patch.postalCode !== undefined) update.postal_code = patch.postalCode;
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .update(update)
+    .eq("user_id", userId)
+    .select()
+    .maybeSingle();
+  if (error && error.code !== "42P01") throw error;
+  return data || null;
+}
+
+/**
+ * Best-effort client-side location detection used to seed a user's profile
+ * location (country/state/city/area + IP) so the admin panel can do
+ * city/state/area/country-wise email targeting. Never throws — callers use
+ * this purely to enrich profiles; failures are swallowed and return null.
+ */
+export async function detectLocationFromIp(): Promise<Partial<UserProfileInput> | null> {
+  try {
+    const res = await fetch("https://ipwho.is/", { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      ip?: string;
+      success?: boolean;
+      country?: string;
+      region?: string;
+      city?: string;
+      latitude?: number;
+      longitude?: number;
+      postal?: string;
+    };
+    if (!data.success) return null;
+    return {
+      country: data.country || null,
+      state: data.region || null,
+      city: data.city || null,
+      postalCode: data.postal || null,
+      ipAddress: data.ip || null,
+      latitude: typeof data.latitude === "number" ? data.latitude : null,
+      longitude: typeof data.longitude === "number" ? data.longitude : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function upsertUserProfile(profile: UserProfileInput): Promise<Tables<"user_profiles"> | null> {
   requireOwner(profile?.userId);
   const payload: TablesInsert<"user_profiles"> = {
@@ -550,6 +654,7 @@ export async function upsertUserProfile(profile: UserProfileInput): Promise<Tabl
     user_name: profile.userName || "Workspace User",
     email: profile.email || null,
     avatar_url: profile.avatarUrl || null,
+    bio: profile.bio || null,
     onboarding_complete: profile.onboardingComplete ?? false,
     use_case: profile.useCase || null,
     workspace_name: profile.workspaceName || "My Workspace",
@@ -567,6 +672,14 @@ export async function upsertUserProfile(profile: UserProfileInput): Promise<Tabl
   if (profile.username !== undefined) {
     payload.username = profile.username;
   }
+  if (profile.country !== undefined) payload.country = profile.country;
+  if (profile.state !== undefined) payload.state = profile.state;
+  if (profile.city !== undefined) payload.city = profile.city;
+  if (profile.area !== undefined) payload.area = profile.area;
+  if (profile.postalCode !== undefined) payload.postal_code = profile.postalCode;
+  if (profile.ipAddress !== undefined) payload.ip_address = profile.ipAddress;
+  if (profile.latitude !== undefined) payload.latitude = profile.latitude;
+  if (profile.longitude !== undefined) payload.longitude = profile.longitude;
   const { data, error } = await supabase
     .from("user_profiles")
     .upsert(payload, { onConflict: "user_id" })

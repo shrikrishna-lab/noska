@@ -865,12 +865,23 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          area: string | null
           avatar_url: string | null
+          bio: string | null
+          city: string | null
+          country: string | null
           created_at: string | null
           email: string | null
           id: string
+          ip_address: string | null
+          last_active_at: string | null
+          latitude: number | null
+          longitude: number | null
           onboarding_complete: boolean | null
+          postal_code: string | null
           preferences: Json | null
+          role: string | null
+          state: string | null
           updated_at: string | null
           use_case: string | null
           user_id: string
@@ -879,12 +890,23 @@ export type Database = {
           workspace_name: string | null
         }
         Insert: {
+          area?: string | null
           avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
+          ip_address?: string | null
+          last_active_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
           onboarding_complete?: boolean | null
+          postal_code?: string | null
           preferences?: Json | null
+          role?: string | null
+          state?: string | null
           updated_at?: string | null
           use_case?: string | null
           user_id: string
@@ -893,12 +915,23 @@ export type Database = {
           workspace_name?: string | null
         }
         Update: {
+          area?: string | null
           avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
+          ip_address?: string | null
+          last_active_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
           onboarding_complete?: boolean | null
+          postal_code?: string | null
           preferences?: Json | null
+          role?: string | null
+          state?: string | null
           updated_at?: string | null
           use_case?: string | null
           user_id?: string

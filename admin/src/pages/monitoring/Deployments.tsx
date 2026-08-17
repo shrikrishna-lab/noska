@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Rocket, RefreshCw, GitBranch, GitCommit, Clock, RotateCcw, CheckCircle, Loader2, XCircle } from "lucide-react";
+import { Rocket, RefreshCw, GitBranch, GitCommit, Clock, RotateCcw, CheckCircle, Loader2, XCircle, HelpCircle } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -13,6 +13,7 @@ const STATUS_ICON: Record<string, typeof CheckCircle> = {
   building: Loader2,
   error: XCircle,
   canceled: XCircle,
+  unknown: HelpCircle,
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -20,6 +21,7 @@ const STATUS_BADGE: Record<string, string> = {
   building: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
   error: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
   canceled: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400",
+  unknown: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
 };
 
 export function MonitoringDeployments() {

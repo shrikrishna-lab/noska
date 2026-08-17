@@ -4,23 +4,102 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Portal } from "@/components/ui/Portal";
 import {
   useNewsletterSubscribers,
-  useUpdateEmailCampaign,
+  useCreateNewsletterSubscriber,
   useRealtimeInvalidate,
 } from "@/lib/queries";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { Users, Search, Mail, Download, UserPlus, Trash2 } from "lucide-react";
+import { downloadCSV } from "@/lib/utils";
+import { Users, Search, Download, UserPlus, Loader2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 
 const SOURCES = ["all", "waitlist", "signup", "manual", "import", "referral"];
+
+const STATUSES = ["active", "unsubscribed", "bounced"] as const;
+
+function AddSubscriberDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const create = useCreateNewsletterSubscriber();
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [source, setSource] = useState("manual");
+  const [status, setStatus] = useState<string>("active");
+
+  const handleSubmit = async () => {
+    if (!email.trim() || !email.includes("@")) { toast.error("Enter a valid email"); return; }
+    await create.mutateAsync({ email: email.trim(), name: name.trim() || undefined, source, status });
+    toast.success("Subscriber added");
+    onOpenChange(false);
+    setEmail(""); setName(""); setSource("manual"); setStatus("active");
+  };
+
+  return (
+    <Portal>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => onOpenChange(false)}>
+          <div className="w-full max-w-md rounded-xl border bg-background p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Add Subscriber</h2>
+              <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}><X className="h-4 w-4" /></Button>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email</label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="subscriber@example.com" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Name</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Optional" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Source</label>
+                  <select
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                  >
+                    <option value="waitlist">Waitlist</option>
+                    <option value="signup">Roadmap</option>
+                    <option value="manual">Manual</option>
+                    <option value="import">Import</option>
+                    <option value="referral">Referral</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Status</label>
+                  <select
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Cancel</Button>
+                <Button className="flex-1" onClick={handleSubmit} disabled={create.isPending || !email.trim()}>
+                  {create.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <UserPlus className="mr-1 h-4 w-4" />}
+                  Add Subscriber
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </Portal>
+  );
+}
 
 export function Subscribers() {
   const { data: subscribers, isLoading } = useNewsletterSubscribers();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [showAdd, setShowAdd] = useState(false);
   useRealtimeInvalidate(["admin", "newsletter-subscribers"], "newsletter_subscribers");
 
   const filtered = useMemo(() => {
@@ -43,13 +122,22 @@ export function Subscribers() {
     };
   }, [subscribers]);
 
+  const handleExport = () => {
+    if (filtered.length === 0) { toast.error("No subscribers to export"); return; }
+    downloadCSV("subscribers.csv", filtered.map((s) => ({
+      email: s.email, name: s.name || "", status: s.status, source: s.source === "signup" ? "Roadmap" : s.source,
+      subscribed_at: s.subscribed_at,
+    })));
+    toast.success("CSV exported");
+  };
+
   if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Subscribers" description={`${stats.active} active subscribers`}>
-        <Button variant="outline"><Download className="mr-1 h-4 w-4" /> Export</Button>
-        <Button><UserPlus className="mr-1 h-4 w-4" /> Add Subscriber</Button>
+        <Button variant="outline" onClick={handleExport}><Download className="mr-1 h-4 w-4" /> Export</Button>
+        <Button onClick={() => setShowAdd(true)}><UserPlus className="mr-1 h-4 w-4" /> Add Subscriber</Button>
       </PageHeader>
 
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
@@ -121,6 +209,8 @@ export function Subscribers() {
           )}
         </CardContent>
       </Card>
+
+      <AddSubscriberDialog open={showAdd} onOpenChange={setShowAdd} />
     </div>
   );
 }

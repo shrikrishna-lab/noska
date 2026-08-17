@@ -10,6 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { initialsFromName } from "@/lib/utils";
+import { ROLE_LABELS } from "@/lib/rbac";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface HeaderProps {
@@ -54,6 +55,9 @@ export function Header({ onMenuClick, onSearchOpen }: HeaderProps) {
               <div className="flex flex-col">
                 <span>{user.name}</span>
                 <span className="text-xs font-normal text-muted-foreground">{user.email}</span>
+                <span className="mt-1 inline-flex w-fit rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  {ROLE_LABELS[user.role]}
+                </span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

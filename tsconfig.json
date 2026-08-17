@@ -44,7 +44,6 @@
 
     /* Mirrors the "@" -> "./src" alias configured in vite.config.js so
        imports resolve identically for tsc and for the Vite dev/build. */
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }

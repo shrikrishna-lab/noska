@@ -16,6 +16,7 @@ import {
   Moon,
   Monitor,
   Settings,
+  UserRound,
   type LucideIcon
 } from "lucide-react";
 import {
@@ -80,6 +81,7 @@ interface SidebarProps {
   onSearch: () => void;
   onTrash: () => void;
   onSettings: (tab?: string) => void;
+  onProfile?: () => void;
   onAI: () => void;
   onAIFull: () => void;
   onHelp: () => void;
@@ -131,6 +133,7 @@ const Sidebar = memo(function Sidebar({
   onSearch,
   onTrash,
   onSettings,
+  onProfile,
   onAI,
   onAIFull,
   onHelp,
@@ -304,6 +307,23 @@ const Sidebar = memo(function Sidebar({
                     <X size={13} />
                   </button>
                 </div>
+
+                <div className="h-px bg-[var(--hover)] my-0.5" />
+
+                {/* Profile — self-service profile editor (fully optional,
+                    only reachable inside the authenticated workspace). */}
+                <button
+                  onClick={() => { setSwitcherOpen(false); onProfile?.(); }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-[var(--hover)] transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--noska-blue)]"
+                >
+                  <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-[var(--noska-blue)] to-[var(--noska-blue-light)]/70 flex items-center justify-center text-white shadow-sm shrink-0">
+                    <UserRound size={13} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-[var(--text)] text-[11.5px] leading-none">My Profile</div>
+                    <div className="text-[9px] text-[var(--muted)] mt-0.5 truncate">Edit name, photo, bio & location</div>
+                  </div>
+                </button>
 
                 <div className="h-px bg-[var(--hover)] my-0.5" />
 
@@ -485,6 +505,7 @@ const Sidebar = memo(function Sidebar({
 
           {/* 10. Support & Document Actions */}
           <NoskaSection title="Support" defaultExpanded={false}>
+            <NoskaNavItem icon={UserRound} label="My Profile" onClick={() => onProfile?.()} />
             <NoskaNavItem icon={AnimatedBookmark} label="Help Center" onClick={onHelp} />
             <NoskaNavItem icon={AnimatedTrash} label={`Trash${trashCount ? ` (${trashCount})` : ""}`} ariaLabel="Open trash" onClick={onTrash} />
           </NoskaSection>

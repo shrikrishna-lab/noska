@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
-import { useSignIn } from "@clerk/react";
+import { useClerk, useSignIn } from "@clerk/react";
 import AuthBackground from "./AuthBackground";
 import AuthProviders from "./AuthProviders";
 import AuthError from "./AuthError";
@@ -36,6 +36,7 @@ interface AuthPageProps {
 
 export default function AuthPage(_props: AuthPageProps) {
   const { signIn } = useSignIn();
+  const clerk = useClerk();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,11 +50,32 @@ export default function AuthPage(_props: AuthPageProps) {
     if (provider === "microsoft") capture("microsoft_login");
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      await signIn.sso({
-        strategy,
-        redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
-      });
+      // Support both Clerk runtime APIs. Some production Clerk bundles still
+      // expose the legacy `sso` helper even though newer typings expose
+      // `authenticateWithRedirect`; both use the same callback route below.
+      // Keep the auth callback on the canonical app host. The marketing
+      // alias (www.noska.me) must not send an authenticated user back to the
+      // public login page after Clerk completes the OAuth exchange.
+      const appOrigin = window.location.hostname === "www.noska.me"
+        ? "https://app.noska.me"
+        : window.location.origin;
+      const redirectUrl = `${appOrigin}/sso-callback`;
+      const authenticateWithRedirect = (signIn as typeof signIn & {
+        authenticateWithRedirect?: (params: Record<string, string>) => Promise<void>;
+        sso?: (params: Record<string, string>) => Promise<void>;
+      }).authenticateWithRedirect;
+      if (typeof authenticateWithRedirect === "function") {
+        await authenticateWithRedirect({ strategy, redirectUrl, redirectUrlComplete: `${appOrigin}/login` });
+      } else {
+        // Older Clerk runtimes expose a legacy `sso` helper that can resolve
+        // without starting navigation. Use Clerk's hosted sign-in flow for
+        // those runtimes; it still offers all enabled providers and returns to
+        // the canonical app host after authentication.
+        await clerk.redirectToSignIn({
+          signInForceRedirectUrl: `${appOrigin}/login`,
+          signInFallbackRedirectUrl: `${appOrigin}/login`,
+        });
+      }
     } catch (e) {
       setError((e as Error).message || "Failed to sign in. Please try again.");
       setLoadingProvider(null);

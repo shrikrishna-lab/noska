@@ -62,8 +62,11 @@ export interface NavItem {
   requiresRole?: "super_admin" | "admin" | "developer" | "marketing";
 }
 
+export type NavigationRole = NonNullable<NavItem["requiresRole"]>;
+
 export const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Dashboard", icon: Home, group: "overview" },
+  { to: "/my-dashboard", label: "My workspace", icon: UserCog, group: "overview" },
   { to: "/analytics", label: "Analytics", icon: BarChart3, group: "overview" },
   { to: "/launch-control", label: "Launch Control", icon: Megaphone, group: "marketing", requiresRole: "marketing" },
   { to: "/landing-page", label: "Landing Page", icon: PanelTop, group: "marketing", requiresRole: "marketing" },
@@ -127,7 +130,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/sentry", label: "Sentry", icon: AlertTriangle, group: "monitoring", requiresRole: "admin" },
   { to: "/posthog", label: "PostHog", icon: BarChart4, group: "monitoring", requiresRole: "admin" },
   { to: "/monitoring", label: "Monitoring", icon: Activity, group: "monitoring", requiresRole: "admin" },
-  { to: "/admin-accounts", label: "Administrator Accounts", icon: ShieldCheck, group: "settings", requiresRole: "super_admin" }
+  { to: "/admin-accounts", label: "Administrator Accounts", icon: ShieldCheck, group: "settings", requiresRole: "super_admin" },
+  { to: "/routes-manager", label: "Routes Manager", icon: Workflow, group: "settings", requiresRole: "super_admin" }
 ];
 
 export const NAV_GROUPS: Array<{ id: NavItem["group"]; label: string }> = [
@@ -150,15 +154,25 @@ export const COMMAND_ACTIONS: Array<{
   perform: "navigate" | "modal";
   payload?: string;
   keywords?: string[];
+  requiresRole?: NavigationRole;
 }> = [
   { id: "go-users", label: "Go to Users", group: "Navigation", perform: "navigate", payload: "/users", keywords: ["people", "accounts"] },
   { id: "go-waitlist", label: "Open Waitlist", group: "Navigation", perform: "navigate", payload: "/waitlist", keywords: ["leads"] },
   { id: "go-analytics", label: "Go to Analytics", group: "Navigation", perform: "navigate", payload: "/analytics" },
-  { id: "go-flag", label: "Create Feature Flag", group: "Actions", perform: "navigate", payload: "/feature-flags", keywords: ["toggle"] },
-  { id: "go-invite", label: "Invite User", group: "Actions", perform: "navigate", payload: "/admin-accounts", keywords: ["admin"] },
+  { id: "go-flag", label: "Create Feature Flag", group: "Actions", perform: "navigate", payload: "/feature-flags", keywords: ["toggle"], requiresRole: "admin" },
+  { id: "go-invite", label: "Invite User", group: "Actions", perform: "navigate", payload: "/admin-accounts", keywords: ["admin"], requiresRole: "super_admin" },
   { id: "go-search", label: "Search Workspace", group: "Navigation", perform: "navigate", payload: "/workspaces" },
-  { id: "go-logs", label: "Open Logs", group: "Navigation", perform: "navigate", payload: "/audit-logs" },
-  { id: "maintenance", label: "Enable Maintenance Mode", group: "System", perform: "navigate", payload: "/feature-flags" },
-  { id: "send-email", label: "Send Email Campaign", group: "Actions", perform: "navigate", payload: "/email-campaigns" },
+  { id: "go-logs", label: "Open Logs", group: "Navigation", perform: "navigate", payload: "/audit-logs", requiresRole: "developer" },
+  { id: "maintenance", label: "Enable Maintenance Mode", group: "System", perform: "navigate", payload: "/feature-flags", requiresRole: "admin" },
+  { id: "send-email", label: "Send Email Campaign", group: "Actions", perform: "navigate", payload: "/email-campaigns", requiresRole: "marketing" },
   { id: "go-status", label: "System Status", group: "Navigation", perform: "navigate", payload: "/system-status" }
 ];
+
+/** Resolve the role required for a URL, including nested editor/detail routes. */
+export function requiredRoleForPath(pathname: string): NavigationRole | undefined {
+  const path = pathname.replace(/^\/control/, "") || "/";
+  const exact = NAV_ITEMS.find((item) => item.to === path);
+  if (exact?.requiresRole) return exact.requiresRole;
+  if (path.startsWith("/email-templates/")) return "marketing";
+  return undefined;
+}

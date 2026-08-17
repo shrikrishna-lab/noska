@@ -14,16 +14,16 @@ import { useAuth } from "@/lib/auth";
 import { initialsFromName } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Plus, Shield, Trash2, X, Loader2 } from "lucide-react";
+import { Plus, Shield, Trash2, X, Loader2, Search, ShieldCheck, UserCheck, Users } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
+import { ROLE_CAPABILITIES, ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/rbac";
+import { Card, CardContent } from "@/components/ui/card";
 
 const roleColors: Record<string, "default" | "destructive" | "secondary" | "success" | "warning"> = {
   super_admin: "destructive", admin: "default", developer: "secondary", support: "success", marketing: "warning",
 };
-const roleLabels: Record<string, string> = {
-  super_admin: "Super Admin", admin: "Admin", developer: "Developer", support: "Support", marketing: "Marketing",
-};
+const roleLabels: Record<string, string> = ROLE_LABELS;
 
 function InviteModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
@@ -93,7 +93,21 @@ export function AdminAccounts() {
   const updateRole = useUpdateAdminRole();
   const [showInvite, setShowInvite] = useState(false);
   const [editingRole, setEditingRole] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   useRealtimeInvalidate(["admin", "admin-accounts"], "admin_users");
+
+  const filtered = (admins ?? []).filter((a) => {
+    const q = search.toLowerCase();
+    return !q || a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q);
+  });
+
+  const stats = {
+    total: admins?.length ?? 0,
+    superAdmins: admins?.filter((a) => a.role === "super_admin").length ?? 0,
+    active: admins?.filter((a) => a.last_login).length ?? 0,
+    byRole: {} as Record<string, number>,
+  };
+  admins?.forEach((a) => { stats.byRole[a.role] = (stats.byRole[a.role] ?? 0) + 1; });
 
   const columns: Column<DbAdminUser>[] = [
     {
@@ -153,14 +167,39 @@ export function AdminAccounts() {
 
   if (isLoading) return <div className="p-6"><PageHeader title="Administrator Accounts" description="Manage platform administrators" /><LoadingState count={3} /></div>;
 
-  return (
+return (
     <div className="p-6">
       <PageHeader title="Administrator Accounts" description="Manage platform administrators" actions={<Button size="sm" onClick={() => setShowInvite(true)}><Plus className="mr-1 h-3.5 w-3.5" /> Invite Admin</Button>} />
-      {admins && admins.length > 0 ? (
-        <DataTable columns={columns} data={admins} searchable={false} />
+
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card><CardContent className="p-4"><div className="flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /><p className="text-2xl font-bold">{stats.total}</p></div><p className="text-xs text-muted-foreground">Total admins</p></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-destructive" /><p className="text-2xl font-bold">{stats.superAdmins}</p></div><p className="text-xs text-muted-foreground">Super admins</p></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-2"><UserCheck className="h-4 w-4 text-emerald-500" /><p className="text-2xl font-bold">{stats.active}</p></div><p className="text-xs text-muted-foreground">Ever logged in</p></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-2"><Shield className="h-4 w-4 text-amber-500" /><p className="text-2xl font-bold">{stats.byRole.support ?? 0}</p></div><p className="text-xs text-muted-foreground">Support team</p></CardContent></Card>
+      </div>
+
+      <div className="relative mb-4 max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Search admins by name or email..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+      </div>
+
+      {filtered.length > 0 ? (
+        <DataTable columns={columns} data={filtered} searchable={false} />
       ) : (
-        <EmptyState title="No administrators" description="Administrator accounts will appear here once created." />
+        <EmptyState title={search ? "No matching admins" : "No administrators"} description={search ? "Try a different search term." : "Administrator accounts will appear here once created."} />
       )}
+      <section className="mt-6 rounded-xl border bg-card p-4">
+        <div className="mb-4"><h2 className="text-sm font-semibold">Role access matrix</h2><p className="text-xs text-muted-foreground">Permission presets are enforced again by Supabase RPCs for every mutation.</p></div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {Object.entries(ROLE_CAPABILITIES).map(([role, capabilities]) => (
+            <div key={role} className="rounded-lg border p-3">
+              <div className="mb-2 flex items-center justify-between gap-2"><Badge variant={roleColors[role] ?? "secondary"}>{roleLabels[role] ?? role}</Badge><span className="text-[11px] text-muted-foreground">{capabilities.length} areas</span></div>
+              <p className="mb-2 text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[role as keyof typeof ROLE_DESCRIPTIONS]}</p>
+              <div className="flex flex-wrap gap-1">{capabilities.map((capability) => <span key={capability} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{capability.replaceAll("_", " ")}</span>)}</div>
+            </div>
+          ))}
+        </div>
+      </section>
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
     </div>
   );

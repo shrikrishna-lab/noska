@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ArrowRight } from "lucide-react";
 import { COMMAND_ACTIONS } from "@/lib/navigation";
+import { useAuth } from "@/lib/auth";
+import { hasRole } from "@/lib/rbac";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -15,9 +17,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const filtered = COMMAND_ACTIONS.filter(
-    (a) => a.label.toLowerCase().includes(query.toLowerCase()) || a.keywords?.some((k) => k.toLowerCase().includes(query.toLowerCase()))
+    (a) => (!a.requiresRole || hasRole(user, a.requiresRole)) &&
+      (a.label.toLowerCase().includes(query.toLowerCase()) || a.keywords?.some((k) => k.toLowerCase().includes(query.toLowerCase())))
   );
 
   useEffect(() => {

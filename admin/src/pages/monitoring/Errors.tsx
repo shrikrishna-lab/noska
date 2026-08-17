@@ -27,7 +27,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export function MonitoringErrors() {
-  const { data: errors, isLoading, refetch, isRefetching } = useSentryErrors();
+  const { data: errors, isLoading, refetch, isRefetching, isError, error } = useSentryErrors();
   const [levelFilter, setLevelFilter] = useState<string>("all");
 
   const filtered = levelFilter === "all" ? errors : errors?.filter((e) => e.level === levelFilter);
@@ -37,6 +37,30 @@ export function MonitoringErrors() {
       <div className="p-6">
         <PageHeader title="Errors" description="Track and triage errors across environments" />
         <LoadingState count={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6">
+        <PageHeader
+          title="Errors"
+          description="Track and triage errors across environments"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          }
+        />
+        <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-6 text-center dark:border-yellow-700 dark:bg-yellow-900/20">
+          <AlertTriangle className="mx-auto h-8 w-8 text-yellow-600" />
+          <h3 className="mt-2 text-sm font-semibold">Sentry unavailable</h3>
+          <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+            Could not load errors from Sentry ({(error instanceof Error ? error.message : "unknown error").slice(0, 160)}). Check the Sentry integration settings.
+          </p>
+        </div>
       </div>
     );
   }

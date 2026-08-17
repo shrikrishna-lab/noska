@@ -51,15 +51,15 @@ export function MonitoringOverview() {
   if (!metrics) return null;
 
   const kpis = [
-    { title: "Users Online", value: formatNumber(metrics.usersOnline), trend: 0, icon: Users },
-    { title: "Today's Users", value: formatNumber(metrics.todayUsers), trend: 8, icon: Users },
-    { title: "Workspaces", value: formatNumber(metrics.workspaces), trend: 0, icon: Building2 },
-    { title: "Pages", value: formatNumber(metrics.pages), trend: 0, icon: FileText },
-    { title: "AI Requests", value: formatNumber(metrics.aiRequests), trend: 12, icon: Bot },
-    { title: "Errors Today", value: formatNumber(metrics.errorsToday), trend: -5, icon: AlertTriangle },
-    { title: "Emails Delivered", value: formatNumber(metrics.emailsDelivered), trend: 3, icon: Mail },
-    { title: "Avg API Response", value: `${metrics.avgApiResponse}ms`, trend: 0, icon: Clock },
-    { title: "Storage Used", value: metrics.storageUsed, trend: 0, icon: HardDrive },
+    { title: "Users Online", value: formatNumber(metrics.usersOnline), icon: Users },
+    { title: "Today's Users", value: formatNumber(metrics.todayUsers), icon: Users },
+    { title: "Workspaces", value: formatNumber(metrics.workspaces), icon: Building2 },
+    { title: "Pages", value: formatNumber(metrics.pages), icon: FileText },
+    { title: "AI Requests", value: formatNumber(metrics.aiRequests), icon: Bot },
+    { title: "Errors Today", value: formatNumber(metrics.errorsToday), icon: AlertTriangle },
+    { title: "Emails Delivered", value: formatNumber(metrics.emailsDelivered), icon: Mail },
+    { title: "Avg API Response", value: `${metrics.avgApiResponse}ms`, icon: Clock },
+    { title: "Storage Used", value: metrics.storageUsed, icon: HardDrive },
   ];
 
   const services: Array<{ label: string; status: string; icon: typeof Activity }> = [

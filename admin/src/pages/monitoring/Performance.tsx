@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Gauge, RefreshCw, Zap, Cpu, Globe, Activity, Database, Radio, AlertTriangle } from "lucide-react";
+import { Gauge, RefreshCw, Zap, Cpu, Globe, Activity, Database, Radio } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -27,11 +27,11 @@ export function MonitoringPerformance() {
   if (!metrics) return null;
 
   const vitals = [
-    { title: "LCP", value: `${(metrics.lcp / 1000).toFixed(1)}s`, trend: metrics.lcp > 2500 ? -1 : 1, icon: Gauge },
-    { title: "FCP", value: `${(metrics.fcp / 1000).toFixed(1)}s`, trend: metrics.fcp > 1800 ? -1 : 1, icon: Gauge },
-    { title: "CLS", value: metrics.cls.toFixed(2), trend: metrics.cls > 0.1 ? -1 : 1, icon: Zap },
-    { title: "INP", value: `${metrics.inp}ms`, trend: metrics.inp > 200 ? -1 : 1, icon: Activity },
-    { title: "TTFB", value: `${metrics.ttfb}ms`, trend: metrics.ttfb > 600 ? -1 : 1, icon: Globe },
+    { title: "LCP", value: `${(metrics.lcp / 1000).toFixed(1)}s`, icon: Gauge },
+    { title: "FCP", value: `${(metrics.fcp / 1000).toFixed(1)}s`, icon: Gauge },
+    { title: "CLS", value: metrics.cls.toFixed(2), icon: Zap },
+    { title: "INP", value: `${metrics.inp}ms`, icon: Activity },
+    { title: "TTFB", value: `${metrics.ttfb}ms`, icon: Globe },
   ];
 
   return (
@@ -94,11 +94,9 @@ export function MonitoringPerformance() {
               <span className="text-lg font-bold">{metrics.avgDbQuery}ms</span>
             </div>
             {metrics.slowQueries > 0 && (
-              <div className="flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 dark:border-yellow-700 dark:bg-yellow-900/20">
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                <span className="text-xs text-yellow-700 dark:text-yellow-300">
-                  {metrics.slowQueries} slow queries detected
-                </span>
+              <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <Database className="h-4 w-4" />
+                <span>{metrics.slowQueries} page versions saved in the last 24 hours</span>
               </div>
             )}
           </CardContent>
@@ -161,11 +159,11 @@ export function MonitoringPerformance() {
             <div className="flex gap-4">
               <div className="flex-1 rounded-lg border bg-muted/20 p-3 text-center">
                 <p className="text-lg font-bold text-yellow-600">{metrics.slowPages}</p>
-                <p className="text-xs text-muted-foreground">Slow Pages</p>
+                <p className="text-xs text-muted-foreground">Total Pages</p>
               </div>
               <div className="flex-1 rounded-lg border bg-muted/20 p-3 text-center">
                 <p className="text-lg font-bold text-orange-600">{metrics.slowQueries}</p>
-                <p className="text-xs text-muted-foreground">Slow Queries</p>
+                <p className="text-xs text-muted-foreground">Page Versions (24h)</p>
               </div>
             </div>
           </CardContent>

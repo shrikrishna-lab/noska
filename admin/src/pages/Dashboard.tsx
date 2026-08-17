@@ -1156,11 +1156,11 @@ export function Dashboard() {
   const ticketTotal = ticketData?.length ?? 0;
   const openTickets = (ticketData ?? []).filter((t: any) => t.status === "open" || t.status === "pending").length;
 
-  const KPI_CARDS: Array<{ id: string; title: string; value: string; trend: number; icon: React.ComponentType<{ className?: string }>; subtitle: string }> = [
-    { id: "users", title: "Total Users", value: formatNumber(stats.totalUsers), trend: 12.5, icon: Users, subtitle: `${formatNumber(todaySignups)} today` },
-    { id: "pages", title: "Total Pages", value: formatNumber(stats.totalPages), trend: 3.2, icon: FileText, subtitle: "Across all workspaces" },
-    { id: "audit", title: "Audit Events", value: formatNumber(stats.totalAudit), trend: -2.1, icon: Activity, subtitle: "All time" },
-    { id: "ai", title: "AI Chats", value: formatNumber(stats.totalChats), trend: 18.7, icon: Bot, subtitle: `${formatNumber(stats.totalEvents)} today` },
+  const KPI_CARDS: Array<{ id: string; title: string; value: string; trend?: number; icon: React.ComponentType<{ className?: string }>; subtitle: string }> = [
+    { id: "users", title: "Total Users", value: formatNumber(stats.totalUsers), icon: Users, subtitle: `${formatNumber(todaySignups)} today` },
+    { id: "pages", title: "Total Pages", value: formatNumber(stats.totalPages), icon: FileText, subtitle: "Across all workspaces" },
+    { id: "audit", title: "Audit Events", value: formatNumber(stats.totalAudit), icon: Activity, subtitle: "All time" },
+    { id: "ai", title: "AI Chats", value: formatNumber(stats.totalChats), icon: Bot, subtitle: `${formatNumber(stats.totalEvents)} today` },
   ];
 
   return (
@@ -1169,10 +1169,10 @@ export function Dashboard() {
         <motion.div variants={itemAnim} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <PageHeader title="Dashboard" description="Platform overview and key metrics" />
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => trigger({ type: "backup", onConfirm: async () => { await new Promise((r) => setTimeout(r, 3500)); } })}>
+            <Button variant="outline" size="sm" onClick={() => trigger({ type: "backup", onConfirm: async () => {} })}>
               <Database className="mr-2 h-4 w-4" /> Backup
             </Button>
-            <Button variant="outline" size="sm" onClick={() => trigger({ type: "restore", onConfirm: async () => { await new Promise((r) => setTimeout(r, 2000)); showSuccess("System restore completed successfully"); } })}>
+            <Button variant="outline" size="sm" onClick={() => trigger({ type: "restore", onConfirm: async () => {} })}>
               <RotateCcw className="mr-2 h-4 w-4" /> Restore
             </Button>
           </div>

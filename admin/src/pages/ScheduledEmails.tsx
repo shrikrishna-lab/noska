@@ -23,7 +23,7 @@ export function ScheduledEmails() {
 
   const handleCancel = async (id: string) => {
     try {
-      await update.mutateAsync({ id, status: "draft", scheduled_for: undefined });
+      await update.mutateAsync({ id, status: "draft", scheduled_for: null });
       toast.success("Campaign unscheduled");
     } catch { toast.error("Failed to unschedule campaign"); }
   };

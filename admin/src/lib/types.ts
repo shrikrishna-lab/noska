@@ -590,6 +590,19 @@ export interface EmailSegment {
   updated_at: string;
 }
 
+export interface AdminRoute {
+  id: string;
+  area: "admin" | "web";
+  path: string;
+  label: string;
+  section: string | null;
+  description: string | null;
+  enabled: boolean;
+  min_role: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SegmentFilter {
   field: string;
   operator: SegmentFilterOperator;

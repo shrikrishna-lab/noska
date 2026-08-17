@@ -52,6 +52,38 @@
   margin-bottom: 14px;
 }
 
+.marketing .legal-body ul,
+.marketing .legal-body ol {
+  margin: 0 0 16px;
+  padding-left: 22px;
+}
+
+.marketing .legal-body ul {
+  list-style: disc;
+}
+
+.marketing .legal-body ol {
+  list-style: decimal;
+}
+
+.marketing .legal-body li {
+  margin-bottom: 6px;
+}
+
+.marketing .legal-body a {
+  color: var(--mkt-brand-color);
+  text-decoration: none;
+}
+
+.marketing .legal-body a:hover {
+  text-decoration: underline;
+}
+
+.marketing .legal-body strong {
+  color: var(--mkt-text-primary);
+  font-weight: 600;
+}
+
 .marketing .legal-loading {
   display: flex;
   justify-content: center;

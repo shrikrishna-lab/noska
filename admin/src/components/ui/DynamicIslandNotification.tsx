@@ -3,7 +3,8 @@ import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import {
   CheckCircle2, Info, AlertTriangle, XCircle, Shield,
   Upload, Download, Database, Sparkles, Mail, User,
-  Folder, Activity, Rocket, X, Clock, ArrowRight, ChevronDown, ChevronUp
+  Folder, Activity, Rocket, X, Clock, ArrowRight, ChevronRight,
+  Radio, Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +14,7 @@ export interface DynamicIslandNotificationItem {
   title: string;
   description?: string;
   type: "success" | "info" | "warning" | "error" | "security" | "progress" | "live";
-  priority: 1 | 2 | 3 | 4 | 5; // 1: 2-3s, 2: 4-5s, 3: 6-8s, 4: Manual, 5: Live Progress
+  priority: 1 | 2 | 3 | 4 | 5; // 1: 2.5s, 2: 4.5s, 3: 7s, 4: Manual (Critical), 5: Live Progress
   icon?: "success" | "info" | "warning" | "error" | "security" | "upload" | "download" | "backup" | "ai" | "email" | "users" | "workspace" | "analytics" | "deploy";
   progress?: number; // 0 to 100 for live activity progress
   progressText?: string; // Custom progress metadata, e.g., "2.1 GB / 4 GB"
@@ -51,6 +52,7 @@ interface DynamicIslandNotificationContextType {
   history: DynamicIslandNotificationItem[];
   isHistoryOpen: boolean;
   setIsHistoryOpen: (open: boolean) => void;
+  activeNotif: DynamicIslandNotificationItem | null;
 }
 
 const DynamicIslandNotificationContext = createContext<DynamicIslandNotificationContextType | null>(null);
@@ -63,13 +65,15 @@ export function useIslandNotification() {
   return context;
 }
 
-// Micro sound synthesis using Web Audio API (no external file dependencies)
+// Apple-inspired Micro sound synthesis via Web Audio API
 const playSound = (type: string) => {
   try {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    if (ctx.state === "suspended") return;
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
 
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
@@ -77,35 +81,44 @@ const playSound = (type: string) => {
     gainNode.connect(ctx.destination);
 
     if (type === "success") {
-      // Gentle warm synthetic chirp
+      // Warm iOS chime: D5 (587.33Hz) -> A5 (880Hz)
       osc.type = "sine";
-      osc.frequency.setValueAtTime(400, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.12);
-      gainNode.gain.setValueAtTime(0.06, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.14);
+      gainNode.gain.setValueAtTime(0.08, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
       osc.start();
-      osc.stop(ctx.currentTime + 0.12);
+      osc.stop(ctx.currentTime + 0.18);
     } else if (type === "warning") {
-      // Soft high-frequency chime
+      // Soft high chime
       osc.type = "sine";
-      osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-      osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.06); // G5
-      gainNode.gain.setValueAtTime(0.05, ctx.currentTime);
+      osc.frequency.setValueAtTime(659.25, ctx.currentTime);
+      osc.frequency.setValueAtTime(523.25, ctx.currentTime + 0.08);
+      gainNode.gain.setValueAtTime(0.07, ctx.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
       osc.start();
       osc.stop(ctx.currentTime + 0.22);
     } else if (type === "error") {
-      // Low-frequency warning chime
+      // Gentle warning double pulse
       osc.type = "triangle";
-      osc.frequency.setValueAtTime(220, ctx.currentTime);
-      osc.frequency.linearRampToValueAtTime(147, ctx.currentTime + 0.22);
-      gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+      osc.frequency.setValueAtTime(261.63, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(196.00, ctx.currentTime + 0.2);
+      gainNode.gain.setValueAtTime(0.09, ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.2);
       osc.start();
-      osc.stop(ctx.currentTime + 0.22);
+      osc.stop(ctx.currentTime + 0.2);
+    } else {
+      // Crisp subtle pop / tap
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(740, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.08);
+      gainNode.gain.setValueAtTime(0.05, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
     }
-  } catch (e) {
-    // Fail silently if browser blocks sound
+  } catch {
+    // Fail silently if audio is blocked
   }
 };
 
@@ -114,9 +127,10 @@ const triggerHaptics = (type: string) => {
   if (typeof navigator !== "undefined" && navigator.vibrate) {
     const isMobile = window.matchMedia("(pointer: coarse)").matches;
     if (isMobile) {
-      if (type === "success") navigator.vibrate(20);
-      else if (type === "warning") navigator.vibrate(40);
-      else if (type === "error") navigator.vibrate(60);
+      if (type === "success") navigator.vibrate([15, 30, 15]);
+      else if (type === "warning") navigator.vibrate([25, 40, 25]);
+      else if (type === "error") navigator.vibrate([40, 50, 40]);
+      else navigator.vibrate(15);
     }
   }
 };
@@ -129,12 +143,10 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
 
   const activeRef = useRef<DynamicIslandNotificationItem | null>(null);
 
-  // Sync ref with state to prevent stale closures in timeouts
   useEffect(() => {
     activeRef.current = activeNotif;
   }, [activeNotif]);
 
-  // Append new notification to history and queue/morph
   const notify = useCallback((input: DynamicIslandNotifyInput): string => {
     const id = input.id || Math.random().toString(36).substring(2, 9);
     const newNotif: DynamicIslandNotificationItem = {
@@ -143,13 +155,10 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
       timestamp: input.timestamp || new Date()
     };
 
-    // Add to history (keep last 20)
-    setHistory((prev) => [newNotif, ...prev.slice(0, 19)]);
+    setHistory((prev) => [newNotif, ...prev.slice(0, 24)]);
 
-    // Check if the incoming notification is an update to an active task morphing
     const current = activeRef.current;
     if (current && newNotif.taskId && current.taskId === newNotif.taskId) {
-      // Haptics & sound for transition
       if (newNotif.type !== current.type) {
         playSound(newNotif.type);
         triggerHaptics(newNotif.type);
@@ -158,11 +167,9 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
       return id;
     }
 
-    // Play initial sound & haptic
     playSound(newNotif.type);
     triggerHaptics(newNotif.type);
 
-    // If there is an active item and it has the same taskId in the queue, update queue items instead
     setQueue((prev) => {
       const matchIndex = prev.findIndex((item) => newNotif.taskId && item.taskId === newNotif.taskId);
       if (matchIndex >= 0) {
@@ -196,13 +203,13 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
     return notify({ title, description: desc, type: "security", priority: 3, icon: "security", ...opts });
   }, [notify]);
 
-  const progress = useCallback((title: string, progress: number, progressText?: string, taskId?: string, opts?: Partial<DynamicIslandNotifyInput>) => {
+  const progress = useCallback((title: string, prog: number, progressText?: string, taskId?: string, opts?: Partial<DynamicIslandNotifyInput>) => {
     return notify({
       title,
       type: "progress",
       priority: 5,
       icon: "backup",
-      progress,
+      progress: prog,
       progressText,
       taskId,
       ...opts
@@ -235,7 +242,6 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
     setQueue([]);
   }, []);
 
-  // Promise-based toast API adapter
   const promise = useCallback(<T,>(
     prom: Promise<T>,
     msgs: { loading: string; success: string; error: string },
@@ -243,7 +249,6 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
   ): Promise<T> => {
     const taskId = Math.random().toString(36).substring(2, 9);
     
-    // Trigger loading
     notify({
       title: msgs.loading,
       type: "live",
@@ -279,15 +284,13 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
       });
   }, [notify]);
 
-  // Queue runner: pulls next item when activeNotif is null
   useEffect(() => {
     if (!activeNotif && queue.length > 0) {
       const next = queue[0];
       setQueue((prev) => prev.slice(1));
-      // Give a tiny timeout buffer for exit animations to look distinct if not same task
       setTimeout(() => {
         setActiveNotif(next);
-      }, 100);
+      }, 120);
     }
   }, [activeNotif, queue]);
 
@@ -307,7 +310,8 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
         promise,
         history,
         isHistoryOpen,
-        setIsHistoryOpen
+        setIsHistoryOpen,
+        activeNotif
       }}
     >
       {children}
@@ -316,55 +320,87 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
   );
 }
 
-// Icon mapper
-const NotificationIcon = ({ icon, type }: { icon?: string; type: string }) => {
-  const baseClasses = "h-5 w-5 shrink-0";
-  
-  // Custom breathing/pulsing animation classes
-  let animClass = "";
-  if (type === "security") animClass = "animate-pulse";
-  if (type === "live" || type === "progress") animClass = "animate-spin-slow";
-
+// Icon helper with authentic Apple iOS colors & styling
+const NotificationIcon = ({ icon, type, size = "md" }: { icon?: string; type: string; size?: "sm" | "md" | "lg" }) => {
+  const sizeClasses = size === "sm" ? "h-3.5 w-3.5" : size === "lg" ? "h-5 w-5" : "h-4 w-4";
   const resolvedIcon = icon || type;
 
   switch (resolvedIcon) {
     case "success":
-      return <CheckCircle2 className={cn(baseClasses, "text-emerald-450")} />;
+      return <CheckCircle2 className={cn(sizeClasses, "text-[#30D158]")} />;
     case "info":
-      return <Info className={cn(baseClasses, "text-blue-450")} />;
+      return <Info className={cn(sizeClasses, "text-[#0A84FF]")} />;
     case "warning":
-      return <AlertTriangle className={cn(baseClasses, "text-amber-450")} />;
+      return <AlertTriangle className={cn(sizeClasses, "text-[#FFD60A]")} />;
     case "error":
-      return <XCircle className={cn(baseClasses, "text-red-450")} />;
+      return <XCircle className={cn(sizeClasses, "text-[#FF453A]")} />;
     case "security":
-      return <Shield className={cn(baseClasses, "text-purple-450", animClass)} />;
+      return <Shield className={cn(sizeClasses, "text-[#BF5AF2]")} />;
     case "upload":
-      return <Upload className={cn(baseClasses, "text-zinc-300")} />;
+      return <Upload className={cn(sizeClasses, "text-[#0A84FF]")} />;
     case "download":
-      return <Download className={cn(baseClasses, "text-zinc-300")} />;
+      return <Download className={cn(sizeClasses, "text-[#0A84FF]")} />;
     case "backup":
-      return <Database className={cn(baseClasses, "text-sky-400")} />;
+      return <Database className={cn(sizeClasses, "text-[#64D2FF]")} />;
     case "ai":
-      return <Sparkles className={cn(baseClasses, "text-yellow-400 animate-pulse")} />;
+      return <Sparkles className={cn(sizeClasses, "text-[#FF9F0A]")} />;
     case "email":
-      return <Mail className={cn(baseClasses, "text-indigo-400")} />;
+      return <Mail className={cn(sizeClasses, "text-[#5E5CE6]")} />;
     case "users":
-      return <User className={cn(baseClasses, "text-emerald-400")} />;
+      return <User className={cn(sizeClasses, "text-[#30D158]")} />;
     case "workspace":
-      return <Folder className={cn(baseClasses, "text-amber-400")} />;
+      return <Folder className={cn(sizeClasses, "text-[#FF9F0A]")} />;
     case "analytics":
-      return <Activity className={cn(baseClasses, "text-rose-450")} />;
+      return <Activity className={cn(sizeClasses, "text-[#FF375F]")} />;
     case "deploy":
-      return <Rocket className={cn(baseClasses, "text-teal-400 animate-bounce")} />;
+      return <Rocket className={cn(sizeClasses, "text-[#40C8E0]")} />;
     default:
-      return <Info className={cn(baseClasses, "text-zinc-400")} />;
+      return <Info className={cn(sizeClasses, "text-[#0A84FF]")} />;
   }
+};
+
+// Apple-style live waveform / activity visualizer for compact pill state
+const IslandLiveVisualizer = ({ type }: { type: string }) => {
+  if (type === "progress" || type === "live") {
+    return (
+      <div className="flex items-center gap-[2px] h-3 px-1">
+        {[0.4, 0.9, 0.6, 1, 0.5].map((scale, i) => (
+          <motion.span
+            key={i}
+            className="w-[2px] rounded-full bg-[#0A84FF]"
+            animate={{
+              height: ["4px", `${scale * 12}px`, "4px"],
+            }}
+            transition={{
+              duration: 0.8,
+              repeat: Infinity,
+              delay: i * 0.12,
+              ease: "easeInOut"
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const dotColor =
+    type === "success" ? "bg-[#30D158]" :
+    type === "warning" ? "bg-[#FFD60A]" :
+    type === "error" ? "bg-[#FF453A]" :
+    type === "security" ? "bg-[#BF5AF2]" : "bg-[#0A84FF]";
+
+  return (
+    <div className="relative flex h-2 w-2 items-center justify-center">
+      <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", dotColor)} />
+      <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", dotColor)} />
+    </div>
+  );
 };
 
 // Dynamic Island UI Component
 export function DynamicIslandNotification() {
-  const { activeNotif, dismiss, history, isHistoryOpen, setIsHistoryOpen } = useIslandNotification() as any;
-  const notif = activeNotif as DynamicIslandNotificationItem | null;
+  const { activeNotif, dismiss, history, isHistoryOpen, setIsHistoryOpen } = useIslandNotification();
+  const notif = activeNotif;
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -372,19 +408,17 @@ export function DynamicIslandNotification() {
   const remainingTimeRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
 
-  // Auto-dismiss timing options (Priority 1-3)
   const getTimeoutDuration = (priority: number): number => {
     switch (priority) {
-      case 1: return 2500; // Priority 1: 2-3s
-      case 2: return 4500; // Priority 2: 4-5s
-      case 3: return 7000; // Priority 3: 6-8s
-      case 5: return 0;    // Priority 5: Live Activity (handled manually when finished)
+      case 1: return 2800; // Priority 1: Quick confirm
+      case 2: return 4800; // Priority 2: Standard
+      case 3: return 7500; // Priority 3: Notice
+      case 5: return 0;    // Priority 5: Live Activity (manual completion)
       case 4:              // Priority 4: Critical (manual dismissal)
       default: return 0;
     }
   };
 
-  // Setup timers
   const startTimer = useCallback((duration: number) => {
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     if (duration <= 0) return;
@@ -414,7 +448,6 @@ export function DynamicIslandNotification() {
     }, remainingTimeRef.current);
   }, [notif, dismiss]);
 
-  // Reset expanded view and timer whenever active notification changes
   useEffect(() => {
     setIsExpanded(false);
     if (!notif) {
@@ -431,7 +464,6 @@ export function DynamicIslandNotification() {
     };
   }, [notif, startTimer]);
 
-  // Pause on hover
   useEffect(() => {
     if (!notif) return;
     if (hovered) {
@@ -441,7 +473,6 @@ export function DynamicIslandNotification() {
     }
   }, [hovered, notif, pauseTimer, resumeTimer]);
 
-  // Close drawer if notification becomes null
   useEffect(() => {
     if (!notif) {
       setIsHistoryOpen(false);
@@ -455,170 +486,210 @@ export function DynamicIslandNotification() {
     dismiss(notif.id);
   };
 
-  // Priority color tag glows
-  const getAccentGlow = (type: string) => {
+  const getTypeTheme = (type: string) => {
     switch (type) {
-      case "success": return "shadow-[0_4px_20px_rgba(16,185,129,0.15)] border-emerald-500/20";
-      case "warning": return "shadow-[0_4px_20px_rgba(245,158,11,0.15)] border-amber-500/20";
-      case "error": return "shadow-[0_4px_20px_rgba(239,68,68,0.25)] border-red-500/20";
-      case "security": return "shadow-[0_4px_20px_rgba(168,85,247,0.20)] border-purple-500/20";
+      case "success":
+        return {
+          glow: "shadow-[0_20px_60px_-10px_rgba(48,209,88,0.3),0_0_0_1px_rgba(48,209,88,0.25)]",
+          badgeBg: "bg-[#30D158]/15 border-[#30D158]/30 text-[#30D158]",
+          ring: "ring-emerald-500/20",
+          accentText: "text-[#30D158]"
+        };
+      case "warning":
+        return {
+          glow: "shadow-[0_20px_60px_-10px_rgba(255,214,10,0.3),0_0_0_1px_rgba(255,214,10,0.25)]",
+          badgeBg: "bg-[#FFD60A]/15 border-[#FFD60A]/30 text-[#FFD60A]",
+          ring: "ring-amber-500/20",
+          accentText: "text-[#FFD60A]"
+        };
+      case "error":
+        return {
+          glow: "shadow-[0_20px_60px_-10px_rgba(255,69,58,0.35),0_0_0_1px_rgba(255,69,58,0.3)]",
+          badgeBg: "bg-[#FF453A]/15 border-[#FF453A]/30 text-[#FF453A]",
+          ring: "ring-red-500/25",
+          accentText: "text-[#FF453A]"
+        };
+      case "security":
+        return {
+          glow: "shadow-[0_20px_60px_-10px_rgba(191,90,242,0.3),0_0_0_1px_rgba(191,90,242,0.25)]",
+          badgeBg: "bg-[#BF5AF2]/15 border-[#BF5AF2]/30 text-[#BF5AF2]",
+          ring: "ring-purple-500/20",
+          accentText: "text-[#BF5AF2]"
+        };
       case "info":
       case "progress":
       case "live":
       default:
-        return "shadow-[0_4px_20px_rgba(59,130,246,0.15)] border-blue-500/20";
+        return {
+          glow: "shadow-[0_20px_60px_-10px_rgba(10,132,255,0.3),0_0_0_1px_rgba(10,132,255,0.25)]",
+          badgeBg: "bg-[#0A84FF]/15 border-[#0A84FF]/30 text-[#0A84FF]",
+          ring: "ring-blue-500/20",
+          accentText: "text-[#0A84FF]"
+        };
     }
   };
 
+  const theme = getTypeTheme(notif.type);
   const hasExtraDetails = notif.description || notif.metadata || notif.actions || notif.logs || notif.progress !== undefined;
 
   return (
     <LayoutGroup>
+      {/* Top anchor notch container */}
       <div 
-        className="fixed top-3 left-1/2 -translate-x-1/2 z-[110] w-full max-w-[92vw] sm:max-w-[420px] flex flex-col items-center pointer-events-none"
+        className="fixed top-2.5 left-1/2 -translate-x-1/2 z-[120] w-full max-w-[94vw] sm:max-w-[440px] flex flex-col items-center pointer-events-none"
         aria-live="assertive"
         aria-atomic="true"
       >
         <motion.div
-          layoutId="dynamic-island-notification"
+          layoutId="apple-dynamic-island"
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
-          onClick={hasExtraDetails ? () => setIsExpanded(!isExpanded) : undefined}
+          onClick={() => {
+            if (hasExtraDetails) {
+              setIsExpanded(!isExpanded);
+            }
+          }}
           transition={{
             type: "spring",
-            stiffness: 380,
-            damping: 28,
-            mass: 0.85
+            stiffness: 420,
+            damping: 30,
+            mass: 0.75
           }}
           className={cn(
-            "pointer-events-auto flex flex-col bg-[#121212]/92 backdrop-blur-[30px] border text-zinc-150 overflow-hidden cursor-pointer select-none",
-            "transition-shadow duration-300 ease-out",
-            getAccentGlow(notif.type),
-            isExpanded 
-              ? "w-full rounded-[24px] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.5)]" 
-              : "w-[300px] h-[40px] px-3.5 rounded-[999px] flex flex-row items-center justify-between shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
+            "pointer-events-auto relative flex flex-col bg-black/95 text-white overflow-hidden select-none",
+            "backdrop-blur-3xl border border-white/[0.14]",
+            "shadow-[0_24px_60px_-12px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.1),inset_0_1px_1px_rgba(255,255,255,0.25)]",
+            "transition-all duration-300",
+            theme.glow,
+            hasExtraDetails ? "cursor-pointer" : "cursor-default",
+            isExpanded
+              ? "w-full rounded-[32px] p-5"
+              : "min-w-[270px] max-w-[360px] h-[42px] px-3 rounded-full flex flex-row items-center justify-between"
           )}
           style={{ willChange: "transform, width, height, border-radius" }}
         >
-          {/* Subtle reflection overlay */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.01] via-transparent to-white/[0.04] pointer-events-none" />
+          {/* Apple Specular Gloss Top Edge Highlight */}
+          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none" />
 
-          {/* Micro status pulse dot (only visible in compact mode) */}
-          {!isExpanded && (
-            <div className="absolute right-12 top-1/2 -translate-y-1/2 flex h-2 w-2">
-              <span className={cn(
-                "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
-                notif.type === "success" && "bg-emerald-400",
-                notif.type === "warning" && "bg-amber-400",
-                notif.type === "error" && "bg-red-400",
-                notif.type === "security" && "bg-purple-400",
-                (notif.type === "info" || notif.type === "progress" || notif.type === "live") && "bg-blue-400"
-              )} />
-              <span className={cn(
-                "relative inline-flex rounded-full h-2 w-2",
-                notif.type === "success" && "bg-emerald-500",
-                notif.type === "warning" && "bg-amber-500",
-                notif.type === "error" && "bg-red-500",
-                notif.type === "security" && "bg-purple-500",
-                (notif.type === "info" || notif.type === "progress" || notif.type === "live") && "bg-blue-500"
-              )} />
-            </div>
-          )}
-
-          {/* COMPACT PILL STATE */}
+          {/* ================= COMPACT PILL STATE ================= */}
           {!isExpanded ? (
             <motion.div
               key="compact-content"
-              initial={{ opacity: 0, filter: "blur(4px)" }}
-              animate={{ opacity: 1, filter: "blur(0px)" }}
-              exit={{ opacity: 0, filter: "blur(4px)" }}
-              transition={{ duration: 0.18 }}
-              className="flex items-center justify-between w-full h-full"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.16 }}
+              className="flex items-center justify-between w-full h-full gap-2.5"
             >
-              <div className="flex items-center gap-2.5 min-w-0 pr-6">
-                <NotificationIcon icon={notif.icon} type={notif.type} />
-                <span className="text-[11px] font-semibold text-zinc-100 truncate tracking-wide leading-none pt-[1px]">
+              {/* Left: Apple Icon Badge */}
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className={cn("w-6 h-6 rounded-full flex items-center justify-center shrink-0 border", theme.badgeBg)}>
+                  <NotificationIcon icon={notif.icon} type={notif.type} size="sm" />
+                </div>
+                
+                <span className="text-[12.5px] font-semibold text-white tracking-tight truncate leading-none pt-[0.5px]">
                   {notif.title}
                 </span>
               </div>
-              <button
-                onClick={handleClose}
-                className="h-5 w-5 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-                title="Dismiss"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
+
+              {/* Right: Dynamic Visualizer / Live Indicator + Dismiss */}
+              <div className="flex items-center gap-2 shrink-0">
+                <IslandLiveVisualizer type={notif.type} />
+
+                <button
+                  onClick={handleClose}
+                  className="h-5 w-5 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 border border-white/10 flex items-center justify-center text-zinc-300 hover:text-white transition-all ml-0.5"
+                  title="Dismiss"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </div>
             </motion.div>
           ) : (
-            /* EXPANDED DETAILED STATE */
+            /* ================= EXPANDED DETAILED STATE ================= */
             <motion.div
               key="expanded-content"
-              initial={{ opacity: 0, y: 5 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05, duration: 0.2 }}
+              transition={{ delay: 0.04, duration: 0.2 }}
               className="w-full space-y-4 text-left"
             >
-              {/* Header: Title, Icon, Close */}
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex items-center gap-3">
+              {/* Top Header Row */}
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex items-center gap-3.5">
                   <div className={cn(
-                    "p-2 rounded-xl border",
-                    notif.type === "success" && "bg-emerald-500/10 border-emerald-500/20",
-                    notif.type === "warning" && "bg-amber-500/10 border-amber-500/20",
-                    notif.type === "error" && "bg-red-500/10 border-red-500/20",
-                    notif.type === "security" && "bg-purple-500/10 border-purple-500/20",
-                    (notif.type === "info" || notif.type === "progress" || notif.type === "live") && "bg-blue-500/10 border-blue-500/20"
+                    "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border shadow-inner",
+                    theme.badgeBg
                   )}>
-                    <NotificationIcon icon={notif.icon} type={notif.type} />
+                    <NotificationIcon icon={notif.icon} type={notif.type} size="lg" />
                   </div>
+
                   <div>
-                    <h4 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-                      {notif.title}
-                    </h4>
-                    <span className="text-[9px] text-zinc-500 font-medium">
-                      {notif.timestamp.toLocaleTimeString()}
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-[13.5px] font-bold text-white tracking-tight uppercase">
+                        {notif.title}
+                      </h4>
+                      <span className={cn(
+                        "text-[9px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wider",
+                        theme.badgeBg
+                      )}>
+                        {notif.type}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-zinc-400 font-medium tracking-wide">
+                      {notif.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                   </div>
                 </div>
+
                 <button
                   onClick={handleClose}
-                  className="p-1 rounded-lg bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+                  className="h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 border border-white/10 text-zinc-300 hover:text-white flex items-center justify-center transition-all shadow-sm"
+                  title="Close"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
 
-              {/* Description */}
+              {/* Description Body - 100% Crisp High-Contrast Typography */}
               {notif.description && (
-                <p className="text-xs text-zinc-350 leading-relaxed font-normal bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-xl">
-                  {notif.description}
-                </p>
+                <div className="bg-white/[0.05] border border-white/[0.09] p-3.5 rounded-2xl shadow-inner">
+                  <p className="text-[12.5px] text-zinc-100 font-normal leading-relaxed">
+                    {notif.description}
+                  </p>
+                </div>
               )}
 
-              {/* Progress Bar (Priority 5: Live Activity) */}
+              {/* Progress Bar (Live Activity / AirDrop style) */}
               {notif.progress !== undefined && (
-                <div className="space-y-1.5 bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl">
-                  <div className="flex justify-between text-[10px] text-zinc-400 font-semibold tracking-wide">
-                    <span className="animate-pulse">{notif.progressText || "Processing Task..."}</span>
-                    <span className="font-mono">{Math.round(notif.progress)}%</span>
+                <div className="space-y-2 bg-white/[0.04] border border-white/[0.08] p-3.5 rounded-2xl">
+                  <div className="flex justify-between items-center text-[11px] font-semibold text-zinc-200">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#0A84FF] animate-pulse" />
+                      {notif.progressText || "Processing Live Task..."}
+                    </span>
+                    <span className="font-mono text-white bg-white/10 px-2 py-0.5 rounded-md text-[10px]">
+                      {Math.round(notif.progress)}%
+                    </span>
                   </div>
-                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-zinc-800/80 rounded-full overflow-hidden p-[1px] border border-white/5">
                     <motion.div
                       layout
-                      className="h-full bg-gradient-to-r from-blue-500 via-sky-400 to-indigo-500"
-                      style={{ width: `${notif.progress}%` }}
+                      className="h-full rounded-full bg-gradient-to-r from-[#0A84FF] via-[#64D2FF] to-[#5E5CE6] shadow-[0_0_12px_rgba(10,132,255,0.6)]"
+                      style={{ width: `${Math.min(Math.max(notif.progress, 0), 100)}%` }}
                     />
                   </div>
                 </div>
               )}
 
-              {/* Metadata Key/Value Details */}
-              {notif.metadata && (
-                <div className="bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl text-[10px] space-y-1.5 font-mono text-zinc-400">
+              {/* Metadata Key/Value Details - Apple Settings Style */}
+              {notif.metadata && Object.keys(notif.metadata).length > 0 && (
+                <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl divide-y divide-white/[0.06] overflow-hidden">
                   {Object.entries(notif.metadata).map(([key, val]) => (
-                    <div key={key} className="flex justify-between items-center">
-                      <span className="text-zinc-500 capitalize">{key}:</span>
-                      <span className="font-semibold text-zinc-300">{val}</span>
+                    <div key={key} className="flex justify-between items-center px-3.5 py-2 text-xs">
+                      <span className="text-zinc-400 capitalize font-medium">{key}</span>
+                      <span className="font-mono font-semibold text-white tracking-wide">{String(val)}</span>
                     </div>
                   ))}
                 </div>
@@ -626,18 +697,19 @@ export function DynamicIslandNotification() {
 
               {/* Live console logs */}
               {notif.logs && notif.logs.length > 0 && (
-                <div className="bg-black/40 border border-white/[0.03] p-3 rounded-xl text-[9px] font-mono text-zinc-500 max-h-[80px] overflow-y-auto space-y-1">
+                <div className="bg-black/60 border border-white/[0.06] p-3 rounded-2xl text-[10px] font-mono text-zinc-300 max-h-[90px] overflow-y-auto space-y-1">
                   {notif.logs.map((log, lIdx) => (
-                    <div key={lIdx} className="leading-tight truncate">
-                      &gt; {log}
+                    <div key={lIdx} className="leading-relaxed truncate flex items-center gap-1.5">
+                      <span className="text-[#30D158] font-bold">&gt;</span>
+                      <span>{log}</span>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Action triggers */}
+              {/* Action Buttons - Apple Frosted Capsule Design */}
               {notif.actions && notif.actions.length > 0 && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-0.5">
                   {notif.actions.map((act, aIdx) => (
                     <button
                       key={aIdx}
@@ -645,7 +717,7 @@ export function DynamicIslandNotification() {
                         e.stopPropagation();
                         act.onClick();
                       }}
-                      className="flex-1 py-1.5 text-[10px] font-bold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white transition-colors"
+                      className="flex-1 py-2 px-3 text-xs font-semibold rounded-xl bg-white/10 hover:bg-white/20 active:scale-[0.98] border border-white/15 text-white transition-all shadow-sm text-center"
                     >
                       {act.label}
                     </button>
@@ -653,80 +725,88 @@ export function DynamicIslandNotification() {
                 </div>
               )}
 
-              {/* Drawer History trigger */}
-              <div className="border-t border-white/[0.06] pt-3 flex justify-between items-center text-[10px] text-zinc-500 font-semibold tracking-wide">
-                <span>Auto-dismiss {notif.priority === 4 ? "disabled" : "active"}</span>
+              {/* Footer / Auto-dismiss countdown bar & History drawer link */}
+              <div className="border-t border-white/[0.08] pt-3 flex justify-between items-center text-[10px] text-zinc-400 font-medium">
+                <span className="flex items-center gap-1">
+                  {notif.priority === 4 ? (
+                    <span className="text-zinc-400">Manual dismissal required</span>
+                  ) : (
+                    <span className="text-zinc-400">Tap to toggle collapse</span>
+                  )}
+                </span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsHistoryOpen(true);
                   }}
-                  className="flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
+                  className="flex items-center gap-1 text-zinc-300 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-2 py-1 rounded-lg border border-white/10"
                 >
-                  <Clock className="h-3 w-3" /> View History <ArrowRight className="h-2.5 w-2.5" />
+                  <Clock className="h-3 w-3" />
+                  <span>History</span>
+                  <ChevronRight className="h-2.5 w-2.5" />
                 </button>
               </div>
             </motion.div>
           )}
         </motion.div>
 
-        {/* NOTIFICATION HISTORY SLIDING DRAWER SHEET */}
+        {/* NOTIFICATION HISTORY SLIDING DRAWER SHEET (macOS / iOS Style) */}
         <AnimatePresence>
           {isHistoryOpen && (
             <>
-              {/* Backing screen block */}
+              {/* Dimmed backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 0.4 }}
+                animate={{ opacity: 0.5 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[120] bg-black pointer-events-auto"
+                className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm pointer-events-auto"
                 onClick={() => setIsHistoryOpen(false)}
               />
 
-              {/* Sidebar drawer containing historical list */}
+              {/* Sidebar drawer */}
               <motion.div
                 initial={{ x: "100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
-                transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                className="fixed top-0 right-0 h-full w-[350px] max-w-[85vw] bg-[#0c0c0c] border-l border-zinc-800/80 shadow-[0_0_50px_rgba(0,0,0,0.8)] z-[130] flex flex-col pointer-events-auto p-5 text-left"
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                className="fixed top-0 right-0 h-full w-[360px] max-w-[88vw] bg-[#0A0A0A] border-l border-white/10 shadow-[0_0_60px_rgba(0,0,0,0.9)] z-[140] flex flex-col pointer-events-auto p-5 text-left"
               >
-                <div className="flex justify-between items-center pb-4 border-b border-zinc-800">
+                <div className="flex justify-between items-center pb-4 border-b border-white/10">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4.5 w-4.5 text-zinc-400" />
-                    <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wider">System History</h3>
+                    <Clock className="h-4 w-4 text-[#0A84FF]" />
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Notification Center</h3>
                   </div>
                   <button
                     onClick={() => setIsHistoryOpen(false)}
-                    className="p-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors"
+                    className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-zinc-300 hover:text-white transition-all"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
 
                 {/* Scroller list */}
-                <div className="flex-1 overflow-y-auto py-4 space-y-3.5 pr-1">
+                <div className="flex-1 overflow-y-auto py-4 space-y-3 pr-1">
                   {history.length === 0 ? (
-                    <div className="text-center text-xs text-zinc-500 py-12">
+                    <div className="text-center text-xs text-zinc-500 py-16">
                       No notifications recorded yet.
                     </div>
                   ) : (
                     history.map((hItem: DynamicIslandNotificationItem) => (
                       <div
                         key={hItem.id}
-                        className="p-3 bg-zinc-900/40 border border-zinc-800/60 rounded-2xl space-y-2 text-xs"
+                        className="p-3.5 bg-white/[0.04] border border-white/[0.08] rounded-2xl space-y-2 text-xs transition-all hover:bg-white/[0.06]"
                       >
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
-                            <NotificationIcon icon={hItem.icon} type={hItem.type} />
-                            <span className="font-bold text-zinc-200 tracking-wide">{hItem.title}</span>
+                            <NotificationIcon icon={hItem.icon} type={hItem.type} size="sm" />
+                            <span className="font-semibold text-white tracking-wide">{hItem.title}</span>
                           </div>
-                          <span className="text-[9px] text-zinc-500 font-mono">
+                          <span className="text-[10px] text-zinc-400 font-mono">
                             {hItem.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </span>
                         </div>
                         {hItem.description && (
-                          <p className="text-zinc-400 leading-normal text-[11px] font-normal pl-7">
+                          <p className="text-zinc-300 leading-relaxed text-[11.5px] font-normal pl-6">
                             {hItem.description}
                           </p>
                         )}
@@ -735,8 +815,8 @@ export function DynamicIslandNotification() {
                   )}
                 </div>
 
-                <div className="pt-4 border-t border-zinc-800 text-[10px] text-zinc-500 text-center font-medium">
-                  Showing last 20 administrator events
+                <div className="pt-3 border-t border-white/10 text-[10px] text-zinc-400 text-center font-medium">
+                  Showing last {history.length} events
                 </div>
               </motion.div>
             </>
@@ -746,3 +826,4 @@ export function DynamicIslandNotification() {
     </LayoutGroup>
   );
 }
+

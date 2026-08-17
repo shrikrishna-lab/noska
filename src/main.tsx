@@ -81,6 +81,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/privacy" element={<MarketingLayout><Legal /></MarketingLayout>} />
           <Route path="/terms" element={<MarketingLayout><Legal /></MarketingLayout>} />
           <Route path="/policy" element={<MarketingLayout><Legal /></MarketingLayout>} />
+          <Route path="/refund" element={<MarketingLayout><Legal /></MarketingLayout>} />
           <Route path="/docs" element={<MarketingLayout><Docs /></MarketingLayout>} />
           <Route path="/referrals" element={<MarketingLayout><Referrals /></MarketingLayout>} />
           <Route path="/roadmap" element={<MarketingLayout><Roadmap /></MarketingLayout>} />
