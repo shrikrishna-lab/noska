@@ -43,9 +43,5 @@ src/pages/support/
 # Dev/test artifacts
 test-page.cjs
 admin/src/lib/more_hooks.txt
-
-# Root-level screenshots (WIP)
-/support-fullpage.png
-/support-hero.png
-/support-interaction.png
-/support-with-footer.png
+console-after-typing.txt
+/*.png
