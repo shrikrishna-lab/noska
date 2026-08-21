@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bold, Italic, Underline, Code, Strikethrough, Eraser, Palette, type LucideIcon } from "lucide-react";
+import { Bold, Italic, Underline, Code, Strikethrough, Eraser, Palette, GripVertical, type LucideIcon } from "lucide-react";
 
 const TEXT_COLORS = [
   { name: "Gray", var: "gray" }, { name: "Brown", var: "brown" }, { name: "Orange", var: "orange" },
@@ -169,19 +169,24 @@ export default function FloatingFormatToolbar({ blockId, inputRef, onFormat }: F
         {visible && (
           <motion.div
             ref={toolbarRef}
+            drag
+            dragMomentum={false}
             initial={{ opacity: 0, scale: 0.9, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 4 }}
             transition={{ duration: 0.12 }}
-            className="fixed z-[200] flex items-center gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--elevated)] px-1.5 py-1 shadow-xl"
+            className="apple-liquid-glass fixed z-[200] flex items-center gap-1 rounded-2xl px-2 py-1.5 select-none"
             style={{ top: pos.top, left: Math.max(8, pos.left) }}
           >
+            <div className="flex items-center px-1 text-[var(--muted)] cursor-grab active:cursor-grabbing hover:text-[var(--text)] transition" title="Hold & drag this toolbar">
+              <GripVertical size={13} />
+            </div>
             {FORMAT_BUTTONS.map((btn) => (
               <button
                 key={btn.key}
                 onClick={() => handleFormat(btn.key)}
                 onMouseDown={(e) => e.preventDefault()}
-                className="grid h-7 w-7 place-items-center rounded text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+                className="grid h-7 w-7 place-items-center rounded-xl text-[var(--text-secondary)] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] hover:text-[var(--text)] transition cursor-pointer active:scale-95"
                 title={btn.label}
               >
                 <btn.icon size={14} />
@@ -198,19 +203,19 @@ export default function FloatingFormatToolbar({ blockId, inputRef, onFormat }: F
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 4 }}
             transition={{ duration: 0.12 }}
-            className="fixed z-[210] rounded-lg border border-[var(--border)] bg-[var(--elevated)] p-2 shadow-xl"
-            style={{ top: pos.top + 32, left: Math.max(8, pos.left) }}
+            className="apple-liquid-glass fixed z-[210] rounded-2xl p-3"
+            style={{ top: pos.top + 36, left: Math.max(8, pos.left) }}
           >
-            <div className="flex gap-1 mb-2">
-              <button onClick={() => setColorTab("text")} className={`text-xs px-2 py-0.5 rounded ${colorTab === "text" ? "bg-[var(--accent)] text-white" : "text-[var(--secondary)] hover:bg-[var(--hover)]"} cursor-pointer`}>Text</button>
-              <button onClick={() => setColorTab("bg")} className={`text-xs px-2 py-0.5 rounded ${colorTab === "bg" ? "bg-[var(--accent)] text-white" : "text-[var(--secondary)] hover:bg-[var(--hover)]"} cursor-pointer`}>Background</button>
+            <div className="flex gap-1 mb-2 apple-glass-pill p-0.5 rounded-xl">
+              <button onClick={() => setColorTab("text")} className={`text-xs px-2.5 py-1 rounded-lg transition font-medium ${colorTab === "text" ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold" : "text-[var(--text-secondary)] hover:text-[var(--text)]"} cursor-pointer`}>Text</button>
+              <button onClick={() => setColorTab("bg")} className={`text-xs px-2.5 py-1 rounded-lg transition font-medium ${colorTab === "bg" ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold" : "text-[var(--text-secondary)] hover:text-[var(--text)]"} cursor-pointer`}>Background</button>
             </div>
-            <div className="grid grid-cols-6 gap-1">
+            <div className="grid grid-cols-6 gap-1.5">
               {TEXT_COLORS.map(c => (
                 <button
                   key={c.var}
                   onClick={() => handleColor(c.var)}
-                  className="w-6 h-6 rounded border border-[var(--border)] hover:scale-110 transition cursor-pointer"
+                  className="w-6 h-6 rounded-lg border border-black/[0.08] dark:border-white/[0.12] hover:scale-115 transition cursor-pointer shadow-sm"
                   style={{ background: `var(--clr-${colorTab === "bg" ? "bg-" : ""}${c.var})` }}
                   title={c.name}
                 />

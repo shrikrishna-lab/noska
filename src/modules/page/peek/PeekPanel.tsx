@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import type { CSSProperties, ChangeEvent, MouseEvent as ReactMouseEvent } from "react";
 import { X, Expand, Minimize2 } from "lucide-react";
+import { PageIcon } from "../../../components/PageIcon";
 import type { DatabaseRow, DatabaseSchema, PropertyDefinition } from "../../database/types/database";
 
 type PanelMode = "right" | "bottom" | "floating";
@@ -68,7 +69,9 @@ export default function PeekPanel({ row, database, properties, onPatchRow, onClo
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)] shrink-0">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="text-base shrink-0">{row?.icon || '📄'}</span>
+          <span className="text-base shrink-0 flex items-center justify-center">
+            <PageIcon icon={row?.icon} size={16} fallback={<span>📄</span>} />
+          </span>
           <span className="text-sm font-medium text-[var(--text)] truncate">{row?.name || 'Untitled'}</span>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">

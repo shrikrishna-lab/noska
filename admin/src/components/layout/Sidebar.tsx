@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, PanelRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS, NAV_GROUPS, type NavItem } from "@/lib/navigation";
 import { useAuth } from "@/lib/auth";
-import { hasRole, type AdminRole } from "@/lib/rbac";
+import { can, type AdminCapability } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 
 interface SidebarProps {
@@ -20,7 +20,7 @@ function SidebarNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   const { user } = useAuth();
   const active = location.pathname === item.to;
 
-  if (item.requiresRole && !hasRole(user, item.requiresRole as AdminRole)) return null;
+  if (!can(user, item.capability as AdminCapability)) return null;
 
   const Icon = item.icon;
 
@@ -53,6 +53,7 @@ function SidebarNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
 
 export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
   const location = useLocation();
+  const { user } = useAuth();
   const currentGroup = NAV_ITEMS.find((i) => i.to === location.pathname)?.group;
 
   return (
@@ -88,7 +89,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
             </div>
             <div className="flex-1 overflow-y-auto p-3">
               {NAV_GROUPS.map((group) => {
-                const items = NAV_ITEMS.filter((i) => i.group === group.id);
+                const items = NAV_ITEMS.filter((i) => i.group === group.id && can(user, i.capability as AdminCapability));
                 if (!items.length) return null;
                 return (
                   <div key={group.id} className="mb-4">

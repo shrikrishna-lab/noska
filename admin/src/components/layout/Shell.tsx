@@ -7,8 +7,8 @@ import { CommandCenterProvider, AdminCommandCenter, useCommandCenter } from "@/c
 import { DynamicIslandNotificationProvider } from "@/components/ui/DynamicIslandNotification";
 import { useRealtimeNotificationPopups } from "@/lib/notifications/hooks";
 import { Forbidden } from "@/pages/Forbidden";
-import { requiredRoleForPath } from "@/lib/navigation";
-import { hasRole } from "@/lib/rbac";
+import { requiredCapabilityForPath } from "@/lib/navigation";
+import { can } from "@/lib/rbac";
 import { useAuth } from "@/lib/auth";
 
 function ShellInner() {
@@ -46,8 +46,8 @@ function ShellInner() {
         <Header onMenuClick={() => setMobileOpen(true)} onSearchOpen={() => setSearchOpen(true)} />
         <main className="flex-1 overflow-y-auto isolate">
           {(() => {
-            const requiredRole = requiredRoleForPath(location.pathname);
-            return requiredRole && !hasRole(user, requiredRole) ? <Forbidden /> : <Outlet />;
+            const requiredCapability = requiredCapabilityForPath(location.pathname);
+            return requiredCapability && !can(user, requiredCapability) ? <Forbidden /> : <Outlet />;
           })()}
         </main>
       </div>

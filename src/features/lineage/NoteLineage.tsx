@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Clock
 } from "lucide-react";
+import { PageIcon } from "../../components/PageIcon";
 
 /* ─── Icon mapping for lineage events ─── */
 
@@ -120,7 +121,10 @@ export default function NoteLineage({ page, pages, onClose }) {
         <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-4">
           <Dna size={18} className="text-[var(--accent)]" />
           <h2 className="flex-1 font-semibold text-[var(--text)]">Note DNA</h2>
-          <span className="text-xs text-[var(--muted)]">{page.icon} {page.title}</span>
+          <span className="text-xs text-[var(--muted)] flex items-center gap-1">
+            <PageIcon icon={page.icon} size={12} fallback="📄" />
+            <span>{page.title}</span>
+          </span>
           <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-md text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]">
             <X size={16} />
           </button>
@@ -130,14 +134,20 @@ export default function NoteLineage({ page, pages, onClose }) {
         {(parentChain.length > 0 || children.length > 0) && (
           <div className="border-b border-[var(--border)] px-5 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">Page Tree</div>
-            <div className="flex items-center gap-1 flex-wrap text-xs">
+            <div className="flex items-center gap-1.5 flex-wrap text-xs">
               {parentChain.map((p, i) => (
                 <React.Fragment key={p.id}>
-                  <span className="text-[var(--muted)]">{p.icon} {p.title}</span>
+                  <span className="text-[var(--muted)] flex items-center gap-1">
+                    <PageIcon icon={p.icon} size={12} fallback="📄" />
+                    <span>{p.title}</span>
+                  </span>
                   <span className="text-[var(--muted)]">→</span>
                 </React.Fragment>
               ))}
-              <span className="font-semibold text-[var(--text)]">{page.icon} {page.title}</span>
+              <span className="font-semibold text-[var(--text)] flex items-center gap-1">
+                <PageIcon icon={page.icon} size={12} fallback="📄" />
+                <span>{page.title}</span>
+              </span>
               {children.length > 0 && (
                 <>
                   <span className="text-[var(--muted)]">→</span>

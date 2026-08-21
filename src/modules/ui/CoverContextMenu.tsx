@@ -79,18 +79,25 @@ export default function CoverContextMenu({ open, position, settings, onUpdate, o
       {open && (
         <motion.div
           ref={menuRef}
+          drag
+          dragMomentum={false}
           initial={{ opacity: 0, scale: 0.95, y: -4 }}
           animate={closing ? { opacity: 0, scale: 0.95, y: -4 } : { opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -4 }}
           transition={{ duration: 0.12 }}
-          className="fixed z-[9999] w-64 rounded-xl border border-white/[0.08] bg-[#1a1a1e] shadow-2xl shadow-black/50 overflow-hidden"
-          style={{ left: menuX, top: menuY }}
+          className="fixed z-[9999] w-64 rounded-2xl border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.3)] backdrop-blur-2xl overflow-hidden cursor-default"
+          style={{
+            left: menuX,
+            top: menuY,
+            background: "linear-gradient(135deg, rgba(26, 28, 36, 0.94) 0%, rgba(12, 14, 20, 0.97) 100%)",
+          }}
         >
-          <div className="px-3 py-2 border-b border-white/[0.06] flex items-center justify-between">
-            <span className="text-xs font-medium text-white">Cover settings</span>
+          {/* Header - draggable handle */}
+          <div className="px-3.5 py-2.5 border-b border-white/[0.1] flex items-center justify-between cursor-grab active:cursor-grabbing bg-white/[0.03]">
+            <span className="text-xs font-semibold text-white/95 tracking-tight">Cover settings</span>
             <button
               onClick={resetAll}
-              className="flex items-center gap-1 text-[10px] text-[var(--text-secondary)] hover:text-white transition-colors"
+              className="flex items-center gap-1 text-[10px] font-medium text-white/60 hover:text-white transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               Reset

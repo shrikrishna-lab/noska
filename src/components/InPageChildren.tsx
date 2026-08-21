@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ChevronRight, ArrowUpRight } from "lucide-react";
 import { isPageEntity } from "../utils/pageTreeOps";
 import type { Page } from "../lib/supabaseService";
+import { PageIcon } from "./PageIcon";
 
 interface ChildPage extends Page {
   childCount: number;
@@ -55,7 +56,9 @@ export default function InPageChildren({ pageId, pages, onNavigate }: InPageChil
             onClick={(e: ReactMouseEvent) => onNavigate?.(child.id, { altKey: e.altKey })}
             className="group flex items-center gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-left hover:border-[var(--accent)] hover:bg-[var(--hover)] transition-all cursor-pointer"
           >
-            <span className="text-lg shrink-0">{child.icon || "📄"}</span>
+            <span className="text-lg shrink-0 flex items-center justify-center">
+              <PageIcon icon={child.icon} size={18} fallback={<span>📄</span>} />
+            </span>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-[var(--text)] truncate">
                 {child.title || "Untitled"}

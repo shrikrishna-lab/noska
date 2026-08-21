@@ -6,7 +6,7 @@ import {
   MapPin, Save, Loader2, ImagePlus, Upload, Search, Filter, ChevronDown, ChevronRight,
   Bot, Coins, Gauge, UserCheck, Crown, ShieldCheck, X, Undo2, Database, HardDrive,
   Plus, Minus, PencilLine, Archive, CalendarDays, List, Sparkles, Copy, Check, Zap, Layers,
-  Download, FileSpreadsheet, Maximize2, Split, Code2, ExternalLink, ArrowRight,
+  Download, FileSpreadsheet, Maximize2, Split, Code2, ExternalLink, ArrowRight, KeyRound, Link2,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,12 +29,14 @@ import {
   useUpdateUserLocation, useUpdateUserProfile, adminUploadAvatar,
   useAdminMatchByEmail, useUserBans, useUserSessions, useUnbanUser,
   useUserStorage, useUserAdminActions,
+  useSetBypassWaitlist,
   type AdminMatchRow, type UserBanRow, type UserSessionRow,
   type UserStorageRow, type AdminUserActionRow, type UserAuditDetailRow,
   type UserAiChatRow,
 } from "@/lib/queries";
 import { useAuth } from "@/lib/auth";
 import { hasRole, ROLE_LABELS } from "@/lib/rbac";
+import { adminApi } from "@/lib/admin-api";
 import { formatRelativeTime, initialsFromName, formatCurrency } from "@/lib/utils";
 import { useRealtimeInvalidate } from "@/lib/queries";
 
@@ -718,6 +720,90 @@ function BanStatusCard({ profile, bans, onUnban }: { profile: { id: string; user
             </Button>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AccessCard({ profile }: { profile: { id: string; user_name: string | null; email: string | null; bypass_waitlist?: boolean | null } | null }) {
+  const setBypass = useSetBypassWaitlist();
+  const [generating, setGenerating] = useState(false);
+  const [link, setLink] = useState<{ url: string | null; expires: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  if (!profile) return null;
+
+  const handleToggle = async (value: boolean) => {
+    try {
+      await setBypass.mutateAsync({ id: profile.id, bypass_waitlist: value });
+      toast.success(value ? "Waitlist bypass enabled" : "Waitlist bypass disabled");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update bypass flag");
+    }
+  };
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setLink(null);
+    try {
+      const res = await adminApi.users.signInToken(profile.id, 7 * 24 * 60 * 60);
+      setLink({ url: res.url, expires: new Date(Date.now() + res.expires_in_seconds * 1000).toISOString() });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate link");
+    }
+    setGenerating(false);
+  };
+
+  const handleCopy = async () => {
+    if (!link?.url) return;
+    try {
+      await navigator.clipboard.writeText(link.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <KeyRound className="h-4 w-4" /> Access
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+          <div>
+            <p className="text-sm font-medium">Bypass waitlist</p>
+            <p className="text-[11px] text-muted-foreground">This account skips the waitlist and gets access immediately.</p>
+          </div>
+          <Switch
+            checked={!!profile.bypass_waitlist}
+            onCheckedChange={(v) => void handleToggle(v)}
+            disabled={setBypass.isPending}
+          />
+        </div>
+
+        <div className="rounded-lg border px-3 py-2">
+          <p className="text-sm font-medium">Direct access link</p>
+          <p className="text-[11px] text-muted-foreground">One-time magic link that signs this user in and opens their workspace.</p>
+          <Button size="sm" className="mt-2" onClick={() => void handleGenerate()} disabled={generating}>
+            {generating ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Link2 className="mr-1 h-3.5 w-3.5" />}
+            {link ? "Regenerate link" : "Generate link"}
+          </Button>
+          {link?.url && (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Input value={link.url} readOnly className="h-9 font-mono text-[11px]" />
+                <Button size="sm" variant="outline" onClick={() => void handleCopy()}>
+                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Expires {formatDateTime(link.expires)} · Share this link with the user.</p>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -2297,6 +2383,9 @@ export function UserDetail() {
 
       {/* Profile details */}
       <ProfileInfoCard profile={profile} />
+
+      {/* Access control (admin only) */}
+      {canManage && <AccessCard profile={profile} />}
 
       {/* Subscription */}
       <Card>

@@ -6,7 +6,7 @@ import { useWaitlist, useRealtimeInvalidate } from "@/lib/queries";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from "recharts";
-import { ArrowLeft, Users, MailCheck, TrendingUp, Clock, Globe, UserCheck } from "lucide-react";
+import { ArrowLeft, Users, MailCheck, TrendingUp, Clock, Globe, UserCheck, XCircle } from "lucide-react";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   waiting: { label: "Pending", color: "#6b7280" },
@@ -34,6 +34,7 @@ export default function WaitlistAnalyticsPage() {
     const invited = entries.filter((e) => e.status === "invited").length;
     const accepted = entries.filter((e) => e.status === "accepted").length;
     const pending = entries.filter((e) => e.status === "waiting" || e.status === "pending").length;
+    const rejected = entries.filter((e) => e.status === "rejected").length;
     const todaySignups = entries.filter((e) => e.joined_at && new Date(e.joined_at).toDateString() === new Date().toDateString()).length;
     const conversion = total > 0 ? Math.round((accepted / total) * 100) : 0;
     const topReferrers = entries.filter((e) => e.referral_count > 0).sort((a, b) => b.referral_count - a.referral_count).slice(0, 5);
@@ -49,7 +50,7 @@ export default function WaitlistAnalyticsPage() {
       if (e.country) { acc[e.country] = (acc[e.country] || 0) + 1; }
       return acc;
     }, {} as Record<string, number>);
-    return { total, approved, invited, accepted, pending, todaySignups, conversion, topReferrers, avgApprovalTime, countryData };
+    return { total, approved, invited, accepted, pending, rejected, todaySignups, conversion, topReferrers, avgApprovalTime, countryData };
   }, [entries]);
 
   const statusPieData = useMemo(() => {
@@ -93,6 +94,7 @@ export default function WaitlistAnalyticsPage() {
         <Card><CardContent className="p-4 flex items-center gap-3"><MailCheck className="h-5 w-5 text-amber-500" /><div><p className="text-2xl font-bold">{stats?.invited ?? 0}</p><p className="text-xs text-muted-foreground">Invited</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><UserCheck className="h-5 w-5 text-green-500" /><div><p className="text-2xl font-bold">{stats?.accepted ?? 0}</p><p className="text-xs text-muted-foreground">Accepted</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="h-5 w-5 text-orange-500" /><div><p className="text-2xl font-bold">{stats?.pending ?? 0}</p><p className="text-xs text-muted-foreground">Pending</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><XCircle className="h-5 w-5 text-red-500" /><div><p className="text-2xl font-bold">{stats?.rejected ?? 0}</p><p className="text-xs text-muted-foreground">Rejected</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><Globe className="h-5 w-5 text-purple-500" /><div><p className="text-2xl font-bold">{stats?.conversion ?? 0}%</p><p className="text-xs text-muted-foreground">Conversion Rate</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><Users className="h-5 w-5 text-cyan-500" /><div><p className="text-2xl font-bold">{Object.keys(stats?.countryData ?? {}).length}</p><p className="text-xs text-muted-foreground">Countries</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="h-5 w-5 text-rose-500" /><div><p className="text-2xl font-bold">{stats?.avgApprovalTime ?? "—"}</p><p className="text-xs text-muted-foreground">Avg Approval Time</p></div></CardContent></Card>

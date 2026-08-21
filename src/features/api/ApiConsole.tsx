@@ -328,7 +328,7 @@ export default function ApiConsole({ pages, activePageId, addPage, updatePage, o
                       <option value="">Select Page...</option>
                       {pages.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.icon} {p.title || "(Untitled)"} ({p.id.substring(0, 6)}...)
+                          {p.icon?.startsWith("lucide:") ? "📄" : (p.icon || "📄")} {p.title || "(Untitled)"} ({p.id.substring(0, 6)}...)
                         </option>
                       ))}
                     </select>

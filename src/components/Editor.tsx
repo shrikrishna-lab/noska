@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { SPRING_PRESETS } from "../features/motion/MotionSystem";
 import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
@@ -39,6 +39,9 @@ const DragGhostBlock = React.memo(function DragGhostBlock({ block }: { block: Ed
 import { useGhostWriter } from "../features/ghostwriter/GhostWriter";
 import { BlockRegistry } from "../registry/BlockRegistry";
 import ImagePicker from "./editor/ImagePicker";
+import PageIconBlock from "./editor/PageIconBlock";
+import PageTitleCustomizer, { TITLE_GRADIENTS } from "./editor/PageTitleCustomizer";
+import { PageIcon } from "./PageIcon";
 
 import InPageFind from "./InPageFind";
 import useMultiBlockSelect from "../hooks/useMultiBlockSelect";
@@ -47,7 +50,7 @@ import {
   Quote, MessageSquare, Clipboard, MoreHorizontal, Image, Link, Table2, Columns3, Edit3, Database, Plus,
   Search, X, GripVertical, Maximize2, Mic, Loader2, Play, Bold, Italic, Underline, SlidersHorizontal, Highlighter,
   Smile, MessageCircle, Settings2, Sparkles, Code, Star, Heart, ThumbsUp, Flag, Bell, Bookmark, Lightbulb,
-  Target, Zap, Check, Clock, AlertCircle, HelpCircle, Info, Calendar, Hash, FileDown, Upload, Globe, BarChart3, History, Move, Eye, FileEdit, Palette, Trash2, ExternalLink
+  Target, Zap, Check, Clock, AlertCircle, HelpCircle, Info, Calendar, Hash, FileDown, Upload, Globe, BarChart3, History, Move, Eye, FileEdit, Palette, Trash2, ExternalLink, Menu
 } from "lucide-react";
 import { AnimatedSparkle } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss, TextArea } from "./ui";
@@ -97,6 +100,7 @@ import CustomizePanel from "./editor/CustomizePanel";
 import IconPicker from "../modules/ui/IconPicker";
 import CoverPicker from "../modules/ui/CoverPicker";
 import CoverContextMenu from "../modules/ui/CoverContextMenu";
+import CoverLiquidGlassToolbar from "./cover/CoverLiquidGlassToolbar";
 import { executeCommand } from "../core/commands/ActionExecutor";
 import CollabPresenceBar from "./collab/CollabPresenceBar";
 import { realtimeCollab } from "../lib/realtimeCollab";
@@ -502,8 +506,45 @@ export default function Editor({
   const [openSlashForBlockId, setOpenSlashForBlockId] = useState(null);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
+  const [coverPickerPos, setCoverPickerPos] = useState<{ top: number; left: number } | undefined>(undefined);
+  const coverBtnRef = useRef<HTMLButtonElement>(null);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
   const [coverMenuPos, setCoverMenuPos] = useState({ left: 0, top: 0 });
+  const [isRepositioningCover, setIsRepositioningCover] = useState(false);
+  const [coverDragYPercent, setCoverDragYPercent] = useState<number | null>(null);
+  const coverDragStartY = useRef<number | null>(null);
+  const coverDragStartPercent = useRef<number>(50);
+  const isDraggingCover = useRef<boolean>(false);
+
+  const getCoverYPercent = (pos?: string): number => {
+    if (!pos) return 50;
+    if (pos === "top") return 0;
+    if (pos === "center") return 50;
+    if (pos === "bottom") return 100;
+    const match = pos.match(/(\d+)%/);
+    if (match) return parseInt(match[1], 10);
+    return 50;
+  };
+
+  const handleStartReposition = () => {
+    const initialPercent = getCoverYPercent(page?.coverPosition);
+    coverDragStartPercent.current = initialPercent;
+    setCoverDragYPercent(initialPercent);
+    setIsRepositioningCover(true);
+  };
+
+  const handleSaveReposition = () => {
+    if (coverDragYPercent !== null) {
+      onPagePatch({ coverPosition: `center ${coverDragYPercent}%` });
+    }
+    setIsRepositioningCover(false);
+    setCoverDragYPercent(null);
+  };
+
+  const handleCancelReposition = () => {
+    setIsRepositioningCover(false);
+    setCoverDragYPercent(null);
+  };
   const [presentationMode, setPresentationMode] = useState(false);
   const [suggestEdits, setSuggestEdits] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -519,6 +560,9 @@ export default function Editor({
   const [activeId, setActiveId] = useState(null);
   const [titleEmojiOpen, setTitleEmojiOpen] = useState(false);
   const titleEmojiRef = useRef(null);
+  const [titleCustomizerOpen, setTitleCustomizerOpen] = useState(false);
+  const titleMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const titleDragControls = useDragControls();
   const handleClearOpenSlash = useCallback(() => setOpenSlashForBlockId(null), []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -783,12 +827,14 @@ export default function Editor({
       >
         {(page.cover || page.cover === undefined) && (
           <div
-            className="-mx-16 mb-6 rounded-b-xl transition-all duration-300 relative group"
+            className={`-mx-16 mb-6 rounded-b-xl transition-all duration-300 relative group/banner select-none overflow-hidden ${
+              isRepositioningCover ? "ring-2 ring-blue-500/60 cursor-grab active:cursor-grabbing" : ""
+            }`}
             style={{
               height: (page.coverHeight || 160) + "px",
               background: (page.cover ?? covers[0]).startsWith('linear-gradient')
                 ? (page.cover ?? covers[0])
-                : `url(${page.cover}) ${page.coverPosition || "center"}/cover no-repeat`,
+                : `url(${page.cover}) ${isRepositioningCover && coverDragYPercent !== null ? `center ${coverDragYPercent}%` : (page.coverPosition || "center")}/cover no-repeat`,
               marginTop: page.coverSize === "small" ? "-1rem" : page.coverSize === "wide" ? "-2rem" : page.coverSize === "standard" ? "-1.5rem" : !page.coverSize || page.coverSize === "full" ? "-2.5rem" : "-2.5rem",
               ...(!page.coverSize || page.coverSize === "full" ? {
                 width: "100vw",
@@ -802,203 +848,165 @@ export default function Editor({
               filter: page.coverOverlay ? `brightness(${page.coverBrightness || 100}%)` : "none",
               ...(page.coverParallax ? { backgroundAttachment: "fixed" } : {})
             }}
+            onMouseDown={(e) => {
+              if (isRepositioningCover) {
+                e.preventDefault();
+                isDraggingCover.current = true;
+                coverDragStartY.current = e.clientY;
+                coverDragStartPercent.current = coverDragYPercent ?? getCoverYPercent(page.coverPosition);
+              }
+            }}
+            onMouseMove={(e) => {
+              if (isRepositioningCover && isDraggingCover.current && coverDragStartY.current !== null) {
+                const deltaY = e.clientY - coverDragStartY.current;
+                const height = page.coverHeight || 160;
+                const deltaPercent = (deltaY / height) * 100;
+                const newPercent = Math.min(100, Math.max(0, Math.round(coverDragStartPercent.current - deltaPercent)));
+                setCoverDragYPercent(newPercent);
+              }
+            }}
+            onMouseUp={() => {
+              if (isRepositioningCover) {
+                isDraggingCover.current = false;
+              }
+            }}
+            onMouseLeave={() => {
+              if (isRepositioningCover) {
+                isDraggingCover.current = false;
+              }
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               setCoverMenuPos({ left: e.clientX, top: e.clientY });
               setCoverMenuOpen(true);
             }}
           >
-            {/* Cover-mutating controls: gated on isEditable (not just isLocked) so
-                viewers/commenters on a shared page can't change the cover/customize.
-                Real gap found during live UI QA — previously matched only
-                `!page.isLocked`, same class of bug already fixed for the block
-                context menu. */}
-            {isEditable && (
-              <div className="absolute top-3 right-3 flex gap-1.5">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setCoverPickerOpen(!coverPickerOpen); }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/50 backdrop-blur-md border border-white/10 text-[11px] font-medium text-white/90 shadow-lg hover:bg-white/15 hover:border-white/20 hover:text-white hover:scale-105 active:scale-95 transition-all duration-200"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  Change Cover
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setCoverMenuPos({ left: rect.right - 256, top: rect.bottom + 4 });
-                    setCoverMenuOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/50 backdrop-blur-md border border-white/10 text-[11px] font-medium text-white/90 shadow-lg hover:bg-white/15 hover:border-white/20 hover:text-white hover:scale-105 active:scale-95 transition-all duration-200"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                  Customize
-                </button>
+            {/* Repositioning visual grid hint overlay */}
+            {isRepositioningCover && (
+              <div className="absolute inset-0 bg-black/25 pointer-events-none flex items-center justify-center">
+                <div className="border border-white/30 border-dashed rounded-lg inset-3 absolute pointer-events-none" />
               </div>
             )}
+
+            {/* Apple Liquid Glass Cover Toolbar (Change | Reposition | Download/Options) */}
+            <CoverLiquidGlassToolbar
+              page={page}
+              isEditable={isEditable}
+              isRepositioning={isRepositioningCover}
+              onStartReposition={handleStartReposition}
+              onSaveReposition={handleSaveReposition}
+              onCancelReposition={handleCancelReposition}
+              onOpenPicker={(pos) => {
+                setCoverPickerPos(pos);
+                setCoverPickerOpen(true);
+              }}
+              onOpenSettings={(pos) => {
+                setCoverMenuPos(pos);
+                setCoverMenuOpen(true);
+              }}
+              onRemoveCover={() => {
+                onPagePatch({ cover: null });
+              }}
+            />
           </div>
         )}
-          <div className="mb-2 flex items-center gap-2 relative">
-            <button
-              disabled={page.isLocked}
-              className="grid h-10 w-10 place-items-center rounded-md text-3xl transition hover:bg-[var(--hover)] disabled:opacity-50"
-              onClick={() => setIconPickerOpen(!iconPickerOpen)}
-            >
-              {page.icon || "📄"}
-            </button>
-            <IconPicker
-              open={iconPickerOpen}
-              onClose={() => setIconPickerOpen(false)}
-              onSelect={(icon) => onPagePatch({ icon })}
-              currentIcon={page.icon}
-              position={{ top: 52, left: 0 }}
-            />
-          {isEditable && (
-            <>
-              <div className="relative">
-                <button
-                  className="rounded px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--secondary)]"
-                  onClick={() => setCoverPickerOpen(!coverPickerOpen)}
-                >
-                  {page.cover ? "Change cover" : "Add cover"}
-                </button>
-                <CoverPicker
-                  open={coverPickerOpen}
-                  onClose={() => setCoverPickerOpen(false)}
-                  onSelect={(cover) => onPagePatch({ cover: cover.value })}
-                  onRemove={() => onPagePatch({ cover: null })}
-                  currentCover={page.cover}
-                  position={{ top: 36, left: 0 }}
-                />
-              </div>
-              {coverMenuOpen && createPortal(
-                <CoverContextMenu
-                  open={coverMenuOpen}
-                  position={coverMenuPos}
-                  settings={{
-                    coverPosition: page.coverPosition,
-                    coverSize: page.coverSize,
-                    coverHeight: page.coverHeight,
-                    coverParallax: page.coverParallax,
-                    coverBlur: page.coverBlur,
-                    coverOverlay: page.coverOverlay,
-                    coverBrightness: page.coverBrightness
-                  }}
-                  onUpdate={(settings) => {
-                    onPagePatch(settings);
-                  }}
-                  onClose={() => setCoverMenuOpen(false)}
-                />,
-                document.body
+        <div className="mb-2 flex items-center justify-between gap-2 relative min-h-[32px]">
+            <div className="flex items-center gap-2">
+              {page.isLocked && (
+                <span className="flex items-center gap-1 rounded bg-[var(--danger)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--danger)]">
+                  🔒 Locked
+                </span>
               )}
-              <button
-                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--secondary)]"
-                onClick={onVoiceCapture}
-              >
-                <Mic size={12} />
-                Voice capture
-              </button>
-            </>
-          )}
-          {page.isLocked && (
-            <span className="flex items-center gap-1 rounded bg-[var(--danger)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--danger)]">
-              🔒 Locked
-            </span>
-          )}
-          {permission === 'view' && !page.isLocked && (
-            <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">
-              👁 View only
-            </span>
-          )}
-          {page.sharedRole && (
-            <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]" title="Shared with you — you are not the owner of this page">
-              🤝 Shared {page.sharedRole === "editor" ? "· can edit" : page.sharedRole === "commenter" ? "· can comment" : "· view only"}
-            </span>
-          )}
-            <CollabPresenceBar users={users} ownStatus={ownStatus} pageId={page?.id} onStatusChange={(s) => setOwnStatus(s)} />
-            <div className="ml-auto relative">
-              <div ref={pageOptionsRef}>
-                <button
-                  onClick={() => setBacklinksOpen(!backlinksOpen)}
-                  className={`grid h-8 w-8 place-items-center rounded-md transition cursor-pointer ${backlinksOpen ? "bg-[var(--accent)]/10 text-[var(--accent)]" : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"}`}
-                  title="Backlinks"
-                >
-                  <ExternalLink size={16} />
-                </button>
-                <button
-                  onClick={() => {
-                    if (!pageMenuOpen) {
-                      const rect = pageOptionsRef.current?.getBoundingClientRect();
-                      const menuW = 300;
-                      const margin = 8;
-                      let left = (rect?.left ?? 0) - menuW + 32;
-                      if (left + menuW > window.innerWidth - margin) {
-                        left = Math.max(margin, window.innerWidth - menuW - margin);
+              {permission === 'view' && !page.isLocked && (
+                <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">
+                  👁 View only
+                </span>
+              )}
+              {page.sharedRole && (
+                <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]" title="Shared with you — you are not the owner of this page">
+                  🤝 Shared {page.sharedRole === "editor" ? "· can edit" : page.sharedRole === "commenter" ? "· can comment" : "· view only"}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 ml-auto">
+              <div className="relative flex items-center">
+                <div ref={pageOptionsRef} className="flex items-center">
+                  <button
+                    onClick={() => {
+                      if (!pageMenuOpen) {
+                        const rect = pageOptionsRef.current?.getBoundingClientRect();
+                        const menuW = 300;
+                        const margin = 8;
+                        let left = (rect?.left ?? 0) - menuW + 32;
+                        if (left + menuW > window.innerWidth - margin) {
+                          left = Math.max(margin, window.innerWidth - menuW - margin);
+                        }
+                        if (left < margin) left = margin;
+                        let top = (rect?.bottom ?? 0) + 4;
+                        const maxMenuH = 560;
+                        if (top + maxMenuH > window.innerHeight - margin) {
+                          top = Math.max(margin, (rect?.top ?? top) - maxMenuH);
+                        }
+                        setPageMenuPos({ top, left });
                       }
-                      if (left < margin) left = margin;
-                      let top = (rect?.bottom ?? 0) + 4;
-                      const maxMenuH = 560;
-                      if (top + maxMenuH > window.innerHeight - margin) {
-                        top = Math.max(margin, (rect?.top ?? top) - maxMenuH);
-                      }
-                      setPageMenuPos({ top, left });
-                    }
-                    setPageMenuOpen(!pageMenuOpen);
-                  }}
-                  className="grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
-                  title="Page options"
-                >
-                  <MoreHorizontal size={18} />
-                </button>
-              </div>
-              {pageMenuOpen && createPortal(
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setPageMenuOpen(false)} />
-                  <div
-                    className="fixed z-50"
-                    style={{ top: pageMenuPos.top, left: pageMenuPos.left }}
-                  >
-                    <PageOptionsMenu
-                      open={pageMenuOpen}
-                      onClose={() => setPageMenuOpen(false)}
-                      page={page}
-                    onAction={(action) => {
-                      setPageMenuOpen(false);
-                      switch (action) {
-                        case "trash": onTrashPage?.(page.id); break;
-                        case "duplicate": onDuplicateBlock?.(page.id); break;
-                        case "present": setPresentationMode(true); break;
-                        case "suggest": setSuggestEdits(v => !v); onToast?.(`Suggest edits ${!suggestEdits ? "ON" : "OFF"}`); break;
-                        case "move-to": setMoveToOpen(true); break;
-                        case "customize": setCustomizeOpen(true); break;
-                        case "import": setImportDialogOpen(true); break;
-                        case "export": handleExport(); break;
-                        case "wiki": handleWikiConversion(); break;
-                        case "history": setHistoryOpen(true); break;
-                        case "analytics": setAnalyticsOpen(true); break;
-                        case "ai": onAskAI?.(); break;
-                        default: break;
-                      }
+                      setPageMenuOpen(!pageMenuOpen);
                     }}
-                    wordCount={wordCount}
-                    lastEditedBy={page?.lastEditedBy || realtimeCollab.getUser()?.userName || "Workspace User"}
-                    lastEditedAt={page?.lastEditedAt || page?.updatedAt}
-                    onPagePatch={onPagePatch}
-                    onToast={onToast}
-                    onTrash={onTrashPage}
-                    onDuplicatePage={() => onDuplicateBlock?.(page.id)}
-                    onImport={() => setImportDialogOpen(true)}
-                    onExport={handleExport}
-                    onAnalytics={() => setAnalyticsOpen(true)}
-                    onHistory={() => setHistoryOpen(true)}
-                    onAskAI={onAskAI}
-                  />
+                    className="grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+                    title="Page options"
+                  >
+                    <MoreHorizontal size={18} />
+                  </button>
                 </div>
-              </>,
-              document.body
-            )}
+                {pageMenuOpen && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setPageMenuOpen(false)} />
+                    <div
+                      className="fixed z-50"
+                      style={{ top: pageMenuPos.top, left: pageMenuPos.left }}
+                    >
+                      <PageOptionsMenu
+                        open={pageMenuOpen}
+                        onClose={() => setPageMenuOpen(false)}
+                        page={page}
+                        onAction={(action) => {
+                          setPageMenuOpen(false);
+                          switch (action) {
+                            case "trash": onTrashPage?.(page.id); break;
+                            case "duplicate": onDuplicateBlock?.(page.id); break;
+                            case "present": setPresentationMode(true); break;
+                            case "suggest": setSuggestEdits(v => !v); onToast?.(`Suggest edits ${!suggestEdits ? "ON" : "OFF"}`); break;
+                            case "move-to": setMoveToOpen(true); break;
+                            case "customize": setCustomizeOpen(true); break;
+                            case "import": setImportDialogOpen(true); break;
+                            case "export": handleExport(); break;
+                            case "wiki": handleWikiConversion(); break;
+                            case "history": setHistoryOpen(true); break;
+                            case "analytics": setAnalyticsOpen(true); break;
+                            case "ai": onAskAI?.(); break;
+                            default: break;
+                          }
+                        }}
+                        wordCount={wordCount}
+                        lastEditedBy={page?.lastEditedBy || realtimeCollab.getUser()?.userName || "Workspace User"}
+                        lastEditedAt={page?.lastEditedAt || page?.updatedAt}
+                        onPagePatch={onPagePatch}
+                        onToast={onToast}
+                        onTrash={onTrashPage}
+                        onDuplicatePage={() => onDuplicateBlock?.(page.id)}
+                        onImport={() => setImportDialogOpen(true)}
+                        onExport={handleExport}
+                        onAnalytics={() => setAnalyticsOpen(true)}
+                        onHistory={() => setHistoryOpen(true)}
+                        onAskAI={onAskAI}
+                      />
+                    </div>
+                  </>,
+                  document.body
+                )}
+              </div>
+            </div>
           </div>
-        </div>
         <Breadcrumbs pageId={page.id} pages={pages} onNavigate={onNavigate} />
         <AnimatePresence>
           {findOpen && (
@@ -1048,106 +1056,242 @@ export default function Editor({
             </motion.div>
           )}
         </AnimatePresence>
-        {/* Page title row with hover controls + icon picker */}
-        <div className="group/title relative flex items-start gap-1 mb-5">
-          {/* Hover-revealed title controls — mirrors block-tools pattern.
-              Drag/add-block are mutation-only, gated on isEditable (not just
-              isLocked) — real gap found during live UI QA, same class of bug
-              already fixed for the block context menu. The comment toggle is
-              intentionally NOT gated on isEditable since commenting doesn't
-              require edit access in this app's permission model. */}
-          {!page.isLocked && (
-            <div className="block-tools flex w-12 shrink-0 items-start justify-end gap-0.5 pt-2 transition z-20 opacity-0 group-hover/title:opacity-100">
-              {isEditable && (
-                <>
-                  {/* Drag handle (visual — title is structural, not in block list) */}
-                  <button
-                    className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:scale-110 active:scale-90 cursor-grab active:cursor-grabbing transition-transform touch-none"
-                    aria-label="Drag title"
-                    draggable="false"
-                  >
-                    <GripVertical size={15} />
-                  </button>
-                  {/* Add block above (inserts at top of block list + opens slash menu) */}
-                  <button
-                    className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer transition"
-                    aria-label="Add block above title"
-                    onClick={() => {
-                      const nextId = crypto.randomUUID();
-                      const blocks = page.blocks || [];
-                      onBlocks([{ id: nextId, type: "text", text: "" }, ...blocks]);
-                      setOpenSlashForBlockId(nextId);
-                    }}
-                  >
-                    <Plus size={15} />
-                  </button>
-                </>
-              )}
-              {/* Comment on title */}
-              <div className="relative">
+        {/* Page header and title container with hover controls */}
+        <div className="group/header relative mb-5">
+          {/* Hover-revealed action bar: Change cover, Add/Change icon, Voice capture */}
+          {isEditable && (
+            <div className="relative z-30 flex items-center gap-2 mb-2 min-h-[30px] opacity-0 group-hover/header:opacity-100 transition-opacity duration-150 select-none pointer-events-none group-hover/header:pointer-events-auto">
+              {!page.icon && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); setActiveCommentBlockId(activeCommentBlockId === "__title__" ? null : "__title__"); }}
-                  className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${
-                    (page.comments || []).some(c => c.blockId === "__title__" && !c.resolvedAt)
-                      ? "text-[var(--accent)] opacity-100"
-                      : "text-[var(--muted)] opacity-0 group-hover/title:opacity-100"
-                  } hover:bg-[var(--hover)]`}
-                  aria-label="Toggle comments on title"
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
+                  onClick={() => {
+                    onPagePatch({ icon: "📝" });
+                    setTitleEmojiOpen(true);
+                  }}
                 >
-                  <MessageCircle size={13} />
+                  <span>Add icon</span>
                 </button>
-                {activeCommentBlockId === "__title__" && (
-                  <>
-                    <div className="fixed inset-0 z-[150]" onClick={() => setActiveCommentBlockId(null)} />
-                    <div className="absolute top-0 left-full ml-2 z-[160]">
-                      <CommentThread
-                        comments={(page.comments || []).filter(c => c.blockId === "__title__")}
-                        blockId="__title__"
-                        pageId={page.id}
-                        onAddComment={handleAddComment}
-                        onResolveComment={handleResolveComment}
-                        onClose={() => setActiveCommentBlockId(null)}
-                        pages={pages}
-                        onNavigate={onNavigate}
-                      />
-                    </div>
-                  </>
-                )}
+              )}
+              <div className="relative pointer-events-auto">
+                <button
+                  ref={coverBtnRef}
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const pickerW = 360;
+                    let left = rect.left;
+                    if (left + pickerW > window.innerWidth - 16) {
+                      left = Math.max(16, window.innerWidth - pickerW - 16);
+                    }
+                    setCoverPickerPos({ top: rect.bottom + 6, left });
+                    setCoverPickerOpen((o) => !o);
+                  }}
+                >
+                  <span>{page.cover ? "Change cover" : "Add cover"}</span>
+                </button>
+                <CoverPicker
+                  open={coverPickerOpen}
+                  onClose={() => setCoverPickerOpen(false)}
+                  onSelect={(cover) => onPagePatch({ cover: cover.value })}
+                  onRemove={() => onPagePatch({ cover: null })}
+                  currentCover={page.cover}
+                  position={coverPickerPos}
+                />
               </div>
+              {coverMenuOpen && createPortal(
+                <CoverContextMenu
+                  open={coverMenuOpen}
+                  position={coverMenuPos}
+                  settings={{
+                    coverPosition: page.coverPosition,
+                    coverSize: page.coverSize,
+                    coverHeight: page.coverHeight,
+                    coverParallax: page.coverParallax,
+                    coverBlur: page.coverBlur,
+                    coverOverlay: page.coverOverlay,
+                    coverBrightness: page.coverBrightness
+                  }}
+                  onUpdate={(settings) => {
+                    onPagePatch(settings);
+                  }}
+                  onClose={() => setCoverMenuOpen(false)}
+                />,
+                document.body
+              )}
+              <button
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onVoiceCapture?.();
+                }}
+              >
+                <Mic size={12} />
+                <span>Voice capture</span>
+              </button>
             </div>
           )}
-          {/* Page icon (emoji picker) */}
-          <div className="relative shrink-0 mt-1" ref={titleEmojiRef}>
-            <button
-              disabled={page.isLocked}
-              className="text-[36px] leading-none hover:bg-[var(--hover)] rounded px-0.5 transition cursor-pointer"
-              onClick={() => setTitleEmojiOpen(!titleEmojiOpen)}
-              aria-label="Change page icon"
-            >
-              {page.icon || "📝"}
-            </button>
-            {titleEmojiOpen && (
-              <div className="absolute top-full left-0 mt-1 z-50 w-[208px] bg-[var(--elevated)] border border-[var(--border)] rounded-lg shadow-xl grid grid-cols-8 gap-0.5 p-1.5 max-h-[160px] overflow-y-auto">
-                {emojis.map((emoji) => (
+
+          {/* Page icon placed above title with full customization (size, padding, free move, alignment) */}
+          <PageIconBlock
+            page={page}
+            isEditable={isEditable}
+            onPagePatch={onPagePatch}
+            open={titleEmojiOpen}
+            onOpen={() => setTitleEmojiOpen(true)}
+            onClose={() => setTitleEmojiOpen(false)}
+            hasCover={Boolean(page.cover)}
+          />
+
+          {/* Page title row with drag handle and free movement */}
+          <motion.div
+            drag={isEditable && !page.isLocked}
+            dragControls={titleDragControls}
+            dragListener={false}
+            dragMomentum={false}
+            onDragEnd={(_e, info) => {
+              const nextX = Math.round((page.titleOffsetX || 0) + info.offset.x);
+              const nextY = Math.round((page.titleOffsetY || 0) + info.offset.y);
+              onPagePatch({ titleOffsetX: nextX, titleOffsetY: nextY });
+            }}
+            style={{
+              x: page.titleOffsetX || 0,
+              y: page.titleOffsetY || 0,
+              rotate: page.titleRotation || 0
+            }}
+            className="group/title relative flex items-start gap-1"
+          >
+            {!page.isLocked && (
+              <div className="block-tools flex w-12 shrink-0 items-start justify-end gap-0.5 pt-2 transition z-20 opacity-0 group-hover/title:opacity-100">
+                {isEditable && (
+                  <>
+                    <button
+                      className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:scale-110 active:scale-90 cursor-grab active:cursor-grabbing transition-transform touch-none"
+                      aria-label="Drag title"
+                      draggable="false"
+                      title="Drag to freely reposition title"
+                      onPointerDown={(e) => {
+                        if (isEditable && !page.isLocked) {
+                          titleDragControls.start(e);
+                        }
+                      }}
+                    >
+                      <GripVertical size={15} />
+                    </button>
+                    <button
+                      className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer transition"
+                      aria-label="Add block above title"
+                      onClick={() => {
+                        const nextId = crypto.randomUUID();
+                        const blocks = page.blocks || [];
+                        onBlocks([{ id: nextId, type: "text", text: "" }, ...blocks]);
+                        setOpenSlashForBlockId(nextId);
+                      }}
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </>
+                )}
+                {/* Comment on title */}
+                <div className="relative">
                   <button
-                    key={emoji}
-                    className="flex items-center justify-center w-6 h-6 rounded text-sm hover:bg-[var(--hover)] transition"
-                    onClick={() => { onPagePatch({ icon: emoji }); setTitleEmojiOpen(false); }}
+                    onClick={(e) => { e.stopPropagation(); setActiveCommentBlockId(activeCommentBlockId === "__title__" ? null : "__title__"); }}
+                    className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${
+                      (page.comments || []).some(c => c.blockId === "__title__" && !c.resolvedAt)
+                        ? "text-[var(--accent)] opacity-100"
+                        : "text-[var(--muted)] opacity-0 group-hover/title:opacity-100"
+                    } hover:bg-[var(--hover)]`}
+                    aria-label="Toggle comments on title"
                   >
-                    {emoji}
+                    <MessageCircle size={13} />
                   </button>
-                ))}
+                  {activeCommentBlockId === "__title__" && (
+                    <>
+                      <div className="fixed inset-0 z-[150]" onClick={() => setActiveCommentBlockId(null)} />
+                      <div className="absolute top-0 left-full ml-2 z-[160]">
+                        <CommentThread
+                          comments={(page.comments || []).filter(c => c.blockId === "__title__")}
+                          blockId="__title__"
+                          pageId={page.id}
+                          onAddComment={handleAddComment}
+                          onResolveComment={handleResolveComment}
+                          onClose={() => setActiveCommentBlockId(null)}
+                          pages={pages}
+                          onNavigate={onNavigate}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-          <input
-            ref={titleRef}
-            value={page.title}
-            readOnly={page.isLocked}
-            onChange={(e) => onPagePatch({ title: e.target.value })}
-            className="flex-1 min-w-0 bg-transparent text-[36px] font-bold leading-tight tracking-normal text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-            placeholder="Untitled" aria-label="Page title"
-          />
+            <input
+              ref={titleRef}
+              value={page.title}
+              readOnly={page.isLocked}
+              onChange={(e) => onPagePatch({ title: e.target.value })}
+              style={{
+                fontSize: `${page.titleSize || 40}px`,
+                fontWeight:
+                  page.titleWeight === "normal"
+                    ? 400
+                    : page.titleWeight === "semibold"
+                    ? 600
+                    : page.titleWeight === "bold"
+                    ? 700
+                    : 800,
+                fontFamily:
+                  page.titleFont === "serif"
+                    ? "Georgia, Cambria, serif"
+                    : page.titleFont === "mono"
+                    ? "JetBrains Mono, Fira Code, monospace"
+                    : "inherit",
+                textAlign: (page.titleAlign as any) || "left",
+                letterSpacing:
+                  page.titleTracking === "tighter"
+                    ? "-0.04em"
+                    : page.titleTracking === "tight"
+                    ? "-0.025em"
+                    : page.titleTracking === "wide"
+                    ? "0.05em"
+                    : "-0.015em",
+                ...(page.titleColor && page.titleColor !== "default"
+                  ? {
+                      backgroundImage: TITLE_GRADIENTS.find((g) => g.id === page.titleColor)?.style || "none",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent"
+                    }
+                  : {})
+              }}
+              className="flex-1 min-w-0 bg-transparent leading-tight text-[var(--text)] outline-none placeholder:text-[var(--muted)] mt-1 transition-all"
+              placeholder="Untitled"
+              aria-label="Page title"
+            />
+            {isEditable && (
+              <div className="relative shrink-0 mt-2 flex items-center z-30 pointer-events-auto">
+                <button
+                  ref={titleMenuBtnRef}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTitleCustomizerOpen((prev) => !prev);
+                  }}
+                  className="h-8 w-8 rounded-lg hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] grid place-items-center transition cursor-pointer select-none opacity-60 hover:opacity-100 z-30 pointer-events-auto"
+                  title="Customize Title (Size, Font, Color, Style)"
+                >
+                  <Menu size={18} />
+                </button>
+                <PageTitleCustomizer
+                  page={page}
+                  isEditable={isEditable}
+                  onPagePatch={onPagePatch}
+                  open={titleCustomizerOpen}
+                  onClose={() => setTitleCustomizerOpen(false)}
+                  anchorRef={titleMenuBtnRef}
+                />
+              </div>
+            )}
+          </motion.div>
         </div>
         {(page.blocks || []).length === 0 && <EmptyState onAdd={() => onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked} />}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(e.active.id)} onDragEnd={handleDragEnd}>
@@ -2362,7 +2506,7 @@ const Block = memo(function Block({
                         onClick={() => selectPageMention(pageItem)}
                         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--text)] hover:bg-[var(--hover)] transition-colors cursor-pointer"
                       >
-                        <span className="text-base shrink-0">{pageItem.icon}</span>
+                        <PageIcon icon={pageItem.icon} size={15} fallback="📄" />
                         <span className="min-w-0 flex-1 truncate">{pageItem.title || 'Untitled'}</span>
                       </motion.button>
                     ))}

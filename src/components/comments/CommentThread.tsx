@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, MessageCircle, Send, AtSign } from "lucide-react";
+import { Send, Smile, AtSign, CheckCircle, Trash2, Edit2, CornerDownRight, X, MessageCircle, Check } from "lucide-react";
+import { PageIcon } from "../PageIcon";
 import { uid } from "../../utils/helpers";
 
 export default function CommentThread({ comments, blockId, pageId, onAddComment, onResolveComment, onClose, pages, onNavigate }) {
@@ -148,7 +149,9 @@ export default function CommentThread({ comments, blockId, pageId, onAddComment,
                 onClick={() => insertMention(p.title || "Untitled")}
                 className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] hover:bg-[var(--hover)] cursor-pointer"
               >
-                <span>{p.icon || "📄"}</span>
+                <span className="flex items-center justify-center">
+                  <PageIcon icon={p.icon} size={13} fallback={<span>📄</span>} />
+                </span>
                 <span className="truncate">{p.title || "Untitled"}</span>
               </button>
             ))}

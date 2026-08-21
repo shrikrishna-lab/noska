@@ -8,7 +8,7 @@ export const SPRING_PRESETS = {
   stiff: { type: "spring", stiffness: 350, damping: 28, mass: 0.8 },
   bouncy: { type: "spring", stiffness: 220, damping: 12, mass: 0.7 },
   gentle: { type: "spring", stiffness: 90, damping: 16, mass: 1.2 }
-};
+} as const;
 
 // Check if user prefers reduced motion
 export function useReducedMotion() {

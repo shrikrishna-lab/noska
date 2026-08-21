@@ -61,6 +61,8 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
       <div className="fixed inset-0 z-[139]" onClick={onClose} />
       <motion.div
       ref={pickerRef}
+      drag
+      dragMomentum={false}
       initial={{ opacity: 0, scale: 0.95, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: 4 }}
@@ -69,10 +71,10 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
         width: 360,
         ...(position ? { position: "fixed", top: position.top, left: position.left } : {}),
       }}
-      className="flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--elevated)] shadow-[var(--shadow-floating)] z-[140]"
+      className="flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--elevated)] shadow-[var(--shadow-floating)] z-[140] cursor-default"
     >
-      {/* Header */}
-      <div className="px-3 py-2.5 border-b border-[var(--border)]">
+      {/* Header - draggable handle */}
+      <div className="px-3 py-2.5 border-b border-[var(--border)] cursor-grab active:cursor-grabbing">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-[var(--text)]">Cover</span>
           {currentCover && (

@@ -3,6 +3,7 @@ import { Link2, Database, ExternalLink, X } from "lucide-react";
 import DatabaseBlock from "../DatabaseBlock";
 import type { LinkedViewBlockData, DatabaseBlock as DatabaseBlockData } from "../../../types/blocks";
 import type { Page } from "../../lib/supabaseService";
+import { PageIcon } from "../PageIcon";
 
 /**
  * LinkedViewBlock — references an existing database elsewhere in the workspace
@@ -91,8 +92,9 @@ export default function LinkedViewBlock({ block, onPatch, isLocked, pages = [], 
                   <Database size={14} className="text-[var(--accent)] shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-medium text-[var(--text)] truncate">{s.label}</div>
-                    <div className="text-[10px] text-[var(--muted)]">
-                      {s.pageIcon} {s.pageTitle} · {s.propCount} propert{s.propCount === 1 ? "y" : "ies"} · {s.rowCount} row{s.rowCount === 1 ? "" : "s"}
+                    <div className="text-[10px] text-[var(--muted)] flex items-center gap-1">
+                      <PageIcon icon={s.pageIcon} size={11} />
+                      <span>{s.pageTitle} · {s.propCount} propert{s.propCount === 1 ? "y" : "ies"} · {s.rowCount} row{s.rowCount === 1 ? "" : "s"}</span>
                     </div>
                   </div>
                 </button>
@@ -116,7 +118,8 @@ export default function LinkedViewBlock({ block, onPatch, isLocked, pages = [], 
             className="truncate text-[var(--accent)] hover:underline inline-flex items-center gap-1 cursor-pointer"
             title="Open source page"
           >
-            {source.page.icon || "📄"} {source.block.text || source.page.title || "Untitled"}
+            <PageIcon icon={source.page.icon} size={12} fallback={<span className="text-[11px]">📄</span>} />
+            <span>{source.block.text || source.page.title || "Untitled"}</span>
             <ExternalLink size={10} className="shrink-0" />
           </button>
         </div>

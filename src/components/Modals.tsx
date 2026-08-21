@@ -7,6 +7,7 @@ import {
   Settings,
   Sparkles,
   HardDrive,
+  UserRound,
   X,
   Search,
   GripHorizontal,
@@ -19,18 +20,46 @@ import {
   Globe,
   Check,
   Loader2,
+  Palette,
+  Camera,
+  MapPin,
+  Mail,
+  Pencil,
+  Save,
+  RotateCcw,
+  Copy,
+  CheckCircle2,
+  Share2,
+  Bookmark,
   type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
+import { PageIcon } from "./PageIcon";
 import { aiManager } from "../ai/AIManager";
 import { getProviderList, testProviderConnection } from "../ai/providers";
 import { getAgentList } from "../ai/agents";
 import {
+  PROFILE_CARD_GRADIENTS_BY_CATEGORY,
+  getProfileCardGradient,
+  setProfileCardGradient,
+  type ProfileCardGradient,
+} from "../lib/profileCardGradient";
+import {
   sendPageInvite, fetchSentPageInvites, withdrawPageInvite, type PageInviteRole,
-  isUsernameAvailable, isValidUsernameFormat, normalizeUsername, setUsername
+  isUsernameAvailable, isValidUsernameFormat, normalizeUsername, setUsername,
+  fetchUserProfile, updateUserProfile, detectLocationFromIp,
+  uploadImage, ensureImagesBucket
 } from "../lib/supabaseService";
 import type { Page } from "../lib/supabaseService";
 import type { Tables } from "../../types/supabase";
+import {
+  getImportedIcons,
+  addImportedIcon,
+  removeImportedIcon,
+  getImportedCategories,
+  type ImportedIcon
+} from "../registry/icons/IconRegistry";
+
 
 // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
 // (deliberately, to avoid a circular type dependency — see that file's
@@ -66,6 +95,8 @@ interface SettingsModalProps {
   setNvidiaKey: (key: string) => void;
   onReplayOnboarding?: () => void;
   onLogout?: () => void;
+  onProfileNameChanged?: (name: string) => void;
+  onProfileAvatarChanged?: (avatarUrl: string | null) => void;
   onClose: () => void;
   ghostWriterEnabled: boolean;
   setGhostWriterEnabled: (enabled: boolean) => void;
@@ -98,6 +129,8 @@ export function SettingsModal({
   setNvidiaKey,
   onReplayOnboarding,
   onLogout,
+  onProfileNameChanged,
+  onProfileAvatarChanged,
   onClose,
   ghostWriterEnabled,
   setGhostWriterEnabled,
@@ -198,6 +231,150 @@ export function SettingsModal({
 
   const [saveStatus, setSaveStatus] = useState("");
 
+  // ── Profile card preview + inline edit (My Profile tab) ─────────────
+  const [profileMode, setProfileMode] = useState<"card" | "edit">("card");
+  const [pUserName, setPUserName] = useState("");
+  const [pBio, setPBio] = useState("");
+  const [pAvatarUrl, setPAvatarUrl] = useState<string | null>(null);
+  const [pAvatarLocal, setPAvatarLocal] = useState<string | null>(null);
+  const [pAvatarFile, setPAvatarFile] = useState<File | null>(null);
+  const [pCountry, setPCountry] = useState("");
+  const [pState, setPState] = useState("");
+  const [pCity, setPCity] = useState("");
+  const [pPostalCode, setPPostalCode] = useState("");
+  const [pSaving, setPSaving] = useState(false);
+  const [pSaved, setPSaved] = useState(false);
+  const [pDetecting, setPDetecting] = useState(false);
+  const [pUploading, setPUploading] = useState(false);
+  const [pLoaded, setPLoaded] = useState(false);
+  const [pCopiedShare, setPCopiedShare] = useState(false);
+  const [pCopiedEmail, setPCopiedEmail] = useState(false);
+  const [pBookmarked, setPBookmarked] = useState(false);
+  const pFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const loadProfileForSettings = React.useCallback(async () => {
+    if (!currentUserId) return;
+    setPLoaded(false);
+    setPSaved(false);
+    try {
+      const profile = await fetchUserProfile(currentUserId);
+      if (profile) {
+        setPUserName(profile.user_name || "");
+        setPBio(profile.bio || "");
+        setPAvatarUrl(profile.avatar_url || null);
+        setPAvatarLocal(null);
+        setPAvatarFile(null);
+        setPCountry(profile.country || "");
+        setPState(profile.state || "");
+        setPCity(profile.city || "");
+        setPPostalCode(profile.postal_code || "");
+      }
+    } catch {}
+    setPLoaded(true);
+  }, [currentUserId]);
+
+  React.useEffect(() => {
+    if (tab === "Profile") {
+      setProfileMode("card");
+      loadProfileForSettings();
+    }
+  }, [tab, loadProfileForSettings]);
+
+  const pickProfileAvatar = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setSaveStatus("Please choose an image file.");
+      setTimeout(() => setSaveStatus(""), 2500);
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setSaveStatus("Image must be under 2 MB.");
+      setTimeout(() => setSaveStatus(""), 2500);
+      return;
+    }
+    setPAvatarFile(file);
+    setPAvatarLocal(URL.createObjectURL(file));
+  };
+
+  const uploadProfileAvatar = async (): Promise<string | null> => {
+    if (!pAvatarFile) return pAvatarUrl;
+    try {
+      setPUploading(true);
+      await ensureImagesBucket();
+      const url = await uploadImage(pAvatarFile, currentUserId);
+      setPAvatarUrl(url);
+      setPAvatarLocal(null);
+      setPAvatarFile(null);
+      return url;
+    } catch {
+      setSaveStatus("Avatar upload failed — try again.");
+      setTimeout(() => setSaveStatus(""), 2500);
+      return pAvatarUrl;
+    } finally {
+      setPUploading(false);
+    }
+  };
+
+  const detectProfileLocation = async () => {
+    if (!currentUserId) return;
+    setPDetecting(true);
+    try {
+      const loc = await detectLocationFromIp();
+      if (loc) {
+        if (loc.country) setPCountry(loc.country);
+        if (loc.state) setPState(loc.state);
+        if (loc.city) setPCity(loc.city);
+        if (loc.postalCode) setPPostalCode(loc.postalCode);
+        setSaveStatus("Location detected from IP.");
+        setTimeout(() => setSaveStatus(""), 2500);
+      } else {
+        setSaveStatus("Couldn't detect location.");
+        setTimeout(() => setSaveStatus(""), 2500);
+      }
+    } catch {
+      setSaveStatus("Couldn't detect location.");
+      setTimeout(() => setSaveStatus(""), 2500);
+    } finally {
+      setPDetecting(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!currentUserId) return;
+    setPSaving(true);
+    try {
+      const finalAvatar = await uploadProfileAvatar();
+      const patch: Record<string, unknown> = {};
+      const trimmedName = pUserName.trim();
+      if (trimmedName) patch.userName = trimmedName;
+      if (finalAvatar !== null) patch.avatarUrl = finalAvatar;
+      if (pBio !== undefined) patch.bio = pBio.trim() || null;
+      patch.country = pCountry.trim() || null;
+      patch.state = pState.trim() || null;
+      patch.city = pCity.trim() || null;
+      patch.postalCode = pPostalCode.trim() || null;
+      await updateUserProfile(currentUserId, patch);
+      if (trimmedName) onProfileNameChanged?.(trimmedName);
+      if (finalAvatar !== null) onProfileAvatarChanged?.(finalAvatar);
+      setPSaved(true);
+      setSaveStatus("Profile saved!");
+      setTimeout(() => {
+        setSaveStatus("");
+        setPSaved(false);
+        setProfileMode("card");
+      }, 1200);
+    } catch (e) {
+      setSaveStatus(e instanceof Error ? e.message : "Couldn't save profile. Try again.");
+      setTimeout(() => setSaveStatus(""), 2500);
+    } finally {
+      setPSaving(false);
+    }
+  };
+
+  const pDisplayName = pUserName.trim() || (currentUsername ? `@${currentUsername}` : "Workspace User");
+  const pDisplayUsername = currentUsername ? `@${currentUsername}` : "@username";
+  const pLocationString = [pCity, pState, pCountry].filter(Boolean).join(", ") || "Location not set";
+
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -245,18 +422,19 @@ export function SettingsModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 10 }}
         transition={SPRING_PRESETS.soft}
-        className="flex h-[min(calc(100vh-40px),720px)] w-[980px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] shadow-[var(--shadow-modal)]"
+        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] shadow-[var(--shadow-modal)]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <aside className="w-[260px] shrink-0 border-r border-[var(--border)] bg-[var(--surface-1)] p-5 overflow-y-auto scrollbar-thin">
           <div className="mb-6 text-sm font-semibold text-[var(--muted)]">Account</div>
+          <SettingsNavItem icon={UserRound} label="My Profile" active={tab === "Profile"} onClick={() => setTab("Profile")} />
           <SettingsNavItem icon={Bot} label={displayName} active={tab === "Account"} onClick={() => setTab("Account")} />
 
           <div className="mb-3 mt-8 text-sm font-semibold text-[var(--muted)]">Workspace</div>
-          {["General"].map((item) => (
+          {["General", "Customization"].map((item) => (
             <SettingsNavItem
               key={item}
-              icon={Settings}
+              icon={item === "Customization" ? Palette : Settings}
               label={item}
               active={tab === item}
               onClick={() => setTab(item)}
@@ -297,45 +475,14 @@ export function SettingsModal({
                 </div>
               </Field>
 
-              {/* Real username change — mirrors UsernameStep.tsx's
-                  debounced availability check, actually writes via
-                  setUsername(). Replaces the previous fake "Full Name"/
-                  "Email Address" text inputs whose "Save Profile" button
-                  never called any Supabase write and silently reverted on
-                  reload. Name/Email above are read-only since they come
-                  from the OAuth provider (GitHub/Google), not something
-                  this app lets you directly edit. */}
+              {/* Username — read-only; set at signup and can only be changed by
+                  an admin (admin panel / admin-api). */}
               <Field label="Username">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--muted)] pointer-events-none">@</span>
-                  <MotionInput
-                    value={usernameDraft}
-                    onChange={(e) => setUsernameDraft(normalizeUsername(e.target.value))}
-                    onKeyDown={(e) => { if (e.key === "Enter" && usernameCheckState === "available") handleSaveUsername(); }}
-                    maxLength={20}
-                    className="pl-7"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {usernameCheckState === "checking" && <Loader2 size={14} className="animate-spin text-[var(--muted)]" />}
-                    {usernameCheckState === "available" && <Check size={14} style={{ color: "#10b981" }} />}
-                    {(usernameCheckState === "taken" || usernameCheckState === "invalid") && <X size={14} style={{ color: "#ef4444" }} />}
-                  </span>
+                <div className="rounded border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--secondary)]">
+                  {currentUsername ? `@${currentUsername}` : "@username"}
                 </div>
-                {usernameError ? (
-                  <p className="mt-1 text-xs" style={{ color: "#ef4444" }}>{usernameError}</p>
-                ) : (
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {usernameCheckState === "available" ? `@${normalizeUsername(usernameDraft)} is available` : "This is your unique handle across Noska. Others use it to share pages with you."}
-                  </p>
-                )}
+                <p className="mt-1 text-xs text-[var(--muted)]">Username is set at signup and can only be changed by an admin.</p>
               </Field>
-              <button
-                onClick={handleSaveUsername}
-                disabled={usernameCheckState !== "available" || savingUsername}
-                className="bg-[var(--accent)] text-white px-4 py-2 rounded font-semibold text-sm hover:bg-[var(--accent-deep)] disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                {savingUsername ? "Saving..." : "Save username"}
-              </button>
 
               <div className="flex items-center justify-between rounded border border-[var(--border)] bg-[var(--panel)] p-3">
                 <div>
@@ -348,6 +495,252 @@ export function SettingsModal({
                 >
                   Log out
                 </button>
+              </div>
+            </div>
+          )}
+
+          {tab === "Profile" && (
+            <div className="flex h-full gap-10">
+              {/* Left: live profile card preview (mirrors ProfileModal card) */}
+              <div className="w-[360px] sm:w-[380px] shrink-0">
+                <div
+                  className="relative w-full rounded-[36px] overflow-hidden p-6 sm:p-7 flex flex-col justify-between backdrop-blur-2xl text-[#111827] border border-white/90 shadow-[0_25px_60px_-12px_rgba(0,170,230,0.3),0_0_0_1px_rgba(255,255,255,0.7),inset_0_1px_2px_rgba(255,255,255,1)] min-h-[480px]"
+                  style={{ background: getProfileCardGradient().background }}
+                >
+                  <div className="pointer-events-none absolute -bottom-20 left-0 right-0 h-44"
+                    style={{ backgroundImage: `linear-gradient(to top, ${getProfileCardGradient().glow}, rgba(255,255,255,0) 100%)` }}
+                  />
+
+                  {/* Top Bar: Share Profile + Close (mirrors real card) */}
+                  <div className="relative flex items-center justify-end w-full gap-2 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/@${currentUsername || "user"}`).then(() => { setPCopiedShare(true); setSaveStatus("Profile link copied!"); setTimeout(() => { setPCopiedShare(false); setSaveStatus(""); }, 2000); }).catch(() => {}); }}
+                      className="grid h-10 w-10 place-items-center rounded-full bg-white/70 hover:bg-white text-[#1e293b] border border-black/[0.04] shadow-sm hover:shadow transition cursor-pointer"
+                      title="Share profile"
+                    >
+                      {pCopiedShare ? (
+                        <Check size={16} className="text-emerald-600" />
+                      ) : (
+                        <Share2 size={16} className="text-slate-700" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="grid h-10 w-10 place-items-center rounded-full bg-black/5 hover:bg-black/10 text-slate-600 transition cursor-pointer"
+                      title="Close"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  {/* Avatar (click to change — mirrors ProfileModal) */}
+                  <div className="relative mt-2 mb-3 flex items-start">
+                    <div
+                      className="group relative cursor-pointer"
+                      onClick={() => pFileInputRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); pickProfileAvatar(e.dataTransfer.files?.[0] || null); }}
+                      title="Change photo — click or drag & drop"
+                    >
+                      <div
+                        className="relative h-[92px] w-[92px] rounded-full ring-4 ring-white/95 shadow-[0_8px_20px_rgba(0,140,220,0.2)] overflow-hidden grid place-items-center text-4xl"
+                        style={{ background: getProfileCardGradient().background }}
+                      >
+                        {pAvatarLocal ? (
+                          <img src={pAvatarLocal} alt="Avatar preview" className="h-full w-full object-cover" />
+                        ) : pAvatarUrl ? (
+                          <img src={pAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-4xl text-white">👤</span>
+                        )}
+                        {pUploading && (
+                          <div className="absolute inset-0 bg-black/50 grid place-items-center">
+                            <Loader2 size={22} className="animate-spin text-white" />
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => pFileInputRef.current?.click()}
+                        className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full bg-white text-slate-700 border border-slate-200/80 shadow-[0_2px_6px_rgba(0,0,0,0.12)] hover:bg-slate-50 transition cursor-pointer"
+                        title="Change photo"
+                      >
+                        <Camera size={13} />
+                      </button>
+                      <input
+                        ref={pFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => { pickProfileAvatar(e.target.files?.[0] || null); e.target.value = ""; }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Name & Handle */}
+                  <div className="relative space-y-0.5 mb-3">
+                    <h3 className="text-[23px] font-bold tracking-tight text-[#0f172a] leading-tight">{pDisplayName}</h3>
+                    <p className="text-[14px] font-medium text-[#64748b]">{pDisplayUsername}</p>
+                  </div>
+
+                  {/* Bio */}
+                  {pBio ? (
+                    <div className="relative mb-3.5 px-3.5 py-2 rounded-2xl bg-white/50 backdrop-blur-sm border border-white/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                      <p className="text-[12.5px] text-[#334155] leading-relaxed line-clamp-3">"{pBio}"</p>
+                    </div>
+                  ) : null}
+
+                  {/* Details: Email & Location */}
+                  <div className="relative rounded-2xl bg-white/60 backdrop-blur-md p-3.5 mb-5 border border-white/90 shadow-[0_2px_6px_rgba(0,0,0,0.03)] space-y-2.5">
+                    <div
+                      onClick={async () => {
+                        if (currentUserEmail) {
+                          await navigator.clipboard.writeText(currentUserEmail);
+                          setPCopiedEmail(true);
+                          setSaveStatus("Email copied to clipboard!");
+                          setTimeout(() => { setPCopiedEmail(false); setSaveStatus(""); }, 2000);
+                        }
+                      }}
+                      className="flex items-center gap-2.5 text-[12.5px] text-[#334155] hover:text-[#0f172a] transition cursor-pointer"
+                      title="Click to copy email"
+                    >
+                      <div className="h-6 w-6 rounded-full bg-sky-100/80 grid place-items-center shrink-0">
+                        <Mail size={13} style={{ color: getProfileCardGradient().accent }} />
+                      </div>
+                      <span className="truncate flex-1 font-medium">{currentUserEmail || "No email"}</span>
+                      {pCopiedEmail ? <Check size={14} className="text-emerald-600 shrink-0" /> : <Copy size={13} className="text-[#94a3b8] shrink-0" />}
+                    </div>
+                    <div className="flex items-center gap-2.5 text-[12.5px] text-[#334155]">
+                      <div className="h-6 w-6 rounded-full bg-cyan-100/80 text-[#0891b2] grid place-items-center shrink-0">
+                        <MapPin size={13} />
+                      </div>
+                      <span className="truncate font-medium">{pLocationString}</span>
+                    </div>
+                  </div>
+
+                  {/* Bottom Action Row (mirrors real card) */}
+                  <div className="relative flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById("pDisplayNameInput");
+                        input?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        input?.focus();
+                      }}
+                      className="flex-1 h-[52px] rounded-full font-semibold text-[14.5px] text-[#0f172a] bg-gradient-to-r from-[#d0f3f8] via-[#bfeef6] to-[#a8e6f2] active:scale-[0.98] border border-[#9ee4ef] shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_4px_16px_rgba(0,180,225,0.22)] flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      <Pencil size={16} style={{ color: getProfileCardGradient().accent }} />
+                      <span>Edit Profile</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPBookmarked((v) => !v);
+                        const msg = pBookmarked ? "Removed from favorites" : "Profile pinned to favorites";
+                        setSaveStatus(msg);
+                        setTimeout(() => setSaveStatus(""), 2500);
+                      }}
+                      className={`h-[52px] w-[52px] shrink-0 rounded-full border shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_12px_rgba(0,0,0,0.04)] grid place-items-center transition cursor-pointer ${
+                        pBookmarked
+                          ? "bg-[#0f172a] text-white border-transparent shadow-md"
+                          : "bg-white/85 hover:bg-white text-[#1e293b] border-black/[0.05]"
+                      }`}
+                      title={pBookmarked ? "Remove bookmark" : "Bookmark profile"}
+                    >
+                      <Bookmark size={19} className={pBookmarked ? "fill-current text-white" : ""} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: edit form + save */}
+              <div className="flex-1 min-w-0 max-w-xl">
+                <h2 className="text-[32px] font-bold">My Profile</h2>
+                <p className="text-sm text-[var(--secondary)] mb-6">Preview updates live as you edit.</p>
+
+                <div className="space-y-4">
+                  <Field label="Display Name">
+                    <MotionInput
+                      id="pDisplayNameInput"
+                      value={pUserName}
+                      onChange={(e) => setPUserName(e.target.value)}
+                      placeholder="How others see you"
+                      maxLength={60}
+                    />
+                  </Field>
+
+                  <Field label="Username">
+                    <div className="flex h-[38px] items-center rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--secondary)]">
+                      {pDisplayUsername}
+                    </div>
+                    <p className="mt-1.5 text-xs text-[var(--muted)]">Username is set at signup and can only be changed by an admin.</p>
+                  </Field>
+
+                  <Field label={`Bio (${pBio.length}/240)`}>
+                    <textarea
+                      value={pBio}
+                      onChange={(e) => setPBio(e.target.value)}
+                      placeholder="A few words about you (optional)..."
+                      maxLength={240}
+                      rows={3}
+                      className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px] font-medium text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 shadow-sm resize-none"
+                    />
+                  </Field>
+
+                  <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3.5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[13px] font-semibold text-[var(--text)] flex items-center gap-1.5">
+                        <MapPin size={13} className="text-[var(--accent)]" /> Location
+                      </label>
+                      <button
+                        type="button"
+                        onClick={detectProfileLocation}
+                        disabled={pDetecting}
+                        className="text-[11px] font-semibold text-[var(--accent)] hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        {pDetecting ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                        Auto-detect
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-[var(--muted)]">Country</label>
+                        <MotionInput value={pCountry} onChange={(e) => setPCountry(e.target.value)} placeholder="Country" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-[var(--muted)]">State</label>
+                        <MotionInput value={pState} onChange={(e) => setPState(e.target.value)} placeholder="State" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-[var(--muted)]">City</label>
+                        <MotionInput value={pCity} onChange={(e) => setPCity(e.target.value)} placeholder="City" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-[var(--muted)]">Postal Code</label>
+                        <MotionInput value={pPostalCode} onChange={(e) => setPPostalCode(e.target.value)} placeholder="Postal code" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={pSaving || !pLoaded}
+                    className="w-full h-12 rounded-full font-semibold text-[14px] text-[#0f172a] bg-gradient-to-r from-[#d0f3f8] via-[#bfeef6] to-[#a8e6f2] active:scale-[0.98] border border-[#9ee4ef] shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_4px_16px_rgba(0,180,225,0.22)] flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                  >
+                    {pSaving ? (
+                      <Loader2 size={16} className="animate-spin text-[#0f172a]" />
+                    ) : pSaved ? (
+                      <CheckCircle2 size={16} className="text-emerald-700" />
+                    ) : (
+                      <Save size={16} style={{ color: getProfileCardGradient().accent }} />
+                    )}
+                    <span>{pSaving ? "Saving..." : pSaved ? "Saved!" : "Save Profile"}</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -445,6 +838,9 @@ export function SettingsModal({
                 </button>
               </div>
             </div>
+          )}
+          {tab === "Customization" && (
+            <ProfileCardCustomization />
           )}
           {tab === "Noska AI" && (
             <NoskaAISettings
@@ -810,7 +1206,7 @@ export function TrashModal({ pages, onClose, onRestore, onDelete }: TrashModalPr
         {pages.length === 0 && <div className="text-sm text-[var(--muted)]">Trash is empty.</div>}
         {pages.map((p) => (
           <div key={p.id} className="flex items-center gap-2 rounded border border-[var(--border)] p-2">
-            <span>{p.icon}</span>
+            <PageIcon icon={p.icon} size={15} fallback="📄" />
             <span className="flex-1">
               <span className="block">{p.title}</span>
               {p.purgeAfter && (
@@ -1422,6 +1818,237 @@ export function CustomDialog({ open, type, title, placeholder, defaultValue, onC
           </button>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+function ProfileCardCustomization() {
+  const [selected, setSelected] = useState<ProfileCardGradient>(() => getProfileCardGradient());
+  const [hovered, setHovered] = useState<ProfileCardGradient | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [customIcons, setCustomIcons] = useState<ImportedIcon[]>(() => getImportedIcons());
+  const [catDraft, setCatDraft] = useState("");
+  const [iconUploadSuccess, setIconUploadSuccess] = useState("");
+  const preview = hovered || selected;
+
+  const apply = (g: ProfileCardGradient) => {
+    setSelected(g);
+    setProfileCardGradient(g.id);
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1400);
+  };
+
+  const handleImportFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const cat = catDraft.trim() || "Custom";
+    let count = 0;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const url = ev.target?.result as string;
+        addImportedIcon({
+          url,
+          name: file.name.replace(/\.[^/.]+$/, ""),
+          category: cat
+        });
+        count++;
+        setCustomIcons(getImportedIcons());
+        setIconUploadSuccess(`Imported ${count} icon(s) into "${cat}"`);
+        setTimeout(() => setIconUploadSuccess(""), 3000);
+      };
+      reader.readAsDataURL(file);
+    });
+    setCatDraft("");
+  };
+
+  const categories = Array.from(new Set(customIcons.map(i => i.category || "Custom")));
+
+  return (
+    <div className="max-w-3xl space-y-8 pb-8">
+      {/* ─── Profile Card Gradient ─── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[28px] font-bold text-[var(--text)]">Customization</h2>
+          {saved && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-500">
+              <Check size={14} /> Saved
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-[var(--text-secondary)]">
+          Choose the color gradient for your profile card. Hover any option to preview it live.
+        </p>
+
+        {/* Live preview */}
+        <div className="grid grid-cols-[240px_1fr] gap-5 items-start max-[640px]:grid-cols-1">
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 sticky top-0 max-[640px]:static">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Preview
+            </div>
+            <svg
+              viewBox="0 0 260 320"
+              className="w-full rounded-[24px] border border-white/80 shadow-xl"
+              style={{ background: preview.background }}
+            >
+              <defs>
+                <linearGradient id="pcp-avatar" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor={preview.background} />
+                  <stop offset="100%" stopColor={preview.accent} />
+                </linearGradient>
+              </defs>
+              <rect
+                x="10"
+                y="248"
+                width="240"
+                height="80"
+                rx="20"
+                fill={preview.glow}
+                opacity="0.5"
+              />
+              <circle cx="130" cy="78" r="34" fill="url(#pcp-avatar)" stroke="rgba(255,255,255,0.9)" strokeWidth="4" />
+              <rect x="86" y="130" width="88" height="12" rx="6" fill="#111827" opacity="0.75" />
+              <rect x="92" y="152" width="76" height="8" rx="4" fill="#111827" opacity="0.35" />
+              <g>
+                <rect x="34" y="196" width="18" height="18" rx="9" fill={preview.background} />
+                <rect x="58" y="200" width="120" height="8" rx="4" fill="#111827" opacity="0.45" />
+              </g>
+              <g>
+                <rect x="34" y="222" width="18" height="18" rx="9" fill={preview.background} />
+                <rect x="58" y="226" width="140" height="8" rx="4" fill="#111827" opacity="0.45" />
+              </g>
+              <circle cx="226" cy="44" r="14" fill="rgba(255,255,255,0.6)" stroke={preview.accent} strokeWidth="2" />
+              <rect x="220" y="41" width="12" height="6" rx="3" fill={preview.accent} />
+            </svg>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--text-secondary)]">{preview.label}</span>
+              <span className="h-3 w-3 rounded-full" style={{ background: preview.glow }} />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Profile card gradient
+            </div>
+            <div className="max-h-[320px] space-y-4 overflow-y-auto pr-2 scroll-smooth">
+              {PROFILE_CARD_GRADIENTS_BY_CATEGORY.map(({ category, items }) => (
+                <div key={category.id}>
+                  <div className="mb-2">
+                    <div className="text-xs font-bold text-[var(--text)]">{category.label}</div>
+                    <div className="text-[10px] text-[var(--muted)]">{category.tagline}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {items.map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => apply(g)}
+                        onMouseEnter={() => setHovered(g)}
+                        onMouseLeave={() => setHovered(null)}
+                        className={[
+                          "group flex items-center gap-2 rounded-xl border p-1.5 text-left transition cursor-pointer",
+                          selected.id === g.id
+                            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-sm"
+                            : "border-[var(--border)] hover:border-[var(--accent)] hover:bg-[var(--hover)]",
+                        ].join(" ")}
+                      >
+                        <span
+                          className="h-7 w-7 shrink-0 rounded-lg border border-white/70 shadow-sm"
+                          style={{ background: g.background }}
+                        />
+                        <span className="flex-1 min-w-0">
+                          <span className="block truncate text-[11px] font-semibold text-[var(--text)]">{g.label}</span>
+                        </span>
+                        {selected.id === g.id && (
+                          <Check size={12} className="shrink-0 text-[var(--accent)]" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-px bg-[var(--border)]" />
+
+      {/* ─── Custom Icons & Icon Packs Manager ─── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-[var(--text)]">Imported Icons & Icon Packs</h3>
+            <p className="text-xs text-[var(--muted)] mt-0.5">
+              Import SVG or PNG icon packs. When you import with a category name, a new icon category is automatically created and appears in the Page Icon Picker.
+            </p>
+          </div>
+          {iconUploadSuccess && (
+            <span className="text-xs font-semibold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+              ✓ {iconUploadSuccess}
+            </span>
+          )}
+        </div>
+
+        <div className="p-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] space-y-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={catDraft}
+              onChange={(e) => setCatDraft(e.target.value)}
+              placeholder="Category Name (e.g. Company Brands, Product Badges)..."
+              className="flex-1 px-3 py-2 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-xs text-[var(--text)] outline-none focus:border-[var(--noska-blue)]"
+            />
+            <label className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--noska-blue)] hover:bg-[var(--noska-blue)]/90 text-white text-xs font-semibold cursor-pointer shadow-sm active:scale-95 transition">
+              <Camera size={13} />
+              <span>Import Icon Files</span>
+              <input
+                type="file"
+                multiple
+                accept="image/*,.svg"
+                className="hidden"
+                onChange={handleImportFiles}
+              />
+            </label>
+          </div>
+
+          {customIcons.length === 0 ? (
+            <div className="py-6 text-center text-xs text-[var(--muted)] border border-dashed border-[var(--border)] rounded-xl">
+              No custom icons imported yet. Choose icon files above to import.
+            </div>
+          ) : (
+            <div className="space-y-3 pt-2">
+              {categories.map((cat) => {
+                const iconsInCat = customIcons.filter(i => (i.category || "Custom") === cat);
+                return (
+                  <div key={cat} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold text-[var(--text)]">
+                      <span className="flex items-center gap-1.5">📁 {cat} ({iconsInCat.length})</span>
+                    </div>
+                    <div className="grid grid-cols-8 gap-2 p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]">
+                      {iconsInCat.map((icon) => (
+                        <div key={icon.id} className="relative group/ic h-10 w-10 rounded-lg bg-[var(--surface-1)] border border-[var(--border)] p-1 flex items-center justify-center">
+                          <img src={icon.url} alt={icon.name} className="w-full h-full object-contain" />
+                          <button
+                            onClick={() => {
+                              removeImportedIcon(icon.id);
+                              setCustomIcons(getImportedIcons());
+                            }}
+                            className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[var(--danger)] text-white text-[9px] grid place-items-center opacity-0 group-hover/ic:opacity-100 transition shadow-sm cursor-pointer"
+                            title="Delete icon"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

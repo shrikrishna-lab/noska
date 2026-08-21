@@ -14,6 +14,8 @@ import { timeAgo, plainText } from "../../utils/helpers";
 import { UnlockPagePrompt } from "../encryption/Encryption";
 import { SPRING_PRESETS } from "../motion/MotionSystem";
 import { auditEngine } from "../../lib/auditEngine";
+import { PageIcon } from "../../components/PageIcon";
+
 
 export default function StackedColumn({
   page,
@@ -85,7 +87,7 @@ export default function StackedColumn({
         className="flex h-8 shrink-0 items-center border-b border-[var(--border)] px-2 bg-[var(--sidebar)] select-none"
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <span className="text-xs shrink-0">{page.icon || "📄"}</span>
+          <PageIcon icon={page.icon} size={14} fallback={<span className="text-xs shrink-0">📄</span>} />
           <PagePeek page={page} pages={pages} onNavigate={onSelect} onOpenFull={undefined}>
             <span className="truncate text-xs font-medium text-[var(--text)]">
               {page.title || "Untitled"}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles, GripHorizontal } from "lucide-react";
+import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles, GripHorizontal, FileText } from "lucide-react";
 import { TextArea } from "../ui";
 import RichTextEditor from "./RichTextEditor";
 import { BlockRegistry } from "../../registry/BlockRegistry";
@@ -19,6 +19,8 @@ import LazyMermaidBlock from "./LazyMermaidBlock";
 import DatabaseBlock from "../DatabaseBlock";
 import LinkedViewBlock from "./LinkedViewBlock";
 import FormsBlock from "../FormsBlock";
+import { PageIcon } from "../PageIcon";
+
 
 function placeholderFor(type: string) {
   if (type === "code") return "Code";
@@ -71,55 +73,91 @@ export default function renderBlockEditor(
   if (block.type === "page") {
     const linked = pages.find((p) => p.id === (block.linkedPageId || block.id));
     const previewPage = linked || pages.find((p) => p.id === block.linkedPageId);
+    const rawIcon = linked?.icon || block.icon;
+
     return (
       <PagePeek page={previewPage} pages={pages} onNavigate={onNavigate} onOpenFull={undefined}>
-        <button
-          type="button"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            const targetId = linked?.id || block.linkedPageId;
-            if (targetId && pages.find((p) => p.id === targetId)) {
-              onNavigate?.(targetId, { altKey: e.altKey });
-            } else if (onCreateSubpage) {
-              const newId = onCreateSubpage(block.id, block.text || "");
-              if (newId) onNavigate?.(newId, { altKey: e.altKey });
-            }
-          }}
-          className="flex w-full items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-left text-sm font-medium text-[var(--text)] hover:bg-[var(--hover)]"
-        >
-          <span>{linked?.icon || "📄"}</span>
-          <span>{linked?.title || block.text || "Untitled"}</span>
-          <span className="ml-auto text-[10px] uppercase tracking-wide text-[var(--muted)]">Subpage</span>
-        </button>
+        <div className="group/subpage my-1">
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              const targetId = linked?.id || block.linkedPageId;
+              if (targetId && pages.find((p) => p.id === targetId)) {
+                onNavigate?.(targetId, { altKey: e.altKey });
+              } else if (onCreateSubpage) {
+                const newId = onCreateSubpage(block.id, block.text || "");
+                if (newId) onNavigate?.(newId, { altKey: e.altKey });
+              }
+            }}
+            className="flex items-center gap-2 py-1 px-1.5 rounded-lg text-left transition cursor-pointer hover:bg-[var(--hover)]/70 max-w-full"
+          >
+            <PageIcon
+              icon={rawIcon}
+              size={18}
+              fallback={
+                <FileText
+                  size={18}
+                  strokeWidth={1.75}
+                  className="text-[var(--text-secondary)] opacity-85 shrink-0"
+                />
+              }
+            />
+            <span className="text-[15px] font-bold text-[var(--text)] underline decoration-[var(--border)] group-hover/subpage:decoration-[var(--text)] decoration-1 underline-offset-3 transition-colors truncate">
+              {linked?.title || block.text || "New page"}
+            </span>
+          </button>
+        </div>
       </PagePeek>
     );
   }
 
   if (block.type === "link-to-page") {
     const target = pages.find((p) => p.id === block.targetPageId);
+    const rawIcon = target?.icon;
+
     return (
-      <div className="flex items-center gap-2 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
-        <Link size={14} className="text-[var(--accent)] shrink-0" />
+      <div className="group/subpage my-1">
         {target ? (
           <PagePeek page={target} pages={pages} onNavigate={onNavigate} onOpenFull={undefined}>
-              <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => onNavigate?.(target.id, { altKey: e.altKey })} className="truncate font-medium text-[var(--accent)] hover:underline">
-              {target.icon} {target.title || "Untitled"}
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => onNavigate?.(target.id, { altKey: e.altKey })}
+              className="flex items-center gap-2 py-1 px-1.5 rounded-lg text-left transition cursor-pointer hover:bg-[var(--hover)]/70 max-w-full"
+            >
+              <PageIcon
+                icon={rawIcon}
+                size={18}
+                fallback={
+                  <FileText
+                    size={18}
+                    strokeWidth={1.75}
+                    className="text-[var(--text-secondary)] opacity-85 shrink-0"
+                  />
+                }
+              />
+              <span className="text-[15px] font-bold text-[var(--text)] underline decoration-[var(--border)] group-hover/subpage:decoration-[var(--text)] decoration-1 underline-offset-3 transition-colors truncate">
+                {target.title || "Untitled"}
+              </span>
             </button>
           </PagePeek>
         ) : (
-          <select
-            disabled={isLocked}
-            value={block.targetPageId || ""}
-            onChange={(e) => onPatch({ targetPageId: e.target.value })}
-            className="min-w-0 flex-1 bg-transparent outline-none text-[var(--secondary)]"
-          >
-            <option value="">Select a page to link…</option>
-            {pages.filter((p) => !p.trashed).map((p) => (
-              <option key={p.id} value={p.id}>{p.icon} {p.title || "Untitled"}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
+            <FileText size={16} className="text-[var(--muted)] shrink-0" />
+            <select
+              disabled={isLocked}
+              value={block.targetPageId || ""}
+              onChange={(e) => onPatch({ targetPageId: e.target.value })}
+              className="min-w-0 flex-1 bg-transparent outline-none text-[var(--secondary)]"
+            >
+              <option value="">Select a page to link…</option>
+              {pages.filter((p) => !p.trashed).map((p) => (
+                <option key={p.id} value={p.id}>{p.icon ? `${p.icon} ` : ""}{p.title || "Untitled"}</option>
+              ))}
+            </select>
+          </div>
         )}
-        <span className="ml-auto text-[10px] uppercase tracking-wide text-[var(--muted)]">Link</span>
       </div>
     );
   }

@@ -64,6 +64,7 @@ export interface UserDetailProfile extends AdminUserRow {
   workspace_name?: string | null;
   preferences?: Record<string, unknown> | null;
   onboarding_complete?: boolean | null;
+  bypass_waitlist?: boolean | null;
 }
 
 export interface UserSubscriptionRow {
@@ -297,6 +298,122 @@ export function useAuditEvents(limit = 50) {
 
 export function useAuditCount() {
   return useQuery({ queryKey: ["admin", "audit", "count"], queryFn: () => adminCount("audit_events"), refetchInterval: 30000 });
+}
+
+// ── User lifecycle activity (for DAU / returning-user analytics) ──
+export interface UserActivityRow {
+  id: string;
+  user_id: string;
+  user_name: string;
+  action: string;
+  created_at: string | null;
+}
+export function useUserActivity() {
+  return useQuery({
+    queryKey: ["admin", "user-activity"],
+    queryFn: () => adminSelect<UserActivityRow>(
+      "audit_events", "id, user_id, user_name, action, created_at", { order: "created_at asc" },
+    ),
+    refetchInterval: 60000,
+  });
+}
+
+export interface UserLifecycleStats {
+  totalWaitlist: number;
+  approved: number;
+  rejected: number;
+  invited: number;
+  accepted: number;
+  pending: number;
+  accounts: number;
+  onboardingComplete: number;
+  firstPageUsers: number;
+  dau: number;
+  active7d: number;
+  active30d: number;
+  returning30d: number;
+  notReturning: number;
+}
+export function useUserLifecycle() {
+  return useQuery({
+    queryKey: ["admin", "user-lifecycle"],
+    queryFn: async () => {
+      const [waitlist, profiles, pages, activity] = await Promise.all([
+        adminSelect<{ status: string | null; approved_at: string | null; rejected_at: string | null }>(
+          "waitlist_entries", "status, approved_at, rejected_at",
+        ),
+        adminSelect<{ user_id: string; created_at: string | null; onboarding_complete: boolean | null }>(
+          "user_profiles", "user_id, created_at, onboarding_complete",
+        ),
+        adminSelect<{ user_id: string | null; created_at: string | null }>(
+          "pages", "user_id, created_at",
+        ),
+        adminSelect<UserActivityRow>("audit_events", "id, user_id, user_name, action, created_at"),
+      ]);
+
+      const approved = waitlist.filter((w) => ["approved", "invited", "accepted"].includes(w.status ?? "")).length;
+      const rejected = waitlist.filter((w) => w.status === "rejected").length;
+      const invited = waitlist.filter((w) => w.status === "invited").length;
+      const accepted = waitlist.filter((w) => w.status === "accepted").length;
+      const pending = waitlist.filter((w) => ["waiting", "pending"].includes(w.status ?? "")).length;
+      const accounts = profiles.length;
+      const onboardingComplete = profiles.filter((p) => p.onboarding_complete === true).length;
+      const firstPageUsers = new Set(pages.map((p) => p.user_id).filter(Boolean)).size;
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayKey = todayStart.toDateString();
+      const weekAgo = Date.now() - 7 * 86400000;
+      const monthAgo = Date.now() - 30 * 86400000;
+
+      const activeDays = new Map<string, Set<string>>();
+      for (const a of activity) {
+        if (!a.created_at || !a.user_id) continue;
+        const ts = new Date(a.created_at).getTime();
+        const dayKey = new Date(a.created_at).toDateString();
+        if (!activeDays.has(a.user_id)) activeDays.set(a.user_id, new Set());
+        activeDays.get(a.user_id)!.add(dayKey);
+        void ts;
+      }
+
+      let dau = 0;
+      let active7d = 0;
+      let active30d = 0;
+      let returning30d = 0;
+      let notReturning = 0;
+      const profileByUserId = new Map(profiles.map((p) => [p.user_id, p]));
+      for (const [userId, days] of activeDays) {
+        const userCreated = profileByUserId.get(userId)?.created_at;
+        if (days.has(todayKey)) dau++;
+        const lastTs = Math.max(...Array.from(days).map((d) => new Date(d).getTime()));
+        if (lastTs >= weekAgo) active7d++;
+        if (lastTs >= monthAgo) active30d++;
+        if (days.size >= 2 && lastTs >= monthAgo) returning30d++;
+        // Only users who actually created an account count toward churn —
+        // waitlist signups that never logged in are not "returning" users.
+        if (!userCreated) continue;
+        if ((Date.now() - new Date(userCreated).getTime()) > 30 * 86400000 && lastTs < monthAgo) notReturning++;
+      }
+
+      return {
+        totalWaitlist: waitlist.length,
+        approved,
+        rejected,
+        invited,
+        accepted,
+        pending,
+        accounts,
+        onboardingComplete,
+        firstPageUsers,
+        dau,
+        active7d,
+        active30d,
+        returning30d,
+        notReturning,
+      };
+    },
+    refetchInterval: 60000,
+  });
 }
 
 // ── Admin audit log (admin_audit_log via read_admin_audit_log RPC) ──
@@ -1875,6 +1992,25 @@ export function useUpdateUserProfile() {
       const { error } = await supabase.rpc("admin_update", {
         p_session_token: token(), p_table: "user_profiles", p_id: id,
         p_data: { ...data, updated_at: new Date().toISOString() }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users", "detail"] });
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+// Toggle a user's waitlist bypass flag (admin-only access control).
+export function useSetBypassWaitlist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, bypass_waitlist }: { id: string; bypass_waitlist: boolean }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "user_profiles", p_id: id,
+        p_data: { bypass_waitlist, updated_at: new Date().toISOString() }, p_min_role: "admin",
       });
       if (error) throw error;
     },

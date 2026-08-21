@@ -31,6 +31,8 @@ import {
   getDescendantIdsFromContent, smartDepthOpacity,
 } from '../core/tree/TreeEngine';
 import type { FlattenedPage } from '../core/tree/TreeEngine';
+import { PageIcon } from './PageIcon';
+
 
 /** Builds a real /<workspace-slug>/<pageId> URL by swapping the page-id
  * segment of the current path — App.jsx's URL-sync effect keeps the
@@ -44,16 +46,31 @@ function pageUrl(pageId: string): string {
 
 /** Options bag passed to onSelect — mirrors the real shapes read at every
  * call site (altKey/shiftKey from click modifiers, sidePeek from the
- * peek-preview and side-peek menu actions). */
+ * peek-preview and side-peek menu actions). `openInNewTab` is set when the
+ * user Ctrl/Cmd+clicks or middle-clicks a sidebar page, mirroring how
+ * browser tabs (and Notion) treat those gestures. */
 export interface PageSelectOptions {
   altKey?: boolean;
   shiftKey?: boolean;
   sidePeek?: boolean;
+  openInNewTab?: boolean;
 }
 
 type OnSelect = (pageId: string, options?: PageSelectOptions) => void;
 type OnPatchPage = (pageId: string, patch: Partial<Page>) => void;
 type OnPageIdAction = (pageId: string) => void;
+
+/** Build PageSelectOptions from a mouse event. Follows Notion's navigation
+ * philosophy: plain click navigates the active tab, Ctrl/Cmd+Click and
+ * middle-click open a new tab, Alt+Click side-peeks. */
+export function selectOptionsFromEvent(e: { altKey: boolean; metaKey: boolean; shiftKey: boolean; ctrlKey: boolean; button?: number }): PageSelectOptions {
+  const openInNewTab = e.button === 1 || e.ctrlKey || e.metaKey;
+  return {
+    altKey: !openInNewTab && e.altKey,
+    shiftKey: e.shiftKey,
+    openInNewTab,
+  };
+}
 
 interface TreeConnectorProps {
   depth: number;
@@ -306,7 +323,13 @@ function PremiumBranch({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleClick = useCallback((e: ReactMouseEvent) => {
-    onSelect(page.id, { altKey: e.altKey || e.metaKey, shiftKey: e.shiftKey });
+    onSelect(page.id, selectOptionsFromEvent(e));
+  }, [page.id, onSelect]);
+
+  const handleAuxClick = useCallback((e: ReactMouseEvent) => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    onSelect(page.id, selectOptionsFromEvent(e));
   }, [page.id, onSelect]);
 
   return (
@@ -321,6 +344,8 @@ function PremiumBranch({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleClick}
+      onAuxClick={handleAuxClick}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(true); }}
     >
       <TreeConnector
         depth={depth}
@@ -358,7 +383,7 @@ function PremiumBranch({
           onPatchPage(page.id, { icon: emojis[(emojis.indexOf(page.icon) + 1) % emojis.length] });
         }}
       >
-        {page.icon}
+        <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
       </motion.button>
 
       {/* Title */}
@@ -472,9 +497,17 @@ function PremiumPageItem({
         }}
         onClick={(e) => {
           if (e.target === e.currentTarget) {
-            onSelect(page.id, { altKey: e.altKey || e.metaKey, shiftKey: e.shiftKey });
+            onSelect(page.id, selectOptionsFromEvent(e));
           }
         }}
+        onAuxClick={(e) => {
+          if (e.button !== 1) return;
+          e.preventDefault();
+          if (e.target === e.currentTarget) {
+            onSelect(page.id, selectOptionsFromEvent(e));
+          }
+        }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(true); }}
       >
         {/* Animated active background */}
         {active && (
@@ -541,7 +574,7 @@ function PremiumPageItem({
             });
           }}
         >
-          {page.icon}
+          <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
         </motion.button>
 
         {/* Title */}
@@ -549,7 +582,7 @@ function PremiumPageItem({
           className="flex min-w-0 flex-1 items-center gap-1 z-10 pl-0.5 cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
-            onSelect(page.id, { altKey: e.altKey || e.metaKey, shiftKey: e.shiftKey });
+            onSelect(page.id, selectOptionsFromEvent(e));
           }}
         >
           <span className={`truncate text-[12.5px] ${active ? 'font-semibold' : 'font-normal'}`}>
@@ -601,44 +634,11 @@ function PremiumPageItem({
           <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" onClick={() => { onToast?.("Move to is not yet implemented"); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedTrash} label="Move to Trash" onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
           <div className="my-2 border-t border-[var(--border)]" />
-          <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(pageUrl(page.id), '_blank'); setMenuOpen(false); }} />
+<PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Click" onClick={() => { onSelect(page.id, { openInNewTab: true }); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(pageUrl(page.id), '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
         </FloatingMenu>
       </div>
-
-      {/* Children */}
-      <TreeBranch depth={depth} isLast={false} expanded={expanded} animateHeight={true}>
-        <div
-          className="relative"
-          onMouseEnter={() => setChildHovered(true)}
-          onMouseLeave={() => setChildHovered(false)}
-        >
-          {page.content?.map((childId) => {
-            const childPage = allBlocks.find(b => b.id === childId);
-            if (!childPage || !isPageEntity(childPage)) return null;
-            return (
-              <PremiumPageItem
-                key={childPage.id}
-                page={childPage}
-                active={childPage.id === activeId}
-                selected={selected}
-                hasChildren={childPage.content?.some(id => isPageEntity(allBlocks.find(b => b.id === id))) ?? false}
-                expanded={!collapsedPages.has(childPage.id)}
-                depth={depth + 1}
-                ancestors={ancestors}
-                onToggleCollapse={onToggleCollapse}
-                onSelect={onSelect}
-                onPatchPage={onPatchPage}
-                onAddInside={onAddInside}
-                allBlocks={allBlocks}
-                collapsedPages={collapsedPages}
-                activeId={activeId}
-              />
-            );
-          })}
-        </div>
-      </TreeBranch>
     </div>
   );
 }
@@ -681,7 +681,7 @@ function DragGhost({ page, depth }: DragGhostProps) {
     >
       <GripVertical size={10} className="text-[var(--muted)] shrink-0" />
       <div style={{ width: depth * 14 }} className="shrink-0" />
-      <span>{page.icon}</span>
+      <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
       <span className="truncate">{page.title || 'Untitled'}</span>
     </motion.div>
   );

@@ -42,7 +42,10 @@ import {
 import { IconButton, FloatingMenu, useOutsideDismiss } from "./ui";
 import { timeAgo, plainText, emojis } from "../utils/helpers";
 import PageTree from "./PageTree";
+import { selectOptionsFromEvent } from "./PageTree";
 import type { PageSelectOptions } from "./PageTree";
+import { PageIcon } from "./PageIcon";
+
 import type { Page } from "../lib/supabaseService";
 import TeamSwitcher from "./teams/TeamSwitcher";
 
@@ -86,7 +89,7 @@ interface SidebarProps {
   onAI: () => void;
   onAIFull: () => void;
   onHelp: () => void;
-  onView: (view: string) => void;
+  onView: (view: string, options?: PageSelectOptions) => void;
   onPrev: () => void;
   onNext: () => void;
   onPatchPage: (pageId: string, patch: Partial<Page>) => void;
@@ -178,6 +181,8 @@ const Sidebar = memo(function Sidebar({
   const displayEmail = currentUserEmail || collabUser?.userId || 'user@workspace';
   const displayAvatar = collabUser?.userAvatar || '👤';
 
+  const isAvatarUrl = typeof displayAvatar === "string" && (displayAvatar.startsWith("http://") || displayAvatar.startsWith("https://") || displayAvatar.startsWith("data:") || displayAvatar.startsWith("blob:"));
+
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   // Click-outside references
@@ -247,17 +252,7 @@ const Sidebar = memo(function Sidebar({
             <ChevronDown size={11} className="text-[var(--muted)] shrink-0 ml-1" />
           </button>
 
-          {/* Hide sidebar. Real bug fix: this used to launch a "macOS
-              Desktop application menu" (File/Edit/View/History/Window/
-              Help) that was mostly redundant with functionality already
-              exposed elsewhere in the UI (Ctrl+N/Ctrl+K/Ctrl+Z are real
-              global shortcuts, Undo/Redo/AI/mode-switch buttons already
-              exist in the Topbar) and contained one explicitly-fake
-              action ("Minimized window (simulated)..."). Replaced with a
-              single real, obvious action: collapse the sidebar — mirrors
-              the exact button already present in the Topbar for the
-              reverse (open) direction, so the collapse/expand pair is
-              now consistent and always reachable from both ends. */}
+          {/* Hide sidebar. */}
           <button
             onClick={onToggle}
             className="w-8 h-8 rounded-lg hover:bg-[var(--hover)] text-[var(--text-secondary)] hover:text-[var(--text)] transition duration-150 outline-none flex items-center justify-center cursor-pointer shrink-0 focus-visible:ring-1 focus-visible:ring-[var(--noska-blue)]"
@@ -267,10 +262,7 @@ const Sidebar = memo(function Sidebar({
           </button>
         </div>
 
-        {/* Account switcher popover — redesigned as a single real-data
-            panel (real signed-in identity, real workspace name, real
-            theme setting) instead of the previous fake multi-account/
-            multi-workspace list + separate cascading app menu. */}
+        {/* Account switcher popover */}
         {createPortal(
           <AnimatePresence>
             {switcherOpen && (
@@ -283,15 +275,14 @@ const Sidebar = memo(function Sidebar({
                 style={{ top: switcherCoords.top, bottom: switcherCoords.bottom, left: switcherCoords.left }}
                 className="fixed z-[100] w-[266px] rounded-xl border border-[var(--border)] bg-[var(--surface-1)] backdrop-blur-xl p-3 shadow-2xl text-[12px] outline-none select-none flex flex-col gap-2"
               >
-                {/* Signed-in account — real identity (currentUsername/
-                    currentUserEmail from App.tsx's actual auth session).
-                    Real bug fix: this used to show a fake multi-account
-                    list where "switching accounts" only flipped a local
-                    flag with no actual session/data change — replaced
-                    with the one real account, plus a real Log out. */}
+                {/* Signed-in account */}
                 <div className="flex items-center gap-2.5 px-1">
-                  <div className="h-8.5 w-8.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-sm shadow-inner select-none shrink-0 text-[var(--text)]">
-                    {displayAvatar}
+                  <div className="h-8.5 w-8.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-sm shadow-inner select-none shrink-0 text-[var(--text)] overflow-hidden">
+                    {isAvatarUrl ? (
+                      <img src={displayAvatar} alt="Avatar" className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{displayAvatar || "👤"}</span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-[var(--text)] truncate leading-none text-[12.5px]">{displayName}</div>
@@ -413,10 +404,10 @@ const Sidebar = memo(function Sidebar({
         <div className="flex-1 overflow-y-auto pb-2 scrollbar-thin fade-edges-y">
           {/* 1. Core Workspace Links */}
           <NoskaSection title="Workspace" defaultExpanded={true}>
-            <NoskaNavItem icon={AnimatedFolder} label="Home" active={appView === "home"} onClick={() => onView("home")} />
+            <NoskaNavItem icon={AnimatedFolder} label="Home" active={appView === "home"} onClick={(e) => onView("home", selectOptionsFromEvent(e))} />
             <NoskaNavItem icon={AnimatedAI} label="AI Workspace" active={false} onClick={onAIFull} />
-            <NoskaNavItem icon={AnimatedHistory} label="Calendar" active={appView === "calendar"} onClick={() => onView("calendar")} />
-            <NoskaNavItem icon={AnimatedBell} label="Inbox" active={appView === "inbox"} onClick={() => onView("inbox")} badge={pendingInvitesCount} />
+            <NoskaNavItem icon={AnimatedHistory} label="Calendar" active={appView === "calendar"} onClick={(e) => onView("calendar", selectOptionsFromEvent(e))} />
+            <NoskaNavItem icon={AnimatedBell} label="Inbox" active={appView === "inbox"} onClick={(e) => onView("inbox", selectOptionsFromEvent(e))} badge={pendingInvitesCount} />
           </NoskaSection>
 
           {/* 2. Starred Favorites */}
@@ -425,7 +416,7 @@ const Sidebar = memo(function Sidebar({
               <div className="text-[10px] text-[var(--muted)] px-3.5 py-1.5 italic">Starred pages appear here</div>
             ) : (
               pages.filter(p => p.favorite && !p.trashed).map(p => (
-                <NoskaNavItem key={p.id} icon={(props) => <Star {...props} size={11} className="fill-[var(--warning)] text-[var(--warning)]" />} label={p.title || "Untitled"} onClick={() => onSelect(p.id)} active={p.id === activeId} compact={true} />
+                <NoskaNavItem key={p.id} icon={(props) => <Star {...props} size={11} className="fill-[var(--warning)] text-[var(--warning)]" />} label={p.title || "Untitled"} onClick={(e) => onSelect(p.id, selectOptionsFromEvent(e))} active={p.id === activeId} compact={true} />
               ))
             )}
           </NoskaSection>
@@ -452,16 +443,16 @@ const Sidebar = memo(function Sidebar({
 
           {/* 4. AI & Agents */}
           <NoskaSection title="AI Agents" defaultExpanded={false}>
-            <NoskaNavItem icon={AnimatedSparkle} label="Personal Agent" onClick={() => onView("agents")} active={appView === "agents"} />
-            <NoskaNavItem icon={AnimatedVoice} label="AI Meeting Capture" onClick={() => onView("meetingNote")} active={appView === "meetingNote"} />
+            <NoskaNavItem icon={AnimatedSparkle} label="Personal Agent" onClick={(e) => onView("agents", selectOptionsFromEvent(e))} active={appView === "agents"} />
+            <NoskaNavItem icon={AnimatedVoice} label="AI Meeting Capture" onClick={(e) => onView("meetingNote", selectOptionsFromEvent(e))} active={appView === "meetingNote"} />
             <NoskaNavItem icon={AnimatedPlus} label="Deploy New Agent" onClick={onAI} />
           </NoskaSection>
 
           {/* 5. Marketplace */}
           <NoskaSection title="Marketplace" defaultExpanded={false}>
-            <NoskaNavItem icon={AnimatedSparkle} label="Browse Templates" onClick={() => onView("marketplace")} active={appView === "marketplace"} />
-            <NoskaNavItem icon={AnimatedUpload} label="Creator Studio" onClick={() => onView("creator")} active={appView === "creator"} />
-            <NoskaNavItem icon={AnimatedBookmark} label="Agent Directory" onClick={() => onView("agents")} active={appView === "agents"} />
+            <NoskaNavItem icon={AnimatedSparkle} label="Browse Templates" onClick={(e) => onView("marketplace", selectOptionsFromEvent(e))} active={appView === "marketplace"} />
+            <NoskaNavItem icon={AnimatedUpload} label="Creator Studio" onClick={(e) => onView("creator", selectOptionsFromEvent(e))} active={appView === "creator"} />
+            <NoskaNavItem icon={AnimatedBookmark} label="Agent Directory" onClick={(e) => onView("agents", selectOptionsFromEvent(e))} active={appView === "agents"} />
           </NoskaSection>
 
           {/* 6. Page Tree Documents */}
@@ -496,7 +487,7 @@ const Sidebar = memo(function Sidebar({
 
           {/* 7. Collaboration Space */}
           <NoskaSection title="Shared Space" defaultExpanded={false}>
-            <NoskaNavItem icon={AnimatedPlus} label="Start collaboration" onClick={() => onView("shared")} active={appView === "shared"} muted compact />
+            <NoskaNavItem icon={AnimatedPlus} label="Start collaboration" onClick={(e) => onView("shared", selectOptionsFromEvent(e))} active={appView === "shared"} muted compact />
           </NoskaSection>
 
           {/* 9. Spaced Recall & Console */}
@@ -507,7 +498,6 @@ const Sidebar = memo(function Sidebar({
 
           {/* 10. Support & Document Actions */}
           <NoskaSection title="Support" defaultExpanded={false}>
-            <NoskaNavItem icon={UserRound} label="My Profile" onClick={() => onProfile?.()} />
             <NoskaNavItem icon={AnimatedBookmark} label="Help Center" onClick={onHelp} />
             <NoskaNavItem icon={AnimatedTrash} label={`Trash${trashCount ? ` (${trashCount})` : ""}`} ariaLabel="Open trash" onClick={onTrash} />
           </NoskaSection>
@@ -529,8 +519,8 @@ const Sidebar = memo(function Sidebar({
           
           {/* Library and Tasks Footers */}
           <div className="flex flex-col space-y-0.5">
-            <NoskaNavItem icon={AnimatedCanvas} label="Library" onClick={() => onView("library")} active={appView === "library"} compact />
-            <NoskaNavItem icon={AnimatedCheck} label="My Tasks" onClick={() => onView("tasks")} active={appView === "tasks"} compact />
+            <NoskaNavItem icon={AnimatedCanvas} label="Library" onClick={(e) => onView("library", selectOptionsFromEvent(e))} active={appView === "library"} compact />
+            <NoskaNavItem icon={AnimatedCheck} label="My Tasks" onClick={(e) => onView("tasks", selectOptionsFromEvent(e))} active={appView === "tasks"} compact />
           </div>
 
           {/* Premium "New Creation" Action Button */}
@@ -558,8 +548,12 @@ const Sidebar = memo(function Sidebar({
           }}
           className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--hover)] transition text-left"
         >
-          <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs text-[var(--text)] shrink-0">
-            {displayAvatar}
+          <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs text-[var(--text)] shrink-0 overflow-hidden">
+            {isAvatarUrl ? (
+              <img src={displayAvatar} alt="Avatar" className="h-full w-full object-cover" />
+            ) : (
+              <span>{displayAvatar || "👤"}</span>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-[12px] font-semibold text-[var(--text)] truncate leading-none">{displayName}</div>
@@ -591,10 +585,11 @@ function RecentsPageItem({ page, active, onSelect, onRemove }: RecentsPageItemPr
         />
       )}
       <button
-        onClick={() => onSelect(page.id)}
+        onClick={(e) => onSelect(page.id, selectOptionsFromEvent(e))}
+        onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onSelect(page.id, selectOptionsFromEvent(e)); } }}
         className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1 text-left z-10 outline-none cursor-pointer"
       >
-        <span className="text-[12px] shrink-0 leading-none">{page.icon || "📄"}</span>
+        <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
         <div className="min-w-0 flex-1">
           <div className={`truncate text-[12px] ${active ? "text-[var(--text)] font-semibold" : "font-normal text-[var(--text-secondary)] group-hover:text-[var(--text)]"}`}>
             {page.title || "Untitled"}
@@ -665,7 +660,7 @@ interface NoskaNavItemProps {
   subtitle?: ReactNode;
   active?: boolean;
   muted?: boolean;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   ariaLabel?: string;
   compact?: boolean;
   /** Small numeric pill shown at the end of the row — used by Inbox for
@@ -678,6 +673,7 @@ function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ari
     <button
       aria-label={ariaLabel}
       onClick={onClick}
+      onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onClick?.(e); } }}
       onMouseUp={(e) => (e.currentTarget as HTMLButtonElement).blur()}
       className={`flex ${compact ? "min-h-[22px] text-[11px] py-0.5" : "min-h-[26px] text-[12px] py-1"} w-full items-center gap-2 rounded-lg px-2.5 text-left outline-none relative transition-all duration-150 cursor-pointer ${
         active
@@ -731,9 +727,9 @@ export function PageRow({ page, active, onSelect, onPatchPage, collapsed, onColl
         onClick={() => onPatchPage(page.id, { icon: emojis[(emojis.indexOf(page.icon) + 1) % emojis.length] })}
         title="Change icon"
       >
-        {page.icon}
+        <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
       </button>
-      <button className="min-w-0 flex-1 text-left" onClick={(e) => onSelect(page.id, { altKey: e.altKey || e.metaKey })}>
+      <button className="min-w-0 flex-1 text-left" onClick={(e) => onSelect(page.id, selectOptionsFromEvent(e))} onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onSelect(page.id, selectOptionsFromEvent(e)); } }}>
         <div className="truncate">{page.title || "Untitled"}</div>
         <div className="truncate text-[10px] text-[var(--text)]/45">
           {words} words · {timeAgo(page.updatedAt)}

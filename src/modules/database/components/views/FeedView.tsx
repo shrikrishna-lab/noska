@@ -1,5 +1,6 @@
 import React from "react";
 import { Plus } from "lucide-react";
+import { PageIcon } from "../../../../components/PageIcon";
 import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
 export interface FeedViewProps {
@@ -39,7 +40,9 @@ export default function FeedView({ rows, properties, onAddRow, activeView, onRow
             onClick={() => onRowClick?.(row.id)}
             className="flex gap-3 px-4 py-3 hover:bg-[var(--hover)]/50 transition cursor-pointer"
           >
-            <span className="shrink-0 text-lg mt-0.5">{row.icon || "📄"}</span>
+            <span className="shrink-0 text-lg mt-0.5 flex items-center justify-center">
+              <PageIcon icon={row.icon} size={18} fallback={<span>📄</span>} />
+            </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-[13px] text-[var(--text)] truncate">{row.name || "Untitled"}</span>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
-import type { Page, AIChat } from "../lib/supabaseService";
+import { saveSetting, type Page, type AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 import type { Tables } from "../../types/supabase";
 
@@ -29,7 +29,7 @@ interface WorkspaceActions {
   setPages: React.Dispatch<React.SetStateAction<Page[]>>;
   setSharedPages: React.Dispatch<React.SetStateAction<Page[]>>;
   setActiveId: React.Dispatch<React.SetStateAction<string | null>>;
-  setWorkspaceName: React.Dispatch<React.SetStateAction<string>>;
+  setWorkspaceName: (nameOrFn: string | ((prev: string) => string)) => void;
   setPendingInvites: React.Dispatch<React.SetStateAction<Tables<"page_invites">[]>>;
   setCollapsedPages: React.Dispatch<React.SetStateAction<Set<string>>>;
   setRenameFocusId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -57,7 +57,31 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [pages, setPages] = useState<Page[]>([]);
   const [sharedPages, setSharedPages] = useState<Page[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [workspaceName, setWorkspaceName] = useState("My Workspace");
+  const [workspaceName, setWorkspaceNameState] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem("workspaceName");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "string" && parsed.trim() && parsed !== "Noska") {
+          return parsed;
+        }
+      }
+    } catch {}
+    return "My Workspace";
+  });
+
+  const setWorkspaceName = useCallback((nameOrFn: string | ((prev: string) => string)) => {
+    setWorkspaceNameState((prev) => {
+      const next = typeof nameOrFn === "function" ? nameOrFn(prev) : nameOrFn;
+      if (next && next.trim()) {
+        try {
+          localStorage.setItem("workspaceName", JSON.stringify(next));
+        } catch {}
+        saveSetting("workspaceName", next).catch(() => {});
+      }
+      return next;
+    });
+  }, []);
   const [pendingInvites, setPendingInvites] = useState<Tables<"page_invites">[]>([]);
   const [collapsedPages, setCollapsedPages] = useState<Set<string>>(() => new Set());
   const [renameFocusId, setRenameFocusId] = useState<string | null>(null);
@@ -74,7 +98,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [history, setHistory] = useState<Page[][]>([]);
   const [future, setFuture] = useState<Page[][]>([]);
 
-  const persistTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const persistTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     return () => {

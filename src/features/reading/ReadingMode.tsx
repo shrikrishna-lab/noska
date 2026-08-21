@@ -17,6 +17,8 @@ import {
 import { plainText } from "../../utils/helpers";
 import type { Page } from "../../lib/supabaseService";
 import type { Block } from "../../../types/blocks";
+import { PageIcon } from "../../components/PageIcon";
+
 
 interface ReadingTheme {
   name: string;
@@ -302,7 +304,7 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
         const meta = block.meta as { icon?: string } | undefined;
         return (
           <div key={block.id} className="my-4 flex gap-3 rounded-lg border border-[var(--reading-border)] bg-black/5 dark:bg-white/5 p-4 text-[var(--reading-text)]">
-            {meta?.icon && <span className="text-lg select-none">{meta.icon}</span>}
+            {meta?.icon && <PageIcon icon={meta.icon} size={20} fallback="💡" />}
             <div className="flex-1">{block.text}</div>
           </div>
         );
@@ -663,20 +665,22 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
             } transition-[font-size,line-height] selection:bg-[var(--reading-accent)]/30`}
           >
             {/* Cover and Header */}
-            {page.cover && (
-              <div className="w-full h-44 rounded-xl overflow-hidden mb-6 select-none border border-[var(--reading-border)]">
-                <img
-                  src={page.cover}
-                  alt="Page Cover"
-                  className="w-full h-full object-cover opacity-80"
-                />
-              </div>
+            {Boolean(page.cover) && (
+              <div
+                className="w-full h-44 rounded-xl overflow-hidden mb-6 select-none border border-[var(--reading-border)] shadow-sm transition-all"
+                style={{
+                  background: page.cover?.startsWith("linear-gradient")
+                    ? page.cover
+                    : `url(${page.cover}) ${page.coverPosition || "center"}/cover no-repeat`,
+                  filter: page.coverBlur ? `blur(${page.coverBlur}px)` : "none"
+                }}
+              />
             )}
 
             <header className="mb-8 border-b border-[var(--reading-border)] pb-5 select-none">
-              <div className="flex items-center gap-2.5 text-4xl mb-3">
-                <span>{page.icon || "📄"}</span>
-                <h1 className="font-extrabold tracking-tight text-[var(--reading-text)]">
+              <div className="flex items-center gap-2.5 mb-3">
+                <PageIcon icon={page.icon} size={36} fallback={<span className="text-4xl">📄</span>} />
+                <h1 className="text-3xl font-extrabold tracking-tight text-[var(--reading-text)]">
                   {page.title || "Untitled Note"}
                 </h1>
               </div>

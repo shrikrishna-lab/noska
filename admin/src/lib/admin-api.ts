@@ -37,6 +37,15 @@ class AdminApi {
       this.request<{ success: boolean }>("users", "restore", { accountId, sessionToken: getAdminToken() }),
     permanentDelete: (accountId: string) =>
       this.request<{ success: boolean }>("users", "permanent_delete", { accountId, sessionToken: getAdminToken() }),
+    signInToken: (userId: string, expiresInSeconds = 7 * 24 * 60 * 60) =>
+      this.request<{ url: string | null; token_id: string | null; status: string | null; user_id: string; expires_in_seconds: number }>(
+        "users", "sign_in_token", {
+          userId,
+          expiresInSeconds,
+          sessionToken: getAdminToken(),
+          appOrigin: import.meta.env.VITE_APP_URL ?? "https://app.noska.me",
+        }
+      ),
   };
 
   analytics = {

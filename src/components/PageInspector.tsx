@@ -11,6 +11,8 @@ import { timeAgo, plainText } from '../utils/helpers';
 import { getAllRelations } from '../utils/pageLinks';
 import { auditEngine } from '../lib/auditEngine';
 import type { LucideIcon } from 'lucide-react';
+import { PageIcon } from './PageIcon';
+
 
 const TABS = [
   { id: 'overview', icon: Info, label: 'Overview' },
@@ -189,7 +191,7 @@ function OverviewTab({ page, pages, relations, versionsCount, auditCount, aiEven
   return (
     <div className="space-y-2 px-2 py-2">
       <div className="flex items-center gap-3 mb-3">
-        <span className="text-3xl">{page.icon || '📄'}</span>
+        <PageIcon icon={page.icon} size={32} fallback="📄" />
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-semibold truncate text-[var(--text)]">{page.title || 'Untitled'}</div>
           <div className="text-[10px] text-[var(--muted)]">
@@ -358,7 +360,20 @@ function DetailsTab({ page, pages }) {
 
       <div className="rounded-lg bg-[var(--surface)] p-2 border border-[var(--border)] space-y-0.5">
         <SectionHeader icon={GitBranch} label="Hierarchy" />
-        <StatRow icon={FolderTree} label="Parent" value={parent ? `${parent.icon || '📄'} ${parent.title}` : 'No parent (root level)'} />
+        <StatRow
+          icon={FolderTree}
+          label="Parent"
+          value={
+            parent ? (
+              <span className="flex items-center gap-1">
+                <PageIcon icon={parent.icon} size={12} fallback="📄" />
+                <span>{parent.title}</span>
+              </span>
+            ) : (
+              'No parent (root level)'
+            )
+          }
+        />
         <StatRow icon={FolderTree} label="Children" value={children.length > 0 ? children.length : 'No child pages'} />
       </div>
     </div>
@@ -419,7 +434,10 @@ function PropertiesTab({ page, pages, onPatchPage }) {
           <div className="text-[9px] text-[var(--muted)] mb-0.5">Parent</div>
           <div className="text-[11px] text-[var(--text)]">
             {parent ? (
-              <button className="hover:text-[var(--accent)] transition-colors">{parent.icon} {parent.title}</button>
+              <button className="hover:text-[var(--accent)] transition-colors inline-flex items-center gap-1">
+                <PageIcon icon={parent.icon} size={12} fallback="📄" />
+                <span>{parent.title}</span>
+              </button>
             ) : <span className="text-[var(--muted)] italic">Root level</span>}
           </div>
         </div>
@@ -428,8 +446,8 @@ function PropertiesTab({ page, pages, onPatchPage }) {
           <div className="space-y-0.5">
             {children.length === 0 && <div className="text-[10px] text-[var(--muted)] italic">No child pages</div>}
             {children.map(child => (
-              <div key={child.id} className="text-[11px] flex items-center gap-1 text-[var(--text)]">
-                <span>{child.icon}</span>
+              <div key={child.id} className="text-[11px] flex items-center gap-1.5 text-[var(--text)]">
+                <PageIcon icon={child.icon} size={12} fallback="📄" />
                 <span className="truncate">{child.title || 'Untitled'}</span>
               </div>
             ))}
@@ -460,7 +478,7 @@ function RelationshipsTab({ page, pages }) {
           )}
           {relations.backlinks.map(link => (
             <button key={link.pageId} className="flex items-center gap-1.5 w-full text-left p-1.5 rounded hover:bg-[var(--hover)] text-[11px] text-[var(--text)] transition-colors">
-              <span>{link.icon || '📄'}</span>
+              <PageIcon icon={link.icon} size={12} fallback="📄" />
               <span className="truncate">{link.title || 'Untitled'}</span>
             </button>
           ))}
@@ -475,7 +493,7 @@ function RelationshipsTab({ page, pages }) {
           )}
           {relations.outgoing.map(link => (
             <button key={link.pageId} className="flex items-center gap-1.5 w-full text-left p-1.5 rounded hover:bg-[var(--hover)] text-[11px] text-[var(--text)] transition-colors">
-              <span>{link.icon || '🔗'}</span>
+              <PageIcon icon={link.icon} size={12} fallback="🔗" />
               <span className="truncate">{link.title || 'Untitled'}</span>
             </button>
           ))}
@@ -487,7 +505,14 @@ function RelationshipsTab({ page, pages }) {
         <div className="space-y-1 mt-1">
           <div className="text-[10px] text-[var(--muted)] flex items-center gap-1">
             <span>Parent:</span>
-            <span className="text-[var(--text)]">{parent ? `${parent.icon || '📄'} ${parent.title}` : 'No parent (root level)'}</span>
+            {parent ? (
+              <span className="text-[var(--text)] flex items-center gap-1">
+                <PageIcon icon={parent.icon} size={11} fallback="📄" />
+                <span>{parent.title}</span>
+              </span>
+            ) : (
+              <span className="text-[var(--text)]">No parent (root level)</span>
+            )}
           </div>
           <div className="text-[10px] text-[var(--muted)] flex items-center gap-1">
             <span>Children:</span>
@@ -510,7 +535,7 @@ function RelationshipsTab({ page, pages }) {
           )}
           {tagRelated.slice(0, 8).map(p => (
             <button key={p.id} className="flex items-center gap-1.5 w-full text-left p-1.5 rounded hover:bg-[var(--hover)] text-[11px] text-[var(--text)] transition-colors">
-              <span>{p.icon || '📄'}</span>
+              <PageIcon icon={p.icon} size={12} fallback="📄" />
               <span className="truncate">{p.title || 'Untitled'}</span>
             </button>
           ))}

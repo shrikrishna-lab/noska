@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useRef, useCallback } from "react";
-import { Plus } from "lucide-react";
+import { Plus, MoreHorizontal } from "lucide-react";
 import { sortRowsByMultiple } from "../../utils/sortEngine";
 import { colorForOption } from "../../utils/optionColors";
+import { PageIcon } from "../../../../components/PageIcon";
 import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
 export interface BoardViewProps {
@@ -160,7 +161,9 @@ export default function BoardView({ rows, properties, onPatchRow, onAddRow, acti
                     onDragEnd={handleDragEnd}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-base shrink-0">{row.icon || '📄'}</span>
+                      <span className="text-base shrink-0 flex items-center justify-center">
+                        <PageIcon icon={row.icon} size={14} fallback={<span>📄</span>} />
+                      </span>
                       <span className="truncate font-medium text-[12px]">{row.name || 'Untitled'}</span>
                     </div>
                     {previewProps.length > 0 && (

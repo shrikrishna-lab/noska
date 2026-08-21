@@ -98,6 +98,23 @@ export interface Page {
   pageBg?: string | null;
   coverHeight?: number;
   coverPosition?: string;
+  iconSize?: number;
+  iconPadding?: number;
+  iconOffsetX?: number;
+  iconOffsetY?: number;
+  iconRotation?: number;
+  iconAlign?: "overlap" | "left" | "center" | "right" | "float-left" | "free" | string;
+  iconBg?: "card" | "glass" | "transparent" | "circle" | "glow" | string;
+  iconBorderRadius?: number;
+  titleSize?: number;
+  titleWeight?: "normal" | "semibold" | "bold" | "extrabold" | string;
+  titleFont?: "default" | "serif" | "mono" | "display" | string;
+  titleAlign?: "left" | "center" | "right" | string;
+  titleColor?: string;
+  titleTracking?: "tighter" | "tight" | "normal" | "wide" | string;
+  titleOffsetX?: number;
+  titleOffsetY?: number;
+  titleRotation?: number;
 
   /** Reading Mode's saved text-selection highlights and bookmark flag
    * (src/features/reading/ReadingMode.jsx, confirmed via its App.tsx call
@@ -1316,6 +1333,22 @@ export async function saveAgentRunLog(log: AgentRunLogInput): Promise<Tables<"ag
 // ============ MAPPERS ============
 
 function mapPageFromDb(db: Tables<"pages">): Page {
+  let userTags: unknown[] = [];
+  let meta: Record<string, any> = {};
+
+  if (Array.isArray(db.tags)) {
+    for (const t of db.tags) {
+      if (t && typeof t === "object" && "__pageMeta" in (t as Record<string, unknown>)) {
+        meta = ((t as Record<string, unknown>).__pageMeta as Record<string, any>) || {};
+      } else {
+        userTags.push(t);
+      }
+    }
+  } else if (db.tags && typeof db.tags === "object") {
+    meta = ((db.tags as Record<string, unknown>).__pageMeta as Record<string, any>) || ((db.tags as Record<string, unknown>).meta as Record<string, any>) || {};
+    userTags = ((db.tags as Record<string, unknown>).list as unknown[]) || [];
+  }
+
   return {
     id: db.id,
     title: db.title || "Untitled",
@@ -1324,7 +1357,7 @@ function mapPageFromDb(db: Tables<"pages">): Page {
     parentId: db.parent_id,
     favorite: db.favorite || false,
     trashed: db.trashed || false,
-    tags: (db.tags as unknown[]) || [],
+    tags: userTags,
     hiddenFromRecents: db.hidden_from_recents || false,
     offline: db.offline || false,
     isEncrypted: db.is_encrypted || false,
@@ -1336,10 +1369,83 @@ function mapPageFromDb(db: Tables<"pages">): Page {
     lineage: (db.lineage as unknown as LineageEntry[]) || [],
     updatedAt: db.updated_at,
     createdAt: db.created_at,
+    // Restored layout and positioning fields
+    iconSize: meta.iconSize,
+    iconPadding: meta.iconPadding,
+    iconOffsetX: meta.iconOffsetX,
+    iconOffsetY: meta.iconOffsetY,
+    iconRotation: meta.iconRotation,
+    iconAlign: meta.iconAlign,
+    iconBg: meta.iconBg,
+    iconBorderRadius: meta.iconBorderRadius,
+    titleSize: meta.titleSize,
+    titleWeight: meta.titleWeight,
+    titleFont: meta.titleFont,
+    titleAlign: meta.titleAlign,
+    titleColor: meta.titleColor,
+    titleTracking: meta.titleTracking,
+    titleOffsetX: meta.titleOffsetX,
+    titleOffsetY: meta.titleOffsetY,
+    titleRotation: meta.titleRotation,
+    coverPosition: meta.coverPosition,
+    coverSize: meta.coverSize,
+    coverHeight: meta.coverHeight,
+    coverParallax: meta.coverParallax,
+    coverBlur: meta.coverBlur,
+    coverOverlay: meta.coverOverlay,
+    coverBrightness: meta.coverBrightness,
+    pageBg: meta.pageBg,
+    fontStyle: meta.fontStyle,
+    smallText: meta.smallText,
+    fullWidth: meta.fullWidth,
+    highlights: meta.highlights,
+    bookmarked: meta.bookmarked,
+    comments: meta.comments,
+    database: meta.database,
   };
 }
 
 function mapPageToDb(page: PageInput): TablesInsert<"pages"> {
+  const meta = {
+    iconSize: page.iconSize,
+    iconPadding: page.iconPadding,
+    iconOffsetX: page.iconOffsetX,
+    iconOffsetY: page.iconOffsetY,
+    iconRotation: page.iconRotation,
+    iconAlign: page.iconAlign,
+    iconBg: page.iconBg,
+    iconBorderRadius: page.iconBorderRadius,
+    titleSize: page.titleSize,
+    titleWeight: page.titleWeight,
+    titleFont: page.titleFont,
+    titleAlign: page.titleAlign,
+    titleColor: page.titleColor,
+    titleTracking: page.titleTracking,
+    titleOffsetX: page.titleOffsetX,
+    titleOffsetY: page.titleOffsetY,
+    titleRotation: page.titleRotation,
+    coverPosition: page.coverPosition,
+    coverSize: page.coverSize,
+    coverHeight: page.coverHeight,
+    coverParallax: page.coverParallax,
+    coverBlur: page.coverBlur,
+    coverOverlay: page.coverOverlay,
+    coverBrightness: page.coverBrightness,
+    pageBg: page.pageBg,
+    fontStyle: page.fontStyle,
+    smallText: page.smallText,
+    fullWidth: page.fullWidth,
+    highlights: page.highlights,
+    bookmarked: page.bookmarked,
+    comments: page.comments,
+    database: page.database,
+  };
+
+  const rawTags = Array.isArray(page.tags)
+    ? page.tags.filter((t) => typeof t === "string" || (t && typeof t === "object" && !("__pageMeta" in (t as Record<string, unknown>))))
+    : [];
+  const tagsWithMeta = [...rawTags, { __pageMeta: meta }];
+
   return {
     id: page.id,
     title: page.title,
@@ -1348,12 +1454,7 @@ function mapPageToDb(page: PageInput): TablesInsert<"pages"> {
     parent_id: page.parentId || null,
     favorite: page.favorite || false,
     trashed: page.trashed || false,
-    // tags/blocks/lineage are Json columns on the DB side; the app-facing
-    // Page/PageInput shapes (unknown[]/Block[]/LineageEntry[]) are more
-    // precise than Json allows structurally, so this is the same
-    // unknown-mediated cast used for ai_chats/ai_memory above, just in
-    // the app -> DB direction instead of DB -> app.
-    tags: (page.tags as unknown as Json) || [],
+    tags: tagsWithMeta as unknown as Json,
     hidden_from_recents: page.hiddenFromRecents || false,
     offline: page.offline || false,
     is_encrypted: page.isEncrypted || false,

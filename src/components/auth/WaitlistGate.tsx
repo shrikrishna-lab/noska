@@ -6,7 +6,7 @@ import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert } from "lucide-rea
 
 type GateStatus = "checking" | "approved" | "waiting" | "not_on_waitlist" | "expired" | "banned" | "suspended" | "error";
 
-export function WaitlistGate({ children }: { children: React.ReactNode }) {
+export function WaitlistGate({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
   const { user: clerkUser } = useUser();
   const clerk = useClerk();
   const [status, setStatus] = useState<GateStatus>("checking");
@@ -24,6 +24,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
+    if (!enabled) { setStatus("approved"); return; }
     if (!clerkUser) { setStatus("error"); return; }
     const email = clerkUser.emailAddresses?.[0]?.emailAddress;
     if (!email) { setStatus("error"); return; }
@@ -35,23 +36,27 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const { data } = await supabaseAnon
-          .from("waitlist_entries" as never)
-          .select("id, status, position, joined_at, invite_expires_at, ban_reason, suspension_reason" as never)
-          .eq("email" as never, email.toLowerCase())
-          .maybeSingle() as never;
+        // If the account is flagged to bypass the waitlist, let it straight through.
+        const clerkId = clerkUser.id;
+        if (clerkId) {
+          const { data: bypass } = await supabaseAnon
+            .rpc("check_bypass_waitlist" as never, { p_user_id: clerkId, p_email: email.toLowerCase() } as never) as never;
+          if (bypass === true) {
+            setStatus("approved");
+            return;
+          }
+        }
 
-        if (!data) {
-          const { data: aeData } = await supabaseAnon
-            .from("approved_emails" as never)
-            .select("id, status")
-            .eq("email" as never, email.toLowerCase())
-            .maybeSingle() as never;
-          setStatus(aeData ? "approved" : "not_on_waitlist");
+        const { data } = await supabaseAnon
+          .rpc("get_waitlist_status" as never, { p_email: email.toLowerCase() } as never) as never;
+        const result = (data ?? {}) as { entry?: Record<string, unknown> | null; approved?: boolean };
+
+        if (!result.entry) {
+          setStatus(result.approved ? "approved" : "not_on_waitlist");
           return;
         }
 
-        const entry = data as Record<string, unknown>;
+        const entry = result.entry;
         let pos = entry.position as number | undefined;
         let aheadCount: number | undefined = undefined;
 
@@ -67,16 +72,6 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
             if (result) {
               pos = result.pos;
               aheadCount = result.ahead;
-            } else if (joinedAt) {
-              const { count } = await supabaseAnon
-                .from("waitlist_entries" as never)
-                .select("id" as never, { count: "exact", head: true })
-                .lt("joined_at" as never, joinedAt)
-                .eq("status" as never, "pending");
-              if (typeof count === "number") {
-                aheadCount = count;
-                pos = count + 1;
-              }
             }
           } catch {
             // ignore fallback
@@ -96,6 +91,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
         const s = entry.status as string;
         if (s === "banned") { setStatus("banned"); return; }
         if (s === "suspended") { setStatus("suspended"); return; }
+        if (result.approved) { setStatus("approved"); return; }
         if (s === "approved" || s === "invited" || s === "accepted") {
           if (s === "invited" && entry.invite_expires_at && new Date(entry.invite_expires_at as string) < new Date()) {
             setStatus("expired");
@@ -109,7 +105,7 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
         setStatus("approved");
       }
     })();
-  }, [clerkUser, refreshNonce]);
+  }, [clerkUser, refreshNonce, enabled]);
 
   if (status === "checking") {
     return (
@@ -247,6 +243,34 @@ export function WaitlistGate({ children }: { children: React.ReactNode }) {
         <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 28 }}>{entryData?.suspension_reason ?? "Your account has been temporarily suspended."}</p>
         <button 
           onClick={() => clerk.signOut()} 
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px',
+            borderRadius: 12, border: '1px solid #e2e8f0', background: '#ffffff',
+            color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer'
+          }}
+        >
+          <LogOut style={{ width: 16, height: 16 }} /> Sign out
+        </button>
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return renderContainer(
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(135deg, #fee2e2, #fecaca)', marginBottom: 20,
+          boxShadow: '0 8px 24px -6px rgba(239, 68, 68, 0.2)'
+        }}>
+          <ShieldAlert style={{ width: 26, height: 26, color: '#dc2626' }} />
+        </div>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1e293b', margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>We couldn't verify your access</h1>
+        <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 28 }}>
+          Your session was lost or we couldn't load your account. Please sign in again to continue.
+        </p>
+        <button
+          onClick={() => clerk.signOut()}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px',
             borderRadius: 12, border: '1px solid #e2e8f0', background: '#ffffff',

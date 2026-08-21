@@ -16,6 +16,7 @@ import { Login } from "@/pages/Login";
 import { Loader2 } from "lucide-react";
 
 const Analytics = lazy(() => import("@/pages/Analytics").then((m) => ({ default: m.Analytics })));
+const UserFunnel = lazy(() => import("@/pages/UserFunnel"));
 const Waitlist = lazy(() => import("@/pages/Waitlist").then((m) => ({ default: m.Waitlist })));
 const WaitlistAnalyticsPage = lazy(() => import("@/pages/WaitlistAnalyticsPage"));
 const Users = lazy(() => import("@/pages/Users").then((m) => ({ default: m.Users })));
@@ -139,108 +140,107 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename="/control">
         <AuthProvider queryClient={queryClient}>
-          <AuthGate>
-            <TooltipProvider delayDuration={200}>
-              <DialogProvider>
-                <ErrorBoundary>
+          <TooltipProvider delayDuration={200}>
+            <DialogProvider>
+              <ErrorBoundary>
                 <Routes>
-                  <Route element={<Shell />}>
+                  <Route path="/403" element={<Forbidden />} />
+                  <Route element={<AuthGate><Shell /></AuthGate>}>
                     <Route element={<RouteGuard />}>
-                    <Route index element={<Dashboard />} />
-                    <Route path="my-dashboard" element={<RoleDashboard />} />
-                    <Route path="analytics" element={<Suspense fallback={<PageLoading />}><Analytics /></Suspense>} />
-                    <Route path="waitlist" element={<Suspense fallback={<PageLoading />}><Waitlist /></Suspense>} />
-                    <Route path="users" element={<Suspense fallback={<PageLoading />}><Users /></Suspense>} />
-                    <Route path="users/:id" element={<Suspense fallback={<PageLoading />}><UserDetail /></Suspense>} />
-                    <Route path="banned-users" element={<Suspense fallback={<PageLoading />}><BannedUsers /></Suspense>} />
-                    <Route path="trash" element={<Suspense fallback={<PageLoading />}><Trash /></Suspense>} />
-                    <Route path="workspaces" element={<Suspense fallback={<PageLoading />}><Workspaces /></Suspense>} />
-                    <Route path="teams" element={<Suspense fallback={<PageLoading />}><Teams /></Suspense>} />
-                    <Route path="subscriptions" element={<Suspense fallback={<PageLoading />}><Subscriptions /></Suspense>} />
-                    <Route path="payments" element={<Suspense fallback={<PageLoading />}><Payments /></Suspense>} />
-                    <Route path="ai-usage" element={<Suspense fallback={<PageLoading />}><AiUsage /></Suspense>} />
-                    <Route path="models" element={<Suspense fallback={<PageLoading />}><Models /></Suspense>} />
-                    <Route path="launch-control" element={<Suspense fallback={<PageLoading />}><LaunchControl /></Suspense>} />
-                    <Route path="landing-page" element={<Suspense fallback={<PageLoading />}><LandingPage /></Suspense>} />
-                    <Route path="cta-buttons" element={<Suspense fallback={<PageLoading />}><CTAManager /></Suspense>} />
-                    <Route path="announcement-bar" element={<Suspense fallback={<PageLoading />}><AnnouncementBarPage /></Suspense>} />
-                    <Route path="waitlist-analytics" element={<Suspense fallback={<PageLoading />}><WaitlistAnalyticsPage /></Suspense>} />
-                    <Route path="waitlist-settings" element={<Suspense fallback={<PageLoading />}><WaitlistSettingsPage /></Suspense>} />
-                    <Route path="demo-requests" element={<Suspense fallback={<PageLoading />}><DemoRequests /></Suspense>} />
-                    <Route path="seo-settings" element={<Suspense fallback={<PageLoading />}><SEOSettingsPage /></Suspense>} />
-                    <Route path="social-links" element={<Suspense fallback={<PageLoading />}><SocialLinksPage /></Suspense>} />
-                    <Route path="pages" element={<Suspense fallback={<PageLoading />}><ContentPages /></Suspense>} />
-                    <Route path="files" element={<Suspense fallback={<PageLoading />}><ContentFiles /></Suspense>} />
-                    <Route path="templates" element={<Suspense fallback={<PageLoading />}><ContentTemplates /></Suspense>} />
-                    <Route path="feature-flags" element={<Suspense fallback={<PageLoading />}><FeatureFlags /></Suspense>} />
-                    <Route path="email-dashboard" element={<Suspense fallback={<PageLoading />}><EmailDashboard /></Suspense>} />
-                    <Route path="email-templates" element={<Suspense fallback={<PageLoading />}><EmailTemplates /></Suspense>} />
-                    <Route path="email-templates/:id/edit" element={<Suspense fallback={<PageLoading />}><EmailTemplateEditor /></Suspense>} />
-                    <Route path="email-campaigns" element={<Suspense fallback={<PageLoading />}><EmailCampaigns /></Suspense>} />
-                    <Route path="transactional-emails" element={<Suspense fallback={<PageLoading />}><TransactionalEmails /></Suspense>} />
-                    <Route path="audience-manager" element={<Suspense fallback={<PageLoading />}><AudienceManager /></Suspense>} />
-                    <Route path="subscribers" element={<Suspense fallback={<PageLoading />}><Subscribers /></Suspense>} />
-                    <Route path="segments" element={<Suspense fallback={<PageLoading />}><Segments /></Suspense>} />
-                    <Route path="scheduled-emails" element={<Suspense fallback={<PageLoading />}><ScheduledEmails /></Suspense>} />
-                    <Route path="email-analytics" element={<Suspense fallback={<PageLoading />}><EmailAnalytics /></Suspense>} />
-                    <Route path="brand-settings" element={<Suspense fallback={<PageLoading />}><BrandSettings /></Suspense>} />
-                    <Route path="email-history" element={<Suspense fallback={<PageLoading />}><EmailHistory /></Suspense>} />
-                    <Route path="referrals" element={<Suspense fallback={<PageLoading />}><Referrals /></Suspense>} />
-                    <Route path="notifications" element={<Suspense fallback={<PageLoading />}><NotificationCenter /></Suspense>} />
-                    <Route path="notifications/:id" element={<Suspense fallback={<PageLoading />}><NotificationDetail /></Suspense>} />
-                    <Route path="feedback" element={<Suspense fallback={<PageLoading />}><Feedback /></Suspense>} />
-                    <Route path="support" element={<Suspense fallback={<PageLoading />}><Support /></Suspense>} />
-                    <Route path="audit-logs" element={<Suspense fallback={<PageLoading />}><AuditLogs /></Suspense>} />
-                    <Route path="roadmap" element={<Suspense fallback={<PageLoading />}><Roadmap /></Suspense>} />
-                    <Route path="changelog" element={<Suspense fallback={<PageLoading />}><ChangelogEntries /></Suspense>} />
-                    <Route path="blog" element={<Suspense fallback={<PageLoading />}><BlogPosts /></Suspense>} />
-                    <Route path="legal" element={<Suspense fallback={<PageLoading />}><LegalPages /></Suspense>} />
-                    <Route path="broadcasts" element={<Suspense fallback={<PageLoading />}><Broadcasts /></Suspense>} />
-                    <Route path="integrations" element={<Suspense fallback={<PageLoading />}><Integrations /></Suspense>} />
-                    <Route path="api-keys" element={<Suspense fallback={<PageLoading />}><ApiKeys /></Suspense>} />
-                    <Route path="system-status" element={<Suspense fallback={<PageLoading />}><SystemStatus /></Suspense>} />
-                    <Route path="system-health" element={<Suspense fallback={<PageLoading />}><SystemHealth /></Suspense>} />
-                    <Route path="settings" element={<Suspense fallback={<PageLoading />}><Settings /></Suspense>} />
-                    <Route path="admin-accounts" element={<Suspense fallback={<PageLoading />}><AdminAccounts /></Suspense>} />
-                    <Route path="routes-manager" element={<Suspense fallback={<PageLoading />}><RoutesManager /></Suspense>} />
-                    <Route path="webhooks" element={<Suspense fallback={<PageLoading />}><Webhooks /></Suspense>} />
-                    <Route path="sentry" element={<Suspense fallback={<PageLoading />}><Sentry /></Suspense>} />
-                    <Route path="posthog" element={<Suspense fallback={<PageLoading />}><PostHog /></Suspense>} />
-                    <Route path="monitoring" element={<Suspense fallback={<PageLoading />}><MonitoringHub /></Suspense>} />
-                    <Route path="monitoring/overview" element={<Suspense fallback={<PageLoading />}><MonitoringOverview /></Suspense>} />
-                    <Route path="monitoring/errors" element={<Suspense fallback={<PageLoading />}><MonitoringErrors /></Suspense>} />
-                    <Route path="monitoring/performance" element={<Suspense fallback={<PageLoading />}><MonitoringPerformance /></Suspense>} />
-                    <Route path="monitoring/sessions" element={<Suspense fallback={<PageLoading />}><MonitoringSessions /></Suspense>} />
-                    <Route path="monitoring/infrastructure" element={<Suspense fallback={<PageLoading />}><MonitoringInfrastructure /></Suspense>} />
-                    <Route path="monitoring/email-health" element={<Suspense fallback={<PageLoading />}><MonitoringEmailHealth /></Suspense>} />
-                    <Route path="monitoring/deployments" element={<Suspense fallback={<PageLoading />}><MonitoringDeployments /></Suspense>} />
-                    <Route path="monitoring/logs" element={<Suspense fallback={<PageLoading />}><MonitoringLogs /></Suspense>} />
-                    <Route path="monitoring/integrations" element={<Suspense fallback={<PageLoading />}><MonitoringIntegrations /></Suspense>} />
-                    <Route path="perf" element={<Suspense fallback={<PageLoading />}><PerfDashboard /></Suspense>} />
+                      <Route index element={<Dashboard />} />
+                      <Route path="my-dashboard" element={<RoleDashboard />} />
+                      <Route path="analytics" element={<Suspense fallback={<PageLoading />}><Analytics /></Suspense>} />
+                      <Route path="user-funnel" element={<Suspense fallback={<PageLoading />}><UserFunnel /></Suspense>} />
+                      <Route path="waitlist" element={<Suspense fallback={<PageLoading />}><Waitlist /></Suspense>} />
+                      <Route path="users" element={<Suspense fallback={<PageLoading />}><Users /></Suspense>} />
+                      <Route path="users/:id" element={<Suspense fallback={<PageLoading />}><UserDetail /></Suspense>} />
+                      <Route path="banned-users" element={<Suspense fallback={<PageLoading />}><BannedUsers /></Suspense>} />
+                      <Route path="trash" element={<Suspense fallback={<PageLoading />}><Trash /></Suspense>} />
+                      <Route path="workspaces" element={<Suspense fallback={<PageLoading />}><Workspaces /></Suspense>} />
+                      <Route path="teams" element={<Suspense fallback={<PageLoading />}><Teams /></Suspense>} />
+                      <Route path="subscriptions" element={<Suspense fallback={<PageLoading />}><Subscriptions /></Suspense>} />
+                      <Route path="payments" element={<Suspense fallback={<PageLoading />}><Payments /></Suspense>} />
+                      <Route path="ai-usage" element={<Suspense fallback={<PageLoading />}><AiUsage /></Suspense>} />
+                      <Route path="models" element={<Suspense fallback={<PageLoading />}><Models /></Suspense>} />
+                      <Route path="launch-control" element={<Suspense fallback={<PageLoading />}><LaunchControl /></Suspense>} />
+                      <Route path="landing-page" element={<Suspense fallback={<PageLoading />}><LandingPage /></Suspense>} />
+                      <Route path="cta-buttons" element={<Suspense fallback={<PageLoading />}><CTAManager /></Suspense>} />
+                      <Route path="announcement-bar" element={<Suspense fallback={<PageLoading />}><AnnouncementBarPage /></Suspense>} />
+                      <Route path="waitlist-analytics" element={<Suspense fallback={<PageLoading />}><WaitlistAnalyticsPage /></Suspense>} />
+                      <Route path="waitlist-settings" element={<Suspense fallback={<PageLoading />}><WaitlistSettingsPage /></Suspense>} />
+                      <Route path="demo-requests" element={<Suspense fallback={<PageLoading />}><DemoRequests /></Suspense>} />
+                      <Route path="seo-settings" element={<Suspense fallback={<PageLoading />}><SEOSettingsPage /></Suspense>} />
+                      <Route path="social-links" element={<Suspense fallback={<PageLoading />}><SocialLinksPage /></Suspense>} />
+                      <Route path="pages" element={<Suspense fallback={<PageLoading />}><ContentPages /></Suspense>} />
+                      <Route path="files" element={<Suspense fallback={<PageLoading />}><ContentFiles /></Suspense>} />
+                      <Route path="templates" element={<Suspense fallback={<PageLoading />}><ContentTemplates /></Suspense>} />
+                      <Route path="feature-flags" element={<Suspense fallback={<PageLoading />}><FeatureFlags /></Suspense>} />
+                      <Route path="email-dashboard" element={<Suspense fallback={<PageLoading />}><EmailDashboard /></Suspense>} />
+                      <Route path="email-templates" element={<Suspense fallback={<PageLoading />}><EmailTemplates /></Suspense>} />
+                      <Route path="email-templates/:id/edit" element={<Suspense fallback={<PageLoading />}><EmailTemplateEditor /></Suspense>} />
+                      <Route path="email-campaigns" element={<Suspense fallback={<PageLoading />}><EmailCampaigns /></Suspense>} />
+                      <Route path="transactional-emails" element={<Suspense fallback={<PageLoading />}><TransactionalEmails /></Suspense>} />
+                      <Route path="audience-manager" element={<Suspense fallback={<PageLoading />}><AudienceManager /></Suspense>} />
+                      <Route path="subscribers" element={<Suspense fallback={<PageLoading />}><Subscribers /></Suspense>} />
+                      <Route path="segments" element={<Suspense fallback={<PageLoading />}><Segments /></Suspense>} />
+                      <Route path="scheduled-emails" element={<Suspense fallback={<PageLoading />}><ScheduledEmails /></Suspense>} />
+                      <Route path="email-analytics" element={<Suspense fallback={<PageLoading />}><EmailAnalytics /></Suspense>} />
+                      <Route path="brand-settings" element={<Suspense fallback={<PageLoading />}><BrandSettings /></Suspense>} />
+                      <Route path="email-history" element={<Suspense fallback={<PageLoading />}><EmailHistory /></Suspense>} />
+                      <Route path="referrals" element={<Suspense fallback={<PageLoading />}><Referrals /></Suspense>} />
+                      <Route path="notifications" element={<Suspense fallback={<PageLoading />}><NotificationCenter /></Suspense>} />
+                      <Route path="notifications/:id" element={<Suspense fallback={<PageLoading />}><NotificationDetail /></Suspense>} />
+                      <Route path="feedback" element={<Suspense fallback={<PageLoading />}><Feedback /></Suspense>} />
+                      <Route path="support" element={<Suspense fallback={<PageLoading />}><Support /></Suspense>} />
+                      <Route path="audit-logs" element={<Suspense fallback={<PageLoading />}><AuditLogs /></Suspense>} />
+                      <Route path="roadmap" element={<Suspense fallback={<PageLoading />}><Roadmap /></Suspense>} />
+                      <Route path="changelog" element={<Suspense fallback={<PageLoading />}><ChangelogEntries /></Suspense>} />
+                      <Route path="blog" element={<Suspense fallback={<PageLoading />}><BlogPosts /></Suspense>} />
+                      <Route path="legal" element={<Suspense fallback={<PageLoading />}><LegalPages /></Suspense>} />
+                      <Route path="broadcasts" element={<Suspense fallback={<PageLoading />}><Broadcasts /></Suspense>} />
+                      <Route path="integrations" element={<Suspense fallback={<PageLoading />}><Integrations /></Suspense>} />
+                      <Route path="api-keys" element={<Suspense fallback={<PageLoading />}><ApiKeys /></Suspense>} />
+                      <Route path="system-status" element={<Suspense fallback={<PageLoading />}><SystemStatus /></Suspense>} />
+                      <Route path="system-health" element={<Suspense fallback={<PageLoading />}><SystemHealth /></Suspense>} />
+                      <Route path="settings" element={<Suspense fallback={<PageLoading />}><Settings /></Suspense>} />
+                      <Route path="admin-accounts" element={<Suspense fallback={<PageLoading />}><AdminAccounts /></Suspense>} />
+                      <Route path="routes-manager" element={<Suspense fallback={<PageLoading />}><RoutesManager /></Suspense>} />
+                      <Route path="webhooks" element={<Suspense fallback={<PageLoading />}><Webhooks /></Suspense>} />
+                      <Route path="sentry" element={<Suspense fallback={<PageLoading />}><Sentry /></Suspense>} />
+                      <Route path="posthog" element={<Suspense fallback={<PageLoading />}><PostHog /></Suspense>} />
+                      <Route path="monitoring" element={<Suspense fallback={<PageLoading />}><MonitoringHub /></Suspense>} />
+                      <Route path="monitoring/overview" element={<Suspense fallback={<PageLoading />}><MonitoringOverview /></Suspense>} />
+                      <Route path="monitoring/errors" element={<Suspense fallback={<PageLoading />}><MonitoringErrors /></Suspense>} />
+                      <Route path="monitoring/performance" element={<Suspense fallback={<PageLoading />}><MonitoringPerformance /></Suspense>} />
+                      <Route path="monitoring/sessions" element={<Suspense fallback={<PageLoading />}><MonitoringSessions /></Suspense>} />
+                      <Route path="monitoring/infrastructure" element={<Suspense fallback={<PageLoading />}><MonitoringInfrastructure /></Suspense>} />
+                      <Route path="monitoring/email-health" element={<Suspense fallback={<PageLoading />}><MonitoringEmailHealth /></Suspense>} />
+                      <Route path="monitoring/deployments" element={<Suspense fallback={<PageLoading />}><MonitoringDeployments /></Suspense>} />
+                      <Route path="monitoring/logs" element={<Suspense fallback={<PageLoading />}><MonitoringLogs /></Suspense>} />
+                      <Route path="monitoring/integrations" element={<Suspense fallback={<PageLoading />}><MonitoringIntegrations /></Suspense>} />
+                      <Route path="perf" element={<Suspense fallback={<PageLoading />}><PerfDashboard /></Suspense>} />
                     </Route>
                   </Route>
-                  <Route path="/403" element={<Forbidden />} />
                   <Route path="*" element={<Forbidden />} />
                 </Routes>
-                </ErrorBoundary>
-              </DialogProvider>
-              <Toaster
-                position="bottom-right"
-                containerClassName="noska-toaster"
-                toastOptions={{
-                  duration: 4500,
-                  style: {
-                    background: "transparent",
-                    boxShadow: "none",
-                    border: "none",
-                    padding: 0,
-                  },
-                  success: { iconTheme: { primary: "transparent", secondary: "transparent" } },
-                  error: { iconTheme: { primary: "transparent", secondary: "transparent" } },
-                }}
-              />
-            </TooltipProvider>
-          </AuthGate>
+              </ErrorBoundary>
+            </DialogProvider>
+            <Toaster
+              position="bottom-right"
+              containerClassName="noska-toaster"
+              toastOptions={{
+                duration: 4500,
+                style: {
+                  background: "transparent",
+                  boxShadow: "none",
+                  border: "none",
+                  padding: 0,
+                },
+                success: { iconTheme: { primary: "transparent", secondary: "transparent" } },
+                error: { iconTheme: { primary: "transparent", secondary: "transparent" } },
+              }}
+            />
+          </TooltipProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

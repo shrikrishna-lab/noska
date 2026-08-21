@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { colorForOption } from "../../utils/optionColors";
+import { PageIcon } from "../../../../components/PageIcon";
 import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
 export interface ListViewProps {
@@ -33,7 +34,9 @@ export default function ListView({ rows, properties, onAddRow, activeView, onRow
               onClick={() => onRowClick?.(row.id)}
               className="flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text)] hover:bg-[var(--hover)]/50 transition cursor-pointer"
             >
-              <span className="shrink-0 text-base">{row.icon || '📄'}</span>
+              <span className="shrink-0 text-base flex items-center justify-center">
+                <PageIcon icon={row.icon} size={15} fallback={<span>📄</span>} />
+              </span>
               <span className="flex-1 truncate font-medium text-[13px]">{row.name || 'Untitled'}</span>
               <div className="flex items-center gap-1.5 shrink-0">
                 {inlineProps.slice(0, 4).map(p => {

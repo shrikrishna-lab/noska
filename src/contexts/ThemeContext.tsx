@@ -31,8 +31,26 @@ const defaultThemeFx: ThemeFxConfig = {
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
+const VALID_THEMES = ["light", "dark", "system"];
+
+function readStoredTheme(): string {
+  try {
+    const raw = localStorage.getItem("theme");
+    if (!raw) return "light";
+    let value: string = raw;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      /* raw value (legacy) */
+    }
+    return VALID_THEMES.includes(value) ? value : "light";
+  } catch {
+    return "light";
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+  const [theme, setTheme] = useState<string>(readStoredTheme);
   const [themeFx, setThemeFx] = useState<ThemeFxConfig>(() => {
     try {
       const saved = localStorage.getItem("themeFx");
@@ -45,7 +63,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setThemeWithTransition = useCallback((t: string) => {
     document.documentElement.style.transition = "background-color .2s, color .2s";
     setTheme(t);
-    localStorage.setItem("theme", t);
+    localStorage.setItem("theme", JSON.stringify(t));
     document.documentElement.setAttribute("data-theme", t);
     setTimeout(() => document.documentElement.style.transition = "", 250);
   }, []);

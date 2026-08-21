@@ -1,6 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Crosshair, ExternalLink, Calendar, Clock, Tag, Star } from "lucide-react";
+import { PageIcon } from "../../components/PageIcon";
 
 export default function GraphInfoPanel({ page, nodePosition, onClose, onCenter }) {
   if (!page) return null;
@@ -34,7 +35,9 @@ export default function GraphInfoPanel({ page, nodePosition, onClose, onCenter }
         </div>
         <div className="p-3 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-lg">{page.icon || "📄"}</span>
+            <span className="text-lg shrink-0 flex items-center justify-center">
+              <PageIcon icon={page.icon} size={18} fallback={<span>📄</span>} />
+            </span>
             <span className="text-sm font-semibold text-[var(--text)] truncate">
               {page.title || "Untitled"}
             </span>

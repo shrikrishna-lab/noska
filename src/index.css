@@ -435,3 +435,92 @@ aside svg,
   font-size: 12.5px !important;
   line-height: 1.5 !important;
 }
+
+/* ─── Apple Liquid Glass Design System ─── */
+.apple-liquid-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.42) 100%) !important;
+  backdrop-filter: blur(40px) saturate(210%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(210%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.75) !important;
+  box-shadow:
+    0 32px 72px -12px rgba(0, 0, 0, 0.16),
+    0 16px 32px -12px rgba(0, 0, 0, 0.08),
+    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 1.5px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+.dark .apple-liquid-glass,
+[data-theme="dark"] .apple-liquid-glass {
+  background: linear-gradient(135deg, rgba(28, 28, 35, 0.70) 0%, rgba(18, 18, 24, 0.50) 100%) !important;
+  backdrop-filter: blur(40px) saturate(210%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(210%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow:
+    0 32px 80px -12px rgba(0, 0, 0, 0.65),
+    0 16px 36px -12px rgba(0, 0, 0, 0.45),
+    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 1.5px 0 rgba(0, 0, 0, 0.4) !important;
+}
+
+.apple-glass-pill {
+  background: rgba(255, 255, 255, 0.40) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.65) !important;
+  box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.7) !important;
+}
+
+.dark .apple-glass-pill,
+[data-theme="dark"] .apple-glass-pill {
+  background: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.08) !important;
+}
+
+.apple-glass-active-pill {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 247, 250, 0.88) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 1) !important;
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.09),
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+}
+
+.dark .apple-glass-active-pill,
+[data-theme="dark"] .apple-glass-active-pill {
+  background: linear-gradient(180deg, rgba(55, 55, 65, 0.9) 0%, rgba(38, 38, 48, 0.8) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.20) !important;
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.22) !important;
+}
+
+.apple-glass-btn {
+  background: rgba(255, 255, 255, 0.45) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.85) !important;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.apple-glass-btn:hover {
+  background: rgba(255, 255, 255, 0.70) !important;
+  transform: scale(1.05);
+}
+.apple-glass-btn:active {
+  transform: scale(0.95);
+}
+
+.dark .apple-glass-btn,
+[data-theme="dark"] .apple-glass-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
+}
+.dark .apple-glass-btn:hover,
+[data-theme="dark"] .apple-glass-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+

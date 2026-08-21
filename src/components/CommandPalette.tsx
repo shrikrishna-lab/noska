@@ -7,6 +7,8 @@ import { executeCommand } from "../core/commands/ActionExecutor";
 import { blockFor } from "../utils/helpers";
 import type { Page } from "../lib/supabaseService";
 import { capture } from "../lib/posthog";
+import { PageIcon } from "./PageIcon";
+
 
 /** This component's own `context` prop is a superset of `CommandContext`
  * (CommandRegistry.ts) — it's forwarded as-is into `executeCommand`/
@@ -221,15 +223,17 @@ export default function CommandPalette({
 
           {/* Palette */}
           <motion.div
+            drag
+            dragMomentum={false}
             initial={{ opacity: 0, scale: 0.96, y: -12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -8 }}
             transition={{ type: "spring", stiffness: 380, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[580px] flex flex-col overflow-hidden rounded-xl border border-[var(--border-hover)] bg-[var(--panel)] shadow-[var(--shadow-floating)]"
+            className="relative w-full max-w-[580px] flex flex-col overflow-hidden rounded-xl border border-[var(--border-hover)] bg-[var(--panel)] shadow-[var(--shadow-floating)] cursor-default"
           >
-            {/* Search */}
-            <div className="relative flex items-center border-b border-[var(--border)]">
+            {/* Search - draggable handle */}
+            <div className="relative flex items-center border-b border-[var(--border)] cursor-grab active:cursor-grabbing">
               <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 ref={inputRef}
@@ -308,7 +312,7 @@ export default function CommandPalette({
                         }`}
                       >
                         <span className="flex h-6 w-6 items-center justify-center rounded bg-[var(--hover)] text-[var(--text-secondary)] shrink-0">
-                          {p.icon || renderIcon("FileText")}
+                          <PageIcon icon={p.icon} size={15} />
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-[var(--text)] truncate">{p.title || "Untitled"}</div>

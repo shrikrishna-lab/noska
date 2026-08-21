@@ -422,3 +422,46 @@ export const emojiDescriptions = {
 export function getEmojiDescription(emoji) {
   return emojiDescriptions[emoji] || "";
 }
+
+export interface ImportedIcon {
+  id: string;
+  url: string;
+  name: string;
+  category: string;
+  date: number;
+}
+
+const STORAGE_KEY_IMPORTED = "noska_imported_icons";
+
+let _importedIcons: ImportedIcon[] = loadPersisted(STORAGE_KEY_IMPORTED);
+
+export function getImportedIcons(): ImportedIcon[] {
+  return _importedIcons;
+}
+
+export function addImportedIcon(icon: { url: string; name?: string; category?: string }): ImportedIcon {
+  const newIcon: ImportedIcon = {
+    id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    url: icon.url,
+    name: icon.name || "Custom Icon",
+    category: (icon.category || "Custom").trim(),
+    date: Date.now()
+  };
+  _importedIcons = [newIcon, ..._importedIcons];
+  savePersisted(STORAGE_KEY_IMPORTED, _importedIcons);
+  notifyListeners();
+  return newIcon;
+}
+
+export function removeImportedIcon(id: string): void {
+  _importedIcons = _importedIcons.filter(i => i.id !== id);
+  savePersisted(STORAGE_KEY_IMPORTED, _importedIcons);
+  notifyListeners();
+}
+
+export function getImportedCategories(): string[] {
+  const cats = new Set<string>();
+  _importedIcons.forEach(i => cats.add(i.category || "Custom"));
+  return Array.from(cats);
+}
+

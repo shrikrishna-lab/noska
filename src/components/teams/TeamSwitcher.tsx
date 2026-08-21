@@ -6,7 +6,7 @@ import TeamSettingsModal from "./TeamSettingsModal"
 
 interface TeamSwitcherProps {
   workspaceName: string
-  onView?: (view: string) => void
+  onView?: (view: string, options?: { openInNewTab?: boolean }) => void
 }
 
 const TEAM_ICONS = ["👥", "💼", "🎨", "⚙️", "📊", "🚀", "🎯", "💡", "🏗️", "🤝", "📝", "🎪"]

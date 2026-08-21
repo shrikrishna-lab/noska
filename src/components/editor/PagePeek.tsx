@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, ExternalLink, Clock, FileText } from "lucide-react";
 import { timeAgo, plainText } from "../../utils/helpers";
 import type { Page } from "../../lib/supabaseService";
+import { PageIcon } from "../PageIcon";
 
 interface PagePeekProps {
   page: Page | null | undefined;
@@ -83,7 +84,9 @@ export default function PagePeek({ page, pages, children, onNavigate, onOpenFull
             >
               <div className="p-4 space-y-3">
                 <div className="flex items-start gap-3">
-                  <span className="text-2xl shrink-0 mt-0.5">{page.icon || "📄"}</span>
+                  <span className="text-2xl shrink-0 mt-0.5 flex items-center justify-center">
+                    <PageIcon icon={page.icon} size={28} fallback={<span>📄</span>} />
+                  </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-[var(--text)] truncate">
                       {page.title || "Untitled"}

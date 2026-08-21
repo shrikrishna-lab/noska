@@ -3,8 +3,16 @@ import react from "@vitejs/plugin-react";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { fileURLToPath } from "url";
 import path from "path";
+import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const httpsConfig = process.env.VITE_HTTPS_KEY && process.env.VITE_HTTPS_CERT
+  ? {
+      key: fs.readFileSync(path.resolve(process.env.VITE_HTTPS_KEY.trim())),
+      cert: fs.readFileSync(path.resolve(process.env.VITE_HTTPS_CERT.trim())),
+    }
+  : undefined;
 
 export default defineConfig({
   plugins: [
@@ -26,7 +34,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    allowedHosts: ["app.noska.me", "localhost", "127.0.0.1", "app.localhost"],
+    https: httpsConfig,
   },
   build: {
     sourcemap: process.env.SENTRY_AUTH_TOKEN ? true : false,

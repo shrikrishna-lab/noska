@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Search, X, CornerDownLeft } from "lucide-react";
+import { PageIcon } from "../../components/PageIcon";
 import { AnimatePresence, motion } from "framer-motion";
 import { FADE_IN_VARIANTS } from "./GraphAnimations";
 import { capture } from "../../lib/posthog";
@@ -97,7 +98,9 @@ export default function GraphSearch({
                     className="w-full flex items-center justify-between text-left px-2.5 py-2 rounded-lg bg-[var(--surface)]/30 hover:bg-[var(--hover)] border border-transparent hover:border-[var(--border)] transition-all cursor-pointer group"
                   >
                     <div className="flex items-center gap-2 truncate">
-                      <span className="text-sm shrink-0">{node.icon || "📄"}</span>
+                      <span className="text-sm shrink-0 flex items-center justify-center">
+                        <PageIcon icon={node.icon} size={14} fallback={<span>📄</span>} />
+                      </span>
                       <span className="text-xs font-medium text-[var(--text)] truncate">{node.title || "Untitled"}</span>
                     </div>
                     {index === 0 && (

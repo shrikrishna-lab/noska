@@ -21,6 +21,7 @@ import {
 import { IconButton, PearlButton } from "./ui";
 import WorkspaceJoinBar from "./collab/WorkspaceJoinBar";
 import type { Page } from "../lib/supabaseService";
+import { PageIcon } from "./PageIcon";
 
 interface TopbarProps {
   page: Page;
@@ -43,11 +44,6 @@ interface TopbarProps {
   pageMode?: string;
   onPageModeChange?: (mode: string) => void;
   appView?: string;
-  // The following are passed by src/App.tsx but not currently read here —
-  // added to the destructure only to document that they're intentionally
-  // unused by this component (same dead-prop pattern applied to other
-  // still-.jsx components during the TypeScript migration), not a
-  // behavior change.
   onExport?: () => void;
   onClipper?: () => void;
   onLineage?: () => void;
@@ -56,14 +52,6 @@ interface TopbarProps {
   onRemoveEncryption?: (pageId: string) => void;
 }
 
-// IconButton (src/components/ui/index.tsx) types its `icon` prop as
-// lucide-react's `LucideIcon` (a ForwardRefExoticComponent), but several
-// calls below pass this codebase's custom AnimatedX icon components
-// (AnimatedMenu, AnimatedBookmark, etc.) which share the same size/
-// className prop shape but aren't LucideIcon instances — same mismatch
-// already documented/cast for in src/components/PageTree.tsx. Casting via
-// this helper rather than widening IconButton's exported prop type, which
-// is out of scope for this migration pass.
 const asLucideIcon = (icon: unknown) => icon as LucideIcon;
 
 const Topbar = memo(function Topbar({
@@ -99,8 +87,8 @@ const Topbar = memo(function Topbar({
     <header className="flex h-11 shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg)] px-3">
       {!sidebarOpen && <IconButton icon={asLucideIcon(AnimatedMenu)} label="Open sidebar" onClick={onSidebar} />}
       <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] text-[var(--text-secondary)]">
-        <span>{page.icon}</span>
-        <span className="truncate text-[var(--text)]">{page.title || "Untitled"}</span>
+        <PageIcon icon={page.icon} size={15} fallback={<span className="text-[13px] leading-none">📄</span>} />
+        <span className="truncate text-[var(--text)] font-medium">{page.title || "Untitled"}</span>
         <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">
           <AnimatedLock size={10} />
           Private

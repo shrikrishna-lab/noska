@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { colorForOption } from "../../utils/optionColors";
+import { PageIcon } from "../../../../components/PageIcon";
 import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
 export interface GalleryViewProps {
@@ -34,7 +35,7 @@ export default function GalleryView({ rows, properties, onAddRow, activeView, on
               className="group rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden hover:border-[var(--accent)]/50 transition cursor-pointer"
             >
               <div className="h-24 flex items-center justify-center text-3xl bg-[var(--surface-2)]">
-                {row.icon || '📄'}
+                <PageIcon icon={row.icon} size={32} fallback={<span>📄</span>} />
               </div>
               <div className="p-3">
                 <div className="text-[13px] font-medium text-[var(--text)] truncate">{row.name || 'Untitled'}</div>

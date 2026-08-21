@@ -110,7 +110,7 @@ function PublishForm({ pages, onPublish, onCancel }) {
           <select value={form.sourcePageId} onChange={e => setForm(f => ({ ...f, sourcePageId: e.target.value }))} className="w-full rounded-lg bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] outline-none">
             <option value="">Select a page...</option>
             {pages.filter(p => !p.trashed).map(p => (
-              <option key={p.id} value={p.id}>{p.icon} {p.title}</option>
+              <option key={p.id} value={p.id}>{p.icon?.startsWith("lucide:") ? "📄" : (p.icon || "📄")} {p.title || "Untitled"}</option>
             ))}
           </select>
         </div>

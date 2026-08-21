@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import type { Page } from "../../lib/supabaseService";
+import { PageIcon } from "../PageIcon";
 
 interface BacklinksPanelProps {
   pageId: string;
@@ -52,7 +53,9 @@ export default function BacklinksPanel({ pageId, pages, onNavigate, onClose }: B
               onClick={() => onNavigate?.(p.id)}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--text)] hover:bg-[var(--hover)] transition cursor-pointer"
             >
-              <span className="text-base shrink-0">{p.icon || "📄"}</span>
+              <span className="text-base shrink-0 flex items-center justify-center">
+                <PageIcon icon={p.icon} size={15} fallback={<span>📄</span>} />
+              </span>
               <span className="flex-1 truncate font-medium">{p.title || "Untitled"}</span>
               <span className="shrink-0 text-[10px] text-[var(--muted)]">{mentions.length} mention{mentions.length > 1 ? "s" : ""}</span>
               <ExternalLink size={11} className="shrink-0 text-[var(--muted)]" />

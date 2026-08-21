@@ -1,5 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 import { motion } from "framer-motion";
+import { PageIcon } from "../../components/PageIcon";
 import { Star } from "lucide-react";
 import { NODE_VARIANTS } from "./GraphAnimations";
 import { getPageCluster } from "./GraphLegend";
@@ -66,7 +67,9 @@ function GraphNodeComponent({
       }`}
     >
       {/* Category indicator icon */}
-      <span className="text-sm shrink-0 select-none">{page.icon || "📄"}</span>
+      <span className="text-sm shrink-0 select-none flex items-center justify-center">
+        <PageIcon icon={page.icon} size={14} fallback={<span>📄</span>} />
+      </span>
       
       {showLabels && (
         <span className="truncate text-xs font-medium text-[var(--text)] select-none flex-1 leading-none">

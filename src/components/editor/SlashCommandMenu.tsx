@@ -301,12 +301,14 @@ export default forwardRef<HTMLDivElement, SlashCommandMenuProps>(function SlashC
           {/* Main Menu */}
           <motion.div
             ref={innerMenuRef}
+            drag
+            dragMomentum={false}
             initial={{ opacity: 0, scale: 0.95, y: 6 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 3, transition: { duration: 0.08, ease: [0.7, 0, 0.84, 0] } }}
             transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
             style={{ width: MENU_WIDTH }}
-            className="flex overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--elevated)]/95 backdrop-blur-md shadow-[var(--shadow-floating)] max-h-[460px]"
+            className="apple-liquid-glass flex overflow-hidden rounded-2xl max-h-[460px]"
             role="dialog" aria-label="Block type selector"
           >
             {/* Category sidebar */}
@@ -328,9 +330,9 @@ export default forwardRef<HTMLDivElement, SlashCommandMenuProps>(function SlashC
             )}
 
             <div className="flex flex-col flex-1 min-w-0">
-              {/* Search */}
-              <div className="relative border-b border-[var(--border)]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+              {/* Search + Draggable header handle */}
+              <div className="relative border-b border-[var(--border)] cursor-grab active:cursor-grabbing">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none" />
                 <input
                   ref={searchRef}
                   value={search}
@@ -416,11 +418,11 @@ export default forwardRef<HTMLDivElement, SlashCommandMenuProps>(function SlashC
               </div>
 
               {/* Footer */}
-              <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex items-center justify-between text-[10px] text-[var(--muted)]">
-                <div className="flex items-center gap-3">
+              <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex items-center justify-between text-[10px] text-[var(--muted)] select-none">
+                <div className="flex items-center gap-2.5">
                   <span><kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">↑↓</kbd> Navigate</span>
                   <span><kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">↵</kbd> Select</span>
-                  {!search && <span><kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">←→</kbd> Category</span>}
+                  <span className="opacity-75">✋ Hold to drag card</span>
                 </div>
                 <kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">esc</kbd>
               </div>
