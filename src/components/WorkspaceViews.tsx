@@ -43,7 +43,9 @@ import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
 import MarketplacePage from "../features/marketplace/MarketplacePage";
 import CreatorDashboard from "../features/creator/CreatorDashboard";
 import AgentWorkspace from "../features/agents/AgentWorkspace";
+import { PageIcon } from "./PageIcon";
 import { IconButton, Modal, ModalHeader, PearlButton } from "./ui";
+import MonthCalendar from "./MonthCalendar";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block, LineageEntry } from "../../types/blocks";
@@ -530,16 +532,7 @@ export function WorkspaceView({
 
         {view === "calendar" && (
           <Panel title="Calendar">
-            <div className="grid grid-cols-7 gap-1 text-sm">
-              {Array.from({ length: 35 }, (_, i) => i + 1).map((day) => (
-                <div key={day} className="min-h-28 rounded-md border border-[var(--border)] bg-[var(--panel)] p-2">
-                  <div className="text-xs text-[var(--muted)]">{day}</div>
-                  {calendarRows.filter((p) => Number(new Date(p.updatedAt as string).getDate()) === day).map((p) => (
-                    <button key={p.id} onClick={() => onSelect(p.id)} className="mt-1 block w-full truncate rounded bg-[var(--surface)] px-1.5 py-1 text-left text-xs text-[var(--text)] hover:bg-[var(--hover)]">{p.icon} {p.title}</button>
-                  ))}
-                </div>
-              ))}
-            </div>
+            <CalendarGrid pages={calendarRows} onSelect={onSelect} />
           </Panel>
         )}
 
@@ -1426,6 +1419,10 @@ interface PageCardProps {
   onSelect: (pageId: string) => void;
 }
 
+function CalendarGrid({ pages, onSelect }: { pages: Page[]; onSelect: (pageId: string) => void }) {
+  return <MonthCalendar pages={pages} onSelect={onSelect} />;
+}
+
 function PageCard({ page, onSelect }: PageCardProps) {
   return (
     <motion.button
@@ -1436,7 +1433,7 @@ function PageCard({ page, onSelect }: PageCardProps) {
       className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-left hover:border-[var(--accent)] w-full block transition-colors duration-150"
     >
       <div className="flex items-center gap-2">
-        <span>{page.icon}</span>
+        <PageIcon icon={page.icon} size={15} fallback="📄" />
         <span className="truncate text-sm font-medium text-[var(--text)]">{page.title || "Untitled"}</span>
       </div>
       <div className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--secondary)]">{plainText(page).slice(0, 120) || "Empty page"}</div>
@@ -1664,7 +1661,7 @@ export function NewPageOverlay({ page, onClose, onPagePatch, onShare, onFavorite
           <IconButton icon={ArrowUpRight} label="Open full page" onClick={() => onAction("close")} />
           <button className="flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-[var(--secondary)] hover:bg-[var(--hover)] border-0 bg-transparent outline-none">
             Add to
-            <span>{page.icon}</span>
+            <PageIcon icon={page.icon} size={14} fallback="📄" />
             <span className="max-w-[140px] truncate text-[var(--text)]">{page.title || "New page"}</span>
             <ChevronDown size={12} />
           </button>

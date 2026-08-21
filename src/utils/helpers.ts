@@ -91,7 +91,8 @@ export const covers = [
   "linear-gradient(135deg,#14532d,#22c55e,#bbf7d0)",
 ];
 
-export const emojis = ["📝", "📌", "💡", "✅", "🧠", "🚀", "📚", "🎯", "🗓️", "🔖"];
+import { EMOJI_ICONS } from "../registry/icons/IconRegistry";
+export const emojis = EMOJI_ICONS;
 
 // Rotating default background tints for column layouts. Named tokens (not raw
 // hex) so ColumnsBlock can map them to light/dark-correct CSS values and the
@@ -263,7 +264,7 @@ export function blockFor(type: string, text: string = ''): Block {
     return { ...block, text, formConfig: props.formConfig, submissions: props.submissions } as unknown as FormBlock;
   }
   if (type === 'synced-block') {
-    return { ...block, text, syncedGroupId: crypto.randomUUID() } as GenericBlock;
+    return { ...block, text, syncedGroupId: uid() } as GenericBlock;
   }
   if (type === 'breadcrumb' || type === 'table-of-contents') {
     return { ...block, text, pageIds: props.pageIds || [] } as unknown as PageListBlock;

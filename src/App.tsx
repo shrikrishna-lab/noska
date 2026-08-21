@@ -4,6 +4,8 @@ import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { UIProvider, useUI } from "./contexts/UIContext";
 import { WorkspaceProvider, useWorkspace } from "./contexts/WorkspaceContext";
 import { AIProvider, useAI } from "./contexts/AIContext";
+import { TabProvider, useTabs } from "./contexts/TabContext";
+import { WorkspaceTabBar } from "./components/tabs/WorkspaceTabBar";
 import { Confetti, Toast } from "./components/ui";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
@@ -46,6 +48,8 @@ const ApiConsole = lazy(() => import("./features/api/ApiConsole"));
 import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
 import { supabase, setClerkSessionToken } from "./lib/supabase";
 import LoginGate from "./components/auth/LoginGate";
+import { WaitlistGate } from "./components/auth/WaitlistGate";
+import { useLaunchSettings } from "./hooks/useLaunchSettings";
 import { TEST_MODE } from "./lib/envGuard";
 import { capture, identifyUser, resetIdentity } from "./lib/posthog";
 import { setSentryUser, captureException } from "./lib/sentry";
@@ -111,9 +115,11 @@ function App() {
     <ThemeProvider>
       <UIProvider>
         <WorkspaceProvider>
-          <AIProvider>
-            <AppContent />
-          </AIProvider>
+          <TabProvider>
+            <AIProvider>
+              <AppContent />
+            </AIProvider>
+          </TabProvider>
         </WorkspaceProvider>
       </UIProvider>
     </ThemeProvider>
@@ -155,6 +161,8 @@ function AppContent() {
 
   const [{ theme, themeFx }, { setTheme, setThemeFx }] = useTheme();
 
+  const { openTab } = useTabs();
+
   const [
     { aiOpen, aiRightOpen, apiKey, aiProvider, nvidiaKey, aiChats, activeChatId, ghostWriterEnabled },
     { setAiOpen, setAiRightOpen, setApiKey, setAiProvider, setNvidiaKey,
@@ -166,6 +174,54 @@ function AppContent() {
   const { user: clerkUser } = useUser();
   const { session } = useSession();
   const clerk = useClerk();
+
+  // Direct-access magic link: the admin panel generates a URL like
+  // `/<route>?ticket=<sign_in_token>` (see admin-api users.ts sign_in_token).
+  // Consume the ticket client-side so the link works regardless of the
+  // Clerk Account Portal / Cloudflare redirect behaviour.
+  const ticketConsumed = useRef(false);
+  const [ticketPending, setTicketPending] = useState(false);
+  useEffect(() => {
+    if (!clerkLoaded) return;
+    const params = new URLSearchParams(window.location.search);
+    const ticket = params.get("ticket");
+    if (!ticket) return;
+    // If we're already signed in the ticket is redundant — just drop it.
+    if (isSignedIn) {
+      params.delete("ticket");
+      const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}${window.location.hash}`;
+      window.history.replaceState({}, "", next);
+      return;
+    }
+    if (ticketConsumed.current) return;
+    ticketConsumed.current = true;
+    setTicketPending(true);
+    (async () => {
+      let signedIn = false;
+      try {
+        const signInAttempt = await clerk.client.signIn.create({ strategy: "ticket", ticket });
+        if (signInAttempt.createdSessionId) {
+          await clerk.setActive({ session: signInAttempt.createdSessionId });
+          signedIn = true;
+        }
+      } catch (e) {
+        console.warn("App: ticket sign-in failed", e);
+      } finally {
+        // Always drop the ticket from the URL — it's single-use. If the
+        // sign-in failed, send the user to the auth screen.
+        params.delete("ticket");
+        const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}${window.location.hash}`;
+        window.history.replaceState({}, "", next);
+        setTicketPending(false);
+        if (!signedIn) setAppFlowState("auth");
+      }
+    })();
+  }, [clerkLoaded, isSignedIn, clerk]);
+
+  // Launch settings — used to decide whether the waitlist gate should apply.
+  const { settings: launchSettings, loading: launchSettingsLoading } = useLaunchSettings();
+  const waitlistActive = !launchSettingsLoading
+    && (launchSettings.launch_mode === "waitlist" || launchSettings.login_mode === "waitlist");
 
   useEffect(() => {
     window.noskaPrompt = (title: string, defaultValue = "", placeholder = "") => {
@@ -632,9 +688,17 @@ function AppContent() {
         setAppFlowState("onboarding");
       }
 
-      if (loadedSettings.workspaceName && loadedSettings.workspaceName !== "Noska") {
-        setWorkspaceName(loadedSettings.workspaceName as string);
-      }
+      try {
+        const localWs = localStorage.getItem("workspaceName");
+        if (localWs) {
+          const parsed = JSON.parse(localWs);
+          if (parsed && typeof parsed === "string" && parsed.trim() && parsed !== "Noska") {
+            setWorkspaceName(parsed);
+          }
+        } else if (loadedSettings.workspaceName && loadedSettings.workspaceName !== "Noska") {
+          setWorkspaceName(loadedSettings.workspaceName as string);
+        }
+      } catch {}
       if (loadedSettings.theme) {
         setTheme(loadedSettings.theme === "system" ? "dark" : (loadedSettings.theme as string));
       }
@@ -731,7 +795,26 @@ function AppContent() {
       } catch (e) {
         console.warn("App: failed to load returning user's pages", e);
       }
-      if (existingProfile.workspace_name) setWorkspaceName(existingProfile.workspace_name);
+      // Prefer the locally saved workspace name (updated live from
+      // Settings) over the profile's onboarding-time workspace_name, so
+      // a refresh after renaming doesn't revert to the old default.
+      // The bare "My Workspace" default (written by handleLogout) is
+      // skipped so a brand-new sign-in still adopts the DB profile name.
+      let wsName = null;
+      try {
+        const localWs = localStorage.getItem("workspaceName");
+        if (localWs) {
+          const parsed = JSON.parse(localWs);
+          if (parsed && typeof parsed === "string" && parsed.trim() && parsed !== "Noska" && parsed !== "My Workspace") {
+            wsName = parsed;
+          }
+        }
+      } catch {}
+      if (wsName) {
+        setWorkspaceName(wsName);
+      } else if (existingProfile.workspace_name) {
+        setWorkspaceName(existingProfile.workspace_name);
+      }
       setAppFlowState("workspace");
     } else {
       setWorkspaceName(`${uname}'s Workspace`);
@@ -987,6 +1070,7 @@ function AppContent() {
   // selectByOffset/sidebar navigation, not URL history entries.
   useEffect(() => {
     if (appFlowState === "loading") return;
+    if (ticketPending) return;
     if (location.pathname === "/waitlist" || location.pathname === "/banned") return;
     if (appFlowState === "auth") {
       if (location.pathname !== "/login") navigate("/login", { replace: true });
@@ -1001,7 +1085,7 @@ function AppContent() {
       const nextPath = activeId ? `/${slug}/${activeId}` : `/${slug}`;
       if (location.pathname !== nextPath) navigate(nextPath, { replace: true });
     }
-  }, [appFlowState, activeId, workspaceName, location.pathname]);
+  }, [appFlowState, activeId, workspaceName, location.pathname, ticketPending]);
 
   const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   onKeyRef.current = (e: KeyboardEvent) => {
@@ -1209,10 +1293,16 @@ function AppContent() {
 
   interface PageSelectOptions {
     altKey?: boolean;
+    shiftKey?: boolean;
     sidePeek?: boolean;
+    openInNewTab?: boolean;
   }
 
   const handlePageSelect = useCallback((pageId: string, options: PageSelectOptions = {}) => {
+    if (options.openInNewTab) {
+      openTab("page", pageId, { inNewTab: true, makeActive: true });
+      return;
+    }
     setAppView("page");
     if (options.altKey || options.sidePeek) {
       setStackedPageIds((prev) => prev.includes(pageId) ? prev : [...prev, pageId]);
@@ -1226,7 +1316,33 @@ function AppContent() {
       });
       setActiveId(pageId);
     }
-  }, [setAppView, setStackedPageIds, setActiveId]);
+  }, [setAppView, setStackedPageIds, setActiveId, openTab]);
+
+  const handleViewSelect = useCallback((view: string, options: PageSelectOptions = {}) => {
+    if (options.openInNewTab) {
+      openTab("view", view, { inNewTab: true, makeActive: true });
+      return;
+    }
+    setAppView(view);
+  }, [setAppView, openTab]);
+
+  const handleTabNavigate = useCallback((type: "page" | "view", targetId: string) => {
+    if (type === "page") {
+      setAppView("page");
+      setActiveId(targetId);
+      setStackedPageIds([targetId]);
+    } else {
+      setAppView(targetId);
+    }
+  }, [setAppView, setActiveId, setStackedPageIds]);
+
+  useEffect(() => {
+    if (routeParams.pageId && pages.length > 0 && pages.some((p) => p.id === routeParams.pageId)) {
+      setActiveId(routeParams.pageId);
+      setAppView("page");
+      setStackedPageIds((prev) => (prev.includes(routeParams.pageId!) ? prev : [routeParams.pageId!]));
+    }
+  }, [routeParams.pageId, pages, setActiveId, setAppView, setStackedPageIds]);
 
   const navigateToChildPage = useCallback((pageId: string, options: PageSelectOptions = {}) => {
     setAppView("page");
@@ -2133,7 +2249,7 @@ function AppContent() {
     <TeamProvider>
     <AnimatePresence mode="wait">
       {appFlowState === "loading" && !TEST_MODE && !isSignedIn && (
-        <LoadingScreen key="loader" onComplete={() => setAppFlowState("auth")} />
+        <LoadingScreen key="loader" onComplete={() => { if (!ticketPending) setAppFlowState("auth"); }} />
       )}
       {appFlowState === "loading" && !TEST_MODE && isSignedIn && (
         <div className="fixed inset-0 flex items-center justify-center bg-[#f8fafc] z-50">
@@ -2149,7 +2265,7 @@ function AppContent() {
         </LoginGate>
       )}
       {(appFlowState === "onboarding" || appFlowState === "workspace") && location.pathname !== "/banned" && (
-        <>
+        <WaitlistGate enabled={waitlistActive}>
           {appFlowState === "onboarding" && !onboardingOpen && (
             <OnboardingPage
               key="onboarding"
@@ -2208,7 +2324,7 @@ function AppContent() {
             onAI={openRightPanel}
             onAIFull={startAIChat}
             onHelp={() => setHelpOpen(true)}
-            onView={setAppView}
+            onView={handleViewSelect}
             onPrev={() => selectByOffset(-1)}
             onNext={() => selectByOffset(1)}
             onPatchPage={updatePage}
@@ -2234,6 +2350,17 @@ function AppContent() {
             currentUserEmail={currentUserEmail}
           />
           <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)]">
+            <WorkspaceTabBar
+              pages={visiblePages}
+              sharedPages={sharedPages}
+              pendingInvites={pendingInvites}
+              aiChats={aiChats}
+              onNewPage={(template) => {
+                const newId = addPage(template || "blank");
+                if (newId) setRenameFocusId(newId);
+              }}
+              onCopyLink={copyPageLink}
+            />
             <Topbar
               page={topPage}
               sidebarOpen={sidebarOpen}
@@ -2569,6 +2696,14 @@ onLineage={() => setLineageOpen(true)}
                 setNvidiaKey={setNvidiaKey}
                 onReplayOnboarding={handleReplayOnboarding}
                 onLogout={handleLogout}
+                onProfileNameChanged={(name) => {
+                  const avatar = realtimeCollab.getUser()?.userAvatar || "👤";
+                  realtimeCollab.initUser(currentUserId || "", name, avatar);
+                }}
+                onProfileAvatarChanged={(avatarUrl) => {
+                  const name = realtimeCollab.getUser()?.userName || "Workspace User";
+                  realtimeCollab.initUser(currentUserId || "", name, avatarUrl || "👤");
+                }}
                 onClose={() => setSettingsOpen(false)}
                 ghostWriterEnabled={ghostWriterEnabled}
                 setGhostWriterEnabled={setGhostWriterEnabled}
@@ -2584,7 +2719,6 @@ onLineage={() => setLineageOpen(true)}
               currentUserId={currentUserId}
               currentUsername={currentUsername}
               currentUserEmail={currentUserEmail}
-              onUsernameChanged={setCurrentUsername}
               onNameChanged={(name) => {
                 const avatar = realtimeCollab.getUser()?.userAvatar || "👤";
                 realtimeCollab.initUser(currentUserId || "", name, avatar);
@@ -2723,7 +2857,7 @@ onLineage={() => setLineageOpen(true)}
           )}
         </motion.div>
       )}
-        </>
+        </WaitlistGate>
       )}
       {location.pathname === "/banned" && (
         <motion.div
