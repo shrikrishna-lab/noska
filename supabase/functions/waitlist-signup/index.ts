@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const { error: dbError } = await supabase
+  const { data: entryRows, error: dbError } = await supabase
     .from("waitlist_entries")
     .upsert({
       name,
@@ -72,6 +72,7 @@ Deno.serve(async (req: Request) => {
       invite_sent: false,
       accepted: false,
     }, { onConflict: "email" })
+    .select("id, position, invite_code")
 
   if (dbError) {
     console.error("Failed to insert waitlist entry:", dbError)
@@ -81,7 +82,14 @@ Deno.serve(async (req: Request) => {
     })
   }
 
-  return new Response(JSON.stringify({ success: true, clerk_entry_id: clerkEntryId }), {
+  const entry = Array.isArray(entryRows) ? entryRows[0] : null
+
+  return new Response(JSON.stringify({
+    success: true,
+    clerk_entry_id: clerkEntryId,
+    position: entry?.position ?? null,
+    invite_code: entry?.invite_code ?? null,
+  }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   })

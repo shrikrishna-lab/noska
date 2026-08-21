@@ -9,9 +9,13 @@ export default defineConfig({
   base: "/control/",
   plugins: [react()],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src")
-    }
+    alias: [
+      // Shim intercepts every react-hot-toast import so action toasts also
+      // surface on the Dynamic Island. "original" reaches the real package.
+      { find: /^react-hot-toast$/, replacement: path.resolve(__dirname, "./src/lib/rht-shim.tsx") },
+      { find: /^react-hot-toast\/original$/, replacement: path.resolve(__dirname, "./node_modules/react-hot-toast/dist/index.mjs") },
+      { find: "@", replacement: path.resolve(__dirname, "./src") }
+    ]
   },
   server: {
     port: 5174,

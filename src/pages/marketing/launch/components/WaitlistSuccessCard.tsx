@@ -43,13 +43,15 @@ export function WaitlistSuccessCard({
   };
 
   const displayName = userName || (userEmail ? userEmail.split('@')[0] : 'VIP Member');
-  const displayPosition = position !== null && position !== undefined ? position : '128';
+  const hasPosition = typeof position === 'number' && position > 0;
 
   const shareUrl = referralCode
     ? `${window.location.origin}/launch?ref=${referralCode}`
     : `${window.location.origin}/launch`;
 
-  const shareText = `I'm #${displayPosition} on the Noska early access waitlist! Claim your VIP pass here:`;
+  const shareText = hasPosition
+    ? `I'm #${position} on the Noska early access waitlist! Claim your VIP pass here:`
+    : `I just joined the Noska early access waitlist! Claim your VIP pass here:`;
 
   const handleCopyLink = async () => {
     const fullText = `${shareText} ${shareUrl}`;
@@ -121,7 +123,7 @@ export function WaitlistSuccessCard({
             Thankyou, {displayName}
           </h2>
           <p className="nl-success-waitlist-num">
-            You’re #{displayPosition} on the waitlist
+            {hasPosition ? `You’re #${position} on the waitlist` : `You’re on the waitlist`}
           </p>
         </motion.div>
 
@@ -177,7 +179,7 @@ export function WaitlistSuccessCard({
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.7, delay: 0.45, ease: [0.16, 1, 0.3, 1] }}
               >
-                {displayPosition}
+                {hasPosition ? position : <Sparkles size={34} />}
               </motion.div>
 
               {/* Minimalist Barcode & Serial Graphic */}
@@ -186,7 +188,7 @@ export function WaitlistSuccessCard({
                   <span /><span className="w-wide" /><span /><span className="w-mid" /><span /><span className="w-wide" /><span /><span />
                 </div>
                 <div className="nl-card-serial-code">
-                  NO. 000{displayPosition} • VERIFIED
+                  {hasPosition ? `NO. ${String(position).padStart(4, '0')} • VERIFIED` : `NOSKA • VERIFIED`}
                 </div>
               </div>
             </div>

@@ -62,20 +62,24 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
 
         const joinedAt = entry.joined_at as string | undefined;
 
-        if (pos && pos > 0) {
-          aheadCount = pos - 1;
-        } else {
-          try {
-            const { data: rpcData } = await supabaseAnon
-              .rpc("get_waitlist_position" as never, { p_email: email.toLowerCase() } as never) as never;
-            const result = rpcData as { pos: number; ahead: number; total_pending: number } | undefined;
-            if (result) {
-              pos = result.pos;
-              aheadCount = result.ahead;
-            }
-          } catch {
-            // ignore fallback
+        // Prefer the dynamic queue rank (active waiting/pending entries only);
+        // the raw stored position keeps growing as people are approved/rejected.
+        try {
+          const { data: rpcData } = await supabaseAnon
+            .rpc("get_waitlist_position" as never, { p_email: email.toLowerCase() } as never) as never;
+          // PostgREST returns RETURNS-TABLE functions as an array of rows.
+          const first = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+          const result2 = first as { pos: number; ahead: number; total_pending: number } | null;
+          if (result2 && typeof result2.pos === "number" && result2.pos > 0) {
+            pos = result2.pos;
+            aheadCount = result2.ahead;
           }
+        } catch {
+          // ignore — fall back to stored position below
+        }
+
+        if (pos && aheadCount === undefined) {
+          aheadCount = Math.max(pos - 1, 0);
         }
 
         setEntryData({
@@ -91,7 +95,20 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
         const s = entry.status as string;
         if (s === "banned") { setStatus("banned"); return; }
         if (s === "suspended") { setStatus("suspended"); return; }
-        if (result.approved) { setStatus("approved"); return; }
+        if (result.approved) {
+          // Admin approval is durable — an 'invited' entry with a stale
+          // invite_expires_at still gets in (only the literal 'expired'
+          // status, set by the expiry cron, blocks).
+          if (s === "invited" && !entry.invite_expires_at) { setStatus("approved"); return; }
+          if (s === "invited" && entry.invite_expires_at && new Date(entry.invite_expires_at as string) < new Date()) {
+            // Legacy rows: expiry stamped before approvals became durable.
+            setStatus("approved");
+            return;
+          }
+          setStatus("approved");
+          return;
+        }
+        if (s === "expired") { setStatus("expired"); return; }
         if (s === "approved" || s === "invited" || s === "accepted") {
           if (s === "invited" && entry.invite_expires_at && new Date(entry.invite_expires_at as string) < new Date()) {
             setStatus("expired");

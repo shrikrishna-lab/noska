@@ -59,6 +59,7 @@ import {
   getImportedCategories,
   type ImportedIcon
 } from "../registry/icons/IconRegistry";
+import { pickImageFile } from "../lib/filePicker";
 
 
 // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
@@ -250,7 +251,6 @@ export function SettingsModal({
   const [pCopiedShare, setPCopiedShare] = useState(false);
   const [pCopiedEmail, setPCopiedEmail] = useState(false);
   const [pBookmarked, setPBookmarked] = useState(false);
-  const pFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const loadProfileForSettings = React.useCallback(async () => {
     if (!currentUserId) return;
@@ -539,7 +539,7 @@ export function SettingsModal({
                   <div className="relative mt-2 mb-3 flex items-start">
                     <div
                       className="group relative cursor-pointer"
-                      onClick={() => pFileInputRef.current?.click()}
+                      onClick={(e) => { e.stopPropagation(); pickImageFile(pickProfileAvatar); }}
                       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); pickProfileAvatar(e.dataTransfer.files?.[0] || null); }}
                       title="Change photo — click or drag & drop"
@@ -563,19 +563,12 @@ export function SettingsModal({
                       </div>
                       <button
                         type="button"
-                        onClick={() => pFileInputRef.current?.click()}
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); pickImageFile(pickProfileAvatar); }}
                         className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full bg-white text-slate-700 border border-slate-200/80 shadow-[0_2px_6px_rgba(0,0,0,0.12)] hover:bg-slate-50 transition cursor-pointer"
                         title="Change photo"
                       >
                         <Camera size={13} />
                       </button>
-                      <input
-                        ref={pFileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => { pickProfileAvatar(e.target.files?.[0] || null); e.target.value = ""; }}
-                      />
                     </div>
                   </div>
 

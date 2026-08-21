@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Camera, MapPin, AtSign, Mail, Loader2, Check, Sparkles, UserRound,
@@ -10,6 +10,7 @@ import {
   uploadImage, ensureImagesBucket
 } from "../lib/supabaseService";
 import { getProfileCardGradient } from "../lib/profileCardGradient";
+import { pickImageFile } from "../lib/filePicker";
 
 interface ProfileModalProps {
   open: boolean;
@@ -53,8 +54,6 @@ export default function ProfileModal({
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load user profile
   const loadProfile = useCallback(async () => {
@@ -282,7 +281,7 @@ export default function ProfileModal({
                   <div className="relative mt-2 mb-3 flex items-start">
                     <div
                       className="group relative cursor-pointer"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={(e) => { e.stopPropagation(); pickImageFile(pickAvatar); }}
                       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); pickAvatar(e.dataTransfer.files?.[0] || null); }}
                       title="Change photo — click or drag & drop"
@@ -311,19 +310,13 @@ export default function ProfileModal({
                       <motion.button
                         whileHover={{ scale: 1.15 }}
                         whileTap={{ scale: 0.88 }}
-                        onClick={() => fileInputRef.current?.click()}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); pickImageFile(pickAvatar); }}
                         className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full bg-white text-slate-700 border border-slate-200/80 shadow-[0_2px_6px_rgba(0,0,0,0.12)] hover:bg-slate-50 transition cursor-pointer"
                         title="Change photo"
                       >
                         <Camera size={13} />
                       </motion.button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => { pickAvatar(e.target.files?.[0] || null); e.target.value = ""; }}
-                      />
                     </div>
                   </div>
 

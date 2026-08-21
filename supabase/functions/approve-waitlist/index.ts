@@ -49,11 +49,14 @@ Deno.serve(async (req: Request) => {
     const sessionToken = authHeader.replace(/^Bearer\s+/i, "").trim()
     if (!sessionToken) return respond({ error: "Unauthorized" }, 401)
 
-    const { error: authErr } = await supabase.rpc("require_admin_role", {
-      p_session_token: sessionToken,
+    // require_admin_role returns the acting admin's uuid — use it for
+    // approved_by (the column is a uuid FK, not a display name).
+    const { data: adminId, error: authErr } = await supabase.rpc("require_admin_role", {
+      p_token: sessionToken,
       p_min_role: "support",
     })
     if (authErr) return respond({ error: "Forbidden" }, 403)
+    const approvedBy = typeof adminId === "string" && adminId ? adminId : null
 
     const body = await req.json()
     const waitlistId = body.waitlist_id as string | undefined
@@ -74,7 +77,9 @@ Deno.serve(async (req: Request) => {
 
     const inviteCode = generateCode()
     const now = new Date().toISOString()
-    const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    // No invite_expires_at: admin approval is an explicit, durable decision.
+    // A 7-day expiry previously hard-blocked approved users ("Invite Expired")
+    // in WaitlistGate if they signed up late.
 
     const { error: updateErr } = await supabase
       .from("waitlist_entries")
@@ -83,7 +88,7 @@ Deno.serve(async (req: Request) => {
         invite_sent: true,
         invite_code: inviteCode,
         approved_at: now,
-        invite_expires_at: inviteExpiresAt,
+        approved_by: approvedBy,
         email_status: "queued",
         email_queued_at: now,
       })
@@ -98,7 +103,6 @@ Deno.serve(async (req: Request) => {
         waitlist_entry_id: waitlistId,
         invite_sent: true,
         status: "invited",
-        invite_expires_at: inviteExpiresAt,
       }, { onConflict: "email" })
 
     const config = await getResendConfig()
@@ -110,7 +114,7 @@ Deno.serve(async (req: Request) => {
         <p style="margin: 24px 0;"><strong>Your invite code:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 14px;">${inviteCode}</code></p>
         <a href="${Deno.env.get("PUBLIC_SITE_URL") ?? "https://noska.dev"}/invite/${inviteCode}" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invitation</a>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-        <p style="color: #6b7280; font-size: 12px;">This invite expires in 7 days. If you didn't sign up for Noska, you can ignore this email.</p>
+        <p style="color: #6b7280; font-size: 12px;">If you didn't sign up for Noska, you can ignore this email.</p>
       </div>`
 
       const emailRes = await fetch("https://api.resend.com/emails", {

@@ -8,7 +8,7 @@ import {
   Plus, Minus, PencilLine, Archive, CalendarDays, List, Sparkles, Copy, Check, Zap, Layers,
   Download, FileSpreadsheet, Maximize2, Split, Code2, ExternalLink, ArrowRight, KeyRound, Link2,
 } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,7 @@ import { hasRole, ROLE_LABELS } from "@/lib/rbac";
 import { adminApi } from "@/lib/admin-api";
 import { formatRelativeTime, initialsFromName, formatCurrency } from "@/lib/utils";
 import { useRealtimeInvalidate } from "@/lib/queries";
+import { pickImageFile } from "@/lib/filePicker";
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";
@@ -253,7 +254,6 @@ function LocationCard({ profile }: { profile: { id: string; city?: string | null
 function AvatarManager({ profile, canManage }: { profile: { id: string; user_name: string | null; email?: string | null; avatar_url?: string | null } | null; canManage: boolean }) {
   const update = useUpdateUserProfile();
   const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!profile) return null;
 
@@ -292,7 +292,7 @@ function AvatarManager({ profile, canManage }: { profile: { id: string; user_nam
         {canManage && (
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); pickImageFile(handleFile); }}
             className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-zinc-200 shadow ring-1 ring-zinc-700 hover:bg-zinc-700"
             title="Upload avatar (max 2 MB)"
           >
@@ -300,22 +300,11 @@ function AvatarManager({ profile, canManage }: { profile: { id: string; user_nam
           </button>
         )}
       </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void handleFile(file);
-          e.target.value = "";
-        }}
-      />
       {canManage && (
         <div className="flex items-center gap-1.5">
           <Button
             variant="ghost" size="sm" className="h-6 px-2 text-[11px]"
-            onClick={() => fileInputRef.current?.click()} disabled={uploading}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); pickImageFile(handleFile); }} disabled={uploading}
           >
             <Upload className="mr-1 h-3 w-3" /> Upload
           </Button>

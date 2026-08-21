@@ -1224,6 +1224,58 @@ export function usePermanentDeleteAccount() {
   });
 }
 
+// ── Trashed Pages (Trash) ──
+export interface TrashedPageRow {
+  id: string;
+  title: string;
+  icon: string | null;
+  user_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  trashed: boolean;
+}
+
+export function useTrashedPages() {
+  return useQuery({
+    queryKey: ["admin", "trashed-pages"],
+    queryFn: () => adminSelect<TrashedPageRow>(
+      "pages",
+      "id, title, icon, user_id, created_at, updated_at, trashed",
+      { order: "updated_at desc", eq: ["trashed", true] }
+    ),
+    refetchInterval: 30000,
+  });
+}
+
+export function useRestoreTrashedPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pageId: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "pages", p_id: pageId,
+        p_data: { trashed: false, updated_at: new Date().toISOString() }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "trashed-pages"] }); },
+  });
+}
+
+export function usePermanentDeletePage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pageId: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "pages", p_id: pageId, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "trashed-pages"] }); },
+  });
+}
+
 // ── Support Messages (Live Chat) ──
 export function useSupportMessages(ticketId: string) {
   return useQuery({

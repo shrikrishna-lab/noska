@@ -543,7 +543,9 @@ export async function setUsername(userId: string, username: string): Promise<Tab
   if (!USERNAME_PATTERN.test(normalized)) {
     throw new Error("Username must be 3-20 characters: lowercase letters, numbers, or underscores, starting with a letter.");
   }
-  const available = await isUsernameAvailable(normalized);
+  // Exclude the caller's own row — re-saving your current username is a
+  // no-op, not a collision (UI checks pass the same exclusion).
+  const available = await isUsernameAvailable(normalized, userId);
   if (!available) {
     throw new Error("That username is already taken.");
   }

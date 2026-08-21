@@ -907,8 +907,13 @@ function AppContent() {
     setPages(pages);
     setActiveId(pages[0].id);
     setStackedPageIds([pages[0].id]);
-    const user = realtimeCollab?.getUser?.();
-    const userId = user?.userId;
+    // Identity guard: profile writes MUST use the signed-in Clerk id.
+    // realtimeCollab.getUser().userId can still be a stale anon-*/localStorage
+    // UUID here (e.g. onboarding raced ahead of auth bootstrap), which would
+    // silently create a second user_profiles row under the wrong id — the
+    // duplicate-account bug. Fall back to collab id only when truly signed out
+    // (TEST_MODE / local-only usage).
+    const userId = clerkUser?.id || currentUserId || realtimeCollab?.getUser?.()?.userId;
     if (userId) {
       for (const page of pages) {
         try { await savePage(page, userId); } catch (e) {}
@@ -920,7 +925,7 @@ function AppContent() {
       } catch (e) {}
     }
     setAppFlowState("workspace");
-  }, [currentUsername]);
+  }, [currentUsername, currentUserId, clerkUser]);
 
   // Accept/decline handlers for the Inbox's real invite cards. Both
   // update local state optimistically then reconcile with the server

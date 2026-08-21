@@ -29,7 +29,7 @@ Deno.serve(async (req: Request) => {
     if (!sessionToken) return respond({ error: "Unauthorized" }, 401)
 
     const { error: authErr } = await supabase.rpc("require_admin_role", {
-      p_session_token: sessionToken,
+      p_token: sessionToken,
       p_min_role: "admin",
     })
     if (authErr) return respond({ error: "Forbidden" }, 403)

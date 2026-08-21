@@ -7,6 +7,7 @@ import {
   Radio, Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { registerIslandToastBridge } from "@/lib/islandToastBridge";
 
 // Notification Data Types
 export interface DynamicIslandNotificationItem {
@@ -140,6 +141,22 @@ export function DynamicIslandNotificationProvider({ children }: { children: Reac
   const [activeNotif, setActiveNotif] = useState<DynamicIslandNotificationItem | null>(null);
   const [history, setHistory] = useState<DynamicIslandNotificationItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  // Mirror every react-hot-toast call (via the rht-shim bridge) onto the
+  // Dynamic Island so action feedback always appears in both places.
+  useEffect(() => {
+    registerIslandToastBridge((type, title, description) => {
+      notify({
+        title,
+        description,
+        type,
+        icon: type,
+        priority: type === "success" ? 1 : type === "error" ? 4 : 2,
+      });
+    });
+    return () => registerIslandToastBridge(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const activeRef = useRef<DynamicIslandNotificationItem | null>(null);
 

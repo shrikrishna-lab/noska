@@ -71,18 +71,33 @@ Deno.serve(async (req: Request) => {
       const name = `${firstName} ${lastName}`.trim() || (data.username as string) || "Workspace User"
       const avatarUrl = data.image_url as string | undefined
 
+      // user.created: seed a fresh profile (onboarding pending).
+      // user.updated: ONLY sync identity fields. Resetting onboarding_complete
+      // here re-onboarded existing users on every profile tweak, and if the
+      // app's local identity was stale at that moment, completing onboarding
+      // again created a SECOND account row for the same person.
+      const payload =
+        eventType === "user.created"
+          ? {
+              user_id: clerkId,
+              user_name: name,
+              email: email ?? null,
+              avatar_url: avatarUrl ?? null,
+              onboarding_complete: false,
+              use_case: null,
+              workspace_name: "My Workspace",
+              preferences: {},
+            }
+          : {
+              user_id: clerkId,
+              user_name: name,
+              email: email ?? null,
+              avatar_url: avatarUrl ?? null,
+            }
+
       const { error } = await supabase
         .from("user_profiles")
-        .upsert({
-          user_id: clerkId,
-          user_name: name,
-          email: email ?? null,
-          avatar_url: avatarUrl ?? null,
-          onboarding_complete: false,
-          use_case: null,
-          workspace_name: "My Workspace",
-          preferences: {},
-        }, { onConflict: "user_id" })
+        .upsert(payload, { onConflict: "user_id" })
 
       if (error) {
         console.error("Error upserting user profile:", error)

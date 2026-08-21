@@ -137,6 +137,15 @@ export default function Launch() {
         setWaitlistSubmitting(false);
         return;
       }
+      const data = await res.json().catch(() => ({}));
+      if (typeof data.position === 'number' && data.position > 0) {
+        setWaitlistPosition(data.position);
+      }
+      if (data.invite_code) {
+        setWaitlistReferralCode(data.invite_code);
+      } else {
+        setWaitlistReferralCode(ref || email.split('@')[0]);
+      }
     } catch (err) {
       setWaitlistError(err instanceof Error ? err.message : 'Something went wrong');
       setWaitlistSubmitting(false);
@@ -152,22 +161,17 @@ export default function Launch() {
     try {
       const { supabaseAnon } = await import('../../../lib/supabase');
       if (supabaseAnon) {
-        const { data: entry } = await supabaseAnon
-          .from('waitlist_entries' as never)
-          .select('position, invite_code')
-          .eq('email' as never, email)
-          .maybeSingle() as any;
-        if (entry) {
-          setWaitlistPosition(entry.position as number);
-          setWaitlistReferralCode((entry.invite_code as string) || email.split('@')[0]);
-        } else {
-          setWaitlistReferralCode(email.split('@')[0]);
+        const { data: rpcData } = await supabaseAnon
+          .rpc('get_waitlist_position' as never, { p_email: email } as never) as any;
+        if (rpcData && typeof rpcData.pos === 'number' && rpcData.pos > 0) {
+          setWaitlistPosition(rpcData.pos as number);
         }
+        setWaitlistReferralCode((prev) => prev || email.split('@')[0]);
       } else {
         setWaitlistReferralCode(email.split('@')[0]);
       }
     } catch {
-      setWaitlistReferralCode(email.split('@')[0]);
+      setWaitlistReferralCode((prev) => prev || email.split('@')[0]);
     }
   };
 

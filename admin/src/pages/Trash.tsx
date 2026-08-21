@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { useDeletedAccounts, useRestoreAccount, usePermanentDeleteAccount, useRealtimeInvalidate } from "@/lib/queries";
+import { useDeletedAccounts, useRestoreAccount, usePermanentDeleteAccount, useTrashedPages, useRestoreTrashedPage, usePermanentDeletePage, useRealtimeInvalidate } from "@/lib/queries";
+import type { TrashedPageRow } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -20,11 +21,15 @@ export function Trash() {
   const { data: accounts, isLoading } = useDeletedAccounts();
   const restoreAccount = useRestoreAccount();
   const permanentDeleteAccount = usePermanentDeleteAccount();
+  const { data: trashedPages, isLoading: pagesLoading } = useTrashedPages();
+  const restorePage = useRestoreTrashedPage();
+  const permanentDeletePage = usePermanentDeletePage();
   const { confirm } = useConfirmDialog();
   const [restoring, setRestoring] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "deleted" | "restored">("all");
+  const [tab, setTab] = useState<"accounts" | "pages">("accounts");
   const [searchQuery, setSearchQuery] = useState("");
   useRealtimeInvalidate(["admin", "deleted-accounts"], "deleted_accounts");
 
@@ -40,6 +45,15 @@ export function Trash() {
       return true;
     });
   }, [accounts, filterStatus, searchQuery]);
+
+  const filteredPages = useMemo(() => {
+    if (!trashedPages) return [];
+    if (!searchQuery) return trashedPages;
+    const q = searchQuery.toLowerCase();
+    return trashedPages.filter((p) =>
+      p.title?.toLowerCase().includes(q) || p.user_id?.toLowerCase().includes(q)
+    );
+  }, [trashedPages, searchQuery]);
 
   const selected = useMemo(() => {
     if (!selectedId || !accounts) return null;
@@ -64,6 +78,26 @@ export function Trash() {
       toast.success("Account permanently deleted");
       if (selectedId === account.id) setSelectedId(null);
     } catch { toast.error("Failed to permanently delete account"); }
+    setDeleting(null);
+  };
+
+  const handleRestorePage = async (page: TrashedPageRow) => {
+    if (!await confirm({ title: "Restore Page", description: `Restore "${page.title || page.id}" back to the user's workspace?`, variant: "confirm", confirmText: "Restore" })) return;
+    setRestoring(page.id);
+    try {
+      await restorePage.mutateAsync(page.id);
+      toast.success("Page restored");
+    } catch { toast.error("Failed to restore page"); }
+    setRestoring(null);
+  };
+
+  const handlePermanentDeletePage = async (page: TrashedPageRow) => {
+    if (!await confirm({ title: "Permanently Delete Page", description: `Permanently delete "${page.title || page.id}" and all its content? This cannot be undone.`, variant: "delete", confirmText: "Delete Forever" })) return;
+    setDeleting(page.id);
+    try {
+      await permanentDeletePage.mutateAsync(page.id);
+      toast.success("Page permanently deleted");
+    } catch { toast.error("Failed to permanently delete page"); }
     setDeleting(null);
   };
 
@@ -101,42 +135,95 @@ export function Trash() {
     },
   ];
 
+  const pageColumns: Column<TrashedPageRow>[] = [
+    { key: "title", label: "Page", sortable: true, render: (row) => (
+      <div className="flex items-center gap-2">
+        <span>{row.icon || "📄"}</span>
+        <div>
+          <p className="font-medium">{row.title || "Untitled"}</p>
+          <p className="text-xs text-muted-foreground font-mono">{row.id.slice(0, 8)}…</p>
+        </div>
+      </div>
+    )},
+    { key: "user_id", label: "Owner", sortable: true, render: (row) => <span className="text-xs text-muted-foreground font-mono">{row.user_id || "—"}</span> },
+    { key: "created_at", label: "Created", sortable: true, render: (row) => <span className="text-muted-foreground">{row.created_at ? formatRelativeTime(row.created_at) : "—"}</span> },
+    { key: "updated_at", label: "Trashed", sortable: true, render: (row) => <span className="text-muted-foreground">{row.updated_at ? formatRelativeTime(row.updated_at) : "—"}</span> },
+    { key: "trashed", label: "Status", render: () => <Badge variant="destructive">In Trash</Badge> },
+    {
+      key: "id", label: "", sortable: false,
+      render: (row) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="icon" onClick={() => handleRestorePage(row)} disabled={restoring === row.id} title="Restore page">
+            {restoring === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handlePermanentDeletePage(row)} disabled={deleting === row.id} title="Delete forever">
+            {deleting === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   if (isLoading) return <div className="p-6"><PageHeader title="Trash" description="Restore or permanently delete accounts" /><LoadingState count={5} /></div>;
 
   return (
     <div className="p-6 space-y-6">
       <PageHeader
         title="Trash"
-        description={`${accounts?.length ?? 0} deleted accounts — restore or permanently erase`}
+        description={`${tab === "accounts" ? `${accounts?.length ?? 0} deleted account${(accounts?.length ?? 0) === 1 ? "" : "s"}` : `${trashedPages?.length ?? 0} trashed page${(trashedPages?.length ?? 0) === 1 ? "" : "s"}`} — restore or permanently erase`}
       />
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex gap-1 border rounded-md p-0.5">
+          <button
+            className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${tab === "accounts" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setTab("accounts")}
+          >
+            Accounts ({accounts?.length ?? 0})
+          </button>
+          <button
+            className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${tab === "pages" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setTab("pages")}
+          >
+            Pages ({trashedPages?.length ?? 0})
+          </button>
+        </div>
+        <div className="relative flex-1 max-w-md min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm"
-            placeholder="Search by name, email, or ID..."
+            placeholder={tab === "accounts" ? "Search by name, email, or ID..." : "Search by title or owner ID..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-1 border rounded-md p-0.5">
-          {(["all", "deleted", "restored"] as const).map((f) => (
-            <button
-              key={f}
-              className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${filterStatus === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setFilterStatus(f)}
-            >
-              {f === "all" ? "All" : f === "deleted" ? "Deleted" : "Restored"}
-            </button>
-          ))}
-        </div>
+        {tab === "accounts" && (
+          <div className="flex gap-1 border rounded-md p-0.5">
+            {(["all", "deleted", "restored"] as const).map((f) => (
+              <button
+                key={f}
+                className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${filterStatus === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => setFilterStatus(f)}
+              >
+                {f === "all" ? "All" : f === "deleted" ? "Deleted" : "Restored"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState icon={TrashIcon} title="Trash is empty" description="Deleted accounts will appear here when users or admins are deleted from the platform." />
+      {tab === "accounts" ? (
+        filtered.length === 0 ? (
+          <EmptyState icon={TrashIcon} title="No deleted accounts" description="Deleted accounts will appear here when users or admins are deleted from the platform." />
+        ) : (
+          <DataTable columns={columns} data={filtered} />
+        )
+      ) : pagesLoading ? (
+        <LoadingState count={5} />
+      ) : filteredPages.length === 0 ? (
+        <EmptyState icon={TrashIcon} title="No trashed pages" description="Pages users move to trash will appear here and can be restored or erased." />
       ) : (
-        <DataTable columns={columns} data={filtered} />
+        <DataTable columns={pageColumns} data={filteredPages} />
       )}
 
       {selected && (
