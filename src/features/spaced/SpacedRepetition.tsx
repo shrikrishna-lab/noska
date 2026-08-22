@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SPRING_PRESETS } from "../motion/MotionSystem";
 import {
@@ -11,47 +11,18 @@ import {
   Clock,
   Check,
   Eye,
-  EyeOff
+  EyeOff,
+  Undo2,
+  SkipForward,
+  PauseCircle,
+  Trash2
 } from "lucide-react";
-
-/* ─── SM-2 Algorithm ─── */
-
-interface ReviewState {
-  easeFactor?: number;
-  interval?: number;
-  repetition?: number;
-  nextReview?: string;
-  lastReview?: string;
-  quality?: number;
-}
-
-function sm2(quality: number, review: ReviewState = {}): Required<ReviewState> {
-  let { easeFactor = 2.5, interval = 0, repetition = 0 } = review;
-
-  if (quality >= 3) {
-    if (repetition === 0) interval = 1;
-    else if (repetition === 1) interval = 6;
-    else interval = Math.round(interval * easeFactor);
-    repetition += 1;
-  } else {
-    repetition = 0;
-    interval = 1;
-  }
-
-  easeFactor = Math.max(1.3, easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
-
-  const nextReview = new Date();
-  nextReview.setDate(nextReview.getDate() + interval);
-
-  return {
-    easeFactor,
-    interval,
-    repetition,
-    nextReview: nextReview.toISOString(),
-    lastReview: new Date().toISOString(),
-    quality
-  };
-}
+import {
+  activeScheduler,
+  isBlockDue,
+  removedReviewState,
+  type ReviewState
+} from "./scheduler";
 
 /* ─── Rating buttons ─── */
 
@@ -64,96 +35,178 @@ const RATINGS = [
 
 /* ─── main component ─── */
 
-export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast }) {
+interface QueueItem {
+  block: { id: string; text?: string; review?: ReviewState };
+  pageId: string;
+  pageTitle: string;
+}
+
+export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast }: {
+  pages: Array<{ id: string; title?: string; trashed?: boolean; blocks?: Array<Record<string, unknown>> }>;
+  onBlockPatch: (pageId: string, blockId: string, patch: Record<string, unknown>) => void;
+  onClose: () => void;
+  onToast?: (message: string) => void;
+}) {
   const [cardIndex, setCardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [sessionStats, setSessionStats] = useState({ reviewed: 0, correct: 0 });
   const [view, setView] = useState("review"); // "review" | "dashboard"
 
-  // Collect all reviewable blocks across pages
-  const dueCards = useMemo(() => {
-    const cards = [];
-    const now = new Date().toISOString();
+  /* ── Session queue ──
+   * Snapshot of due cards taken when the modal opens (and re-synced until
+   * the user's first action). Frozen afterwards so rating/suspending a card
+   * can't reshuffle indices mid-session via parent re-renders — this fixes
+   * the latent index-shift bug where a rated card dropping out of `pages`
+   * pulled the next card forward AND index+1 skipped it. */
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const touchedRef = useRef(false);
+
+  useEffect(() => {
+    if (touchedRef.current) return;
+    const cards: QueueItem[] = [];
     for (const page of pages) {
       if (page.trashed) continue;
-      for (const block of page.blocks || []) {
-        if (block.review) {
-          // Check if due
-          if (!block.review.nextReview || block.review.nextReview <= now) {
-            cards.push({ block, pageId: page.id, pageTitle: page.title });
-          }
+      for (const raw of page.blocks || []) {
+        const block = raw as { id: string; text?: string; review?: ReviewState };
+        if (block.review && isBlockDue(block)) {
+          cards.push({ block, pageId: page.id, pageTitle: page.title || "Untitled" });
         }
       }
     }
-    return cards;
+    setQueue(cards);
   }, [pages]);
 
   const allReviewableCards = useMemo(() => {
-    const cards = [];
+    const cards: QueueItem[] = [];
+    let suspended = 0;
     for (const page of pages) {
       if (page.trashed) continue;
-      for (const block of page.blocks || []) {
-        if (block.review) {
-          cards.push({ block, pageId: page.id, pageTitle: page.title });
-        }
+      for (const raw of page.blocks || []) {
+        const block = raw as { id: string; text?: string; review?: ReviewState };
+        if (!block.review) continue;
+        if (block.review.suspended) { suspended += 1; continue; }
+        cards.push({ block, pageId: page.id, pageTitle: page.title || "Untitled" });
       }
     }
-    return cards;
+    return { cards, suspended };
   }, [pages]);
 
-  const currentCard = dueCards[cardIndex];
-  const isComplete = cardIndex >= dueCards.length;
+  const currentCard = queue[cardIndex];
+  const isComplete = cardIndex >= queue.length;
 
-  const handleRate = useCallback((quality) => {
+  /* ── Undo history: previous review states of rated cards ── */
+  const historyRef = useRef<Array<{ item: QueueItem; prevReview: ReviewState; wasCorrect: boolean }>>([]);
+
+  const handleRate = useCallback((quality: number) => {
     if (!currentCard) return;
-    const { block, pageId } = currentCard;
-    const nextReview = sm2(quality, block.review);
-    onBlockPatch(pageId, block.id, { review: nextReview });
-    setSessionStats((s) => ({
-      reviewed: s.reviewed + 1,
-      correct: s.correct + (quality >= 3 ? 1 : 0)
-    }));
+    const prevReview = currentCard.block.review ?? {};
+    historyRef.current.push({ item: currentCard, prevReview, wasCorrect: quality >= 3 });
+    touchedRef.current = true;
+    onBlockPatch(currentCard.pageId, currentCard.block.id, activeScheduler.schedule(prevReview, quality));
+    setSessionStats((s) => ({ reviewed: s.reviewed + 1, correct: s.correct + (quality >= 3 ? 1 : 0) }));
     setShowAnswer(false);
     setCardIndex((i) => i + 1);
   }, [currentCard, onBlockPatch]);
 
-  // Keyboard shortcuts
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "Escape") {
+  /** Restore the last rated card to its pre-rating state and return to it. */
+  const undoLast = useCallback(() => {
+    const entry = historyRef.current.pop();
+    if (!entry) return;
+    onBlockPatch(entry.item.pageId, entry.item.block.id, entry.prevReview as Record<string, unknown>);
+    setSessionStats((s) => ({
+      reviewed: Math.max(0, s.reviewed - 1),
+      correct: Math.max(0, s.correct - (entry.wasCorrect ? 1 : 0))
+    }));
+    setShowAnswer(false);
+    setCardIndex((i) => Math.max(0, i - 1));
+  }, [onBlockPatch]);
+
+  /** Advance without scheduling — card keeps its current state. */
+  const skipCard = useCallback(() => {
+    if (!currentCard) return;
+    touchedRef.current = true;
+    setShowAnswer(false);
+    setCardIndex((i) => i + 1);
+  }, [currentCard]);
+
+  /** Park a card: leaves the due queue but keeps its scheduling history. */
+  const suspendCard = useCallback(() => {
+    if (!currentCard) return;
+    touchedRef.current = true;
+    onBlockPatch(currentCard.pageId, currentCard.block.id, {
+      ...(currentCard.block.review ?? {}),
+      suspended: true
+    });
+    onToast?.("Card suspended — find it again via Remove from review → re-add");
+    setShowAnswer(false);
+    setCardIndex((i) => i + 1);
+  }, [currentCard, onBlockPatch, onToast]);
+
+  /** Strip review metadata entirely. */
+  const removeCard = useCallback(() => {
+    if (!currentCard) return;
+    touchedRef.current = true;
+    onBlockPatch(currentCard.pageId, currentCard.block.id, removedReviewState());
+    onToast?.("Removed from review queue");
+    setShowAnswer(false);
+    setCardIndex((i) => i + 1);
+  }, [currentCard, onBlockPatch, onToast]);
+
+  const restartSession = useCallback(() => {
+    historyRef.current = [];
+    touchedRef.current = false; // allow queue re-sync from pages
+    setCardIndex(0);
+    setSessionStats({ reviewed: 0, correct: 0 });
+  }, []);
+
+  /* ─── Keyboard shortcuts ───
+     Space/Enter reveal · 1–4 rate · U undo · S skip · Esc close */
+  useEffect(() => {
+    const onKey = (e: React.KeyboardEvent | KeyboardEvent) => {
+      if ((e as KeyboardEvent).key === "Escape") {
         onClose();
         return;
       }
       if (isComplete) return;
+      const target = e.target as HTMLElement | null;
+      if (target && /input|textarea/i.test(target.tagName)) return;
       if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
         if (!showAnswer) setShowAnswer(true);
         return;
       }
       if (showAnswer) {
-        const rating = RATINGS.find((r) => r.key === e.key);
+        const rating = RATINGS.find((r) => r.key === (e as KeyboardEvent).key);
         if (rating) {
           e.preventDefault();
           handleRate(rating.quality);
+          return;
         }
       }
+      const k = (e as KeyboardEvent).key.toLowerCase();
+      if (k === "u" && historyRef.current.length > 0) { e.preventDefault(); undoLast(); }
+      else if (k === "s") { e.preventDefault(); skipCard(); }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showAnswer, isComplete, handleRate, onClose]);
+    window.addEventListener("keydown", onKey as unknown as EventListener);
+    return () => window.removeEventListener("keydown", onKey as unknown as EventListener);
+  }, [showAnswer, isComplete, handleRate, undoLast, skipCard, onClose]);
 
-  // Mastery percentage
-  const mastery = allReviewableCards.length > 0
-    ? Math.round((allReviewableCards.filter((c) => c.block.review?.repetition >= 3).length / allReviewableCards.length) * 100)
+  /* ─── Stats ─── */
+  const totalCards = allReviewableCards.cards.length;
+  const mastery = totalCards > 0
+    ? Math.round((allReviewableCards.cards.filter((c) => (c.block.review?.repetition ?? 0) >= 3).length / totalCards) * 100)
     : 0;
 
-  // Current streak
-  const streak = allReviewableCards.filter((c) => {
+  const streak = allReviewableCards.cards.filter((c) => {
     const lastReview = c.block.review?.lastReview;
     if (!lastReview) return false;
     const diff = Date.now() - new Date(lastReview).getTime();
     return diff < 86400000 * 2; // Reviewed in last 2 days
   }).length;
+
+  const retention = sessionStats.reviewed > 0
+    ? Math.round((sessionStats.correct / sessionStats.reviewed) * 100)
+    : 0;
 
   return (
     <motion.div
@@ -198,17 +251,23 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
           /* Dashboard */
           <div className="p-6 space-y-5">
             <div className="grid grid-cols-3 gap-3">
-              <StatCard icon={Brain} label="Total Cards" value={allReviewableCards.length} color="text-[var(--accent)]" />
-              <StatCard icon={Clock} label="Due Today" value={dueCards.length} color="text-[var(--accent)]" />
+              <StatCard icon={Brain} label="Total Cards" value={totalCards} color="text-[var(--accent)]" />
+              <StatCard icon={Clock} label="Due Now" value={queue.length} color="text-[var(--accent)]" />
               <StatCard icon={Trophy} label="Mastery" value={`${mastery}%`} color="text-[var(--success)]" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <StatCard icon={Flame} label="Streak" value={streak} color="text-[var(--warning)]" />
               <StatCard icon={Zap} label="Reviewed Today" value={sessionStats.reviewed} color="text-[var(--noska-blue)]" />
             </div>
-            {allReviewableCards.length === 0 && (
+            {sessionStats.reviewed > 0 && (
+              <StatCard icon={Check} label="Retention (this session)" value={`${retention}%`} color="text-[var(--success)]" />
+            )}
+            {allReviewableCards.suspended > 0 && (
+              <p className="text-xs text-[var(--muted)] text-center">{allReviewableCards.suspended} card(s) suspended</p>
+            )}
+            {totalCards === 0 && (
               <div className="text-center py-6 text-sm text-[var(--muted)]">
-                No cards yet. Add blocks to review from the block menu in the editor.
+                No cards yet. Right-click any block → “Add to review”, or type /review in the editor.
               </div>
             )}
           </div>
@@ -230,19 +289,25 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
                 </h3>
                 <p className="text-sm text-[var(--secondary)]">
                   {sessionStats.reviewed === 0
-                    ? `${allReviewableCards.length} cards total · All caught up`
-                    : `Reviewed ${sessionStats.reviewed} cards · ${sessionStats.correct} correct`
-                  }
+                    ? `${totalCards} cards total · All caught up`
+                    : `Reviewed ${sessionStats.reviewed} cards · ${sessionStats.correct} correct${sessionStats.reviewed > 0 ? ` · ${retention}% retention` : ""}`}
                 </p>
-                {sessionStats.reviewed > 0 && (
+                {historyRef.current.length > 0 && (
                   <button
-                    onClick={() => { setCardIndex(0); setSessionStats({ reviewed: 0, correct: 0 }); }}
-                    className="mt-4 flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-4 py-2 text-xs font-medium text-[var(--text)] hover:bg-[var(--hover)]"
+                    onClick={() => { while (historyRef.current.length) undoLast(); }}
+                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-4 py-2 text-xs font-medium text-[var(--secondary)] hover:bg-[var(--hover)]"
                   >
-                    <RotateCcw size={13} />
-                    Review again
+                    <Undo2 size={13} />
+                    Undo session ({historyRef.current.length})
                   </button>
                 )}
+                <button
+                  onClick={restartSession}
+                  className="mt-4 flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-4 py-2 text-xs font-medium text-[var(--text)] hover:bg-[var(--hover)]"
+                >
+                  <RotateCcw size={13} />
+                  Review again
+                </button>
               </div>
             ) : (
               <>
@@ -252,19 +317,29 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
                     <motion.div
                       className="h-full rounded-full bg-[var(--accent)]"
                       initial={{ width: 0 }}
-                      animate={{ width: `${((cardIndex + 1) / dueCards.length) * 100}%` }}
+                      animate={{ width: `${((cardIndex + 1) / queue.length) * 100}%` }}
                       transition={{ type: "spring", stiffness: 200, damping: 25 }}
                     />
                   </div>
                   <span className="text-xs text-[var(--muted)]">
-                    {cardIndex + 1}/{dueCards.length}
+                    {cardIndex + 1}/{queue.length}
                   </span>
+                  {historyRef.current.length > 0 && (
+                    <button
+                      onClick={undoLast}
+                      title="Undo last answer (U)"
+                      className="flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[10px] font-medium text-[var(--secondary)] hover:bg-[var(--hover)] cursor-pointer"
+                    >
+                      <Undo2 size={11} />
+                      Undo
+                    </button>
+                  )}
                 </div>
 
                 {/* Card */}
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={currentCard.block.id}
+                    key={currentCard.block.id + ":" + cardIndex}
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
@@ -316,6 +391,30 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
                               </motion.button>
                             ))}
                           </div>
+                          {/* Card actions */}
+                          <div className="flex items-center justify-center gap-4 pt-1">
+                            <button
+                              onClick={skipCard}
+                              title="Skip (S)"
+                              className="flex items-center gap-1 text-[10px] font-medium text-[var(--muted)] hover:text-[var(--text)] cursor-pointer"
+                            >
+                              <SkipForward size={11} /> Skip
+                            </button>
+                            <button
+                              onClick={suspendCard}
+                              title="Suspend — hides card from queue, keeps history"
+                              className="flex items-center gap-1 text-[10px] font-medium text-[var(--muted)] hover:text-[var(--text)] cursor-pointer"
+                            >
+                              <PauseCircle size={11} /> Suspend
+                            </button>
+                            <button
+                              onClick={removeCard}
+                              title="Remove from review entirely"
+                              className="flex items-center gap-1 text-[10px] font-medium text-[var(--muted)] hover:text-[var(--danger)] cursor-pointer"
+                            >
+                              <Trash2 size={11} /> Remove
+                            </button>
+                          </div>
                         </motion.div>
                       )}
                     </div>
@@ -332,7 +431,7 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
 
 /* ─── Stat Card ─── */
 
-function StatCard({ icon: Icon, label, value, color }) {
+function StatCard({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ size?: number; className?: string }>; label: string; value: string | number; color: string }) {
   return (
     <div className="rounded-xl bg-[var(--surface)] p-4">
       <div className="flex items-center gap-2 mb-2">

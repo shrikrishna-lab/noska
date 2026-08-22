@@ -1,5 +1,6 @@
 import { blockFor } from "../../utils/helpers";
 import type { Page } from "../../lib/supabaseService";
+import { createReviewState } from "../../features/spaced/scheduler";
 // Aliased to avoid colliding with this file's own local usage patterns
 // (same pattern as the DatabaseBlock component/type collision resolved
 // in earlier Phase-4 batches).
@@ -489,6 +490,17 @@ const database = [
 
 // ── Advanced Blocks ─────────────────────────────────────────────
 const advanced = [
+  {
+    id: "review", title: "Add to review", aliases: ["review", "flashcard", "memorize", "study"],
+    icon: "Brain", category: "Advanced blocks",
+    description: "Turn this block into a spaced-repetition study card",
+    preview: { description: "Adds this block to your review queue — recall it with the Spaced Repetition study session" },
+    execute(ctx) {
+      // Same helper as the block context menu — behavior cannot diverge.
+      ctx.onPatch?.(createReviewState());
+      ctx.onToast?.("Added to your review queue");
+    }
+  },
   {
     id: "table-of-contents", title: "Table of contents", aliases: ["toc"],
     icon: "BookOpen", category: "Advanced blocks",

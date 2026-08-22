@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, X, ChevronRight, ChevronLeft, Link2, Copy, Move, Trash2, FileEdit, Sparkles, Check,
   Type, Heading1, Heading2, Heading3, Heading4, List, ListChecks, CheckSquare, Quote, MessageSquare, Code,
-  Palette, MessageCircle, Play, Square
+  Palette, MessageCircle, Play, Square, Brain
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { TEXT_COLORS, BG_COLORS } from "../../utils/colors";
@@ -90,6 +90,7 @@ export default function BlockContextMenu({
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Layout actions and groups matching Image 2
+  const isReviewCard = Boolean((block as { review?: unknown } | undefined)?.review);
   const mainActions: MenuItem[] = [
     { id: "turn-into", icon: Type, label: "Turn into", submenu: true, section: "Text" },
     { id: "color", icon: Palette, label: "Color", submenu: true, section: "Text" },
@@ -103,6 +104,12 @@ export default function BlockContextMenu({
     { id: "delete", icon: Trash2, label: "Delete", shortcut: "Del", group: 2, danger: true },
 
     // Divider group 2
+    {
+      id: isReviewCard ? "remove-from-review" : "add-to-review",
+      icon: Brain,
+      label: isReviewCard ? "Remove from review" : "Add to review",
+      group: 3
+    },
     { id: "comment", icon: MessageCircle, label: "Comment", shortcut: "Ctrl+⇧+M", group: 3 },
     { id: "suggest", icon: FileEdit, label: "Suggest edits", shortcut: "Ctrl+⇧+Alt+X", group: 3 },
     { id: "present", icon: Play, label: "Present from here", badge: "Beta", shortcut: "Ctrl+Alt+P", group: 3 },

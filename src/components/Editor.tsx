@@ -81,6 +81,7 @@ const EMOJI_CATALOG = [
   { e: "🌟", k: ["star", "glow", "special"] }, { e: "☕", k: ["coffee", "break", "cafe"] },
 ];
 import BlockContextMenu from "./editor/BlockContextMenu";
+import { createReviewState, removedReviewState } from "../features/spaced/scheduler";
 import SlashCommandMenu from "./editor/SlashCommandMenu";
 // SlashCommandMenu.jsx (still untyped .jsx, out of Phase 4's scope) uses a
 // bare `forwardRef(function SlashCommandMenu(props, ref) {...})` with no
@@ -2656,6 +2657,18 @@ const Block = memo(function Block({
                 }
                 case "move-to": onMove?.(); break;
                 case "ask-ai": onAskAI?.(); break;
+                case "add-to-review": {
+                  // Same helper as the /review slash command — one source
+                  // of truth for review-state creation.
+                  onPatch(createReviewState() as unknown as Partial<typeof block>);
+                  onToast?.("Added to your review queue");
+                  break;
+                }
+                case "remove-from-review": {
+                  onPatch(removedReviewState() as unknown as Partial<typeof block>);
+                  onToast?.("Removed from your review queue");
+                  break;
+                }
                 case "convert": {
                   // turnInto (blockModel.ts) operates on the generic
                   // TreeBlock shape; `properties` is `Record<string,
