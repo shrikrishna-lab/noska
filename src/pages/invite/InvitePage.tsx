@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabaseAnon } from "../../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSignIn } from "@clerk/react";
+import { useSignIn, useClerk } from "@clerk/react";
 import AuthBackground from "../../components/auth/AuthBackground";
 import AuthProviders from "../../components/auth/AuthProviders";
 import AuthError from "../../components/auth/AuthError";
@@ -12,6 +12,7 @@ export function InvitePage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const { signIn } = useSignIn();
+  const clerk = useClerk();
   const [state, setState] = useState<"loading" | "valid" | "expired" | "used" | "invalid">("loading");
   const [invitee, setInvitee] = useState<{ name: string; email: string } | null>(null);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
@@ -45,12 +46,40 @@ export function InvitePage() {
     }
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      const { error } = await signIn.sso({
-        strategy,
-        redirectUrl: `${window.location.origin}/dashboard`,
-        redirectCallbackUrl: `${window.location.origin}/sso-callback`,
+      // `signIn.sso()` is for ENTERPRISE SSO connections and fails outright on
+      // instances without one — invited users could never accept their invite.
+      // Primary path (stable across Clerk versions): start the OAuth sign-in,
+      // then go straight to the provider, keeping the custom Noska invite UI.
+      // Keep the auth callback on the canonical app host. The marketing
+      // alias (www.noska.me) must not send an authenticated user back to the
+      // public login page after Clerk completes the OAuth exchange.
+      const appOrigin = window.location.hostname === "www.noska.me"
+        ? "https://app.noska.me"
+        : window.location.origin;
+      const redirectUrl = `${appOrigin}/sso-callback`;
+      try {
+        await signIn.create({ strategy, redirectUrl } as never);
+        const external = (signIn as unknown as {
+          firstFactorVerification?: { externalVerificationRedirectURL?: URL | string | null };
+        }).firstFactorVerification?.externalVerificationRedirectURL;
+        if (external) {
+          window.location.assign(external as unknown as string);
+          return;
+        }
+      } catch {
+        // fall through to legacy helpers below
+      }
+      const authenticateWithRedirect = (signIn as typeof signIn & {
+        authenticateWithRedirect?: (params: Record<string, string>) => Promise<void>;
+      }).authenticateWithRedirect;
+      if (typeof authenticateWithRedirect === "function") {
+        await authenticateWithRedirect({ strategy, redirectUrl, redirectUrlComplete: `${appOrigin}/login` });
+        return;
+      }
+      await clerk.redirectToSignIn({
+        signInForceRedirectUrl: `${appOrigin}/login`,
+        signInFallbackRedirectUrl: `${appOrigin}/login`,
       });
-      if (error) throw error;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to sign up. Please try again.");
       setLoadingProvider(null);

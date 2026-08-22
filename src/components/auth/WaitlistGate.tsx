@@ -329,8 +329,8 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
         setStatus("checking");
         setEntryData(null);
         setRefreshNonce((value) => value + 1);
-      } catch (e) {
-        setJoinError(e instanceof Error ? e.message : "Could not join the waitlist. Please try again.");
+      } catch {
+        setJoinError("Could not join the waitlist. Please check your connection and try again.");
         setJoining(false);
       }
     };
