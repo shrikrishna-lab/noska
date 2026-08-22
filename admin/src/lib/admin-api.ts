@@ -43,7 +43,7 @@ class AdminApi {
           userId,
           expiresInSeconds,
           sessionToken: getAdminToken(),
-          appOrigin: import.meta.env.VITE_APP_URL ?? "https://app.noska.me",
+          appOrigin: import.meta.env.VITE_APP_URL ?? window.location.origin,
         }
       ),
   };

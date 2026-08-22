@@ -50,12 +50,9 @@ export function InvitePage() {
       // instances without one — invited users could never accept their invite.
       // Primary path (stable across Clerk versions): start the OAuth sign-in,
       // then go straight to the provider, keeping the custom Noska invite UI.
-      // Keep the auth callback on the canonical app host. The marketing
-      // alias (www.noska.me) must not send an authenticated user back to the
-      // public login page after Clerk completes the OAuth exchange.
-      const appOrigin = window.location.hostname === "www.noska.me"
-        ? "https://app.noska.me"
-        : window.location.origin;
+      // Stay on the current origin: www.noska.me serves the full app, and
+      // app.noska.me is not a live production host (dead DNS).
+      const appOrigin = window.location.origin;
       const redirectUrl = `${appOrigin}/sso-callback`;
       try {
         await signIn.create({ strategy, redirectUrl } as never);

@@ -71,12 +71,10 @@ const { signIn, errors, fetchStatus } = useSignIn();
     if (provider === "microsoft") capture("microsoft_login");
 try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      // Keep the auth callback on the canonical app host. The marketing
-      // alias (www.noska.me) must not send an authenticated user back to the
-      // public login page after Clerk completes the OAuth exchange.
-      const appOrigin = window.location.hostname === "www.noska.me"
-        ? "https://app.noska.me"
-        : window.location.origin;
+      // Stay on the current origin: www.noska.me serves the full app, and
+      // app.noska.me is not a live production host (dead DNS) — rewriting
+      // there sent every completed OAuth into a connection error.
+      const appOrigin = window.location.origin;
       const redirectUrl = `${appOrigin}/sso-callback`;
       // Primary path (stable across Clerk versions): start the OAuth sign-in,
       // then navigate straight to the provider — this keeps the CUSTOM Noska
