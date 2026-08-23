@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-desktop
 .env
 *.local
 dev_server.log
@@ -45,3 +46,11 @@ test-page.cjs
 admin/src/lib/more_hooks.txt
 console-after-typing.txt
 /*.png
+
+# ── Tauri desktop shell ──────────────────────────────────────────────────────
+# Rust build artifacts (huge, machine-specific)
+src-tauri/target/
+# Generated Tauri schemas/capability snapshots
+src-tauri/gen/schemas/
+# Updater signing keys — the private key must NEVER be committed
+.tauri/

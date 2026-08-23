@@ -14,7 +14,12 @@ const httpsConfig = process.env.VITE_HTTPS_KEY && process.env.VITE_HTTPS_CERT
     }
   : undefined;
 
+// When building under `tauri build`/`tauri dev`, TAURI_ENV_* variables are set.
+const isTauri = !!process.env.TAURI_ENV_PLATFORM;
+
 export default defineConfig({
+  // Keep the terminal clear of noise when driven by the Tauri CLI.
+  clearScreen: false,
   plugins: [
     react(),
     sentryVitePlugin({
@@ -37,8 +42,19 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: ["app.noska.me", "localhost", "127.0.0.1", "app.localhost"],
     https: httpsConfig,
+    // Ignore Rust build artifacts — chokidar crashes with EBUSY on Windows
+    // when tauri build outputs get locked/replaced mid-watch.
+    watch: {
+      ignored: ["**/src-tauri/target/**", "**/dist/**", "**/node_modules/**"],
+    },
   },
   build: {
+    // Match the bundled system webviews when targeting Tauri (WebView2 /
+    // WKWebView / WebKitGTK); leave the default target untouched for web.
+    ...(isTauri && {
+      target:
+        process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
+    }),
     sourcemap: process.env.SENTRY_AUTH_TOKEN ? true : false,
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
