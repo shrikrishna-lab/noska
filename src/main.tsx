@@ -10,6 +10,8 @@ import { initPosthog } from "./lib/posthog";
 import { initSentry, Sentry } from "./lib/sentry";
 import DesktopBridge from "./lib/desktop/DesktopBridge";
 import { isDesktop } from "./lib/desktop/platform";
+import MarketingShell from "./components/MarketingShell";
+import LoginRoute from "./components/LoginRoute";
 import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import ControlCenter from "./ControlCenter";
@@ -32,11 +34,6 @@ const NewUpdated = lazy(() => import("./pages/marketing/NewUpdated"));
 const Launch = lazy(() => import("./pages/marketing/launch/Launch"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
-
-// Runtime-aware shell for marketing routes: on desktop they hand over to
-// <App /> (loading -> auth -> workspace/login); never the marketing site.
-const MarketingShell = ({ children }: { children: React.ReactNode }) =>
-  isDesktop() ? <App /> : <MarketingShell>{children}</MarketingShell>;
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-white">
@@ -98,7 +95,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           <Route path="/control" element={<ControlCenter />} />
-          <Route path="/login" element={<App />} />
+          <Route path="/login" element={<LoginRoute />} />
           <Route path="/dashboard" element={<App />} />
           <Route path="/onboarding" element={<App />} />
           <Route path="/waitlist" element={<App />} />
