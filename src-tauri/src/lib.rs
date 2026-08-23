@@ -1,0 +1,142 @@
+//! Noska desktop shell (Tauri 2).
+//!
+//! Rust is ONLY the native layer: window, tray, deep links, notifications,
+//! single-instance, auto-update. All Noska application logic stays in the
+//! React + TypeScript frontend under `src/`.
+
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::TrayIconBuilder,
+    Emitter, Manager,
+};
+#[cfg(desktop)]
+use tauri_plugin_deep_link::DeepLinkExt;
+
+/// Event emitted to the webview when a tray menu item is clicked.
+/// Payload is the raw action id ("new-page" | "new-task" | "open-ai").
+const TRAY_ACTION_EVENT: &str = "tray://action";
+/// Event emitted to the webview when a `noska://` deep link is opened.
+/// Payload: array of URL strings.
+const DEEP_LINK_EVENT: &str = "deep-link://open-url";
+
+fn focus_main_window(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+    }
+}
+
+fn emit_deep_links(app: &tauri::AppHandle, urls: Vec<String>) {
+    if urls.is_empty() {
+        return;
+    }
+    // Ensure the window is visible when launched via a deep link.
+    focus_main_window(app);
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.emit(DEEP_LINK_EVENT, urls);
+    }
+}
+
+#[cfg(desktop)]
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "open", "Open Noska", true, None::<&str>)?;
+    let new_page = MenuItem::with_id(app, "new-page", "New Page", true, None::<&str>)?;
+    let new_task = MenuItem::with_id(app, "new-task", "New Task", true, None::<&str>)?;
+    let open_ai = MenuItem::with_id(app, "open-ai", "Open AI", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Noska", true, None::<&str>)?;
+    let sep1 = PredefinedMenuItem::separator(app)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
+
+    let menu = Menu::with_items(
+        app,
+        &[&open, &sep1, &new_page, &new_task, &open_ai, &sep2, &quit],
+    )?;
+
+    TrayIconBuilder::with_id("noska-tray")
+        .icon(app.default_window_icon().expect("missing window icon").clone())
+        .tooltip("Noska")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "quit" => app.exit(0),
+            "open" => focus_main_window(app),
+            action => {
+                // Forward to the frontend; routing/validation happens in TS.
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.emit(TRAY_ACTION_EVENT, action);
+                }
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn setup_deep_links(app: &tauri::App) {
+    let deep_link = app.deep_link();
+
+    // Deep links received while this process was the launching process
+    // (cold start via `noska://...` on Windows/Linux argv or macOS open event).
+    if let Ok(Some(urls)) = deep_link.get_current() {
+        let urls: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
+        if !urls.is_empty() {
+            let handle = app.handle().clone();
+            // The webview may not be ready yet; retry shortly from a plain
+            // thread (never block Tauri's async runtime).
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                emit_deep_links(&handle, urls);
+            });
+        }
+    }
+
+    // Runtime deep links while the app is already running.
+    let handle = app.handle().clone();
+    app.deep_link().on_open_url(move |event| {
+        let urls: Vec<String> = event.urls().iter().map(|u| u.to_string()).collect();
+        emit_deep_links(&handle, urls);
+    });
+}
+
+pub fn run() {
+    #[cfg(desktop)]
+    let builder = {
+        let mut builder = tauri::Builder::default();
+
+        // Second launch: focus the existing window and forward any deep-link
+        // argv to it instead of starting a second instance.
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            focus_main_window(app);
+            let urls: Vec<String> = argv
+                .iter()
+                .filter(|a| a.starts_with("noska://"))
+                .cloned()
+                .collect();
+            emit_deep_links(app, urls);
+        }));
+
+        builder
+            .plugin(tauri_plugin_window_state::Builder::default().build())
+            .plugin(tauri_plugin_deep_link::init())
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_process::init())
+    };
+
+    #[cfg(not(desktop))]
+    let builder = tauri::Builder::default();
+
+    builder
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                setup_tray(app)?;
+                setup_deep_links(app);
+            }
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running Noska");
+}

@@ -8,6 +8,8 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
 import { initPosthog } from "./lib/posthog";
 import { initSentry, Sentry } from "./lib/sentry";
+import DesktopBridge from "./lib/desktop/DesktopBridge";
+import { isDesktop } from "./lib/desktop/platform";
 import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import ControlCenter from "./ControlCenter";
@@ -30,6 +32,11 @@ const NewUpdated = lazy(() => import("./pages/marketing/NewUpdated"));
 const Launch = lazy(() => import("./pages/marketing/launch/Launch"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
+
+// Runtime-aware shell for marketing routes: on desktop they hand over to
+// <App /> (loading -> auth -> workspace/login); never the marketing site.
+const MarketingShell = ({ children }: { children: React.ReactNode }) =>
+  isDesktop() ? <App /> : <MarketingShell>{children}</MarketingShell>;
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-white">
@@ -65,27 +72,28 @@ createRoot(document.getElementById("root")!).render(
             </div>
           </div>
         )}>
-        <SpeedInsights />
-        <Analytics />
+        {!isDesktop() && <SpeedInsights />}
+        {!isDesktop() && <Analytics />}
+        <DesktopBridge />
         <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<MarketingLayout><MarketingHome /></MarketingLayout>} />
-          <Route path="/pricing" element={<MarketingLayout><MarketingPricing /></MarketingLayout>} />
-          <Route path="/enterprise" element={<MarketingLayout><MarketingEnterprise /></MarketingLayout>} />
-          <Route path="/product" element={<MarketingLayout><MarketingProduct /></MarketingLayout>} />
-          <Route path="/solutions" element={<MarketingLayout><MarketingSolutions /></MarketingLayout>} />
-          <Route path="/resources" element={<MarketingLayout><MarketingResources /></MarketingLayout>} />
-          <Route path="/changelog" element={<MarketingLayout><MarketingChangelog /></MarketingLayout>} />
-          <Route path="/blog" element={<MarketingLayout><MarketingBlog /></MarketingLayout>} />
-          <Route path="/blog/:slug" element={<MarketingLayout><BlogPost /></MarketingLayout>} />
-          <Route path="/privacy" element={<MarketingLayout><Legal /></MarketingLayout>} />
-          <Route path="/terms" element={<MarketingLayout><Legal /></MarketingLayout>} />
-          <Route path="/policy" element={<MarketingLayout><Legal /></MarketingLayout>} />
-          <Route path="/refund" element={<MarketingLayout><Legal /></MarketingLayout>} />
-          <Route path="/docs" element={<MarketingLayout><Docs /></MarketingLayout>} />
-          <Route path="/referrals" element={<MarketingLayout><Referrals /></MarketingLayout>} />
-          <Route path="/roadmap" element={<MarketingLayout><Roadmap /></MarketingLayout>} />
-          <Route path="/new-updated" element={<MarketingLayout><NewUpdated /></MarketingLayout>} />
+          <Route path="/" element={<MarketingShell><MarketingHome /></MarketingShell>} />
+          <Route path="/pricing" element={<MarketingShell><MarketingPricing /></MarketingShell>} />
+          <Route path="/enterprise" element={<MarketingShell><MarketingEnterprise /></MarketingShell>} />
+          <Route path="/product" element={<MarketingShell><MarketingProduct /></MarketingShell>} />
+          <Route path="/solutions" element={<MarketingShell><MarketingSolutions /></MarketingShell>} />
+          <Route path="/resources" element={<MarketingShell><MarketingResources /></MarketingShell>} />
+          <Route path="/changelog" element={<MarketingShell><MarketingChangelog /></MarketingShell>} />
+          <Route path="/blog" element={<MarketingShell><MarketingBlog /></MarketingShell>} />
+          <Route path="/blog/:slug" element={<MarketingShell><BlogPost /></MarketingShell>} />
+          <Route path="/privacy" element={<MarketingShell><Legal /></MarketingShell>} />
+          <Route path="/terms" element={<MarketingShell><Legal /></MarketingShell>} />
+          <Route path="/policy" element={<MarketingShell><Legal /></MarketingShell>} />
+          <Route path="/refund" element={<MarketingShell><Legal /></MarketingShell>} />
+          <Route path="/docs" element={<MarketingShell><Docs /></MarketingShell>} />
+          <Route path="/referrals" element={<MarketingShell><Referrals /></MarketingShell>} />
+          <Route path="/roadmap" element={<MarketingShell><Roadmap /></MarketingShell>} />
+          <Route path="/new-updated" element={<MarketingShell><NewUpdated /></MarketingShell>} />
           <Route path="/launch" element={<Launch />} />
           <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
