@@ -109,6 +109,7 @@ import CommentThread from "./comments/CommentThread";
 import Breadcrumbs from "./Breadcrumbs";
 import { usePresence } from "../hooks/usePresence";
 import CommandPalette from "./CommandPalette";
+import AIFlashcardGenerator from "../features/study/AIFlashcardGenerator";
 import BacklinksPanel from "./editor/BacklinksPanel";
 import SelectionAIBar from "./editor/SelectionAIBar";
 import VersionHistoryPanel from "./editor/VersionHistoryPanel";
@@ -552,6 +553,7 @@ export default function Editor({
   const [backlinksOpen, setBacklinksOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [studyGeneratorOpen, setStudyGeneratorOpen] = useState(false);
   const [moveToOpen, setMoveToOpen] = useState(false);
   const importInputRef = useRef(null);
   const [activeCommentBlockId, setActiveCommentBlockId] = useState(null);
@@ -1615,6 +1617,19 @@ export default function Editor({
         />
       )}
 
+      {/* AI study-card generator */}
+      {studyGeneratorOpen && (
+        <AIFlashcardGenerator
+          page={page}
+          onBlocks={(next) => onBlocks(next as EditorBlock[])}
+          apiKey={apiKey}
+          aiProvider={aiProvider}
+          nvidiaKey={nvidiaKey}
+          onClose={() => setStudyGeneratorOpen(false)}
+          onToast={onToast}
+        />
+      )}
+
       {/* Analytics Panel */}
       {analyticsOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
@@ -1675,6 +1690,7 @@ export default function Editor({
           onImport: () => setImportDialogOpen(true),
           onExport: () => handleExport(),
           onAnalytics: () => setAnalyticsOpen(true),
+          onGenerateStudyCards: () => setStudyGeneratorOpen(true),
           onHistory: () => setHistoryOpen(true),
           onMoveTo: () => setMoveToOpen(true),
           onToggleSuggest: () => { setSuggestEdits(v => !v); onToast?.(`Suggest edits ${!suggestEdits ? "ON" : "OFF"}`); },
@@ -2086,7 +2102,15 @@ const Block = memo(function Block({
       e.preventDefault();
       onAdd("text", "");
       setTimeout(
-        () => (inputRef.current?.closest(".noska-block")?.nextSibling as Element | null)?.querySelector<HTMLElement>("textarea,input")?.focus(),
+        () => {
+          const next = inputRef.current?.closest(".noska-block")?.nextSibling as Element | null;
+          // Text blocks render as contenteditable, not textarea/input — try
+          // both so the caret actually moves into the freshly added block.
+          const focusable =
+            next?.querySelector<HTMLElement>("textarea, input") ||
+            next?.querySelector<HTMLElement>("[contenteditable='true']");
+          focusable?.focus();
+        },
         0
       );
     }
@@ -2659,8 +2683,9 @@ const Block = memo(function Block({
                 case "ask-ai": onAskAI?.(); break;
                 case "add-to-review": {
                   // Same helper as the /review slash command — one source
-                  // of truth for review-state creation.
-                  onPatch(createReviewState() as unknown as Partial<typeof block>);
+                  // of truth for review-state creation. Nested under
+                  // `review` to mirror removedReviewState()'s shape.
+                  onPatch({ review: createReviewState() } as unknown as Partial<typeof block>);
                   onToast?.("Added to your review queue");
                   break;
                 }

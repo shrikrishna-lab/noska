@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@clerk/react';
 import Lenis from 'lenis';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -7,6 +8,7 @@ import { AnnouncementBar } from './components/AnnouncementBar';
 import { useLaunchSettings } from '../../hooks/useLaunchSettings';
 import SEOHead from '../../components/SEOHead';
 import { ShieldAlert } from 'lucide-react';
+import { consumeOAuthIntent } from '../../lib/oauthIntent';
 import './marketing-theme.css';
 
 /**
@@ -29,6 +31,19 @@ export default function MarketingLayout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { settings, loading } = useLaunchSettings();
+  const { isLoaded, isSignedIn } = useAuth();
+
+  // OAuth recovery net. When Clerk's Account Portal can't honor the
+  // pending sign-in redirect, it dumps the (now signed-in) user on its
+  // Home URL — the marketing site — instead of /sso-callback. If we just
+  // sent them off to OAuth and they land here signed in, finish the flow
+  // by taking them into the app; App's bootstrap resolves workspace vs
+  // onboarding from there.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (!consumeOAuthIntent()) return;
+    navigate('/dashboard', { replace: true });
+  }, [isLoaded, isSignedIn, navigate]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !wrapperRef.current || !contentRef.current) return;

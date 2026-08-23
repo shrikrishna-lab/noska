@@ -1,0 +1,802 @@
+/* Download Page — zero.university-style: cream canvas, tactile mat scene,
+   giant fluid serif display, Caveat script accents, frosted pills.
+   Scoped under .dlp (rendered inside .marketing). */
+
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fragment+Mono&display=swap');
+
+.marketing .dlp {
+  --dlp-cream: #FBFAF9;
+  --dlp-paper: #FFFFFF;
+  --dlp-ink: #1C1B1A;
+  --dlp-ink-soft: #6B6B6B;
+  --dlp-green: #2E7D46;
+  --dlp-green-deep: #1E6B3C;
+  --dlp-green-bright: #4CBF63;
+  --dlp-green-tint: rgba(76, 191, 99, 0.14);
+  --dlp-yellow: #F2FF49;
+  --dlp-line: rgba(28, 27, 26, 0.1);
+  --dlp-glass: rgba(255, 255, 255, 0.66);
+  --dlp-ease: cubic-bezier(0.05, 0.72, 0.43, 0.98);
+  background: var(--dlp-cream);
+  color: var(--dlp-ink);
+  overflow-x: clip;
+}
+
+/* ── Shared type ──────────────────────────────────── */
+
+.marketing .dlp .dlp-mono-label {
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dlp-ink-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketing .dlp .dlp-mono-label.center { justify-content: center; width: 100%; }
+
+.marketing .dlp .dlp-display {
+  font-family: var(--mkt-font-serif);
+  font-weight: 500;
+  font-size: clamp(46px, 8.6vw, 104px);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  color: var(--dlp-ink);
+}
+
+.marketing .dlp .dlp-display.small { font-size: clamp(34px, 5vw, 60px); }
+
+.marketing .dlp .dlp-script {
+  font-family: 'Caveat', cursive;
+  font-style: normal;
+  font-weight: 700;
+  color: var(--dlp-green);
+  letter-spacing: -0.01em;
+  padding-right: 0.08em;
+}
+
+.marketing .dlp .dlp-script.green { color: var(--dlp-green); }
+
+.marketing .dlp .dlp-h2 {
+  font-family: var(--mkt-font-serif);
+  font-weight: 500;
+  font-size: clamp(32px, 4.6vw, 58px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  margin-top: 14px;
+}
+
+.marketing .dlp .dlp-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dlp-green-bright);
+  animation: dlp-pulse 2.4s var(--dlp-ease) infinite;
+}
+
+.marketing .dlp .dlp-pulse.dark { background: var(--dlp-green-bright); }
+
+@keyframes dlp-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(76, 191, 99, 0.5); }
+  60% { box-shadow: 0 0 0 7px rgba(76, 191, 99, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing .dlp .dlp-pulse { animation: none; }
+}
+
+/* ── Scene: desk + cutting mat + paper ────────────── */
+
+.marketing .dlp-scene-wrap {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 20px 140px 20px;
+}
+
+.marketing .dlp-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.marketing .dlp-desk {
+  position: absolute;
+  inset: -4%;
+  background:
+    radial-gradient(ellipse 90% 70% at 30% 20%, #E9DCC8 0%, transparent 60%),
+    radial-gradient(ellipse 80% 80% at 85% 90%, #D9C6A8 0%, transparent 55%),
+    repeating-linear-gradient(94deg, rgba(146, 116, 76, 0.1) 0 3px, transparent 3px 96px),
+    linear-gradient(160deg, #EAD9BC 0%, #DECBA6 48%, #D4BE96 100%);
+}
+
+.marketing .dlp-mat {
+  position: absolute;
+  inset: 4% 6% 10% 6%;
+  border-radius: 26px;
+  background: linear-gradient(155deg, #2E8A4E 0%, #256F3E 52%, #1E5F35 100%);
+  box-shadow:
+    0 40px 90px rgba(20, 40, 25, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+  transform: rotate(-1.1deg);
+}
+
+.marketing .dlp-mat-grid {
+  position: absolute;
+  inset: 7%;
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px 44px);
+  mask-image: radial-gradient(ellipse 75% 70% at 45% 40%, #000 30%, transparent 92%);
+}
+
+.marketing .dlp-mat-ruler {
+  position: absolute;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.5) 0 2px, transparent 2px 26px);
+  opacity: 0.5;
+}
+
+.marketing .dlp-mat-ruler.top { left: 7%; right: 7%; top: 4.5%; height: 8px; }
+.marketing .dlp-mat-ruler.left { top: 7%; bottom: 7%; left: 4.5%; width: 8px; background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.5) 0 2px, transparent 2px 26px); }
+
+.marketing .dlp-paper {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(680px, 78vw);
+  height: min(560px, 74vh);
+  transform: translate(-50%, -52%) rotate(-1.6deg);
+  background:
+    linear-gradient(115deg, rgba(0, 0, 0, 0.055) 0%, transparent 34%),
+    linear-gradient(295deg, rgba(0, 0, 0, 0.04) 0%, transparent 30%),
+    #FDFDFB;
+  border-radius: 6px;
+  box-shadow:
+    0 60px 120px rgba(25, 45, 30, 0.4),
+    0 12px 34px rgba(25, 45, 30, 0.25);
+}
+
+.marketing .dlp-shadow-leaf {
+  position: absolute;
+  background: radial-gradient(ellipse 60% 34% at 50% 50%, rgba(30, 60, 38, 0.16), transparent 70%);
+  filter: blur(14px);
+}
+
+.marketing .dlp-shadow-leaf.leaf-a { top: -8%; right: -6%; width: 70%; height: 44%; transform: rotate(-18deg); }
+.marketing .dlp-shadow-leaf.leaf-b { bottom: -4%; left: -10%; width: 60%; height: 38%; transform: rotate(12deg); }
+
+/* Stickers */
+
+.marketing .dlp-sticker {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  background: #fff;
+  color: #17161B;
+  border-radius: 20px;
+  box-shadow: 0 14px 30px rgba(20, 40, 25, 0.3), inset 0 0 0 5px #fff, inset 0 0 0 6px rgba(0, 0, 0, 0.06);
+  animation: dlp-bob 6s ease-in-out infinite;
+}
+
+.marketing .dlp-sticker.st-win { top: 16%; right: 12%; transform: rotate(9deg); animation-delay: 0s; }
+.marketing .dlp-sticker.st-mac { top: 58%; right: 6%; transform: rotate(-8deg); animation-delay: 1.6s; }
+.marketing .dlp-sticker.st-linux { bottom: 12%; left: 9%; transform: rotate(-6deg); animation-delay: 3s; }
+.marketing .dlp-sticker.st-zap {
+  top: 14%; left: 8%; transform: rotate(-10deg);
+  background: var(--dlp-yellow);
+  color: #17161B;
+  animation-delay: 4.4s;
+}
+
+@keyframes dlp-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing .dlp-sticker { animation: none; }
+}
+
+/* Handwritten sticky notes */
+
+.marketing .dlp-note {
+  position: absolute;
+  font-family: 'Caveat', cursive;
+  font-weight: 600;
+  font-size: clamp(16px, 1.6vw, 21px);
+  color: #3F3D38;
+  background: #FBF3C9;
+  padding: 10px 16px;
+  border-radius: 4px;
+  box-shadow: 0 10px 22px rgba(30, 40, 25, 0.22);
+  transform: rotate(-4deg);
+}
+
+.marketing .dlp-note i { color: var(--dlp-green); }
+
+.marketing .dlp-note.n-one { top: 9%; left: 16%; transform: rotate(-7deg); }
+.marketing .dlp-note.n-two { bottom: 20%; right: 20%; transform: rotate(4deg); background: #DFF3E2; }
+.marketing .dlp-note.n-three { bottom: 7%; left: 26%; transform: rotate(2deg); background: #FDE4D2; }
+
+/* Hero copy sits on the paper */
+
+.marketing .dlp-hero-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  width: min(820px, 92vw);
+}
+
+.marketing .dlp-hero-paper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+
+.marketing .dlp-hero-content .dlp-display { color: var(--dlp-ink); }
+
+.marketing .dlp-hero-sub {
+  max-width: 480px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--dlp-ink-soft);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 18px;
+  padding: 14px 20px;
+  box-shadow: inset 0 0 0 1px rgba(28, 27, 26, 0.06);
+}
+
+.marketing .dlp-scroll-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 118px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dlp-ink);
+  text-decoration: none;
+  background: var(--dlp-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--dlp-line);
+  border-radius: 999px;
+  padding: 9px 16px;
+}
+
+/* Floating dock */
+
+.marketing .dlp-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--dlp-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--dlp-line);
+  border-radius: 999px;
+  padding: 7px;
+  box-shadow: 0 20px 44px rgba(20, 30, 22, 0.22);
+}
+
+.marketing .dlp-dock-logo {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--dlp-line);
+  overflow: hidden;
+}
+
+.marketing .dlp-dock-logo img { width: 24px; height: 24px; object-fit: contain; }
+
+.marketing .dlp-dock-cta {
+  display: inline-flex;
+  align-items: center;
+  background: #17161B;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 999px;
+  padding: 11px 26px;
+  transition: transform 0.35s var(--dlp-ease), background 0.35s var(--dlp-ease);
+}
+
+.marketing .dlp-dock-cta:hover { background: #2A2830; transform: scale(1.03); }
+
+.marketing .dlp-dock-web {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--dlp-ink);
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--dlp-line);
+  transition: transform 0.35s var(--dlp-ease);
+}
+
+.marketing .dlp-dock-web:hover { transform: scale(1.06); }
+
+/* ── Giant marquee words ──────────────────────────── */
+
+.marketing .dlp-giant {
+  padding: clamp(48px, 8vw, 110px) 0;
+  background: var(--dlp-ink);
+  overflow: hidden;
+}
+
+.marketing .dlp-marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.marketing .dlp-marquee-track {
+  display: inline-flex;
+  animation: dlp-marquee 26s linear infinite;
+}
+
+.marketing .dlp-marquee-group { display: inline-flex; }
+
+.marketing .dlp-marquee-group span {
+  font-family: var(--mkt-font-serif);
+  font-weight: 500;
+  font-size: clamp(64px, 11vw, 150px);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  color: var(--dlp-yellow);
+  padding-right: 0.35em;
+}
+
+.marketing .dlp-marquee-group span.alt { color: var(--dlp-cream); }
+
+.marketing .dlp-marquee-group span i {
+  font-style: normal;
+  color: var(--dlp-green-bright);
+  padding-left: 0.3em;
+}
+
+@keyframes dlp-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing .dlp-marquee-track { animation: none; }
+}
+
+/* ── Download cards ───────────────────────────────── */
+
+.marketing .dlp-get {
+  padding: clamp(72px, 10vw, 130px) 20px;
+  scroll-margin-top: 80px;
+}
+
+.marketing .dlp-get-head { text-align: center; max-width: 700px; margin: 0 auto clamp(40px, 6vw, 64px) auto; }
+
+.marketing .dlp-cards {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.marketing .dlp-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--dlp-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--dlp-line);
+  border-radius: 30px;
+  padding: 28px 26px 24px 26px;
+  box-shadow: 0 24px 60px rgba(25, 40, 28, 0.1);
+  transition: transform 0.6s var(--dlp-ease), box-shadow 0.6s var(--dlp-ease), background 0.4s;
+}
+
+.marketing .dlp-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 36px 80px rgba(25, 40, 28, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.marketing .dlp-card.is-yours { border-color: rgba(46, 125, 70, 0.4); }
+
+.marketing .dlp-yours {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--dlp-green);
+  background: var(--dlp-green-tint);
+  border: 1px dashed rgba(46, 125, 70, 0.45);
+  border-radius: 999px;
+  padding: 3px 13px;
+  transform: rotate(3deg);
+}
+
+.marketing .dlp-card header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.marketing .dlp-card-glyph {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border: 1px solid var(--dlp-line);
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(25, 40, 28, 0.08);
+  transform: rotate(-3deg);
+}
+
+.marketing .dlp-card-glyph.mac { transform: rotate(2deg); }
+.marketing .dlp-card-glyph.linux { transform: rotate(-2deg); }
+
+.marketing .dlp-card h3 {
+  font-family: var(--mkt-font-heading);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.marketing .dlp-card header p {
+  font-size: 12.5px;
+  color: var(--dlp-ink-soft);
+  margin-top: 2px;
+}
+
+.marketing .dlp-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  background: var(--dlp-green-deep);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 999px;
+  padding: 14px 20px;
+  box-shadow: 0 14px 30px rgba(30, 107, 60, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: transform 0.4s var(--dlp-ease), box-shadow 0.4s var(--dlp-ease), background 0.3s;
+}
+
+.marketing .dlp-pill-btn:hover {
+  transform: translateY(-2px) scale(1.01);
+  background: var(--dlp-green);
+  box-shadow: 0 20px 40px rgba(30, 107, 60, 0.34);
+}
+
+.marketing .dlp-pill-btn.dark {
+  background: var(--dlp-ink);
+  box-shadow: 0 14px 30px rgba(23, 22, 27, 0.26);
+}
+
+.marketing .dlp-pill-btn.dark:hover { background: #2A2830; }
+
+.marketing .dlp-pill-btn.big { width: auto; font-size: 15px; padding: 16px 30px; }
+.marketing .dlp-pill-btn.light { background: var(--dlp-ink); color: #fff; }
+.marketing .dlp-pill-btn.light:hover { background: #2A2830; }
+
+.marketing .dlp-meta {
+  list-style: none;
+  margin: 20px 0 0 0;
+  padding: 0;
+}
+
+.marketing .dlp-meta li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 9px 2px;
+  border-bottom: 1px dashed var(--dlp-line);
+}
+
+.marketing .dlp-meta li span {
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dlp-ink-soft);
+}
+
+.marketing .dlp-meta li strong { font-weight: 600; }
+
+.marketing .dlp-seg {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  background: rgba(28, 27, 26, 0.06);
+  border-radius: 999px;
+  padding: 3px;
+  margin-bottom: 6px;
+}
+
+.marketing .dlp-seg button {
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dlp-ink-soft);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: all 0.35s var(--dlp-ease);
+}
+
+.marketing .dlp-seg button.on {
+  background: #fff;
+  color: var(--dlp-ink);
+  box-shadow: 0 2px 8px rgba(25, 40, 28, 0.12);
+}
+
+.marketing .dlp-seg-hint {
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--dlp-ink-soft);
+  margin-bottom: 16px;
+  min-height: 15px;
+}
+
+.marketing .dlp-alts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+.marketing .dlp-alts a {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dlp-ink-soft);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--dlp-line);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  padding: 6px 13px;
+  transition: all 0.3s var(--dlp-ease);
+}
+
+.marketing .dlp-alts a:hover { color: var(--dlp-ink); border-color: rgba(28, 27, 26, 0.28); }
+
+.marketing .dlp-all-releases {
+  text-align: center;
+  margin-top: 36px;
+  font-size: 14px;
+  color: var(--dlp-ink-soft);
+}
+
+.marketing .dlp-all-releases a {
+  color: var(--dlp-green);
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.marketing .dlp-all-releases a:hover { text-decoration: underline; }
+
+/* ── Why desktop ──────────────────────────────────── */
+
+.marketing .dlp-why {
+  padding: clamp(64px, 9vw, 110px) 20px;
+  background: var(--dlp-cream);
+}
+
+.marketing .dlp-features {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.marketing .dlp-feature {
+  background: #fff;
+  border: 1px solid var(--dlp-line);
+  border-radius: 26px;
+  padding: 26px 22px;
+  box-shadow: 0 18px 44px rgba(25, 40, 28, 0.07);
+  transition: transform 0.6s var(--dlp-ease), box-shadow 0.6s var(--dlp-ease);
+}
+
+.marketing .dlp-feature:hover { transform: translateY(-5px) rotate(-0.4deg); box-shadow: 0 30px 60px rgba(25, 40, 28, 0.12); }
+
+.marketing .dlp-feature-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  font-size: 19px;
+  color: var(--dlp-green);
+  background: var(--dlp-green-tint);
+  border: 1px dashed rgba(46, 125, 70, 0.4);
+  border-radius: 14px;
+  margin-bottom: 16px;
+  transform: rotate(-4deg);
+}
+
+.marketing .dlp-feature h3 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 6px; }
+
+.marketing .dlp-feature p { font-size: 13.5px; line-height: 1.6; color: var(--dlp-ink-soft); }
+
+/* ── Steps ────────────────────────────────────────── */
+
+.marketing .dlp-steps-sec { padding: clamp(56px, 8vw, 96px) 20px; }
+
+.marketing .dlp-steps {
+  max-width: 880px;
+  margin: 0 auto;
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+}
+
+.marketing .dlp-steps li { position: relative; display: flex; flex-direction: column; gap: 14px; }
+
+.marketing .dlp-step-num {
+  font-family: var(--mkt-font-serif);
+  font-size: 44px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--dlp-green);
+  letter-spacing: -0.02em;
+}
+
+.marketing .dlp-steps h3 { font-size: 16.5px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 5px; }
+.marketing .dlp-steps p { font-size: 13.5px; line-height: 1.6; color: var(--dlp-ink-soft); }
+
+.marketing .dlp-step-dash {
+  position: absolute;
+  top: 24px;
+  right: -22px;
+  width: 34px;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--dlp-green-bright) 0 5px, transparent 5px 10px);
+  transform: rotate(-4deg);
+}
+
+/* ── FAQ ──────────────────────────────────────────── */
+
+.marketing .dlp-faq-sec { padding: clamp(48px, 7vw, 88px) 20px clamp(72px, 9vw, 120px) 20px; max-width: 780px; margin: 0 auto; }
+
+.marketing .dlp .dlp-faq .mkt-faq-accordion-item {
+  background: #fff;
+  border: 1px solid var(--dlp-line);
+  border-radius: 20px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.4s var(--dlp-ease);
+}
+
+.marketing .dlp .dlp-faq .mkt-faq-accordion-item.open { box-shadow: 0 16px 40px rgba(25, 40, 28, 0.09); }
+
+.marketing .dlp .dlp-faq .mkt-faq-accordion-question {
+  font-family: var(--mkt-font-heading);
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: 19px 22px;
+}
+
+.marketing .dlp .dlp-faq .mkt-faq-accordion-answer-wrap p {
+  padding: 0 22px 20px 22px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--dlp-ink-soft);
+}
+
+.marketing .dlp .dlp-faq .mkt-faq-accordion-chevron { color: var(--dlp-green); }
+
+/* ── Final CTA ────────────────────────────────────── */
+
+.marketing .dlp-final { padding: 0 20px clamp(80px, 10vw, 130px) 20px; }
+
+.marketing .dlp-final-inner {
+  position: relative;
+  overflow: hidden;
+  max-width: 1120px;
+  margin: 0 auto;
+  text-align: center;
+  border-radius: 36px;
+  padding: clamp(56px, 8vw, 96px) 28px;
+  background:
+    radial-gradient(ellipse 70% 90% at 20% 0%, rgba(76, 191, 99, 0.2), transparent 55%),
+    radial-gradient(ellipse 60% 80% at 85% 100%, rgba(242, 255, 73, 0.12), transparent 55%),
+    var(--dlp-green-deep);
+}
+
+.marketing .dlp-final-inner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 44px), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 44px);
+  mask-image: radial-gradient(ellipse 70% 80% at 50% 40%, #000 20%, transparent 80%);
+  pointer-events: none;
+}
+
+.marketing .dlp-final-inner h2 { position: relative; color: #fff; }
+.marketing .dlp-final-inner h2 .dlp-script { color: var(--dlp-yellow); }
+
+.marketing .dlp-final .dlp-pill-btn { position: relative; margin-top: 26px; }
+
+.marketing .dlp-final-note {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ── Responsive ───────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  .marketing .dlp-cards { grid-template-columns: 1fr; max-width: 460px; }
+  .marketing .dlp-features { grid-template-columns: repeat(2, 1fr); }
+  .marketing .dlp-sticker.st-win { right: 4%; }
+  .marketing .dlp-sticker.st-mac { right: 2%; }
+}
+
+@media (max-width: 820px) {
+  .marketing .dlp-steps { grid-template-columns: 1fr; max-width: 460px; gap: 26px; }
+  .marketing .dlp-step-dash { display: none; }
+  .marketing .dlp-note.n-three { display: none; }
+  .marketing .dlp-sticker { width: 58px; height: 58px; border-radius: 16px; }
+  .marketing .dlp-sticker svg { width: 26px; height: 26px; }
+}
+
+@media (max-width: 560px) {
+  .marketing .dlp-scene-wrap { padding: 72px 16px 128px 16px; }
+  .marketing .dlp-mat { inset: 3% 4% 8% 4%; }
+  .marketing .dlp-paper { width: 88vw; height: 66vh; }
+  .marketing .dlp-hero-sub { font-size: 14.5px; padding: 12px 16px; }
+  .marketing .dlp-sticker.st-mac { display: none; }
+  .marketing .dlp-note { display: none; }
+  .marketing .dlp-note.n-one { display: block; top: 6%; left: 5%; font-size: 15px; }
+  .marketing .dlp-scroll-pill { bottom: 112px; }
+  .marketing .dlp-dock { bottom: 20px; width: calc(100% - 32px); justify-content: space-between; }
+  .marketing .dlp-dock-cta { flex: 1; text-align: center; }
+  .marketing .dlp-get, .marketing .dlp-why, .marketing .dlp-steps-sec, .marketing .dlp-faq-sec, .marketing .dlp-final { padding-left: 16px; padding-right: 16px; }
+  .marketing .dlp-card { padding: 24px 20px 20px 20px; border-radius: 24px; }
+  .marketing .dlp-features { grid-template-columns: 1fr; }
+  .marketing .dlp-marquee-group span { font-size: clamp(44px, 14vw, 72px); }
+}

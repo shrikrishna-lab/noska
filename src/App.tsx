@@ -23,14 +23,21 @@ import { SettingsModal, TrashModal, ShareModal, HelpModal, CustomDialog } from "
 import ProfileModal from "./components/ProfileModal";
 import FocusZoom from "./features/focus/FocusZoom";
 import StackedColumn from "./features/stacking/StackedColumn";
+import SplitWorkspaceRenderer from "./features/split/SplitWorkspaceRenderer";
 import ReadingMode from "./features/reading/ReadingMode";
 import { motion, AnimatePresence } from "framer-motion";
 import { encryptData, decryptData } from "./features/encryption/Encryption";
 import { aiManager } from "./ai/AIManager";
 import { initializeMemory } from "./ai/memory";
+import { publishWorkspaceEvent } from "./ai/runtime";
+import { startTriggerService } from "./intelligence/triggerService";
 import { realtimeCollab } from "./lib/realtimeCollab";
 (window as any).realtimeCollab = realtimeCollab;
 import { auditEngine } from "./lib/auditEngine";
+
+/** Marker the shared agent runtime stamps onto patches it makes, used for
+ * automation loop prevention (see src/ai/runtime/AgentRuntime.ts). */
+const PROVENANCE_KEY = "__noskaExec";
 
 const AIPanel = lazy(() => import("./components/AIPanel"));
 const AIRightPanel = lazy(() => import("./components/AIRightPanel"));
@@ -161,7 +168,23 @@ function AppContent() {
 
   const [{ theme, themeFx }, { setTheme, setThemeFx }] = useTheme();
 
-  const { openTab } = useTabs();
+  const { openTab, panes: tabPanes } = useTabs();
+
+  // Split-pane awareness (#36): pages currently open in any pane/tab, so the
+  // AI can reason about "the page in the other pane" and agents can target
+  // exactly what the user is looking at.
+  const openPanePages = useMemo(() => {
+    const ids = new Set<string>();
+    for (const pane of Object.values(tabPanes || {})) {
+      for (const t of pane?.tabs || []) {
+        if (t.type === "page" && t.targetId) ids.add(t.targetId);
+      }
+    }
+    ids.delete(activeId || "");
+    return [...ids]
+      .map((id) => pages.find((p) => p.id === id && !p.trashed))
+      .filter((p): p is Page => Boolean(p));
+  }, [tabPanes, activeId, pages]);
 
   const [
     { aiOpen, aiRightOpen, apiKey, aiProvider, nvidiaKey, aiChats, activeChatId, ghostWriterEnabled },
@@ -358,6 +381,29 @@ function AppContent() {
   }), [activePage, visiblePages, pages]);
 
   const dark = theme === "dark" || (theme === "system" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+
+  // ── Intelligence platform wiring: expose the live tool context so agents
+  // and automations can execute through the same actions as interactive AI,
+  // and start the trigger service (workspace events + schedules) once
+  // authenticated. The service is idempotent.
+  useEffect(() => {
+    (window as unknown as { __noskaToolContext?: () => unknown }).__noskaToolContext = () => ({
+      currentPage: toolContext.currentPage,
+      pages: toolContext.pages,
+      actions: toolContext.actions,
+    });
+  }, [toolContext]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    startTriggerService({
+      getContext: () => {
+        const get = (window as unknown as { __noskaToolContext?: () => unknown }).__noskaToolContext;
+        return (get ? get() : { pages: [], actions: {} }) as never;
+      },
+      onNotify: showToast,
+    });
+  }, [isSignedIn]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -1463,6 +1509,16 @@ function AppContent() {
       closeStackedColumn(id);
       auditEngine.log({ pageId: id, userId: realtimeCollab.getUser()?.userId || 'system', userName: realtimeCollab.getUser()?.userName || 'System', action: 'trashed', detail: 'Moved page to trash' });
     }
+    const prevPage = pages.find((p) => p.id === id);
+    // ── Intelligence event bus prep: runtime-caused patches carry
+    // __noskaExec provenance. Extract it, then strip it so it never
+    // persists onto the page object or into Supabase.
+    const execProvenance = (patch as { __noskaExec?: { executionId: string; sourceId: string } }).__noskaExec;
+    if (execProvenance) {
+      const { [PROVENANCE_KEY]: _stripped, ...rest } = patch as Record<string, unknown>;
+      void _stripped;
+      patch = rest as Partial<Page>;
+    }
     const nextPages = pages.map((p) => {
         if (p.id === id) {
           // Stamp real user attribution on any block that's new or was
@@ -1525,6 +1581,40 @@ function AppContent() {
         }
         return p;
       });
+    // ── Intelligence event bus: publish workspace mutations so agents and
+    // automations can react. Provenance (when present) lets the trigger
+    // service skip events caused by runtime executions — loop prevention.
+    if (prevPage && !prevPage.trashed) {
+      publishWorkspaceEvent({
+        type: "page_updated",
+        pageId: id,
+        pageTitle: patch.title || prevPage.title,
+        provenance: execProvenance,
+        detail: "page updated",
+      });
+      if (patch.title && patch.title !== prevPage.title) {
+        publishWorkspaceEvent({ type: "title_changed", pageId: id, pageTitle: patch.title, provenance: execProvenance });
+      }
+      if (patch.blocks) {
+        for (const block of patch.blocks) {
+          const checked = Boolean((block as { properties?: { checked?: boolean } }).properties?.checked);
+          const wasChecked = Boolean(
+            (prevPage.blocks?.find((b) => b.id === block.id) as { properties?: { checked?: boolean } } | undefined)?.properties?.checked
+          );
+          if (block.type === "todo" && checked && !wasChecked) {
+            publishWorkspaceEvent({
+              type: "task_completed",
+              pageId: id,
+              pageTitle: prevPage.title,
+              blockId: block.id,
+              blockText: String(block.text || ""),
+              provenance: execProvenance,
+            });
+          }
+        }
+      }
+    }
+
     commitPages(patch.parentId !== undefined || patch.content !== undefined ? normalizePageTree(nextPages) : nextPages);
   }, [pages, sharedPages, updateSharedPage, trashPageSubtree, restorePageSubtree, closeStackedColumn, auditEngine, realtimeCollab, stampBlockAttribution, now, commitPages, normalizePageTree]);
 
@@ -2431,114 +2521,76 @@ function AppContent() {
                         onSelect={handlePageSelect}
                       /></Suspense>
                     ) : (
-                      <div className="flex-1 flex overflow-x-auto overflow-y-hidden divide-x divide-[var(--border)]">
-                        <AnimatePresence mode="popLayout">
-                          {stackedPageIds.map((pId, idx) => {
-                            // Falls back to sharedPages the same way activePage
-                            // does above — otherwise a shared page pushed into
-                            // the stack (e.g. opened via Ctrl-click from the
-                            // Inbox/Library) would resolve to nothing and
-                            // silently vanish from the column view. Also
-                            // applies the same sharedRole->permission mapping
-                            // as activePage (real bug, fixed: this used to
-                            // read straight from sharedPages with no mapping,
-                            // so a viewer/commenter got full edit affordances
-                            // in the Editor.tsx rendering path for this code
-                            // path specifically).
-                            const ownedColPage = pages.find((p) => p.id === pId);
-                            const sharedColPage = !ownedColPage ? sharedPages.find((p) => p.id === pId) : undefined;
-                            const colPage = ownedColPage || (sharedColPage ? withSharedPermission(sharedColPage) : undefined);
-                            if (!colPage) return null;
-                            return (
-                              <motion.div
-                                key={pId}
-                                layout
-                                initial={{ opacity: 0, x: 40, scale: 0.995 }}
-                                animate={{ opacity: 1, x: 0, scale: 1 }}
-                                exit={{ opacity: 0, x: -35, scale: 0.99 }}
-                                transition={{ type: "spring", stiffness: 350, damping: 28 }}
-                                className={`h-full flex ${idx === stackedPageIds.length - 1 ? "flex-grow min-w-[400px] flex-1" : "shrink-0"}`}
-                              >
-                                <StackedColumn
-                                  page={colPage}
-                                  pages={visiblePages}
-                                  isActive={pId === activeId}
-                                  isFirst={idx === 0}
-                                  onSelect={navigateToChildPage}
-                                  onReadingModePage={(p) => setReadingPage(p)}
-                                  renameFocusId={renameFocusId}
-                                  onRenameFocusDone={() => setRenameFocusId(null)}
-                                  onPagePatch={(patch) => updatePage(pId, patch)}
-                                  onBlockPatch={(blockId, patch) => {
-                                    if (!colPage?.blocks) return;
-                                    updatePage(pId, {
-                                      blocks: colPage.blocks.map((b) => b.id === blockId ? { ...b, ...patch } : b)
-                                    });
-                                  }}
-                                  onAddBlock={(blockId, type = "text", text = "", customId = null) => {
-                                    if (!colPage?.blocks) return;
-                                    const index = colPage.blocks.findIndex((b) => b.id === blockId);
-                                    if (index < 0) return;
-                                    const block = blockFor(type, text);
-                                    if (customId) block.id = customId;
-                                    updatePage(pId, {
-                                      blocks: [...colPage.blocks.slice(0, index + 1), block, ...colPage.blocks.slice(index + 1)]
-                                    });
-                                  }}
-                                  onDeleteBlock={(blockId) => {
-                                    if (!colPage?.blocks) return;
-                                    updatePage(pId, {
-                                      blocks: colPage.blocks.filter((b) => b.id !== blockId)
-                                    });
-                                  }}
-                                  onDuplicateBlock={(blockId) => {
-                                    if (!colPage?.blocks) return;
-                                    const index = colPage.blocks.findIndex((b) => b.id === blockId);
-                                    if (index < 0) return;
-                                    const copy = JSON.parse(JSON.stringify(colPage.blocks[index]));
-                                    copy.id = uid();
-                                    updatePage(pId, {
-                                      blocks: [...colPage.blocks.slice(0, index + 1), copy, ...colPage.blocks.slice(index + 1)]
-                                    });
-                                  }}
-                                  onMoveBlock={(blockId, dir) => {
-                                    if (!colPage?.blocks) return;
-                                    const blocks = [...colPage.blocks];
-                                    const i = blocks.findIndex((b) => b.id === blockId);
-                                    const j = i + dir;
-                                    if (i < 0 || j < 0 || j >= blocks.length) return;
-                                    [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
-                                    updatePage(pId, { blocks });
-                                  }}
-                                  onBlocks={(blocks) => updatePage(pId, { blocks })}
-                                  onAskAI={openRightPanel}
-                                  onFocusBlock={(block) => setFocusedBlock(block)}
-                                  onClose={() => closeStackedColumn(pId)}
-                                  isResizable={idx < stackedPageIds.length - 1}
-                                  onUnlockPage={handleUnlockPage}
-                                  onDeletePage={(id) => { closeStackedColumn(id); commitPages(pages.filter((p) => p.id !== id)); }}
-                                  onToast={showToast}
-                                  onVoiceCapture={() => setVoiceOpen(true)}
-                                  ghostWriterEnabled={ghostWriterEnabled}
-                                  apiKey={apiKey}
-                                  aiProvider={aiProvider}
-                                  nvidiaKey={nvidiaKey}
-                                  onUpdatePage={updatePage}
-                                  onCreateSubpage={(afterBlockId, title) =>
-                                    createSubpageAtBlock(pId, afterBlockId, title)
-                                  }
-                                  onTrashPage={(id) => updatePage(id, { trashed: true })}
-                                />
-                              </motion.div>
-                            );
-                          })}
-                        </AnimatePresence>
-                      </div>
+                      <SplitWorkspaceRenderer
+                        pages={visiblePages}
+                        sharedPages={sharedPages}
+                        currentUserId={currentUserId}
+                        renameFocusId={renameFocusId}
+                        onRenameFocusDone={() => setRenameFocusId(null)}
+                        onPagePatch={(pId, patch) => updatePage(pId, patch)}
+                        onUpdatePage={updatePage}
+                        onAddBlock={(pId, blockId, type, text) => {
+                          const p = pages.find((page) => page.id === pId);
+                          if (!p?.blocks) return;
+                          const index = p.blocks.findIndex((b) => b.id === blockId);
+                          if (index < 0) return;
+                          const block = blockFor(type, text);
+                          updatePage(pId, {
+                            blocks: [...p.blocks.slice(0, index + 1), block, ...p.blocks.slice(index + 1)]
+                          });
+                        }}
+                        onDeleteBlock={(pId, blockId) => {
+                          const p = pages.find((page) => page.id === pId);
+                          if (!p?.blocks) return;
+                          updatePage(pId, {
+                            blocks: p.blocks.filter((b) => b.id !== blockId)
+                          });
+                        }}
+                        onDuplicateBlock={(pId, blockId) => {
+                          const p = pages.find((page) => page.id === pId);
+                          if (!p?.blocks) return;
+                          const index = p.blocks.findIndex((b) => b.id === blockId);
+                          if (index < 0) return;
+                          const copy = JSON.parse(JSON.stringify(p.blocks[index]));
+                          copy.id = uid();
+                          updatePage(pId, {
+                            blocks: [...p.blocks.slice(0, index + 1), copy, ...p.blocks.slice(index + 1)]
+                          });
+                        }}
+                        onMoveBlock={(pId, blockId, dir) => {
+                          const p = pages.find((page) => page.id === pId);
+                          if (!p?.blocks) return;
+                          const blocks = [...p.blocks];
+                          const i = blocks.findIndex((b) => b.id === blockId);
+                          const j = i + dir;
+                          if (i < 0 || j < 0 || j >= blocks.length) return;
+                          [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
+                          updatePage(pId, { blocks });
+                        }}
+                        onBlocks={(pId, blocks) => updatePage(pId, { blocks })}
+                        onAskAI={openRightPanel}
+                        onFocusBlock={(block) => setFocusedBlock(block)}
+                        onReadingModePage={(p) => setReadingPage(p)}
+                        onUnlockPage={handleUnlockPage}
+                        onDeletePage={(id) => { commitPages(pages.filter((p) => p.id !== id)); }}
+                        onToast={showToast}
+                        onVoiceCapture={() => setVoiceOpen(true)}
+                        ghostWriterEnabled={ghostWriterEnabled}
+                        apiKey={apiKey}
+                        aiProvider={aiProvider}
+                        nvidiaKey={nvidiaKey}
+                        onCreateSubpage={(pId, afterBlockId, title) =>
+                          createSubpageAtBlock(pId, afterBlockId, title)
+                        }
+                        onTrashPage={(id) => updatePage(id, { trashed: true })}
+                        onNewPage={(template) => addPage(template)}
+                      />
                     )
                   ) : (
                     <WorkspaceView
                       view={appView}
                       pages={visiblePages}
+                      currentUserId={currentUserId}
                       sharedPages={sharedPages}
                       pendingInvites={pendingInvites}
                       onAcceptInvite={handleAcceptInvite}
@@ -2565,6 +2617,8 @@ function AppContent() {
                         commitPages([copy, ...pages]);
                         setActiveId(copy.id);
                       }}
+                      onView={(view) => setAppView(view)}
+                      toolContext={toolContext}
                     />
                   )}
                 </motion.div>
@@ -2613,6 +2667,7 @@ function AppContent() {
             pages={visiblePages}
             appView={appView}
             pageMode={pageMode}
+            openPanePages={openPanePages}
             apiKey={apiKey}
             aiProvider={aiProvider}
             nvidiaKey={nvidiaKey}
@@ -2815,8 +2870,7 @@ onLineage={() => setLineageOpen(true)}
                 <ApiConsole
                   pages={pages}
                   activePageId={activeId}
-                  addPage={addPage}
-                  updatePage={updatePage}
+                  currentUserId={currentUserId}
                   onClose={() => setApiConsoleOpen(false)}
                   onToast={showToast}
                 />

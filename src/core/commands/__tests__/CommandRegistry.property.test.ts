@@ -537,7 +537,7 @@ describe("Feature: notion-command-parity, Property 9: Registry bidirectional com
     "copy-link", "copy-contents", "duplicate", "move-to", "trash",
     "present", "offline", "small-text", "full-width", "customize",
     "lock", "readonly", "suggest", "translate", "import", "export",
-    "wiki", "analytics", "history",
+    "wiki", "analytics", "history", "review", "generate-study-cards",
     // Inline formatting commands
     "bold", "italic", "underline", "strikethrough", "inline-code",
     // Color commands

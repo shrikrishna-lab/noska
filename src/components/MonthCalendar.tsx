@@ -137,6 +137,48 @@ export default function MonthCalendar({ pages, onSelect, compact = false }: Mont
     return days;
   }, [pages, liveNow]);
 
+  /* ─── Calendar intelligence ───
+   * Forward study load for the selected future day: how many review cards
+   * land between now and that day, which topics are weakest among them,
+   * and what a sensible daily pace looks like. Deterministic — computed
+   * from real scheduling state, no AI, no invented dates. */
+  const studyLoad = useMemo(() => {
+    if (selectedDay === null) return null;
+    const selected = new Date(viewYear, viewMonth, selectedDay, 23, 59, 59);
+    const daysAway = Math.ceil((selected.getTime() - liveNow.getTime()) / 86_400_000);
+    if (daysAway <= 0) return null;
+
+    interface ReviewFull { nextReview?: string; suspended?: boolean; easeFactor?: number }
+    const topics = new Map<string, { label: string; pageId: string; pageIcon: string; cards: number; struggling: number }>();
+    let cardsLanding = 0;
+
+    for (const p of pages) {
+      if (p.trashed) continue;
+      const tags = Array.isArray(p.tags) ? p.tags.filter((t): t is string => typeof t === "string") : [];
+      const label = tags[0] || p.title || "Untitled";
+      for (const b of p.blocks || []) {
+        const review = b.review as ReviewFull | undefined;
+        if (!review || review.suspended || !review.nextReview) continue;
+        const when = new Date(review.nextReview).getTime();
+        if (when > selected.getTime() || when < new Date(liveNow).setHours(0, 0, 0, 0)) continue;
+        cardsLanding += 1;
+        const t = topics.get(label) ?? { label, pageId: p.id, pageIcon: p.icon, cards: 0, struggling: 0 };
+        t.cards += 1;
+        if ((review.easeFactor ?? 2.5) < 2.35) t.struggling += 1;
+        topics.set(label, t);
+      }
+    }
+
+    const topTopics = [...topics.values()].sort((a, b) => b.struggling - a.struggling || b.cards - a.cards).slice(0, 3);
+    return {
+      daysAway,
+      cardsLanding,
+      dailyPace: Math.ceil(cardsLanding / daysAway),
+      heavy: cardsLanding / daysAway > 15,
+      topTopics,
+    };
+  }, [selectedDay, viewYear, viewMonth, pages, liveNow]);
+
   const prevMonth = () => {
     setSelectedDay(null);
     if (viewMonth === 0) {
@@ -368,6 +410,39 @@ export default function MonthCalendar({ pages, onSelect, compact = false }: Mont
                   <ExternalLink size={12} className="mt-1 shrink-0 text-[var(--muted)]" />
                 </button>
               ))}
+            </div>
+          )}
+          {/* Forward study load — shown when planning against a future day */}
+          {studyLoad && (
+            <div className={`mt-2 rounded-md border p-3 ${studyLoad.heavy ? "border-[var(--warning)]/40 bg-[var(--warning)]/[0.06]" : "border-[var(--border)] bg-[var(--panel)]"}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-[var(--text)]">
+                  Study load · {studyLoad.daysAway} day{studyLoad.daysAway === 1 ? "" : "s"} out
+                </span>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${studyLoad.heavy ? "bg-[var(--warning)]/15 text-[var(--warning)]" : "bg-[var(--hover)] text-[var(--secondary)]"}`}>
+                  {studyLoad.cardsLanding} card{studyLoad.cardsLanding === 1 ? "" : "s"} land before this day
+                </span>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--secondary)]">
+                Pace it: ~{studyLoad.dailyPace} card{studyLoad.dailyPace === 1 ? "" : "s"}/day keeps you even.
+                {studyLoad.heavy && " That's a heavy window — start weak topics early."}
+              </p>
+              {studyLoad.topTopics.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {studyLoad.topTopics.map((t) => (
+                    <button
+                      key={t.label}
+                      onClick={() => onSelect?.(t.pageId)}
+                      className="flex items-center gap-1 rounded bg-[var(--surface)] px-2 py-1 text-[10px] font-medium text-[var(--text)] hover:bg-[var(--hover)]"
+                      title={`${t.cards} cards landing${t.struggling ? ` · ${t.struggling} struggling` : ""}`}
+                    >
+                      <PageIcon icon={t.pageIcon} size={9} fallback="📄" />
+                      {t.label}
+                      {t.struggling > 0 && <span className="font-bold text-[var(--danger)]">{t.struggling}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -1,5 +1,5 @@
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 const LINES = [
   { text: 'Ideas become knowledge.' },
@@ -28,8 +28,16 @@ export function ScrollFadeText() {
 
 function FadeLine({ line }) {
   const ref = useRef(null);
+  // The page scrolls inside .noska-launch (body overflow is hidden globally),
+  // so framer-motion must track that container, not window. Populate the ref
+  // in an effect declared before useScroll so motion's own effect sees it.
+  const containerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    containerRef.current = document.getElementById('nl-top');
+  }, []);
   const { scrollYProgress } = useScroll({
     target: ref,
+    container: containerRef,
     offset: ['start 0.85', 'start 0.4', 'end 0.6', 'end 0.15'],
   });
   const opacity = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.25, 1, 1, 0.25]);

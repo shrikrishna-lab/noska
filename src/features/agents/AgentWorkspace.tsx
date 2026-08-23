@@ -1,12 +1,113 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Sparkles, User, Settings, Play, Pause, Plus, MessageCircle, FileText, Zap, Clock, ChevronRight, Globe, Sliders, Cpu, Shield, BookOpen, Pen, Trash2, Copy, ToggleLeft, ToggleRight, type LucideIcon } from "lucide-react";
+import { Bot, User, Settings, Play, Plus, MessageCircle, FileText, Zap, Clock, ChevronRight, Globe, Shield, BookOpen, Trash2, Copy, ToggleLeft, ToggleRight, History, Loader2, BrainCircuit, Sparkles, type LucideIcon } from "lucide-react";
 import { uid } from "../../utils/helpers";
+import {
+  saveAgentTrigger,
+  fetchAgentRunLogs,
+  saveAgentRunLog,
+  type Page,
+} from "../../lib/supabaseService";
+import {
+  fetchAgentsUnified, saveAgentFromRow, setAgentStatus, removeAgent,
+  findBestTargetPage, type AgentRowLike,
+} from "./agentStore";
+import { agentRuntime, subscribeRuns, type ToolContextLike } from "../../ai/runtime";
+import type { RunRecord } from "../../ai/runtime";
+import { computeHealth } from "../../ai/runtime/agentOps";
+import RunsExplorer from "../../components/ai/RunsExplorer";
+import MemoryManager from "./MemoryManager";
+import BackgroundExecutionSettings from "./BackgroundExecutionSettings";
+import TemplateLibrary from "./TemplateLibrary";
 
-export default function AgentWorkspace({ pages, onToast, onDuplicate }) {
+// The unified store is the single source of truth — DB when reachable,
+// offline mirror otherwise. Legacy row shape kept for this view's UI.
+type AgentRow = AgentRowLike;
+type RunLogRow = { id: string; status: string | null; started_at: string | null; finished_at: string | null; steps_taken: number | null; triggered_by: string | null };
+
+export default function AgentWorkspace({ pages, currentUserId, onToast, toolContext }: {
+  pages: Page[];
+  currentUserId?: string | null;
+  onToast?: (message: string) => void;
+  /** Real page actions from App — required for tools to execute edits. */
+  toolContext?: { currentPage?: Page; pages?: Page[]; actions: Record<string, (...args: never[]) => unknown> };
+}) {
   const [tab, setTab] = useState('personal');
-  const [agents, setAgents] = useState([]);
+  const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showBuilder, setShowBuilder] = useState(false);
+
+  const refresh = useCallback(async () => {
+    // Works signed-in OR offline (mirror) — no more dead list without Supabase.
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setAgents(await fetchAgentsUnified());
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to load agents.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const getContext = useCallback((): ToolContextLike => ({
+    currentPage: (toolContext?.currentPage ?? undefined) as ToolContextLike["currentPage"],
+    pages: ((toolContext?.pages?.length ? toolContext.pages : pages) ?? []) as never,
+    actions: (toolContext?.actions ?? {}) as ToolContextLike["actions"],
+  }), [pages, toolContext]);
+
+  /** Manual run — goes through the shared Noska Intelligence runtime
+   * (permissions, planning, verification) and logs to agent_run_logs. */
+  const runAgent = useCallback(async (agent: AgentRow) => {
+    onToast?.(`Running “${agent.name}”…`);
+    let logId = uid();
+    try {
+      await saveAgentRunLog({ id: logId, agentId: agent.id, status: 'running', startedAt: new Date().toISOString() });
+    } catch { /* log write is best-effort */ }
+    // Notion-like default target: score pages against the agent's purpose so
+    // tools that need a page just work without the agent having to ask.
+    const target = findBestTargetPage(pages as never, {
+      name: agent.name,
+      description: agent.description,
+      instructions: agent.instructions,
+      contextScope: [],
+    });
+    try {
+      const run = await agentRuntime.execute({
+        goal: agent.instructions || agent.description || `Carry out your role as ${agent.name}.`,
+        sourceId: `agent-${agent.id}`,
+        sourceKind: "agent",
+        trigger: "manual",
+        modelClassOverride: agent.model === "fast" ? "fast" : agent.model === "quality" ? "reasoning" : undefined,
+        maxSteps: 6,
+        getContext,
+        instructions: target
+          ? `Default target page: "${target.title}" (page_id: ${target.id}). When a tool needs a page and none is specified, operate on this one.`
+          : undefined,
+      });
+      try {
+        await saveAgentRunLog({
+          id: logId,
+          agentId: agent.id,
+          status: run.status,
+          stepsTaken: run.steps?.length ?? 0,
+          finishedAt: new Date().toISOString(),
+          resourcesRead: [],
+          resourcesWritten: [],
+        });
+      } catch { /* best-effort */ }
+      onToast?.(run.status === "completed"
+        ? `“${agent.name}” finished${run.summary ? `: ${run.summary.slice(0, 80)}` : ""}`
+        : `“${agent.name}” ${run.status}`);
+    } catch (e) {
+      onToast?.(e instanceof Error ? e.message : "Agent run failed.");
+    }
+  }, [getContext, onToast, pages]);
 
   return (
     <div className="flex h-full bg-[var(--bg)]">
@@ -18,7 +119,10 @@ export default function AgentWorkspace({ pages, onToast, onDuplicate }) {
         <div className="flex-1 p-2 space-y-1">
           <TabButton icon={User} label="Personal Agent" active={tab === 'personal'} onClick={() => setTab('personal')} />
           <TabButton icon={Bot} label="Custom Agents" active={tab === 'custom'} onClick={() => setTab('custom')} count={agents.length} />
-          <TabButton icon={Shield} label="Agent Directory" active={tab === 'directory'} onClick={() => setTab('directory')} />
+          <TabButton icon={History} label="Runs" active={tab === 'runs'} onClick={() => setTab('runs')} />
+          <TabButton icon={BrainCircuit} label="Memory" active={tab === 'memory'} onClick={() => setTab('memory')} />
+          <TabButton icon={Sparkles} label="Library" active={tab === 'library'} onClick={() => setTab('library')} />
+          <TabButton icon={Globe} label="Agent Directory" active={tab === 'directory'} onClick={() => setTab('directory')} />
           <TabButton icon={Settings} label="Agent Settings" active={tab === 'settings'} onClick={() => setTab('settings')} />
         </div>
         <div className="p-3 border-t border-[var(--border)]">
@@ -30,13 +134,119 @@ export default function AgentWorkspace({ pages, onToast, onDuplicate }) {
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <AnimatePresence mode="wait">
           {showBuilder ? (
-            <AgentBuilder agents={agents} onSave={(a) => { setAgents(prev => [{ ...a, id: uid() }, ...prev]); setShowBuilder(false); onToast?.('Agent created'); }} onCancel={() => setShowBuilder(false)} pages={pages} />
+            <AgentBuilder
+              onSave={async (draft) => {
+                try {
+                  const saved = await saveAgentFromRow({
+                    id: uid(),
+                    name: draft.name || "Untitled agent",
+                    description: draft.description,
+                    icon: draft.icon,
+                    instructions: draft.instructions,
+                    model: draft.model,
+                    status: "active",
+                  });
+                  // Legacy trigger rows are DB-backed and best-effort; the
+                  // unified store keeps the schedule/trigger in agent config.
+                  for (const t of draft.triggers || []) {
+                    try {
+                      await saveAgentTrigger({ id: uid(), agentId: saved.id, type: mapTriggerType(t.type), config: safeConfig(t.config) });
+                    } catch { /* offline — config jsonb still carries it */ }
+                  }
+                  setAgents((prev) => [saved, ...prev]);
+                  setShowBuilder(false);
+                  onToast?.("Agent created");
+                } catch (e) {
+                  onToast?.(e instanceof Error ? e.message : "Failed to save agent.");
+                }
+              }}
+              onCancel={() => setShowBuilder(false)}
+              pages={pages}
+            />
           ) : tab === 'personal' ? (
             <PersonalAgentView pages={pages} onToast={onToast} />
           ) : tab === 'custom' ? (
-            <CustomAgentsView agents={agents} onToast={onToast} onNew={() => setShowBuilder(true)} onToggle={(id) => setAgents(prev => prev.map(a => a.id === id ? { ...a, status: a.status === 'active' ? 'paused' : 'active' } : a))} onDelete={(id) => { setAgents(prev => prev.filter(a => a.id !== id)); onToast?.('Agent deleted'); }} onDuplicateAgent={(agent) => { const copy = { ...agent, id: uid(), name: `${agent.name} (copy)`, status: 'paused' }; setAgents(prev => [copy, ...prev]); onToast?.('Agent duplicated'); }} />
+            <CustomAgentsView
+              agents={agents}
+              loading={loading}
+              loadError={loadError}
+              onRetry={refresh}
+              onToast={onToast}
+              onNew={() => setShowBuilder(true)}
+              onToggle={async (a) => {
+                const nextStatus = a.status === 'active' ? 'paused' : 'active';
+                setAgents((prev) => prev.map((x) => (x.id === a.id ? { ...x, status: nextStatus } : x)));
+                const ok = await setAgentStatus(a.id, nextStatus as "active" | "paused");
+                if (!ok) {
+                  setAgents((prev) => prev.map((x) => (x.id === a.id ? { ...x, status: a.status } : x)));
+                  onToast?.("Failed to update agent.");
+                }
+              }}
+              onDelete={async (a) => {
+                const snapshot = agents;
+                setAgents((prev) => prev.filter((x) => x.id !== a.id));
+                try {
+                  await removeAgent(a.id);
+                  onToast?.("Agent deleted");
+                } catch (e) {
+                  setAgents(snapshot);
+                  onToast?.(e instanceof Error ? e.message : "Failed to delete agent.");
+                }
+              }}
+              onDuplicateAgent={(a) => setShowBuilder(false) /* handled via copy below */}
+              onCopy={async (a) => {
+                try {
+                  const copy = await saveAgentFromRow({
+                    name: `${a.name} (copy)`,
+                    description: a.description,
+                    icon: a.icon,
+                    instructions: a.instructions,
+                    model: a.model,
+                    status: "paused",
+                  });
+                  setAgents((prev) => [copy, ...prev]);
+                  onToast?.("Agent duplicated");
+                } catch (e) {
+                  onToast?.(e instanceof Error ? e.message : "Failed to duplicate agent.");
+                }
+              }}
+              onRun={runAgent}
+            />
+          ) : tab === 'runs' ? (
+            <div className="p-6 max-w-3xl">
+              <h2 className="text-sm font-semibold text-[var(--text)] mb-1">Runs</h2>
+              <p className="text-[10px] text-[var(--muted)] mb-4">Every execution — here or on Noska's servers — with full traces, retries and approvals.</p>
+              <RunsExplorer sourceKind="agent" agents={agents.map((a) => ({ id: a.id, name: a.name, icon: a.icon || "🤖" }))} onToast={onToast} />
+            </div>
+          ) : tab === 'memory' ? (
+            <div className="p-6 max-w-3xl">
+              <MemoryManager agents={agents.map((a) => ({ id: a.id, name: a.name, icon: a.icon || "🤖" }))} onToast={onToast} />
+            </div>
+          ) : tab === 'library' ? (
+            <div className="p-6">
+              <h2 className="text-sm font-semibold text-[var(--text)] mb-1">Agent Library</h2>
+              <p className="text-[10px] text-[var(--muted)] mb-4">Purpose-built workers — review exactly what each one can and cannot do before installing.</p>
+              <TemplateLibrary onInstalled={() => void refresh()} onToast={onToast} />
+            </div>
           ) : tab === 'directory' ? (
-            <AgentDirectoryView agents={agents} onToast={onToast} onInstall={(a) => { if (!agents.find(x => x.id === a.id)) { setAgents(prev => [{ ...a, id: uid(), status: 'paused' }, ...prev]); onToast?.('Agent installed'); }}} />
+            <AgentDirectoryView
+              installed={agents.map((a) => a.name)}
+              onInstall={async (t) => {
+                try {
+                  const saved = await saveAgentFromRow({
+                    name: t.name,
+                    description: t.description,
+                    icon: t.icon,
+                    model: t.model,
+                    status: "paused",
+                  });
+                  setAgents((prev) => [saved, ...prev]);
+                  onToast?.(`${t.name} installed — activate it in Custom Agents`);
+                } catch (e) {
+                  onToast?.(e instanceof Error ? e.message : "Install failed.");
+                }
+              }}
+            />
           ) : (
             <AgentSettingsView onToast={onToast} />
           )}
@@ -44,6 +254,18 @@ export default function AgentWorkspace({ pages, onToast, onDuplicate }) {
       </div>
     </div>
   );
+}
+
+function mapTriggerType(uiType: string): Parameters<typeof saveAgentTrigger>[0]["type"] {
+  const allowed: Array<Parameters<typeof saveAgentTrigger>[0]["type"]> = [
+    "mention", "reaction", "property_change", "schedule", "new_email", "calendar_event",
+  ];
+  return (allowed.includes(uiType as never) ? uiType : "mention") as Parameters<typeof saveAgentTrigger>[0]["type"];
+}
+
+function safeConfig(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === "object") return raw as Record<string, unknown>;
+  return {};
 }
 
 interface TabButtonProps {
@@ -62,7 +284,11 @@ function TabButton({ icon: Icon, label, active, onClick, count }: TabButtonProps
   );
 }
 
-function PersonalAgentView({ pages, onToast }) {
+/* ═══ Personal agent (local configuration surface) ═══ */
+
+function PersonalAgentView({ pages, onToast }: { pages: unknown; onToast?: (m: string) => void }) {
+  void pages;
+  void onToast;
   const [name, setName] = useState('Noska');
   const [avatar, setAvatar] = useState('🤖');
   const [personality, setPersonality] = useState('helpful');
@@ -78,13 +304,13 @@ function PersonalAgentView({ pages, onToast }) {
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-center gap-4 mb-6">
-        <div className="text-4xl">{avatar}</div>
+        <input value={avatar} onChange={(e) => setAvatar(e.target.value.slice(0, 2))} className="w-14 text-4xl bg-transparent outline-none text-center" aria-label="Avatar" />
         <div>
-          <h2 className="text-lg font-semibold text-[var(--text)]">{name}</h2>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="bg-transparent text-lg font-semibold text-[var(--text)] outline-none" aria-label="Agent name" />
           <p className="text-xs text-[var(--muted)]">Your personal AI assistant · {personality} personality</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => setPlanMode(!planMode)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition ${planMode ? 'bg-[var(--warning)]/10 border-[var(--warning)]/30 text-[var(--warning)]' : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)]'}`}><Shield size={12} /> {planMode ? 'Plan Mode On' : 'Plan Mode Off'}</button>
+          <button onClick={() => { setPlanMode(!planMode); }} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition ${planMode ? 'bg-[var(--warning)]/10 border-[var(--warning)]/30 text-[var(--warning)]' : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)]'}`}><Shield size={12} /> {planMode ? 'Plan Mode On' : 'Plan Mode Off'}</button>
         </div>
       </div>
 
@@ -131,14 +357,72 @@ function PersonalAgentView({ pages, onToast }) {
   );
 }
 
-function CustomAgentsView({ agents, onToast, onNew, onToggle, onDelete, onDuplicateAgent }) {
+/* ═══ Custom agents — DB-backed ═══ */
+
+function CustomAgentsView({ agents, loading, loadError, onRetry, onToast, onNew, onToggle, onDelete, onDuplicateAgent, onCopy, onRun }: {
+  agents: AgentRow[];
+  loading: boolean;
+  loadError: string | null;
+  onRetry: () => void;
+  onToast?: (m: string) => void;
+  onNew: () => void;
+  onToggle: (a: AgentRow) => void;
+  onDelete: (a: AgentRow) => void;
+  onDuplicateAgent?: (a: AgentRow) => void;
+  onCopy: (a: AgentRow) => void;
+  onRun: (a: AgentRow) => Promise<void>;
+}) {
+  void onDuplicateAgent; void onToast;
+  const [runningId, setRunningId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [runs, setRuns] = useState<Record<string, RunLogRow[]>>({});
+
+  const loadRuns = async (agentId: string) => {
+    if (runs[agentId]) {
+      setExpandedId(expandedId === agentId ? null : agentId);
+      return;
+    }
+    try {
+      const rows = await fetchAgentRunLogs(agentId);
+      setRuns((prev) => ({ ...prev, [agentId]: rows }));
+      setExpandedId(agentId);
+    } catch {
+      setRuns((prev) => ({ ...prev, [agentId]: [] }));
+      setExpandedId(agentId);
+    }
+  };
+
+  const run = async (a: AgentRow) => {
+    setRunningId(a.id);
+    try {
+      await onRun(a);
+    } finally {
+      setRunningId(null);
+      // Refresh history if this card is expanded.
+      if (expandedId === a.id) {
+        setRuns((prev) => {
+          const next = { ...prev };
+          delete next[a.id];
+          return next;
+        });
+      }
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-[var(--text)]">Custom Agents ({agents.length})</h2>
         <button onClick={onNew} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white"><Plus size={12} /> New Agent</button>
       </div>
-      {agents.length === 0 ? (
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 size={18} className="animate-spin text-[var(--muted)]" /></div>
+      ) : loadError ? (
+        <div className="max-w-md mx-auto text-center py-8 space-y-2">
+          <p className="text-xs text-[var(--danger)]">{loadError}</p>
+          <button onClick={onRetry} className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--secondary)] hover:bg-[var(--hover)]">Retry</button>
+        </div>
+      ) : agents.length === 0 ? (
         <div className="text-center py-12">
           <Bot size={32} className="mx-auto text-[var(--muted)] mb-2" />
           <p className="text-xs text-[var(--muted)]">No custom agents yet. Create one to automate your workflows.</p>
@@ -146,20 +430,46 @@ function CustomAgentsView({ agents, onToast, onNew, onToggle, onDelete, onDuplic
       ) : (
         <div className="space-y-2">
           {agents.map(a => (
-            <div key={a.id} className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <span className="text-xl">{a.icon || '🤖'}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-semibold text-[var(--text)]">{a.name}</h4>
-                  <span className="text-[9px] text-[var(--muted)] bg-[var(--bg)] px-1.5 py-0.5 rounded">{a.model || 'default'}</span>
+            <div key={a.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{a.icon || '🤖'}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</h4>
+                    <span className="text-[9px] text-[var(--muted)] bg-[var(--bg)] px-1.5 py-0.5 rounded shrink-0">{a.model || 'default'}</span>
+                    <span className={`shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${a.status === 'active' ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-[var(--hover)] text-[var(--muted)]'}`}>{a.status || 'paused'}</span>
+                    <AgentHealthBadge agentId={a.id} enabled={a.status === 'active'} />
+                  </div>
+                  <p className="text-[10px] text-[var(--muted)] truncate mt-0.5">{a.description || 'No description'}</p>
                 </div>
-                <p className="text-[10px] text-[var(--muted)] truncate mt-0.5">{a.description || 'No description'}</p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <IconBtn title="Run now" onClick={() => run(a)} disabled={runningId !== null}>
+                    {runningId === a.id ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                  </IconBtn>
+                  <IconBtn title="Run history" onClick={() => loadRuns(a.id)}><History size={11} /></IconBtn>
+                  <IconBtn title="Duplicate" onClick={() => onCopy(a)}><Copy size={11} /></IconBtn>
+                  <IconBtn title="Delete" danger onClick={() => { if (window.confirm(`Delete “${a.name}”? This cannot be undone.`)) onDelete(a); }}><Trash2 size={11} /></IconBtn>
+                  <button onClick={() => onToggle(a)} className={`p-1.5 rounded ${a.status === 'active' ? 'text-[var(--success)] hover:text-[var(--success)]/80' : 'text-[var(--muted)] hover:text-[var(--text)]'}`} title={a.status === 'active' ? 'Pause' : 'Activate'}>
+                    {a.status === 'active' ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => onDuplicateAgent(a)} className="p-1.5 rounded text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]"><Copy size={11} /></button>
-                <button onClick={() => onDelete(a.id)} className="p-1.5 rounded text-[var(--muted)] hover:text-[var(--danger)] hover:bg-[var(--hover)]"><Trash2 size={11} /></button>
-                <button onClick={() => onToggle(a.id)} className={`p-1.5 rounded ${a.status === 'active' ? 'text-[var(--success)] hover:text-[var(--success)]/80' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>{a.status === 'active' ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}</button>
-              </div>
+              {expandedId === a.id && (
+                <div className="mt-2.5 border-t border-[var(--border)] pt-2 space-y-1">
+                  {(runs[a.id] ?? []).length === 0 ? (
+                    <p className="text-[10px] text-[var(--muted)]">No runs yet — hit ▶ to execute this agent against your workspace.</p>
+                  ) : (
+                    (runs[a.id] ?? []).slice(0, 5).map((r) => (
+                      <div key={r.id} className="flex items-center gap-2 text-[10px] text-[var(--secondary)]">
+                        <Clock size={9} className="text-[var(--muted)]" />
+                        <span>{r.started_at ? new Date(r.started_at).toLocaleString() : "—"}</span>
+                        <span className={`font-semibold ${r.status === 'completed' ? 'text-[var(--success)]' : r.status === 'failed' ? 'text-[var(--danger)]' : 'text-[var(--warning)]'}`}>{r.status}</span>
+                        {typeof r.steps_taken === "number" && <span>· {r.steps_taken} step{r.steps_taken === 1 ? "" : "s"}</span>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -168,14 +478,84 @@ function CustomAgentsView({ agents, onToast, onNew, onToggle, onDelete, onDuplic
   );
 }
 
-function AgentBuilder({ pages, onSave, onCancel }: { pages: unknown; onSave: (a: any) => void; onCancel: () => void; agents?: unknown[] }) {
-  const [form, setForm] = useState({
-    name: '', description: '', icon: '🤖', instructions: '', model: 'default',
-    triggers: [], accessGrants: [], creditCapPerRun: 100, creditCapPerMonth: 10000, type: 'custom'
+/** Real health from unified run history (#5) — both source-id conventions
+ * are checked since manual runs and scheduled runs may key differently. */
+function AgentHealthBadge({ agentId, enabled }: { agentId: string; enabled: boolean }) {
+  const [runs, setRuns] = useState<RunRecord[] | null>(null);
+  useEffect(() => subscribeRuns(setRuns), []);
+  if (runs === null) return null;
+  const relevant = runs.filter((r) => r.sourceKind === "agent" && (r.sourceId === agentId || r.sourceId === `agent-${agentId}`));
+  const waiting = relevant[0]?.status === "awaiting_approval";
+  const health = computeHealth({
+    runs: relevant,
+    enabled,
+    hasRequiredConfiguration: true, // client runtime needs no extra config
+    waitingApproval: waiting,
   });
-  const [triggerForm, setTriggerForm] = useState({ type: 'mention', config: '{}' });
+  const tone =
+    health.status === "healthy" ? "text-[var(--success)]" :
+    health.status === "failing" ? "text-[var(--danger)]" :
+    health.status === "warning" ? "text-[var(--warning)]" : "text-[var(--muted)]";
+  const dot =
+    health.status === "healthy" ? "bg-[var(--success)]" :
+    health.status === "failing" ? "bg-[var(--danger)]" :
+    health.status === "warning" ? "bg-[var(--warning)]" : "bg-[var(--muted)]";
+  const label =
+    health.status === "needs_configuration" ? "Needs setup"
+    : health.status.charAt(0).toUpperCase() + health.status.slice(1);
+  const reasons = `${label}: ${health.reasons.join(" · ")}`;
+  return (
+    <span title={reasons} className={`inline-flex items-center gap-1 text-[9px] font-semibold ${tone} shrink-0`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+      {relevant.length > 0 ? label : null}
+      {relevant.length === 0 && <span className="text-[var(--muted)]">New</span>}
+    </span>
+  );
+}
+
+function IconBtn({ children, title, onClick, danger, disabled }: {
+  children: React.ReactNode;
+  title: string;
+  onClick: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={`p-1.5 rounded transition-colors ${danger ? "text-[var(--muted)] hover:text-[var(--danger)] hover:bg-[var(--hover)]" : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]"} disabled:opacity-40`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ═══ Builder ═══ */
+
+interface AgentDraft {
+  name: string;
+  description: string;
+  icon: string;
+  instructions: string;
+  model: string;
+  triggers: Array<{ type: string; config: unknown }>;
+  accessGrants: Array<{ resourceType: string; resourceId: string; level: string }>;
+  creditCapPerRun: number;
+  creditCapPerMonth: number;
+}
+
+function AgentBuilder({ onSave, onCancel }: { pages: unknown; onSave: (draft: AgentDraft) => void | Promise<void>; onCancel: () => void }) {
+  void onCancel;
+  const [form, setForm] = useState<AgentDraft>({
+    name: '', description: '', icon: '🤖', instructions: '', model: 'default',
+    triggers: [], accessGrants: [], creditCapPerRun: 100, creditCapPerMonth: 10000
+  });
+  const [triggerForm, setTriggerForm] = useState({ type: 'schedule', when: 'daily 20:00' });
   const [accessForm, setAccessForm] = useState({ resourceType: 'page', resourceId: '', level: 'view' });
   const [buildMode, setBuildMode] = useState('blank');
+  const [saving, setSaving] = useState(false);
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="max-w-2xl mx-auto p-6">
@@ -191,26 +571,23 @@ function AgentBuilder({ pages, onSave, onCancel }: { pages: unknown; onSave: (a:
           { id: 'chat', label: 'Chat-built', icon: MessageCircle },
           { id: 'template', label: 'From Template', icon: Copy },
         ].map(m => (
-          <button key={m.id} onClick={() => setBuildMode(m.id)} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition ${buildMode === m.id ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30' : 'bg-[var(--surface)] text-[var(--secondary)] border border-[var(--border)] hover:bg-[var(--hover)]'}`}>
+          <button key={m.id} onClick={() => setBuildMode(m.id)} disabled={m.id !== 'blank'} title={m.id !== 'blank' ? "Coming soon" : undefined} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition disabled:opacity-40 ${buildMode === m.id ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30' : 'bg-[var(--surface)] text-[var(--secondary)] border border-[var(--border)] hover:bg-[var(--hover)]'}`}>
             <m.icon size={12} /> {m.label}
           </button>
         ))}
       </div>
 
       <div className="space-y-4">
-        {/* Name */}
         <div>
           <label className="text-xs font-medium text-[var(--secondary)] mb-1 block">Name</label>
-          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Weekly Report Builder" className="w-full rounded-lg bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] outline-none" />
+          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Daily Study Agent" className="w-full rounded-lg bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] outline-none" />
         </div>
 
-        {/* Description */}
         <div>
           <label className="text-xs font-medium text-[var(--secondary)] mb-1 block">Description</label>
-          <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="One sentence for the directory listing" className="w-full rounded-lg bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] outline-none" />
+          <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="One sentence describing what it does" className="w-full rounded-lg bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] outline-none" />
         </div>
 
-        {/* Icon + Model */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-medium text-[var(--secondary)] mb-1 block">Icon</label>
@@ -226,7 +603,6 @@ function AgentBuilder({ pages, onSave, onCancel }: { pages: unknown; onSave: (a:
           </div>
         </div>
 
-        {/* Instructions */}
         <div>
           <label className="text-xs font-medium text-[var(--secondary)] mb-1 block">Instructions</label>
           <textarea value={form.instructions} onChange={e => setForm(f => ({ ...f, instructions: e.target.value }))} rows={4} placeholder="Describe what this agent does and how it should behave..." className="w-full rounded-lg bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] outline-none resize-none" />
@@ -245,18 +621,24 @@ function AgentBuilder({ pages, onSave, onCancel }: { pages: unknown; onSave: (a:
           ))}
           <div className="flex gap-2">
             <select value={triggerForm.type} onChange={e => setTriggerForm(t => ({ ...t, type: e.target.value }))} className="rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text)] outline-none">
+              <option value="schedule">Schedule</option>
               <option value="mention">@Mention</option>
-              <option value="reaction">Emoji Reaction</option>
               <option value="property_change">Property Change</option>
-              <option value="schedule">Schedule (Cron)</option>
-              <option value="new_email">New Email</option>
-              <option value="calendar_event">Calendar Event</option>
             </select>
-            <button onClick={() => { setForm(f => ({ ...f, triggers: [...f.triggers, { ...triggerForm, config: JSON.parse(triggerForm.config || '{}') }] })); }} className="rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[10px] font-semibold text-white"><Plus size={10} /></button>
+            {triggerForm.type === 'schedule' && (
+              <select value={triggerForm.when} onChange={e => setTriggerForm(t => ({ ...t, when: e.target.value }))} className="rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text)] outline-none">
+                <option value="daily 08:00">Daily · 08:00</option>
+                <option value="daily 13:00">Daily · 13:00</option>
+                <option value="daily 20:00">Daily · 20:00</option>
+                <option value="weekly mon 09:00">Weekly · Mon 09:00</option>
+                <option value="weekly fri 17:00">Weekly · Fri 17:00</option>
+              </select>
+            )}
+            <button onClick={() => { setForm(f => ({ ...f, triggers: [...f.triggers, { type: triggerForm.type, config: triggerForm.type === 'schedule' ? { schedule: triggerForm.when } : {} }] })); }} className="rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[10px] font-semibold text-white"><Plus size={10} /></button>
           </div>
         </div>
 
-        {/* Access Grants */}
+        {/* Access permissions */}
         <div>
           <label className="text-xs font-medium text-[var(--secondary)] mb-1 block">Access Permissions</label>
           {form.accessGrants.map((g, i) => (
@@ -279,7 +661,7 @@ function AgentBuilder({ pages, onSave, onCancel }: { pages: unknown; onSave: (a:
           </div>
         </div>
 
-        {/* Credit Caps */}
+        {/* Credit caps */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-medium text-[var(--secondary)] mb-1 block">Credit Cap / Run</label>
@@ -292,7 +674,17 @@ function AgentBuilder({ pages, onSave, onCancel }: { pages: unknown; onSave: (a:
         </div>
 
         <div className="flex items-center gap-3 pt-2">
-          <button onClick={() => onSave({ ...form })} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent)]/90 transition"><Play size={14} /> Create Agent</button>
+          <button
+            onClick={async () => {
+              if (!form.name.trim()) return;
+              setSaving(true);
+              try { await onSave(form); } finally { setSaving(false); }
+            }}
+            disabled={saving || !form.name.trim()}
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent)]/90 transition disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} Create Agent
+          </button>
           <button onClick={onCancel} className="text-xs text-[var(--muted)] hover:text-[var(--text)]">Cancel</button>
         </div>
       </div>
@@ -300,22 +692,22 @@ function AgentBuilder({ pages, onSave, onCancel }: { pages: unknown; onSave: (a:
   );
 }
 
-function AgentDirectoryView({ agents, onToast, onInstall }) {
-  const templates = [
-    { id: 'a1', name: 'Lead Enricher', description: 'Automatically enrich new leads with web research and write clean fields back to the database.', icon: '🔍', model: 'default', creator: 'Noska Labs' },
-    { id: 'a2', name: 'Report Generator', description: 'Compile weekly reports from data sources, format them, and post to team chat.', icon: '📊', model: 'quality', creator: 'Noska Labs' },
-    { id: 'a3', name: 'Meeting Note Taker', description: 'Join meetings, take structured notes, extract action items, and link to relevant pages.', icon: '🎙️', model: 'default', creator: 'Noska Labs' },
-    { id: 'a4', name: 'Social Media Scheduler', description: 'Draft, review, and schedule posts across platforms. Track engagement and suggest content.', icon: '📱', model: 'fast', creator: 'Community' },
-  ];
+/* ═══ Directory ═══ */
 
-  const isInstalled = (id) => agents.some(a => a.name === templates.find(t => t.id === id)?.name);
+const DIRECTORY_TEMPLATES = [
+  { id: 'a1', name: 'Lead Enricher', description: 'Automatically enrich new leads with web research and write clean fields back to the database.', icon: '🔍', model: 'default', creator: 'Noska Labs' },
+  { id: 'a2', name: 'Report Generator', description: 'Compile weekly reports from data sources, format them, and post to team chat.', icon: '📊', model: 'quality', creator: 'Noska Labs' },
+  { id: 'a3', name: 'Meeting Note Taker', description: 'Join meetings, take structured notes, extract action items, and link to relevant pages.', icon: '🎙️', model: 'default', creator: 'Noska Labs' },
+  { id: 'a4', name: 'Social Media Scheduler', description: 'Draft, review, and schedule posts across platforms. Track engagement and suggest content.', icon: '📱', model: 'fast', creator: 'Community' },
+];
 
+function AgentDirectoryView({ installed, onInstall }: { installed: string[]; onInstall: (t: typeof DIRECTORY_TEMPLATES[number]) => void }) {
   return (
     <div className="p-6">
       <h2 className="text-sm font-semibold text-[var(--text)] mb-4">Agent Directory</h2>
       <p className="text-xs text-[var(--muted)] mb-6">Discover and install pre-built agents for your workspace.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {templates.map(t => (
+        {DIRECTORY_TEMPLATES.map(t => (
           <div key={t.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="flex items-start gap-3">
               <span className="text-2xl">{t.icon}</span>
@@ -324,7 +716,7 @@ function AgentDirectoryView({ agents, onToast, onInstall }) {
                 <p className="text-[10px] text-[var(--muted)] mt-0.5">by {t.creator}</p>
                 <p className="text-xs text-[var(--secondary)] mt-1.5">{t.description}</p>
                 <div className="flex items-center gap-2 mt-3">
-                  {isInstalled(t.id) ? (
+                  {installed.includes(t.name) ? (
                     <span className="text-[10px] text-[var(--success)] font-medium">Installed</span>
                   ) : (
                     <button onClick={() => onInstall(t)} className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[10px] font-semibold text-white"><Plus size={10} /> Install</button>
@@ -340,47 +732,51 @@ function AgentDirectoryView({ agents, onToast, onInstall }) {
   );
 }
 
-function AgentSettingsView({ onToast }) {
+/* ═══ Settings ═══ */
+
+function AgentSettingsView({ onToast }: { onToast?: (m: string) => void }) {
+  void onToast;
   return (
     <div className="p-6">
       <h2 className="text-sm font-semibold text-[var(--text)] mb-4">Agent Settings</h2>
       <div className="space-y-3 max-w-xl">
-        <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div>
-            <h4 className="text-xs font-semibold text-[var(--text)]">Allow Custom Agents</h4>
-            <p className="text-[10px] text-[var(--muted)]">Who can create custom agents</p>
-          </div>
-          <select className="rounded-lg bg-[var(--bg)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] outline-none">
-            <option>Everyone</option><option>Admins only</option><option>Specific groups</option>
-          </select>
-        </div>
-        <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div>
-            <h4 className="text-xs font-semibold text-[var(--text)]">Audit Logging</h4>
-            <p className="text-[10px] text-[var(--muted)]">Log every agent run for admin review</p>
-          </div>
-          <input type="checkbox" defaultChecked className="toggle" />
-        </div>
-        <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div>
-            <h4 className="text-xs font-semibold text-[var(--text)]">Prompt Injection Guard</h4>
-            <p className="text-[10px] text-[var(--muted)]">Detect hidden instructions in content agents read</p>
-          </div>
-          <input type="checkbox" defaultChecked className="toggle" />
-        </div>
-        <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div>
-            <h4 className="text-xs font-semibold text-[var(--text)]">Live Usage Dashboard</h4>
-            <p className="text-[10px] text-[var(--muted)]">Show credit consumption in real-time</p>
-          </div>
-          <input type="checkbox" defaultChecked className="toggle" />
+        <BackgroundExecutionSettings onToast={onToast} />
+        <SettingRow title="Audit Logging" desc="Log every agent run for review (stored per-agent under Run history)" defaultOn readOnly />
+        <SettingRow title="Prompt Injection Guard" desc="Detect hidden instructions in content agents read" defaultOn readOnly />
+        <SettingRow title="Confirmation for destructive actions" desc="Deletes and overwrites always require explicit approval before execution" defaultOn readOnly />
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <h4 className="text-xs font-semibold text-[var(--text)] mb-1">How scheduling works</h4>
+          <p className="text-[10px] text-[var(--muted)] leading-relaxed">
+            Scheduled automations execute on Noska's servers via Trigger.dev — your browser does not
+            need to be open. Timezones, missed-run policies, retries and idempotency are handled server-side.
+            Without background execution enabled, scheduled runs are recorded as <span className="italic">skipped</span> rather than silently ignored.
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-function Section({ title, icon: Icon, children }) {
+function SettingRow({ title, desc, defaultOn, readOnly }: { title: string; desc: string; defaultOn?: boolean; readOnly?: boolean }) {
+  const [on, setOn] = useState(Boolean(defaultOn));
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div>
+        <h4 className="text-xs font-semibold text-[var(--text)]">{title}</h4>
+        <p className="text-[10px] text-[var(--muted)]">{desc}</p>
+      </div>
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={readOnly}
+        onChange={() => setOn(!on)}
+        className={`toggle ${readOnly ? "opacity-60" : ""}`}
+      />
+    </div>
+  );
+}
+
+function Section({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: React.ReactNode }) {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-2">
@@ -391,3 +787,6 @@ function Section({ title, icon: Icon, children }) {
     </div>
   );
 }
+
+// Re-exported for potential external consumers of the directory list.
+export { DIRECTORY_TEMPLATES };

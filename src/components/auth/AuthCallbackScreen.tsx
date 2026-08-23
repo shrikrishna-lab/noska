@@ -6,6 +6,7 @@ import { supabase, supabaseAnon } from "../../lib/supabase";
 import { upsertUserProfile, fetchUserProfile } from "../../lib/supabaseService";
 import { capture, identifyUser } from "../../lib/posthog";
 import { setSentryUser } from "../../lib/sentry";
+import { clearOAuthIntent } from "../../lib/oauthIntent";
 import AuthBackground from "./AuthBackground";
 import { slugifyWorkspaceName } from "../../utils/helpers";
 
@@ -52,9 +53,14 @@ const callbackStartedRef = useRef(false);
     if (!isLoaded || window.location.pathname !== "/sso-callback" || callbackStartedRef.current) return;
     callbackStartedRef.current = true;
     clerk.handleRedirectCallback({}).catch((error) => {
-      if (!mountedRef.current) return;
-      setStage("error");
-      setErrorMessage(error instanceof Error ? error.message : "Authentication failed. Please try again.");
+      // The routing effect below may already be processing a completed
+      // session (e.g. the user returned signed-in with no pending OAuth
+      // state). Only surface an error if nothing took over.
+      setTimeout(() => {
+        if (!mountedRef.current || processedRef.current) return;
+        setStage("error");
+        setErrorMessage(error instanceof Error ? error.message : "Authentication failed. Please try again.");
+      }, 250);
     });
   }, [clerk, isLoaded]);
 
@@ -87,6 +93,9 @@ if (timeoutRef.current) {
     if (!user) return;
 
     processedRef.current = true;
+    // The callback completed on this route — the marketing-home recovery
+    // net must not fire for this attempt.
+    clearOAuthIntent();
 
     (async () => {
       try {

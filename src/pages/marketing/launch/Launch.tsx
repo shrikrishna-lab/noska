@@ -65,11 +65,18 @@ export default function Launch() {
   const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
   const [waitlistReferralCode, setWaitlistReferralCode] = useState<string | null>(null);
   const scratchSectionRef = useRef(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const lenisRef = useRef<Lenis | null>(null);
+  const rafIdRef = useRef(0);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !rootRef.current || !contentRef.current) return;
+    // Scroll happens inside .noska-launch (body overflow is hidden globally),
+    // so Lenis must target this container — same pattern as MarketingLayout.
     const lenis = new Lenis({
+      wrapper: rootRef.current,
+      content: contentRef.current,
       duration: 1.15,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
@@ -80,10 +87,11 @@ export default function Launch() {
 
     function raf(time) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      rafIdRef.current = requestAnimationFrame(raf);
     }
-    requestAnimationFrame(raf);
+    rafIdRef.current = requestAnimationFrame(raf);
     return () => {
+      cancelAnimationFrame(rafIdRef.current);
       lenis.destroy();
       lenisRef.current = null;
     };
@@ -96,7 +104,12 @@ export default function Launch() {
         lenisRef.current?.resize();
         window.dispatchEvent(new Event('resize'));
         if (scratchSectionRef.current) {
-          (scratchSectionRef.current as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const target = scratchSectionRef.current as HTMLElement;
+          if (lenisRef.current) {
+            lenisRef.current.scrollTo(target, { duration: 1.2 });
+          } else {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
         }
       }, 150);
     }
@@ -176,7 +189,13 @@ export default function Launch() {
   };
 
   const scrollToScratch = () => {
-    document.getElementById('scratch')?.scrollIntoView({ behavior: 'smooth' });
+    const el = document.getElementById('scratch');
+    if (!el) return;
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(el, { duration: 1.2 });
+    } else {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   if (settings.launch_mode === 'maintenance') {
@@ -195,9 +214,10 @@ export default function Launch() {
   }
 
   return (
-    <div className="noska-launch" id="nl-top">
+    <div className="noska-launch" id="nl-top" ref={rootRef}>
       <SEOHead path="/launch" />
       <Preloader persistKey={null} />
+      <div ref={contentRef}>
       <LaunchNavbar />
 
       {/* Hero */}
@@ -302,6 +322,7 @@ export default function Launch() {
       </div>
 
       <LaunchFooter />
+      </div>
     </div>
   );
 }

@@ -12,7 +12,10 @@ const NOTIFY_EMAIL = Deno.env.get("NOTIFY_EMAIL") ?? "hello@noska.dev"
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
+  // baggage/traceparent/sentry-trace are auto-injected by PostHog/Sentry
+  // browser SDKs into every fetch — rejecting them breaks preflight in prod.
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, apikey, x-client-info, baggage, traceparent, sentry-trace",
 }
 
 async function sendNotification(name: string, email: string, company: string, employees: string, message: string | null) {

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import {
   FileQuestion, PenLine, Sparkles, Database, Link2, Users, BookOpen, Network,
@@ -23,8 +23,16 @@ const STEPS = [
  */
 export function ProductStory() {
   const sectionRef = useRef(null);
+  // The page scrolls inside .noska-launch (body overflow is hidden globally),
+  // so framer-motion must track that container, not window. Populate the ref
+  // in an effect declared before useScroll so motion's own effect sees it.
+  const containerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    containerRef.current = document.getElementById('nl-top');
+  }, []);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
+    container: containerRef,
     offset: ['start start', 'end end'],
   });
 

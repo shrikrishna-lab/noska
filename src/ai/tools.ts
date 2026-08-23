@@ -228,6 +228,15 @@ const DEFINITIONS = [
     params: {
       page_id: { type: "string", desc: "Page ID or title (defaults to current page)", required: false }
     }
+  },
+  {
+    name: "send_notification",
+    description: "Send an in-app notification to the current user (appears in their notifications inbox).",
+    params: {
+      title: { type: "string", desc: "Short notification title", required: true },
+      message: { type: "string", desc: "Notification body text", required: true },
+      action_url: { type: "string", desc: "Optional in-app link, e.g. a page path", required: false }
+    }
   }
 ];
 
@@ -241,7 +250,7 @@ function validateParams(name, params) {
   }
 }
 
-export function getToolInstructions() {
+export function getToolInstructions(options: { compact?: boolean } = {}) {
   const lines = [
     "---",
     "## Available Tools",
@@ -261,36 +270,43 @@ export function getToolInstructions() {
     "4. Never describe what you would do — just do it with the tool",
     "5. If no tool exists for the request, say so honestly",
     "",
-    "### Content Tips (make pages beautiful)",
-    "- Use headings (# ## ###) for structure",
-    "- Add emojis in content text for visual appeal 🎨 ✨ 🚀",
-    "- Use callout blocks for important notes: > 💡 Tip text here",
-    "- Use dividers (---) to separate sections",
-    "- Mix bullet lists (-), numbered lists (1. 2.), and todos (- [ ])",
-    "- Use code blocks (```) for technical content",
-    "- Add toggles (<details>) for collapsible sections",
-    "",
-    "### Tool Reference",
-    "Use this format: <<TOOL:tool_name>>{\"param\":\"value\"}<</TOOL>>",
-    "",
-    "Example: <<TOOL:append_blocks>>{\"content\":\"## 🚀 AI Content\\n\\n- Feature one\\n- Feature two\\n- [ ] Task pending\\n\\n> 💡 Pro tip here\\n\\n---\\n\\n### More details\\n\\nFinal paragraph.\",\"page_id\":\"current\"}<</TOOL>>",
-    "Example: <<TOOL:set_page_icon>>{\"icon\":\"🚀\"}<</TOOL>>",
-    "Example: <<TOOL:create_page>>{\"title\":\"Meeting Notes\",\"icon\":\"📝\",\"content\":\"# Notes\\n\\n- [ ] Follow up\"}<</TOOL>>",
-    "Example: <<TOOL:rename_page>>{\"title\":\"New Title\"}<</TOOL>>",
-    "Example: <<TOOL:search_pages>>{\"query\":\"AI\"}<</TOOL>>",
-    "",
   ];
+  if (!options.compact) {
+    lines.push(
+      "### Content Tips (make pages beautiful)",
+      "- Use headings (# ## ###) for structure",
+      "- Add emojis in content text for visual appeal 🎨 ✨ 🚀",
+      "- Use callout blocks for important notes: > 💡 Tip text here",
+      "- Use dividers (---) to separate sections",
+      "- Mix bullet lists (-), numbered lists (1. 2.), and todos (- [ ])",
+      "- Use code blocks (```) for technical content",
+      "- Add toggles (<details>) for collapsible sections",
+      "",
+    );
+  }
+  lines.push("### Tool Reference", 'Use this format: <<TOOL:tool_name>>{"param":"value"}<</TOOL>>', "");
+  if (!options.compact) {
+    lines.push(
+      "Example: <<TOOL:append_blocks>>{\"content\":\"## 🚀 AI Content\\n\\n- Feature one\\n- Feature two\\n- [ ] Task pending\\n\\n> 💡 Pro tip here\\n\\n---\\n\\n### More details\\n\\nFinal paragraph.\",\"page_id\":\"current\"}<</TOOL>>",
+      `Example: <<TOOL:set_page_icon>>{\"icon\":\"🚀\"}<</TOOL>>`,
+      `Example: <<TOOL:create_page>>{"title":"Meeting Notes","icon":"📝","content":"# Notes\\n\\n- [ ] Follow up"}<</TOOL>>`,
+      `Example: <<TOOL:rename_page>>{\"title\":\"New Title\"}<</TOOL>>`,
+      `Example: <<TOOL:search_pages>>{\"query\":\"AI\"}<</TOOL>>`,
+      "",
+    );
+  }
   for (const def of DEFINITIONS) {
     const params = Object.entries(def.params)
       .map(([key, spec]) => `\`${key}\`${spec.required ? " (required)" : ""}: ${spec.desc}`)
       .join(", ");
     lines.push(`- **${def.name}**: ${def.description} ${params ? `— ${params}` : ""}`);
   }
-  const capabilities = getCapabilities();
-  lines.push("");
-  lines.push("### Capability Status");
-  for (const cap of capabilities) {
-    lines.push(`- ${cap.status} **${cap.name}**: ${cap.description}`);
+  if (!options.compact) {
+    const capabilities = getCapabilities();
+    lines.push("", "### Capability Status");
+    for (const cap of capabilities) {
+      lines.push(`- ${cap.status} **${cap.name}**: ${cap.description}`);
+    }
   }
   lines.push("---");
   return lines.join("\n");
@@ -316,6 +332,8 @@ export function getCapabilities() {
     { name: "User Learning", description: "Remembers your style, preferences, likes, dislikes, and adapts over time", status: "✓" },
     { name: "Workspace Stats", description: "Page counts, tag distribution, favorites", status: "✓" },
     { name: "Undo Support", description: "Undo the last AI action", status: "✓" },
+    { name: "In-App Notifications", description: "Agents can send you notifications in-app", status: "✓" },
+    { name: "Agent Delegation", description: "Agents can invoke other agents as specialists (approval-gated)", status: "✓" },
     { name: "Real-time Collaboration", description: "Multi-user editing with presence", status: "⚠" },
     { name: "Audit Trail", description: "Action history and change tracking", status: "⚠" },
     { name: "External Search", description: "Web search and external data access", status: "✕" },
@@ -352,6 +370,16 @@ export function parseToolCalls(text) {
   return calls;
 }
 
+/**
+ * Validate and execute a single tool call against a tool context.
+ * Exported for the shared agent runtime (which applies its own permission
+ * gate before calling this). Throws on unknown tools or missing params.
+ */
+export async function runTool(name, params, context) {
+  validateParams(name, params);
+  return await executeTool(name, params, context);
+}
+
 export function stripToolCalls(text) {
   return text.replace(new RegExp(TOOL_SOURCE, 'g'), '').trim();
 }
@@ -385,6 +413,7 @@ function findPageByIdOrTitle(pageId, pages, currentPage) {
 }
 
 async function executeTool(name, params, context) {
+  if (name === "send_notification") return executeSendNotification(params, context);
   const { currentPage, pages, actions } = context;
 
   switch (name) {
@@ -791,6 +820,29 @@ async function executeTool(name, params, context) {
     default:
       throw new Error(`Unknown tool: "${name}"`);
   }
+}
+
+// send_notification is executed here (not in the switch above) because it
+// needs the Supabase client; kept separate so the hot tool path stays free
+// of DB imports at module-eval time is NOT a concern (supabase.ts is
+// already imported elsewhere) — it lives here purely for readability.
+async function executeSendNotification(params, context) {
+  const { supabase } = await import('../lib/supabase');
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+  if (!userId) throw new Error("You must be signed in to send notifications");
+  const { error } = await supabase.from('notifications').insert({
+    user_id: userId,
+    type: 'ai_agent',
+    title: String(params.title || 'Notification').slice(0, 120),
+    message: String(params.message || '').slice(0, 500),
+    category: 'agent',
+    source: 'noska-intelligence',
+    status: 'unread',
+    action_url: params.action_url ? String(params.action_url).slice(0, 300) : null,
+  });
+  if (error) throw new Error(`Couldn't deliver the notification: ${error.message}`);
+  return { delivered: true, title: params.title };
 }
 
 export { DEFINITIONS as TOOL_DEFINITIONS };

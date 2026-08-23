@@ -55,9 +55,13 @@ export function LaunchNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
+    // The page scrolls inside .noska-launch (body overflow is hidden globally),
+    // so track that container's scrollTop — window.scrollY never changes here.
+    const scroller = document.querySelector('.noska-launch');
+    if (!scroller) return;
+    const onScroll = () => setScrolled(scroller.scrollTop > 12);
+    scroller.addEventListener('scroll', onScroll);
+    return () => scroller.removeEventListener('scroll', onScroll);
   }, []);
 
   const scrollTo = (id) => (e) => {

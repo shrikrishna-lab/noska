@@ -62,13 +62,21 @@ const sections: DocSection[] = [
     ],
   },
   {
+    id: 'developers',
+    icon: Terminal,
+    title: 'Developers',
+    items: [
+      { id: 'mcp-server', title: 'MCP Server' },
+      { id: 'api-reference', title: 'API Reference' },
+    ],
+  },
+  {
     id: 'account',
     icon: Key,
     title: 'Account',
     items: [
       { id: 'plans', title: 'Plans & Pricing' },
       { id: 'import-export', title: 'Import & Export' },
-      { id: 'api-reference', title: 'API Reference' },
     ],
   },
 ];
@@ -652,6 +660,24 @@ Export scope:
 
 Enterprise customers get API access for programmatic import/export. The API supports RESTful operations for pages, databases, and workspace management.`,
   },
+  'mcp-server': {
+    title: 'MCP Server',
+    body: `Connect AI clients like Claude Desktop, Cursor and custom agents directly to your Noska workspace.
+
+Noska exposes a full Model Context Protocol (MCP) server — 47 tools across 9 capability groups. Search and fetch pages as markdown, create pages from markdown, run native slash commands, manage tasks, query databases, schedule spaced-repetition study cards, and configure agents & automations — all authenticated with scoped API keys and verified against persisted state.
+
+Highlights:
+- search / fetch / create-pages / update-page — URL or UUID accepted everywhere
+- list-commands → the real slash-command registry; execute-command inserts native blocks
+- list-tasks, create-task, complete-task, bulk-update-tasks
+- list-reviews, add-study-card, create-study-plan workflow
+- get-workspace-context for a compact workspace snapshot
+- RED-risk tools require explicit confirmation; every mutation is verified
+
+[[OPEN_MCP_DOCS]]
+
+Full setup guides, Claude Desktop and Cursor configuration, the complete tool reference, the local development stack and troubleshooting live on the dedicated MCP page.`,
+  },
   'api-reference': {
     title: 'API Reference',
     body: `Noska provides a built-in API console and REST API for programmatic access.
@@ -827,6 +853,18 @@ export default function Docs() {
             <h1 className="docs-content-title">{currentDoc.title}</h1>
             <div className="docs-content-body">
               {currentDoc.body.split('\n').map((line, i, lines) => {
+                if (line === '[[OPEN_MCP_DOCS]]') {
+                  return (
+                    <div key={i} className="my-4">
+                      <Link
+                        to="/docs/mcp"
+                        className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                      >
+                        Open the MCP documentation <ChevronRight size={14} />
+                      </Link>
+                    </div>
+                  );
+                }
                 if (line.startsWith('```')) {
                   const lang = line.slice(3).trim();
                   const codeLines: string[] = [];

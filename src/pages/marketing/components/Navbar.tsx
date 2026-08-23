@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Menu, X, ArrowRight, Sparkles, FileText, Database, CheckSquare, Users, Building, Laptop, HelpCircle, BookOpen, Clock } from 'lucide-react';
+import { ChevronDown, Menu, X, ArrowRight, Sparkles, FileText, Database, CheckSquare, Users, Building, Laptop, HelpCircle, BookOpen, Clock, MonitorDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCTAButtons, useLaunchSettings } from '../../../hooks/useLaunchSettings';
 import './Navbar.css';
@@ -173,6 +173,15 @@ export default function Navbar() {
                     {activeDropdown === 'resources' && (
                       <motion.div className="liquid-glass-dropdown-panel" {...dropdownMotion}>
                         <div className="liquid-dropdown-grid single-col">
+                          <Link to="/download" className="liquid-dropdown-item">
+                            <div className="liquid-dropdown-icon-box sage">
+                              <MonitorDown size={16} />
+                            </div>
+                            <div className="liquid-dropdown-info">
+                              <p className="liquid-dropdown-title">Download for Desktop</p>
+                              <p className="liquid-dropdown-desc">Windows, macOS &amp; Linux</p>
+                            </div>
+                          </Link>
                           <Link to="/resources" className="liquid-dropdown-item">
                             <div className="liquid-dropdown-icon-box orange">
                               <BookOpen size={16} />
@@ -289,6 +298,7 @@ export default function Navbar() {
 
                 <div className="liquid-mobile-group">
                   <p className="liquid-mobile-group-header">Resources</p>
+                  <Link to="/download" className="liquid-mobile-item">Download for Desktop</Link>
                   <Link to="/resources" className="liquid-mobile-item">Guides & Shortcuts</Link>
                   {settings.show_docs && <Link to="/docs" className="liquid-mobile-item">Documentation</Link>}
                   {settings.show_changelog && <Link to="/changelog" className="liquid-mobile-item">Changelog</Link>}

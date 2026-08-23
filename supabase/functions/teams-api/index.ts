@@ -9,7 +9,10 @@ function corsHeaders(origin: string) {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
+    // baggage/traceparent/sentry-trace are auto-injected by PostHog/Sentry
+    // browser SDKs into every fetch — rejecting them breaks preflight in prod.
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, apikey, baggage, traceparent, sentry-trace",
     "Content-Type": "application/json",
   }
 }

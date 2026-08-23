@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      user_api_keys: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          prefix: string
+          key_hash: string
+          scopes: Json
+          created_at: string
+          expires_at: string | null
+          last_used_at: string | null
+          revoked_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name?: string
+          prefix: string
+          key_hash: string
+          scopes?: Json
+          created_at?: string
+          expires_at?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          prefix?: string
+          key_hash?: string
+          scopes?: Json
+          created_at?: string
+          expires_at?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action: string
@@ -334,6 +373,7 @@ export type Database = {
       }
       agents: {
         Row: {
+          config: Json | null
           created_at: string | null
           credit_cap_per_month: number | null
           credit_cap_per_run: number | null
@@ -350,6 +390,7 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          config?: Json | null
           created_at?: string | null
           credit_cap_per_month?: number | null
           credit_cap_per_run?: number | null
@@ -366,6 +407,7 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          config?: Json | null
           created_at?: string | null
           credit_cap_per_month?: number | null
           credit_cap_per_run?: number | null
@@ -382,6 +424,110 @@ export type Database = {
           workspace_id?: string | null
         }
         Relationships: []
+      }
+      automations: {
+        Row: {
+          conditions: Json | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          last_run_at: string | null
+          name: string
+          owner_id: string
+          permissions: Json | null
+          run_count: number
+          status: string
+          steps: Json | null
+          trigger_config: Json
+          updated_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          conditions?: Json | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          last_run_at?: string | null
+          name: string
+          owner_id: string
+          permissions?: Json | null
+          run_count?: number
+          status?: string
+          steps?: Json | null
+          trigger_config: Json
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          conditions?: Json | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          last_run_at?: string | null
+          name?: string
+          owner_id?: string
+          permissions?: Json | null
+          run_count?: number
+          status?: string
+          steps?: Json | null
+          trigger_config?: Json
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      automation_runs: {
+        Row: {
+          automation_id: string
+          detail: Json | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          owner_id: string
+          started_at: string
+          status: string
+          steps_taken: number | null
+          summary: string | null
+          trigger_type: string | null
+        }
+        Insert: {
+          automation_id: string
+          detail?: Json | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          owner_id: string
+          started_at?: string
+          status?: string
+          steps_taken?: number | null
+          summary?: string | null
+          trigger_type?: string | null
+        }
+        Update: {
+          automation_id?: string
+          detail?: Json | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          owner_id?: string
+          started_at?: string
+          status?: string
+          steps_taken?: number | null
+          summary?: string | null
+          trigger_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_chats: {
         Row: {

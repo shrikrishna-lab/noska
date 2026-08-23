@@ -1,124 +1,134 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SendHorizontal, StopCircle, Sparkles, Plus, Globe, SlidersHorizontal } from 'lucide-react';
 import { realtimeCollab } from '../../lib/realtimeCollab';
+import { aiManager } from '../../ai/AIManager';
+import {
+  AiPromptInput,
+  type AiModelSelection,
+  type AiPromptSendStatus,
+  getRealAiModels,
+} from '../ui/ai-prompt-input';
+
+interface PromptComposerProps {
+  prompt: string;
+  setPrompt: (value: string) => void;
+  onSend: (overrideText?: string, selection?: AiModelSelection) => void;
+  loading: boolean;
+  onAbort?: () => void;
+  currentAgent?: { name: string; icon?: string | React.ReactNode };
+  page?: { id?: string; title?: string };
+  onOpenKeySetup?: (providerId?: string) => void;
+  onUploadFile?: () => void;
+  onSkills?: () => void;
+  onConnectors?: () => void;
+  onToast?: (msg: string) => void;
+}
+
+const WORKSPACE_PLACEHOLDERS = [
+  "Ask anything about your workspace...",
+  "Summarize this document...",
+  "Extract action items and todo tasks...",
+  "Draft a response or new page section...",
+  "Brainstorm ideas or analyze structure...",
+] as const;
 
 export default function PromptComposer({
-  prompt, setPrompt, onSend, loading, onAbort,
-  currentAgent, page, showSettings, onToggleSettings
-}) {
-  const textareaRef = useRef(null);
-  const [focused, setFocused] = useState(false);
+  prompt,
+  setPrompt,
+  onSend,
+  loading,
+  onAbort,
+  currentAgent,
+  page,
+  onOpenKeySetup,
+  onUploadFile,
+  onSkills,
+  onConnectors,
+  onToast,
+}: PromptComposerProps) {
+  const models = useMemo(() => getRealAiModels(), []);
+  const initialModelId = aiManager.getActiveModel() || models[0]?.id || "anthropic/claude-sonnet-4-20250514";
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 160) + 'px';
-    }
-  }, [prompt]);
+  const [modelSelection, setModelSelection] = useState<AiModelSelection>({
+    id: initialModelId,
+    effort: "high",
+    context: "200K",
+    fast: true,
+    thinking: false,
+  });
+  const [deepResearch, setDeepResearch] = useState(false);
+  const [webSearch, setWebSearch] = useState(false);
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (loading) onAbort?.();
-      else onSend?.();
+  const handleSubmit = useCallback((value: string, selection: AiModelSelection) => {
+    let finalPrompt = value;
+    if (deepResearch) {
+      finalPrompt = `[Deep Research Mode] ${finalPrompt}`;
     }
-    if (e.key === 'Escape') {
-      setFocused(false);
-      textareaRef.current?.blur();
+    if (webSearch) {
+      finalPrompt = `[Web Search Active] ${finalPrompt}`;
     }
-  };
+    onSend(finalPrompt, selection);
+  }, [deepResearch, webSearch, onSend]);
+
+  const handleChange = useCallback((val: string) => {
+    setPrompt(val);
+    if (page?.id && realtimeCollab.isJoined()) {
+      realtimeCollab.sendTyping(page.id);
+    }
+  }, [setPrompt, page?.id]);
+
+  const status: AiPromptSendStatus = loading ? "loading" : "idle";
 
   return (
-    <div className="border-t border-[var(--border)] bg-[var(--bg)]">
-      <div className={`mx-3 my-2.5 rounded-xl border transition-all duration-200 ${
-        focused ? 'border-[var(--accent)]/40 shadow-[0_0_0_1px_var(--accent-alpha)]' : 'border-[var(--border)]'
-      } bg-[var(--surface)]`}>
-        {/* Toolbar row */}
-        <div className="flex items-center gap-1 px-2 pt-1.5 pb-1">
-          {currentAgent && (
-            <span className="flex items-center gap-1 rounded-md bg-[var(--accent)]/8 px-1.5 py-0.5 text-[9px] font-medium text-[var(--accent)]">
-              <Sparkles size={8} />
-              {currentAgent.name}
-            </span>
-          )}
-          {page && (
-            <span className="flex items-center gap-1 rounded-md bg-[var(--surface-3)] px-1.5 py-0.5 text-[9px] text-[var(--muted)]">
-              <Globe size={8} />
-              {page.title?.slice(0, 20)}
-            </span>
-          )}
-          <div className="flex-1" />
-          <button
-            onClick={onToggleSettings}
-            className={`p-1 rounded text-[9px] transition ${showSettings ? 'text-[var(--accent)] bg-[var(--accent)]/8' : 'text-[var(--muted)] hover:text-[var(--text-secondary)]'}`}
-            title="Prompt settings"
-          >
-            <SlidersHorizontal size={10} />
-          </button>
-        </div>
+    <div className="w-full px-4 pb-6 pt-2">
+      {/* Clean Minimalist AI Prompt Card */}
+      <AiPromptInput
+        value={prompt}
+        onChange={handleChange}
+        onSubmit={handleSubmit}
+        status={status}
+        models={models}
+        modelSelection={modelSelection}
+        onModelSelectionChange={setModelSelection}
+        onOpenKeySetup={onOpenKeySetup}
+        placeholders={WORKSPACE_PLACEHOLDERS}
+        placeholderInterval={3200}
+        deepResearch={deepResearch}
+        onDeepResearchChange={setDeepResearch}
+        webSearch={webSearch}
+        onWebSearchChange={setWebSearch}
+        onUploadFile={onUploadFile ?? (() => onToast?.("File uploader ready"))}
+        onSkills={onSkills ?? (() => onToast?.("AI Skills activated"))}
+        onConnectors={onConnectors ?? (() => onToast?.("Connectors ready"))}
+        aria-label="AI prompt"
+      />
 
-        {/* Textarea */}
-        <textarea
-          ref={textareaRef}
-          value={prompt}
-          onChange={(e) => {
-            setPrompt(e.target.value);
-            if (page?.id && realtimeCollab.isJoined()) realtimeCollab.sendTyping(page.id);
-          }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          onKeyDown={handleKeyDown}
-          rows={1}
-          className="w-full resize-none bg-transparent px-3 py-1.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)] leading-relaxed"
-          placeholder={`Ask ${currentAgent?.name || 'Noska'} to write, search, or edit...`}
-        />
-
-        {/* Bottom row */}
-        <div className="flex items-center gap-1 px-2 pb-1.5">
-          <button
-            className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition"
-            title="Attach"
-          >
-            <Plus size={11} />
-          </button>
-          <div className="flex-1" />
-          {loading ? (
-            <button
-              onClick={onAbort}
-              className="flex items-center gap-1 rounded-lg bg-[var(--danger)]/10 text-[var(--danger)] hover:bg-[var(--danger)]/20 px-2 py-1 text-[10px] font-medium transition"
-            >
-              <StopCircle size={10} />
-              Stop
-            </button>
-          ) : (
-            <button
-              onClick={onSend}
-              disabled={!prompt.trim()}
-              className="flex items-center gap-1 rounded-lg bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-30 px-2 py-1 text-[10px] font-medium transition"
-            >
-              <SendHorizontal size={10} />
-              Send
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Token/usage bar */}
+      {/* Real-time processing feedback */}
       <AnimatePresence>
         {loading && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="flex items-center gap-2 px-4 pb-2"
+            className="flex items-center justify-between px-3 pt-2 text-xs text-[var(--muted)]"
           >
-            <div className="flex gap-0.5">
-              <span className="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style={{animationDelay: '0ms'}} />
-              <span className="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style={{animationDelay: '100ms'}} />
-              <span className="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style={{animationDelay: '200ms'}} />
+            <div className="flex items-center gap-2">
+              <span className="flex gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '120ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '240ms' }} />
+              </span>
+              <span>{currentAgent?.name || 'AI'} is thinking with {modelSelection.id}...</span>
             </div>
-            <span className="text-[9px] text-[var(--muted)]">{currentAgent?.name || 'AI'} is thinking...</span>
+            {onAbort && (
+              <button
+                type="button"
+                onClick={onAbort}
+                className="text-[var(--danger)] hover:underline font-medium"
+              >
+                Cancel
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

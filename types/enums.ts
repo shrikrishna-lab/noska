@@ -17,17 +17,19 @@
  * value appears anywhere in current code. */
 export type AgentStatus = "active" | "paused";
 
-/** agents.type — the only literal value assigned in the agent builder
- * form (src/features/agents/AgentWorkspace.jsx) is 'custom'. The schema
- * comment describes this as a general "kind of agent" field; other kinds
- * referenced only as UI tab ids ('personal', 'directory') are not agent
- * records themselves, so they're intentionally excluded here. */
-export type AgentType = "custom";
+/** agents.type — 'custom' is assigned by the agent builder; 'template' is
+ * used when an agent is installed from the Agent Directory. */
+export type AgentType = "custom" | "template";
 
-/** agent_triggers.type — the only literal used when creating a trigger
- * (src/features/agents/AgentWorkspace.jsx triggerForm default) is
- * 'mention'. */
-export type AgentTriggerType = "mention";
+/** agent_triggers.type — trigger kinds offered by the agent builder
+ * (src/features/agents/AgentWorkspace.tsx). */
+export type AgentTriggerType =
+  | "mention"
+  | "reaction"
+  | "property_change"
+  | "schedule"
+  | "new_email"
+  | "calendar_event";
 
 /** agent_access_grants.resource_type — options rendered in the resource
  * type <select> in src/features/agents/AgentWorkspace.jsx. */

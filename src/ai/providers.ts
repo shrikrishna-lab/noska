@@ -350,14 +350,14 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.groq.com/openai/v1",
     keyPlaceholder: "gsk_...",
     models: [
-      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", context: 131072 },
-      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", context: 32768 },
-      { id: "gemma2-9b-it", name: "Gemma 2 9B", context: 8192 }
+      { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", context: 131072 },
+      { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", context: 131072 },
+      { id: "qwen/qwen3.6-27b", name: "Qwen 3.6 27B", context: 131072 }
     ],
-    defaultModel: "llama-3.3-70b-versatile",
+    defaultModel: "openai/gpt-oss-120b",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
       if (!apiKey) return mockResponse("Groq key not configured");
-      try {
+      const attempt = async (): Promise<string> => {
         const res = await fetch(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
@@ -377,8 +377,164 @@ const PROVIDERS: Record<string, AIProvider> = {
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
+      };
+      try {
+        try {
+          return await attempt();
+        } catch (err) {
+          // Free-tier TPM windows reset each minute — one patient retry.
+          if (/429|rate limit|tokens per minute/i.test(String(err.message))) {
+            await new Promise(r => setTimeout(r, 20000));
+            return await attempt();
+          }
+          throw err;
+        }
       } catch (err) {
-        return `${mockResponse("Groq request failed")}\n\n_Error: ${err.message}_`;
+        // Surface failures honestly (runtime + panel render friendly messages);
+        // never let callers mistake an error response for model output.
+        const msg = String(err.message || "");
+        const friendly = /429|rate limit|tokens per minute/i.test(msg)
+          ? "Groq rate limit reached — wait a minute or upgrade your plan tier."
+          : msg.slice(0, 300);
+        throw new Error(friendly);
+      }
+    }
+  },
+
+  deepseek: {
+    id: "deepseek",
+    name: "DeepSeek",
+    type: "cloud",
+    requiresKey: true,
+    baseUrl: "https://api.deepseek.com/v1",
+    keyPlaceholder: "sk-…",
+    models: [
+      { id: "deepseek-chat", name: "DeepSeek V3 Chat", context: 64000 },
+      { id: "deepseek-reasoner", name: "DeepSeek R1 Reasoner", context: 64000 }
+    ],
+    defaultModel: "deepseek-chat",
+    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
+      if (!apiKey) return mockResponse("DeepSeek key not configured");
+      try {
+        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: model || this.defaultModel,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
+          })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content || "";
+      } catch (err) {
+        return `${mockResponse("DeepSeek request failed")}\n\n_Error: ${err.message}_`;
+      }
+    }
+  },
+
+  mistral: {
+    id: "mistral",
+    name: "Mistral AI",
+    type: "cloud",
+    requiresKey: true,
+    baseUrl: "https://api.mistral.ai/v1",
+    keyPlaceholder: "…",
+    models: [
+      { id: "mistral-large-latest", name: "Mistral Large", context: 128000 },
+      { id: "mistral-small-latest", name: "Mistral Small", context: 128000 },
+      { id: "codestral-latest", name: "Codestral", context: 256000 }
+    ],
+    defaultModel: "mistral-large-latest",
+    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
+      if (!apiKey) return mockResponse("Mistral key not configured");
+      try {
+        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: model || this.defaultModel,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
+          })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content || "";
+      } catch (err) {
+        return `${mockResponse("Mistral request failed")}\n\n_Error: ${err.message}_`;
+      }
+    }
+  },
+
+  together: {
+    id: "together",
+    name: "Together AI",
+    type: "cloud",
+    requiresKey: true,
+    baseUrl: "https://api.together.xyz/v1",
+    keyPlaceholder: "…",
+    models: [
+      { id: "meta-llama/Llama-3.3-70B-Instruct-Turbo", name: "Llama 3.3 70B Turbo", context: 128000 },
+      { id: "Qwen/Qwen2.5-72B-Instruct-Turbo", name: "Qwen 2.5 72B", context: 128000 },
+      { id: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", name: "Llama 3.1 8B Turbo", context: 128000 }
+    ],
+    defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
+      if (!apiKey) return mockResponse("Together key not configured");
+      try {
+        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: model || this.defaultModel,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
+          })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content || "";
+      } catch (err) {
+        return `${mockResponse("Together request failed")}\n\n_Error: ${err.message}_`;
+      }
+    }
+  },
+
+  xai: {
+    id: "xai",
+    name: "xAI Grok",
+    type: "cloud",
+    requiresKey: true,
+    baseUrl: "https://api.x.ai/v1",
+    keyPlaceholder: "xai-…",
+    models: [
+      { id: "grok-2-latest", name: "Grok 2", context: 131072 },
+      { id: "grok-2-mini", name: "Grok 2 Mini", context: 131072 }
+    ],
+    defaultModel: "grok-2-latest",
+    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
+      if (!apiKey) return mockResponse("xAI key not configured");
+      try {
+        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: model || this.defaultModel,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
+          })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content || "";
+      } catch (err) {
+        return `${mockResponse("xAI request failed")}\n\n_Error: ${err.message}_`;
       }
     }
   },
@@ -596,17 +752,121 @@ async function* parseSSEStream(response) {
 }
 
 /**
- * Get provider definition by ID
+ * Get provider definition by ID (built-ins + user-registered custom ones)
  */
 export function getProvider(id) {
-  return PROVIDERS[id] || null;
+  return PROVIDERS[id] || customProviders.get(id) || null;
 }
 
 /**
  * Get all provider definitions
  */
 export function getAllProviders() {
-  return Object.values(PROVIDERS);
+  return [...Object.values(PROVIDERS), ...customProviders.values()];
+}
+
+// ─── Custom Providers (#2: bring any OpenAI-compatible endpoint) ───────────
+
+const customProviders = new Map<string, AIProvider>();
+
+export interface CustomProviderConfig {
+  id: string;
+  name: string;
+  baseUrl: string;
+  models: Array<{ id: string; name?: string }>;
+  defaultModel?: string;
+}
+
+/** Build an AIProvider around ANY OpenAI-compatible chat-completions endpoint
+ * (Groq, Together, Fireworks, vLLM, LM Studio, OpenRouter, Azure gateways…). */
+export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
+  const base = cfg.baseUrl.replace(/\/+$/, "");
+  return {
+    id: cfg.id,
+    name: cfg.name,
+    type: "custom",
+    requiresKey: true,
+    baseUrl: base,
+    keyPlaceholder: "sk-… / API key",
+    models: cfg.models.map((m) => ({ id: m.id, name: m.name || m.id, context: 128000 })),
+    defaultModel: cfg.defaultModel || cfg.models[0]?.id || "",
+    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
+      if (!apiKey) return mockResponse(`${cfg.name}: no API key set`);
+      try {
+        const res = await fetch(`${base}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: model || this.defaultModel,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            messages: [
+              ...(system ? [{ role: "system", content: system }] : []),
+              ...messages,
+            ],
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content || "";
+      } catch (err) {
+        return `${mockResponse(`${cfg.name} request failed`)}\n\n_Error: ${err.message}_`;
+      }
+    },
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048 }) {
+      if (!apiKey) { yield mockResponse(`${cfg.name}: no API key set`); return; }
+      try {
+        const res = await fetch(`${base}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: model || this.defaultModel,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            stream: true,
+            messages: [
+              ...(system ? [{ role: "system", content: system }] : []),
+              ...messages,
+            ],
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const payload = trimmed.slice(5).trim();
+            if (payload === "[DONE]") return;
+            try {
+              const json = JSON.parse(payload);
+              const delta = json.choices?.[0]?.delta?.content;
+              if (delta) yield delta;
+            } catch { /* partial chunk */ }
+          }
+        }
+      } catch (err) {
+        yield `${mockResponse(`${cfg.name} stream failed`)}\n\n_Error: ${err.message}_`;
+      }
+    },
+  };
+}
+
+/** Register a custom provider for this session (called from AIManager init). */
+export function registerCustomProvider(cfg: CustomProviderConfig): void {
+  if (!cfg?.id || !cfg.baseUrl) return;
+  customProviders.set(cfg.id, createCustomProvider(cfg));
+}
+
+export function unregisterCustomProvider(id: string): void {
+  customProviders.delete(id);
 }
 
 /**
