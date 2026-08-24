@@ -51,7 +51,7 @@ export function PairClaimWatcher() {
     tried.current = true;
     (async () => {
       try {
-        const jwt = await getToken();
+        const jwt = await getToken({ template: "supabase" });
         if (!jwt) throw new Error("no token");
         await claimPairCode(code, jwt);
         window.dispatchEvent(new CustomEvent("noska:pair-claimed", { detail: code }));
@@ -87,7 +87,7 @@ export default function DesktopConnectPage() {
     setState("working");
     (async () => {
       try {
-        const jwt = await getToken();
+        const jwt = await getToken({ template: "supabase" });
         if (!jwt) throw new Error("Not signed in");
         await claimPairCode(urlCode, jwt);
         sessionStorage.removeItem(PENDING_KEY);
@@ -109,7 +109,7 @@ export default function DesktopConnectPage() {
     }
     setState("working");
     try {
-      const jwt = await getToken();
+      const jwt = await getToken({ template: "supabase" });
       if (!jwt) throw new Error("Not signed in");
       await claimPairCode(clean, jwt);
       sessionStorage.removeItem(PENDING_KEY);

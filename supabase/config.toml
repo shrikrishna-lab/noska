@@ -1,0 +1,5 @@
+# desktop-auth receives a Clerk JWT for browser claims and no user JWT for
+# first-time desktop exchanges. Both cases must reach the function's own
+# action-specific authentication checks rather than Supabase's JWT gateway.
+[functions.desktop-auth]
+verify_jwt = false

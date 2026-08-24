@@ -1,0 +1,26 @@
+# Local dependencies and generated artifacts are rebuilt by Vercel.
+node_modules
+admin/node_modules
+dist
+dist-*
+dist-desktop
+
+# Local tooling, test output, and developer-only material.
+.git
+.agents
+.playwright-mcp
+.tauri
+.vscode
+.zcode
+docs
+test
+scripts
+sdk
+src-tauri
+supabase
+trigger
+emails
+graphify-out
+tinytrails
+*.log
+*.tmp

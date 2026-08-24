@@ -1,6 +1,9 @@
 // Desktop browser-pairing auth edge function.
 //
 // POST /functions/v1/desktop-auth   body: { action, ... }
+// Deploy configuration: supabase/config.toml sets verify_jwt = false. This
+// endpoint accepts Clerk JWTs for `claim` and no JWT for `exchange`, neither
+// of which can pass Supabase's gateway JWT validation.
 //
 //  action:"claim"    (BROWSER, Clerk JWT in Authorization)
 //      { code } -> verifies the Clerk session via GoTrue, links code->user.
@@ -108,15 +111,20 @@ async function pairBumpAttempts(code: string, n: number): Promise<void> {
 
 /* ── identity helpers ──────────────────────────────────────────────────── */
 
-/** Verifies a Clerk JWT through GoTrue and returns the mapped auth user. */
+/**
+ * Validates the Clerk `supabase` JWT through GoTrue and returns its mapped
+ * Supabase user. The web client must request this named Clerk token template;
+ * a default Clerk FAPI session token cannot be used as a bearer credential
+ * against Clerk's /v1/me endpoint from an Edge Function.
+ */
 async function resolveClerkUser(clerkJwt: string): Promise<{ id: string; email: string | null }> {
   const res = await fetch(`${URL_BASE}/auth/v1/user`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${clerkJwt}` },
   });
   if (!res.ok) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
-  const u = await res.json();
-  if (!u?.id) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
-  return { id: u.id as string, email: (u.email as string) ?? null };
+  const user = await res.json() as { id?: string; email?: string };
+  if (!user.id) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
+  return { id: user.id, email: user.email ?? null };
 }
 
 function httpError(status: number, error: string, message: string) {
