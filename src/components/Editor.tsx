@@ -816,7 +816,92 @@ export default function Editor({
       }`}
       style={page.pageBg ? { background: page.pageBg } : undefined}
     >
-      <div className={`mx-auto px-16 py-10 transition-all duration-200 ${
+      {/* Cover Banner — full width of editor container or constrained by coverSize without viewport overflow */}
+      {Boolean(page.cover) && (
+        <div
+          className={`transition-all duration-300 relative group/banner select-none overflow-hidden ${
+            !page.coverSize || page.coverSize === "full"
+              ? "w-full"
+              : page.coverSize === "wide"
+              ? "max-w-5xl mx-auto rounded-b-xl"
+              : page.coverSize === "small"
+              ? "max-w-[480px] mx-auto rounded-b-xl"
+              : "max-w-[720px] mx-auto rounded-b-xl"
+          } ${
+            isRepositioningCover ? "ring-2 ring-blue-500/60 cursor-grab active:cursor-grabbing" : ""
+          }`}
+          style={{
+            height: (page.coverHeight || 160) + "px",
+            background: typeof page.cover === "string" && (page.cover.startsWith('linear-gradient') || page.cover.startsWith('radial-gradient'))
+              ? page.cover
+              : `url(${page.cover}) ${isRepositioningCover && coverDragYPercent !== null ? `center ${coverDragYPercent}%` : (page.coverPosition || "center")}/cover no-repeat`,
+            filter: page.coverOverlay ? `brightness(${page.coverBrightness || 100}%)` : "none",
+            ...(page.coverParallax ? { backgroundAttachment: "fixed" } : {})
+          }}
+          onMouseDown={(e) => {
+            if (isRepositioningCover) {
+              e.preventDefault();
+              isDraggingCover.current = true;
+              coverDragStartY.current = e.clientY;
+              coverDragStartPercent.current = coverDragYPercent ?? getCoverYPercent(page.coverPosition);
+            }
+          }}
+          onMouseMove={(e) => {
+            if (isRepositioningCover && isDraggingCover.current && coverDragStartY.current !== null) {
+              const deltaY = e.clientY - coverDragStartY.current;
+              const height = page.coverHeight || 160;
+              const deltaPercent = (deltaY / height) * 100;
+              const newPercent = Math.min(100, Math.max(0, Math.round(coverDragStartPercent.current - deltaPercent)));
+              setCoverDragYPercent(newPercent);
+            }
+          }}
+          onMouseUp={() => {
+            if (isRepositioningCover) {
+              isDraggingCover.current = false;
+            }
+          }}
+          onMouseLeave={() => {
+            if (isRepositioningCover) {
+              isDraggingCover.current = false;
+            }
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setCoverMenuPos({ left: e.clientX, top: e.clientY });
+            setCoverMenuOpen(true);
+          }}
+        >
+          {/* Repositioning visual grid hint overlay */}
+          {isRepositioningCover && (
+            <div className="absolute inset-0 bg-black/25 pointer-events-none flex items-center justify-center">
+              <div className="border border-white/30 border-dashed rounded-lg inset-3 absolute pointer-events-none" />
+            </div>
+          )}
+
+          {/* Apple Liquid Glass Cover Toolbar (Change | Reposition | Download/Options) */}
+          <CoverLiquidGlassToolbar
+            page={page}
+            isEditable={isEditable}
+            isRepositioning={isRepositioningCover}
+            onStartReposition={handleStartReposition}
+            onSaveReposition={handleSaveReposition}
+            onCancelReposition={handleCancelReposition}
+            onOpenPicker={(pos) => {
+              setCoverPickerPos(pos);
+              setCoverPickerOpen(true);
+            }}
+            onOpenSettings={(pos) => {
+              setCoverMenuPos(pos);
+              setCoverMenuOpen(true);
+            }}
+            onRemoveCover={() => {
+              onPagePatch({ cover: null });
+            }}
+          />
+        </div>
+      )}
+
+      <div className={`mx-auto px-16 ${page.cover ? "pt-4 pb-10" : "py-10"} transition-all duration-200 ${
         page.fullWidth ? "max-w-full px-8" : "max-w-[720px]"
       } ${
         page.smallText ? "noska-small-text text-xs" : ""
@@ -828,91 +913,6 @@ export default function Editor({
           }
         }}
       >
-        {(page.cover || page.cover === undefined) && (
-          <div
-            className={`-mx-16 mb-6 rounded-b-xl transition-all duration-300 relative group/banner select-none overflow-hidden ${
-              isRepositioningCover ? "ring-2 ring-blue-500/60 cursor-grab active:cursor-grabbing" : ""
-            }`}
-            style={{
-              height: (page.coverHeight || 160) + "px",
-              background: (page.cover ?? covers[0]).startsWith('linear-gradient')
-                ? (page.cover ?? covers[0])
-                : `url(${page.cover}) ${isRepositioningCover && coverDragYPercent !== null ? `center ${coverDragYPercent}%` : (page.coverPosition || "center")}/cover no-repeat`,
-              marginTop: page.coverSize === "small" ? "-1rem" : page.coverSize === "wide" ? "-2rem" : page.coverSize === "standard" ? "-1.5rem" : !page.coverSize || page.coverSize === "full" ? "-2.5rem" : "-2.5rem",
-              ...(!page.coverSize || page.coverSize === "full" ? {
-                width: "100vw",
-                marginLeft: "calc(-50vw + 50%)",
-                maxWidth: "none"
-              } : {
-                marginLeft: page.coverSize === "small" ? "auto" : page.coverSize === "standard" ? "-4rem" : "-16rem",
-                marginRight: page.coverSize === "small" ? "auto" : page.coverSize === "standard" ? "-4rem" : "-16rem",
-                maxWidth: page.coverSize === "small" ? "60%" : page.coverSize === "standard" ? "calc(100% + 8rem)" : "calc(100% + 32rem)",
-              }),
-              filter: page.coverOverlay ? `brightness(${page.coverBrightness || 100}%)` : "none",
-              ...(page.coverParallax ? { backgroundAttachment: "fixed" } : {})
-            }}
-            onMouseDown={(e) => {
-              if (isRepositioningCover) {
-                e.preventDefault();
-                isDraggingCover.current = true;
-                coverDragStartY.current = e.clientY;
-                coverDragStartPercent.current = coverDragYPercent ?? getCoverYPercent(page.coverPosition);
-              }
-            }}
-            onMouseMove={(e) => {
-              if (isRepositioningCover && isDraggingCover.current && coverDragStartY.current !== null) {
-                const deltaY = e.clientY - coverDragStartY.current;
-                const height = page.coverHeight || 160;
-                const deltaPercent = (deltaY / height) * 100;
-                const newPercent = Math.min(100, Math.max(0, Math.round(coverDragStartPercent.current - deltaPercent)));
-                setCoverDragYPercent(newPercent);
-              }
-            }}
-            onMouseUp={() => {
-              if (isRepositioningCover) {
-                isDraggingCover.current = false;
-              }
-            }}
-            onMouseLeave={() => {
-              if (isRepositioningCover) {
-                isDraggingCover.current = false;
-              }
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setCoverMenuPos({ left: e.clientX, top: e.clientY });
-              setCoverMenuOpen(true);
-            }}
-          >
-            {/* Repositioning visual grid hint overlay */}
-            {isRepositioningCover && (
-              <div className="absolute inset-0 bg-black/25 pointer-events-none flex items-center justify-center">
-                <div className="border border-white/30 border-dashed rounded-lg inset-3 absolute pointer-events-none" />
-              </div>
-            )}
-
-            {/* Apple Liquid Glass Cover Toolbar (Change | Reposition | Download/Options) */}
-            <CoverLiquidGlassToolbar
-              page={page}
-              isEditable={isEditable}
-              isRepositioning={isRepositioningCover}
-              onStartReposition={handleStartReposition}
-              onSaveReposition={handleSaveReposition}
-              onCancelReposition={handleCancelReposition}
-              onOpenPicker={(pos) => {
-                setCoverPickerPos(pos);
-                setCoverPickerOpen(true);
-              }}
-              onOpenSettings={(pos) => {
-                setCoverMenuPos(pos);
-                setCoverMenuOpen(true);
-              }}
-              onRemoveCover={() => {
-                onPagePatch({ cover: null });
-              }}
-            />
-          </div>
-        )}
         <div className="mb-2 flex items-center justify-between gap-2 relative min-h-[32px]">
             <div className="flex items-center gap-2">
               {page.isLocked && (

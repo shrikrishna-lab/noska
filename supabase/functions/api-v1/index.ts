@@ -91,14 +91,16 @@ function corsHeaders(origin: string): Record<string, string> {
   };
 }
 
+
+function allowedOrigin(origin) {
+  if (!origin) return "https://app.noska.me";
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
+  if (/^https:\/\/([\w-]+\.)?noska\.me$/.test(origin)) return origin;
+  return "https://app.noska.me";
+}
+
 function getOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || req.headers.get("referer") || "";
-  if (origin.includes("localhost") || origin.includes("127.0.0.1")) return origin;
-  try {
-    return new URL(Deno.env.get("SITE_URL") ?? "https://app.noska.me").origin;
-  } catch {
-    return "https://app.noska.me";
-  }
+  return allowedOrigin(req.headers.get("origin") || req.headers.get("referer") || "");
 }
 
 /* ─── Rate limiting ─── */

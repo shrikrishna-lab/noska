@@ -211,6 +211,104 @@ export default function McpDocs() {
           <p>Then just ask: <em>"Search my Noska for Raft, fetch that page and turn its paragraphs into study cards."</em></p>
         </Section>
 
+        <Section id="setup-guide" kicker="Step by step" title="Setup guide">
+          <div className="space-y-8">
+            {/* STEP 1 */}
+            <div>
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--text)]">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent)]/15 text-[11px] font-bold text-[#8a744f]">1</span>
+                Create your API key
+              </h4>
+              <ol className="ml-9 list-decimal space-y-1.5 text-[13px]">
+                <li>Open Noska → <strong className="text-[var(--text)]">Settings → Developer</strong> (or <strong className="text-[var(--text)]">API Console → API Keys</strong>).</li>
+                <li>Enter a key name — e.g. <code className="rounded bg-[var(--surface)] px-1">Claude Desktop</code>.</li>
+                <li>Pick scopes. Recommended starter set: <code className="rounded bg-[var(--surface)] px-1">pages:read</code> <code className="rounded bg-[var(--surface)] px-1">pages:write</code> <code className="rounded bg-[var(--surface)] px-1">tasks:read</code> <code className="rounded bg-[var(--surface)] px-1">tasks:write</code> <code className="rounded bg-[var(--surface)] px-1">search:read</code>. Add <code className="rounded bg-[var(--surface)] px-1">reviews:*</code> if you want study-card control.</li>
+                <li>Choose an expiry (30–90 days recommended) and click <strong className="text-[var(--text)]">Generate key</strong>.</li>
+                <li><strong className="text-[var(--text)]">Copy it immediately</strong> — it's shown once and can't be recovered.</li>
+              </ol>
+            </div>
+
+            {/* STEP 2 */}
+            <div>
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--text)]">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent)]/15 text-[11px] font-bold text-[#8a744f]">2</span>
+                Deploy the MCP server
+              </h4>
+              <p className="mb-2 ml-9 text-[13px]">From the repo root (requires Supabase CLI + a linked project):</p>
+              <div className="ml-9"><Code>{`# one-time
+supabase link --project-ref <your-project-ref>
+
+# deploy the MCP endpoint
+supabase functions deploy mcp --no-verify-jwt
+
+# deploy the REST API (optional, powers the API Console)
+supabase functions deploy api-v1 --no-verify-jwt
+
+# apply the key tables if not yet applied
+supabase db push`}</Code></div>
+              <p className="ml-9 mt-2 text-[12px] text-[var(--muted)]">
+                Your endpoint becomes <code className="rounded bg-[var(--surface)] px-1">https://&lt;project-ref&gt;.supabase.co/functions/v1/mcp</code>.
+                <code className="ml-1 rounded bg-[var(--surface)] px-1">--no-verify-jwt</code> is required because MCP authenticates with Noska keys, not Supabase JWTs.
+              </p>
+            </div>
+
+            {/* STEP 3 — CLAUDE */}
+            <div>
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--text)]">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent)]/15 text-[11px] font-bold text-[#8a744f]">3</span>
+                Connect Claude Desktop
+              </h4>
+              <div className="ml-9 space-y-2 text-[13px]">
+                <p>Open the config file (create it if missing):</p>
+                <Code>{`Windows:  %APPDATA%\\Claude\\claude_desktop_config.json
+macOS:    ~/Library/Application Support/Claude/claude_desktop_config.json
+Linux:    ~/.config/Claude/claude_desktop_config.json`}</Code>
+                <Code>{`{
+  "mcpServers": {
+    "noska": {
+      "url": "https://<project-ref>.supabase.co/functions/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer nsk_YOUR_KEY_HERE"
+      }
+    }
+  }
+}`}</Code>
+                <p>Save, restart Claude Desktop, then click the <strong className="text-[var(--text)]">tools</strong> (hammer) icon — you should see Noska's tools listed. Try: <em>"Search my Noska for today's tasks."</em></p>
+              </div>
+            </div>
+
+            {/* STEP 4 — CURSOR */}
+            <div>
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--text)]">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent)]/15 text-[11px] font-bold text-[#8a744f]">4</span>
+                Connect Cursor
+              </h4>
+              <div className="ml-9 space-y-2 text-[13px]">
+                <ol className="list-decimal space-y-1 pl-5">
+                  <li>Cursor Settings → <strong className="text-[var(--text)]">MCP</strong> → <strong className="text-[var(--text)]">Add new global MCP server</strong>.</li>
+                  <li>Create <code className="rounded bg-[var(--surface)] px-1">~/.cursor/mcp.json</code> with the same block as above (the <code className="rounded bg-[var(--surface)] px-1">"mcpServers"</code> object).</li>
+                  <li>Reload Cursor. The Noska tools appear under MCP tools; enable the ones you want the agent to use.</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* STEP 5 — VERIFY */}
+            <div>
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--text)]">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent)]/15 text-[11px] font-bold text-[#8a744f]">5</span>
+                Verify the connection
+              </h4>
+              <div className="ml-9"><Code>{`curl -X POST "https://<project-ref>.supabase.co/functions/v1/mcp" \\
+  -H "Authorization: Bearer nsk_YOUR_KEY_HERE" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# expect: { "result": { "tools": [ … 47 tools … ] } }`}</Code></div>
+              <p className="ml-9 mt-2 text-[12px] text-[var(--muted)]">401 → key problem · 200 with tools → you're live.</p>
+            </div>
+          </div>
+        </Section>
+
         <Section id="authentication" kicker="Security" title="Authentication & scopes">
           <p>Every JSON-RPC method — including <code className="rounded bg-[var(--surface)] px-1">tools/list</code> — requires a valid key.
           Invalid, revoked or expired keys get <strong className="text-[var(--text)]">401</strong> on all methods.</p>

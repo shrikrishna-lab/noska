@@ -191,6 +191,9 @@ export default function CoverLiquidGlassToolbar({
                 const rect = e.currentTarget.getBoundingClientRect();
                 const pickerW = 360;
                 let left = rect.right - pickerW;
+                if (left + pickerW > window.innerWidth - 16) {
+                  left = Math.max(16, window.innerWidth - pickerW - 16);
+                }
                 if (left < 16) left = 16;
                 onOpenPicker({ top: rect.bottom + 8, left });
               }}

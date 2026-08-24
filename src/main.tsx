@@ -1,4 +1,4 @@
-import { ClerkProvider } from "@clerk/react";
+﻿import { ClerkProvider } from "@clerk/react";
 import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -47,13 +47,8 @@ const RouteFallback = () => (
   </div>
 );
 
-// Desktop: kill the branded preloader instantly — the app should feel like a
+// Desktop: kill the branded preloader instantly â€” the app should feel like a
 // native program, not a website loading. Web keeps the fade-out.
-if (isDesktop()) {
-  document.getElementById("preloader")?.remove();
-}
-
-// Desktop: kill the branded preloader instantly — native app feel.
 if (isDesktop()) {
   document.getElementById("preloader")?.remove();
 }

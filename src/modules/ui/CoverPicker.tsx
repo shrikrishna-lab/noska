@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Upload, Image, Trash2 } from "lucide-react";
 import { COVER_CATEGORIES, getAllCovers } from "../../registry/covers/CoverRegistry";
@@ -56,23 +57,23 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
 
   if (!open) return null;
 
-  return (
+  const content = (
     <>
-      <div className="fixed inset-0 z-[139]" onClick={onClose} />
+      <div className="fixed inset-0 z-[9998]" onClick={onClose} />
       <motion.div
-      ref={pickerRef}
-      drag
-      dragMomentum={false}
-      initial={{ opacity: 0, scale: 0.95, y: 8 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: 4 }}
-      transition={{ type: "spring", stiffness: 350, damping: 25 }}
-      style={{
-        width: 360,
-        ...(position ? { position: "fixed", top: position.top, left: position.left } : {}),
-      }}
-      className="flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--elevated)] shadow-[var(--shadow-floating)] z-[140] cursor-default"
-    >
+        ref={pickerRef}
+        drag
+        dragMomentum={false}
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 4 }}
+        transition={{ type: "spring", stiffness: 350, damping: 25 }}
+        style={{
+          width: 360,
+          ...(position ? { position: "fixed", top: position.top, left: position.left } : {}),
+        }}
+        className="flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--elevated)] shadow-[var(--shadow-floating)] z-[9999] cursor-default"
+      >
       {/* Header - draggable handle */}
       <div className="px-3 py-2.5 border-b border-[var(--border)] cursor-grab active:cursor-grabbing">
         <div className="flex items-center justify-between mb-2">
@@ -181,4 +182,6 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
     </motion.div>
     </>
   );
+
+  return typeof document !== "undefined" ? createPortal(content, document.body) : content;
 }

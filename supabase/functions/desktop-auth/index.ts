@@ -14,8 +14,11 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  // baggage/traceparent/sentry-trace are auto-injected by PostHog/Sentry
+  // browser SDKs; clerk-db-jwt rides along on Clerk-authenticated calls.
+  // Missing any of these breaks the preflight from www.noska.me.
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, baggage, traceparent, sentry-trace, clerk-db-jwt, x-noska-pairing",
 };
 
 const URL_BASE = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
