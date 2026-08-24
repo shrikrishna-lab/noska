@@ -108,6 +108,8 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ always() && needs.build-desktop.result == 'success' }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Resolve version + tag
         id: ver
         run: |
