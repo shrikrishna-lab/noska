@@ -14,6 +14,8 @@
 //                  first-class Supabase session; supabase-js refreshes it.
 //  action:"revoke"   (DESKTOP) { refresh_token } -> admin sign-out.
 
+import { verifyToken } from "npm:@clerk/backend";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -111,20 +113,53 @@ async function pairBumpAttempts(code: string, n: number): Promise<void> {
 
 /* ── identity helpers ──────────────────────────────────────────────────── */
 
-/**
- * Validates the Clerk `supabase` JWT through GoTrue and returns its mapped
- * Supabase user. The web client must request this named Clerk token template;
- * a default Clerk FAPI session token cannot be used as a bearer credential
- * against Clerk's /v1/me endpoint from an Edge Function.
- */
+/** Verifies the Clerk session server-side and returns its Clerk identity. */
 async function resolveClerkUser(clerkJwt: string): Promise<{ id: string; email: string | null }> {
-  const res = await fetch(`${URL_BASE}/auth/v1/user`, {
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${clerkJwt}` },
+  const secret = Deno.env.get("CLERK_SECRET_KEY") ?? "";
+  if (!secret) throw httpError(500, "clerk_not_configured", "Clerk server authentication is not configured");
+  const apiBase = (Deno.env.get("CLERK_API_BASE") ?? "https://api.clerk.com/v1").replace(/\/$/, "");
+  let clerkUserId = "";
+  try {
+    const verified = await verifyToken(clerkJwt, { secretKey: secret });
+    clerkUserId = String(verified.sub ?? "");
+  } catch {
+    throw httpError(401, "unauthorized", "Invalid or expired sign-in");
+  }
+  if (!clerkUserId) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
+  const userRes = await fetch(`${apiBase}/users/${encodeURIComponent(clerkUserId)}`, {
+    headers: { Authorization: `Bearer ${secret}` },
   });
-  if (!res.ok) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
-  const user = await res.json() as { id?: string; email?: string };
+  if (!userRes.ok) {
+    throw httpError(401, "unauthorized", "Invalid or expired sign-in");
+  }
+  const user = await userRes.json() as {
+    id?: string;
+    email_addresses?: Array<{ id: string; email_address: string }>;
+    primary_email_address_id?: string;
+  };
+  const email = user.email_addresses?.find((e) => e.id === user.primary_email_address_id)?.email_address ??
+    user.email_addresses?.[0]?.email_address ?? null;
   if (!user.id) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
-  return { id: user.id, email: user.email ?? null };
+  return { id: user.id, email };
+}
+
+/** Resolves the Clerk email to the UUID used by Supabase Auth/RLS. */
+async function resolveSupabaseUserId(email: string | null): Promise<string> {
+  if (!email) throw httpError(400, "email_required", "A verified email is required");
+  const res = await rest("/auth/v1/admin/users?per_page=1000&page=1");
+  if (!res.ok) throw httpError(500, "user_lookup_failed", "Could not look up linked account");
+  const body = await res.json() as { users?: Array<{ id?: string; email?: string }> } | Array<{ id?: string; email?: string }>;
+  const users = Array.isArray(body) ? body : body.users ?? [];
+  const match = users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+  if (match?.id) return match.id;
+  const created = await rest("/auth/v1/admin/users", {
+    method: "POST",
+    body: JSON.stringify({ email, email_confirm: true, password: crypto.randomUUID() + crypto.randomUUID() }),
+  });
+  if (!created.ok) throw httpError(500, "user_create_failed", "Could not link desktop identity");
+  const user = await created.json() as { id?: string };
+  if (!user.id) throw httpError(500, "user_create_failed", "Could not link desktop identity");
+  return user.id;
 }
 
 function httpError(status: number, error: string, message: string) {
@@ -185,7 +220,8 @@ async function handleClaim(code: string, clerkJwt: string) {
     return json({ status: "unknown_code" }, 400);
   }
   const user = await resolveClerkUser(clerkJwt);
-  await pairUpsertClaimed(code, user.id, user.email);
+  const userId = await resolveSupabaseUserId(user.email);
+  await pairUpsertClaimed(code, userId, user.email);
   return json({ status: "claimed" });
 }
 
