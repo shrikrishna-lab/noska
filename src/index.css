@@ -1,10 +1,53 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+@theme {
+  --color-border: var(--border-color);
+  --color-input: var(--input-color);
+  --color-ring: var(--ring-color);
+  --color-background: var(--bg-color);
+  --color-foreground: var(--foreground-color);
+  --color-primary: var(--primary-color);
+  --color-primary-foreground: var(--primary-foreground-color);
+  --color-secondary: var(--secondary-color);
+  --color-secondary-foreground: var(--secondary-foreground-color);
+  --color-destructive: var(--destructive-color);
+  --color-destructive-foreground: var(--destructive-foreground-color);
+  --color-muted: var(--muted-color);
+  --color-muted-foreground: var(--muted-foreground-color);
+  --color-accent: var(--accent-color);
+  --color-accent-foreground: var(--accent-foreground-color);
+  --color-popover: var(--popover-color);
+  --color-popover-foreground: var(--popover-foreground-color);
+  --color-card: var(--card-color);
+  --color-card-foreground: var(--card-foreground-color);
+}
+
 :root {
   color-scheme: dark;
   --expo-out: cubic-bezier(0.16, 1, 0.3, 1);
   --expo-in: cubic-bezier(0.7, 0, 0.84, 0);
+
+  /* ─── Shadcn Theme Tokens (Dark) ─── */
+  --bg-color: #0F1117;
+  --foreground-color: #EDEBE5;
+  --card-color: #171A20;
+  --card-foreground-color: #EDEBE5;
+  --popover-color: #1E2128;
+  --popover-foreground-color: #EDEBE5;
+  --primary-color: #E3CFB3;
+  --primary-foreground-color: #0F1117;
+  --secondary-color: #262A33;
+  --secondary-foreground-color: #EDEBE5;
+  --muted-color: #262A33;
+  --muted-foreground-color: #9A9892;
+  --accent-color: #2E333C;
+  --accent-foreground-color: #EDEBE5;
+  --destructive-color: #F85149;
+  --destructive-foreground-color: #FFFFFF;
+  --border-color: rgba(255, 255, 255, 0.09);
+  --input-color: #262A33;
+  --ring-color: #0066FF;
 
   /* ─── Dark Theme ─── */
   --bg: #0F1117;
@@ -77,6 +120,27 @@
 
 .light {
   color-scheme: light;
+
+  /* ─── Shadcn Theme Tokens (Light) ─── */
+  --bg-color: #F0FAFF;
+  --foreground-color: #1A1A1A;
+  --card-color: #F5F7FA;
+  --card-foreground-color: #1A1A1A;
+  --popover-color: #FFFFFF;
+  --popover-foreground-color: #1A1A1A;
+  --primary-color: #C9B090;
+  --primary-foreground-color: #FFFFFF;
+  --secondary-color: #F0F0F0;
+  --secondary-foreground-color: #1A1A1A;
+  --muted-color: #F0F0F0;
+  --muted-foreground-color: #5A5A5A;
+  --accent-color: #E8E8E8;
+  --accent-foreground-color: #1A1A1A;
+  --destructive-color: #D93025;
+  --destructive-foreground-color: #FFFFFF;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --input-color: #E8E8E8;
+  --ring-color: #0066FF;
 
   /* ─── Light Theme (New Palette) ─── */
   --bg: #F0FAFF;

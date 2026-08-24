@@ -134,6 +134,7 @@ export default function Footer() {
                     <li><Link to="/product" className="liquid-link-item">Docs & Notes</Link></li>
                     <li><Link to="/product" className="liquid-link-item">Databases</Link></li>
                     <li><Link to="/resources" className="liquid-link-item">Templates</Link></li>
+                    <li><Link to="/download" className="liquid-link-item">Desktop app</Link></li>
                     {settings.show_changelog && (
                       <li>
                         <Link to="/changelog" className="liquid-link-item with-badge">

@@ -15,9 +15,11 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   ChevronDown, Link2, Copy, ArchiveRestore, Lock, Star,
   Plus, MoreHorizontal, Sparkles, Eye, GripVertical,
+  Columns, ArrowRight, ArrowLeft, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { FloatingMenu } from './ui';
+import { useTabs } from '../contexts/TabContext';
 import {
   AnimatedBookmark, AnimatedTrash,
   AnimatedSend, AnimatedUpload, AnimatedDownload, AnimatedCanvas,
@@ -440,6 +442,16 @@ function PremiumBranch({
         <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(pageUrl(page.id), '_blank'); setMenuOpen(false); }} />
         <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(pageUrl(page.id), '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
         <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
+
+        {/* Split Submenu / Actions */}
+        <div className="my-2 border-t border-[var(--border)]" />
+        <div className="px-2 py-0.5 text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">
+          Split
+        </div>
+        <PageMenuAction icon={ArrowRight} label="Split right" onClick={() => { splitPage({ pageId: page.id, direction: 'right' }); setMenuOpen(false); }} />
+        <PageMenuAction icon={ArrowLeft} label="Split left" onClick={() => { splitPage({ pageId: page.id, direction: 'left' }); setMenuOpen(false); }} />
+        <PageMenuAction icon={ArrowUp} label="Split above" onClick={() => { splitPage({ pageId: page.id, direction: 'above' }); setMenuOpen(false); }} />
+        <PageMenuAction icon={ArrowDown} label="Split below" onClick={() => { splitPage({ pageId: page.id, direction: 'below' }); setMenuOpen(false); }} />
       </FloatingMenu>
     </div>
   );
@@ -465,9 +477,9 @@ function PremiumPageItem({
   onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
   onRemoveFromRecents, onToggleOffline, onToast,
 }: PremiumPageItemProps) {
+  const { splitPage } = useTabs();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [childHovered, setChildHovered] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const isAncestor = ancestors?.includes(page.id);
@@ -634,18 +646,23 @@ function PremiumPageItem({
           <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" onClick={() => { onToast?.("Move to is not yet implemented"); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedTrash} label="Move to Trash" onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
           <div className="my-2 border-t border-[var(--border)]" />
-<PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Click" onClick={() => { onSelect(page.id, { openInNewTab: true }); setMenuOpen(false); }} />
+          <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Click" onClick={() => { onSelect(page.id, { openInNewTab: true }); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(pageUrl(page.id), '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
+
+          {/* Split Actions */}
+          <div className="my-2 border-t border-[var(--border)]" />
+          <div className="px-2 py-0.5 text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">
+            Split
+          </div>
+          <PageMenuAction icon={ArrowRight} label="Split right" onClick={() => { splitPage({ pageId: page.id, direction: 'right' }); setMenuOpen(false); }} />
+          <PageMenuAction icon={ArrowLeft} label="Split left" onClick={() => { splitPage({ pageId: page.id, direction: 'left' }); setMenuOpen(false); }} />
+          <PageMenuAction icon={ArrowUp} label="Split above" onClick={() => { splitPage({ pageId: page.id, direction: 'above' }); setMenuOpen(false); }} />
+          <PageMenuAction icon={ArrowDown} label="Split below" onClick={() => { splitPage({ pageId: page.id, direction: 'below' }); setMenuOpen(false); }} />
         </FloatingMenu>
       </div>
     </div>
   );
-}
-
-interface SortablePremiumItemProps extends PremiumPageItemProps {
-  id: string;
-  focused: boolean;
 }
 
 function SortablePremiumItem({ id, focused, ...props }: SortablePremiumItemProps) {

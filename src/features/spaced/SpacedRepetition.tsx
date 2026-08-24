@@ -18,11 +18,15 @@ import {
   Trash2
 } from "lucide-react";
 import {
-  activeScheduler,
+  getActiveScheduler,
   isBlockDue,
+  preferredSchedulerName,
   removedReviewState,
+  setPreferredScheduler,
   type ReviewState
 } from "./scheduler";
+import { cardSides } from "../study/studyCards";
+import LearningAnalytics from "../study/LearningAnalytics";
 
 /* ─── Rating buttons ─── */
 
@@ -36,7 +40,7 @@ const RATINGS = [
 /* ─── main component ─── */
 
 interface QueueItem {
-  block: { id: string; text?: string; review?: ReviewState };
+  block: { id: string; text?: string; review?: ReviewState; study?: { answer?: string } };
   pageId: string;
   pageTitle: string;
 }
@@ -50,7 +54,8 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
   const [cardIndex, setCardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [sessionStats, setSessionStats] = useState({ reviewed: 0, correct: 0 });
-  const [view, setView] = useState("review"); // "review" | "dashboard"
+  const [view, setView] = useState("review"); // "review" | "dashboard" | "insights"
+  const [, forceTick] = useState(0); // re-render after scheduler preference change
 
   /* ── Session queue ──
    * Snapshot of due cards taken when the modal opens (and re-synced until
@@ -67,7 +72,7 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
     for (const page of pages) {
       if (page.trashed) continue;
       for (const raw of page.blocks || []) {
-        const block = raw as { id: string; text?: string; review?: ReviewState };
+        const block = raw as { id: string; text?: string; review?: ReviewState; study?: { answer?: string } };
         if (block.review && isBlockDue(block)) {
           cards.push({ block, pageId: page.id, pageTitle: page.title || "Untitled" });
         }
@@ -82,7 +87,7 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
     for (const page of pages) {
       if (page.trashed) continue;
       for (const raw of page.blocks || []) {
-        const block = raw as { id: string; text?: string; review?: ReviewState };
+        const block = raw as { id: string; text?: string; review?: ReviewState; study?: { answer?: string } };
         if (!block.review) continue;
         if (block.review.suspended) { suspended += 1; continue; }
         cards.push({ block, pageId: page.id, pageTitle: page.title || "Untitled" });
@@ -102,7 +107,7 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
     const prevReview = currentCard.block.review ?? {};
     historyRef.current.push({ item: currentCard, prevReview, wasCorrect: quality >= 3 });
     touchedRef.current = true;
-    onBlockPatch(currentCard.pageId, currentCard.block.id, activeScheduler.schedule(prevReview, quality));
+    onBlockPatch(currentCard.pageId, currentCard.block.id, getActiveScheduler().schedule(prevReview, quality));
     setSessionStats((s) => ({ reviewed: s.reviewed + 1, correct: s.correct + (quality >= 3 ? 1 : 0) }));
     setShowAnswer(false);
     setCardIndex((i) => i + 1);
@@ -241,13 +246,24 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
             >
               Stats
             </button>
+            <button
+              onClick={() => setView("insights")}
+              className={`rounded-md px-3 py-1 text-xs font-medium ${view === "insights" ? "bg-[var(--hover)] text-[var(--text)]" : "text-[var(--secondary)]"}`}
+            >
+              Insights
+            </button>
           </div>
           <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-md text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]">
             <X size={16} />
           </button>
         </div>
 
-        {view === "dashboard" ? (
+        {view === "insights" ? (
+          /* Learning analytics */
+          <div className="p-5">
+            <LearningAnalytics pages={pages} />
+          </div>
+        ) : view === "dashboard" ? (
           /* Dashboard */
           <div className="p-6 space-y-5">
             <div className="grid grid-cols-3 gap-3">
@@ -265,6 +281,24 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
             {allReviewableCards.suspended > 0 && (
               <p className="text-xs text-[var(--muted)] text-center">{allReviewableCards.suspended} card(s) suspended</p>
             )}
+            {/* Scheduler preference — applies from each card's next rating. */}
+            <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+              <div>
+                <div className="text-[11px] font-semibold text-[var(--text)]">Scheduling algorithm</div>
+                <div className="text-[9px] text-[var(--muted)]">Cards migrate automatically on their next review</div>
+              </div>
+              <select
+                value={preferredSchedulerName()}
+                onChange={(e) => {
+                  setPreferredScheduler(e.target.value as "sm2" | "fsrs");
+                  forceTick((t) => t + 1);
+                }}
+                className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-[11px] text-[var(--text)] focus:outline-none"
+              >
+                <option value="sm2">SM-2 (classic)</option>
+                <option value="fsrs">FSRS-4.5 (modern)</option>
+              </select>
+            </div>
             {totalCards === 0 && (
               <div className="text-center py-6 text-sm text-[var(--muted)]">
                 No cards yet. Right-click any block → “Add to review”, or type /review in the editor.
@@ -350,12 +384,30 @@ export default function SpacedRepetition({ pages, onBlockPatch, onClose, onToast
                       {currentCard.pageTitle}
                     </div>
 
-                    {/* Question side */}
+                    {/* Question side — cloze-aware: {{answers}} render as [ … ] until reveal */}
                     <div className="flex-1 flex items-center justify-center rounded-xl bg-[var(--surface)] p-6 min-h-[120px]">
                       <p className="text-center text-base leading-7 text-[var(--text)]">
-                        {currentCard.block.text || "(Empty block)"}
+                        {cardSides(currentCard.block).front || "(Empty block)"}
                       </p>
                     </div>
+
+                    {/* Answer side — shown after reveal when the card has a
+                        distinct back (cloze reveal or study.answer) */}
+                    {showAnswer && (() => {
+                      const sides = cardSides(currentCard.block);
+                      const hasBack = sides.isCloze || Boolean(currentCard.block.study?.answer);
+                      if (!hasBack || sides.back === sides.front) return null;
+                      return (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-3 rounded-xl border border-[var(--success)]/25 bg-[var(--success)]/[0.06] p-4"
+                        >
+                          <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">Answer</div>
+                          <p className="text-sm leading-6 text-[var(--text)]">{sides.back}</p>
+                        </motion.div>
+                      );
+                    })()}
 
                     {/* Show answer / Rate */}
                     <div className="mt-4">

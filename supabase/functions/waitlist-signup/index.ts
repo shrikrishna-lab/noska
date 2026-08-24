@@ -11,7 +11,10 @@ const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY") ?? ""
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  // baggage/traceparent/sentry-trace are auto-injected by PostHog/Sentry
+  // browser SDKs into every fetch — rejecting them breaks preflight in prod.
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, baggage, traceparent, sentry-trace",
 }
 
 Deno.serve(async (req: Request) => {

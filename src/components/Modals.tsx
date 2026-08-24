@@ -31,10 +31,13 @@ import {
   CheckCircle2,
   Share2,
   Bookmark,
+  Code2,
   type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
+import CustomProviders from "./settings/CustomProviders";
 import { PageIcon } from "./PageIcon";
+import ApiKeysManager from "../features/api/ApiKeysManager";
 import { aiManager } from "../ai/AIManager";
 import { getProviderList, testProviderConnection } from "../ai/providers";
 import { getAgentList } from "../ai/agents";
@@ -442,8 +445,8 @@ export function SettingsModal({
           ))}
           
           <div className="mb-3 mt-8 text-sm font-semibold text-[var(--muted)]">Features</div>
-          {["Noska AI", "Offline"].map((item) => (
-            <SettingsNavItem key={item} icon={item === "Offline" ? HardDrive : Sparkles} label={item} active={tab === item} onClick={() => setTab(item)} />
+          {["Noska AI", "Offline", "Developer"].map((item) => (
+            <SettingsNavItem key={item} icon={item === "Offline" ? HardDrive : item === "Developer" ? Code2 : Sparkles} label={item} active={tab === item} onClick={() => setTab(item)} />
           ))}
         </aside>
         
@@ -496,6 +499,19 @@ export function SettingsModal({
                   Log out
                 </button>
               </div>
+            </div>
+          )}
+
+          {tab === "Developer" && (
+            <div className="max-w-xl space-y-6">
+              <div>
+                <h2 className="text-[32px] font-bold">Developer</h2>
+                <p className="mt-1 text-sm text-[var(--secondary)]">
+                  Build on your workspace with the Noska API — pages, tasks, reviews, search and more.
+                  Try endpoints live in the API Console.
+                </p>
+              </div>
+              <ApiKeysManager userId={currentUserId} onToast={(msg) => setSaveStatus(msg)} />
             </div>
           )}
 
@@ -1119,6 +1135,9 @@ function NoskaAISettings({
           })}
         </div>
       </div>
+
+      {/* ─── Custom Providers (bring your own endpoint) ─────────────── */}
+      <CustomProviders />
 
       {/* ─── Context Settings ─────────────────────────────────────── */}
       <div>

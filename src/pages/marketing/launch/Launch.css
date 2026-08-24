@@ -40,8 +40,16 @@
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
   position: relative;
-  min-height: 100vh;
+  /* This page must own its scrolling: the global app stylesheet sets
+     body { overflow: hidden } (src/index.css), so window scroll is dead.
+     Mirror the `.marketing` shell pattern (marketing-theme.css): the root
+     becomes the scroll container. `100dvh` (with 100vh fallback) avoids the
+     mobile-Safari address-bar trap where static 100vh clips below the fold. */
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
   overflow-x: clip;
+  -webkit-overflow-scrolling: touch;
 }
 
 .noska-launch * {

@@ -442,8 +442,10 @@ const Sidebar = memo(function Sidebar({
           </NoskaSection>
 
           {/* 4. AI & Agents */}
-          <NoskaSection title="AI Agents" defaultExpanded={false}>
-            <NoskaNavItem icon={AnimatedSparkle} label="Personal Agent" onClick={(e) => onView("agents", selectOptionsFromEvent(e))} active={appView === "agents"} />
+          <NoskaSection title="Intelligence" defaultExpanded={false}>
+            <NoskaNavItem icon={AnimatedSparkle} label="Command Center" onClick={(e) => onView("commandCenter", selectOptionsFromEvent(e))} active={appView === "commandCenter"} />
+            <NoskaNavItem icon={AnimatedSparkle} label="Agents" onClick={(e) => onView("agents", selectOptionsFromEvent(e))} active={appView === "agents"} />
+            <NoskaNavItem icon={AnimatedVoice} label="Automations" onClick={(e) => onView("automations", selectOptionsFromEvent(e))} active={appView === "automations"} />
             <NoskaNavItem icon={AnimatedVoice} label="AI Meeting Capture" onClick={(e) => onView("meetingNote", selectOptionsFromEvent(e))} active={appView === "meetingNote"} />
             <NoskaNavItem icon={AnimatedPlus} label="Deploy New Agent" onClick={onAI} />
           </NoskaSection>

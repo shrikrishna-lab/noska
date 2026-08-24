@@ -28,6 +28,8 @@ export interface CommandContext {
   onDelete?: () => void;
   onDuplicatePage?: () => void;
   onEmojiPicker?: () => void;
+  /** Opens the AI study-card generator for the current page (Editor supplies this). */
+  onGenerateStudyCards?: () => void;
   onExport?: () => void;
   onHistory?: () => void;
   onImport?: () => void;
@@ -497,8 +499,26 @@ const advanced = [
     preview: { description: "Adds this block to your review queue — recall it with the Spaced Repetition study session" },
     execute(ctx) {
       // Same helper as the block context menu — behavior cannot diverge.
-      ctx.onPatch?.(createReviewState());
+      // Nested under `review` to match removedReviewState()'s shape and
+      // every read site (`if (block.review)`).
+      ctx.onPatch?.({ review: createReviewState() });
       ctx.onToast?.("Added to your review queue");
+    }
+  },
+  {
+    id: "generate-study-cards", title: "Generate study cards", aliases: ["ai flashcards", "study set", "make cards"],
+    icon: "GraduationCap", category: "Advanced blocks",
+    description: "AI writes flashcards, cloze and exam questions from this page",
+    preview: { description: "Preview AI-generated study cards before saving — accepted cards enter your review queue immediately" },
+    available(ctx) { return Boolean(ctx.onGenerateStudyCards); },
+    execute(ctx) {
+      // Hosts without the callback still get feedback instead of a silent
+      // no-op (keeps the registry-wide side-effect contract).
+      if (ctx.onGenerateStudyCards) {
+        ctx.onGenerateStudyCards();
+        return;
+      }
+      ctx.onToast?.("Open a page to generate study cards from its content");
     }
   },
   {

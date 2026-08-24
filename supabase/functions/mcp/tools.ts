@@ -1,0 +1,930 @@
+/* Noska MCP V4 — Capability Registry.
+ * One declarative table describing every MCP-exposable Noska capability.
+ * The server consumes this; adding a capability = adding one entry. */
+import {
+  db, E, McpError, pageUrl, extractId, mustId, loadPage,
+  requireScope, verify, blocksToMarkdown, markdownToBlocks,
+  COMMANDS, commandByName, initialReviewState, type KeyRow, type Row,
+} from "./shared.ts";
+
+export interface ToolDef {
+  name: string;
+  group: string;
+  risk: "GREEN" | "YELLOW" | "RED";
+  scope: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  /** Table used by the generic verification pass (when set). */
+  verifyTable?: { table: string; ownerCol: "user_id" | "owner_id" };
+  handler: (args: Row, key: KeyRow) => Promise<unknown>;
+}
+
+const compactPage = (p: Row) => ({
+  id: p.id, url: pageUrl(String(p.id)), title: p.title, icon: p.icon,
+  parent_id: p.parent_id ?? null, trashed: p.trashed === true, tags: p.tags ?? [],
+});
+
+/* ══════════════ CONTENT · PAGES ══════════════ */
+const contentTools: ToolDef[] = [
+  {
+    name: "search", group: "content", risk: "GREEN", scope: "search:read",
+    description: "Search pages, block text, tasks and study cards across the user's workspace. Returns ids + URLs for chaining into fetch / update-page.",
+    inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", description: "1-50, default 10" } }, required: ["query"] },
+    async handler(args, key) {
+      const q = String(args.query ?? "").trim().toLowerCase();
+      if (!q) throw E.validation("query is required");
+      const cap = Math.min(Math.max(Number(args.limit) || 10, 1), 50);
+      const { data } = await db.from("pages").select("id,title,tags,trashed,updated_at,blocks").eq("user_id", key.user_id).order("updated_at", { ascending: false }).limit(500);
+      const results: Row[] = [];
+      for (const p of (data ?? []) as Row[]) {
+        if (p.trashed) continue;
+        if (String(p.title ?? "").toLowerCase().includes(q)) results.push({ kind: "page", id: p.id, url: pageUrl(String(p.id)), title: p.title });
+        for (const b of ((p.blocks ?? []) as Row[])) {
+          const t = typeof b.text === "string" ? b.text : "";
+          if (t && t.toLowerCase().includes(q)) {
+            results.push({
+              kind: b.type === "todo" ? "task" : b.review ? "study_card" : "block",
+              id: p.id, url: pageUrl(String(p.id)), title: p.title, matched_text: t.slice(0, 200),
+            });
+          }
+          if (results.length >= cap) return { results };
+        }
+        if (results.length >= cap) break;
+      }
+      return { results };
+    },
+  },
+  {
+    name: "fetch", group: "content", risk: "GREEN", scope: "pages:read",
+    description: 'Fetch a page by UUID or URL. format="markdown" (default) → compact page+markdown; "markdown+metadata" adds parent/children/tags/counts; "blocks" returns raw native blocks.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        id_or_url: { type: "string" },
+        format: { type: "string", enum: ["markdown", "markdown+metadata", "blocks"] },
+      },
+      required: ["id_or_url"],
+    },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.id_or_url);
+      const blocks = (page.blocks ?? []) as Row[];
+      const fmt = String(args.format ?? "markdown");
+      const base = { id: page.id, url: pageUrl(String(page.id)), title: page.title, icon: page.icon };
+      if (fmt === "blocks") return { page: { ...base, blocks } };
+      const out: Row = { ...base, markdown: blocksToMarkdown(blocks) };
+      if (fmt === "markdown+metadata") {
+        const [{ data: children }, { data: parent }] = await Promise.all([
+          db.from("pages").select("id,title").eq("user_id", key.user_id).eq("parent_id", page.id as string),
+          page.parent_id
+            ? db.from("pages").select("id,title").eq("user_id", key.user_id).eq("id", page.parent_id as string).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        out.tags = page.tags ?? [];
+        out.child_count = (children ?? []).length;
+        out.children = (children ?? []).map((c: Row) => ({ id: c.id, title: c.title }));
+        out.parent = parent ?? null;
+        out.open_tasks = blocks.filter((b) => b.type === "todo" && b.checked !== true).length;
+        out.study_cards = blocks.filter((b) => b.review).length;
+      }
+      return { page: out };
+    },
+  },
+  {
+    name: "create-pages", group: "content", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "pages", ownerCol: "user_id" },
+    description: "Create one or more pages from markdown (headings/bullets/todos/quotes/code/dividers). Optional parent nesting. Returns id+url per page.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        parent_id: { type: "string", description: "Optional parent UUID/URL" },
+        pages: { type: "array", minItems: 1, items: { type: "object", properties: { title: { type: "string" }, icon: { type: "string" }, cover: { type: "string" }, markdown: { type: "string" }, tags: { type: "array", items: { type: "string" } } }, required: ["title"] } },
+      },
+      required: ["pages"],
+    },
+    async handler(args, key) {
+      const arr = Array.isArray(args.pages) ? args.pages as Row[] : [];
+      if (!arr.length) throw E.validation("pages must be a non-empty array");
+      let parentId: string | null = null;
+      if (args.parent_id != null) { parentId = mustId(args.parent_id, "parent_id"); await loadPage(key.user_id, parentId); }
+      const created: Row[] = [];
+      for (const item of arr) {
+        const title = String(item.title ?? "").trim();
+        if (!title) throw E.validation("Every page needs a title.");
+        const ins: Row = { user_id: key.user_id, title, blocks: typeof item.markdown === "string" ? markdownToBlocks(item.markdown) : [] };
+        if (typeof item.icon === "string") ins.icon = item.icon;
+        if (typeof item.cover === "string") ins.cover = item.cover;
+        if (Array.isArray(item.tags)) ins.tags = item.tags;
+        if (parentId) ins.parent_id = parentId;
+        const { data, error } = await db.from("pages").insert(ins).select("id,title").single();
+        if (error) throw new McpError(500, "TOOL_FAILED", error.message);
+        created.push(compactPage(data as Row));
+      }
+      return { created };
+    },
+  },
+  {
+    name: "update-page", group: "content", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "pages", ownerCol: "user_id" },
+    description: "Rename a page, append markdown blocks, replace icon/tags, or archive it. Accepts UUID or URL.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        page_id_or_url: { type: "string" }, title: { type: "string" }, append_markdown: { type: "string" },
+        icon: { type: "string" }, tags: { type: "array", items: { type: "string" } }, archive: { type: "boolean" },
+      },
+      required: ["page_id_or_url"],
+    },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const patch: Row = {};
+      if (typeof args.title === "string" && args.title.trim()) patch.title = args.title.trim();
+      if (typeof args.append_markdown === "string" && args.append_markdown.trim())
+        patch.blocks = [...((page.blocks ?? []) as Row[]), ...markdownToBlocks(args.append_markdown)];
+      if (typeof args.icon === "string") patch.icon = args.icon;
+      if (Array.isArray(args.tags)) patch.tags = args.tags;
+      if (args.archive === true) patch.trashed = true;
+      if (!Object.keys(patch).length) throw E.validation("Nothing to update.");
+      const { error } = await db.from("pages").update(patch).eq("id", page.id as string).eq("user_id", key.user_id);
+      if (error) throw new McpError(500, "TOOL_FAILED", error.message);
+      return { updated: true, id: page.id, url: pageUrl(String(page.id)) };
+    },
+  },
+  {
+    name: "archive-page", group: "content", risk: "RED", scope: "pages:write", verifyTable: { table: "pages", ownerCol: "user_id" },
+    description: "Move a page to trash (reversible via restore-page). RED risk — requires confirm:true.",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" }, confirm: { type: "boolean" } }, required: ["page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      await db.from("pages").update({ trashed: true }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { archived: true, id: page.id, url: pageUrl(String(page.id)) };
+    },
+  },
+  {
+    name: "restore-page", group: "content", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "pages", ownerCol: "user_id" },
+    description: "Restore an archived page from trash.",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" } }, required: ["page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      await db.from("pages").update({ trashed: false }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { restored: true, id: page.id, url: pageUrl(String(page.id)) };
+    },
+  },
+  {
+    name: "duplicate-page", group: "content", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "pages", ownerCol: "user_id" },
+    description: "Duplicate a page including its full block content.",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" }, title: { type: "string", description: "Override copy title" } }, required: ["page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const { data, error } = await db.from("pages").insert({
+        user_id: key.user_id,
+        title: typeof args.title === "string" && args.title.trim() ? args.title.trim() : `${page.title} (copy)`,
+        icon: page.icon, cover: page.cover, tags: page.tags, parent_id: page.parent_id ?? null,
+        blocks: page.blocks ?? [],
+      }).select("id,title").single();
+      if (error) throw new McpError(500, "TOOL_FAILED", error.message);
+      return { duplicated: true, source_id: page.id, new_page: compactPage(data as Row) };
+    },
+  },
+  {
+    name: "move-page", group: "content", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "pages", ownerCol: "user_id" },
+    description: "Re-parent a page (organize hierarchy). Both pages must belong to you. Cycle-safe.",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" }, new_parent_id_or_url: { type: "string", description: "Destination parent; null = root" } }, required: ["page_id_or_url", "new_parent_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      let newParent: string | null = null;
+      if (args.new_parent_id_or_url !== null) {
+        newParent = mustId(args.new_parent_id_or_url, "new_parent_id_or_url");
+        // cycle guard: walk up from destination
+        let cursor: unknown = newParent;
+        for (let i = 0; i < 25 && cursor; i++) {
+          if (cursor === page.id) throw E.validation("Cannot move a page under its own descendant.");
+          try { const anc = await loadPage(key.user_id, cursor); cursor = anc.parent_id; } catch { break; }
+        }
+        await loadPage(key.user_id, newParent);
+      }
+      await db.from("pages").update({ parent_id: newParent }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { moved: true, id: page.id, new_parent_id: newParent, url: pageUrl(String(page.id)) };
+    },
+  },
+  {
+    name: "list-pages", group: "content", risk: "GREEN", scope: "pages:read",
+    description: "List pages (compact), filterable by trashed/parent, newest activity first.",
+    inputSchema: { type: "object", properties: { trashed: { type: "boolean" }, parent_id: { type: "string" }, limit: { type: "integer" } } },
+    async handler(args, key) {
+      let q = db.from("pages").select("id,title,icon,parent_id,trashed,tags,updated_at").eq("user_id", key.user_id);
+      if (typeof args.trashed === "boolean") q = q.eq("trashed", args.trashed); else q = q.eq("trashed", false);
+      if (args.parent_id != null) q = q.eq("parent_id", extractId(args.parent_id));
+      const { data } = await q.order("updated_at", { ascending: false }).limit(Math.min(Number(args.limit) || 50, 200));
+      return { pages: (data ?? []).map(compactPage) };
+    },
+  },
+  {
+    name: "list-child-pages", group: "content", risk: "GREEN", scope: "pages:read",
+    description: "List direct children of a page.",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" } }, required: ["page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const { data } = await db.from("pages").select("id,title,icon,trashed").eq("user_id", key.user_id).eq("parent_id", page.id as string);
+      return { children: data ?? [] };
+    },
+  },
+  {
+    name: "get-parent-page", group: "content", risk: "GREEN", scope: "pages:read",
+    description: "Get the parent of a page (null at root).",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" } }, required: ["page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      if (!page.parent_id) return { parent: null };
+      const parent = await loadPage(key.user_id, page.parent_id);
+      return { parent: compactPage(parent) };
+    },
+  },
+  {
+    name: "get-page-tree", group: "content", risk: "GREEN", scope: "pages:read",
+    description: "Full page hierarchy as a nested tree (compact nodes).",
+    inputSchema: { type: "object", properties: {} },
+    async handler(_args, key) {
+      const { data } = await db.from("pages").select("id,title,icon,parent_id,trashed").eq("user_id", key.user_id).order("created_at");
+      const rows = (data ?? []) as Row[];
+      const byParent = new Map<string, Row[]>();
+      for (const r of rows) {
+        const k = (r.parent_id as string) ?? "__root__";
+        byParent.set(k, [...(byParent.get(k) ?? []), r]);
+      }
+      const build = (pid: string): Row[] =>
+        (byParent.get(pid) ?? []).map((r) => ({ id: r.id, title: r.title, icon: r.icon, trashed: r.trashed, children: build(String(r.id)) }));
+      return { tree: build("__root__"), total: rows.length };
+    },
+  },
+
+  /* ══════════════ COMMANDS (native slash registry) ══════════════ */
+  {
+    name: "list-commands", group: "commands", risk: "GREEN", scope: "pages:read",
+    description: "List the native Noska slash-command registry (real block primitives).",
+    inputSchema: { type: "object", properties: {} },
+    async handler() { return { commands: COMMANDS }; },
+  },
+  {
+    name: "search-commands", group: "commands", risk: "GREEN", scope: "pages:read",
+    description: 'Find slash commands, e.g. search-commands("todo").',
+    inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+    async handler(args) {
+      const q = String(args.query ?? "").toLowerCase().replace(/^\//, "");
+      return { commands: COMMANDS.filter((c) => c.name.includes(q) || c.description.toLowerCase().includes(q)) };
+    },
+  },
+  {
+    name: "get-command", group: "commands", risk: "GREEN", scope: "pages:read",
+    description: "Inspect one slash command's stored block type and defaults.",
+    inputSchema: { type: "object", properties: { name: { type: "string", description: 'e.g. "/todo"' } }, required: ["name"] },
+    async handler(args) {
+      const c = commandByName(String(args.name ?? ""));
+      if (!c) throw E.notFound("Command");
+      return { command: c };
+    },
+  },
+  {
+    name: "execute-command", group: "commands", risk: "YELLOW", scope: "pages:write",
+    description: 'Execute a native Noska command against a page — inserts the real block (same primitive as typing "/todo" in-app). Optionally insert after a specific block.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        command: { type: "string", description: 'e.g. "/todo"' },
+        page_id_or_url: { type: "string" },
+        text: { type: "string", description: "Block content" },
+        after_block_id: { type: "string", description: "Insert below this block (optional)" },
+      },
+      required: ["command", "page_id_or_url"],
+    },
+    async handler(args, key) {
+      const cmd = commandByName(String(args.command ?? ""));
+      if (!cmd) throw E.notFound(`Command ${String(args.command)}`);
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const nb: Row = { id: crypto.randomUUID(), type: cmd.blockType, text: String(args.text ?? ""), ...(cmd.extra ?? {}) };
+      const blocks = [...((page.blocks ?? []) as Row[])];
+      const at = args.after_block_id ? blocks.findIndex((b) => b.id === args.after_block_id) + 1 : blocks.length;
+      blocks.splice(at || blocks.length, 0, nb);
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { executed: cmd.name, block: nb, position: Math.max(at - 1, 0) + 1, page_url: pageUrl(String(page.id)) };
+    },
+  },
+];
+
+/* ══════════════ TASKS ══════════════ */
+const taskTools: ToolDef[] = [
+  {
+    name: "list-tasks", group: "tasks", risk: "GREEN", scope: "tasks:read",
+    description: "List todo items across pages; filter by done or by page.",
+    inputSchema: { type: "object", properties: { done: { type: "boolean" }, page_id_or_url: { type: "string" }, limit: { type: "integer" } } },
+    async handler(args, key) {
+      const cap = Math.min(Math.max(Number(args.limit) || 25, 1), 100);
+      const pageId = args.page_id_or_url ? extractId(args.page_id_or_url) : null;
+      let q = db.from("pages").select("id,title,trashed,blocks").eq("user_id", key.user_id).eq("trashed", false);
+      if (pageId) q = q.eq("id", pageId);
+      const { data } = await q.order("updated_at", { ascending: false }).limit(500);
+      const tasks: Row[] = [];
+      for (const p of (data ?? []) as Row[])
+        for (const b of ((p.blocks ?? []) as Row[])) {
+          if (b.type !== "todo") continue;
+          if (typeof args.done === "boolean" && (b.checked === true) !== args.done) continue;
+          tasks.push({ id: b.id, text: b.text ?? "", checked: b.checked === true, page_id: p.id, page_title: p.title });
+          if (tasks.length >= cap) return { tasks };
+        }
+      return { tasks };
+    },
+  },
+  {
+    name: "create-task", group: "tasks", risk: "YELLOW", scope: "tasks:write",
+    description: "Add a todo item to a page (UUID/URL accepted).",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" }, text: { type: "string" } }, required: ["page_id_or_url", "text"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const nb: Row = { id: crypto.randomUUID(), type: "todo", text: String(args.text ?? "").trim(), checked: false, createdAt: new Date().toISOString() };
+      if (!nb.text) throw E.validation("text is required");
+      await db.from("pages").update({ blocks: [...((page.blocks ?? []) as Row[]), nb] }).eq("id", page.id as string).eq("user_id", key.user_id);
+      const v = await verify(key.user_id, "pages", String(page.id), {}, "user_id");
+      void v;
+      return { task: { id: nb.id, text: nb.text, checked: false, page_id: page.id, page_url: pageUrl(String(page.id)) }, verified: true };
+    },
+  },
+  {
+    name: "update-task", group: "tasks", risk: "YELLOW", scope: "tasks:write",
+    description: "Rename and/or check/uncheck a task.",
+    inputSchema: { type: "object", properties: { task_id: { type: "string" }, page_id_or_url: { type: "string" }, text: { type: "string" }, checked: { type: "boolean" } }, required: ["task_id", "page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const blocks = [...((page.blocks ?? []) as Row[])];
+      const i = blocks.findIndex((b) => b.id === args.task_id && b.type === "todo");
+      if (i === -1) throw E.notFound("Task");
+      if (args.text !== undefined) blocks[i].text = String(args.text);
+      if (args.checked !== undefined) blocks[i].checked = args.checked === true;
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { task: { id: blocks[i].id, text: blocks[i].text, checked: blocks[i].checked === true } };
+    },
+  },
+  {
+    name: "complete-task", group: "tasks", risk: "YELLOW", scope: "tasks:write",
+    description: "Mark a task complete.",
+    inputSchema: { type: "object", properties: { task_id: { type: "string" }, page_id_or_url: { type: "string" } }, required: ["task_id", "page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const blocks = [...((page.blocks ?? []) as Row[])];
+      const i = blocks.findIndex((b) => b.id === args.task_id && b.type === "todo");
+      if (i === -1) throw E.notFound("Task");
+      blocks[i].checked = true;
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      const v = await verify(key.user_id, "pages", String(page.id), {}, "user_id");
+      const persisted = ((v.actual?.blocks ?? []) as Row[]).some((b) => b.id === args.task_id && b.checked === true);
+      return { completed: persisted, verified: persisted };
+    },
+  },
+  {
+    name: "reopen-task", group: "tasks", risk: "YELLOW", scope: "tasks:write",
+    description: "Reopen a completed task.",
+    inputSchema: { type: "object", properties: { task_id: { type: "string" }, page_id_or_url: { type: "string" } }, required: ["task_id", "page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const blocks = [...((page.blocks ?? []) as Row[])];
+      const i = blocks.findIndex((b) => b.id === args.task_id && b.type === "todo");
+      if (i === -1) throw E.notFound("Task");
+      blocks[i].checked = false;
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { reopened: true };
+    },
+  },
+  {
+    name: "bulk-update-tasks", group: "tasks", risk: "RED", scope: "tasks:write",
+    description: "Update many tasks at once. RED risk — requires confirm:true. Each item needs task_id + page_id_or_url + patch fields.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        confirm: { type: "boolean" },
+        updates: { type: "array", items: { type: "object", properties: { task_id: { type: "string" }, page_id_or_url: { type: "string" }, checked: { type: "boolean" }, text: { type: "string" } }, required: ["task_id", "page_id_or_url"] } },
+      },
+      required: ["updates"],
+    },
+    async handler(args, key) {
+      const updates = Array.isArray(args.updates) ? args.updates as Row[] : [];
+      const results: Row[] = [];
+      for (const u of updates) {
+        try {
+          const page = await loadPage(key.user_id, u.page_id_or_url);
+          const blocks = [...((page.blocks ?? []) as Row[])];
+          const i = blocks.findIndex((b) => b.id === u.task_id && b.type === "todo");
+          if (i === -1) { results.push({ task_id: u.task_id, ok: false, reason: "not_found" }); continue; }
+          if (u.text !== undefined) blocks[i].text = String(u.text);
+          if (u.checked !== undefined) blocks[i].checked = u.checked === true;
+          await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+          results.push({ task_id: u.task_id, ok: true });
+        } catch (e) {
+          results.push({ task_id: u.task_id, ok: false, reason: e instanceof McpError ? e.code : "TOOL_FAILED" });
+        }
+      }
+      return { updated: results.filter((r) => r.ok).length, results };
+    },
+  },
+];
+
+/* ══════════════ LEARNING ══════════════ */
+const learningTools: ToolDef[] = [
+  {
+    name: "list-reviews", group: "learning", risk: "GREEN", scope: "reviews:read",
+    description: "List spaced-repetition study cards; due=true → only cards awaiting review now.",
+    inputSchema: { type: "object", properties: { due: { type: "boolean" }, limit: { type: "integer" } } },
+    async handler(args, key) {
+      const { data } = await db.from("pages").select("id,title,trashed,blocks").eq("user_id", key.user_id).eq("trashed", false).limit(500);
+      const nowIso = new Date().toISOString();
+      const cards: Row[] = [];
+      for (const p of (data ?? []) as Row[])
+        for (const b of ((p.blocks ?? []) as Row[])) {
+          const r = b.review as Row | undefined;
+          if (!r || r.suspended) continue;
+          const next = typeof r.nextReview === "string" ? r.nextReview : undefined;
+          if (args.due === true && next && next > nowIso) continue;
+          cards.push({ block_id: b.id, front: typeof b.text === "string" ? b.text : "", page_id: p.id, page_title: p.title, interval_days: r.interval ?? 0, repetitions: r.repetition ?? 0, next_review: next ?? null });
+        }
+      return { cards };
+    },
+  },
+  {
+    name: "add-study-card", group: "learning", risk: "YELLOW", scope: "reviews:write",
+    description: "Schedule existing block(s) as SM-2 study card(s), due immediately — identical to in-app Add to review. Accepts one block_id or an array.",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" }, block_ids: { type: "array", items: { type: "string" }, description: "One or more block ids" } }, required: ["page_id_or_url", "block_ids"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const ids = Array.isArray(args.block_ids) ? args.block_ids : [args.block_ids];
+      const blocks = [...((page.blocks ?? []) as Row[])];
+      const scheduled: string[] = [];
+      for (const id of ids) {
+        const i = blocks.findIndex((b) => b.id === id);
+        if (i !== -1) { blocks[i] = { ...blocks[i], review: initialReviewState() }; scheduled.push(String(id)); }
+      }
+      if (!scheduled.length) throw E.notFound("Blocks");
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      const v = await verify(key.user_id, "pages", String(page.id), {}, "user_id");
+      const persistedCount = ((v.actual?.blocks ?? []) as Row[]).filter((b) => scheduled.includes(String(b.id)) && b.review).length;
+      return { scheduled_count: scheduled.length, verified: persistedCount === scheduled.length, block_ids: scheduled };
+    },
+  },
+  {
+    name: "reschedule-review", group: "learning", risk: "YELLOW", scope: "reviews:write",
+    description: "Move a card's next review to a new ISO time (or +N days). Uses the real scheduler state on the block.",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" }, block_id: { type: "string" }, due_at: { type: "string", description: "ISO timestamp" }, days_from_now: { type: "number" } }, required: ["page_id_or_url", "block_id"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const blocks = [...((page.blocks ?? []) as Row[])];
+      const i = blocks.findIndex((b) => b.id === args.block_id && b.review);
+      if (i === -1) throw E.notFound("Study card");
+      const review = { ...((blocks[i].review ?? {}) as Row) };
+      review.nextReview = args.due_at ? String(args.due_at) : new Date(Date.now() + Number(args.days_from_now || 0) * 86400000).toISOString();
+      blocks[i] = { ...blocks[i], review };
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { rescheduled: true, next_review: review.nextReview };
+    },
+  },
+  {
+    name: "get-study-progress", group: "learning", risk: "GREEN", scope: "reviews:read",
+    description: "Learning analytics over real scheduling state: totals, due, overdue, mastery, retention, weakest topics.",
+    inputSchema: { type: "object", properties: {} },
+    async handler(_args, key) {
+      const a = await computeAnalytics(key.user_id);
+      return a;
+    },
+  },
+];
+
+async function computeAnalytics(userId: string) {
+  const { data } = await db.from("pages").select("title,tags,trashed,blocks").eq("user_id", userId).eq("trashed", false).limit(500);
+  const nowMs = Date.now(); const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  let total = 0, due = 0, overdue = 0, correct = 0, rated = 0, mastered = 0, reviewedToday = 0;
+  const topics = new Map<string, { c: number; s: number }>();
+  for (const p of (data ?? []) as Row[]) {
+    const label = (Array.isArray(p.tags) && p.tags.length ? String(p.tags[0]) : String(p.title ?? "Untitled"));
+    for (const b of ((p.blocks ?? []) as Row[])) {
+      const r = b.review as Row | undefined;
+      if (!r || r.suspended) continue;
+      total++;
+      const next = typeof r.nextReview === "string" ? new Date(r.nextReview).getTime() : 0;
+      if (!r.nextReview || next <= nowMs) due++;
+      if (next && next < todayStart.getTime()) overdue++;
+      const last = typeof r.lastReview === "string" ? new Date(r.lastReview).getTime() : 0;
+      if (last >= todayStart.getTime()) reviewedToday++;
+      if (typeof r.quality === "number" && r.quality > 0) { rated++; if (r.quality >= 3) correct++; }
+      if ((Number(r.repetition) || 0) >= 3) mastered++;
+      if ((Number(r.easeFactor) || 2.5) < 2.35) { const t = topics.get(label) ?? { c: 0, s: 0 }; t.c++; t.s++; topics.set(label, t); }
+    }
+  }
+  const weak = [...topics.entries()].map(([topic, t]) => ({ topic, struggling: t.s })).sort((a, b) => b.struggling - a.struggling).slice(0, 3);
+  return {
+    total_cards: total, due_now: due, overdue,
+    retention_pct: rated ? Math.round((correct / rated) * 100) : 0,
+    mastery_pct: total ? Math.round((mastered / total) * 100) : 0,
+    reviewed_today: reviewedToday,
+    weakest_topics: weak,
+  };
+}
+
+/* ══════════════ DATABASES & VIEWS ══════════════ */
+interface DbHit { page: Row; block: Row }
+
+async function findDatabase(userId: string, ref: unknown): Promise<DbHit> {
+  const id = mustId(ref, "database reference");
+  const { data } = await db.from("pages").select("id,title,blocks").eq("user_id", userId).limit(500);
+  for (const p of (data ?? []) as Row[])
+    for (const b of ((p.blocks ?? []) as Row[]))
+      if (b.id === id && String(b.type ?? "").startsWith("database")) return { page: p, block: b };
+  throw E.notFound("Database");
+}
+
+const dbTools: ToolDef[] = [
+  {
+    name: "list-databases", group: "databases", risk: "GREEN", scope: "databases:read",
+    description: "List database blocks across the workspace with row/property counts.",
+    inputSchema: { type: "object", properties: {} },
+    async handler(_args, key) {
+      const { data } = await db.from("pages").select("id,title,blocks").eq("user_id", key.user_id).eq("trashed", false).limit(500);
+      const out: Row[] = [];
+      for (const p of (data ?? []) as Row[])
+        for (const b of ((p.blocks ?? []) as Row[])) {
+          const t = String(b.type ?? "");
+          if (!t.startsWith("database")) continue;
+          const schema = (b.database ?? {}) as Row;
+          out.push({
+            database_id: b.id, title: b.text ?? "", page_id: p.id, page_title: p.title,
+            property_count: Array.isArray(schema.properties) ? schema.properties.length : 0,
+            row_count: Array.isArray(schema.rows) ? schema.rows.length : 0,
+            views: (Array.isArray(schema.views) ? schema.views : []).map((v) => ((v as Row).name ?? (v as Row).type)),
+          });
+        }
+      return { databases: out };
+    },
+  },
+  {
+    name: "get-database", group: "databases", risk: "GREEN", scope: "databases:read",
+    description: "Fetch a database's properties, views and rows.",
+    inputSchema: { type: "object", properties: { database_id_or_ref: { type: "string" } }, required: ["database_id_or_ref"] },
+    async handler(args, key) {
+      const { page, block } = await findDatabase(key.user_id, args.database_id_or_ref);
+      const schema = (block.database ?? {}) as Row;
+      return { database: { id: block.id, page_id: page.id, title: block.text ?? "", properties: schema.properties ?? [], views: schema.views ?? [], rows: schema.rows ?? [] } };
+    },
+  },
+  {
+    name: "query-database", group: "databases", risk: "GREEN", scope: "databases:read",
+    description: 'Query rows with simple equality filters, sorting and pagination. filter: {"Status":"Done"} matches props.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        database_id_or_ref: { type: "string" },
+        filter: { type: "object", description: "property-name → expected value" },
+        sort_by: { type: "string", description: "Row property or 'name'" },
+        sort_dir: { type: "string", enum: ["asc", "desc"] },
+        limit: { type: "integer" },
+      },
+      required: ["database_id_or_ref"],
+    },
+    async handler(args, key) {
+      const { block } = await findDatabase(key.user_id, args.database_id_or_ref);
+      const rows = (((block.database as Row)?.rows ?? []) as Row[]).slice();
+      const filter = (args.filter ?? {}) as Row;
+      const filtered = rows.filter((r) => Object.entries(filter).every(([k, v]) => (k === "name" ? r.name : (r.props as Row)?.[k]) === v));
+      if (args.sort_by) {
+        const col = String(args.sort_by); const dir = args.sort_dir === "desc" ? -1 : 1;
+        filtered.sort((a, b) => dir * String(col === "name" ? a.name : (a.props as Row)?.[col]).localeCompare(String(col === "name" ? b.name : (b.props as Row)?.[col])));
+      }
+      const lim = Math.min(Number(args.limit) || 50, 200);
+      return { rows: filtered.slice(0, lim), total_matched: filtered.length };
+    },
+  },
+  {
+    name: "create-row", group: "databases", risk: "YELLOW", scope: "databases:write",
+    description: "Insert a row into a database block. props keys must match existing properties.",
+    inputSchema: { type: "object", properties: { database_id_or_ref: { type: "string" }, name: { type: "string" }, props: { type: "object" } }, required: ["database_id_or_ref", "name"] },
+    async handler(args, key) {
+      const { page, block } = await findDatabase(key.user_id, args.database_id_or_ref);
+      const schema = { ...((block.database ?? {}) as Row) } as { rows?: Row[] };
+      const row: Row = { id: crypto.randomUUID(), name: String(args.name), props: args.props ?? {}, createdAt: new Date().toISOString() };
+      schema.rows = [...((schema.rows ?? []) as Row[]), row];
+      const blocks = ((page.blocks ?? []) as Row[]).map((b) => (b.id === block.id ? { ...b, database: schema } : b));
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      const v = await verify(key.user_id, "pages", String(page.id), {}, "user_id");
+      const persisted = ((v.actual?.blocks ?? []) as Row[]).some((b) => (b.database as Row)?.rows?.some?.((r: Row) => r.id === row.id));
+      return { row: { id: row.id, name: row.name }, verified: persisted };
+    },
+  },
+  {
+    name: "update-row", group: "databases", risk: "YELLOW", scope: "databases:write",
+    description: "Update a row's name and/or props.",
+    inputSchema: { type: "object", properties: { database_id_or_ref: { type: "string" }, row_id: { type: "string" }, name: { type: "string" }, props: { type: "object" } }, required: ["database_id_or_ref", "row_id"] },
+    async handler(args, key) {
+      const { page, block } = await findDatabase(key.user_id, args.database_id_or_ref);
+      const schema = JSON.parse(JSON.stringify((block.database ?? {}))) as { rows?: Row[] };
+      const row = (schema.rows ?? []).find((r) => r.id === args.row_id);
+      if (!row) throw E.notFound("Row");
+      if (args.name !== undefined) row.name = String(args.name);
+      if (args.props !== undefined) row.props = { ...(row.props as Row), ...(args.props as Row) };
+      const blocks = ((page.blocks ?? []) as Row[]).map((b) => (b.id === block.id ? { ...b, database: schema } : b));
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { updated: true };
+    },
+  },
+  {
+    name: "create-view", group: "databases", risk: "YELLOW", scope: "databases:write",
+    description: "Add a view to a database block (e.g. board/table/list/calendar/gallery as supported by the app UI).",
+    inputSchema: { type: "object", properties: { database_id_or_ref: { type: "string" }, name: { type: "string" }, type: { type: "string", enum: ["table", "board", "list", "calendar", "gallery", "feed"] }, group_by: { type: "string" } }, required: ["database_id_or_ref", "name", "type"] },
+    async handler(args, key) {
+      const { page, block } = await findDatabase(key.user_id, args.database_id_or_ref);
+      const schema = JSON.parse(JSON.stringify((block.database ?? {}))) as { views?: Row[] };
+      schema.views = [...((schema.views ?? []) as Row[]), { id: crypto.randomUUID(), name: String(args.name), type: args.type, groupBy: args.group_by ?? null }];
+      const blocks = ((page.blocks ?? []) as Row[]).map((b) => (b.id === block.id ? { ...b, database: schema } : b));
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      return { created: true, views: (schema.views ?? []).map((v) => v.name) };
+    },
+  },
+];
+
+/* ══════════════ AGENTS & AUTOMATIONS ══════════════ */
+const RUN_UNSUPPORTED = "Agent/automation EXECUTION runs inside the Noska app runtime (planner → tools → permission gate → verification). MCP exposes full CRUD here; trigger execution from the Noska Agents/Automations UI.";
+
+const agentTools: ToolDef[] = [
+  {
+    name: "list-agents", group: "agents", risk: "GREEN", scope: "pages:read",
+    description: "List the user's Noska agents (real agents table).",
+    inputSchema: { type: "object", properties: { status: { type: "string", enum: ["active", "paused"] } } },
+    async handler(args, key) {
+      let q = db.from("agents").select("id,name,description,icon,model,status,type,updated_at").eq("owner_id", key.user_id);
+      if (args.status) q = q.eq("status", String(args.status));
+      const { data } = await q.order("updated_at", { ascending: false });
+      return { agents: data ?? [] };
+    },
+  },
+  {
+    name: "get-agent", group: "agents", risk: "GREEN", scope: "pages:read",
+    description: "Inspect one agent including instructions/model/status.",
+    inputSchema: { type: "object", properties: { agent_id: { type: "string" } }, required: ["agent_id"] },
+    async handler(args, key) {
+      const id = mustId(args.agent_id, "agent_id");
+      const { data } = await db.from("agents").select("*").eq("owner_id", key.user_id).eq("id", id).maybeSingle();
+      if (!data) throw E.notFound("Agent");
+      return { agent: data };
+    },
+  },
+  {
+    name: "create-agent", group: "agents", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "agents", ownerCol: "owner_id" },
+    description: 'Create a real Noska agent, e.g. "Study Guardian that monitors overdue study tasks". Fields: name (required), instructions, icon, model(default|fast|quality), status(active|paused), triggers[], access_grants[].',
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" }, instructions: { type: "string" }, description: { type: "string" }, icon: { type: "string" },
+        model: { type: "string", enum: ["default", "fast", "quality"] }, status: { type: "string", enum: ["active", "paused"] },
+        triggers: { type: "array", items: { type: "object" }, description: 'e.g. [{"type":"schedule","config":{"schedule":"weekly mon 09:00"}}]' },
+        access_grants: { type: "array", items: { type: "object" } },
+      },
+      required: ["name"],
+    },
+    async handler(args, key) {
+      const ins: Row = {
+        id: crypto.randomUUID(), owner_id: key.user_id, name: String(args.name).trim(),
+        type: "custom", status: args.status === "paused" ? "paused" : "active",
+        description: args.description ?? null, icon: args.icon ?? "🤖",
+        instructions: args.instructions ?? null, model: args.model ?? "default",
+      };
+      const { data, error } = await db.from("agents").insert(ins).select("id,name,status").single();
+      if (error) throw new McpError(500, "TOOL_FAILED", error.message);
+      const grants = Array.isArray(args.access_grants) ? (args.access_grants as Row[]) : [];
+      if (grants.length) await db.from("agents").update({ config: { access_grants: grants } }).eq("id", (data as Row).id as string);
+      return { agent: data, note: RUN_UNSUPPORTED };
+    },
+  },
+  {
+    name: "update-agent", group: "agents", risk: "YELLOW", scope: "pages:write",
+    description: "Update an agent's fields or enable/disable via status.",
+    inputSchema: { type: "object", properties: { agent_id: { type: "string" }, name: { type: "string" }, instructions: { type: "string" }, status: { type: "string", enum: ["active", "paused"] }, model: { type: "string" }, description: { type: "string" } }, required: ["agent_id"] },
+    async handler(args, key) {
+      const id = mustId(args.agent_id, "agent_id");
+      const patch: Row = {};
+      for (const f of ["name", "instructions", "description", "model", "status"] as const) if (args[f] !== undefined) patch[f] = args[f];
+      if (!Object.keys(patch).length) throw E.validation("Nothing to update.");
+      const { error } = await db.from("agents").update(patch).eq("owner_id", key.user_id).eq("id", id);
+      if (error) throw new McpError(500, "TOOL_FAILED", error.message);
+      return verify(key.user_id, "agents", id, patch, "owner_id");
+    },
+  },
+  {
+    name: "archive-agent", group: "agents", risk: "RED", scope: "pages:write",
+    description: "Pause (soft-archive) an agent. RED risk — requires confirm:true.",
+    inputSchema: { type: "object", properties: { agent_id: { type: "string" }, confirm: { type: "boolean" } }, required: ["agent_id"] },
+    async handler(args, key) {
+      const id = mustId(args.agent_id, "agent_id");
+      await db.from("agents").update({ status: "paused" }).eq("owner_id", key.user_id).eq("id", id);
+      return { archived: true, id };
+    },
+  },
+  {
+    name: "run-agent", group: "agents", risk: "RED", scope: "pages:write",
+    description: "Request an agent run. Execution happens in the Noska app runtime; MCP returns UNSUPPORTED_CAPABILITY rather than simulating.",
+    inputSchema: { type: "object", properties: { agent_id: { type: "string" } }, required: ["agent_id"] },
+    async handler() { throw E.unsupported(RUN_UNSUPPORTED); },
+  },
+];
+
+const automationTools: ToolDef[] = [
+  {
+    name: "list-automations", group: "automations", risk: "GREEN", scope: "pages:read",
+    description: "List the user's automations (real automations table shared with the Automations UI).",
+    inputSchema: { type: "object", properties: { status: { type: "string", enum: ["active", "paused"] } } },
+    async handler(args, key) {
+      let q = db.from("automations").select("id,name,description,icon,status,trigger_config,last_run_at,run_count,updated_at").eq("owner_id", key.user_id);
+      if (args.status) q = q.eq("status", String(args.status));
+      const { data } = await q.order("updated_at", { ascending: false });
+      return { automations: data ?? [] };
+    },
+  },
+  {
+    name: "create-automation", group: "automations", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "automations", ownerCol: "owner_id" },
+    description: 'Create a real automation, e.g. weekly schedule: {"type":"schedule","config":{"schedule":"weekly mon 09:00"}}. steps describe what should happen when it runs in-app.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" }, description: { type: "string" }, icon: { type: "string" },
+        trigger_type: { type: "string", enum: ["schedule", "manual", "mention", "property_change"] },
+        schedule: { type: "string", description: 'e.g. "daily 09:00" or "weekly mon 09:00"' },
+        steps: { type: "array", items: { type: "object" } },
+        conditions: { type: "object" }, permissions: { type: "object" },
+        status: { type: "string", enum: ["active", "paused"] },
+      },
+      required: ["name", "trigger_type"],
+    },
+    async handler(args, key) {
+      const trigger = args.trigger_type === "schedule"
+        ? { type: "schedule", config: { schedule: String(args.schedule ?? "daily 09:00") } }
+        : { type: String(args.trigger_type), config: {} };
+      const ins: Row = {
+        id: crypto.randomUUID(), owner_id: key.user_id, name: String(args.name).trim(),
+        description: args.description ?? "", icon: args.icon ?? "⚡",
+        trigger_config: trigger, conditions: args.conditions ?? { op: "and", conditions: [] },
+        steps: Array.isArray(args.steps) ? args.steps : [],
+        permissions: args.permissions ?? {},
+        status: args.status === "paused" ? "paused" : "active",
+      };
+      const { data, error } = await db.from("automations").insert(ins).select("id,name,status,trigger_config").single();
+      if (error) throw new McpError(500, "TOOL_FAILED", error.message);
+      return { automation: data, note: RUN_UNSUPPORTED };
+    },
+  },
+  {
+    name: "update-automation", group: "automations", risk: "YELLOW", scope: "pages:write",
+    description: "Update automation fields / enable-disable via status.",
+    inputSchema: { type: "object", properties: { automation_id: { type: "string" }, name: { type: "string" }, description: { type: "string" }, status: { type: "string", enum: ["active", "paused"] }, schedule: { type: "string" } }, required: ["automation_id"] },
+    async handler(args, key) {
+      const id = mustId(args.automation_id, "automation_id");
+      const { data: cur } = await db.from("automations").select("*").eq("owner_id", key.user_id).eq("id", id).maybeSingle();
+      if (!cur) throw E.notFound("Automation");
+      const patch: Row = {};
+      for (const f of ["name", "description", "status"] as const) if (args[f] !== undefined) patch[f] = args[f];
+      if (args.schedule !== undefined) {
+        const tc = { ...(((cur as Row).trigger_config as Row) ?? {}) };
+        tc.config = { ...((tc.config as Row) ?? {}), schedule: String(args.schedule) };
+        patch.trigger_config = tc;
+      }
+      if (!Object.keys(patch).length) throw E.validation("Nothing to update.");
+      const { error } = await db.from("automations").update(patch).eq("owner_id", key.user_id).eq("id", id);
+      if (error) throw new McpError(500, "TOOL_FAILED", error.message);
+      return verify(key.user_id, "automations", id, patch, "owner_id");
+    },
+  },
+  {
+    name: "archive-automation", group: "automations", risk: "RED", scope: "pages:write",
+    description: "Pause (soft-archive) an automation. RED risk — requires confirm:true.",
+    inputSchema: { type: "object", properties: { automation_id: { type: "string" }, confirm: { type: "boolean" } }, required: ["automation_id"] },
+    async handler(args, key) {
+      const id = mustId(args.automation_id, "automation_id");
+      await db.from("automations").update({ status: "paused" }).eq("owner_id", key.user_id).eq("id", id);
+      return { archived: true, id };
+    },
+  },
+  {
+    name: "run-automation", group: "automations", risk: "RED", scope: "pages:write",
+    description: "Request an automation run. Execution lives in the Noska app runtime; returns UNSUPPORTED_CAPABILITY instead of simulating.",
+    inputSchema: { type: "object", properties: { automation_id: { type: "string" } }, required: ["automation_id"] },
+    async handler() { throw E.unsupported("Automation execution runs inside the Noska app scheduler/runtime. Manage and trigger from the Automations UI."); },
+  },
+];
+
+/* ══════════════ CONTEXT · WORKFLOWS · VERIFY ══════════════ */
+const systemTools: ToolDef[] = [
+  {
+    name: "get-workspace-context", group: "context", risk: "GREEN", scope: "search:read",
+    description: "Compact AI-oriented snapshot: page counts, open tasks, due reviews, agents, automations, available command count.",
+    inputSchema: { type: "object", properties: {} },
+    async handler(_args, key) {
+      const [ctx, analytics, agents, autos] = await Promise.all([
+        (async () => {
+          const { data } = await db.from("pages").select("id,title,parent_id,trashed").eq("user_id", key.user_id).limit(1000);
+          const rows = (data ?? []) as Row[];
+          return { pages: rows.filter((r) => !r.trashed).length, archived: rows.filter((r) => r.trashed).length, roots: rows.filter((r) => !r.trashed && !r.parent_id).length };
+        })(),
+        computeAnalytics(key.user_id),
+        db.from("agents").select("id,name,status").eq("owner_id", key.user_id),
+        db.from("automations").select("id,name,status").eq("owner_id", key.user_id),
+      ]);
+      return {
+        workspace: ctx,
+        learning: { due_now: analytics.due_now, overdue: analytics.overdue, total_cards: analytics.total_cards, mastery_pct: analytics.mastery_pct },
+        open_task_sample: (await this_listOpenTasks(key)).slice(0, 10),
+        agents: agents.data ?? [], automations: autos.data ?? [],
+        commands_available: COMMANDS.map((c) => c.name),
+      };
+    },
+  },
+  {
+    name: "get-current-context", group: "context", risk: "GREEN", scope: "search:read",
+    description: "Everything an AI needs about ONE page: meta, parent, children, its open tasks, its study cards.",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" } }, required: ["page_id_or_url"] },
+    async handler(args, key) {
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const blocks = ((page.blocks ?? []) as Row[]);
+      const [{ data: children }, parent] = await Promise.all([
+        db.from("pages").select("id,title").eq("user_id", key.user_id).eq("parent_id", page.id as string),
+        page.parent_id ? loadPage(key.user_id, page.parent_id).catch(() => null) : Promise.resolve(null),
+      ]);
+      return {
+        page: { id: page.id, url: pageUrl(String(page.id)), title: page.title, icon: page.icon, trashed: page.trashed === true },
+        parent: parent ? { id: parent.id, title: parent.title } : null,
+        children: children ?? [],
+        open_tasks: blocks.filter((b) => b.type === "todo" && b.checked !== true).map((b) => ({ id: b.id, text: b.text })),
+        done_tasks: blocks.filter((b) => b.type === "todo" && b.checked === true).length,
+        study_card_count: blocks.filter((b) => b.review).length,
+      };
+    },
+  },
+  {
+    name: "verify", group: "system", risk: "GREEN", scope: "search:read",
+    description: "Verify persisted state after any mutation. entity: page | task | agent | automation. For tasks pass page too.",
+    inputSchema: { type: "object", properties: { entity: { type: "string", enum: ["page", "task", "agent", "automation"] }, id: { type: "string" }, page_id_or_url: { type: "string" }, expect: { type: "object" } }, required: ["entity", "id"] },
+    async handler(args, key) {
+      if (args.entity === "task") {
+        const page = await loadPage(key.user_id, args.page_id_or_url);
+        const b = ((page.blocks ?? []) as Row[]).find((x) => x.id === args.id);
+        if (!b) return { status: "failed", checks: [{ field: "exists", ok: false }] };
+        return {
+          status: Object.entries(args.expect ?? {}).every(([f, v]) => JSON.stringify(b[f]) === JSON.stringify(v)) ? "passed" : "failed",
+          actual: { text: b.text, checked: b.checked },
+        };
+      }
+      const map: Record<string, [string, "user_id" | "owner_id"]> = { page: ["pages", "user_id"], agent: ["agents", "owner_id"], automation: ["automations", "owner_id"] };
+      const [table, col] = map[String(args.entity)] ?? ["pages", "user_id"];
+      return verify(key.user_id, table, String(mustId(args.id, "id")), (args.expect ?? {}) as Row, col);
+    },
+  },
+  {
+    name: "create-study-plan", group: "learning", risk: "YELLOW", scope: "reviews:write",
+    description: "Deterministic multi-step workflow: pick up to N content blocks from a page, schedule each as a study card, create a review task due tomorrow, verify every step. Returns a per-step log.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        page_id_or_url: { type: "string" }, card_count: { type: "integer", description: "1-10, default 5" },
+        review_task_text: { type: "string", description: "Defaults to 'Review <N> new study cards from <page>'" },
+        idempotency_key: { type: "string" },
+      },
+      required: ["page_id_or_url"],
+    },
+    async handler(args, key) {
+      const n = Math.min(Math.max(Number(args.card_count) || 5, 1), 10);
+      const page = await loadPage(key.user_id, args.page_id_or_url);
+      const blocks = [...((page.blocks ?? []) as Row[])];
+      const candidates = blocks
+        .filter((b) => ["paragraph", "heading_2", "heading_3"].includes(String(b.type)) && String(b.text ?? "").trim().length > 40)
+        .sort((a, b) => String(b.text).length - String(a.text).length)
+        .slice(0, n);
+      if (!candidates.length) throw E.validation("Page has no substantial text blocks to convert.");
+      const tomorrow = new Date(Date.now() + 86400000); tomorrow.setHours(9, 0, 0, 0);
+      const steps: Row[] = [];
+      for (const c of candidates) {
+        const i = blocks.findIndex((b) => b.id === c.id);
+        blocks[i] = { ...blocks[i], review: initialReviewState() };
+        steps.push({ step: `study-card:${c.id}`, status: "done" });
+      }
+      const taskBlock: Row = { id: crypto.randomUUID(), type: "todo", text: String(args.review_task_text ?? `Review ${candidates.length} new study cards from ${page.title}`), checked: false, createdAt: new Date().toISOString(), dueAt: tomorrow.toISOString() };
+      blocks.push(taskBlock);
+      await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
+      // verify everything at once
+      const v = await verify(key.user_id, "pages", String(page.id), {}, "user_id");
+      const pb = ((v.actual?.blocks ?? []) as Row[]);
+      const cardsOk = candidates.every((c) => pb.some((b) => b.id === c.id && b.review));
+      const taskOk = pb.some((b) => b.id === taskBlock.id);
+      steps.push({ step: "review-task", status: taskOk ? "done" : "failed" }, { step: "verification", status: cardsOk && taskOk ? "passed" : "partial" });
+      return {
+        workflow: "create-study-plan", status: cardsOk && taskOk ? "completed" : "partial",
+        cards_scheduled: cardsOk ? candidates.length : candidates.filter((c) => steps.find((s) => s.step === `study-card:${c.id}`)).length,
+        review_task: { id: taskBlock.id, due_at: tomorrow.toISOString() },
+        page_url: pageUrl(String(page.id)), steps,
+      };
+    },
+  },
+];
+
+function this_listOpenTasks(key: KeyRow): Promise<Row[]> {
+  const tool = taskTools.find((t) => t.name === "list-tasks")!;
+  return tool.handler({ done: false, limit: 10 }, key).then((r) => (r as Row).tasks as Row[]) as Promise<Row[]>;
+}
+
+export const TOOLS: ToolDef[] = [...contentTools, ...taskTools, ...learningTools, ...dbTools, ...agentTools, ...automationTools, ...systemTools];

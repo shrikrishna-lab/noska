@@ -7,6 +7,7 @@ import type { Page } from "../../lib/supabaseService";
 import { PageIcon } from "../PageIcon";
 import NewTabModal from "./NewTabModal";
 import TabHoverPreview from "./TabHoverPreview";
+import PagePickerPopover from "./PagePickerPopover";
 import { usePresence } from "../../hooks/usePresence";
 import CollabPresenceBar from "../collab/CollabPresenceBar";
 
@@ -31,6 +32,12 @@ interface PreviewState {
   anchor: { left: number; top: number; bottom: number; right: number };
 }
 
+interface PickerState {
+  open: boolean;
+  tab: WorkspaceTab | null;
+  anchorRect: { top: number; left: number; bottom: number; right: number } | null;
+}
+
 export const WorkspaceTabBar = memo(function WorkspaceTabBar({
   pages,
   sharedPages = [],
@@ -48,7 +55,9 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
     closeTabsToRight,
     togglePinTab,
     reorderTabs,
-    duplicateTab
+    duplicateTab,
+    splitPage,
+    activePaneId
   } = useTabs();
 
   const [
@@ -60,22 +69,26 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
   const activePageId = activeTab?.type === "page" ? activeTab.targetId : null;
   const { users, ownStatus, setStatus } = usePresence(activePageId);
 
-  const handleSplitTab = useCallback((tab: WorkspaceTab) => {
-    if (tab.type === "page") {
-      setAppView("page");
-      setStackedPageIds((prev) => {
-        if (prev.includes(tab.targetId)) {
-          if (prev.length > 1) {
-            return prev.filter((id) => id !== tab.targetId);
-          }
-          const other = pages.find((p) => p.id !== tab.targetId);
-          return other ? [tab.targetId, other.id] : [tab.targetId];
-        }
-        return [...prev, tab.targetId];
-      });
-      setActiveId(tab.targetId);
-    }
-  }, [pages, setAppView, setStackedPageIds, setActiveId]);
+  const [pickerState, setPickerState] = useState<PickerState>({
+    open: false,
+    tab: null,
+    anchorRect: null
+  });
+
+  const handleSplitIconClick = useCallback((e: React.MouseEvent<HTMLButtonElement>, tab: WorkspaceTab) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPickerState({
+      open: true,
+      tab,
+      anchorRect: {
+        top: rect.top,
+        left: rect.left,
+        bottom: rect.bottom,
+        right: rect.right
+      }
+    });
+  }, []);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     open: false,
@@ -340,20 +353,9 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
                   <div className="flex items-center gap-0.5 ml-auto shrink-0 opacity-0 group-hover/tab:opacity-100 transition-opacity duration-150">
                     {tab.type === "page" && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSplitTab(tab);
-                        }}
-                        title={
-                          stackedPageIds.includes(tab.targetId) && stackedPageIds.length > 1
-                            ? "Close split view"
-                            : "Split view (open side-by-side)"
-                        }
-                        className={`grid h-4 w-4 place-items-center rounded-xs transition cursor-pointer ${
-                          stackedPageIds.includes(tab.targetId) && stackedPageIds.length > 1
-                            ? "text-blue-400 bg-blue-500/20 font-bold"
-                            : "text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-                        }`}
+                        onClick={(e) => handleSplitIconClick(e, tab)}
+                        title="Split view (open page beside)"
+                        className="grid h-4 w-4 place-items-center rounded-xs transition cursor-pointer text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
                       >
                         <Columns size={10} strokeWidth={2.2} />
                       </button>
@@ -411,6 +413,30 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
           />
         )}
       </div>
+
+      {/* Tab Split Page Picker Popover */}
+      {pickerState.open && pickerState.tab && (
+        <PagePickerPopover
+          open={pickerState.open}
+          onClose={() => setPickerState({ open: false, tab: null, anchorRect: null })}
+          currentPageTitle={resolveTabMeta(pickerState.tab).title}
+          currentPageId={pickerState.tab.targetId}
+          sourcePaneId={activePaneId}
+          pages={pages}
+          openTabs={tabs}
+          anchorRect={pickerState.anchorRect}
+          onSelectPage={(targetPageId) => {
+            splitPage({
+              pageId: targetPageId,
+              sourcePaneId: activePaneId,
+              direction: "right"
+            });
+          }}
+          onCreateNewPage={() => {
+            onNewPage("blank");
+          }}
+        />
+      )}
 
       {/* Tab Hover Preview — Notion-style with real page content */}
       <AnimatePresence>

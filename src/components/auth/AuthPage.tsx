@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
-import { useClerk, useSignIn } from "@clerk/react";
+import { useAuth, useClerk, useSignIn } from "@clerk/react";
 import { useNavigate } from "react-router-dom";
 import AuthBackground from "./AuthBackground";
 import AuthProviders from "./AuthProviders";
 import AuthError from "./AuthError";
 import AuthLoading from "./AuthLoading";
 import { capture } from "../../lib/posthog";
+import { markOAuthIntent } from "../../lib/oauthIntent";
+import { isDesktop } from "../../lib/desktop/platform";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0, scale: 0.96, y: 16 },
@@ -37,6 +39,7 @@ interface AuthPageProps {
 
 export default function AuthPage(_props: AuthPageProps) {
 const { signIn, errors, fetchStatus } = useSignIn();
+  const { isSignedIn } = useAuth();
   const clerk = useClerk();
   const navigate = useNavigate();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
@@ -63,12 +66,34 @@ const { signIn, errors, fetchStatus } = useSignIn();
   };
 
   const handleProviderClick = async (provider: "github" | "google" | "microsoft") => {
+    // Desktop: OAuth requires navigating out to the provider and back, which
+    // the webview cannot complete (Clerk rejects the callback origin). Keep
+    // users in-app with email sign-in instead of dumping them on a Clerk
+    // error page.
+    if (isDesktop()) {
+      setError("Social sign-in isn't available in the Noska desktop app yet — please use 'Sign in with Email'.");
+      return;
+    }
     setError(null);
     setLoadingProvider(provider);
     setIsConnecting(true);
     capture("signup_started");
     if (provider === "google") capture("google_login");
     if (provider === "microsoft") capture("microsoft_login");
+    // Already holding a session — starting OAuth again makes Clerk's
+    // signIn.create throw, and the fallback chain ends up on the Account
+    // Portal, which bounces to its Home URL (the marketing site) instead
+    // of the app. Route straight into the workspace; App's bootstrap /
+    // post-auth effects resolve profile and onboarding state from here.
+    if (isSignedIn) {
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+    // Remember that we left for OAuth. If the Account Portal loses the
+    // pending sign-in and dumps the user on its Home URL (the marketing
+    // site) instead of /sso-callback, MarketingLayout uses this to bring
+    // the now-signed-in user into their workspace.
+    markOAuthIntent();
 try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
       // Stay on the current origin: www.noska.me serves the full app, and
@@ -92,17 +117,21 @@ try {
         // fall through to the legacy helpers below
       }
       // Legacy helper on some bundles: authenticates + redirects in one call.
+      // redirectUrlComplete must be /sso-callback — the Account Portal
+      // validates this URL and silently falls back to its configured Home
+      // URL (the marketing site) when a completed sign-in has nowhere to go.
       const authenticateWithRedirect = (signIn as typeof signIn & {
         authenticateWithRedirect?: (params: Record<string, string>) => Promise<void>;
       }).authenticateWithRedirect;
       if (typeof authenticateWithRedirect === "function") {
-        await authenticateWithRedirect({ strategy, redirectUrl, redirectUrlComplete: `${appOrigin}/login` });
+        await authenticateWithRedirect({ strategy, redirectUrl, redirectUrlComplete: `${appOrigin}/sso-callback` });
         return;
       }
-      // Last resort only: Clerk's hosted sign-in page.
+      // Last resort only: Clerk's hosted sign-in page. Force/fallback URLs
+      // also land on /sso-callback so AuthCallbackScreen does the routing.
       await clerk.redirectToSignIn({
-        signInForceRedirectUrl: `${appOrigin}/login`,
-        signInFallbackRedirectUrl: `${appOrigin}/login`,
+        signInForceRedirectUrl: `${appOrigin}/sso-callback`,
+        signInFallbackRedirectUrl: `${appOrigin}/sso-callback`,
       });
     } catch (e) {
       setError((e as Error).message || "Failed to sign in. Please try again.");
@@ -191,19 +220,23 @@ try {
             />
           </div>
 
-          {/* Social Logins */}
-          <div className="w-full flex flex-col gap-3">
-            <AuthProviders
-              onProviderClick={handleProviderClick}
-              loadingProvider={loadingProvider}
-              disabled={isConnecting}
-            />
-          </div>
+          {/* Social Logins — web only; desktop uses email sign-in */}
+          {!isDesktop() && (
+            <div className="w-full flex flex-col gap-3">
+              <AuthProviders
+                onProviderClick={handleProviderClick}
+                loadingProvider={loadingProvider}
+                disabled={isConnecting}
+              />
+            </div>
+          )}
 
-          <div className="relative flex items-center justify-center my-6 select-none">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
-            <span className="relative px-3 bg-[#f8fafc] text-[10px] font-mono tracking-widest text-slate-400 uppercase">or</span>
-          </div>
+          {!isDesktop() && (
+            <div className="relative flex items-center justify-center my-6 select-none">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
+              <span className="relative px-3 bg-[#f8fafc] text-[10px] font-mono tracking-widest text-slate-400 uppercase">or</span>
+            </div>
+          )}
 
           {authStep === "credentials" ? (
             <form onSubmit={handlePasswordSignIn} className="w-full flex flex-col gap-3">

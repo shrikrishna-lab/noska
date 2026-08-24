@@ -2,6 +2,8 @@ import { uid, textToBlocks, now, plainText } from '../utils/helpers';
 import { setMemory, getMemory, type MemoryEntry } from './memory.js';
 import { saveUserPreference, saveUserFact } from './userProfile.js';
 import { getBacklinks, getOutgoingLinks } from '../utils/pageLinks';
+import * as StudyCardsNS from '../features/study/studyCards';
+import type { GeneratedCard } from '../features/study/studyCards';
 
 const TOOL_SOURCE = '<<TOOL:(\\w+)>>([\\s\\S]*?)<</TOOL>>';
 const TOOL_PATTERN = new RegExp(TOOL_SOURCE, 'g');
@@ -228,6 +230,24 @@ const DEFINITIONS = [
     params: {
       page_id: { type: "string", desc: "Page ID or title (defaults to current page)", required: false }
     }
+  },
+  {
+    name: "send_notification",
+    description: "Send an in-app notification to the current user (appears in their notifications inbox).",
+    params: {
+      title: { type: "string", desc: "Short notification title", required: true },
+      message: { type: "string", desc: "Notification body text", required: true },
+      action_url: { type: "string", desc: "Optional in-app link, e.g. a page path", required: false }
+    }
+  },
+  {
+    name: "create_flashcards",
+    description: "Create real spaced-repetition study cards on a page. Each card is reviewable in Noska's Spaced Repetition view. ALWAYS use this instead of writing Q/A text manually.",
+    params: {
+      page_id: { type: "string", desc: "Page ID or title to attach cards to (required)", required: true },
+      cards: { type: "string", desc: "JSON array of cards: [{\"front\":\"question\",\"answer\":\"answer\"}]", required: true },
+      heading: { type: "string", desc: "Section heading (default 'Study Cards')", required: false }
+    }
   }
 ];
 
@@ -241,7 +261,7 @@ function validateParams(name, params) {
   }
 }
 
-export function getToolInstructions() {
+export function getToolInstructions(options: { compact?: boolean } = {}) {
   const lines = [
     "---",
     "## Available Tools",
@@ -261,36 +281,43 @@ export function getToolInstructions() {
     "4. Never describe what you would do — just do it with the tool",
     "5. If no tool exists for the request, say so honestly",
     "",
-    "### Content Tips (make pages beautiful)",
-    "- Use headings (# ## ###) for structure",
-    "- Add emojis in content text for visual appeal 🎨 ✨ 🚀",
-    "- Use callout blocks for important notes: > 💡 Tip text here",
-    "- Use dividers (---) to separate sections",
-    "- Mix bullet lists (-), numbered lists (1. 2.), and todos (- [ ])",
-    "- Use code blocks (```) for technical content",
-    "- Add toggles (<details>) for collapsible sections",
-    "",
-    "### Tool Reference",
-    "Use this format: <<TOOL:tool_name>>{\"param\":\"value\"}<</TOOL>>",
-    "",
-    "Example: <<TOOL:append_blocks>>{\"content\":\"## 🚀 AI Content\\n\\n- Feature one\\n- Feature two\\n- [ ] Task pending\\n\\n> 💡 Pro tip here\\n\\n---\\n\\n### More details\\n\\nFinal paragraph.\",\"page_id\":\"current\"}<</TOOL>>",
-    "Example: <<TOOL:set_page_icon>>{\"icon\":\"🚀\"}<</TOOL>>",
-    "Example: <<TOOL:create_page>>{\"title\":\"Meeting Notes\",\"icon\":\"📝\",\"content\":\"# Notes\\n\\n- [ ] Follow up\"}<</TOOL>>",
-    "Example: <<TOOL:rename_page>>{\"title\":\"New Title\"}<</TOOL>>",
-    "Example: <<TOOL:search_pages>>{\"query\":\"AI\"}<</TOOL>>",
-    "",
   ];
+  if (!options.compact) {
+    lines.push(
+      "### Content Tips (make pages beautiful)",
+      "- Use headings (# ## ###) for structure",
+      "- Add emojis in content text for visual appeal 🎨 ✨ 🚀",
+      "- Use callout blocks for important notes: > 💡 Tip text here",
+      "- Use dividers (---) to separate sections",
+      "- Mix bullet lists (-), numbered lists (1. 2.), and todos (- [ ])",
+      "- Use code blocks (```) for technical content",
+      "- Add toggles (<details>) for collapsible sections",
+      "",
+    );
+  }
+  lines.push("### Tool Reference", 'Use this format: <<TOOL:tool_name>>{"param":"value"}<</TOOL>>', "");
+  if (!options.compact) {
+    lines.push(
+      "Example: <<TOOL:append_blocks>>{\"content\":\"## 🚀 AI Content\\n\\n- Feature one\\n- Feature two\\n- [ ] Task pending\\n\\n> 💡 Pro tip here\\n\\n---\\n\\n### More details\\n\\nFinal paragraph.\",\"page_id\":\"current\"}<</TOOL>>",
+      `Example: <<TOOL:set_page_icon>>{\"icon\":\"🚀\"}<</TOOL>>`,
+      `Example: <<TOOL:create_page>>{"title":"Meeting Notes","icon":"📝","content":"# Notes\\n\\n- [ ] Follow up"}<</TOOL>>`,
+      `Example: <<TOOL:rename_page>>{\"title\":\"New Title\"}<</TOOL>>`,
+      `Example: <<TOOL:search_pages>>{\"query\":\"AI\"}<</TOOL>>`,
+      "",
+    );
+  }
   for (const def of DEFINITIONS) {
     const params = Object.entries(def.params)
       .map(([key, spec]) => `\`${key}\`${spec.required ? " (required)" : ""}: ${spec.desc}`)
       .join(", ");
     lines.push(`- **${def.name}**: ${def.description} ${params ? `— ${params}` : ""}`);
   }
-  const capabilities = getCapabilities();
-  lines.push("");
-  lines.push("### Capability Status");
-  for (const cap of capabilities) {
-    lines.push(`- ${cap.status} **${cap.name}**: ${cap.description}`);
+  if (!options.compact) {
+    const capabilities = getCapabilities();
+    lines.push("", "### Capability Status");
+    for (const cap of capabilities) {
+      lines.push(`- ${cap.status} **${cap.name}**: ${cap.description}`);
+    }
   }
   lines.push("---");
   return lines.join("\n");
@@ -316,6 +343,8 @@ export function getCapabilities() {
     { name: "User Learning", description: "Remembers your style, preferences, likes, dislikes, and adapts over time", status: "✓" },
     { name: "Workspace Stats", description: "Page counts, tag distribution, favorites", status: "✓" },
     { name: "Undo Support", description: "Undo the last AI action", status: "✓" },
+    { name: "In-App Notifications", description: "Agents can send you notifications in-app", status: "✓" },
+    { name: "Agent Delegation", description: "Agents can invoke other agents as specialists (approval-gated)", status: "✓" },
     { name: "Real-time Collaboration", description: "Multi-user editing with presence", status: "⚠" },
     { name: "Audit Trail", description: "Action history and change tracking", status: "⚠" },
     { name: "External Search", description: "Web search and external data access", status: "✕" },
@@ -352,6 +381,16 @@ export function parseToolCalls(text) {
   return calls;
 }
 
+/**
+ * Validate and execute a single tool call against a tool context.
+ * Exported for the shared agent runtime (which applies its own permission
+ * gate before calling this). Throws on unknown tools or missing params.
+ */
+export async function runTool(name, params, context) {
+  validateParams(name, params);
+  return await executeTool(name, params, context);
+}
+
 export function stripToolCalls(text) {
   return text.replace(new RegExp(TOOL_SOURCE, 'g'), '').trim();
 }
@@ -385,6 +424,8 @@ function findPageByIdOrTitle(pageId, pages, currentPage) {
 }
 
 async function executeTool(name, params, context) {
+  if (name === "send_notification") return executeSendNotification(params, context);
+  if (name === "create_flashcards") return executeCreateFlashcards(params, context);
   const { currentPage, pages, actions } = context;
 
   switch (name) {
@@ -791,6 +832,77 @@ async function executeTool(name, params, context) {
     default:
       throw new Error(`Unknown tool: "${name}"`);
   }
+}
+
+// ─── send_notification / create_flashcards ────────────────────────────────
+// Executed here rather than the main switch: notification needs Supabase,
+// flashcards reuse the canonical study-card factories from studyCards.ts
+// so agent-made cards are identical to AI-generated/manual ones.
+
+async function executeSendNotification(params, context) {
+  void context;
+  const { supabase } = await import('../lib/supabase');
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+  if (!userId) throw new Error("You must be signed in to send notifications");
+  const { error } = await supabase.from('notifications').insert({
+    user_id: userId,
+    type: 'ai_agent',
+    title: String(params.title || 'Notification').slice(0, 120),
+    message: String(params.message || '').slice(0, 500),
+    category: 'agent',
+    source: 'noska-intelligence',
+    status: 'unread',
+    action_url: params.action_url ? String(params.action_url).slice(0, 300) : null,
+  });
+  if (error) throw new Error(`Couldn't deliver the notification: ${error.message}`);
+  return { delivered: true, title: params.title };
+}
+
+/**
+ * create_flashcards — builds REAL spaced-repetition study cards
+ * (study.answer + review scheduling state) so they render as proper
+ * flip-cards, appear in the Spaced Repetition dashboard and count toward
+ * Home's due reviews — instead of raw "Q:"-"/A:" text pairs.
+ */
+async function executeCreateFlashcards(params, context) {
+  const { currentPage, pages, actions } = context;
+  let cardsRaw = params.cards;
+  if (typeof cardsRaw === 'string') {
+    try { cardsRaw = JSON.parse(cardsRaw); } catch { throw new Error('cards must be a JSON array of {front, answer}'); }
+  }
+  if (!Array.isArray(cardsRaw) || cardsRaw.length === 0) throw new Error('cards must be a non-empty array');
+  const cards: GeneratedCard[] = (cardsRaw as Array<Record<string, unknown>>)
+    .slice(0, 20)
+    .map((c) => ({
+      type: 'question' as const,
+      front: String(c.front ?? c.question ?? '').trim(),
+      answer: String(c.answer ?? '').trim(),
+    }))
+    .filter((c) => c.front && c.answer);
+  if (cards.length === 0) throw new Error('no valid cards after parsing');
+
+  // Resolve target page: explicit id/title match, else current page.
+  const pid = params.page_id ? String(params.page_id) : '';
+  const targetPage =
+    (pid && pid !== 'current'
+      ? pages.find((p) => p.id === pid && !p.trashed) ||
+        pages.find((p) => !p.trashed && p.title && p.title.toLowerCase().includes(pid.toLowerCase()))
+      : null) ||
+    currentPage ||
+    pages.find((p) => !p.trashed);
+  if (!targetPage) throw new Error(`Target page not found: "${pid || 'current'}"`);
+
+  const heading = params.heading ? String(params.heading) : 'Study Cards';
+  const section = StudyCardsNS.studySectionBlocks(cards);
+  if (section[0]) section[0].text = heading;
+
+  if (targetPage.id !== currentPage?.id) {
+    actions.updateAnyPage(targetPage.id, { blocks: [...(targetPage.blocks || []), ...section] });
+  } else {
+    actions.appendBlocks(section);
+  }
+  return { count: cards.length, page: targetPage.title, fronts: cards.map((c) => c.front.slice(0, 60)) };
 }
 
 export { DEFINITIONS as TOOL_DEFINITIONS };

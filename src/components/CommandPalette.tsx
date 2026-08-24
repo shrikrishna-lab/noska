@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, X } from "lucide-react";
+import { Search, X, History, CheckSquare, Brain, Hash } from "lucide-react";
 import * as Icons from "lucide-react";
 import { getFilteredCommands, type CommandContext, type NormalizedCommand } from "../core/commands/CommandRegistry";
 import { executeCommand } from "../core/commands/ActionExecutor";
@@ -8,6 +8,132 @@ import { blockFor } from "../utils/helpers";
 import type { Page } from "../lib/supabaseService";
 import { capture } from "../lib/posthog";
 import { PageIcon } from "./PageIcon";
+
+const RECENT_SEARCHES_KEY = "noska_recent_searches";
+
+/* ─── Universal search ───
+ * One scored index over everything a workspace owns: pages, block text,
+ * tasks, study cards and tags. Subsequence fuzzy matching so "dst sys"
+ * finds "Distributed Systems". */
+
+interface SearchHit {
+  kind: "page" | "block" | "task" | "card" | "tag";
+  pageId: string;
+  pageTitle: string;
+  pageIcon?: string;
+  /** Primary display line. */
+  label: string;
+  /** Secondary context line (matched snippet / parent page). */
+  detail?: string;
+  score: number;
+}
+
+/** Subsequence-aware fuzzy score. Returns -1 when the query can't match. */
+export function fuzzyScore(query: string, text: string): number {
+  const q = query.toLowerCase().trim();
+  const t = text.toLowerCase();
+  if (!q || !t) return -1;
+  if (t === q) return 1000;
+  if (t.startsWith(q)) return 800;
+  const at = t.indexOf(q);
+  if (at >= 0) return 600 - Math.min(at, 200);
+  // Word-boundary subsequence: all query words appear in order somewhere.
+  let ti = 0;
+  let hits = 0;
+  for (const ch of q.replace(/\s+/g, "")) {
+    const found = t.indexOf(ch, ti);
+    if (found === -1) return -1;
+    ti = found + 1;
+    hits += 1;
+  }
+  void hits;
+  return 250;
+}
+
+const MAX_BLOCKS_PER_PAGE = 40;
+
+function buildSearchIndex(pages: Page[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const p of pages) {
+    if (p.trashed) continue;
+    const title = p.title || "Untitled";
+    hits.push({ kind: "page", pageId: p.id, pageTitle: title, pageIcon: p.icon, label: title, score: 0 });
+    const tags = Array.isArray(p.tags) ? p.tags.filter((t): t is string => typeof t === "string") : [];
+    for (const tag of tags) {
+      hits.push({ kind: "tag", pageId: p.id, pageTitle: title, pageIcon: p.icon, label: tag, detail: `Tagged on ${title}`, score: 0 });
+    }
+    let blockBudget = MAX_BLOCKS_PER_PAGE;
+    for (const b of p.blocks ?? []) {
+      if (blockBudget-- <= 0) break;
+      const text = typeof b.text === "string" ? b.text.trim() : "";
+      if (!text) continue;
+      if (b.type === "todo") {
+        hits.push({
+          kind: "task",
+          pageId: p.id,
+          pageTitle: title,
+          pageIcon: p.icon,
+          label: text,
+          detail: b.checked ? `Done · ${title}` : title,
+          score: 0,
+        });
+      } else if ((b as { review?: unknown }).review) {
+        hits.push({
+          kind: "card",
+          pageId: p.id,
+          pageTitle: title,
+          pageIcon: p.icon,
+          label: text.replace(/\{\{(?:c\d+::)?([^{}]+)\}\}/g, "$1"),
+          detail: `Study card · ${title}`,
+          score: 0,
+        });
+      } else {
+        hits.push({
+          kind: "block",
+          pageId: p.id,
+          pageTitle: title,
+          pageIcon: p.icon,
+          label: text.length > 90 ? text.slice(0, 90) + "…" : text,
+          detail: title,
+          score: 0,
+        });
+      }
+    }
+  }
+  return hits;
+}
+
+function searchIndex(index: SearchHit[], query: string, limit = 14): SearchHit[] {
+  const scored: SearchHit[] = [];
+  for (const hit of index) {
+    const base = fuzzyScore(query, hit.label);
+    if (base < 0) continue;
+    // Titles outrank contents; tasks/cards outrank plain blocks.
+    const kindBoost = hit.kind === "page" ? 60 : hit.kind === "task" || hit.kind === "card" || hit.kind === "tag" ? 25 : 0;
+    scored.push({ ...hit, score: base + kindBoost });
+  }
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+function loadRecentSearches(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((s): s is string => typeof s === "string").slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecentSearch(query: string): string[] {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return loadRecentSearches();
+  const next = [trimmed, ...loadRecentSearches().filter((s) => s.toLowerCase() !== trimmed.toLowerCase())].slice(0, 5);
+  try {
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+  } catch { /* storage unavailable */ }
+  return next;
+}
 
 
 /** This component's own `context` prop is a superset of `CommandContext`
@@ -25,7 +151,9 @@ type PaletteContext = CommandContext & {
 
 type PaletteResultItem =
   | { type: "command"; cmd: NormalizedCommand }
-  | { type: "page"; page: Page };
+  | { type: "page"; page: Page }
+  | { type: "hit"; hit: SearchHit }
+  | { type: "recent"; query: string };
 
 // NOTE (found during TypeScript migration, Phase 4 Tier 2 — App.tsx):
 // src/App.tsx's call site passes `pages`/`query`/`setQuery`/`onSelect`/
@@ -87,6 +215,7 @@ export default function CommandPalette({
   const [mode, setMode] = useState<"commands" | "pages">("commands");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [pages, setPages] = useState<Page[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -96,12 +225,19 @@ export default function CommandPalette({
       setQuery("");
       setHighlightedIndex(0);
       setMode("commands");
+      setRecentSearches(loadRecentSearches());
       setTimeout(() => inputRef.current?.focus(), 30);
       // Collect pages from context
       const ctxPages = context.pages || [];
       setPages(Array.isArray(ctxPages) ? ctxPages : []);
     }
   }, [open, context.pages]);
+
+  const searchIndexMemo = useMemo(() => (pages.length > 0 ? buildSearchIndex(pages) : []), [pages]);
+  const searchHits = useMemo(
+    () => (query.trim().length >= 2 ? searchIndex(searchIndexMemo, query) : []),
+    [searchIndexMemo, query]
+  );
 
   const filteredCommands = getFilteredCommands(query, context)
     .filter((c) =>
@@ -110,28 +246,53 @@ export default function CommandPalette({
       query.length > 0
     );
 
-  const filteredPages = pages.filter((p) => {
-    if (!query) return false;
-    return p.title?.toLowerCase().includes(query.toLowerCase());
-  }).slice(0, 8);
-
   const results: PaletteResultItem[] = [];
+  // Commands first (existing behavior), then universal results.
+  results.push(...filteredCommands.map((c): PaletteResultItem => ({ type: "command", cmd: c })));
+  if (query.trim().length >= 2) {
+    results.push(...searchHits.map((hit): PaletteResultItem => ({ type: "hit", hit })));
+  } else if (!query) {
+    results.push(...recentSearches.slice(0, 5).map((q): PaletteResultItem => ({ type: "recent", query: q })));
+  }
+  // "> pages" mode keeps its dedicated title-only listing.
   if (mode === "pages" || (query.startsWith(">") && mode === "commands")) {
     const pageQuery = query.startsWith(">") ? query.slice(1).trim() : query;
-    const fp = pages.filter((p) => p.title?.toLowerCase().includes(pageQuery.toLowerCase())).slice(0, 8);
-    results.push(...fp.map((p): PaletteResultItem => ({ type: "page", page: p })));
+    const fp = pages
+      .filter((p) => p.title?.toLowerCase().includes(pageQuery.toLowerCase()))
+      .slice(0, 8)
+      .map((p): PaletteResultItem => ({ type: "page", page: p }));
+    results.unshift(...fp);
   }
-  // Show commands (always)
-  results.splice(0, 0, ...filteredCommands.map((c): PaletteResultItem => ({ type: "command", cmd: c })));
 
   useEffect(() => {
     setHighlightedIndex((prev) => Math.min(prev, results.length - 1));
   }, [results.length]);
 
   const handleSelect = useCallback((item: PaletteResultItem) => {
+    if (item.type === "recent") {
+      setQuery(item.query);
+      setHighlightedIndex(0);
+      inputRef.current?.focus();
+      return;
+    }
+    if (item.type === "hit") {
+      // Every hit kind resolves to its page — the fastest route to context.
+      if (query.trim().length >= 2) setRecentSearches(pushRecentSearch(query));
+      context.onNavigate?.(item.hit.pageId);
+      onClose();
+      return;
+    }
     if (item.type === "command") {
       const cmd = item.cmd;
       if (cmd.category === "Page actions") {
+        executeCommand(cmd.id, context);
+        onClose();
+        return;
+      }
+      // Workspace-level actions must EXECUTE even without a focused block —
+      // the generic path below would otherwise insert them as bogus blocks.
+      const GLOBAL_ACTION_IDS = new Set(["generate-study-cards"]);
+      if (GLOBAL_ACTION_IDS.has(cmd.id)) {
         executeCommand(cmd.id, context);
         onClose();
         return;
@@ -171,10 +332,11 @@ export default function CommandPalette({
         }, 50);
       }
     } else if (item.type === "page") {
+      if (query.trim().length >= 2) setRecentSearches(pushRecentSearch(query));
       context.onNavigate?.(item.page.id);
     }
     onClose();
-  }, [context, onClose]);
+  }, [context, onClose, query]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
@@ -256,7 +418,9 @@ export default function CommandPalette({
                 <div className="px-4 py-8 text-center text-xs text-[var(--text-muted)]">
                   {query.startsWith(">")
                     ? "No pages found"
-                    : "No results — type to search commands, or > to search pages"}
+                    : query.trim().length < 2
+                    ? "Type to search commands, or > to search pages"
+                    : "No matching pages, tasks, cards or blocks"}
                 </div>
               ) : (
                 results.map((item, idx) => {
@@ -296,6 +460,51 @@ export default function CommandPalette({
                         {cmd.shortcut && (
                           <span className="text-[9px] text-[var(--text-muted)] font-mono shrink-0">{cmd.shortcut}</span>
                         )}
+                      </button>
+                    );
+                  }
+
+                  if (item.type === "hit") {
+                    const hit = item.hit;
+                    const HitIcon = hit.kind === "task" ? CheckSquare : hit.kind === "card" ? Brain : hit.kind === "tag" ? Hash : null;
+                    return (
+                      <button
+                        key={`hit-${hit.kind}-${hit.pageId}-${hit.label}`}
+                        onClick={() => handleSelect(item)}
+                        onMouseEnter={() => setHighlightedIndex(idx)}
+                        className={`flex w-full items-center gap-3 px-4 py-2 text-left text-xs transition-colors cursor-pointer ${
+                          isSelected ? "bg-[var(--accent-soft)]" : ""
+                        }`}
+                      >
+                        <span className="flex h-6 w-6 items-center justify-center rounded bg-[var(--hover)] text-[var(--text-secondary)] shrink-0">
+                          {HitIcon ? <HitIcon size={13} /> : <PageIcon icon={hit.pageIcon || "📄"} size={15} />}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[var(--text)] truncate">{hit.label}</div>
+                          {hit.detail && <div className="text-[10px] text-[var(--text-muted)] truncate">{hit.detail}</div>}
+                        </div>
+                        <span className="shrink-0 rounded bg-[var(--hover)] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                          {hit.kind}
+                        </span>
+                      </button>
+                    );
+                  }
+
+                  if (item.type === "recent") {
+                    return (
+                      <button
+                        key={`recent-${item.query}`}
+                        onClick={() => handleSelect(item)}
+                        onMouseEnter={() => setHighlightedIndex(idx)}
+                        className={`flex w-full items-center gap-3 px-4 py-2 text-left text-xs transition-colors cursor-pointer ${
+                          isSelected ? "bg-[var(--accent-soft)]" : ""
+                        }`}
+                      >
+                        <span className="flex h-6 w-6 items-center justify-center rounded bg-[var(--hover)] text-[var(--text-secondary)] shrink-0">
+                          <History size={13} />
+                        </span>
+                        <span className="flex-1 truncate text-[var(--secondary)]">{item.query}</span>
+                        <span className="shrink-0 text-[9px] uppercase tracking-wide text-[var(--text-muted)]">recent</span>
                       </button>
                     );
                   }
@@ -345,7 +554,7 @@ export default function CommandPalette({
               </span>
               <span className="flex items-center gap-1 ml-auto">
                 <kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono text-[9px]">&gt;</kbd>
-                Search pages
+                Pages only
               </span>
             </div>
           </motion.div>

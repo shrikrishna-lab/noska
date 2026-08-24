@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { supabaseAnon } from "../../lib/supabase";
+import { TEST_MODE } from "../../lib/envGuard";
 import { motion } from "framer-motion";
 import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert } from "lucide-react";
 
@@ -24,6 +25,10 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
+    // TEST_MODE (local-only, never production — see envGuard) exists for
+    // automated end-to-end testing without any backend; the waitlist check
+    // has nothing to verify there, so pass straight through.
+    if (TEST_MODE) { setStatus("approved"); return; }
     if (!enabled) { setStatus("approved"); return; }
     if (!clerkUser) { setStatus("error"); return; }
     const email = clerkUser.emailAddresses?.[0]?.emailAddress;

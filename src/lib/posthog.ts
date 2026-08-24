@@ -72,7 +72,11 @@ type EventName =
   | "feedback_submitted"
   | "feature_used"
   | "comment_added"
-  | "voice_note_inserted";
+  | "voice_note_inserted"
+  | "agent_created_via_ai"
+  | "automation_created_via_ai"
+  | "agent_run"
+  | "automation_run";
 
 export function capture(event: EventName, properties?: Record<string, unknown>) {
   if (!POSTHOG_KEY) return;

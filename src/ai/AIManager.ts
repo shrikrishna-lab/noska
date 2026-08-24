@@ -10,7 +10,7 @@
  *   const response = await aiManager.send({ system: '...', prompt: '...' });
  */
 
-import { getProvider, getAllProviders, mockResponse, testProviderConnection, type AIProvider } from './providers.js';
+import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, type AIProvider } from './providers.js';
 import { buildContext, buildMinimalContext } from './ContextBuilder.js';
 import { buildAgentPrompt, getAgent } from './agents.js';
 import { initializeMemory, getMemory } from './memory.js';
@@ -35,6 +35,11 @@ interface ContextSettings {
 
 interface AIManagerConfig {
   providers: Record<string, ProviderConfigEntry>;
+  /** User-defined OpenAI-compatible providers (#2 custom provider support) */
+  customProviders: Record<string, {
+    id: string; name: string; baseUrl: string;
+    models: Array<{ id: string; name?: string }>; defaultModel?: string;
+  }>;
   activeProvider: string | null;
   activeModel: string | null;
   activeAgent: string;
@@ -85,6 +90,8 @@ interface AIStreamOpts extends AISendOpts {
 const DEFAULT_CONFIG: AIManagerConfig = {
   // Provider configs: { [providerId]: { apiKey?, baseUrl?, enabled? } }
   providers: {},
+  // User-defined OpenAI-compatible providers
+  customProviders: {},
   // Active provider + model
   activeProvider: null,
   activeModel: null,
@@ -106,6 +113,16 @@ const DEFAULT_CONFIG: AIManagerConfig = {
 
 const STORAGE_KEY = "noska_ai_config";
 
+/** Legacy providers return error banners as strings — detect them so the
+ * runtime never treats offline/error text as model output. */
+function looksLikeMockFailure(text: string): boolean {
+  return /\*\*AI Draft\*\* \(offline\)|is running in local mode|request failed/i.test(text || "");
+}
+function extractMockError(text: string): string {
+  const m = (text || "").match(/Error:\s*([\s\S]{0,240})/);
+  return m ? m[1].replace(/_/g, "").trim() : "provider returned an error";
+}
+
 // ─── AI Manager Class ───────────────────────────────────────────────────────
 
 class AIManager {
@@ -114,6 +131,9 @@ class AIManager {
   _initialized: boolean;
   _healthCache: Map<string, HealthEntry>;
   _healthTimers: Map<string, ReturnType<typeof setTimeout>>;
+  /** True when the user (or Settings UI) deliberately picked a provider —
+   * legacy nvidiaKey/anthropicKey migration must never override it. */
+  _hasExplicitSelection: boolean;
 
   constructor() {
     this.config = { ...DEFAULT_CONFIG };
@@ -121,6 +141,7 @@ class AIManager {
     this._initialized = false;
     this._healthCache = new Map();
     this._healthTimers = new Map();
+    this._hasExplicitSelection = false;
   }
 
   /**
@@ -133,13 +154,62 @@ class AIManager {
       if (saved) {
         const parsed = JSON.parse(saved);
         this.config = { ...DEFAULT_CONFIG, ...parsed, context: { ...DEFAULT_CONFIG.context, ...parsed.context } };
+        // A deliberate provider choice (Settings → Noska AI) must never be
+        // stomped by legacy-key migration on later loads.
+        this._hasExplicitSelection = Boolean(parsed.activeProvider);
       }
     } catch {
       // Use defaults
     }
+    // Re-register user-defined custom providers so getProvider finds them
+    for (const cfg of Object.values(this.config.customProviders || {})) {
+      if (cfg && cfg.id && cfg.baseUrl) registerCustomProvider(cfg as never);
+    }
     this._initialized = true;
     // Initialize AI memory (non-blocking)
     initializeMemory().catch(() => {});
+  }
+
+  /**
+   * Add or update a user-defined custom provider (any OpenAI-compatible endpoint).
+   */
+  setCustomProvider(cfg: { id?: string; name: string; baseUrl: string; models: Array<{ id: string; name?: string }>; defaultModel?: string }): string {
+    const id = cfg.id || `custom_${Date.now().toString(36)}`;
+    const clean = {
+      id,
+      name: cfg.name.trim() || "Custom provider",
+      baseUrl: cfg.baseUrl.trim().replace(/\/+$/, ""),
+      models: (cfg.models || []).filter((m) => m.id?.trim()).map((m) => ({ id: m.id.trim(), name: (m.name || m.id).trim() })),
+      defaultModel: cfg.defaultModel?.trim() || undefined,
+    };
+    if (!clean.baseUrl.startsWith("http")) throw new Error("Base URL must start with http(s)://");
+    if (clean.models.length === 0) throw new Error("Add at least one model ID");
+    registerCustomProvider(clean);
+    this.config.customProviders = { ...this.config.customProviders, [id]: clean };
+    // First custom provider → make it active so agents work immediately.
+    if (!this.config.activeProvider) {
+      this.config.activeProvider = id;
+      this.config.activeModel = clean.defaultModel || clean.models[0].id;
+      this._hasExplicitSelection = true;
+    }
+    this._persist();
+    this._notify();
+    return id;
+  }
+
+  /** Remove a custom provider (also deactivates it if it was active). */
+  removeCustomProvider(id: string): void {
+    unregisterCustomProvider(id);
+    const next = { ...this.config.customProviders };
+    delete next[id];
+    this.config.customProviders = next;
+    if (this.config.activeProvider === id) {
+      const builtin = getAllProviders().find((p) => p.id !== id);
+      this.config.activeProvider = builtin?.id || null;
+      this.config.activeModel = builtin?.defaultModel || null;
+    }
+    this._persist();
+    this._notify();
   }
 
   /**
@@ -165,6 +235,22 @@ class AIManager {
     this.config.activeModel = modelId || provider.defaultModel;
     this._persist();
     this._notify();
+  }
+
+  /**
+   * Set active model on the current provider
+   */
+  setActiveModel(modelId: string | null) {
+    this.config.activeModel = modelId;
+    this._persist();
+    this._notify();
+  }
+
+  /**
+   * Get the active model ID (raw, may be null before first selection)
+   */
+  getActiveModel(): string | null {
+    return this.config.activeModel;
   }
 
   /**
@@ -400,6 +486,57 @@ class AIManager {
   }
 
   /**
+   * Raw provider call used by the shared agent runtime. Unlike send/sendConversation
+   * this performs NO context building or agent persona injection — the caller owns
+   * the full prompt — and supports explicit provider/model overrides for model
+   * orchestration (fast/default/reasoning routing). Falls back through configured
+   * providers exactly like send().
+   */
+  async sendRaw({ system, messages, maxTokens, providerId, modelId }: {
+    system?: string;
+    messages: Array<{ role: string; content: string }>;
+    maxTokens?: number;
+    providerId?: string | null;
+    modelId?: string | null;
+  }): Promise<string> {
+    const primaryPid = providerId || this.config.activeProvider;
+    if (!primaryPid) return mockResponse("No AI provider configured");
+
+    const candidates = [primaryPid, ...this._getFallbackProviders().filter((p) => p !== primaryPid)];
+    let lastFriendlyError = "";
+    for (const pid of candidates) {
+      try {
+        const provider = getProvider(pid);
+        if (!provider) continue;
+        const config = this.config.providers[pid] || {};
+        if (provider.requiresKey && !config.apiKey) continue;
+        // Explicit model override only applies to the requested provider;
+        // fallbacks always use their own defaults.
+        const model = pid === primaryPid && modelId ? modelId : provider.defaultModel;
+        const result = await provider.send({
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl || provider.baseUrl,
+          model,
+          system,
+          messages,
+          maxTokens: maxTokens || this.config.maxTokens
+        });
+        // Some legacy providers return error banners as strings — treat those
+        // as failures so callers (agent runtime) never mistake them for output.
+        if (looksLikeMockFailure(result)) {
+          lastFriendlyError = extractMockError(result);
+          continue;
+        }
+        return result;
+      } catch (err) {
+        // Prefer provider-thrown messages (e.g. rate limit) over generic ones
+        lastFriendlyError = err instanceof Error ? err.message : "provider failed";
+      }
+    }
+    throw new Error(lastFriendlyError || "All AI providers failed");
+  }
+
+  /**
    * Send an AI request (non-streaming) with auto-fallback
    * @param {Object} opts - { system?, prompt, page?, pages?, agent?, maxTokens? }
    * @returns {Promise<string>}
@@ -432,20 +569,28 @@ class AIManager {
     // Try active provider, then fallbacks
     const fallbacks = this._getFallbackProviders();
     const messages = [{ role: "user", content: prompt }];
+    let lastError = "";
 
     for (const pid of [this.config.activeProvider, ...fallbacks]) {
       try {
         const result = await this._tryProvider(pid, { system: fullSystem, messages, maxTokens });
+        if (looksLikeMockFailure(result)) {
+          lastError = extractMockError(result);
+          this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
+          continue;
+        }
         // Update health cache on success
         this._healthCache.set(pid, { status: "online", timestamp: Date.now() });
         return this.guardResponse(result, pages, page);
       } catch (err) {
+        lastError = err instanceof Error ? err.message : "provider failed";
         this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
         // Try next fallback
       }
     }
 
-    return mockResponse("All providers failed");
+    // Honest failure — the chat UI renders this as a real error message.
+    throw new Error(lastError || "All AI providers failed");
   }
 
   /**
@@ -489,9 +634,13 @@ class AIManager {
         messages: apiMessages,
         maxTokens: maxTokens || this.config.maxTokens
       });
+      if (looksLikeMockFailure(result)) {
+        throw new Error(extractMockError(result));
+      }
       return this.guardResponse(result, pages, page);
     } catch (err) {
-      return mockResponse(`Request failed: ${err.message}`);
+      // Honest failure — panel catch blocks render friendly messages.
+      throw new Error(err instanceof Error ? err.message : "AI request failed");
     }
   }
 
@@ -591,13 +740,18 @@ class AIManager {
     }
     if (Object.keys(updates).length > 0) {
       this.config.providers = { ...this.config.providers, ...updates };
-      // Set active provider based on legacy setting
-      if (aiProvider === "nvidia" && nvidiaKey) {
-        this.config.activeProvider = "nvidia";
-        this.config.activeModel = "nvidia/llama-3.1-nemotron-70b-instruct";
-      } else if (apiKey) {
-        this.config.activeProvider = "anthropic";
-        this.config.activeModel = "claude-sonnet-4-20250514";
+      // Only auto-switch the ACTIVE provider on first-ever migration —
+      // once the user picked one deliberately, legacy keys just register
+      // as available providers and never hijack the selection again.
+      if (!this._hasExplicitSelection) {
+        if (aiProvider === "nvidia" && nvidiaKey) {
+          this.config.activeProvider = "nvidia";
+          this.config.activeModel = "nvidia/llama-3.1-nemotron-70b-instruct";
+        } else if (apiKey) {
+          this.config.activeProvider = "anthropic";
+          this.config.activeModel = "claude-sonnet-4-20250514";
+        }
+        this._hasExplicitSelection = true;
       }
       this._persist();
       this._notify();

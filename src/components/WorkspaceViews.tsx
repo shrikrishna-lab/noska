@@ -37,16 +37,26 @@ import {
   Loader2,
   SendHorizontal,
   Brain,
+  CheckCircle2,
+  ListTodo,
+  TrendingDown,
+  AlertTriangle,
+  Unlink,
+  Clock3,
   type LucideIcon
 } from "lucide-react";
 import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
 import MarketplacePage from "../features/marketplace/MarketplacePage";
 import CreatorDashboard from "../features/creator/CreatorDashboard";
 import AgentWorkspace from "../features/agents/AgentWorkspace";
+import AutomationWorkspace from "../features/automations/AutomationWorkspace";
+import CommandCenter from "./ai/CommandCenter";
 import { PageIcon } from "./PageIcon";
 import { IconButton, Modal, ModalHeader, PearlButton } from "./ui";
 import MonthCalendar from "./MonthCalendar";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
+import { computeAnalytics } from "../features/study/LearningAnalytics";
+import { curateWorkspace } from "../utils/curator";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block, LineageEntry } from "../../types/blocks";
 import type { Tables } from "../../types/supabase";
@@ -115,6 +125,8 @@ type ChatDisplay = AIChat & { title?: string };
 interface WorkspaceViewProps {
   view: string;
   pages: Page[];
+  /** Signed-in user id — required for DB-backed agent persistence. */
+  currentUserId?: string | null;
   /** Pages actually shared TO the current user (real page_permissions
    * grants) — kept separate from `pages` (owned pages) per App.tsx's
    * comment on its `sharedPages` state. Rendered in LibraryRoute's
@@ -138,11 +150,20 @@ interface WorkspaceViewProps {
   aiProvider?: string;
   nvidiaKey?: string;
   onDuplicate?: (page: Page) => void;
+  /** Switch workspace views (used by Command Center status navigation). */
+  onView?: (view: string) => void;
+  /** Live tool actions from App — lets agents actually execute page edits. */
+  toolContext?: {
+    currentPage?: Page;
+    pages: Page[];
+    actions: Record<string, (...args: never[]) => unknown>;
+  };
 }
 
 export function WorkspaceView({
   view,
   pages,
+  currentUserId,
   sharedPages = [],
   pendingInvites = [],
   onAcceptInvite,
@@ -159,8 +180,9 @@ export function WorkspaceView({
   apiKey,
   aiProvider,
   nvidiaKey,
-  onDuplicate
-}: WorkspaceViewProps) {
+  onDuplicate,
+  onView,
+  toolContext}: WorkspaceViewProps) {
   const tasks: TaskItem[] = pages.flatMap((page) =>
     page.blocks
       .filter((block) => block.type === "todo")
@@ -236,7 +258,9 @@ export function WorkspaceView({
 
   if (view === "marketplace") return <MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} />;
   if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} onDuplicate={onDuplicate || (() => {})} />;
-  if (view === "agents") return <AgentWorkspace pages={pages} onToast={onToast} onDuplicate={onDuplicate || (() => {})} />;
+  if (view === "agents") return <AgentWorkspace pages={pages} currentUserId={currentUserId} onToast={onToast} toolContext={toolContext} />;
+  if (view === "automations") return <AutomationWorkspace onToast={onToast} />;
+  if (view === "commandCenter") return <CommandCenter onToast={onToast} onNavigate={(v) => onView?.(v)} />;
   if (view === "library") return <LibraryRoute pages={pages} sharedPages={sharedPages} workspaceName={workspaceName} onSelect={onSelect} onNew={onNew} />;
   if (view === "tasks") return <TasksRoute tasks={tasks} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
   if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
@@ -277,6 +301,15 @@ export function WorkspaceView({
           <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
             {/* Left Pane - Main Content & Context */}
             <div className="space-y-6">
+              {/* Daily Brief — deterministic workspace summary, no AI required */}
+              <DailyBrief
+                pages={pages}
+                openTasks={tasks.filter(t => !t.checked).length}
+                dueReviews={dueReviewsCount}
+                onStartReview={onReview}
+                onSelect={onSelect}
+              />
+
               {/* Core Metrics Grid */}
               <div className="grid grid-cols-4 gap-3 stagger-reveal">
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 metric-card">
@@ -465,6 +498,11 @@ export function WorkspaceView({
                   </div>
                 </div>
               </Panel>
+              {/* Workspace Health — deterministic knowledge curation */}
+              <Panel title="Workspace Health">
+                <WorkspaceHealthPanel pages={pages} onSelect={onSelect} />
+              </Panel>
+
               {/* Recent AI Chats */}
               <Panel title="Recent AI Chats">
                 <div className="mt-2 space-y-2 max-h-[220px] overflow-y-auto scrollbar-thin">
@@ -1706,6 +1744,143 @@ export function NewPageOverlay({ page, onClose, onPagePatch, onShare, onFavorite
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* --- Daily Brief ---
+ * Deterministic command-center summary computed from live workspace
+ * state (reviews via computeAnalytics, tasks, recent pages). No AI, no
+ * fake data � every line is derived from what the user actually has. */
+
+function DailyBrief({ pages, openTasks, dueReviews, onStartReview, onSelect }: {
+  pages: Page[];
+  openTasks: number;
+  dueReviews: number;
+  onStartReview?: () => void;
+  onSelect: (pageId: string) => void;
+}) {
+  const hour = new Date().getHours();
+  const greeting = hour < 5 ? "Working late" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+  const brief = React.useMemo(() => {
+    const a = computeAnalytics(pages);
+    const lastEdited = [...pages]
+      .filter((p) => !p.trashed)
+      .sort((x, y) => new Date(y.updatedAt).getTime() - new Date(x.updatedAt).getTime())[0];
+    const weakest = a.weakTopics[0];
+    return { a, lastEdited, weakest };
+  }, [pages]);
+
+  const { a, lastEdited, weakest } = brief;
+
+  return (
+    <section className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--panel)] to-[var(--surface)] p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} className="text-[var(--accent)]" />
+          <h2 className="text-sm font-semibold text-[var(--text)]">Daily Brief</h2>
+        </div>
+        <span className="text-[10px] uppercase tracking-wider text-[var(--muted)]">{greeting}</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {dueReviews > 0 ? (
+          <button onClick={() => onStartReview?.()} className="flex items-center gap-3 rounded-lg bg-[var(--danger)]/[0.07] px-3 py-2.5 text-left transition-colors hover:bg-[var(--danger)]/[0.12] cursor-pointer">
+            <Brain size={15} className="shrink-0 text-[var(--danger)]" />
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold text-[var(--text)]">{dueReviews} card{dueReviews === 1 ? "" : "s"} ready for review</div>
+              <div className="truncate text-[10px] text-[var(--muted)]">{a.overdue > 0 ? `${a.overdue} overdue` : "Keep the streak alive"}{a.streakDays > 0 ? ` � ${a.streakDays}d streak` : ""}</div>
+            </div>
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 rounded-lg bg-[var(--success)]/[0.07] px-3 py-2.5">
+            <CheckCircle2 size={15} className="shrink-0 text-[var(--success)]" />
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold text-[var(--text)]">Review queue clear</div>
+              <div className="truncate text-[10px] text-[var(--muted)]">{a.totalCards} card{a.totalCards === 1 ? "" : "s"} on schedule</div>
+            </div>
+          </div>
+        )}
+        <div className="flex items-center gap-3 rounded-lg bg-[var(--surface)] px-3 py-2.5">
+          <ListTodo size={15} className="shrink-0 text-[var(--accent)]" />
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold text-[var(--text)]">{openTasks} open task{openTasks === 1 ? "" : "s"}</div>
+            <div className="truncate text-[10px] text-[var(--muted)]">across your workspace</div>
+          </div>
+        </div>
+        {weakest && (
+          <button
+            onClick={() => {
+              const target = pages.find((p) => !p.trashed && ((Array.isArray(p.tags) && p.tags[0] === weakest.topic) || p.title === weakest.topic));
+              if (target) onSelect(target.id);
+            }}
+            className="flex items-center gap-3 rounded-lg bg-[var(--warning)]/[0.07] px-3 py-2.5 text-left transition-colors hover:bg-[var(--warning)]/[0.12] cursor-pointer"
+          >
+            <TrendingDown size={15} className="shrink-0 text-[var(--warning)]" />
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold text-[var(--text)]">{weakest.topic} needs attention</div>
+              <div className="truncate text-[10px] text-[var(--muted)]">{weakest.struggling} struggling card{weakest.struggling === 1 ? "" : "s"}</div>
+            </div>
+          </button>
+        )}
+        {lastEdited && (
+          <button onClick={() => onSelect(lastEdited.id)} className="flex items-center gap-3 rounded-lg bg-[var(--surface)] px-3 py-2.5 text-left transition-colors hover:bg-[var(--hover)] cursor-pointer">
+            <FileText size={15} className="shrink-0 text-[var(--secondary)]" />
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold text-[var(--text)]">{lastEdited.icon || "??"} {lastEdited.title || "Untitled"}</div>
+              <div className="truncate text-[10px] text-[var(--muted)]">continue where you left off � {timeAgo(lastEdited.updatedAt)}</div>
+            </div>
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* --- Workspace Health (curator UI) ---
+ * Renders the deterministic findings from src/utils/curator.ts. Collapsed
+ * by default when clean; every finding navigates to its page. */
+
+const HEALTH_ICONS: Record<string, typeof AlertTriangle> = {
+  duplicate: Copy,
+  orphan: Unlink,
+  stale: Clock3,
+  empty: FileText,
+};
+
+function WorkspaceHealthPanel({ pages, onSelect }: { pages: Page[]; onSelect: (pageId: string) => void }) {
+  const issues = React.useMemo(() => curateWorkspace(pages), [pages]);
+
+  if (issues.length === 0) {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-lg bg-[var(--success)]/[0.07] px-3 py-2.5">
+        <CheckCircle2 size={14} className="text-[var(--success)] shrink-0" />
+        <span className="text-xs font-medium text-[var(--text)]">Everything looks healthy</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5 max-h-[260px] overflow-y-auto scrollbar-thin">
+      {issues.slice(0, 8).map((issue, i) => {
+        const Icon = HEALTH_ICONS[issue.kind] ?? AlertTriangle;
+        return (
+          <button
+            key={i}
+            onClick={() => issue.pageIds[0] && onSelect(issue.pageIds[0])}
+            className="flex w-full items-start gap-2 rounded-lg bg-[var(--surface)] px-2.5 py-2 text-left hover:bg-[var(--hover)] transition-colors"
+          >
+            <Icon size={12} className={`mt-0.5 shrink-0 ${issue.kind === "stale" ? "text-[var(--warning)]" : "text-[var(--accent)]"}`} />
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-medium text-[var(--text)]">{issue.label}</span>
+              <span className="block text-[10px] text-[var(--muted)] truncate">{issue.detail}</span>
+            </span>
+          </button>
+        );
+      })}
+      {issues.length > 8 && (
+        <p className="text-center text-[10px] text-[var(--muted)]">+{issues.length - 8} more findings</p>
+      )}
     </div>
   );
 }
