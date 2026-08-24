@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Copy, Check, Terminal, ArrowRight, ShieldAlert, Zap,
 } from 'lucide-react';
-import { Reveal, Stagger, staggerItem } from './components/Reveal';
+import { Reveal, Stagger, staggerItem, WordReveal } from './components/Reveal';
+import { Counter } from './components/Counter';
+import { McpAtmosphere, ScrollProgress, ScrollCue } from './components/McpAtmosphere';
 import { HoldToConfirm } from './components/HoldToConfirm';
 import { CursorFollower } from './components/CursorFollower';
 import './McpLanding.css';
@@ -26,31 +28,19 @@ const TOOL_GROUPS = [
 ];
 const TOTAL_TOOLS = TOOL_GROUPS.reduce((a, t) => a + t.n, 0);
 
-const CLIENTS = [
-  { id: 'claude-desktop', name: 'Claude Desktop',
-    cfg: `{
-  "mcpServers": {
-    "noska": {
-      "url": "https://<ref>.supabase.co/functions/v1/mcp",
-      "headers": { "Authorization": "Bearer nsk_your_key" }
-    }
-  }
-}` },
-  { id: 'claude-code', name: 'Claude Code',
-    cfg: `claude mcp add --transport http noska \\
-  https://<ref>.supabase.co/functions/v1/mcp \\
-  --header "Authorization: Bearer nsk_your_key"` },
-  { id: 'cursor', name: 'Cursor',
-    cfg: `{
-  "mcpServers": {
-    "noska": {
-      "url": "https://<ref>.supabase.co/functions/v1/mcp",
-      "headers": { "Authorization": "Bearer nsk_your_key" }
-    }
-  }
-}` },
-];
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "https://yxgtmzksnyarlivgxujf.supabase.co").replace(/\/$/, "");
+const MCP_ENDPOINT = `${SUPABASE_URL}/functions/v1/mcp`;
 
+const b64url = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+const CLIENT_META = [
+  { id: "claude-desktop", name: "Claude Desktop" },
+  { id: "claude-code", name: "Claude Code" },
+  { id: "cursor", name: "Cursor" },
+  { id: "vscode", name: "VS Code" },
+  { id: "chatgpt", name: "ChatGPT & agents" },
+  { id: "universal", name: "Any client" },
+];
 /* Scripted session — what Claude actually speaks to Noska */
 const SESSION = [
   { dir: 'in', body: '{ "method": "initialize" }' },
@@ -98,15 +88,89 @@ export default function McpLanding() {
   const [client, setClient] = useState('claude-desktop');
   const [copied, setCopied] = useState(false);
   const [riskDemo, setRiskDemo] = useState('idle'); // idle → awaiting → confirmed
+  const [keyInput, setKeyInput] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [withKeyInUrl, setWithKeyInUrl] = useState(false);
 
-  const activeCfg = useMemo(() => CLIENTS.find((c) => c.id === client), [client]);
+  const hasKey = keyInput.startsWith('nsk_') && keyInput.length > 10;
+  const personalizedLink = useMemo(() => {
+    if (hasKey && withKeyInUrl) return `${MCP_ENDPOINT}?key=${encodeURIComponent(keyInput)}`;
+    return MCP_ENDPOINT;
+  }, [hasKey, withKeyInUrl, keyInput]);
 
-  const copyCfg = async () => {
-    try { await navigator.clipboard.writeText(activeCfg.cfg); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { /* noop */ }
+  const activeClient = useMemo(() => {
+    const url = personalizedLink;
+    const header = hasKey && !withKeyInUrl
+      ? `"Authorization": "Bearer ${keyInput}"`
+      : null;
+    const jsonCfg = header
+      ? JSON.stringify({ mcpServers: { noska: { url, headers: { Authorization: `Bearer ${keyInput}` } } } }, null, 2)
+      : JSON.stringify({ mcpServers: { noska: { url } } }, null, 2);
+
+    const meta = {
+      'claude-desktop': {
+        name: 'Claude Desktop',
+        steps: [
+          'Open Claude Desktop → Settings → Developer → Edit Config',
+          'Paste this into claude_desktop_config.json and restart Claude',
+        ],
+        copy: jsonCfg,
+      },
+      'claude-code': {
+        name: 'Claude Code',
+        steps: [
+          'Run this in any terminal — Claude Code registers Noska instantly',
+          header ? 'Headers travel with the command; nothing is stored by us' : 'Add your key as a header for full access (recommended)',
+        ],
+        copy: `claude mcp add --transport http noska ${url}` + (header ? ` \\\n  --header ${JSON.stringify('Authorization: Bearer ' + keyInput)}` : ''),
+      },
+      cursor: {
+        name: 'Cursor',
+        steps: [
+          'Click the one-click button below, or paste this into .cursor/mcp.json',
+          header ? 'Your key rides in the Authorization header' : 'Add your key for full access (recommended)',
+        ],
+        copy: jsonCfg,
+        deeplink: `cursor://anysphere.cursor-deeplink/mcp/install?name=Noska&config=${b64url(jsonCfg)}`,
+      },
+      vscode: {
+        name: 'VS Code',
+        steps: [
+          'VS Code 1.101+ — click the one-click button, or add this to mcp.json',
+          'Works in VS Code, Insiders and VS Code-based forks',
+        ],
+        copy: JSON.stringify({ name: 'noska', type: 'http', url, ...(header ? { headers: { Authorization: `Bearer ${keyInput}` } } : {}) }, null, 2),
+        deeplink: `vscode:mcp/install?${b64url(JSON.stringify({ name: 'noska', type: 'http', url, ...(header ? { headers: { Authorization: `Bearer ${keyInput}` } } : {}) }))}`,
+      },
+      chatgpt: {
+        name: 'ChatGPT & agents',
+        steps: [
+          'ChatGPT → Settings → Connectors → Create → Add custom connector',
+          'Paste the one-link URL (key included) — header-less clients need it',
+          'Any agent runtime that speaks HTTP can use the same link',
+        ],
+        copy: hasKey && withKeyInUrl ? url : `${url}?key=YOUR_NSK_KEY`,
+      },
+      universal: {
+        name: 'Any client',
+        steps: [
+          'Stdio-only client? mcp-remote bridges it to our HTTP endpoint',
+          'Or speak raw JSON-RPC 2.0 over HTTP — that is the whole protocol',
+        ],
+        copy: `npx -y mcp-remote ${url}` + (header ? ` --header "Authorization: Bearer ${keyInput}"` : ''),
+      },
+    };
+    return meta[client] ?? meta['claude-desktop'];
+  }, [client, personalizedLink, hasKey, withKeyInUrl, keyInput]);
+
+  const copyText = async (text) => {
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* noop */ }
   };
-
+  const copyLink = () => copyText(personalizedLink);
   return (
     <div className="mcp-page">
+      <McpAtmosphere />
+      <ScrollProgress />
       <CursorFollower variant="mcp" />
 
       {/* ══ Boot gate + hero terminal ══ */}
@@ -142,7 +206,7 @@ export default function McpLanding() {
                       doneLabel="session live"
                       duration={1000}
                       onComplete={() => setBooted(true)}
-                      accent="#7CE38B"
+                      accent="#E0AC3F"
                     />
                   </div>
                 ) : (
@@ -174,51 +238,128 @@ export default function McpLanding() {
               ['100%', 'owner-scoped'],
             ].map(([v, k]) => (
               <motion.div key={k} className="mcp-stat" variants={staggerItem}>
-                <b>{v}</b><span>{k}</span>
+                <b>{k === 'tools' ? <Counter value={TOTAL_TOOLS} /> : k === 'capability groups' ? <Counter value={9} suffix="+" /> : v}</b><span>{k}</span>
               </motion.div>
             ))}
           </Stagger>
         </div>
+        <ScrollCue />
       </section>
 
-      {/* ══ Clients ══ */}
-      <section className="mcp-clients">
+      {/* ══ Connect — one link, any client ══ */}
+      <section className="mcp-clients" id="connect">
         <div className="mcp-wrap">
           <Reveal><span className="mcp-kicker">// connect</span></Reveal>
-          <Reveal delay={0.05} blur><h2>Two minutes to first light.</h2></Reveal>
+          <WordReveal className="mcp-h2line" text="One link. Any client." />
+
+          {/* Step 1 — your key personalizes everything below */}
+          <Reveal delay={0.06}>
+            <div className="mcp-keybox">
+              <div className="mcp-keybox-head">
+                <span className="mcp-stepnum">01</span>
+                <div>
+                  <b>Paste a key to personalize</b>
+                  <span>Stays in this tab — nothing is sent anywhere until you connect a client.</span>
+                </div>
+                <Link to="/docs" className="mcp-mini-link">Create a key →</Link>
+              </div>
+              <div className="mcp-keyrow">
+                <input
+                  type={showKey ? 'text' : 'password'}
+                  className="mcp-keyinput"
+                  placeholder="nsk_…"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value.trim())}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                <button className="mcp-ghostbtn" onClick={() => setShowKey((s) => !s)}>
+                  {showKey ? 'hide' : 'show'}
+                </button>
+                {keyInput && (
+                  <button className="mcp-ghostbtn danger" onClick={() => setKeyInput('')}>clear</button>
+                )}
+              </div>
+              <label className="mcp-urltoggle">
+                <input type="checkbox" checked={withKeyInUrl} onChange={(e) => setWithKeyInUrl(e.target.checked)} />
+                <span>Put the key in the link itself <code>?key=…</code> — needed for ChatGPT connectors &amp; header-less agents.</span>
+              </label>
+            </div>
+          </Reveal>
+
+          {/* Step 2 — the link */}
+          <Reveal delay={0.08}>
+            <div className="mcp-linkbox">
+              <div className="mcp-linkbox-head">
+                <span className="mcp-stepnum">02</span>
+                <b>{keyInput ? 'Your endpoint' : 'The endpoint'}</b>
+                {keyInput && withKeyInUrl && <span className="mcp-pill-gold">one-link mode</span>}
+              </div>
+              <div className="mcp-linkrow">
+                <code className="mcp-linkval">{personalizedLink}</code>
+                <button className="mcp-copybtn gold" onClick={copyLink}>
+                  {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'copied' : 'copy link'}
+                </button>
+              </div>
+              <p className="mcp-linkhint">
+                JSON-RPC 2.0 · streamable HTTP · every request owner-scoped to this key.
+              </p>
+            </div>
+          </Reveal>
+
+          {/* Step 3 — per-client install */}
           <Reveal delay={0.1}>
+            <div className="mcp-clients-head">
+              <span className="mcp-stepnum">03</span>
+              <b>Pick your client</b>
+            </div>
             <div className="mcp-tabs" role="tablist">
-              {CLIENTS.map((c) => (
-                <button key={c.id} role="tab" aria-selected={client === c.id}
-                  className={`mcp-tab ${client === c.id ? 'on' : ''}`}
-                  onClick={() => setClient(c.id)}>{c.name}</button>
+              {CLIENT_META.map((cl) => (
+                <button key={cl.id} role="tab" aria-selected={client === cl.id}
+                  className={`mcp-tab ${client === cl.id ? 'on' : ''}`}
+                  onClick={() => setClient(cl.id)}>{cl.name}</button>
               ))}
             </div>
           </Reveal>
+
           <AnimatePresence mode="wait">
-            <motion.div key={client} className="mcp-cfg"
+            <motion.div key={client + (keyInput ? '1' : '0')}
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.22 }}>
-              <button className="mcp-copy" onClick={copyCfg}>
-                {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'copied' : 'copy'}
-              </button>
-              <pre>{activeCfg.cfg}</pre>
+              transition={{ duration: 0.2 }}>
+              <div className="mcp-cfg">
+                <button className="mcp-copybtn" onClick={() => copyText(activeClient.copy)}>
+                  {copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'copied' : 'copy'}
+                </button>
+                {activeClient.steps.map((st, i) => (
+                  <div className="mcp-cfg-step" key={i}>
+                    <span className="mcp-cfg-stepnum">{i + 1}</span>
+                    <p>{st}</p>
+                  </div>
+                ))}
+                <pre>{activeClient.copy}</pre>
+              </div>
+              {activeClient.deeplink && (
+                <a className="mcp-deeplink" href={activeClient.deeplink}>
+                  <Zap size={15} /> One-click install in {activeClient.name}
+                </a>
+              )}
             </motion.div>
           </AnimatePresence>
+
           <Reveal>
             <p className="mcp-note">
-              Keys are created in-app under Settings → Developer. Noska stores only SHA-256 hashes;
-              the raw key is shown exactly once.
+              Security: prefer the Authorization header where the client supports it.
+              The <code>?key=…</code> link variant is for header-less clients — treat it like a
+              password (it can be revoked anytime in Settings → Developer).
             </p>
           </Reveal>
         </div>
       </section>
-
       {/* ══ Tool catalog ══ */}
       <section className="mcp-tools">
         <div className="mcp-wrap">
           <Reveal><span className="mcp-kicker">// tools/list</span></Reveal>
-          <Reveal delay={0.05} blur><h2>Every capability,<br />one protocol.</h2></Reveal>
+          <WordReveal className="mcp-h2line" text="Every capability, one protocol." />
           <Stagger className="mcp-groups">
             {TOOL_GROUPS.map((t) => (
               <motion.div key={t.g} className="mcp-group" variants={staggerItem}>
@@ -237,7 +378,7 @@ export default function McpLanding() {
         <div className="mcp-wrap mcp-split">
           <div>
             <Reveal><span className="mcp-kicker">// risk gate</span></Reveal>
-            <Reveal delay={0.05} blur><h2>Destructive is<br />a state machine.</h2></Reveal>
+            <WordReveal className="mcp-h2line" text="Destructive is a state machine." />
             <Reveal delay={0.1}>
               <p className="mcp-note big">
                 RED-risk capabilities refuse to run on faith. The model gets told to ask again

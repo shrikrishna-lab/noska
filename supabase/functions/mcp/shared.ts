@@ -13,7 +13,7 @@ import {
 } from "../_shared/core/runtime.ts";
 import {
   PlatformError as PurePlatformError,
-  extractId, mustId,
+  extractId, mustId, sha256Hex,
   blocksToMarkdown, markdownToBlocks,
   COMMANDS, commandByName,
   initialReviewState,
@@ -45,8 +45,33 @@ export interface KeyRow {
 }
 
 export async function authenticate(req: Request): Promise<KeyRow> {
-  const k = await authenticateKey(req);
-  return { id: k.id, user_id: k.user_id, scopes: k.scopes, default_workspace_id: k.default_workspace_id };
+  // Preferred: Authorization: Bearer nsk_…
+  // Fallback for header-less clients (ChatGPT connectors, some agent
+  // runtimes): the key may arrive as ?key= / ?api_key= on the endpoint URL.
+  // One-link connection, Notion/Supabase style — opt-in, revocable, and
+  // never logged by this function.
+  let key = await authenticateKey(req).catch(() => null);
+  if (!key) {
+    const url = new URL(req.url);
+    const raw = (url.searchParams.get("key") ?? url.searchParams.get("api_key") ?? "").trim();
+    if (raw.startsWith("nsk_")) {
+      const { data } = await dbClient().from("user_api_keys")
+        .select("*").eq("key_hash", await sha256Hex(raw)).maybeSingle();
+      const k = data as (Row & {
+        revoked_at: string | null; expires_at: string | null;
+        scopes: unknown; default_workspace_id?: string;
+      }) | null;
+      if (k && !k.revoked_at && !(k.expires_at && new Date(k.expires_at).getTime() < Date.now())) {
+        key = {
+          id: k.id as string, user_id: k.user_id as string,
+          scopes: Array.isArray(k.scopes) ? k.scopes.map(String) : [],
+          default_workspace_id: typeof k.default_workspace_id === "string" ? k.default_workspace_id : "",
+        };
+      }
+    }
+  }
+  if (!key) throw E.authRequired();
+  return key;
 }
 
 export function requireScope(key: KeyRow, scope: string) {

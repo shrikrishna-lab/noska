@@ -87,3 +87,24 @@ The model chains: `search` → `fetch` → `add-study-card` → `create-task` �
 
 → `run-agent` → server-side Agent Runtime (planner → permission gate → tools
 → verification) → `inspect-agent-run` for the full trace.
+
+## One-link connection (header-less clients)
+
+The endpoint also accepts the key as a URL parameter for clients that cannot
+send custom headers (ChatGPT connectors, some agent runtimes):
+
+```
+https://<ref>.supabase.co/functions/v1/mcp?key=nsk_…
+```
+
+Prefer the Authorization header wherever possible; treat `?key=` links like
+passwords (revocable in Settings → Developer).
+
+## One-click installs
+
+- **Cursor** — `cursor://anysphere.cursor-deeplink/mcp/install?name=Noska&config=<base64url json>`
+- **VS Code** — `vscode:mcp/install?<base64url json>`
+- **Claude Code** — `claude mcp add --transport http noska <url> --header "Authorization: Bearer nsk_…"`
+- **Any stdio client** — `npx -y mcp-remote <url>`
+
+The /mcp page builds all of these personalized to your key, entirely client-side.
