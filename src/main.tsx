@@ -13,6 +13,8 @@ import { isDesktop } from "./lib/desktop/platform";
 import MarketingShell from "./components/MarketingShell";
 import LoginRoute from "./components/LoginRoute";
 import { PairClaimWatcher } from "./pages/DesktopConnect";
+import DesktopShell from "./components/desktop/DesktopShell";
+import UpdatePrompt from "./components/desktop/UpdatePrompt";
 import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import ControlCenter from "./ControlCenter";
@@ -51,6 +53,11 @@ if (isDesktop()) {
   document.getElementById("preloader")?.remove();
 }
 
+// Desktop: kill the branded preloader instantly — native app feel.
+if (isDesktop()) {
+  document.getElementById("preloader")?.remove();
+}
+
 const preloader = document.getElementById("preloader");
 if (preloader) {
   preloader.classList.add("hidden");
@@ -62,6 +69,7 @@ deferInit(() => { initPosthog(); initSentry(); }, { timeout: 500 });
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    <DesktopShell>
     <BrowserRouter>
       <PostHogProvider client={posthog}>
       <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/login">
@@ -83,6 +91,7 @@ createRoot(document.getElementById("root")!).render(
         {!isDesktop() && <Analytics />}
         <DesktopBridge />
         <PairClaimWatcher />
+        <UpdatePrompt />
         <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<MarketingShell><MarketingHome /></MarketingShell>} />
@@ -122,5 +131,6 @@ createRoot(document.getElementById("root")!).render(
       </ClerkProvider>
       </PostHogProvider>
     </BrowserRouter>
+    </DesktopShell>
   </React.StrictMode>
 );

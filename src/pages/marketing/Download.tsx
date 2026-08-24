@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring, useInView,
@@ -14,6 +14,45 @@ type OsKey = 'windows' | 'macos' | 'linux';
 const FALLBACK_VERSION = '1.0.0';
 const RELEASES_URL = 'https://github.com/shrikrishna-lab/noska/releases';
 const LATEST_MANIFEST = 'https://github.com/shrikrishna-lab/noska/releases/latest/download/latest.json';
+const GH_RELEASE_API = 'https://api.github.com/repos/shrikrishna-lab/noska/releases/latest';
+
+interface ReleaseAsset {
+  name: string;
+  size: number;
+  browser_download_url: string;
+}
+
+/** Fetches real installer assets (name, bytes, URL) from the latest GitHub release. */
+function useReleaseAssets(onVersion?: (v: string) => void): ReleaseAsset[] | null {
+  const [assets, setAssets] = useState<ReleaseAsset[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(GH_RELEASE_API, { headers: { accept: 'application/vnd.github+json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!alive) return;
+        if (Array.isArray(d?.assets)) setAssets(d.assets as ReleaseAsset[]);
+        const v = d?.tag_name ? String(d.tag_name).replace(/^desktop-v|^v/, '') : null;
+        if (v && typeof onVersion === 'function') onVersion(v);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return assets;
+}
+
+function pickAsset(
+  assets: ReleaseAsset[] | null,
+  match: (name: string) => boolean,
+): ReleaseAsset | null {
+  if (!assets) return null;
+  return assets.find((a) => match(a.name.toLowerCase())) ?? null;
+}
+
+function fmtSize(bytes?: number | null): string | null {
+  if (!bytes || bytes <= 0) return null;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const EASE: [number, number, number, number] = [0.05, 0.72, 0.43, 0.98];
 
@@ -142,7 +181,23 @@ export default function Download() {
   const [macArch, setMacArch] = useState<(typeof MAC_ARCHES)[number]['key']>('silicon');
   const [linuxFormat, setLinuxFormat] = useState<(typeof LINUX_FORMATS)[number]['key']>('appimage');
   const [version, setVersion] = useState(FALLBACK_VERSION);
+  const setVersionCb = useCallback((v: string) => setVersion(v), []);
+  const assets = useReleaseAssets(setVersionCb);
   const [pendingNote, setPendingNote] = useState<OsKey | null>(null);
+
+  // Real installer assets from the latest GitHub release (fall back to
+  // placeholders while the first release is not published yet).
+  const winExeAsset = pickAsset(assets, (n) => n.endsWith('x64-setup.exe'));
+  const winMsiAsset = pickAsset(assets, (n) => n.endsWith('.msi'));
+  const macArmAsset = pickAsset(assets, (n) => n.endsWith('aarch64.dmg'));
+  const macIntelAsset = pickAsset(assets, (n) => n.endsWith('x64.dmg') && !n.includes('aarch64'));
+  const appImageAsset = pickAsset(assets, (n) => n.endsWith('.appimage'));
+  const debAsset = pickAsset(assets, (n) => n.endsWith('_amd64.deb'));
+  const rpmAsset = pickAsset(assets, (n) => n.endsWith('_x86_64.rpm'));
+
+  const macAsset = macArch === 'silicon' ? macArmAsset : macIntelAsset;
+  const linuxAsset =
+    linuxFormat === 'deb' ? debAsset : linuxFormat === 'rpm' ? rpmAsset : appImageAsset;
 
   const sceneRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: sceneRef, offset: ['start start', 'end start'] });
@@ -288,7 +343,11 @@ export default function Download() {
               >
                 <OsSticker os={heroOs} size={16} />
                 {heroDl.name === 'Linux' ? `Download ${linuxPick.file}` : `Download ${heroDl.file}`}
-                <span className="dlp-cta-size">{heroDl.size}</span>
+                <span className="dlp-cta-size">
+                  {fmtSize(
+                    (heroOs === 'windows' ? winExeAsset : heroOs === 'macos' ? macAsset : linuxAsset)?.size,
+                  ) ?? heroDl.size}
+                </span>
               </motion.a>
             </AnimatePresence>
 
@@ -393,9 +452,16 @@ export default function Download() {
             </div>
             <p className="dlp-seg-hint">{winPick.hint}</p>
 
-            <a href="#" className="dlp-pill-btn" onClick={placeholderClick('windows')}>
+            <a
+              href={winFormat === 'msi' ? (winMsiAsset?.browser_download_url ?? '#') : (winExeAsset?.browser_download_url ?? '#')}
+              className="dlp-pill-btn"
+              onClick={winExeAsset || winMsiAsset ? undefined : placeholderClick('windows')}
+            >
               <OsSticker os="windows" size={16} />
               Download {winPick.file}
+              {fmtSize((winFormat === 'msi' ? winMsiAsset : winExeAsset)?.size) && (
+                <span className="dlp-cta-size">{fmtSize((winFormat === 'msi' ? winMsiAsset : winExeAsset)?.size)}</span>
+              )}
             </a>
             <AnimatePresence>
               {pendingNote === 'windows' && (
@@ -411,7 +477,7 @@ export default function Download() {
             </AnimatePresence>
             <ul className="dlp-meta">
               <li><span>Version</span><strong>v{version}</strong></li>
-              <li><span>Size</span><strong>{winPick.size}</strong></li>
+              <li><span>Size</span><strong>{fmtSize((winFormat === 'msi' ? winMsiAsset : winExeAsset)?.size) ?? winPick.size}</strong></li>
               <li><span>Arch</span><strong>x64</strong></li>
             </ul>
             <div className="dlp-alts">
@@ -448,9 +514,14 @@ export default function Download() {
             </div>
             <p className="dlp-seg-hint">{MAC_ARCHES.find((a) => a.key === macArch)?.hint}</p>
 
-            <a href="#" className="dlp-pill-btn dark" onClick={placeholderClick('macos')}>
+            <a
+              href={macAsset?.browser_download_url ?? '#'}
+              className="dlp-pill-btn dark"
+              onClick={macAsset ? undefined : placeholderClick('macos')}
+            >
               <OsSticker os="macos" size={16} />
               Download {OS_META.macos.file}
+              {fmtSize(macAsset?.size) && <span className="dlp-cta-size">{fmtSize(macAsset?.size)}</span>}
             </a>
             <AnimatePresence>
               {pendingNote === 'macos' && (
@@ -466,7 +537,7 @@ export default function Download() {
             </AnimatePresence>
             <ul className="dlp-meta">
               <li><span>Version</span><strong>v{version}</strong></li>
-              <li><span>Size</span><strong>{OS_META.macos.size}</strong></li>
+              <li><span>Size</span><strong>{fmtSize(macAsset?.size) ?? OS_META.macos.size}</strong></li>
               <li><span>Chip</span><strong>{macArch === 'silicon' ? 'Apple Silicon' : 'Intel x64'}</strong></li>
             </ul>
           </GlowCard>
@@ -496,9 +567,14 @@ export default function Download() {
             </div>
             <p className="dlp-seg-hint">{linuxPick.hint}</p>
 
-            <a href="#" className="dlp-pill-btn" onClick={placeholderClick('linux')}>
+            <a
+              href={linuxAsset?.browser_download_url ?? '#'}
+              className="dlp-pill-btn"
+              onClick={linuxAsset ? undefined : placeholderClick('linux')}
+            >
               <OsSticker os="linux" size={16} />
               Download {linuxPick.file}
+              {fmtSize(linuxAsset?.size) && <span className="dlp-cta-size">{fmtSize(linuxAsset?.size)}</span>}
             </a>
             <AnimatePresence>
               {pendingNote === 'linux' && (
@@ -514,7 +590,7 @@ export default function Download() {
             </AnimatePresence>
             <ul className="dlp-meta">
               <li><span>Version</span><strong>v{version}</strong></li>
-              <li><span>Size</span><strong>{OS_META.linux.size}</strong></li>
+              <li><span>Size</span><strong>{fmtSize(linuxAsset?.size) ?? OS_META.linux.size}</strong></li>
               <li><span>Arch</span><strong>x86_64</strong></li>
             </ul>
             <div className="dlp-alts">
