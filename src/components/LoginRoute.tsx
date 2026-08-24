@@ -1,21 +1,23 @@
 // Gate for the /login route.
-// - Desktop: delegates to <App /> which owns the full auth/onboarding flow.
-// - Web: if the visitor already has a valid Clerk session (cookies/cache),
-//   skip the login form entirely and go straight to the workspace. While the
-//   session is resolving, hold on a spinner instead of flashing the form.
+// - Desktop with a paired session: straight through to the app.
+// - Desktop without one: the pairing screen (browser-based sign-in) — the
+//   Clerk login form can't run on the custom app origin.
+// - Web: cached Clerk session skips the form; otherwise render the login UI.
 import type { ReactNode } from "react";
 import { useAuth } from "@clerk/react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { isDesktop } from "../lib/desktop/platform";
+import { getDesktopIdentity } from "../lib/desktop/pairing";
 import App from "../App.jsx";
+import PairingScreen from "./auth/PairingScreen";
 import { RouteFallbackSpinner } from "./MarketingShell";
 
 export default function LoginRoute({ children }: { children?: ReactNode }) {
   const { isLoaded, isSignedIn } = useAuth();
-  const location = useLocation();
 
   if (isDesktop()) {
-    return <App />;
+    if (getDesktopIdentity()) return children ?? <App />;
+    return <PairingScreen />;
   }
   if (!isLoaded) {
     return <RouteFallbackSpinner />;

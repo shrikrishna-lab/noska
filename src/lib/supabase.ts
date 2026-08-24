@@ -23,9 +23,62 @@ export function setClerkSessionToken(getter: () => Promise<string | null>) {
   clerkGetToken = getter;
 }
 
+/* ── Desktop pairing sessions ──────────────────────────────────────────
+   Auth comes from browser-pairing (lib/desktop/pairing.ts): a real
+   GoTrue session is stored locally and refreshed here via the
+   refresh_token grant, so RLS sees the same user identity as web. */
+import { isDesktop } from "./desktop/platform";
+import { loadSession, saveSession } from "./desktop/pairing";
+
+let refreshInFlight: Promise<string | null> | null = null;
+
+async function refreshDesktopSession(): Promise<string | null> {
+  const s = loadSession();
+  if (!s?.refresh_token) return null;
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: supabaseAnonKey ?? "" },
+        body: JSON.stringify({ refresh_token: s.refresh_token }),
+      });
+      if (!res.ok) return null;
+      const j = await res.json();
+      const next = {
+        access_token: j.access_token,
+        refresh_token: j.refresh_token,
+        expires_at: Date.now() + (j.expires_in ?? 3600) * 1000,
+        identity: s.identity,
+      };
+      saveSession(next);
+      return next.access_token;
+    } catch {
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+async function getDesktopAccessToken(): Promise<string | null> {
+  const s = loadSession();
+  if (!s) return null;
+  const freshForMs = 120 * 1000;
+  if (s.expires_at - Date.now() > freshForMs) return s.access_token;
+  return (await refreshDesktopSession()) ?? s.access_token;
+}
+
 export const supabase = createClient<Database>(supabaseUrl || "", supabaseAnonKey || "", {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: true },
   accessToken: async () => {
+    // Desktop paired session wins when present (no Clerk session there).
+    if (isDesktop()) {
+      const tok = await getDesktopAccessToken();
+      if (tok) return tok;
+      return null;
+    }
     if (clerkGetToken) {
       return clerkGetToken();
     }

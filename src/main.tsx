@@ -12,6 +12,7 @@ import DesktopBridge from "./lib/desktop/DesktopBridge";
 import { isDesktop } from "./lib/desktop/platform";
 import MarketingShell from "./components/MarketingShell";
 import LoginRoute from "./components/LoginRoute";
+import { PairClaimWatcher } from "./pages/DesktopConnect";
 import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import ControlCenter from "./ControlCenter";
@@ -34,12 +35,18 @@ const NewUpdated = lazy(() => import("./pages/marketing/NewUpdated"));
 const Launch = lazy(() => import("./pages/marketing/launch/Launch"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
+const DesktopConnectPage = lazy(() => import("./pages/DesktopConnect"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-white">
     <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900" />
   </div>
 );
+
+// Desktop: kill the branded preloader instantly — native app feel.
+if (isDesktop()) {
+  document.getElementById("preloader")?.remove();
+}
 
 const preloader = document.getElementById("preloader");
 if (preloader) {
@@ -72,6 +79,7 @@ createRoot(document.getElementById("root")!).render(
         {!isDesktop() && <SpeedInsights />}
         {!isDesktop() && <Analytics />}
         <DesktopBridge />
+        <PairClaimWatcher />
         <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<MarketingShell><MarketingHome /></MarketingShell>} />
@@ -94,6 +102,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/launch" element={<Launch />} />
           <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
+          <Route path="/connect-desktop" element={<Suspense fallback={<RouteFallback />}><DesktopConnectPage /></Suspense>} />
           <Route path="/control" element={<ControlCenter />} />
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/dashboard" element={<App />} />

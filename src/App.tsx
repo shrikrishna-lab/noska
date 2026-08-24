@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense, useSyncExternalStore } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
+import { isDesktop } from "./lib/desktop/platform";
+import { getDesktopIdentity, subscribePairing, pairingVersion } from "./lib/desktop/pairing";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { UIProvider, useUI } from "./contexts/UIContext";
 import { WorkspaceProvider, useWorkspace } from "./contexts/WorkspaceContext";
@@ -48,6 +50,7 @@ const ApiConsole = lazy(() => import("./features/api/ApiConsole"));
 import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
 import { supabase, setClerkSessionToken } from "./lib/supabase";
 import LoginGate from "./components/auth/LoginGate";
+import PairingScreen from "./components/auth/PairingScreen";
 import { WaitlistGate } from "./components/auth/WaitlistGate";
 import { useLaunchSettings } from "./hooks/useLaunchSettings";
 import { TEST_MODE } from "./lib/envGuard";
@@ -170,8 +173,18 @@ function AppContent() {
   ] = useAI();
 
   // Clerk auth hooks — replaces Supabase auth session management
-  const { isLoaded: clerkLoaded, isSignedIn } = useAuth();
-  const { user: clerkUser } = useUser();
+  const { isLoaded: clerkLoadedRaw, isSignedIn: clerkSignedIn } = useAuth();
+  const { user: clerkUserRaw } = useUser();
+  // Desktop browser-pairing identity (phase-2 auth): treated exactly like
+  // a Clerk user so every downstream gate works unchanged.
+  const desktopAuthVersion = useSyncExternalStore(subscribePairing, pairingVersion);
+  const desktopIdentity = useMemo(
+    () => (isDesktop() ? getDesktopIdentity() : null),
+    [desktopAuthVersion]
+  );
+  const clerkLoaded = clerkLoadedRaw || !!desktopIdentity;
+  const isSignedIn = clerkSignedIn || !!desktopIdentity;
+  const clerkUser = desktopIdentity ?? clerkUserRaw;
   const { session } = useSession();
   const clerk = useClerk();
 
@@ -483,7 +496,7 @@ function AppContent() {
       if (!clerkLoaded) return;
       // Clerk may report isSignedIn before useSession has produced the token
       // Supabase needs for RLS. Wait for the session before the first read.
-      if (isSignedIn && !session) return;
+      if (isSignedIn && !session && !desktopIdentity) return;
       if (!mounted) return;
 
       const userId = isSignedIn && clerkUser ? clerkUser.id : null;
@@ -1091,6 +1104,14 @@ function AppContent() {
       if (location.pathname !== nextPath) navigate(nextPath, { replace: true });
     }
   }, [appFlowState, activeId, workspaceName, location.pathname, ticketPending]);
+
+  // Desktop: skip the decorative startup splash entirely — land straight on
+  // pairing (signed out) or let the workspace bootstrap take over.
+  useEffect(() => {
+    if (isDesktop() && appFlowState === "loading" && !TEST_MODE && !ticketPending) {
+      setAppFlowState("auth");
+    }
+  }, [isDesktop, appFlowState, ticketPending]);
 
   const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   onKeyRef.current = (e: KeyboardEvent) => {
@@ -2253,7 +2274,7 @@ function AppContent() {
   return (
     <TeamProvider>
     <AnimatePresence mode="wait">
-      {appFlowState === "loading" && !TEST_MODE && !isSignedIn && (
+      {appFlowState === "loading" && !TEST_MODE && !isSignedIn && !isDesktop() && (
         <LoadingScreen key="loader" onComplete={() => { if (!ticketPending) setAppFlowState("auth"); }} />
       )}
       {appFlowState === "loading" && !TEST_MODE && isSignedIn && (
@@ -2266,7 +2287,11 @@ function AppContent() {
       )}
       {appFlowState === "auth" && (
         <LoginGate>
-          <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
+          {isDesktop() ? (
+            !desktopIdentity ? <PairingScreen key="pairing" /> : null
+          ) : (
+            <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
+          )}
         </LoginGate>
       )}
       {(appFlowState === "onboarding" || appFlowState === "workspace") && location.pathname !== "/banned" && (
