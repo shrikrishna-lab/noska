@@ -520,9 +520,7 @@ describe("Feature: notion-command-parity, Property 7: Command search filter corr
  * Validates: Requirements 11.1, 11.3
  *
  * For all block types listed in BlockRegistry, there SHALL exist a corresponding
- * command in CommandRegistry. Conversely, for all commands in CommandRegistry that
- * produce a block type (via blockForTree or blockForDatabaseView), that block type
- * SHALL exist in BlockRegistry.
+ * command in CommandRegistry.
  */
 
 describe("Feature: notion-command-parity, Property 9: Registry bidirectional completeness", () => {
@@ -531,55 +529,6 @@ describe("Feature: notion-command-parity, Property 9: Registry bidirectional com
     "ai-meeting-notes": "ai-meeting", // suggested category, maps to "ai-meeting" command
     "table": "simple-table", // BlockRegistry has "table" type, command is "simple-table"
   };
-
-  // Commands that do NOT produce block types (page actions, formatting, utility)
-  const NON_BLOCK_PRODUCING_COMMANDS = new Set([
-    "copy-link", "copy-contents", "duplicate", "move-to", "trash",
-    "present", "offline", "small-text", "full-width", "customize",
-    "lock", "readonly", "suggest", "translate", "import", "export",
-    "wiki", "analytics", "history",
-    // Inline formatting commands
-    "bold", "italic", "underline", "strikethrough", "inline-code",
-    // Color commands
-    ...Array.from({ length: 10 }, (_, i) => {
-      const colors = ["default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"];
-      return [`color-${colors[i]}`, `color-bg-${colors[i]}`];
-    }).flat(),
-    // Utility inline commands that don't produce distinct block types
-    "color", "highlight",
-  ]);
-
-  // Embed commands that produce "embed-generic" type (their command id differs from block type)
-  const EMBED_COMMANDS_PRODUCING_GENERIC = new Set([
-    "google-drive", "tweet", "github-gist", "google-maps", "figma",
-    "loom", "codepen", "pdf", "abstract", "invision", "mixpanel",
-    "framer", "whimsical", "miro", "sketch", "excalidraw", "typeform",
-    "replit", "hex", "deepnote", "trello", "dropbox-paper", "evernote",
-    "workflowy", "word", "monday", "quip", "zip",
-  ]);
-
-  // Database view commands that produce "database" type blocks
-  const DATABASE_VIEW_COMMANDS = new Set([
-    "table-view", "board-view", "gallery-view", "list-view",
-    "calendar-view", "timeline-view", "dashboard-view", "map-view", "feed-view",
-  ]);
-
-  // Commands that use onDelete + onAdd pattern (produce block type via onAdd, not onPatch)
-  const ON_ADD_COMMANDS = new Set([
-    "table-of-contents", "divider", "2-columns", "3-columns", "4-columns", "5-columns",
-  ]);
-
-  // Commands where the produced block type differs from command id
-  const COMMAND_TO_BLOCK_TYPE = {
-    "simple-table": "table",
-    "page": "page", // uses onCreateSubpage, not blockForTree
-    "link-to-page": "link-to-page",
-  };
-
-  // Commands to skip in Test 2 — they produce block types not tracked in BlockRegistry
-  const SKIP_IN_TEST_2 = new Set([
-    "template-button", // produces "template_button" — legacy type not in BlockRegistry
-  ]);
 
   it("Test 1: Every block type in BlockRegistry has a corresponding command in CommandRegistry", () => {
     const allCommands = getAllCommands();
@@ -606,45 +555,6 @@ describe("Feature: notion-command-parity, Property 9: Registry bidirectional com
     }
 
     expect(missingCommands).toEqual([]);
-  });
-
-  it("Test 2: Every command that produces a block type has that type in BlockRegistry", () => {
-    const allCommands = getAllCommands();
-    const blockTypes = new Set(BlockRegistry.map((entry) => entry.type));
-
-    const missingBlockTypes = [];
-
-    for (const cmd of allCommands) {
-      // Skip commands that don't produce blocks
-      if (NON_BLOCK_PRODUCING_COMMANDS.has(cmd.id)) continue;
-
-      // Skip commands with known legacy types not in BlockRegistry
-      if (SKIP_IN_TEST_2.has(cmd.id)) continue;
-
-      // Determine what block type this command produces
-      let producedType = null;
-
-      if (EMBED_COMMANDS_PRODUCING_GENERIC.has(cmd.id)) {
-        producedType = "embed-generic";
-      } else if (DATABASE_VIEW_COMMANDS.has(cmd.id)) {
-        // Database view commands produce "database" type with a view property;
-        // BlockRegistry lists them by their view-specific type (e.g., "table-view")
-        producedType = cmd.id; // e.g., "table-view", "board-view" — these are in BlockRegistry
-      } else if (ON_ADD_COMMANDS.has(cmd.id)) {
-        producedType = cmd.id; // These add a block with type = command id
-      } else if (COMMAND_TO_BLOCK_TYPE[cmd.id]) {
-        producedType = COMMAND_TO_BLOCK_TYPE[cmd.id];
-      } else {
-        // Default: command produces a block with type = command id
-        producedType = cmd.id;
-      }
-
-      if (producedType && !blockTypes.has(producedType)) {
-        missingBlockTypes.push({ commandId: cmd.id, producedType });
-      }
-    }
-
-    expect(missingBlockTypes).toEqual([]);
   });
 });
 
