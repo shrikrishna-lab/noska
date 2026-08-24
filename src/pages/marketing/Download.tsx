@@ -12,9 +12,9 @@ import './Download.css';
 type OsKey = 'windows' | 'macos' | 'linux';
 
 const FALLBACK_VERSION = '1.0.0';
-const RELEASES_URL = 'https://github.com/shrikrishna-lab/noska/releases';
-const LATEST_MANIFEST = 'https://github.com/shrikrishna-lab/noska/releases/latest/download/latest.json';
-const GH_RELEASE_API = 'https://api.github.com/repos/shrikrishna-lab/noska/releases/latest';
+const RELEASES_URL = 'https://github.com/shrikrishna-lab/noska-desktop-releases/releases';
+const LATEST_MANIFEST = 'https://github.com/shrikrishna-lab/noska-desktop-releases/releases/latest/download/latest.json';
+const GH_RELEASE_API = 'https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases/latest';
 
 interface ReleaseAsset {
   name: string;

@@ -99,3 +99,41 @@ jobs:
             src-tauri/target/release/bundle/deb/*
             src-tauri/target/release/bundle/rpm/*
           if-no-files-found: warn
+
+  # Mirrors the signed artifacts + latest.json from the private staging
+  # release to the PUBLIC distribution repo (shrikrishna-lab/noska-desktop-releases).
+  # Only release artifacts move — never source, secrets, or private config.
+  publish-public:
+    needs: build-desktop
+    runs-on: ubuntu-latest
+    if: ${{ always() && needs.build-desktop.result == 'success' }}
+    steps:
+      - name: Resolve version + tag
+        id: ver
+        run: |
+          VERSION=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=desktop-v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download staged artifacts from the private release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh release download "${{ steps.ver.outputs.tag }}" \
+            --repo shrikrishna-lab/noska \
+            --dir dist --clobber --pattern "*"
+
+      - name: Publish to the public release repository
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          if gh release view "$TAG" --repo shrikrishna-lab/noska-desktop-releases > /dev/null 2>&1; then
+            gh release upload "$TAG" --repo shrikrishna-lab/noska-desktop-releases --clobber dist/*
+          else
+            gh release create "$TAG" dist/* \
+              --repo shrikrishna-lab/noska-desktop-releases \
+              --title "Noska Desktop v${{ steps.ver.outputs.version }}" \
+              --notes "Installers for Windows (.exe/.msi), macOS (.dmg, Apple Silicon + Intel) and Linux (.AppImage/.deb/.rpm). Auto-update manifest: latest.json"
+          fi
