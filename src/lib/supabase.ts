@@ -23,10 +23,10 @@ export function setClerkSessionToken(getter: () => Promise<string | null>) {
   clerkGetToken = getter;
 }
 
-/* ── Desktop pairing sessions ──────────────────────────────────────────
-   Auth comes from browser-pairing (lib/desktop/pairing.ts): a real
-   GoTrue session is stored locally and refreshed here via the
-   refresh_token grant, so RLS sees the same user identity as web. */
+/* ── Desktop pairing sessions ────────────────────────────────────────────
+   On desktop, auth comes from browser-pairing (see lib/desktop/pairing.ts):
+   a real GoTrue session is stored locally and refreshed here via the
+   refresh_token grant, so RLS sees the same user identity as the web. */
 import { isDesktop } from "./desktop/platform";
 import { loadSession, saveSession } from "./desktop/pairing";
 
@@ -67,13 +67,13 @@ async function getDesktopAccessToken(): Promise<string | null> {
   if (!s) return null;
   const freshForMs = 120 * 1000;
   if (s.expires_at - Date.now() > freshForMs) return s.access_token;
-  return (await refreshDesktopSession()) ?? s.access_token;
+  return (await refreshDesktopSession()) ?? s.access_token; // fall back to old token on transient failure
 }
 
 export const supabase = createClient<Database>(supabaseUrl || "", supabaseAnonKey || "", {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: true },
   accessToken: async () => {
-    // Desktop paired session wins when present (no Clerk session there).
+    // Desktop paired session wins when present (no Clerk session exists there).
     if (isDesktop()) {
       const tok = await getDesktopAccessToken();
       if (tok) return tok;

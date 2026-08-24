@@ -29,10 +29,12 @@ const MarketingBlog = lazy(() => import("./pages/marketing/Blog"));
 const BlogPost = lazy(() => import("./pages/marketing/BlogPost"));
 const Legal = lazy(() => import("./pages/marketing/Legal"));
 const Docs = lazy(() => import("./pages/marketing/Docs"));
+const McpDocs = lazy(() => import("./pages/marketing/McpDocs"));
 const Referrals = lazy(() => import("./pages/marketing/Referrals"));
 const Roadmap = lazy(() => import("./pages/marketing/Roadmap"));
 const NewUpdated = lazy(() => import("./pages/marketing/NewUpdated"));
 const Launch = lazy(() => import("./pages/marketing/launch/Launch"));
+const Download = lazy(() => import("./pages/marketing/Download"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
 const DesktopConnectPage = lazy(() => import("./pages/DesktopConnect"));
@@ -43,7 +45,8 @@ const RouteFallback = () => (
   </div>
 );
 
-// Desktop: kill the branded preloader instantly — native app feel.
+// Desktop: kill the branded preloader instantly — the app should feel like a
+// native program, not a website loading. Web keeps the fade-out.
 if (isDesktop()) {
   document.getElementById("preloader")?.remove();
 }
@@ -96,10 +99,12 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/policy" element={<MarketingShell><Legal /></MarketingShell>} />
           <Route path="/refund" element={<MarketingShell><Legal /></MarketingShell>} />
           <Route path="/docs" element={<MarketingShell><Docs /></MarketingShell>} />
+          <Route path="/docs/mcp" element={<MarketingShell><McpDocs /></MarketingShell>} />
           <Route path="/referrals" element={<MarketingShell><Referrals /></MarketingShell>} />
           <Route path="/roadmap" element={<MarketingShell><Roadmap /></MarketingShell>} />
           <Route path="/new-updated" element={<MarketingShell><NewUpdated /></MarketingShell>} />
           <Route path="/launch" element={<Launch />} />
+          <Route path="/download" element={<MarketingShell><Download /></MarketingShell>} />
           <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           <Route path="/connect-desktop" element={<Suspense fallback={<RouteFallback />}><DesktopConnectPage /></Suspense>} />
