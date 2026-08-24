@@ -1,4 +1,4 @@
-//! Noska desktop shell (Tauri 2).
+﻿//! Noska desktop shell (Tauri 2).
 //!
 //! Rust is ONLY the native layer: window, tray, deep links, notifications,
 //! single-instance, auto-update. All Noska application logic stays in the
@@ -116,11 +116,22 @@ pub fn run() {
             emit_deep_links(app, urls);
         }));
 
-        builder
-            .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Persist size/position but NOT the maximized flag: restoring
+        // "maximized" onto a borderless (decorations:false, shadow:false)
+        // window can collapse it to a degenerate size on Windows.
+        builder = builder.plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        & !tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build()
+        )
             .plugin(tauri_plugin_deep_link::init())
             .plugin(tauri_plugin_updater::Builder::new().build())
-            .plugin(tauri_plugin_process::init())
+            .plugin(tauri_plugin_process::init());
+
+        builder
     };
 
     #[cfg(not(desktop))]
