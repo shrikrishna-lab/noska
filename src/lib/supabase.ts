@@ -1,8 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+﻿import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../types/supabase";
 
 // Credentials MUST come from environment variables (set in .env locally and in
-// the Vercel project settings for production). No hardcoded project fallback —
+// the Vercel project settings for production). No hardcoded project fallback â€”
 // that would bake a specific project ref into the shipped bundle.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -23,43 +23,28 @@ export function setClerkSessionToken(getter: () => Promise<string | null>) {
   clerkGetToken = getter;
 }
 
-/* ── Desktop pairing sessions ────────────────────────────────────────────
+/* â”€â”€ Desktop pairing sessions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    On desktop, auth comes from browser-pairing (see lib/desktop/pairing.ts):
    a real GoTrue session is stored locally and refreshed here via the
    refresh_token grant, so RLS sees the same user identity as the web. */
 import { isDesktop } from "./desktop/platform";
-import { loadSession, saveSession } from "./desktop/pairing";
+import { loadSession, refreshDesktopSession } from "./desktop/pairing";
 
 let refreshInFlight: Promise<string | null> | null = null;
 
-async function refreshDesktopSession(): Promise<string | null> {
-  const s = loadSession();
-  if (!s?.refresh_token) return null;
+function refreshDesktopSession(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    try {
-      const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: supabaseAnonKey ?? "" },
-        body: JSON.stringify({ refresh_token: s.refresh_token }),
-      });
-      if (!res.ok) return null;
-      const j = await res.json();
-      const next = {
-        access_token: j.access_token,
-        refresh_token: j.refresh_token,
-        expires_at: Date.now() + (j.expires_in ?? 3600) * 1000,
-        identity: s.identity,
-      };
-      saveSession(next);
-      return next.access_token;
-    } catch {
-      return null;
-    } finally {
-      refreshInFlight = null;
-    }
-  })();
+  refreshInFlight = refreshDesktopSession().finally(() => {
+    refreshInFlight = null;
+  });
   return refreshInFlight;
+}
+
+/** The access token the desktop app should present to Supabase/edge fns. */
+export async function currentAccessToken(): Promise<string | null> {
+  if (isDesktop()) return getDesktopAccessToken();
+  if (clerkGetToken) return clerkGetToken();
+  return null;
 }
 
 async function getDesktopAccessToken(): Promise<string | null> {
@@ -86,7 +71,7 @@ export const supabase = createClient<Database>(supabaseUrl || "", supabaseAnonKe
   },
 });
 
-// Anon-only client — no Clerk JWT. Used for public operations (e.g. waitlist)
+// Anon-only client â€” no Clerk JWT. Used for public operations (e.g. waitlist)
 // where the anon RLS policy is sufficient and the Clerk JWT isn't trusted yet.
 export const supabaseAnon = createClient<Database>(supabaseUrl || "", supabaseAnonKey || "", {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },

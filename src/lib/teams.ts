@@ -1,9 +1,9 @@
-import { supabase } from "./supabase"
+import { supabase, currentAccessToken } from "./supabase"
 
 const TEAMS_API = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/teams-api`
 
 async function call(method: string, path: string, body?: unknown) {
-  const token = await supabase.auth.getSession().then((r) => r.data.session?.access_token)
+  const token = (await currentAccessToken()) ?? (await supabase.auth.getSession().then((r) => r.data.session?.access_token))
   const res = await fetch(`${TEAMS_API}/${path}`, {
     method,
     headers: {

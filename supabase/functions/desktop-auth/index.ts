@@ -1,40 +1,42 @@
-// Desktop browser-pairing auth edge function.
+// Desktop browser-pairing auth edge function — v3 (Clerk-identity parity).
 //
-// POST /functions/v1/desktop-auth   body: { action, ... }
-// Deploy configuration: supabase/config.toml sets verify_jwt = false. This
-// endpoint accepts Clerk JWTs for `claim` and no JWT for `exchange`, neither
-// of which can pass Supabase's gateway JWT validation.
+// The web app writes rows keyed by the RAW Clerk user id (e.g. user_2abc…),
+// so the desktop session must carry the SAME identity. Flow:
 //
-//  action:"claim"    (BROWSER, Clerk JWT in Authorization)
-//      { code } -> verifies the Clerk session via GoTrue, links code->user.
-//  action:"exchange" (DESKTOP, no session yet)
-//      { code } -> if claimed: ensures an auth.users row exists for the
-//                  mapped identity, mints a real GoTrue magic-link session
-//                  server-side and returns it. The desktop then owns a
-//                  first-class Supabase session; supabase-js refreshes it.
-//  action:"revoke"   (DESKTOP) { refresh_token } -> admin sign-out.
-
-import { verifyToken } from "npm:@clerk/backend";
+//  claim    (browser, Clerk JWT): GoTrue-verifies the token, decodes the
+//           Clerk `sub`, cross-checks it against the Clerk Backend API and
+//           matches emails — then links code → clerk_sub.
+//  exchange (desktop): mints an HS256 Supabase JWT with sub=clerk_sub,
+//           role=authenticated (PostgREST + RLS see the web identity),
+//           plus a rotating refresh code for silent re-issues.
+//  refresh  (desktop): swaps a valid refresh code for a fresh JWT.
+//  revoke   (desktop): invalidates the refresh code.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  // baggage/traceparent/sentry-trace are auto-injected by PostHog/Sentry
-  // browser SDKs; clerk-db-jwt rides along on Clerk-authenticated calls.
-  // Missing any of these breaks the preflight from www.noska.me.
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, baggage, traceparent, sentry-trace, clerk-db-jwt, x-noska-pairing",
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const URL_BASE = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY") ?? "";
+const JWT_SECRET = Deno.env.get("SUPABASE_JWT_SECRET") ?? Deno.env.get("JWT_SECRET") ?? "";
+
+const ACCESS_TTL_S = 3600;
+const REFRESH_TTL_S = 14 * 24 * 3600;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function httpError(status: number, error: string, message: string) {
+  return { status, error, message };
 }
 
 async function rest(
@@ -58,211 +60,219 @@ async function rest(
 
 interface PairRow {
   code: string;
-  user_id: string | null;
+  clerk_sub: string | null;
   email: string | null;
   status: string;
   attempts: number;
   expires_at: string;
+  refresh_hash: string | null;
+  refresh_expires_at: string | null;
 }
 
-async function pairUpsertClaimed(
-  code: string,
-  user_id: string,
-  email: string | null
-): Promise<void> {
+async function pairUpsertClaimed(code: string, sub: string, email: string | null) {
   const res = await rest("/rest/v1/desktop_auth_pairs", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    key: SERVICE_KEY,
     body: JSON.stringify({
       code,
-      user_id,
+      clerk_sub: sub,
       email,
       status: "claimed",
       claimed_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     }),
   });
-  if (!res.ok) throw new Error("pair_upsert_failed");
+  if (!res.ok) throw httpError(500, "pair_upsert_failed", "Could not stage pairing");
 }
 
 async function pairFind(code: string): Promise<PairRow | null> {
   const res = await rest(
-    `/rest/v1/desktop_auth_pairs?code=${encodeURIComponent(code)}&select=*`,
-    { key: SERVICE_KEY }
+    `/rest/v1/desktop_auth_pairs?code=eq.${encodeURIComponent(code)}&select=*`
   );
   const rows = (await res.json()) as PairRow[];
   return rows[0] ?? null;
 }
 
-async function pairMarkUsed(code: string): Promise<void> {
-  await rest(`/rest/v1/desktop_auth_pairs?code=${encodeURIComponent(code)}`, {
+async function pairSaveRefresh(code: string, hash: string) {
+  await rest(`/rest/v1/desktop_auth_pairs?code=eq.${encodeURIComponent(code)}`, {
     method: "PATCH",
-    key: SERVICE_KEY,
-    body: JSON.stringify({ status: "used" }),
-  });
-}
-
-async function pairBumpAttempts(code: string, n: number): Promise<void> {
-  await rest(`/rest/v1/desktop_auth_pairs?code=${encodeURIComponent(code)}`, {
-    method: "PATCH",
-    key: SERVICE_KEY,
-    body: JSON.stringify({ attempts: n }),
-  });
-}
-
-/* ── identity helpers ──────────────────────────────────────────────────── */
-
-/** Verifies the Clerk session server-side and returns its Clerk identity. */
-async function resolveClerkUser(clerkJwt: string): Promise<{ id: string; email: string | null }> {
-  const secret = Deno.env.get("CLERK_SECRET_KEY") ?? "";
-  if (!secret) throw httpError(500, "clerk_not_configured", "Clerk server authentication is not configured");
-  const apiBase = (Deno.env.get("CLERK_API_BASE") ?? "https://api.clerk.com/v1").replace(/\/$/, "");
-  let clerkUserId = "";
-  try {
-    const verified = await verifyToken(clerkJwt, { secretKey: secret });
-    clerkUserId = String(verified.sub ?? "");
-  } catch {
-    throw httpError(401, "unauthorized", "Invalid or expired sign-in");
-  }
-  if (!clerkUserId) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
-  const userRes = await fetch(`${apiBase}/users/${encodeURIComponent(clerkUserId)}`, {
-    headers: { Authorization: `Bearer ${secret}` },
-  });
-  if (!userRes.ok) {
-    throw httpError(401, "unauthorized", "Invalid or expired sign-in");
-  }
-  const user = await userRes.json() as {
-    id?: string;
-    email_addresses?: Array<{ id: string; email_address: string }>;
-    primary_email_address_id?: string;
-  };
-  const email = user.email_addresses?.find((e) => e.id === user.primary_email_address_id)?.email_address ??
-    user.email_addresses?.[0]?.email_address ?? null;
-  if (!user.id) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
-  return { id: user.id, email };
-}
-
-/** Resolves the Clerk email to the UUID used by Supabase Auth/RLS. */
-async function resolveSupabaseUserId(email: string | null): Promise<string> {
-  if (!email) throw httpError(400, "email_required", "A verified email is required");
-  const res = await rest("/auth/v1/admin/users?per_page=1000&page=1");
-  if (!res.ok) throw httpError(500, "user_lookup_failed", "Could not look up linked account");
-  const body = await res.json() as { users?: Array<{ id?: string; email?: string }> } | Array<{ id?: string; email?: string }>;
-  const users = Array.isArray(body) ? body : body.users ?? [];
-  const match = users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-  if (match?.id) return match.id;
-  const created = await rest("/auth/v1/admin/users", {
-    method: "POST",
-    body: JSON.stringify({ email, email_confirm: true, password: crypto.randomUUID() + crypto.randomUUID() }),
-  });
-  if (!created.ok) throw httpError(500, "user_create_failed", "Could not link desktop identity");
-  const user = await created.json() as { id?: string };
-  if (!user.id) throw httpError(500, "user_create_failed", "Could not link desktop identity");
-  return user.id;
-}
-
-function httpError(status: number, error: string, message: string) {
-  return { status, error, message };
-}
-
-/** Ensures a real auth.users row exists so GoTrue can mint sessions. */
-async function ensureAuthUser(id: string, email: string | null): Promise<string> {
-  const got = await rest(`/auth/v1/admin/users/${id}`);
-  if (got.ok) {
-    const u = await got.json();
-    return (u.email as string) || email || `${id}@users.noska.app`;
-  }
-  const effectiveEmail = email || `${id}@users.noska.app`;
-  const created = await rest("/auth/v1/admin/users", {
-    method: "POST",
     body: JSON.stringify({
-      id,
-      email: effectiveEmail,
-      email_confirm: true,
-      password: crypto.randomUUID() + crypto.randomUUID(), // never used directly
+      refresh_hash: hash,
+      refresh_expires_at: new Date(Date.now() + REFRESH_TTL_S * 1000).toISOString(),
     }),
   });
-  if (!created.ok) throw httpError(500, "user_create_failed", "Could not link desktop identity");
-  return effectiveEmail;
 }
 
-/** Mints a REAL GoTrue session server-side (no email is ever sent). */
-async function mintSession(email: string) {
-  const gl = await (await rest("/auth/v1/admin/generate_link", {
-    method: "POST",
-    body: JSON.stringify({ type: "magiclink", email }),
-  })).json();
-  const tokenHash: string | undefined =
-    gl?.hashed_token ??
-    gl?.properties?.hashed_token ??
-    (gl?.action_link ? new URL(gl.action_link).searchParams.get("token_hash") ?? undefined : undefined);
-  if (!tokenHash) throw httpError(500, "link_failed", "Could not mint desktop session");
+async function pairByRefreshHash(hash: string): Promise<PairRow | null> {
+  const res = await rest(
+    `/rest/v1/desktop_auth_pairs?refresh_hash=eq.${encodeURIComponent(hash)}&select=*`
+  );
+  const rows = (await res.json()) as PairRow[];
+  return rows[0] ?? null;
+}
 
-  const verify = await fetch(`${URL_BASE}/auth/v1/verify?type=magiclink`, {
-    method: "POST",
-    headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "magiclink", token_hash: tokenHash }),
+async function pairClearRefresh(code: string) {
+  await rest(`/rest/v1/desktop_auth_pairs?code=eq.${encodeURIComponent(code)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ refresh_hash: null, refresh_expires_at: null }),
   });
-  if (!verify.ok) throw httpError(500, "verify_failed", "Could not complete desktop session");
-  const s = await verify.json();
-  return {
-    access_token: s.access_token as string,
-    refresh_token: s.refresh_token as string,
-    expires_in: (s.expires_in as number) ?? 3600,
-  };
+}
+
+/* ── identity verification ─────────────────────────────────────────────── */
+
+function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
+  const parts = jwt.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/** GoTrue verifies the Clerk JWT (third-party auth) — proves Supabase trusts it. */
+async function gotraeVerifyEmail(clerkJwt: string): Promise<string | null> {
+  const res = await fetch(`${URL_BASE}/auth/v1/user`, {
+    headers: { apikey: ANON_KEY, Authorization: `Bearer ${clerkJwt}` },
+  });
+  if (!res.ok) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
+  const u = await res.json();
+  if (!u?.id) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
+  return (u.email as string) ?? null;
+}
+
+/** Clerk Backend API cross-check: the decoded sub must be a real Clerk user. */
+async function clerkUserById(sub: string): Promise<{ email: string | null; name: string | null } | null> {
+  if (!CLERK_SECRET_KEY) throw httpError(500, "server_config", "CLERK_SECRET_KEY not configured");
+  const res = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(sub)}`, {
+    headers: { Authorization: `Bearer ${CLERK_SECRET_KEY}` },
+  });
+  if (!res.ok) return null;
+  const u = await res.json();
+  const primary = u?.email_addresses?.find((e: { id: string }) => e.id === u?.primary_email_address_id)
+    ?? u?.email_addresses?.[0];
+  const name = [u?.first_name, u?.last_name].filter(Boolean).join(" ").trim() || null;
+  return { email: primary?.email_address ?? null, name };
+}
+
+/* ── JWT minting (HS256, project secret) ───────────────────────────────── */
+
+const b64url = (bytes: Uint8Array) =>
+  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+async function signJwt(payload: Record<string, unknown>): Promise<string> {
+  if (!JWT_SECRET) throw httpError(500, "server_config", "JWT secret not configured");
+  const enc = new TextEncoder();
+  const header = b64url(enc.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+  const body = b64url(enc.encode(JSON.stringify(payload)));
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(JWT_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${header}.${body}`));
+  return `${header}.${body}.${b64url(new Uint8Array(sig))}`;
+}
+
+async function issueSession(clerkSub: string, email: string | null, name: string | null) {
+  const access_token = await signJwt({
+    sub: clerkSub,
+    role: "authenticated",
+    aud: "authenticated",
+    email: email ?? undefined,
+    app_metadata: { provider: "clerk", noska_desktop: true },
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + ACCESS_TTL_S,
+  });
+  const refresh_code = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+  const hash = b64url(new Uint8Array(await crypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(refresh_code)
+  )));
+  return { access_token, refresh_code, hash };
 }
 
 /* ── actions ───────────────────────────────────────────────────────────── */
 
 async function handleClaim(code: string, clerkJwt: string) {
-  if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) {
-    return json({ status: "unknown_code" }, 400);
+  if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ status: "unknown_code" }, 400);
+
+  // 1) Supabase must trust the token (third-party Clerk auth).
+  const gotrueEmail = await gotraeVerifyEmail(clerkJwt);
+  // 2) Decode the raw Clerk sub (untrusted until cross-checked).
+  const payload = decodeJwtPayload(clerkJwt);
+  const sub = typeof payload?.sub === "string" ? payload.sub : null;
+  if (!sub) return json({ error: "unauthorized", message: "Malformed token" }, 401);
+  // 3) Clerk Backend API confirms the sub exists and the emails line up.
+  const clerk = await clerkUserById(sub);
+  if (!clerk) return json({ error: "unauthorized", message: "Clerk user not found" }, 401);
+  if (gotrueEmail && clerk.email && gotrueEmail.toLowerCase() !== clerk.email.toLowerCase()) {
+    return json({ error: "unauthorized", message: "Identity mismatch" }, 401);
   }
-  const user = await resolveClerkUser(clerkJwt);
-  const userId = await resolveSupabaseUserId(user.email);
-  await pairUpsertClaimed(code, userId, user.email);
-  return json({ status: "claimed" });
+
+  await pairUpsertClaimed(code, sub, clerk.email ?? gotrueEmail);
+  return json({ status: "claimed", name: clerk.name });
 }
 
 async function handleExchange(code: string) {
-  if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) {
-    return json({ status: "unknown_code" }, 400);
-  }
+  if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ status: "unknown_code" }, 400);
   const row = await pairFind(code);
-  if (!row) return json({ status: "pending" });
-  if (row.status === "waiting") return json({ status: "pending" });
+  if (!row || row.status === "waiting") return json({ status: "pending" });
   if (row.status === "used") return json({ status: "unknown_code" });
-  if (new Date(row.expires_at).getTime() < Date.now()) {
-    return json({ status: "expired" });
-  }
+  if (new Date(row.expires_at).getTime() < Date.now()) return json({ status: "expired" });
   if (row.attempts >= 10) return json({ status: "expired" });
+  if (!row.clerk_sub) return json({ status: "pending" });
 
   try {
-    const email = await ensureAuthUser(row.user_id!, row.email);
-    const session = await mintSession(email);
-    await pairMarkUsed(code);
+    const { access_token, refresh_code, hash } = await issueSession(
+      row.clerk_sub, row.email, null
+    );
+    await pairSaveRefresh(code, hash);
     return json({
       status: "complete",
       session: {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_at: Date.now() + session.expires_in * 1000,
-        identity: { id: row.user_id!, email: row.email },
+        access_token,
+        refresh_code,
+        expires_at: Date.now() + ACCESS_TTL_S * 1000,
+        identity: { id: row.clerk_sub, email: row.email },
       },
     });
   } catch (e) {
-    await pairBumpAttempts(code, row.attempts + 1);
     const err = e as { status?: number; error?: string; message?: string };
     return json({ error: err.error ?? "exchange_failed", message: err.message }, err.status ?? 500);
   }
 }
 
-async function handleRevoke(refreshToken: string) {
-  await rest("/auth/v1/logout", {
-    method: "POST",
-    body: JSON.stringify({ refresh_token: refreshToken }),
+async function handleRefresh(refreshCode: string) {
+  const hash = b64url(new Uint8Array(await crypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(refreshCode)
+  )));
+  const row = await pairByRefreshHash(hash);
+  if (!row || !row.clerk_sub) return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+  if (row.refresh_expires_at && new Date(row.refresh_expires_at).getTime() < Date.now()) {
+    await pairClearRefresh(row.code);
+    return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+  }
+  const { access_token, refresh_code, hash: newHash } = await issueSession(
+    row.clerk_sub, row.email, null
+  );
+  await pairSaveRefresh(row.code, newHash); // rotation
+  return json({
+    status: "complete",
+    session: {
+      access_token,
+      refresh_code,
+      expires_at: Date.now() + ACCESS_TTL_S * 1000,
+      identity: { id: row.clerk_sub, email: row.email },
+    },
   });
+}
+
+async function handleRevoke(refreshCode: string) {
+  const hash = b64url(new Uint8Array(await crypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(refreshCode)
+  )));
+  const row = await pairByRefreshHash(hash);
+  if (row) await pairClearRefresh(row.code);
   return json({ ok: true });
 }
 
@@ -286,8 +296,10 @@ Deno.serve(async (req: Request) => {
       }
       case "exchange":
         return await handleExchange(String(body.code ?? ""));
+      case "refresh":
+        return await handleRefresh(String(body.refresh_code ?? ""));
       case "revoke":
-        return await handleRevoke(String(body.refresh_token ?? ""));
+        return await handleRevoke(String(body.refresh_code ?? ""));
       default:
         return json({ error: "bad_action" }, 400);
     }

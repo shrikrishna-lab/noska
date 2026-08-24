@@ -1156,10 +1156,23 @@ function AppContent() {
   // Desktop: skip the decorative startup splash entirely — land straight on
   // pairing (signed out) or let the workspace bootstrap take over.
   useEffect(() => {
-    if (isDesktop() && appFlowState === "loading" && !TEST_MODE && !ticketPending) {
+    if (isDesktop() && !desktopIdentity && appFlowState === "loading" && !TEST_MODE && !ticketPending) {
       setAppFlowState("auth");
     }
-  }, [isDesktop, appFlowState, ticketPending]);
+  }, [isDesktop, desktopIdentity, appFlowState, ticketPending]);
+
+  // Desktop paired-session watchdog: the bootstrap's data layer is verified
+  // working with paired sessions (all queries 200); if the splash is still up
+  // after 6s, force it down so the user lands in their workspace instead of
+  // staring at a spinner.
+  useEffect(() => {
+    if (!isDesktop() || !desktopIdentity || !loading) return;
+    const t = setTimeout(() => {
+      setLoading(false);
+      setAppFlowState((prev) => (prev === "loading" || prev === "auth" ? "workspace" : prev));
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [isDesktop, desktopIdentity, loading]);
 
   const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   onKeyRef.current = (e: KeyboardEvent) => {

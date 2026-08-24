@@ -30,9 +30,13 @@ export async function claimPairCode(code: string, jwt: string): Promise<void> {
     body: JSON.stringify({ action: "claim", code }),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || json.status === "unknown_code") {
-    throw new Error(json.message || json.error || "Could not link this code");
-  }
+      if (!res.ok || json.status === "unknown_code") {
+        throw new Error(json.message || json.error || "Could not link this code");
+      }
+      // Hand the user straight back to the installed app — the OS routes
+      // noska:// to it, the single-instance handler focuses the window, and
+      // its poller completes the session within ~3s.
+      try { window.location.assign("noska://pair-complete"); } catch {}
 }
 
 /**

@@ -64,7 +64,7 @@ function anonKey(): string {
 
 export interface StoredSession {
   access_token: string;
-  refresh_token: string;
+  refresh_code: string;
   expires_at: number; // epoch ms
   identity: DesktopIdentity;
 }
@@ -87,6 +87,7 @@ export function loadSession(): StoredSession | null {
 export function saveSession(s: StoredSession): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify(s));
   cachedIdentity = s.identity;
+  registerWithSupabase(s);
   emit();
 }
 
@@ -229,22 +230,35 @@ export function resetPairing(): void {
 
 /* ── refresh + logout ──────────────────────────────────────────────────── */
 
-/**
- * Returns true when a paired session exists and its access token is still
- * usable (supabase-js performs the actual network refresh; this only checks
- * local freshness and prunes dead sessions).
- */
+/** Swaps the stored refresh code for a fresh JWT (server rotates the code). */
+export async function refreshDesktopSession(): Promise<string | null> {
+  const s = loadSession();
+  if (!s?.refresh_code) return null;
+  try {
+    const r = await callFn<{ status: string; session?: StoredSession }>({
+      action: "refresh",
+      refresh_code: s.refresh_code,
+    });
+    if (r.status === "complete" && r.session) {
+      saveSession(r.session);
+      return r.session.access_token;
+    }
+    if (r.status === "unknown_code") clearSession();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function hasUsableSession(): boolean {
   const s = loadSession();
-  if (!s) return false;
-  if (s.expires_at <= Date.now()) {
-    // Access token expired — supabase-js may still refresh via refresh_token,
-    // so keep the session but report stale; callers decide.
-    return false;
-  }
-  return true;
+  return !!s && s.expires_at > Date.now();
 }
 
 export function desktopSignOut(): void {
+  const s = loadSession();
+  if (s?.refresh_code) {
+    callFn({ action: "revoke", refresh_code: s.refresh_code }).catch(() => {});
+  }
   clearSession();
 }
