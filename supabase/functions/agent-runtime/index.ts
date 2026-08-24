@@ -57,7 +57,13 @@ async function requireUserJwt(req: Request): Promise<string> {
 }
 
 class HttpError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message); }
+  status: number;
+  code: string;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
 }
 
 /* ─── Key encryption (AES-GCM, key derived from AGENT_ENCRYPTION_KEY) ──── */
@@ -153,17 +159,11 @@ async function callModel(cfg: ModelConfig, system: string, userPrompt: string, t
     clearTimeout(timer);
   }
 }
-    const data = await res.json();
-    return { text: data.choices?.[0]?.message?.content ?? "", model };
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 /* ─── Tool protocol (server-side mirror of the browser tool contract) ──── */
 
-const TOOL_RE = /<<TOOL:(\w+)>>([\s\S]*?)<</TOOL>>/g;
-const MEMORY_RE = /<<MEMORY>>([\s\S]*?)<</MEMORY>>/g;
+const TOOL_RE = /<<TOOL:(\w+)>>([\s\S]*?)<\/TOOL>>/g;
+const MEMORY_RE = /<<MEMORY>>([\s\S]*?)<\/MEMORY>>/g;
 
 interface ToolOutcome { name: string; ok: boolean; summary: string; mutatedPageId?: string }
 
@@ -321,9 +321,9 @@ const SYSTEM_PROMPT = `You are a Noska workspace worker executing autonomously o
 RULES:
 1. Truth comes ONLY from the Workspace Context section — never invent pages, tasks, or data.
 2. Act, don't describe: emit tool blocks to do work.
-3. Tool format: <<TOOL:name>>{"param":"value"}<</TOOL>>
+3. Tool format: <<TOOL:name>>{"param":"value"}<\/TOOL>>
    Available: search_pages{query}, list_pages{}, get_page_content{page_id}, create_page{title,icon?,content,tags?}, append_blocks{content,page_id?}, add_todo{text,page_id?}, rename_page{title}, set_page_tags{tags,page_id?}, trash_page{page_id}, create_flashcards{page_id,cards:"JSON array [{front,answer}]"}, send_notification{title,message}
-4. To persist something worth remembering long-term, ALSO emit: <<MEMORY>>{"scope":"agent|workspace|page","content":"...","summary":"...","importance":1-4,"confidence":0-1}<</MEMORY>> (max 2 per run; only durable facts/preferences/decisions — never chatter).
+4. To persist something worth remembering long-term, ALSO emit: <<MEMORY>>{"scope":"agent|workspace|page","content":"...","summary":"...","importance":1-4,"confidence":0-1}<\/MEMORY>> (max 2 per run; only durable facts/preferences/decisions — never chatter).
 5. After tools complete you'll be re-invoked with results — then write a short completion summary with NO tool blocks.
 6. Never expose secrets. Never claim success without tool evidence.`;
 
@@ -379,7 +379,7 @@ async function persistMemoryCandidates(
         scope, content, summary: String(cand.summary || content.slice(0, 140)), importance: clampImportance(cand.importance),
         confidence: clampConfidence(cand.confidence), keywords: keywords as never, status: "active", created_by_run_id: runId,
       });
-      await emitEvent(userId, "", "MEMORY_CONFLICT", { superseded: conflict.existingId, relation: "contradicts" });
+      await emitEvent(runId, userId, "MEMORY_CONFLICT", { superseded: conflict.existingId, relation: "contradicts" });
     } else {
       await db.from("agent_memories").insert({
         id: crypto.randomUUID(), user_id: userId, agent_id: scope === "agent" ? agentId : null, page_id: scope === "page" ? pageId : null,
@@ -588,6 +588,16 @@ async function executeRun(opts: {
   }).eq("id", runId);
   await emitEvent(runId, opts.userId, timedOut ? "RUN_TIMED_OUT" : "RUN_COMPLETED", { counts: ctx.counts });
 
+  // Feed the canonical event bus (webhooks/automations subscribe to these).
+  await db.from("noska_events").insert({
+    user_id: opts.userId, workspace_id: "", type:
+      opts.sourceKind === "automation"
+        ? (timedOut ? "automation.run.failed" : "automation.run.completed")
+        : (timedOut ? "agent.run.failed" : "agent.run.completed"),
+    entity: opts.sourceKind, entity_id: String(opts.sourceId), actor: "runtime",
+    data: { run_id: runId, status, duration_ms: completedAt.getTime() - startedAt },
+  }).then(undefined, () => {});
+
   if (opts.sourceKind === "automation" && !opts.resumeRunId) {
     const { data: autoRow } = await db.from("automations").select("run_count").eq("id", opts.sourceId).maybeSingle();
     await db.from("automations").update({
@@ -771,3 +781,4 @@ Deno.serve(async (req: Request) => {
     return json({ error: "internal", message: "Unexpected server error" }, 500);
   }
 });
+// MARKER-TEST-1

@@ -180,6 +180,7 @@ export async function beginPairing(): Promise<void> {
   emit();
   const deadline = Date.now() + PAIRING_TTL_MS;
   const code = getOrCreatePairingCode();
+  let consecutiveErrors = 0;
   while (Date.now() < deadline && pollStatus === "waiting") {
     try {
       const r = await callFn<{ status: string; session?: StoredSession }>({
@@ -199,11 +200,17 @@ export async function beginPairing(): Promise<void> {
         polling = false;
         return;
       }
+      consecutiveErrors = 0;
+      pollError = null;
       // pending -> keep waiting
       // Row doesn't exist until the browser claims it — keep waiting either
       // way; the local deadline is what ends the wait.
     } catch (e) {
-      // transient network errors: keep trying until deadline
+      consecutiveErrors++;
+      pollError = e instanceof Error ? e.message : "Could not contact the sign-in service";
+      // Keep retrying transient failures, but expose the actual reason to the
+      // UI instead of making a backend/auth failure look like a stuck pairing.
+      if (consecutiveErrors >= 3) emit();
     }
     await new Promise((r2) => setTimeout(r2, POLL_MS));
   }

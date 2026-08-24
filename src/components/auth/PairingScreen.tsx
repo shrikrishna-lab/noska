@@ -20,7 +20,7 @@ export default function PairingScreen() {
   useSyncExternalStore(subscribePairing, pairingVersion);
   const [copied, setCopied] = useState(false);
   const code = getOrCreatePairingCode();
-  const { status } = getPollState();
+  const { status, error } = getPollState();
 
   useEffect(() => {
     beginPairing();
@@ -59,8 +59,8 @@ export default function PairingScreen() {
         </div>
 
         {status === "waiting" && (
-          <p className="text-sm text-slate-600 animate-pulse" data-testid="pairing-waiting">
-            Waiting for confirmation in your browser…
+          <p className="text-sm text-slate-600" data-testid="pairing-waiting">
+            {error ? error : "Waiting for confirmation in your browser…"}
           </p>
         )}
         {status === "success" && (

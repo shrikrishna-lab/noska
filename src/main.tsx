@@ -37,6 +37,9 @@ const Roadmap = lazy(() => import("./pages/marketing/Roadmap"));
 const NewUpdated = lazy(() => import("./pages/marketing/NewUpdated"));
 const Launch = lazy(() => import("./pages/marketing/launch/Launch"));
 const Download = lazy(() => import("./pages/marketing/Download"));
+const PluginsLanding = lazy(() => import("./pages/marketing/PluginsLanding"));
+const McpLanding = lazy(() => import("./pages/marketing/McpLanding"));
+const ApiKeysLanding = lazy(() => import("./pages/marketing/ApiKeysLanding"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
 const DesktopConnectPage = lazy(() => import("./pages/DesktopConnect"));
@@ -109,6 +112,9 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/new-updated" element={<MarketingShell><NewUpdated /></MarketingShell>} />
           <Route path="/launch" element={<Launch />} />
           <Route path="/download" element={<MarketingShell><Download /></MarketingShell>} />
+          <Route path="/plugins" element={<MarketingShell><PluginsLanding /></MarketingShell>} />
+          <Route path="/mcp" element={<MarketingShell><McpLanding /></MarketingShell>} />
+          <Route path="/api-keys" element={<MarketingShell><ApiKeysLanding /></MarketingShell>} />
           <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           <Route path="/connect-desktop" element={<Suspense fallback={<RouteFallback />}><DesktopConnectPage /></Suspense>} />

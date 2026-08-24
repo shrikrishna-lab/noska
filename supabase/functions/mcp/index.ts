@@ -10,11 +10,13 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { authenticate, requireScope, McpError, type KeyRow, db } from "./shared.ts";
+import { PlatformError } from "../_shared/core/pure.ts";
 import { TOOLS } from "./tools.ts";
+import { TOOLS_V5 } from "./tools-v5.ts";
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SERVER_NAME = "noska";
-const SERVER_VERSION = "4.0.0";
+const SERVER_VERSION = "5.0.0";
 
 function cors(origin: string): Record<string, string> {
   return {
@@ -42,7 +44,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({
       name: SERVER_NAME, version: SERVER_VERSION, protocol: PROTOCOL_VERSION,
       transport: "streamable-http",
-      capabilities: TOOLS.length,
+      capabilities: ALL_TOOLS.length,
       groups: [...new Set(TOOLS.map((t) => t.group))],
       usage: 'JSON-RPC 2.0 POSTs here · Authorization: Bearer nsk_…',
     }), { headers });
@@ -80,7 +82,7 @@ Deno.serve(async (req: Request) => {
 
       case "tools/list":
         return new Response(JSON.stringify(rpcOk(body.id, {
-          tools: TOOLS.map((t) => ({
+          tools: ALL_TOOLS.map((t) => ({
             name: t.name,
             description: `[${t.risk}] [${t.scope}] ${t.description}`,
             inputSchema: t.inputSchema,
@@ -91,7 +93,7 @@ Deno.serve(async (req: Request) => {
 
       case "tools/call": {
         const name = String(body.params?.name ?? "");
-        const tool = TOOLS.find((t) => t.name === name);
+        const tool = ALL_TOOLS.find((t) => t.name === name);
         if (!tool) return new Response(JSON.stringify(rpcErr(body.id, -32602, `Unknown tool "${name}"`)), { headers });
 
         const args = { ...((body.params?.arguments ?? {}) as Record<string, unknown>) };
@@ -152,7 +154,7 @@ Deno.serve(async (req: Request) => {
             content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
           })), { headers });
         } catch (err) {
-          if (err instanceof McpError) {
+          if (err instanceof McpError || err instanceof PlatformError) {
             return new Response(JSON.stringify(rpcOk(body.id, {
               content: [{ type: "text", text: JSON.stringify({ error: err.code, message: err.message }) }],
               isError: true,

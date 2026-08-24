@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Menu, X, ArrowRight, Sparkles, FileText, Database, CheckSquare, Users, Building, Laptop, HelpCircle, BookOpen, Clock, MonitorDown } from 'lucide-react';
+import { ChevronDown, Menu, X, ArrowRight, Sparkles, FileText, Database, CheckSquare, Users, Building, Laptop, HelpCircle, BookOpen, Clock, MonitorDown, KeyRound, Terminal, Puzzle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCTAButtons, useLaunchSettings } from '../../../hooks/useLaunchSettings';
 import './Navbar.css';
@@ -228,6 +228,53 @@ export default function Navbar() {
                   </AnimatePresence>
                 </div>
 
+                {/* Developers Dropdown */}
+                <div
+                  className="liquid-nav-dropdown-wrap"
+                  onMouseEnter={() => setActiveDropdown('developers')}
+                  onMouseLeave={() => setActiveDropdown(null)}
+                >
+                  <button className={`liquid-nav-btn ${activeDropdown === 'developers' ? 'active' : ''}`}>
+                    <span>Developers</span>
+                    <ChevronDown size={13} className={`liquid-chevron ${activeDropdown === 'developers' ? 'rotate' : ''}`} />
+                  </button>
+                  <AnimatePresence>
+                    {activeDropdown === 'developers' && (
+                      <motion.div className="liquid-glass-dropdown-panel" {...dropdownMotion}>
+                        <div className="liquid-dropdown-grid single-col">
+                          <Link to="/api-keys" className="liquid-dropdown-item">
+                            <div className="liquid-dropdown-icon-box blue">
+                              <KeyRound size={16} />
+                            </div>
+                            <div className="liquid-dropdown-info">
+                              <p className="liquid-dropdown-title">API Keys</p>
+                              <p className="liquid-dropdown-desc">Scoped keys for the REST API</p>
+                            </div>
+                          </Link>
+                          <Link to="/mcp" className="liquid-dropdown-item">
+                            <div className="liquid-dropdown-icon-box sage">
+                              <Terminal size={16} />
+                            </div>
+                            <div className="liquid-dropdown-info">
+                              <p className="liquid-dropdown-title">MCP</p>
+                              <p className="liquid-dropdown-desc">Noska in Claude, Cursor & any AI client</p>
+                            </div>
+                          </Link>
+                          <Link to="/plugins" className="liquid-dropdown-item">
+                            <div className="liquid-dropdown-icon-box purple">
+                              <Puzzle size={16} />
+                            </div>
+                            <div className="liquid-dropdown-info">
+                              <p className="liquid-dropdown-title">Plugins</p>
+                              <p className="liquid-dropdown-desc">Extend Noska with verified integrations</p>
+                            </div>
+                          </Link>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 {settings.show_pricing && (
                   <Link to="/pricing" className={`liquid-nav-link ${location.pathname === '/pricing' ? 'active' : ''}`}>
                     Pricing
@@ -303,6 +350,13 @@ export default function Navbar() {
                   {settings.show_docs && <Link to="/docs" className="liquid-mobile-item">Documentation</Link>}
                   {settings.show_changelog && <Link to="/changelog" className="liquid-mobile-item">Changelog</Link>}
                   {settings.show_pricing && <Link to="/pricing" className="liquid-mobile-item">Pricing</Link>}
+                </div>
+
+                <div className="liquid-mobile-group">
+                  <p className="liquid-mobile-group-header">Developers</p>
+                  <Link to="/api-keys" className="liquid-mobile-item">API Keys</Link>
+                  <Link to="/mcp" className="liquid-mobile-item">MCP</Link>
+                  <Link to="/plugins" className="liquid-mobile-item">Plugins</Link>
                 </div>
 
                 <div className="liquid-mobile-actions">

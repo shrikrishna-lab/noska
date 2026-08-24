@@ -318,4 +318,5 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(fun
 });
 
 export { default as PearlButton } from "./PearlButton";
+export { default as VoiceDictator } from "./voice-dictator";
 

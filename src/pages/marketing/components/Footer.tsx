@@ -185,8 +185,11 @@ export default function Footer() {
                 <div className="liquid-glass-link-col">
                   <p className="liquid-glass-col-header">Developers</p>
                   <ul className="liquid-glass-link-list">
+                    <li><Link to="/api-keys" className="liquid-link-item">API Keys</Link></li>
+                    <li><Link to="/mcp" className="liquid-link-item">MCP</Link></li>
+                    <li><Link to="/plugins" className="liquid-link-item">Plugins</Link></li>
                     {settings.show_docs && <li><Link to="/docs" className="liquid-link-item">API Reference</Link></li>}
-                    {settings.show_docs && <li><Link to="/docs" className="liquid-link-item">Webhooks</Link></li>}
+                    {settings.show_docs && <li><Link to="/docs/mcp" className="liquid-link-item">Webhooks & MCP docs</Link></li>}
                     {settings.show_login && <li><Link to="/login" className="liquid-link-item">Status page</Link></li>}
                   </ul>
                 </div>

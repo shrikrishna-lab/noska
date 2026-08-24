@@ -1,0 +1,14 @@
+{
+  "name": "@noska/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for the Noska API (/api/v1)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src"
+  ],
+  "keywords": ["noska", "api", "sdk"],
+  "license": "UNLICENSED",
+  "private": true
+}
