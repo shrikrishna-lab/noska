@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import {
   X, Loader2, PanelLeftClose, PanelLeft, PanelRightOpen, PanelRightClose,
   Key, Zap, MessageSquarePlus, Check, ExternalLink, Settings2
@@ -668,95 +668,104 @@ export default function AIPanel({
           </div>
         </header>
 
-        {/* Clean Center Stage */}
-        <div className="flex-1 flex flex-col justify-between overflow-y-auto relative scrollbar-thin select-text">
-          {!hasMessages ? (
-            /* Pristine Centered Minimal Hero (ChatGPT / Perplexity / Cursor style) */
-            <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 max-w-2xl mx-auto w-full">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.25 }}
-                className="flex flex-col items-center text-center mb-8"
-              >
-                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--text)]">
-                  What can I help you with?
-                </h1>
-                <p className="text-sm text-[var(--muted)] mt-1.5 max-w-sm leading-relaxed">
-                  Search your workspace, write docs, or brainstorm ideas.
-                </p>
-              </motion.div>
+        {/* Clean Center Stage with Gamma-style fluid layout transition */}
+        <LayoutGroup id="ai-workspace-layout">
+          <div className="flex-1 flex flex-col justify-between overflow-hidden relative select-text">
+            {/* Scrollable Chat Area */}
+            <div className="flex-1 overflow-y-auto relative scrollbar-thin flex flex-col">
+              <AnimatePresence mode="popLayout" initial={false}>
+                {!hasMessages ? (
+                  /* Pristine Centered Minimal Hero (Gamma style) */
+                  <motion.div
+                    key="hero-container"
+                    layout
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, y: -30, scale: 0.95, transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
+                    className="flex-1 flex flex-col items-center justify-center px-4 py-8 max-w-2xl mx-auto w-full"
+                  >
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20, height: 0, marginBottom: 0 }}
+                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      className="flex flex-col items-center text-center mb-6 overflow-hidden"
+                    >
+                      <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--text)]">
+                        What can I help you with?
+                      </h1>
+                      <p className="text-sm text-[var(--muted)] mt-1.5 max-w-sm leading-relaxed">
+                        Search your workspace, write docs, or brainstorm ideas.
+                      </p>
+                    </motion.div>
+                  </motion.div>
+                ) : (
+                  /* Active Chat Stream */
+                  <motion.div
+                    key="chat-stream"
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                    className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4 flex-1"
+                  >
+                    {messages.map((m, i) => (
+                      <ChatMessage
+                        key={i}
+                        message={m}
+                        index={i}
+                        total={messages.length}
+                        isLastAi={i === messages.length - 1 && m.role === "ai"}
+                        onInsertBelow={handleInsertBelow}
+                        onReplace={handleReplace}
+                        onCopy={handleCopy}
+                        onBranch={handleBranch}
+                        onReaction={handleReaction}
+                      />
+                    ))}
 
-              {/* Centered Floating Prompt Input */}
-              <div className="w-full">
-                <PromptComposer
-                  prompt={prompt}
-                  setPrompt={setPrompt}
-                  onSend={handleSend}
-                  loading={loading}
-                  onAbort={() => setLoading(false)}
-                  currentAgent={currentAgent}
-                  page={page}
-                  onOpenKeySetup={(providerId) => {
-                    if (providerId) setKeyProvider(providerId);
-                    setShowKeyModal(true);
-                  }}
-                  onToast={onToast}
-                />
-              </div>
+                    {loading && messages[messages.length - 1]?.text === "..." && (
+                      <div className="inline-flex items-center gap-2.5 rounded-full bg-[var(--surface-1)] border border-[var(--border)] px-4 py-2 text-xs text-[var(--text-secondary)] shadow-2xs">
+                        <Loader2 size={13} className="animate-spin text-[var(--accent)]" />
+                        <span>{currentAgent.name} is reasoning...</span>
+                      </div>
+                    )}
+
+                    {executingTools && toolResults.length > 0 && (
+                      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-3 space-y-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)] flex items-center gap-1.5">
+                          <Zap size={11} className="text-[var(--accent)]" /> Actions Completed
+                        </div>
+                        {toolResults.map((r, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs py-1">
+                            <span className="font-mono text-xs text-[var(--text)]">{r.name}</span>
+                            <span className="text-[10px] text-[var(--muted)] font-mono">{r.ok ? "Success" : "Failed"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {typingUsers.length > 0 && (
+                      <div className="text-xs text-[var(--muted)]">
+                        {typingUsers.map((u) => u.userName).join(", ")} is typing...
+                      </div>
+                    )}
+
+                    <div ref={messagesEndRef} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          ) : (
-            /* Active Chat Stream */
-            <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
-              {messages.map((m, i) => (
-                <ChatMessage
-                  key={i}
-                  message={m}
-                  index={i}
-                  total={messages.length}
-                  isLastAi={i === messages.length - 1 && m.role === "ai"}
-                  onInsertBelow={handleInsertBelow}
-                  onReplace={handleReplace}
-                  onCopy={handleCopy}
-                  onBranch={handleBranch}
-                  onReaction={handleReaction}
-                />
-              ))}
 
-              {loading && messages[messages.length - 1]?.text === "..." && (
-                <div className="inline-flex items-center gap-2.5 rounded-full bg-[var(--surface-1)] border border-[var(--border)] px-4 py-2 text-xs text-[var(--text-secondary)] shadow-2xs">
-                  <Loader2 size={13} className="animate-spin text-[var(--accent)]" />
-                  <span>{currentAgent.name} is reasoning...</span>
-                </div>
-              )}
-
-              {executingTools && toolResults.length > 0 && (
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-3 space-y-1">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)] flex items-center gap-1.5">
-                    <Zap size={11} className="text-[var(--accent)]" /> Actions Completed
-                  </div>
-                  {toolResults.map((r, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs py-1">
-                      <span className="font-mono text-xs text-[var(--text)]">{r.name}</span>
-                      <span className="text-[10px] text-[var(--muted)] font-mono">{r.ok ? "Success" : "Failed"}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {typingUsers.length > 0 && (
-                <div className="text-xs text-[var(--muted)]">
-                  {typingUsers.map((u) => u.userName).join(", ")} is typing...
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-
-          {/* Bottom Prompt Composer when in active chat */}
-          {hasMessages && (
-            <div className="max-w-3xl mx-auto w-full">
+            {/* Persistent Fluid Prompt Composer (Smoothly morphs from center to bottom like Gamma) */}
+            <motion.div
+              layout="position"
+              transition={{ type: "spring", stiffness: 320, damping: 30 }}
+              className={`w-full shrink-0 transition-all duration-300 ${
+                hasMessages ? "max-w-3xl mx-auto" : "max-w-2xl mx-auto mb-16"
+              }`}
+            >
               <PromptComposer
                 prompt={prompt}
                 setPrompt={setPrompt}
@@ -771,9 +780,9 @@ export default function AIPanel({
                 }}
                 onToast={onToast}
               />
-            </div>
-          )}
-        </div>
+            </motion.div>
+          </div>
+        </LayoutGroup>
       </div>
 
       {/* Slide-over Context Panel */}

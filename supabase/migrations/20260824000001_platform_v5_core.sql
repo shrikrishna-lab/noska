@@ -146,7 +146,7 @@ CREATE POLICY noska_events_delete_own ON public.noska_events
 
 CREATE INDEX idx_noska_events_user_time ON public.noska_events (user_id, created_at DESC);
 CREATE INDEX idx_noska_events_type ON public.noska_events (type, created_at DESC);
-CREATE INDEX idx_noska_events_pending ON public.noska_events (created_at) WHERE created_at > now() - interval '7 days';
+CREATE INDEX IF NOT EXISTS idx_noska_events_created ON public.noska_events (created_at DESC);
 
 -- Canonical page/task events from the DB layer (same detection logic as the
 -- Agent OS queue triggers, emitted with the V5 event vocabulary).

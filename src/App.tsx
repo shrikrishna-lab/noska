@@ -8,7 +8,7 @@ import { WorkspaceProvider, useWorkspace } from "./contexts/WorkspaceContext";
 import { AIProvider, useAI } from "./contexts/AIContext";
 import { TabProvider, useTabs } from "./contexts/TabContext";
 import { WorkspaceTabBar } from "./components/tabs/WorkspaceTabBar";
-import { Confetti, Toast } from "./components/ui";
+import { Confetti, Toast, VoicePill } from "./components/ui";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import Editor from "./components/Editor";
@@ -2988,6 +2988,7 @@ onLineage={() => setLineageOpen(true)}
         </motion.div>
       )}
     </AnimatePresence>
+    <VoicePill />
     </TeamProvider>
   );
 }

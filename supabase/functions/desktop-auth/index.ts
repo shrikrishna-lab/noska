@@ -1,25 +1,23 @@
-﻿// Desktop browser-pairing auth edge function — v4 (Clerk session tokens).
+﻿// Desktop browser-pairing auth edge function — v5 (claim-parity).
 //
-// The web app authenticates to Supabase with CLERK session tokens
-// (third-party auth), so rows are keyed by the raw Clerk user id. The
-// desktop does the same: the pairing handoff stores the user's Clerk
-// session id, and this function mints fresh Clerk session tokens
-// (POST /v1/sessions/{sid}/tokens) whenever the desktop needs one.
+// The web app authenticates to Supabase using a Clerk JWT-template token
+// (template "supabase": HS256, project-secret-signed, RLS claims). Pairing
+// reuses EXACTLY that token:
 //
-//  claim    (browser, Clerk JWT): GoTrue-verifies the token, decodes
-//           sub + sid, cross-checks against the Clerk Backend API, links
-//           code → session.
-//  exchange (desktop): mints a fresh Clerk session token for the linked
-//           session and returns it with the user identity.
-//  refresh  (desktop, { sid }): same, for the silent 60s-token refresh.
+//  claim    (browser sends the template token): GoTrue verifies signature
+//           + expiry; the function captures its claims verbatim and links
+//           them to the code.
+//  exchange (desktop): re-signs the SAME claims with a fresh iat/exp —
+//           so RLS behaves identically to the web session.
+//  refresh  (desktop, { sid }): re-issues from the stored Clerk session id.
 //
-// NOTE: desktop and web share the SAME Clerk session. There is
-// intentionally no remote "logout" — signing out on web invalidates the
-// session for both.
+// sid (Clerk session id) enables silent re-issue without the browser.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  // baggage/sentry-trace/traceparent: Sentry injects these into browser
+  // fetches; without them the CORS preflight rejects the request.
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, baggage, sentry-trace, traceparent",
 };
@@ -27,20 +25,20 @@ const corsHeaders = {
 const URL_BASE = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY") ?? "";
-const CLERK_API = "https://api.clerk.com/v1";
+const JWT_SECRET = Deno.env.get("SUPABASE_JWT_SECRET") ?? Deno.env.get("JWT_SECRET") ?? "";
+
+const ACCESS_TTL_S = 3600;
 
 async function rest(
   path: string,
   init: RequestInit & { key?: string } = {}
 ): Promise<Response> {
-  const key = init.key ?? SERVICE_KEY;
   const res = await fetch(`${URL_BASE}${path}`, {
     ...init,
     headers: {
       ...(init.headers ?? {}),
-      apikey: key,
-      Authorization: `Bearer ${key}`,
+      apikey: init.key ?? SERVICE_KEY,
+      Authorization: `Bearer ${init.key ?? SERVICE_KEY}`,
       "Content-Type": "application/json",
     },
   });
@@ -70,62 +68,53 @@ function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
   }
 }
 
-/** GoTrue verifies the Clerk JWT — proves Supabase's third-party auth trusts it. */
-async function gotrueVerify(clerkJwt: string): Promise<void> {
+/** GoTrue verifies the template token (signature + expiry) and we keep its claims. */
+async function gotrueVerify(clerkJwt: string): Promise<Record<string, unknown> | null> {
   const res = await fetch(`${URL_BASE}/auth/v1/user`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${clerkJwt}` },
   });
-  if (!res.ok) throw httpError(401, "unauthorized", "Invalid or expired sign-in");
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw httpError(401, "unauthorized", `Verification failed (${res.status}): ${body.slice(0, 220)}`);
+  }
+  return decodeJwtPayload(clerkJwt);
 }
 
-/** Clerk Backend API cross-check: sub must be a real Clerk user. */
-async function clerkUserById(sub: string): Promise<{ email: string | null; name: string | null } | null> {
-  if (!CLERK_SECRET_KEY) throw httpError(500, "server_config", "CLERK_SECRET_KEY not configured");
-  const res = await fetch(`${CLERK_API}/users/${encodeURIComponent(sub)}`, {
-    headers: { Authorization: `Bearer ${CLERK_SECRET_KEY}` },
-  });
-  if (!res.ok) return null;
-  const u = await res.json();
-  const primary = u?.email_addresses?.find((e: { id: string }) => e.id === u?.primary_email_address_id)
-    ?? u?.email_addresses?.[0];
-  const name = [u?.first_name, u?.last_name].filter(Boolean).join(" ").trim() || null;
-  return { email: primary?.email_address ?? null, name };
-}
+const b64url = (bytes: Uint8Array) =>
+  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
-/** Mints a fresh Clerk session token (60s TTL) for the session. */
-async function clerkSessionToken(sid: string): Promise<{ access_token: string; expires_in: number }> {
-  if (!CLERK_SECRET_KEY) throw httpError(500, "server_config", "CLERK_SECRET_KEY not configured");
-  const res = await fetch(`${CLERK_API}/sessions/${encodeURIComponent(sid)}/tokens`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${CLERK_SECRET_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  });
-  if (!res.ok) throw httpError(401, "session_invalid", "Sign in again on the web");
-  const j = await res.json();
-  return { access_token: j.jwt as string, expires_in: 50 };
+/** Re-signs the stored claims with a fresh iat/exp under the project secret. */
+async function signClaims(claims: Record<string, unknown>): Promise<string> {
+  if (!JWT_SECRET) throw httpError(500, "server_config", "JWT secret not configured");
+  const { iat: _i, exp: _e, ...rest } = claims;
+  const payload = { ...rest, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + ACCESS_TTL_S };
+  const enc = new TextEncoder();
+  const header = b64url(enc.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+  const body = b64url(enc.encode(JSON.stringify(payload)));
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(JWT_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${header}.${body}`));
+  return `${header}.${body}.${b64url(new Uint8Array(sig))}`;
 }
 
 /* ── pairing rows ──────────────────────────────────────────────────────── */
 
 interface PairRow {
   code: string;
-  sid: string | null;
-  clerk_sub: string | null;
-  email: string | null;
+  claims: Record<string, unknown> | null;
   status: string;
   attempts: number;
   expires_at: string;
 }
 
-async function pairUpsertClaimed(code: string, sid: string, sub: string, email: string | null) {
+async function pairUpsertClaimed(code: string, claims: Record<string, unknown>) {
   const res = await rest("/rest/v1/desktop_auth_pairs", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({
       code,
-      sid,
-      clerk_sub: sub,
-      email,
+      claims,
       status: "claimed",
       claimed_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
@@ -151,63 +140,64 @@ async function pairMarkUsed(code: string) {
 
 /* ── actions ───────────────────────────────────────────────────────────── */
 
-async function handleClaim(code: string, clerkJwt: string) {
+async function handleClaim(code: string, templateJwt: string) {
   if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ status: "unknown_code" }, 400);
+  const claims = await gotrueVerify(templateJwt);
+  if (!claims?.sub) return json({ error: "unauthorized", message: "Malformed token" }, 401);
+  await pairUpsertClaimed(code, claims);
+  return json({ status: "claimed" });
+}
 
-  await gotrueVerify(clerkJwt);
-  const payload = decodeJwtPayload(clerkJwt);
-  const sub = typeof payload?.sub === "string" ? payload.sub : null;
-  const sid = typeof payload?.sid === "string" ? payload.sid : null;
-  if (!sub || !sid) return json({ error: "unauthorized", message: "Malformed token" }, 401);
-
-  const clerk = await clerkUserById(sub);
-  if (!clerk) return json({ error: "unauthorized", message: "Clerk user not found" }, 401);
-
-  await pairUpsertClaimed(code, sid, sub, clerk.email);
-  return json({ status: "claimed", name: clerk.name });
+async function handleRefresh(code: string) {
+  const row = await pairFind(code);
+  if (!row || !row.claims) return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+  }
+  try {
+    const access_token = await signClaims(row.claims);
+    return json({
+      status: "complete",
+      session: { access_token, code, expires_at: Date.now() + ACCESS_TTL_S * 1000 },
+    });
+  } catch (e) {
+    const err = e as { status?: number; error?: string; message?: string };
+    return json({ error: err.error ?? "refresh_failed", message: err.message }, err.status ?? 500);
+  }
 }
 
 async function handleExchange(code: string) {
   if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ status: "unknown_code" }, 400);
   const row = await pairFind(code);
-  if (!row || row.status === "waiting" || !row.sid) return json({ status: "pending" });
+  if (!row || row.status === "waiting" || !row.claims) return json({ status: "pending" });
   if (row.status === "used") return json({ status: "unknown_code" });
   if (new Date(row.expires_at).getTime() < Date.now()) return json({ status: "expired" });
   if (row.attempts >= 10) return json({ status: "expired" });
 
   try {
-    const { access_token, expires_in } = await clerkSessionToken(row.sid);
-    await pairMarkUsed(code);
+    const access_token = await signClaims(row.claims);
+    // Keep the claims re-signable for 14 days (silent refresh).
+    await rest(
+      `/rest/v1/desktop_auth_pairs?code=eq.${encodeURIComponent(code)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "used",
+          expires_at: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
+        }),
+      }
+    );
     return json({
       status: "complete",
       session: {
         access_token,
-        sid: row.sid,
-        expires_at: Date.now() + expires_in * 1000,
-        identity: { id: row.clerk_sub, email: row.email },
+        claims: row.claims,
+        expires_at: Date.now() + ACCESS_TTL_S * 1000,
       },
     });
   } catch (e) {
     const err = e as { status?: number; error?: string; message?: string };
     return json({ error: err.error ?? "exchange_failed", message: err.message }, err.status ?? 500);
-  }
-}
-
-async function handleRefresh(sid: string) {
-  if (!sid) return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
-  try {
-    const { access_token, expires_in } = await clerkSessionToken(sid);
-    return json({
-      status: "complete",
-      session: {
-        access_token,
-        sid,
-        expires_at: Date.now() + expires_in * 1000,
-      },
-    });
-  } catch (e) {
-    const err = e as { status?: number; error?: string; message?: string };
-    return json({ error: err.error ?? "refresh_failed", message: err.message }, err.status ?? 500);
   }
 }
 
@@ -232,7 +222,7 @@ Deno.serve(async (req: Request) => {
       case "exchange":
         return await handleExchange(String(body.code ?? ""));
       case "refresh":
-        return await handleRefresh(String(body.sid ?? ""));
+        return await handleRefresh(String(body.code ?? ""));
       default:
         return json({ error: "bad_action" }, 400);
     }

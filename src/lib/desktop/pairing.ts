@@ -64,7 +64,7 @@ function anonKey(): string {
 
 export interface StoredSession {
   access_token: string;
-  sid: string;
+  code: string;
   expires_at: number; // epoch ms
   identity: DesktopIdentity;
 }
@@ -77,8 +77,8 @@ export function loadSession(): StoredSession | null {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as StoredSession;
-    // v4 shape: sessions without a sid are stale pre-Clerk-token entries.
-    if (!s?.access_token || !s?.identity?.id || !s?.sid) return null;
+    // v5 shape: sessions carry the pairing code used for silent refresh.
+    if (!s?.access_token || !s?.identity?.id || !s?.code) return null;
     return s;
   } catch {
     return null;
@@ -94,7 +94,7 @@ export function saveSession(s: StoredSession): void {
     .then(({ supabase }) =>
       supabase.auth.setSession({
         access_token: s.access_token,
-        refresh_token: s.sid,
+        refresh_token: s.code,
       }))
     .catch(() => {});
   emit();
@@ -132,6 +132,18 @@ export function pairingVersion(): number {
 }
 
 /* â”€â”€ pairing code lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
+  const parts = jwt.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
 
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no I/L/O/0/1
 
@@ -198,10 +210,12 @@ export async function beginPairing(): Promise<void> {
         code,
       });
       if (r.status === "complete" && r.session) {
-        saveSession({
-          ...r.session,
-          identity: toIdentity(r.session.identity),
+        const claims = decodeJwtPayload(r.session.access_token) || {};
+        const identity = toIdentity({
+          id: String(claims.sub || ""),
+          email: typeof claims.email === "string" ? claims.email : null,
         });
+        saveSession({ ...r.session, identity });
         try {
           localStorage.removeItem(CODE_KEY);
         } catch {}
@@ -242,14 +256,20 @@ export function resetPairing(): void {
 /** Swaps the stored refresh code for a fresh JWT (server rotates the code). */
 export async function refreshDesktopSession(): Promise<string | null> {
   const s = loadSession();
-  if (!s?.sid) return null;
+  if (!s?.code) return null;
   try {
     const r = await callFn<{ status: string; session?: StoredSession }>({
       action: "refresh",
-      sid: s.sid,
+      code: s.code,
     });
     if (r.status === "complete" && r.session) {
-      saveSession(r.session);
+      // Keep identity; refresh only the token/code/expiry.
+      saveSession({
+        ...s,
+        access_token: r.session.access_token,
+        code: r.session.code,
+        expires_at: r.session.expires_at,
+      });
       return r.session.access_token;
     }
     if (r.status === "unknown_code") clearSession();
