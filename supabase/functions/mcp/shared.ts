@@ -42,6 +42,8 @@ export interface KeyRow {
   user_id: string;
   scopes: string[];
   default_workspace_id: string;
+  read_only?: boolean;
+  allowed_tools?: string[];
 }
 
 export async function authenticate(req: Request): Promise<KeyRow> {
@@ -66,6 +68,8 @@ export async function authenticate(req: Request): Promise<KeyRow> {
           id: k.id as string, user_id: k.user_id as string,
           scopes: Array.isArray(k.scopes) ? k.scopes.map(String) : [],
           default_workspace_id: typeof k.default_workspace_id === "string" ? k.default_workspace_id : "",
+          read_only: k.read_only === true,
+          allowed_tools: Array.isArray(k.allowed_tools) ? k.allowed_tools.map(String) : [],
         };
       }
     }

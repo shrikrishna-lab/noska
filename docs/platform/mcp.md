@@ -108,3 +108,87 @@ passwords (revocable in Settings → Developer).
 - **Any stdio client** — `npx -y mcp-remote <url>`
 
 The /mcp page builds all of these personalized to your key, entirely client-side.
+
+---
+
+## Production policy layer (v5.1)
+
+Every `tools/call` passes one authorization choke point
+(`_shared/mcp/policy.ts`) before any handler runs:
+
+```
+authenticate → resolve tool → POLICY → RATE LIMIT → EXECUTION BUDGET
+→ handler → VERIFY → AUDIT
+```
+
+**Credential controls** (set when creating a key, Settings → Developer):
+
+| Control | Behavior |
+|---|---|
+| Scopes | Gate tool families (`learning:* ≡ reviews:*`) |
+| **Read-only** | Refuses every mutating tool; read/search/list still work |
+| **Tool allowlist** | Comma-separated tool names; empty = all scope-permitted tools |
+
+**Workspace roles** are respected for workspace-scoped tools:
+`viewer → read only`, `member → read+write`, `admin/owner → administration`.
+Non-members are denied (`WORKSPACE_ACCESS_DENIED`) — a workspace id supplied
+by an AI client is never trusted without membership.
+
+**Rate limits**: 120 req/min/credential (shared with the REST API budget,
+`RATE_LIMITED` + `retry_after_seconds`). Execution tools (`run-agent`,
+`run-automation`, `noska_execute`) additionally cap at **20 executions/hour**
+(`EXECUTION_LIMIT`).
+
+**Audit**: every tool call writes `developer_audit_log` — tool, ok/fail,
+error code, latency, client user-agent, request id. Never secrets, never
+full arguments.
+
+**Structured errors** (§ contract): `AUTH_REQUIRED · TOKEN_EXPIRED ·
+TOKEN_REVOKED · WORKSPACE_NOT_FOUND · WORKSPACE_ACCESS_DENIED ·
+INSUFFICIENT_SCOPE · READ_ONLY_CREDENTIAL · TOOL_NOT_ALLOWED · ROLE_FORBIDDEN
+· RATE_LIMITED · EXECUTION_LIMIT · DESTRUCTIVE_ACTION_REQUIRES_CONFIRMATION ·
+VALIDATION_ERROR · NOT_FOUND · TOOL_FAILED`
+
+## Resources & Prompts (MCP protocol)
+
+- `resources/list` → `noska://workspace/current` + templates
+  `noska://page/{id}` (markdown), `noska://agent/{id}`, `noska://automation/{id}`
+- `resources/read?uri=…` → owner-scoped content, same policy as tools
+- `prompts/list` → `summarize-workspace`, `weekly-review`,
+  `find-overdue-tasks`, `organize-notes`, `plan-project`, `meeting-to-tasks`
+- `prompts/get` → assembled messages; workspace/weekly/overdue prompts embed
+  **live data** (open tasks, due study cards, workspace snapshot)
+
+## Agentic tools
+
+- **`noska_execute`** — you plan, Noska executes. Up to 12 declared steps
+  (`search · create_page · create_task · update_page · append_blocks`),
+  each authorized through the capability layer, persisted as a durable
+  execution record (`agent_runs`, source `ai`), returning an honest summary:
+  `{ execution_id, status, summary:{steps_executed, pages_created,
+  tasks_created, …}, executed[], failed[] }`. Destructive actions are
+  unavailable by design — use dedicated tools with `confirm:true`.
+- **`ask-noska`** — agent delegation: route a question to one of your agents
+  through the server runtime (needs `intelligence:execute` scope + BYOK
+  configured). Returns `run_id` → `inspect-agent-run`.
+- **`summarize-page` / `extract-tasks`** — deterministic intelligence:
+  structured summaries and task-candidate detection. No model, no
+  hallucination; creation stays an explicit `create-task` call.
+
+## New tools in v5.1
+
+`get-current-workspace · get-workspace-members · append-blocks · get-block ·
+update-block · delete-block · bulk-archive-pages · summarize-page ·
+extract-tasks · ask-noska · noska_execute`
+
+## Honest limitations
+
+- OAuth-style MCP authorization (client discovery + token exchange) is not
+  wired yet — keys + `?key=` links are the connection paths today. The OAuth
+  app framework exists for the REST API.
+- `semantic_search` / `hybrid_search` are not exposed (no embedding
+  infrastructure); keyword `search` is the honest surface.
+- The canonical endpoint is the Supabase function URL; a `mcp.noska.dev`
+  alias needs a DNS/proxy change outside this repo.
+- Per-client connection registry UI (connected-clients list) is pending;
+  per-credential restrictions already cover the underlying control.

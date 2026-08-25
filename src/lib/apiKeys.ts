@@ -14,6 +14,8 @@ export interface ApiKeyRecord {
   name: string;
   prefix: string;
   scopes: string[];
+  read_only?: boolean;
+  allowed_tools?: string[];
   created_at: string;
   expires_at: string | null;
   last_used_at: string | null;
@@ -39,7 +41,7 @@ async function sha256Hex(input: string): Promise<string> {
 export async function listApiKeys(userId: string): Promise<ApiKeyRecord[]> {
   const { data, error } = await supabase
     .from("user_api_keys")
-    .select("id,user_id,name,prefix,scopes,created_at,expires_at,last_used_at,revoked_at")
+    .select("id,user_id,name,prefix,scopes,read_only,allowed_tools,created_at,expires_at,last_used_at,revoked_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -50,7 +52,7 @@ export async function listApiKeys(userId: string): Promise<ApiKeyRecord[]> {
  * outside the browser that generated it. Persist nothing but the hash. */
 export async function createApiKey(
   userId: string,
-  input: { name: string; scopes: string[]; expiresInDays: number | null },
+  input: { name: string; scopes: string[]; expiresInDays: number | null; readOnly?: boolean; allowedTools?: string[] },
 ): Promise<{ record: ApiKeyRecord; rawKey: string }> {
   const { raw, prefix } = generateRawKey();
   const keyHash = await sha256Hex(raw);
@@ -59,8 +61,17 @@ export async function createApiKey(
     : null;
   const { data, error } = await supabase
     .from("user_api_keys")
-    .insert({ user_id: userId, name: input.name.trim() || "Untitled key", prefix, key_hash: keyHash, scopes: input.scopes, expires_at })
-    .select("id,user_id,name,prefix,scopes,created_at,expires_at,last_used_at,revoked_at")
+    .insert({
+      user_id: userId,
+      name: input.name.trim() || "Untitled key",
+      prefix,
+      key_hash: keyHash,
+      scopes: input.scopes,
+      expires_at,
+      read_only: input.readOnly ?? false,
+      allowed_tools: input.allowedTools ?? [],
+    })
+    .select("id,user_id,name,prefix,scopes,read_only,allowed_tools,created_at,expires_at,last_used_at,revoked_at")
     .single();
   if (error) throw error;
   return { record: data as ApiKeyRecord, rawKey: raw };
