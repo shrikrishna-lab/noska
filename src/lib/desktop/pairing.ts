@@ -77,7 +77,8 @@ export function loadSession(): StoredSession | null {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as StoredSession;
-    if (!s?.access_token || !s?.identity?.id) return null;
+    // v4 shape: sessions without a sid are stale pre-Clerk-token entries.
+    if (!s?.access_token || !s?.identity?.id || !s?.sid) return null;
     return s;
   } catch {
     return null;
