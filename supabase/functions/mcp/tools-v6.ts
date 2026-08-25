@@ -30,6 +30,47 @@ const workspaceExtras: ToolDef[] = [
     },
   },
   {
+    name: "get-workspace-permissions", group: "workspace", risk: "GREEN", scope: "workspaces:read",
+    description: "Your effective permissions in a workspace: role, membership, and what MCP may do on your behalf.",
+    inputSchema: { type: "object", properties: { workspace_id: { type: "string" } }, required: ["workspace_id"] },
+    async handler(args, key) {
+      const ws = await assertWorkspaceAccess(key.user_id, String(args.workspace_id));
+      const role = ws.owner_id === key.user_id ? "owner"
+        : (((await db.from("workspace_members").select("role").eq("workspace_id", String(ws.id)).eq("user_id", key.user_id).maybeSingle()).data as Row | null)?.role as string) ?? "none";
+      return {
+        workspace_id: ws.id, role,
+        can_read: role !== "none",
+        can_write: ["owner", "admin", "member", "editor"].includes(role),
+        can_admin: ["owner", "admin"].includes(role),
+      };
+    },
+  },
+  {
+    name: "get-workspace-settings", group: "workspace", risk: "GREEN", scope: "workspaces:read",
+    description: "Workspace settings (name, icon, description, slug, archived state, settings object).",
+    inputSchema: { type: "object", properties: { workspace_id: { type: "string" } }, required: ["workspace_id"] },
+    async handler(args, key) {
+      const ws = await assertWorkspaceAccess(key.user_id, String(args.workspace_id));
+      return { settings: { id: ws.id, name: ws.name, icon: ws.icon, description: ws.description, slug: ws.slug ?? null, archived_at: ws.archived_at ?? null, settings: ws.settings ?? {} } };
+    },
+  },
+  {
+    name: "get-page-breadcrumbs", group: "content", risk: "GREEN", scope: "pages:read",
+    description: "Ancestor chain of a page from workspace root to the page itself (id + title per level).",
+    inputSchema: { type: "object", properties: { page_id_or_url: { type: "string" } }, required: ["page_id_or_url"] },
+    async handler(args, key) {
+      const { loadPage } = await import("../_shared/capabilities/content.ts");
+      const chain: Row[] = [];
+      let cursor: unknown = args.page_id_or_url;
+      for (let i = 0; i < 25 && cursor; i++) {
+        const p = await loadPage(key.user_id, cursor);
+        chain.unshift({ id: p.id, title: p.title });
+        cursor = p.parent_id;
+      }
+      return { breadcrumbs: chain, depth: chain.length };
+    },
+  },
+  {
     name: "get-workspace-members", group: "workspace", risk: "GREEN", scope: "workspaces:read",
     description: "List members and roles of a workspace you belong to.",
     inputSchema: { type: "object", properties: { workspace_id: { type: "string" } }, required: ["workspace_id"] },
@@ -234,6 +275,53 @@ const intelligenceTools: ToolDef[] = [
   },
 ];
 
+/* ══════════════ AUTOMATION LIFECYCLE ══════════════ */
+const automationLifecycle: ToolDef[] = [
+  {
+    name: "enable-automation", group: "automations", risk: "YELLOW", scope: "automations:run",
+    description: "Enable (activate) an existing automation so its schedule/triggers run server-side.",
+    inputSchema: { type: "object", properties: { automation_id: { type: "string" } }, required: ["automation_id"] },
+    async handler(args, key) {
+      const { error } = await db.from("automations").update({ status: "active", health: "healthy" })
+        .eq("owner_id", key.user_id).eq("id", String(args.automation_id));
+      if (error) throw errors.internal(error.message);
+      return { enabled: true, id: args.automation_id };
+    },
+  },
+  {
+    name: "disable-automation", group: "automations", risk: "YELLOW", scope: "automations:run",
+    description: "Disable (pause) an automation. Its schedule stops firing; history is kept.",
+    inputSchema: { type: "object", properties: { automation_id: { type: "string" } }, required: ["automation_id"] },
+    async handler(args, key) {
+      const { error } = await db.from("automations").update({ status: "paused" })
+        .eq("owner_id", key.user_id).eq("id", String(args.automation_id));
+      if (error) throw errors.internal(error.message);
+      return { disabled: true, id: args.automation_id };
+    },
+  },
+  {
+    name: "delegate-to-agent", group: "agents", risk: "RED", scope: "intelligence:execute",
+    description: "Alias of ask-noska: hand a task/question to one of your Noska agents through the server runtime.",
+    inputSchema: {
+      type: "object",
+      properties: { agent_id: { type: "string" }, task: { type: "string" } },
+      required: ["agent_id", "task"],
+    },
+    async handler(args, key) {
+      const res = await invokeRuntime({
+        action: "execute",
+        user_id: key.user_id,
+        source_kind: "agent",
+        source_id: String(args.agent_id),
+        trigger_type: "mcp_delegate",
+        trigger_payload: { question: String(args.task ?? "").slice(0, 2000) },
+      });
+      if (!res.ok) throw new McpError(502, "RUNTIME_ERROR", String(res.body.message ?? "runtime unavailable"));
+      return res.body;
+    },
+  },
+];
+
 /* ══════════════ NOSKA_EXECUTE — controlled agentic execution (§14/§15) ══════════════ */
 
 const EXECUTE_ACTIONS = ["search", "create_page", "create_task", "update_page", "append_blocks"] as const;
@@ -382,6 +470,18 @@ export const RESOURCES = [
     description: "An automation's trigger and steps.",
     mimeType: "application/json",
   },
+  {
+    uriTemplate: "noska://workspace/{workspace_id}",
+    name: "Workspace",
+    description: "Workspace metadata and settings (membership required).",
+    mimeType: "application/json",
+  },
+  {
+    uriTemplate: "noska://database/{database_id}",
+    name: "Database",
+    description: "A database block's properties, views and rows.",
+    mimeType: "application/json",
+  },
 ];
 
 export async function readResource(uri: string, key: KeyRow): Promise<Row> {
@@ -413,6 +513,18 @@ export async function readResource(uri: string, key: KeyRow): Promise<Row> {
     if (!data) throw errors.notFound("Automation");
     return [{ uri, mimeType: "application/json", text: JSON.stringify(data, null, 2) }];
   }
+  const wsRes = /^noska:\/\/workspace\/([0-9a-f-]{36})$/i.exec(uri);
+  if (wsRes) {
+    const { assertWorkspaceAccess } = await import("../_shared/capabilities/platform.ts");
+    const ws = await assertWorkspaceAccess(key.user_id, wsRes[1]); // membership IS the authorization
+    return [{ uri, mimeType: "application/json", text: JSON.stringify({ id: ws.id, name: ws.name, icon: ws.icon, description: ws.description, slug: ws.slug ?? null, settings: ws.settings ?? {} }, null, 2) }];
+  }
+  const dbRes = /^noska:\/\/database\/([0-9a-f-]{36})$/i.exec(uri);
+  if (dbRes) {
+    const { databases } = await import("../_shared/capabilities/content.ts");
+    const hit = await databases.get(key.user_id, dbRes[1]);
+    return [{ uri, mimeType: "application/json", text: JSON.stringify(hit, null, 2) }];
+  }
   throw errors.validation(`Unsupported resource URI: ${uri}`);
 }
 
@@ -425,6 +537,10 @@ export const PROMPTS = [
   { name: "organize-notes", description: "Plan an organization pass over notes on a topic.", arguments: [{ name: "topic", description: "Topic or project name", required: true }] },
   { name: "plan-project", description: "Turn a goal into pages, tasks and a study/execution plan.", arguments: [{ name: "goal", description: "Project goal", required: true }] },
   { name: "meeting-to-tasks", description: "Extract decisions and action items from meeting notes.", arguments: [{ name: "page_id_or_url", description: "Meeting notes page", required: true }] },
+  { name: "project-review", description: "Review a project: status, risks, blocked items, next actions.", arguments: [{ name: "topic", description: "Project name", required: true }] },
+  { name: "prepare-meeting", description: "Assemble context for an upcoming meeting from related pages and open tasks.", arguments: [{ name: "topic", description: "Meeting subject", required: true }] },
+  { name: "research-topic", description: "Gather and synthesize everything in the workspace about a topic.", arguments: [{ name: "topic", description: "Research subject", required: true }] },
+  { name: "clean-workspace", description: "Find duplicates, stale pages and archive candidates. Read-only analysis.", arguments: [] },
 ];
 
 export async function getPrompt(name: string, args: Row, key: KeyRow): Promise<Row> {
@@ -458,6 +574,42 @@ export async function getPrompt(name: string, args: Row, key: KeyRow): Promise<R
         const ref = String(args.page_id_or_url ?? "");
         return `Fetch the meeting notes page ${ref} (fetch tool), then: 1) list decisions made, 2) extract action items with owners and deadlines (extract-tasks), 3) propose create_task calls, 4) after approval create them and append a "Decisions & Actions" section with append-blocks.`;
       }
+      case "project-review": {
+        const topic = String(args.topic ?? "the project");
+        const found = await content.search.query(key.user_id, topic, 15);
+        const tasks = await content.tasks.list(key.user_id, { done: false, limit: 50 });
+        const related = (tasks.tasks as Row[]).filter((t) => String(t.text).toLowerCase().includes(topic.toLowerCase()));
+        return {
+          description: PROMPTS.find((p) => p.name === name)?.description ?? "",
+          messages: [{ role: "user", content: { type: "text", text:
+            `Project review for "${topic}".\n\nRelated pages (${(found.results as Row[]).length}):\n${(found.results as Row[]).slice(0, 10).map((r) => `- ${r.title} (${r.url})`).join("\n")}\n\nRelated open tasks (${related.length}):\n${related.slice(0, 15).map((t) => `- ${t.text}${t.dueAt ? ` (due ${t.dueAt})` : ""}`).join("\n")}\n\nProduce: status summary, risks/blockers, stale items, next actions with owners.` } }],
+        };
+      }
+      case "prepare-meeting": {
+        const topic = String(args.topic ?? "the meeting");
+        const found = await content.search.query(key.user_id, topic, 10);
+        return {
+          description: PROMPTS.find((p) => p.name === name)?.description ?? "",
+          messages: [{ role: "user", content: { type: "text", text:
+            `Prepare me for a meeting about "${topic}".\n\nRelated pages:\n${(found.results as Row[]).map((r) => `- ${r.title} (${r.url})`).join("\n") || "none found"}\n\nFetch the top pages, summarize each in 2 bullets, list open questions I should raise, and draft a 5-line agenda.` } }],
+        };
+      }
+      case "research-topic": {
+        const topic = String(args.topic ?? "the topic");
+        return {
+          description: PROMPTS.find((p) => p.name === name)?.description ?? "",
+          messages: [{ role: "user", content: { type: "text", text:
+            `Research "${topic}" across my Noska workspace: search broadly (multiple query variants), fetch the strongest pages, synthesize findings with citations to page URLs, note contradictions between pages, and list knowledge gaps.` } }],
+        };
+      }
+      case "clean-workspace": {
+        const tasks = await content.tasks.list(key.user_id, { done: true, limit: 100 });
+        return {
+          description: PROMPTS.find((p) => p.name === name)?.description ?? "",
+          messages: [{ role: "user", content: { type: "text", text:
+            `Workspace cleanup analysis (READ-ONLY - propose, do not delete).\n\nCompleted tasks: ${(tasks.tasks as Row[]).length}\n\nList pages likely stale (untouched 90+ days), duplicates by near-identical titles, and propose an archive plan for my approval. Do not mutate anything.` } }],
+        };
+      }
       default:
         throw errors.notFound("Prompt");
     }
@@ -473,5 +625,6 @@ export const TOOLS_V6: ToolDef[] = [
   ...blockTools,
   ...bulkTools,
   ...intelligenceTools,
+  ...automationLifecycle,
   ...executeTools,
 ];

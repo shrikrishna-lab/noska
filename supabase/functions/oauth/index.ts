@@ -13,7 +13,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js";
-import { errors, PlatformError, sha256Hex } from "../_shared/core/pure.ts";
+import { errors, PlatformError, sha256Hex, validateDynamicRegistration } from "../_shared/core/pure.ts";
 import { oauth as oauthCap, db as dbClient } from "../_shared/capabilities/platform.ts";
 
 const CORS = {
@@ -53,8 +53,55 @@ Deno.serve(async (req: Request) => {
         name: "Noska OAuth",
         flows: ["authorization_code", "refresh_token"],
         pkce: "S256 supported and recommended",
-        endpoints: { authorize: "/oauth/authorize", token: "/oauth/token", refresh: "/oauth/refresh", revoke: "/oauth/revoke" },
+        endpoints: { authorize: "/oauth/authorize", token: "/oauth/token", refresh: "/oauth/refresh", revoke: "/oauth/revoke", register: "/oauth/register" },
+        well_known: ["/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource"],
       });
+    }
+
+    /* ── MCP authorization discovery (RFC 8414 + draft resource metadata) ── */
+    if (action === ".well-known/oauth-authorization-server" && req.method === "GET") {
+      const base = `${url.protocol}//${url.host}`;
+      return json({
+        issuer: base,
+        authorization_endpoint: `${base}/oauth/authorize`,
+        token_endpoint: `${base}/oauth/token`,
+        revocation_endpoint: `${base}/oauth/revoke`,
+        registration_endpoint: `${base}/oauth/register`,
+        response_types: ["code"],
+        grant_types: ["authorization_code", "refresh_token"],
+        code_challenge_methods: ["S256"],
+        token_endpoint_auth_methods: ["none", "client_secret_post"],
+        scopes_supported: [
+          "pages:read", "pages:write", "tasks:read", "tasks:write",
+          "reviews:read", "reviews:write", "search:read", "databases:read",
+          "workspaces:read", "workspaces:write", "agents:read", "agents:run",
+          "automations:read", "automations:run", "events:read",
+          "webhooks:manage", "connections:manage", "intelligence:execute",
+        ],
+      });
+    }
+    if (action === ".well-known/oauth-protected-resource" && req.method === "GET") {
+      const base = `${url.protocol}//${url.host}`;
+      return json({
+        resource: `${base}/mcp`,
+        authorization_servers: [base],
+        scopes_supported: [
+          "pages:read", "pages:write", "tasks:read", "tasks:write",
+          "reviews:read", "reviews:write", "search:read", "databases:read",
+          "workspaces:read", "workspaces:write", "agents:read", "agents:run",
+          "automations:read", "automations:run", "events:read",
+        ],
+        bearer_methods_supported: ["header"],
+      });
+    }
+
+    /* ── Dynamic client registration (RFC 7591) — MCP clients self-register ── */
+    if (action === "register" && req.method === "POST") {
+      const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+      const reg = validateDynamicRegistration(body);
+      if (!reg.ok) return json({ error: "invalid_client_metadata", message: reg.errors.join("; ") }, 400);
+      const created = await oauthCap.registerClient(reg.meta);
+      return json(created, 201);
     }
 
     const body = req.method === "POST"
@@ -91,8 +138,12 @@ Deno.serve(async (req: Request) => {
     /* Step 2 — code exchange (public; secret or PKCE required). */
     if (action === "token") {
       const grantType = String(body.grant_type ?? "authorization_code");
+      if (grantType === "refresh_token") {
+        const tokens = await oauthCap.refresh(String(body.refresh_token ?? ""));
+        return json(tokens);
+      }
       if (grantType !== "authorization_code") {
-        return json({ error: "unsupported_grant_type", message: "Use /oauth/refresh for refresh_token grants." }, 400);
+        return json({ error: "unsupported_grant_type", message: "Supported: authorization_code, refresh_token." }, 400);
       }
       const tokens = await oauthCap.exchangeCode({
         clientId: String(body.client_id ?? ""),

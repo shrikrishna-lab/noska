@@ -27,6 +27,13 @@
   "rewrites": [
     { "source": "/control", "destination": "/control/index.html" },
     { "source": "/control/(.*)", "destination": "/control/index.html" },
+    { "source": "/mcp", "destination": "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/mcp" },
+    { "source": "/.well-known/oauth-protected-resource", "destination": "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/oauth/.well-known/oauth-protected-resource" },
+    { "source": "/.well-known/oauth-authorization-server", "destination": "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/oauth/.well-known/oauth-authorization-server" },
+    { "source": "/oauth/register", "destination": "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/oauth/register" },
+    { "source": "/oauth/authorize", "destination": "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/oauth/authorize" },
+    { "source": "/oauth/token", "destination": "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/oauth/token" },
+    { "source": "/oauth/revoke", "destination": "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/oauth/revoke" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

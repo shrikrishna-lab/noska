@@ -11,6 +11,7 @@ import {
   db, errors, pageUrl, emitEvent, audit,
   verifyPersisted,
   encryptSecret, decryptSecret,
+  sha256Hex,
   type KeyRow, type Row,
 } from "../core/runtime.ts";
 import {
@@ -664,6 +665,37 @@ export const oauth = {
     delete app.client_secret_hash;
     await audit({ userId, action: "oauth.app_created", resource: "oauth_app", resourceId: String(app.id), surface: "oauth" });
     return { app, client_secret: clientSecret };
+  },
+
+  /** RFC 7591 dynamic client registration (MCP clients self-register).
+   * The app is userless ('dcr' sentinel) until a Noska user consents. */
+  async registerClient(meta: Row) {
+    const clientSecret = `noska_os_${randomToken(24)}`;
+    const ins: Row = {
+      user_id: "dcr",
+      name: String(meta.name ?? "MCP client"),
+      client_id: `noska_c_${randomToken(12)}`,
+      client_secret_hash: await sha256Hex(clientSecret),
+      client_secret_hint: `…${clientSecret.slice(-4)}`,
+      redirect_uris: (meta.redirect_uris ?? []) as never,
+      scopes: (meta.scopes ?? []) as never,
+      homepage_url: String(meta.client_uri ?? ""),
+    };
+    const { data, error } = await db().from("oauth_apps").insert(ins).select("*").single();
+    if (error) throw errors.internal(error.message);
+    const app = data as Row;
+    delete app.client_secret_hash;
+    return {
+      client_id: app.client_id,
+      client_secret: clientSecret,
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      client_secret_expires_at: 0,
+      client_name: app.name,
+      redirect_uris: app.redirect_uris,
+      scope: ((app.scopes ?? []) as string[]).join(" "),
+      grant_types: meta.grant_types ?? ["authorization_code", "refresh_token"],
+      token_endpoint_auth_method: "client_secret_post",
+    };
   },
 
   async listApps(userId: string) {

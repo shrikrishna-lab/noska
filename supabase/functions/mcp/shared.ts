@@ -53,6 +53,20 @@ export async function authenticate(req: Request): Promise<KeyRow> {
   // One-link connection, Notion/Supabase style — opt-in, revocable, and
   // never logged by this function.
   let key = await authenticateKey(req).catch(() => null);
+  // OAuth bearer tokens (noska_at_...) issued via the MCP authorization flow
+  if (!key) {
+    const raw = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (raw.startsWith("noska_at_")) {
+      try {
+        const { authenticateOAuthToken } = await import("../_shared/capabilities/platform.ts");
+        const principal = await authenticateOAuthToken(req);
+        key = {
+          id: principal.id, user_id: principal.user_id, scopes: principal.scopes,
+          default_workspace_id: "", read_only: false, allowed_tools: [],
+        };
+      } catch { /* fall through to ?key= / AUTH_REQUIRED */ }
+    }
+  }
   if (!key) {
     const url = new URL(req.url);
     const raw = (url.searchParams.get("key") ?? url.searchParams.get("api_key") ?? "").trim();

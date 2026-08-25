@@ -551,6 +551,41 @@ export function scopeSubset(requested: string[], granted: string[]): boolean {
   return requested.every((r) => have.has(normalizeScope(r)));
 }
 
+/** RFC 7591 dynamic client registration validation (MCP clients).
+ * Accepts https redirects, RFC 8252 loopback (http://127.0.0.1:port,
+ * http://localhost:port) and custom-scheme redirects (com.example:/cb). */
+export function validateDynamicRegistration(input: Row): { ok: true; meta: Row } | { ok: false; errors: string[] } {
+  const errs: string[] = [];
+  const uris = Array.isArray(input.redirect_uris) ? input.redirect_uris.map(String) : [];
+  if (!uris.length) errs.push("redirect_uris is required");
+  for (const u of uris) {
+    if (/^https:\/\//i.test(u)) continue;
+    if (/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(u)) continue;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(u) && !/^https?:/i.test(u)) continue; // custom scheme
+    errs.push(`unsupported redirect_uri "${u}" (https, loopback http, or custom scheme required)`);
+  }
+  const name = typeof input.client_name === "string" ? input.client_name.trim().slice(0, 80) : "";
+  if (!name) errs.push("client_name is required");
+  const scopes = Array.isArray(input.scope)
+    ? input.scope.map(String)
+    : typeof input.scope === "string" ? input.scope.split(/[ +]/).filter(Boolean) : [];
+  const grantTypes = Array.isArray(input.grant_types) ? input.grant_types.map(String) : ["authorization_code", "refresh_token"];
+  for (const g of grantTypes) {
+    if (!["authorization_code", "refresh_token"].includes(g)) errs.push(`unsupported grant_type "${g}"`);
+  }
+  if (errs.length) return { ok: false, errors: errs };
+  return {
+    ok: true,
+    meta: {
+      name,
+      redirect_uris: uris,
+      scopes: scopes.length ? scopes : ["pages:read", "search:read"],
+      grant_types: grantTypes,
+      client_uri: typeof input.client_uri === "string" ? input.client_uri.slice(0, 300) : "",
+    },
+  };
+}
+
 export const OAUTH_CODE_TTL_MS = 10 * 60_000;
 export const OAUTH_ACCESS_TTL_MS = 60 * 60_000;
 export const OAUTH_REFRESH_TTL_DAYS = 30;

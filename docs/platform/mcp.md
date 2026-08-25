@@ -192,3 +192,55 @@ extract-tasks · ask-noska · noska_execute`
   alias needs a DNS/proxy change outside this repo.
 - Per-client connection registry UI (connected-clients list) is pending;
   per-credential restrictions already cover the underlying control.
+
+---
+
+## Canonical production host
+
+```
+https://mcp.noska.me/mcp
+```
+
+Routing layer: Vercel proxies `/mcp`, `/.well-known/oauth-*` and `/oauth/*`
+to the Supabase MCP/OAuth functions (see `vercel.json` rewrites). To go live:
+
+1. DNS: `CNAME mcp.noska.me -> cname.vercel-dns.com`
+2. Vercel dashboard → add domain `mcp.noska.me` to the project (TLS is automatic)
+3. Verify: `curl https://mcp.noska.me/mcp` → MCP metadata JSON
+
+The Supabase endpoint remains valid for backward compatibility.
+
+## OAuth for MCP (authorization spec)
+
+Standards-shaped flow using the existing Noska identity:
+
+```
+client → GET /.well-known/oauth-protected-resource   (resource metadata)
+       → GET /.well-known/oauth-authorization-server (server metadata)
+       → POST /oauth/register                        (RFC 7591 dynamic registration)
+       → GET  /oauth/authorize?…code_challenge…      (Noska login + consent)
+       → POST /oauth/token                           (code + PKCE → tokens)
+       → Bearer noska_at_… on /mcp
+```
+
+- Dynamic registration accepts `https`, RFC 8252 loopback and custom-scheme
+  redirects; defaults to least-privilege scopes (`pages:read search:read`).
+- Tokens are the existing `oauth_tokens` lifecycle: PKCE S256, single-use
+  10-min codes, refresh rotation, revocation.
+- **Consent screen**: the authorize endpoint requires a Noska session; the
+  browser consent UI (workspace + scope picker) is the remaining build.
+  Until it ships, key-based connection is the complete path.
+
+## Verification status (honest matrix)
+
+| Check | Status |
+|---|---|
+| Protocol: initialize / tools/list / tools/call / resources / prompts | ✅ implemented, unit-tested — **live verification pending deploy** |
+| Policy engine / scopes / roles / read-only / allowlists | ✅ shipped + tested |
+| Rate limits + execution budgets + audit | ✅ shipped |
+| OAuth metadata, DCR, token lifecycle, bearer auth on MCP | ✅ shipped |
+| OAuth consent UI | ⏳ pending |
+| mcp.noska.me DNS + TLS | ⏳ pending (routing prepared in vercel.json) |
+| ChatGPT / Claude / Cursor / OpenCode live E2E | ⏳ pending deploy |
+| Files tools | ❌ not exposed (no storage surface yet) |
+| semantic/hybrid search | ❌ feature-gated (no embeddings) |
