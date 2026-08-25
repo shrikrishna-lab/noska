@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, ChevronDown } from 'lucide-react';
+import { Sparkles, ChevronDown, ArrowRight } from 'lucide-react';
 import { Reveal } from './components/Reveal';
 import { supabaseAnon } from '../../lib/supabase';
 import './Changelog.css';
@@ -49,6 +50,11 @@ export default function Changelog() {
           <span className="changelog-eyebrow"><Sparkles size={13} /> Changelog</span>
           <h1>What's actually shipped.</h1>
           <p>Every entry below is a real, built feature — not a roadmap promise.</p>
+          <p style={{ marginTop: 14 }}>
+            <Link to="/patches" className="changelog-patches-link">
+              Read the detailed patch notes <ArrowRight size={13} />
+            </Link>
+          </p>
         </motion.div>
       </section>
 

@@ -160,3 +160,17 @@
     font-size: 32px;
   }
 }
+
+.marketing .changelog-patches-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mkt-accent-purple);
+  text-decoration: none;
+}
+
+.marketing .changelog-patches-link:hover {
+  text-decoration: underline;
+}

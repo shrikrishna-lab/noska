@@ -1439,6 +1439,70 @@ export function useDeleteChangelogEntry() {
   });
 }
 
+// ── Patch Notes ──
+export interface PatchNoteInput {
+  version?: string;
+  title: string;
+  summary?: string;
+  features?: string[];
+  improvements?: string[];
+  fixes?: string[];
+  known_issues?: string[];
+  published?: boolean;
+  published_at?: string | null;
+}
+
+export function usePatchNotes() {
+  return useQuery({
+    queryKey: ["admin", "patch-notes"],
+    queryFn: () => adminSelect<import("./types").PatchNote>("patch_notes", "*", { order: "created_at desc" }),
+  });
+}
+
+export function useCreatePatchNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: PatchNoteInput) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "patch_notes",
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "patch-notes"] }),
+  });
+}
+
+export function useUpdatePatchNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: PatchNoteInput & { id: string }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "patch_notes", p_id: id,
+        p_data: { ...data, updated_at: new Date().toISOString() } satisfies Record<string, unknown>, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "patch-notes"] }),
+  });
+}
+
+export function useDeletePatchNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_delete", {
+        p_session_token: token(), p_table: "patch_notes", p_id: id, p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "patch-notes"] }),
+  });
+}
+
 // ── Blog Posts ──
 export function useBlogPosts() {
   return useQuery({

@@ -279,6 +279,21 @@ export interface ChangelogEntry {
   updated_at: string;
 }
 
+export interface PatchNote {
+  id: string;
+  version: string | null;
+  title: string;
+  summary: string | null;
+  features: string[];
+  improvements: string[];
+  fixes: string[];
+  known_issues: string[];
+  published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlogPost {
   id: string;
   title: string;

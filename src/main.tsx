@@ -27,6 +27,7 @@ const MarketingProduct = lazy(() => import("./pages/marketing/Product"));
 const MarketingSolutions = lazy(() => import("./pages/marketing/Solutions"));
 const MarketingResources = lazy(() => import("./pages/marketing/Resources"));
 const MarketingChangelog = lazy(() => import("./pages/marketing/Changelog"));
+const MarketingPatches = lazy(() => import("./pages/marketing/Patches"));
 const MarketingBlog = lazy(() => import("./pages/marketing/Blog"));
 const BlogPost = lazy(() => import("./pages/marketing/BlogPost"));
 const Legal = lazy(() => import("./pages/marketing/Legal"));
@@ -99,6 +100,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/solutions" element={<MarketingShell><MarketingSolutions /></MarketingShell>} />
           <Route path="/resources" element={<MarketingShell><MarketingResources /></MarketingShell>} />
           <Route path="/changelog" element={<MarketingShell><MarketingChangelog /></MarketingShell>} />
+          <Route path="/patches" element={<MarketingShell><MarketingPatches /></MarketingShell>} />
           <Route path="/blog" element={<MarketingShell><MarketingBlog /></MarketingShell>} />
           <Route path="/blog/:slug" element={<MarketingShell><BlogPost /></MarketingShell>} />
           <Route path="/privacy" element={<MarketingShell><Legal /></MarketingShell>} />

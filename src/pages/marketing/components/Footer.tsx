@@ -164,6 +164,7 @@ export default function Footer() {
                     {settings.show_docs && <li><Link to="/docs" className="liquid-link-item">Documentation</Link></li>}
                     {settings.show_blog && <li><Link to="/blog" className="liquid-link-item">Blog</Link></li>}
                     {settings.show_changelog && <li><Link to="/changelog" className="liquid-link-item">Changelog</Link></li>}
+                    <li><Link to="/patches" className="liquid-link-item">Updates &amp; Patches</Link></li>
                     <li><Link to="/resources" className="liquid-link-item">Guides & shortcuts</Link></li>
                     {settings.show_login && <li><Link to="/login" className="liquid-link-item">Help center</Link></li>}
                   </ul>

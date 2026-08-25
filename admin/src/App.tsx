@@ -46,6 +46,7 @@ const AuditLogs = lazy(() => import("@/pages/AuditLogs").then((m) => ({ default:
 const NotificationDetail = lazy(() => import("@/pages/NotificationDetail").then((m) => ({ default: m.NotificationDetail })));
 const Roadmap = lazy(() => import("@/pages/Roadmap").then((m) => ({ default: m.Roadmap })));
 const ChangelogEntries = lazy(() => import("@/pages/ChangelogEntries").then((m) => ({ default: m.ChangelogEntries })));
+const PatchNotes = lazy(() => import("@/pages/PatchNotes").then((m) => ({ default: m.PatchNotes })));
 const BlogPosts = lazy(() => import("@/pages/BlogPosts").then((m) => ({ default: m.BlogPosts })));
 const LegalPages = lazy(() => import("@/pages/LegalPages").then((m) => ({ default: m.LegalPages })));
 const Broadcasts = lazy(() => import("@/pages/Broadcasts").then((m) => ({ default: m.Broadcasts })));
@@ -195,6 +196,7 @@ export default function App() {
                       <Route path="audit-logs" element={<Suspense fallback={<PageLoading />}><AuditLogs /></Suspense>} />
                       <Route path="roadmap" element={<Suspense fallback={<PageLoading />}><Roadmap /></Suspense>} />
                       <Route path="changelog" element={<Suspense fallback={<PageLoading />}><ChangelogEntries /></Suspense>} />
+                      <Route path="patch-notes" element={<Suspense fallback={<PageLoading />}><PatchNotes /></Suspense>} />
                       <Route path="blog" element={<Suspense fallback={<PageLoading />}><BlogPosts /></Suspense>} />
                       <Route path="legal" element={<Suspense fallback={<PageLoading />}><LegalPages /></Suspense>} />
                       <Route path="broadcasts" element={<Suspense fallback={<PageLoading />}><Broadcasts /></Suspense>} />

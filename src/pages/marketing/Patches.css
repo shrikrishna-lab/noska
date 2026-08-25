@@ -1,0 +1,703 @@
+/* Patches / Updates page — scoped under .marketing, see marketing-theme.css
+   Motion budget: transform/opacity only (GPU-composited), reveals fire once. */
+
+.marketing .patches-wrapper {
+  padding-bottom: 110px;
+}
+
+/* ── Scroll progress ── */
+
+.marketing .patches-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 60;
+  background: linear-gradient(90deg, var(--mkt-accent-purple), var(--mkt-accent-blue));
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+/* ── Word reveal (styles mirrored from Home.css — chunks are code-split) ── */
+
+.marketing .word-reveal {
+  display: inline-block;
+}
+
+.marketing .word-reveal-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.marketing .word-reveal-word {
+  display: inline-block;
+  will-change: transform;
+}
+
+/* ── Hero ── */
+
+.marketing .patches-hero {
+  position: relative;
+  text-align: center;
+  padding: 100px 24px 64px 24px;
+  max-width: 760px !important;
+  overflow: visible;
+}
+
+.marketing .patches-aurora {
+  position: absolute;
+  inset: -40px -80px auto -80px;
+  height: 420px;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, #000 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, #000 30%, transparent 75%);
+}
+
+.marketing .patches-aurora .aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.5;
+  will-change: transform;
+}
+
+.marketing .patches-aurora .a1 {
+  width: 480px;
+  height: 320px;
+  left: 8%;
+  top: 30px;
+  background: radial-gradient(closest-side, var(--mkt-accent-purple-tint), transparent 72%);
+  animation: patches-drift-a 16s ease-in-out infinite alternate;
+}
+
+.marketing .patches-aurora .a2 {
+  width: 520px;
+  height: 300px;
+  right: 4%;
+  top: 90px;
+  background: radial-gradient(closest-side, var(--mkt-accent-blue-tint), transparent 72%);
+  animation: patches-drift-b 20s ease-in-out infinite alternate;
+}
+
+.marketing .patches-aurora .float-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--mkt-accent-purple);
+  opacity: 0.35;
+  animation: patches-float 9s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.marketing .patches-aurora .d1 { left: 22%; top: 120px; animation-delay: 0s; }
+.marketing .patches-aurora .d2 { left: 58%; top: 60px; background-color: var(--mkt-accent-blue); animation-delay: -3s; animation-duration: 11s; }
+.marketing .patches-aurora .d3 { left: 78%; top: 190px; background-color: var(--mkt-accent-sage); animation-delay: -6s; animation-duration: 13s; }
+
+@keyframes patches-float {
+  0%   { transform: translate3d(0, 0, 0); opacity: 0.15; }
+  50%  { opacity: 0.5; }
+  100% { transform: translate3d(14px, -26px, 0); opacity: 0.15; }
+}
+
+@keyframes patches-drift-a {
+  from { transform: translate3d(-30px, 0, 0) scale(1); }
+  to   { transform: translate3d(46px, 26px, 0) scale(1.12); }
+}
+
+@keyframes patches-drift-b {
+  from { transform: translate3d(34px, 12px, 0) scale(1.08); }
+  to   { transform: translate3d(-42px, -18px, 0) scale(1); }
+}
+
+.marketing .patches-hero-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.marketing .patches-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--mkt-accent-purple);
+  background-color: var(--mkt-accent-purple-tint);
+  padding: 6px 12px;
+  border-radius: 30px;
+  margin-bottom: 22px;
+}
+
+.marketing .patches-hero h1 {
+  font-size: clamp(36px, 6vw, 52px);
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+  margin-bottom: 16px;
+}
+
+.marketing .patches-hero h1 em {
+  font-style: italic;
+  background: linear-gradient(120deg, var(--mkt-accent-purple), var(--mkt-accent-blue));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.marketing .patches-hero p {
+  font-size: 16px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+/* ── Stats ── */
+
+.marketing .patches-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  margin-top: 34px;
+}
+
+.marketing .patches-stats .stat-row {
+  display: contents;
+}
+
+.marketing .patches-stats .stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 86px;
+}
+
+.marketing .patches-stats .stat strong {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .patches-stats .stat span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.marketing .patches-stats .stat-divider {
+  width: 1px;
+  height: 38px;
+  background-color: var(--mkt-border-color);
+}
+
+/* ── Sticky filter bar ── */
+
+.marketing .patches-filterbar {
+  position: sticky;
+  top: 62px;
+  z-index: 20;
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  background: color-mix(in srgb, var(--mkt-bg-primary) 78%, transparent);
+  border-top: 1px solid var(--mkt-border-color);
+  border-bottom: 1px solid var(--mkt-border-color);
+  margin-bottom: 44px;
+}
+
+.marketing .patches-filters {
+  display: flex;
+  gap: 8px;
+  padding: 10px 24px;
+  max-width: 760px !important;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.marketing .patches-filters::-webkit-scrollbar { display: none; }
+
+.marketing .filter-pill {
+  appearance: none;
+  position: relative;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--mkt-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 15px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--mkt-transition-fast),
+    border-color var(--mkt-transition-fast),
+    background-color var(--mkt-transition-fast),
+    transform var(--mkt-transition-fast);
+}
+
+.marketing .filter-pill-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background-color: var(--mkt-text-primary);
+  border: 1px solid var(--mkt-text-primary);
+}
+
+.marketing .filter-pill-label {
+  position: relative;
+  z-index: 1;
+}
+
+.marketing .filter-pill:not(.active) {
+  border-color: var(--mkt-border-color);
+  background-color: var(--mkt-bg-primary);
+}
+
+.marketing .filter-pill.active {
+  color: var(--mkt-bg-primary);
+}
+
+.marketing .filter-pill:focus-visible {
+  outline: 2px solid var(--mkt-accent-purple);
+  outline-offset: 2px;
+}
+
+/* ── Timeline list ── */
+
+.marketing .patches-list {
+  max-width: 800px !important;
+}
+
+.marketing .patches-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-left: 26px;
+}
+
+/* vertical rail — animated in via .patches-rail (scaleY draw) */
+.marketing .patches-rail {
+  position: absolute;
+  left: 5px;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to bottom,
+    var(--mkt-accent-purple) 0%,
+    var(--mkt-border-strong) 220px,
+    var(--mkt-border-color) 55%
+  );
+  opacity: 0.55;
+  transform-origin: 50% 0;
+  will-change: transform;
+}
+
+.marketing .patch-card-wrap {
+  position: relative;
+}
+
+/* node dot on the rail */
+.marketing .patch-card-wrap::before {
+  content: "";
+  position: absolute;
+  left: -26px;
+  top: 34px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--mkt-bg-primary);
+  border: 3px solid var(--mkt-accent-purple);
+  box-shadow: 0 0 0 4px var(--mkt-bg-primary);
+  transition: transform var(--mkt-transition-fast), box-shadow var(--mkt-transition-fast);
+}
+
+.marketing .patch-card-wrap:first-child::before {
+  background-color: var(--mkt-accent-purple);
+  animation: patches-node-pulse 2.6s ease-out infinite;
+}
+
+@keyframes patches-node-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mkt-accent-purple) 45%, transparent), 0 0 0 4px var(--mkt-bg-primary); }
+  70%  { box-shadow: 0 0 0 11px transparent, 0 0 0 4px var(--mkt-bg-primary); }
+  100% { box-shadow: 0 0 0 0 transparent, 0 0 0 4px var(--mkt-bg-primary); }
+}
+
+.marketing .patch-card-wrap:hover::before {
+  transform: scale(1.25);
+}
+
+/* ── Card ── */
+
+.marketing .patch-card {
+  position: relative;
+  border: 1px solid var(--mkt-border-color);
+  border-radius: 20px;
+  background-color: var(--mkt-bg-primary);
+  overflow: hidden;
+  transition:
+    border-color var(--mkt-transition-fast),
+    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  /* perf: skip rendering work for far-offscreen cards */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+
+@media (hover: hover) {
+  .marketing .patch-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--mkt-border-strong);
+    box-shadow:
+      0 18px 44px -18px rgba(23, 22, 27, 0.18),
+      0 2px 8px rgba(23, 22, 27, 0.05);
+  }
+}
+
+.marketing .patch-card.latest {
+  border-color: var(--mkt-border-strong);
+  box-shadow: 0 12px 36px -20px rgba(136, 116, 168, 0.35);
+}
+
+/* keep the copy button clear of the absolutely-positioned Latest badge */
+.marketing .patch-card.latest .patch-meta {
+  padding-right: 92px;
+}
+
+.marketing .patch-latest-badge {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mkt-accent-purple);
+  background-color: var(--mkt-accent-purple-tint);
+  padding: 5px 11px;
+  border-radius: 999px;
+  animation: patches-badge-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes patches-badge-pop {
+  0% { opacity: 0; transform: scale(0.6) translateY(-6px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.marketing .patch-card-header {
+  padding: 28px 30px 22px 30px;
+  border-bottom: 1px solid var(--mkt-border-color);
+}
+
+.marketing .patch-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 13px;
+}
+
+.marketing .patch-version {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--mkt-accent-purple);
+  background-color: var(--mkt-accent-purple-tint);
+  border-radius: 20px;
+  padding: 3px 11px;
+}
+
+.marketing .patch-date {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+}
+
+.marketing .patch-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--mkt-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition:
+    color var(--mkt-transition-fast),
+    background-color var(--mkt-transition-fast),
+    border-color var(--mkt-transition-fast);
+}
+
+.marketing .patch-copy-btn:hover {
+  color: var(--mkt-text-primary);
+  background-color: var(--mkt-bg-secondary);
+  border-color: var(--mkt-border-color);
+}
+
+.marketing .patch-copy-btn.copied,
+.marketing .patch-copy-btn:active {
+  color: var(--mkt-accent-sage);
+}
+
+.marketing .patch-card-header h2 {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  margin-bottom: 9px;
+  padding-right: 74px;
+}
+
+.marketing .patch-summary {
+  font-size: 14.5px;
+  color: var(--mkt-text-secondary);
+  line-height: 1.6;
+  max-width: 58ch;
+}
+
+/* ── Sections grid ── */
+
+.marketing .patch-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.marketing .patch-section {
+  padding: 22px 30px 26px 30px;
+  border-top: 1px solid var(--mkt-border-color);
+  min-width: 0;
+}
+
+.marketing .patch-section:nth-child(odd) {
+  border-right: 1px solid var(--mkt-border-color);
+}
+
+/* single-column sections span full width */
+.marketing .patch-sections > .patch-section:only-child,
+.marketing .patch-sections > .patch-section:last-child:nth-child(odd) {
+  border-right: none;
+  grid-column: 1 / -1;
+}
+
+.marketing .patch-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  margin-bottom: 14px;
+}
+
+.marketing .patch-section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .patch-card:hover .patch-section-icon {
+  transform: rotate(-8deg) scale(1.08);
+}
+
+.marketing .patch-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0;
+  background-color: var(--mkt-bg-secondary);
+  color: var(--mkt-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.marketing .patch-section.features h3 { color: var(--mkt-accent-sage); }
+.marketing .patch-section.features .patch-section-icon { background-color: var(--mkt-accent-sage-tint); }
+
+.marketing .patch-section.improvements h3 { color: var(--mkt-accent-blue); }
+.marketing .patch-section.improvements .patch-section-icon { background-color: var(--mkt-accent-blue-tint); }
+
+.marketing .patch-section.fixes h3 { color: var(--mkt-accent-red); }
+.marketing .patch-section.fixes .patch-section-icon { background-color: var(--mkt-accent-red-tint); }
+
+.marketing .patch-section.known h3 { color: var(--mkt-accent-orange); }
+.marketing .patch-section.known .patch-section-icon { background-color: var(--mkt-accent-orange-tint); }
+
+.marketing .patch-section ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .patch-section li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--mkt-text-primary);
+}
+
+.marketing .patch-section li::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 8.5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.28;
+  transition: opacity var(--mkt-transition-fast);
+}
+
+.marketing .patch-card:hover .patch-section li::before { opacity: 0.45; }
+.marketing .patch-section.fixes li::before { opacity: 0.55; }
+.marketing .patch-section.known li::before { opacity: 0.5; }
+
+/* ── Skeleton loading ── */
+
+.marketing .skel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: var(--mkt-bg-secondary);
+}
+
+.marketing .skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--mkt-bg-primary) 65%, transparent),
+    transparent
+  );
+  animation: patches-shimmer 1.6s infinite;
+}
+
+@keyframes patches-shimmer {
+  to { transform: translateX(100%); }
+}
+
+.marketing .patch-skeleton .patch-card-header { padding: 28px 30px; }
+
+.marketing .skel-pill { width: 88px; height: 22px; border-radius: 999px; margin-bottom: 16px; }
+.marketing .skel-title { width: 62%; height: 26px; margin-bottom: 14px; }
+.marketing .skel-heading { width: 130px; height: 16px; margin-bottom: 16px; }
+.marketing .skel-line { height: 13px; margin-bottom: 11px; }
+.marketing .skel-line.short { width: 72%; }
+
+/* ── Empty state ── */
+
+.marketing .patches-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 70px 24px;
+  color: var(--mkt-text-secondary);
+  font-size: 15px;
+  text-align: center;
+}
+
+/* ── Back to top ── */
+
+.marketing .patches-top-btn {
+  position: fixed;
+  right: 26px;
+  bottom: 26px;
+  z-index: 40;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mkt-border-strong);
+  border-radius: 50%;
+  background-color: var(--mkt-bg-primary);
+  color: var(--mkt-text-primary);
+  cursor: pointer;
+  box-shadow: 0 10px 28px -10px rgba(23, 22, 27, 0.28);
+  transition: border-color var(--mkt-transition-fast), background-color var(--mkt-transition-fast);
+}
+
+.marketing .patches-top-btn:hover {
+  background-color: var(--mkt-text-primary);
+  color: var(--mkt-bg-primary);
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 720px) {
+  .marketing .patches-hero { padding: 72px 20px 48px 20px; }
+  .marketing .patches-hero h1 { font-size: 34px; }
+  .marketing .patches-stats { gap: 16px; }
+  .marketing .patches-stats .stat strong { font-size: 24px; }
+
+  .marketing .patches-timeline {
+    padding-left: 18px;
+    gap: 22px;
+  }
+
+  .marketing .patches-timeline::before { left: 3px; }
+  .marketing .patch-card-wrap::before { left: -18px; width: 10px; height: 10px; top: 30px; }
+
+  .marketing .patch-card-header { padding: 22px 20px 18px 20px; }
+  .marketing .patch-card-header h2 { font-size: 21px; padding-right: 0; }
+  .marketing .patch-latest-badge { position: static; display: inline-flex; margin-bottom: 10px; }
+  .marketing .patch-meta { flex-wrap: wrap; row-gap: 6px; }
+
+  .marketing .patch-sections { grid-template-columns: 1fr; }
+  .marketing .patch-section { padding: 18px 20px 22px 20px; }
+  .marketing .patch-section:nth-child(odd) { border-right: none; }
+
+  .marketing .patches-filterbar { top: 54px; }
+  .marketing .patches-filters { padding: 9px 16px; }
+
+  .marketing .patches-top-btn { right: 16px; bottom: 16px; width: 40px; height: 40px; }
+}
+
+/* ── Reduced motion ── */
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing .patches-aurora .aurora,
+  .marketing .patches-aurora .float-dot { animation: none; }
+  .marketing .patches-aurora .float-dot { display: none; }
+  .marketing .patches-progress { display: none; }
+  .marketing .patches-rail { transform: none; }
+  .marketing .skel::after { animation: none; }
+  .marketing .patch-latest-badge { animation: none; }
+  .marketing .patch-card-wrap:first-child::before { animation: none; }
+  .marketing .patch-card,
+  .marketing .patch-card:hover,
+  .marketing .filter-pill,
+  .marketing .patch-section-icon { transition: none; transform: none; }
+}
