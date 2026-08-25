@@ -13,7 +13,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { X, type LucideIcon } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { AnimatedModal, SPRING_PRESETS } from "../../features/motion/MotionSystem";
 
 export function useOutsideDismiss<T extends HTMLElement = HTMLElement>(
@@ -161,7 +161,7 @@ export function FloatingMenu({ open, anchorRef, onClose, children, width = 320, 
     };
   }, [open, anchorRef, width, preferredAlign]);
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0, scale: 0.96, y: -6 },
     show: {
       opacity: 1,
