@@ -37,6 +37,7 @@ import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { aiManager } from "../../ai/AIManager"
 import { getAllProviders } from "../../ai/providers"
+import { VoiceInput } from "./voice-input"
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -2686,14 +2687,22 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
                   ) : null}
                 </AnimatePresence>
 
-                <MicButton
-                  disabled={disabled || status === "loading" || talking}
-                  phase={dictationPhase}
-                  onToggle={toggleDictation}
-                  reduceMotion={reduceMotion}
+                <VoiceInput
+                  className={cn(
+                    "scale-90 origin-center",
+                    (disabled || status === "loading" || talking) && "pointer-events-none opacity-40"
+                  )}
+                  onStart={() => onDictationChange?.(true)}
+                  onStop={() => onDictationChange?.(false)}
+                  onTranscript={(text) => {
+                    setValue((prev) => {
+                      if (!prev) return text;
+                      return prev + " " + text;
+                    });
+                  }}
                 />
                 <ActionButton
-                  disabled={disabled || dictationPhase !== "idle"}
+                  disabled={disabled}
                   status={status}
                   hasText={hasText}
                   talking={talking}

@@ -56,6 +56,7 @@ import { AnimatedSparkle } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss, TextArea } from "./ui";
 import { emojis, covers, blockFor, getPagePermission, renderInlineMarkdown, softDelete, getDescendants, turnInto } from "../utils/helpers";
 import { richTextToPlainText, plainTextToRichText } from "../utils/richText";
+import { globalVoiceController } from "../lib/voice/voice-controller";
 
 // Searchable emoji catalog for the /emoji picker (keyword-indexed).
 const EMOJI_CATALOG = [
@@ -1126,11 +1127,12 @@ export default function Editor({
                 className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onVoiceCapture?.();
+                  globalVoiceController.toggle();
                 }}
+                title="Toggle Voice Typing (Ctrl+Shift+Space)"
               >
                 <Mic size={12} />
-                <span>Voice capture</span>
+                <span>Voice typing</span>
               </button>
             </div>
           )}
