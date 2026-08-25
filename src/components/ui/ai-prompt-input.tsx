@@ -3,7 +3,6 @@
 import * as React from "react"
 import {
   ArrowUpIcon,
-  AudioLinesIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -2215,110 +2214,29 @@ function DictationWaveform({
   )
 }
 
-function VoiceModeBadge({ reduceMotion }: { reduceMotion: boolean }) {
-  return (
-    <motion.div
-      layout
-      {...statusPresence(reduceMotion)}
-      className="bg-muted text-foreground flex h-9 items-center gap-2 rounded-xl px-2.5 shadow-2xs"
-      role="status"
-    >
-      <motion.span
-        className="flex"
-        animate={reduceMotion ? undefined : { opacity: [0.55, 1, 0.55] }}
-        transition={{ duration: 1.4, ease: EASE, repeat: Infinity }}
-      >
-        <AudioLinesIcon className="size-3.5" aria-hidden />
-      </motion.span>
-      <span className="text-xs font-medium tracking-tight">Voice mode</span>
-    </motion.div>
-  )
-}
-
-function MicButton({
-  disabled,
-  phase,
-  onToggle,
-  reduceMotion,
-}: {
-  disabled?: boolean
-  phase: DictationPhase
-  onToggle: () => void
-  reduceMotion: boolean
-}) {
-  const active = phase === "recording"
-  const processing = phase === "processing"
-  const label =
-    phase === "recording"
-      ? "Stop recording"
-      : phase === "processing"
-        ? "Processing voice"
-        : "Start dictation"
-
-  return (
-    <motion.button
-      type="button"
-      aria-label={label}
-      disabled={disabled || processing}
-      onClick={onToggle}
-      whileHover={disabled || processing ? undefined : { scale: 1.05 }}
-      whileTap={disabled || processing ? undefined : { scale: 0.96 }}
-      transition={SPRING_PRESS}
-      className={cn(
-        TOOLBAR_BTN_CLASS,
-        active || processing ? "bg-muted text-foreground" : "text-muted-foreground"
-      )}
-    >
-      <AnimatePresence mode="wait" initial={false}>
-        {processing ? (
-          <IconSwapFrame swapKey="processing" reduceMotion={reduceMotion}>
-            <Loader2Icon className="size-4 animate-spin" aria-hidden />
-          </IconSwapFrame>
-        ) : active ? (
-          <IconSwapFrame swapKey="stop" reduceMotion={reduceMotion}>
-            <SquareIcon className="size-3.5 fill-current" aria-hidden />
-          </IconSwapFrame>
-        ) : (
-          <IconSwapFrame swapKey="mic" reduceMotion={reduceMotion}>
-            <MicIcon className="size-4" aria-hidden />
-          </IconSwapFrame>
-        )}
-      </AnimatePresence>
-    </motion.button>
-  )
-}
-
 function ActionButton({
   disabled,
   status,
   hasText,
-  talking,
   onSend,
-  onTalkToggle,
   reduceMotion,
 }: {
   disabled?: boolean
   status: AiPromptSendStatus
   hasText: boolean
-  talking: boolean
   onSend: () => void
-  onTalkToggle: () => void
   reduceMotion: boolean
 }) {
   const isLoading = status === "loading"
   const isSuccess = status === "success"
-  const showSend = !talking && (hasText || isLoading || isSuccess)
-  const isDisabled = talking ? false : disabled || isLoading
+  const canSend = hasText && !isLoading && !disabled
+  const isDisabled = !canSend && !isSuccess
 
-  const label = talking
-    ? "Stop voice conversation"
-    : isLoading
-      ? "Sending"
-      : isSuccess
-        ? "Sent"
-        : showSend
-          ? "Send message"
-          : "Talk with AI"
+  const label = isLoading
+    ? "Sending"
+    : isSuccess
+      ? "Sent"
+      : "Send message"
 
   return (
     <motion.button
@@ -2326,27 +2244,22 @@ function ActionButton({
       aria-label={label}
       disabled={isDisabled}
       onClick={() => {
-        if (talking || !showSend) onTalkToggle()
-        else onSend()
+        if (canSend) onSend()
       }}
       whileHover={isDisabled ? undefined : { scale: 1.05 }}
       whileTap={isDisabled ? undefined : { scale: 0.94 }}
       transition={SPRING_PRESS}
       className={cn(
-        "relative flex size-9 cursor-pointer items-center justify-center overflow-hidden rounded-full transition-all duration-200",
+        "relative flex size-9 items-center justify-center overflow-hidden rounded-full transition-all duration-200",
         "focus:outline-none focus-visible:outline-none",
-        "disabled:pointer-events-none",
-        showSend || talking
-          ? "bg-foreground text-background shadow-sm hover:opacity-90"
-          : "bg-muted text-muted-foreground hover:text-foreground"
+        canSend || isSuccess
+          ? "bg-foreground text-background shadow-sm hover:opacity-90 cursor-pointer"
+          : "bg-muted text-muted-foreground/40 cursor-not-allowed opacity-60",
+        isDisabled && "pointer-events-none"
       )}
     >
       <AnimatePresence mode="wait" initial={false}>
-        {talking ? (
-          <IconSwapFrame swapKey="stop" reduceMotion={reduceMotion}>
-            <SquareIcon className="size-3.5 fill-current" aria-hidden />
-          </IconSwapFrame>
-        ) : isLoading ? (
+        {isLoading ? (
           <IconSwapFrame swapKey="loader" reduceMotion={reduceMotion}>
             <Loader2Icon className="size-4 animate-spin" aria-hidden />
           </IconSwapFrame>
@@ -2354,13 +2267,9 @@ function ActionButton({
           <IconSwapFrame swapKey="check" reduceMotion={reduceMotion}>
             <CheckIcon className="size-4" aria-hidden />
           </IconSwapFrame>
-        ) : showSend ? (
+        ) : (
           <IconSwapFrame swapKey="arrow" reduceMotion={reduceMotion}>
             <ArrowUpIcon className="size-4" aria-hidden />
-          </IconSwapFrame>
-        ) : (
-          <IconSwapFrame swapKey="waves" reduceMotion={reduceMotion}>
-            <AudioLinesIcon className="size-4" aria-hidden />
           </IconSwapFrame>
         )}
       </AnimatePresence>
@@ -2679,21 +2588,21 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
                       reduceMotion={reduceMotion}
                     />
                   ) : null}
-                  {talking ? (
-                    <VoiceModeBadge
-                      key="voice-mode"
-                      reduceMotion={reduceMotion}
-                    />
-                  ) : null}
                 </AnimatePresence>
 
                 <VoiceInput
                   className={cn(
                     "scale-90 origin-center",
-                    (disabled || status === "loading" || talking) && "pointer-events-none opacity-40"
+                    (disabled || status === "loading") && "pointer-events-none opacity-40"
                   )}
-                  onStart={() => onDictationChange?.(true)}
-                  onStop={() => onDictationChange?.(false)}
+                  onStart={() => {
+                    setDictationPhase("recording")
+                    onDictationChange?.(true)
+                  }}
+                  onStop={() => {
+                    setDictationPhase("idle")
+                    onDictationChange?.(false)
+                  }}
                   onTranscript={(text) => {
                     setValue((prev) => {
                       if (!prev) return text;
@@ -2705,9 +2614,7 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
                   disabled={disabled}
                   status={status}
                   hasText={hasText}
-                  talking={talking}
                   onSend={submit}
-                  onTalkToggle={toggleTalk}
                   reduceMotion={reduceMotion}
                 />
               </div>

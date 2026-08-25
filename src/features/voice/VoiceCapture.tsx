@@ -76,6 +76,7 @@ export default function VoiceCapture({
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const isListeningRef = useRef(false);
+  const restartAttemptsRef = useRef(0);
 
   // Initialize WebGL Halftone / Bayer-Dithered soundwave sphere
   const initialiseWebGL = useCallback(() => {
@@ -297,71 +298,6 @@ export default function VoiceCapture({
     }
   }, [initialiseWebGL]);
 
-  const startRecording = useCallback(async () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setSupported(false);
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const audioCtx = new AudioContext();
-      audioCtxRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
-
-      recognition.onresult = (event: any) => {
-        let final = "";
-        let interim = "";
-        for (let i = 0; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript + " ";
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-        if (final) {
-          setTranscript((prev) => prev + final);
-        }
-        setInterimText(interim);
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error !== "no-speech") {
-          onToast?.(`Speech error: ${event.error}`);
-        }
-      };
-
-      recognition.onend = () => {
-        if (recognitionRef.current && isListeningRef.current) {
-          try { recognition.start(); } catch (e) { console.warn("VoiceCapture restart:", e); }
-        }
-      };
-
-      recognition.start();
-      recognitionRef.current = recognition;
-      isListeningRef.current = true;
-      setIsRecording(true);
-      setElapsed(0);
-
-      timerRef.current = setInterval(() => {
-        setElapsed((e) => e + 1);
-      }, 1000);
-    } catch (err) {
-      onToast?.("Microphone access denied or unavailable");
-    }
-  }, [onToast]);
-
   const stopRecording = useCallback(() => {
     isListeningRef.current = false;
     if (recognitionRef.current) {
@@ -383,6 +319,101 @@ export default function VoiceCapture({
     setIsRecording(false);
     setInterimText("");
   }, []);
+
+  const startRecording = useCallback(async () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSupported(false);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const audioCtx = new AudioContext();
+      // Autoplay policy can leave the context suspended — analyser reads zeros
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+      audioCtxRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: any) => {
+        restartAttemptsRef.current = 0;
+        let final = "";
+        let interim = "";
+        for (let i = 0; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            final += event.results[i][0].transcript + " ";
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        if (final) {
+          setTranscript((prev) => prev + final);
+        }
+        setInterimText(interim);
+      };
+
+      recognition.onerror = (event: any) => {
+        const code = event.error || "unknown";
+        if (code === "no-speech" || code === "aborted") return;
+        // Permission/capture failures never recover on their own — without
+        // this the UI stays stuck on "Live" with a dead session.
+        if (
+          code === "not-allowed" ||
+          code === "service-not-allowed" ||
+          code === "audio-capture"
+        ) {
+          onToast?.(
+            code === "not-allowed" || code === "service-not-allowed"
+              ? "Microphone permission denied — enable it in your browser settings"
+              : "No microphone available"
+          );
+          stopRecording();
+          return;
+        }
+        onToast?.(`Speech error: ${code}`);
+      };
+
+      recognition.onend = () => {
+        restartAttemptsRef.current += 1;
+        if (!recognitionRef.current || !isListeningRef.current) return;
+        if (restartAttemptsRef.current > 5) {
+          onToast?.("Voice recognition stopped responding");
+          stopRecording();
+          return;
+        }
+        // Small delay so the engine fully releases before restarting
+        setTimeout(() => {
+          if (!recognitionRef.current || !isListeningRef.current) return;
+          try { recognition.start(); } catch (e) { console.warn("VoiceCapture restart:", e); }
+        }, 250);
+      };
+
+      restartAttemptsRef.current = 0;
+      recognition.start();
+      recognitionRef.current = recognition;
+      isListeningRef.current = true;
+      setIsRecording(true);
+      setElapsed(0);
+
+      timerRef.current = setInterval(() => {
+        setElapsed((e) => e + 1);
+      }, 1000);
+    } catch (err) {
+      onToast?.("Microphone access denied or unavailable");
+    }
+  }, [onToast, stopRecording]);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;

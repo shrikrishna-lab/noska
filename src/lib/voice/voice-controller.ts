@@ -9,7 +9,7 @@ import {
   isSpeechRecognitionSupported,
   SpeechRecognitionAdapter,
 } from "./speech-recognition";
-import { insertTextAtCursor, getActiveTypingElement } from "./active-input";
+import { insertTextSmoothly, flushSmoothTyping, getActiveTypingElement } from "./active-input";
 import { useEffect, useState } from "react";
 
 export type VoiceState = "idle" | "starting" | "listening" | "stopping" | "error";
@@ -31,11 +31,15 @@ class VoiceController {
 
   private micSession: MicrophoneSession | null = null;
   private recognitionAdapter: SpeechRecognitionAdapter | null = null;
-  private frequencyLevels: number[] = new Array(12).fill(0.05);
+  private frequencyLevels: number[] = new Array(16).fill(0.05);
 
   private subscribers: Set<VoiceSubscriber> = new Set();
   private transcriptCallbacks: Set<(text: string) => void> = new Set();
   private errorCallbacks: Set<(err: Error) => void> = new Set();
+  private activeOptions: {
+    onStop?: () => void;
+  } | null = null;
+  private startGeneration = 0;
 
   private keyListenerAttached = false;
 
@@ -82,8 +86,13 @@ class VoiceController {
     this.subscribers.forEach((cb) => cb(payload));
   }
 
-  public async start(options?: { onTranscript?: (text: string) => void; onError?: (err: Error) => void }) {
-    if (this.isListening || this.state === "starting") return;
+  public async start(options?: {
+    onTranscript?: (text: string) => void;
+    onError?: (err: Error) => void;
+    onStart?: () => void;
+    onStop?: () => void;
+  }): Promise<boolean> {
+    if (this.isListening || this.state === "starting") return false;
 
     this.state = "starting";
     this.error = null;
@@ -96,25 +105,31 @@ class VoiceController {
       this.notify();
       options?.onError?.(err);
       this.errorCallbacks.forEach((cb) => cb(err));
-      return;
+      return false;
     }
 
     try {
       // 1. Start audio context + real frequency analyser
+      const myGeneration = ++this.startGeneration;
       this.micSession = await startMicrophoneCapture();
+
+      // A stop() (or newer start) may have superseded us while awaiting the
+      // permission prompt — release the orphaned mic instead of going live.
+      if (myGeneration !== this.startGeneration) {
+        this.micSession.stop();
+        this.micSession = null;
+        return false;
+      }
 
       // 2. Initialize Speech Recognition
       this.recognitionAdapter = createBrowserSpeechRecognition({
-        onTranscript: (finalText, interimText) => {
-          const text = finalText || interimText;
-          if (text) {
-            // Insert directly at cursor in active input/editor
-            insertTextAtCursor(text);
-
-            // Call component or global subscribers
+        onTranscript: (finalText) => {
+          const text = finalText.trim();
+          if (!text) return;
+          insertTextSmoothly(text, null, () => {
             options?.onTranscript?.(text);
             this.transcriptCallbacks.forEach((cb) => cb(text));
-          }
+          });
         },
         onError: (err) => {
           this.error = err;
@@ -124,16 +139,23 @@ class VoiceController {
         },
         onEnd: () => {
           if (this.isListening) {
-            // Attempt auto reconnect if listening
+            // Recognition ended unexpectedly (fatal error or restart budget
+            // exhausted) — tear down so the UI doesn't stay stuck "listening".
+            const opts = this.activeOptions;
+            this.cleanup();
+            opts?.onStop?.();
+            this.notify();
           }
         },
       });
 
+      this.activeOptions = { onStop: options?.onStop };
       this.recognitionAdapter.start();
 
       this.isListening = true;
       this.state = "listening";
       this.notify();
+      options?.onStart?.();
 
       // Start elapsed timer
       this.timerId = setInterval(() => {
@@ -141,14 +163,17 @@ class VoiceController {
         this.notify();
       }, 1000);
 
-      // Start real-time 12-band frequency analysis loop
+      // Start real-time 12-band frequency analysis loop (throttled to ~30fps
+      // to avoid re-rendering every subscriber at display refresh rate)
+      let frameCount = 0;
       const updateFrequencies = () => {
         if (!this.isListening || !this.micSession) return;
-        this.frequencyLevels = this.micSession.getFrequencyBands(12);
-        this.notify();
+        this.frequencyLevels = this.micSession.getFrequencyBands(16);
+        if (++frameCount % 2 === 0) this.notify();
         this.animFrameId = requestAnimationFrame(updateFrequencies);
       };
       this.animFrameId = requestAnimationFrame(updateFrequencies);
+      return true;
     } catch (err: any) {
       this.cleanup();
       this.error = err instanceof Error ? err : new Error(String(err));
@@ -156,12 +181,17 @@ class VoiceController {
       this.notify();
       options?.onError?.(this.error);
       this.errorCallbacks.forEach((cb) => cb(this.error!));
+      return false;
     }
   }
 
   public stop() {
     if (!this.isListening && this.state !== "starting") return;
+    // Invalidate any in-flight start() awaiting the mic prompt
+    this.startGeneration += 1;
+    const opts = this.activeOptions;
     this.cleanup();
+    opts?.onStop?.();
     this.notify();
   }
 
@@ -177,7 +207,7 @@ class VoiceController {
     this.state = "idle";
     this.isListening = false;
     this.time = 0;
-    this.frequencyLevels = new Array(12).fill(0.05);
+    this.frequencyLevels = new Array(16).fill(0.05);
 
     if (this.timerId) {
       clearInterval(this.timerId);
@@ -195,6 +225,8 @@ class VoiceController {
       this.recognitionAdapter.stop();
       this.recognitionAdapter = null;
     }
+    flushSmoothTyping();
+    this.activeOptions = null;
   }
 
   private attachGlobalKeyboardShortcut() {
@@ -206,7 +238,7 @@ class VoiceController {
       const isMac = navigator.platform?.toUpperCase().indexOf("MAC") >= 0;
       const modifier = isMac ? e.metaKey : e.ctrlKey;
 
-      if (modifier && e.shiftKey && e.code === "Space") {
+      if (modifier && e.shiftKey && (e.code === "Space" || e.key === " " || e.key === "Space")) {
         e.preventDefault();
         e.stopPropagation();
         this.toggle();
@@ -216,6 +248,10 @@ class VoiceController {
 
   public getIsListening(): boolean {
     return this.isListening;
+  }
+
+  public isBusy(): boolean {
+    return this.isListening || this.state === "starting";
   }
 
   public getTime(): number {
@@ -250,15 +286,16 @@ export function useVoiceController(options?: {
   }, []);
 
   const toggle = () => {
-    if (state.isListening) {
+    // Read live controller state — the hook's snapshot goes stale on rapid clicks
+    if (globalVoiceController.isBusy()) {
       globalVoiceController.stop();
-      options?.onStop?.();
     } else {
       globalVoiceController.start({
         onTranscript: options?.onTranscript,
         onError: options?.onError,
+        onStart: options?.onStart,
+        onStop: options?.onStop,
       });
-      options?.onStart?.();
     }
   };
 
@@ -266,13 +303,13 @@ export function useVoiceController(options?: {
     globalVoiceController.start({
       onTranscript: options?.onTranscript,
       onError: options?.onError,
+      onStart: options?.onStart,
+      onStop: options?.onStop,
     });
-    options?.onStart?.();
   };
 
   const stop = () => {
     globalVoiceController.stop();
-    options?.onStop?.();
   };
 
   return {

@@ -1,5 +1,6 @@
 /**
- * Active input tracking & cursor-preserving text insertion for global dictation.
+ * Active input tracking & cursor-preserving smooth character-by-character
+ * text streaming for global voice dictation.
  */
 
 let lastFocusedElement: HTMLElement | null = null;
@@ -44,6 +45,7 @@ export function isTypingElement(el: HTMLElement | null): boolean {
   }
   if (tag === "textarea") return true;
   if (el.isContentEditable) return true;
+  if (el.getAttribute("contenteditable") === "true") return true;
   if (el.getAttribute("role") === "textbox") return true;
   return false;
 }
@@ -56,21 +58,63 @@ export function getActiveTypingElement(): HTMLElement | null {
   if (lastFocusedElement && document.body.contains(lastFocusedElement)) {
     return lastFocusedElement;
   }
+  // Fallback: look for the active or first editable block in the editor
+  const editorBlock = document.querySelector(
+    "[data-block-id] .rich-text-editor[contenteditable='true'], .rich-text-editor[contenteditable='true'], [contenteditable='true'], textarea:not([disabled]), input[type='text']:not([disabled])"
+  ) as HTMLElement | null;
+  if (editorBlock) {
+    return editorBlock;
+  }
   return null;
 }
 
-/**
- * Inserts text at the current cursor position or replaces the selected text.
- */
-export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | null): boolean {
-  if (!text) return false;
+function getPrefixText(target: HTMLElement): string {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    const start = target.selectionStart ?? target.value.length;
+    return target.value.substring(0, start);
+  }
+  if (target.isContentEditable || target.getAttribute("contenteditable") === "true") {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      try {
+        const range = selection.getRangeAt(0);
+        const prefixRange = range.cloneRange();
+        prefixRange.selectNodeContents(target);
+        prefixRange.setEnd(range.endContainer, range.endOffset);
+        return prefixRange.toString();
+      } catch {
+        return "";
+      }
+    }
+  }
+  return "";
+}
 
+function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const proto =
+    el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+  if (descriptor?.set) {
+    descriptor.set.call(el, value);
+  } else {
+    el.value = value;
+  }
+}
+
+function rangeIsInside(el: HTMLElement, range: Range): boolean {
+  return el.contains(range.startContainer) && el.contains(range.endContainer);
+}
+
+/**
+ * Inserts a single character/chunk into the active input or contentEditable.
+ */
+function insertDirectChunk(textChunk: string, targetOverride?: HTMLElement | null): boolean {
+  if (!textChunk) return false;
   const target = targetOverride || getActiveTypingElement();
   if (!target) return false;
 
   // 1. Standard HTMLInputElement or HTMLTextAreaElement
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-    target.focus();
     const start = target.selectionStart ?? target.value.length;
     const end = target.selectionEnd ?? target.value.length;
     const originalValue = target.value;
@@ -78,69 +122,142 @@ export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | 
     const prefix = originalValue.substring(0, start);
     const suffix = originalValue.substring(end);
 
-    // If there's preceding text without trailing space and text doesn't start with space or punctuation, add space
-    let textToInsert = text;
-    if (prefix.length > 0 && !/\s$/.test(prefix) && !/^[\s,.:;!?]/.test(textToInsert)) {
-      textToInsert = " " + textToInsert;
-    }
+    setNativeValue(target, prefix + textChunk + suffix);
 
-    const nextValue = prefix + textToInsert + suffix;
-    const nextCursorPos = start + textToInsert.length;
-
-    // Use setRangeText where available for native undo stack, fallback to value assignment
-    if (typeof target.setRangeText === "function") {
-      target.setRangeText(textToInsert, start, end, "end");
-    } else {
-      target.value = nextValue;
+    const nextCursorPos = start + textChunk.length;
+    try {
       target.setSelectionRange(nextCursorPos, nextCursorPos);
-    }
+    } catch {}
 
-    // Trigger synthetic input events so React / frameworks detect the change
-    target.dispatchEvent(new Event("input", { bubbles: true }));
-    target.dispatchEvent(new Event("change", { bubbles: true }));
+    target.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
+    target.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
     return true;
   }
 
   // 2. ContentEditable / Rich Text editors (ProseMirror, Slate, Lexical, TipTap, HTML nodes)
   if (target.isContentEditable || target.getAttribute("contenteditable") === "true") {
     target.focus();
-
-    // Prefer document.execCommand('insertText') for native rich-text editor history / undo handling
-    try {
-      const executed = document.execCommand("insertText", false, text);
-      if (executed) {
-        target.dispatchEvent(new Event("input", { bubbles: true }));
-        return true;
-      }
-    } catch {
-      // Fall through to DOM selection insertion
-    }
-
-    // Fallback: DOM Range insertion
     const selection = window.getSelection();
-    let range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : lastSelectionRange;
 
-    if (!range && target) {
-      range = document.createRange();
-      range.selectNodeContents(target);
-      range.collapse(false);
+    let range: Range | null =
+      selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+    if (!range || !rangeIsInside(target, range)) {
+      const saved = lastSelectionRange;
+      if (saved && rangeIsInside(target, saved)) {
+        range = saved.cloneRange();
+      } else {
+        range = document.createRange();
+        range.selectNodeContents(target);
+        range.collapse(false);
+      }
+      selection?.removeAllRanges();
+      selection?.addRange(range);
     }
 
-    if (range) {
-      range.deleteContents();
-      const textNode = document.createTextNode(text);
-      range.insertNode(textNode);
+    let inserted = false;
+    try {
+      inserted = document.execCommand("insertText", false, textChunk);
+    } catch {
+      inserted = false;
+    }
 
-      // Move cursor after the inserted text
+    if (!inserted) {
+      range.deleteContents();
+      const textNode = document.createTextNode(textChunk);
+      range.insertNode(textNode);
       range.setStartAfter(textNode);
       range.setEndAfter(textNode);
       selection?.removeAllRanges();
       selection?.addRange(range);
-
-      target.dispatchEvent(new Event("input", { bubbles: true }));
-      return true;
     }
+
+    target.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
+    try {
+      target.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: textChunk,
+        })
+      );
+    } catch {}
+    return true;
   }
 
   return false;
+}
+
+// Fluid character-by-character typing queue
+interface QueueItem {
+  char: string;
+  target: HTMLElement | null;
+}
+
+const smoothTypeQueue: QueueItem[] = [];
+let isTypingLoopRunning = false;
+
+function runSmoothTypingLoop(onChar?: (char: string) => void) {
+  if (smoothTypeQueue.length === 0) {
+    isTypingLoopRunning = false;
+    return;
+  }
+
+  isTypingLoopRunning = true;
+  const item = smoothTypeQueue.shift()!;
+  insertDirectChunk(item.char, item.target);
+  onChar?.(item.char);
+
+  // Dynamic interval: speed up if more characters are queued so user never waits
+  const delay = smoothTypeQueue.length > 25 ? 5 : smoothTypeQueue.length > 10 ? 12 : 18;
+
+  setTimeout(() => {
+    runSmoothTypingLoop(onChar);
+  }, delay);
+}
+
+/**
+ * Streams incoming voice transcript smoothly character-by-character with natural pacing.
+ */
+export function insertTextSmoothly(
+  text: string,
+  targetOverride?: HTMLElement | null,
+  onChar?: (char: string) => void
+): boolean {
+  if (!text) return false;
+
+  const target = targetOverride || getActiveTypingElement();
+  if (!target) return false;
+
+  const prefix = getPrefixText(target);
+  let textToQueue = text;
+  if (prefix.length > 0 && !/\s$/.test(prefix) && !/^[\s,.:;!?]/.test(text)) {
+    textToQueue = " " + text;
+  }
+
+  for (let i = 0; i < textToQueue.length; i++) {
+    smoothTypeQueue.push({ char: textToQueue[i], target });
+  }
+
+  if (!isTypingLoopRunning) {
+    runSmoothTypingLoop(onChar);
+  }
+
+  return true;
+}
+
+export function flushSmoothTyping() {
+  while (smoothTypeQueue.length > 0) {
+    const item = smoothTypeQueue.shift()!;
+    insertDirectChunk(item.char, item.target);
+  }
+  isTypingLoopRunning = false;
+}
+
+/**
+ * Standard instantaneous insertion fallback.
+ */
+export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | null): boolean {
+  return insertTextSmoothly(text, targetOverride);
 }

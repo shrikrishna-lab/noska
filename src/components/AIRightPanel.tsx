@@ -33,6 +33,7 @@ import { saveAgent, blankAgent } from "../features/agents/agentStore";
 import { saveAutomation, blankAutomation } from "../features/automations/automationStore";
 import { refreshDefinitions } from "../intelligence/triggerService";
 import { capture } from "../lib/posthog";
+import { globalVoiceController } from "../lib/voice/voice-controller";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 
@@ -227,6 +228,23 @@ export default function AIRightPanel({
   const [targetLang, setTargetLang] = useState("Spanish");
   const [tokenEstimate, setTokenEstimate] = useState(0);
   const [attachments, setAttachments] = useState<unknown[]>([]);
+  const [voiceActive, setVoiceActive] = useState(globalVoiceController.getIsListening());
+  useEffect(() => {
+    // Only re-render when the boolean flips (not on every frequency/tick update)
+    return globalVoiceController.subscribe((s) => {
+      setVoiceActive((prev) => (prev === s.isListening ? prev : s.isListening));
+    });
+  }, []);
+  const handleVoiceToggle = useCallback(() => {
+    if (globalVoiceController.isBusy()) {
+      globalVoiceController.stop();
+      return;
+    }
+    globalVoiceController.start({
+      onTranscript: (text) => setPrompt((prev) => (prev ? `${prev} ${text}` : text)),
+      onError: () => setVoiceActive(false),
+    });
+  }, []);
   const pageId = page?.id;
   const relations = useMemo(() => {
     if (!pageId) return { backlinks: [], outgoing: [] };
@@ -978,7 +996,15 @@ export default function AIRightPanel({
                     <button className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition" title="Search">
                       <Search size={10} />
                     </button>
-                    <button className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition" title="Voice input">
+                    <button
+                      onClick={handleVoiceToggle}
+                      className={`p-1 rounded transition ${
+                        voiceActive
+                          ? "text-[var(--danger)] bg-[var(--danger)]/10"
+                          : "text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)]"
+                      }`}
+                      title={voiceActive ? "Stop voice input" : "Start voice input"}
+                    >
                       <Mic size={10} />
                     </button>
                     <button className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition" title="Mention">
