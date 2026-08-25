@@ -33,6 +33,9 @@ const FUNCTIONS = [
 
 const verify = process.argv.includes("--verify");
 const BASE = process.env.NOSKA_MCP_URL ?? "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/mcp";
+// The canonical product host (https://mcp.noska.me/mcp) is verified separately below:
+// DNS → TLS → Vercel proxy → Supabase. It is reported BLOCKED (not FAIL) until
+// the CNAME + Vercel domain are configured, since that is operator infrastructure.
 const KEY = process.env.NOSKA_API_KEY ?? "";
 
 console.log("═══ Noska MCP deploy + verify ═══\n");
@@ -84,14 +87,51 @@ const call = async (name, args = {}, k) => {
 
 console.log("\n═══ Live protocol verification ═══\n");
 
-/* transport + auth */
+/* ── Hop 1: canonical host chain (Internet → DNS → TLS → Vercel → Supabase) ── */
+const CANONICAL = "https://mcp.noska.me/mcp";
+let canonicalLive = false;
+try {
+  const dns = await import("node:dns/promises");
+  const addrs = await dns.resolve4("mcp.noska.me").catch(() => null);
+  if (!addrs) {
+    check("mcp.noska.me DNS", false, "NXDOMAIN — add CNAME mcp.noska.me → cname.vercel-dns.com");
+  } else {
+    check("mcp.noska.me DNS resolves", true, addrs.join(", "));
+    const tls = await import("node:tls");
+    const certOk = await new Promise((resolve) => {
+      const sock = tls.connect({ host: "mcp.noska.me", port: 443, servername: "mcp.noska.me", timeout: 8000 },
+        () => { const c = sock.authorized || !sock.isCertificateErrored(); sock.destroy(); resolve(c); });
+      sock.on("error", () => resolve(false));
+      sock.on("timeout", () => { sock.destroy(); resolve(false); });
+    });
+    check("mcp.noska.me TLS", certOk, certOk ? "certificate valid" : "TLS handshake failed — add the domain in the Vercel dashboard");
+    if (certOk) canonicalLive = true;
+  }
+} catch (e) {
+  check("mcp.noska.me chain", false, String(e).slice(0, 120));
+}
+
+/* ── Hop 2: Supabase backend (always authoritative) ── */
 const anon = await fetch(BASE, { method: "POST", headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
-check("transport reachable", anon.status === 401 || anon.status === 200, `status=${anon.status}`);
+check("Supabase transport reachable", anon.status === 401 || anon.status === 200, `status=${anon.status}`);
 check("auth enforced (no credential → 401)", anon.status === 401);
 const bad = await fetch(BASE, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer nsk_invalid" },
   body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
 check("invalid credential rejected", bad.status === 401);
+
+/* ── Hop 3: canonical host end-to-end (only when DNS+TLS are live) ── */
+if (canonicalLive) {
+  const canonAnon = await fetch(CANONICAL, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+  check("mcp.noska.me/mcp → Vercel → Supabase proxy", canonAnon.status === 401 || canonAnon.status === 200, `status=${anon.status === 401 ? "401 expected" : canonAnon.status}`);
+  const canonAuth = await fetch(CANONICAL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) });
+  const canonOk = canonAuth.status === 200;
+  check("authenticated tools/list via canonical host", canonOk, `status=${canonAuth.status}`);
+} else {
+  check("mcp.noska.me end-to-end", false, "BLOCKED — configure DNS CNAME + Vercel domain, then re-run");
+}
 
 /* lifecycle */
 const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "noska-verifier", version: "1.0" } });

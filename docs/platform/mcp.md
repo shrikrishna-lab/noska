@@ -263,3 +263,17 @@ matrix and is CI-friendly.
 After it passes: run the same endpoint through real clients
 (Claude / Cursor / ChatGPT connectors) — a client is "verified" only after an
 authenticated tools/call succeeds there.
+
+### What mcp:verify proves (full chain)
+
+```
+Internet → DNS(mcp.noska.me) → TLS → Vercel proxy → Supabase MCP function
+         → authentication → initialize → tool discovery → workspace data
+         → create→fetch persistence → destructive-action protection → cleanup
+```
+
+The canonical hostname is checked hop-by-hop (DNS resolve, TLS handshake,
+proxied authenticated call). Until the CNAME + Vercel domain are configured it
+reports **BLOCKED** with the exact fix — it never silently skips, and the
+Supabase-path checks still run so backend verification is never blocked by
+hostname infrastructure.
