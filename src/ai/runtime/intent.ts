@@ -5,6 +5,10 @@
  * between answering directly, running an agentic multi-step job, or
  * proposing an automation/agent. Rule-based first (fast, deterministic,
  * free); the LLM is only consulted as a fallback for ambiguous requests.
+ *
+ * Classification is conversation-aware: short referential messages
+ * ("make it simpler", "update that page") resolve against the previous
+ * intent instead of being misread as brand-new questions.
  */
 
 import type { IntentResult, RuntimeIntent } from "./types";
@@ -64,10 +68,10 @@ const RULES: Rule[] = [
     multiStep: true,
     rationale: "Analysis needs workspace data gathered before answering",
     patterns: [
-      /\b(analyz|analys)e\b/i,
+      /\banaly[sz]e\s+(my|the|this)\b/i,
       /\b(why|what)\s+(is|are)\b.*\b(delayed|late|blocked|failing|behind)\b/i,
       /\bwhy\b[^?]*\b(delayed|late|blocked|failing|behind|stuck|slow)\b/i,
-      /\b(progress|status|health|insights?|summary of my workspace)\b/i,
+      /\b(progress|status|health|insights?)\b.*\b(my|the)\s+(workspace|project|tasks?)\b/i,
       /\bfind\s+blockers?\b/i,
       /\breview\s+(my|the)\s+(project|tasks|workspace)\b/i,
     ],
@@ -77,7 +81,7 @@ const RULES: Rule[] = [
     multiStep: true,
     rationale: "Planning benefits from gathering context before drafting",
     patterns: [
-      /\b(create|make|draft|write|prepare)\s+(me\s+)?(a\s+)?(project\s+plan|plan|roadmap|schedule|itinerary|strategy)\b/i,
+      /\b(create|make|draft|write|prepare)\s+(me\s+)?(a\s+)?(project\s+plan|roadmap|schedule|itinerary|strategy)\b/i,
       /\bplan\s+(my|the|a)\b/i,
       /\bprepare\s+(me\s+)?for\b/i,
     ],
@@ -87,8 +91,8 @@ const RULES: Rule[] = [
     multiStep: true,
     rationale: "Creating real pages/records in your workspace",
     patterns: [
-      /\b(create|make|add|new)\b.*\b(page|database|table|crm|tracker|task|todo|note)s?\b/i,
-      /\bturn (this|these|it) into (tasks|todos|a database|a table|tasks)\b/i,
+      /\b(create|make|add|new)\b.*\b(page|database|table|crm|tracker|task|todo)s?\b/i,
+      /\bturn (this|these|it) into (tasks|todos|a database|a table|flashcards|cards)\b/i,
       /\btake notes\b/i,
     ],
   },
@@ -106,8 +110,8 @@ const RULES: Rule[] = [
     multiStep: false,
     rationale: "Searching the workspace",
     patterns: [
-      /^(find|search|look for|locate|show me|list)\b/i,
-      /\b(where is|which pages?)\b/i,
+      /^(find|search|look for|locate|show me|list)\b.*\b(pages?|notes?|docs?|tasks?|workspace|anything|it)\b/i,
+      /^(where is|which pages?)\b/i,
     ],
   },
 ];
@@ -117,13 +121,59 @@ const RULES: Rule[] = [
 const QUESTION_GUARDS: RegExp[] = [
   /^what ('s|is|are|was|were)\s+(a |an |the )?[^?]*\??$/i,
   /^how (does|do|did|can|could|should|would|to)\b[^?]*\??$/i,
-  /^(explain|define|describe|tell me about|compare)\b/i,
+  /^(explain|define|describe|tell me about|compare|give me an example of)\b/i,
   /^(who|why|when)\s+(is|was|are|were|did|does)\b[^?]*\??$/i,
 ];
 
-export function classifyIntent(text: string): IntentResult {
+/** Small talk and meta questions — never routed into tools. */
+const CASUAL_RE =
+  /^(hi|hey|hello|yo|sup|thanks|thank you|ty|good (morning|evening|afternoon|night)|bye)[\s!.,?]*$|^how are you\b|^who are you\b|^what can you do\b/i;
+
+/** Short continuation messages that only make sense with prior turns:
+ * "make it easier", "go on", "more", "why?", "now turn that into tasks". */
+function looksLikeFollowUp(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  const words = t.split(/\s+/).length;
+  if (
+    /^(make it|keep it|turn it|turn that|now (make|turn|give|write)|go on|continue|and then|more detail|in more detail|be more specific|simpler|easier|shorter|longer|expand|elaborate|again|why\??|\?\??)$|^but why|^ok(ay)?,? but/i.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  // Very short + referential pronoun with no other verb target
+  return words <= 5 && /\b(it|that|this|those|them|the same)\b/i.test(t);
+}
+
+export interface ClassifyOptions {
+  /** Whether earlier conversation turns exist */
+  hasHistory?: boolean;
+  /** Intent of the previous user turn, when known */
+  previousIntent?: RuntimeIntent | null;
+}
+
+export function classifyIntent(text: string, options: ClassifyOptions = {}): IntentResult {
   const input = (text || "").trim();
   if (!input) return { intent: "question", multiStep: false, rationale: "Empty request" };
+
+  // Casual / meta conversation — always conversational, never tool work.
+  if (CASUAL_RE.test(input)) {
+    return { intent: "casual", multiStep: false, rationale: "Conversation" };
+  }
+
+  // Continuation of the prior exchange — inherit its shape so "make it
+  // simpler" after an explanation stays a question, while "now create them"
+  // after analysis can still act.
+  if (options.hasHistory && looksLikeFollowUp(input)) {
+    const prev = options.previousIntent;
+    const actsOnWorkspace = prev === "create" || prev === "edit" || prev === "organize" || prev === "plan";
+    return {
+      intent: "follow_up",
+      multiStep: false,
+      rationale: actsOnWorkspace ? "Continuing the previous task" : "Continuing the topic",
+    };
+  }
 
   // Automation / agent intents always win — even when phrased as questions
   // ("every friday summarize..." starts with an implied question shape).

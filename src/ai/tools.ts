@@ -265,7 +265,7 @@ export function getToolInstructions(options: { compact?: boolean } = {}) {
   const lines = [
     "---",
     "## Available Tools",
-    "You have tools to modify the workspace. ALWAYS use them instead of describing actions.",
+    "These tools act on the user's real workspace. Use them whenever the request needs workspace data or changes — but answer ordinary questions directly; do not call tools reflexively.",
     "",
     "### TOOL FORMAT (MUST USE EXACTLY)",
     "Write the tool block directly in your response like this:",
@@ -275,6 +275,7 @@ export function getToolInstructions(options: { compact?: boolean } = {}) {
     "Then add a 1-2 sentence summary after the tool block.",
     "",
     "### RULES",
+    "0. General-knowledge questions need no tools — answer from what you know",
     "1. When asked to create, write, edit, rename, add, search, or organize — ALWAYS use the matching tool immediately",
     "2. The tool block will be automatically removed from what the user sees — you do NOT need to hide it yourself",
     "3. Write the tool block FIRST, then your summary text",

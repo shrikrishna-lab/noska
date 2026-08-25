@@ -29,7 +29,9 @@ export interface DesktopIdentity {
 }
 
 /** Normalizes a raw {id,email} from the edge function into the full shape. */
-function toIdentity(raw: DesktopIdentity): DesktopIdentity {
+function toIdentity(
+  raw: { id: string; email?: string | null; fullName?: string | null; imageUrl?: string | null }
+): DesktopIdentity {
   const email = raw.email ?? null;
   const namePart = email ? email.split("@")[0] : null;
   return {

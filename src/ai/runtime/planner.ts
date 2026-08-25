@@ -2,9 +2,13 @@
  * Noska Intelligence — Planner
  *
  * Turns an intent + goal into a concrete ExecutionPlan. Plans are built
- * from deterministic, intent-specific templates (testable, predictable)
+ * from deterministic, intent-specific skeletons (testable, predictable)
  * rather than free-form LLM planning; the model still decides *how* to
  * execute each step, guided by instructions and tools.
+ *
+ * Step instructions deliberately avoid prescribing response structure
+ * (no forced bullet counts, no forced section lists) — they state the GOAL
+ * of each step and let the model choose the shape.
  *
  * No chain-of-thought is ever surfaced — plans expose only concise,
  * user-facing labels.
@@ -22,23 +26,38 @@ const INTENT_PLANS: Record<string, (goal: string) => { approach: string; steps: 
     approach: "Answer directly using workspace context where helpful.",
     steps: [step("Understanding your question", "answer", { instruction: goal })],
   }),
+  casual: (goal) => ({
+    approach: "Conversational reply.",
+    steps: [step("Replying", "answer", { instruction: goal })],
+  }),
+  follow_up: (goal) => ({
+    approach: "Continue from the conversation so far.",
+    steps: [
+      step("Continuing where we left off", "answer", {
+        instruction: `${goal}\n\nThis message refers to the earlier conversation — resolve any references before answering.`,
+      }),
+    ],
+  }),
   search: (goal) => ({
-    approach: "Search the workspace, then summarize what was found.",
+    approach: "Search the workspace, then report what was found.",
     steps: [
       step("Searching workspace", "ai_step", {
-        instruction: `Search the workspace for pages matching this request. Use search_pages / list_pages / get_page_content as needed:\n${goal}\n\nReturn a concise summary of what you found with page names.`,
+        instruction: `Search the workspace for pages matching this request. Use search_pages / list_pages / get_page_content as needed:\n${goal}\n\nReport what you found with exact page titles. If nothing relevant exists, say that plainly instead of guessing.`,
       }),
-      step("Summarizing findings", "answer", { instruction: "Summarize the findings above in 3-6 bullet points. Reference page titles exactly as they exist." }),
+      step("Summarizing findings", "answer", {
+        instruction:
+          "Summarize the findings above. Lead with what is most relevant; reference page titles exactly as they exist. Keep it as brief as the results allow.",
+      }),
     ],
   }),
   create: (goal) => ({
-    approach: "Gather context, create the requested content, verify it exists.",
+    approach: "Check what exists, create the requested content, verify it.",
     steps: [
-      step("Reviewing relevant context", "ai_step", {
-        instruction: `Before creating anything, check existing pages to avoid duplicates and gather useful context. Use search_pages if helpful.\nRequest: ${goal}\nBriefly note (1-2 sentences max) what already exists that's relevant.`,
+      step("Checking existing content", "ai_step", {
+        instruction: `Before creating anything, check existing pages so you don't duplicate something that already covers this. Use search_pages if helpful.\nRequest: ${goal}\nNote in one sentence what already exists that's relevant (or say nothing does).`,
       }),
       step("Creating content", "ai_step", {
-        instruction: `Now fulfill the creation request. Use create_page / append_blocks / add_todo / set_page_tags etc. Make the content well-structured with headings, lists, and appropriate detail.\nRequest: ${goal}`,
+        instruction: `Fulfill the creation request using create_page / append_blocks / add_todo / set_page_tags etc.\nRequest: ${goal}`,
       }),
       step("Verifying result", "tool", { toolName: "get_workspace_stats" }),
     ],
@@ -50,21 +69,20 @@ const INTENT_PLANS: Record<string, (goal: string) => { approach: string; steps: 
         instruction: `Read the target page(s) to understand their current state before editing. Use get_page_content.\nEdit request: ${goal}\nState briefly what you found.`,
       }),
       step("Applying edits", "ai_step", {
-        instruction: `Apply the edit now using update_block / append_blocks / insert_block / replace_content / rename_page as appropriate. Preserve the author's voice.\nEdit request: ${goal}`,
+        instruction: `Apply the edit using update_block / append_blocks / insert_block / replace_content / rename_page as appropriate. Preserve the author's voice.\nEdit request: ${goal}`,
       }),
       step("Verifying changes", "tool", { toolName: "get_page_content" }),
     ],
   }),
   analyze: (goal) => ({
-    approach: "Collect relevant data from across the workspace, then analyze.",
+    approach: "Collect relevant workspace data, then reason over it.",
     steps: [
       step("Gathering workspace data", "ai_step", {
         instruction: `Gather all data relevant to this analysis. Use search_pages, list_pages, get_page_content, get_workspace_stats.\nAnalysis goal: ${goal}\nCollect facts only — no conclusions yet.`,
       }),
       step("Analyzing", "answer", {
-        instruction: `Based ONLY on the data gathered above, perform this analysis:\n${goal}\nQuantify findings, prioritize insights, flag gaps in the data honestly.`,
+        instruction: `Based ONLY on the data gathered above:\n${goal}\nQuantify findings from the actual data, prioritize insights, and flag gaps honestly. Structure however serves the answer best.`,
       }),
-      step("Reporting findings", "answer", { instruction: "Produce the final report: key findings first, then supporting details, then recommended next actions as todos." }),
     ],
   }),
   organize: (goal) => ({
@@ -74,10 +92,11 @@ const INTENT_PLANS: Record<string, (goal: string) => { approach: string; steps: 
         instruction: `Inspect the workspace structure: list_pages, get_page_hierarchy on key pages, get_workspace_stats.\nOrganization goal: ${goal}\nList issues found (duplicates, misplaced pages, missing hierarchy).`,
       }),
       step("Preparing organization proposal", "answer", {
-        instruction: "Propose a specific organization plan as a numbered list of concrete move/tag/archive operations. Be conservative: do not propose trashing anything unless clearly a duplicate.",
+        instruction:
+          "Propose a specific organization plan as a numbered list of concrete move/tag/archive operations. Be conservative: do not propose trashing anything unless clearly a duplicate.",
       }),
       step("Applying organization", "ai_step", {
-        instruction: `Apply the approved organizational changes using move_page, set_page_tags, batch_tag, trash_page (only clear duplicates).\nOriginal goal: ${goal}`,
+        instruction: `Apply the organizational changes using move_page, set_page_tags, batch_tag, trash_page (only clear duplicates).\nOriginal goal: ${goal}`,
       }),
       step("Verifying new structure", "tool", { toolName: "get_workspace_stats" }),
     ],
@@ -92,7 +111,8 @@ const INTENT_PLANS: Record<string, (goal: string) => { approach: string; steps: 
         instruction: `Draft a structured plan for: ${goal}\nInclude phases/milestones, concrete tasks as todos, owners where inferable, and realistic sequencing.`,
       }),
       step("Saving plan to workspace", "ai_step", {
-        instruction: "Create a well-formatted page containing the plan using create_page (with headings, todos, and a summary section). Return the page title.",
+        instruction:
+          "Create a well-formatted page containing the plan using create_page (with headings, todos, and a summary section). Return the page title.",
       }),
       step("Verifying saved plan", "tool", { toolName: "get_workspace_stats" }),
     ],

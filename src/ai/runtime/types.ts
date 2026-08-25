@@ -18,6 +18,10 @@ export type RuntimeIntent =
   | "organize"
   | "plan"
   | "action"
+  | /** continuation of the prior exchange ("make it simpler") */
+    "follow_up"
+  | /** small talk / meta questions — answer warmly, no tools */
+    "casual"
   | "automation_intent"
   | "agent_intent";
 
