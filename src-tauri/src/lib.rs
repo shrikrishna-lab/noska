@@ -145,6 +145,19 @@ pub fn run() {
             {
                 setup_tray(app)?;
                 setup_deep_links(app);
+
+                // Self-heal degenerate window-state restores (tiny/offscreen
+                // window = corrupted or pre-borderless state file).
+                if let Some(win) = app.get_webview_window("main") {
+                    let size = win.outer_size().unwrap_or_default();
+                    if size.width < 500 || size.height < 400 {
+                        let _ = win.unmaximize();
+                        let _ = win.set_size(tauri::LogicalSize::new(1280.0, 800.0));
+                        let _ = win.center();
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    }
+                }
             }
             Ok(())
         })
