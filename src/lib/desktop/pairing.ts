@@ -213,6 +213,12 @@ export async function beginPairing(): Promise<void> {
   const deadline = Date.now() + PAIRING_TTL_MS;
   let consecutiveErrors = 0;
   while (Date.now() < deadline && pollStatus === "waiting") {
+    // (Re-)register the code every cycle — transient init failures self-heal.
+    try {
+      await callFn({ action: "init", code });
+    } catch {
+      consecutiveErrors++;
+    }
     try {
       const r = await callFn<{ status: string; session?: StoredSession }>({
         action: "exchange",
@@ -258,6 +264,7 @@ export function resetPairing(): void {
   polling = false;
   regeneratePairingCode();
   emit();
+  beginPairing();
 }
 
 /* â”€â”€ refresh + logout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
