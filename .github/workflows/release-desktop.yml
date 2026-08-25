@@ -136,6 +136,22 @@ jobs:
             --repo shrikrishna-lab/noska \
             --dir dist --clobber --pattern "*"
 
+      - name: Point latest.json at the PUBLIC repository
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'dist/latest.json';
+            const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+            for (const k of Object.keys(j.platforms)) {
+              j.platforms[k].url = j.platforms[k].url.replace(
+                'shrikrishna-lab/noska/',
+                'shrikrishna-lab/noska-desktop-releases/'
+              );
+            }
+            fs.writeFileSync(p, JSON.stringify(j, null, 2));
+            console.log('urls rewritten');
+          "
+
       - name: Publish to the public release repository
         env:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
