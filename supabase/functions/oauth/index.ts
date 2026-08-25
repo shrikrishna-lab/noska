@@ -12,9 +12,9 @@
 // ============================================================================
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js";
 import { errors, PlatformError, sha256Hex, validateDynamicRegistration } from "../_shared/core/pure.ts";
-import { oauth as oauthCap, db as dbClient } from "../_shared/capabilities/platform.ts";
+import { oauth as oauthCap } from "../_shared/capabilities/platform.ts";
+import { db as dbClient } from "../_shared/core/runtime.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

@@ -27,8 +27,8 @@ const ENCRYPTION_SECRET = Deno.env.get("AGENT_ENCRYPTION_KEY") ?? "";
 import {
   RESOURCE_LIMITS, redact, extractKeywords, scoreMemory, detectConflict,
   isRetryableError, backoffDelayMs,
-} from "../../src/ai/runtime/serverContract.ts";
-import type { RunEventType } from "../../src/ai/runtime/serverContract.ts";
+} from "../_shared/ai/serverContract.ts";
+import type { RunEventType } from "../_shared/ai/serverContract.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

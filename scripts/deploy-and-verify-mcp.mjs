@@ -31,7 +31,8 @@ const FUNCTIONS = [
   ["oauth", "--no-verify-jwt"],
 ];
 
-const verify = process.argv.includes("--verify");
+const verify = process.argv.includes("--verify") || process.argv.includes("--verify-only");
+const verifyOnly = process.argv.includes("--verify-only");
 const BASE = process.env.NOSKA_MCP_URL ?? "https://yxgtmzksnyarlivgxujf.supabase.co/functions/v1/mcp";
 // The canonical product host (https://mcp.noska.me/mcp) is verified separately below:
 // DNS → TLS → Vercel proxy → Supabase. It is reported BLOCKED (not FAIL) until
@@ -40,12 +41,14 @@ const KEY = process.env.NOSKA_API_KEY ?? "";
 
 console.log("═══ Noska MCP deploy + verify ═══\n");
 
-/* 1 — migrations */
-run("supabase db push");
+/* 1 — migrations (skip when --verify-only: they are already applied) */
+if (!verifyOnly) run("supabase db push");
 
 /* 2 — functions */
-for (const [name, flag] of FUNCTIONS) {
-  run(`supabase functions deploy ${name}${flag ? ` ${flag}` : ""}`);
+if (!verifyOnly) {
+  for (const [name, flag] of FUNCTIONS) {
+    run(`supabase functions deploy ${name}${flag ? ` ${flag}` : ""}`);
+  }
 }
 
 console.log("\n✅ Deployment complete.\n");
