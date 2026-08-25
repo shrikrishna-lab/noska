@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { realtimeCollab } from '../../lib/realtimeCollab';
 import { aiManager } from '../../ai/AIManager';
+import { resolveStoredSelection, applyModelPick } from '../../ai/modelSelection';
 import {
   AiPromptInput,
   type AiModelSelection,
@@ -32,6 +33,17 @@ const WORKSPACE_PLACEHOLDERS = [
   "Brainstorm ideas or analyze structure...",
 ] as const;
 
+/**
+ * Resolve the persisted provider+model pair to a concrete selection entry.
+ * Model ids are NOT unique across providers ("gpt-4o" exists on many), so
+ * the pair must be resolved together — an id alone is ambiguous.
+ */
+function selectionFromAiManager(models: ReturnType<typeof getRealAiModels>): AiModelSelection | null {
+  const chosen = resolveStoredSelection(models);
+  if (!chosen) return null;
+  return { id: chosen.id, effort: "high", context: undefined, fast: true, thinking: false };
+}
+
 export default function PromptComposer({
   prompt,
   setPrompt,
@@ -47,17 +59,54 @@ export default function PromptComposer({
   onToast,
 }: PromptComposerProps) {
   const models = useMemo(() => getRealAiModels(), []);
-  const initialModelId = aiManager.getActiveModel() || models[0]?.id || "anthropic/claude-sonnet-4-20250514";
-
-  const [modelSelection, setModelSelection] = useState<AiModelSelection>({
-    id: initialModelId,
-    effort: "high",
-    context: "200K",
-    fast: true,
-    thinking: false,
+  const [modelSelection, setModelSelection] = useState<AiModelSelection>(() => {
+    // Start from the PERSISTED provider+model pair so reloads keep the choice
+    const saved = selectionFromAiManager(models);
+    if (saved) return saved;
+    // Nothing usable persisted → first configured model, else first listed
+    const firstReady = models.find((m) => m.configured || m.providerType === "local") || models[0];
+    return {
+      id: firstReady?.id || "",
+      effort: "high",
+      context: undefined,
+      fast: true,
+      thinking: false,
+    };
   });
   const [deepResearch, setDeepResearch] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
+
+  // Persist the choice THE MOMENT it's picked — including switching
+  // providers — so it survives reloads and applies everywhere (#persist).
+  const handleSelectionChange = useCallback(
+    (next: AiModelSelection) => {
+      setModelSelection(next);
+      const entry = models.find((m) => m.id === next.id);
+      if (!entry) return;
+      applyModelPick(entry);
+    },
+    [models]
+  );
+
+  // Stay in sync when config changes elsewhere (e.g. the API-key modal
+  // activates a different provider after saving a key).
+  useEffect(() => {
+    const unsubscribe = aiManager.subscribe(() => {
+      const cfg = aiManager.getConfig();
+      setModelSelection((prev) => {
+        const currentEntry = models.find((m) => m.id === prev.id);
+        const stillValid =
+          currentEntry &&
+          currentEntry.providerId === cfg.activeProvider &&
+          prev.id === cfg.activeModel;
+        if (stillValid) return prev;
+        const saved = selectionFromAiManager(models);
+        if (saved) return saved;
+        return prev;
+      });
+    });
+    return () => { unsubscribe(); };
+  }, [models]);
 
   const handleSubmit = useCallback((value: string, selection: AiModelSelection) => {
     let finalPrompt = value;
@@ -89,7 +138,7 @@ export default function PromptComposer({
         status={status}
         models={models}
         modelSelection={modelSelection}
-        onModelSelectionChange={setModelSelection}
+        onModelSelectionChange={handleSelectionChange}
         onOpenKeySetup={onOpenKeySetup}
         placeholders={WORKSPACE_PLACEHOLDERS}
         placeholderInterval={3200}

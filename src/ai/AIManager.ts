@@ -15,6 +15,7 @@ import { buildContext, buildMinimalContext } from './ContextBuilder.js';
 import { buildAgentPrompt, getAgent } from './agents.js';
 import { initializeMemory, getMemory } from './memory.js';
 import { buildUserProfileContext } from './userProfile.js';
+import { selectModel } from './runtime/modelRouter.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,24 @@ interface ContextSettings {
   includeTags: boolean;
   includeMemory: boolean;
   tokenBudget: number;
+}
+
+/**
+ * Per-request context enrichments beyond the static page/workspace snapshot.
+ * All optional — callers add only what they have (#20 relevance-ranked
+ * context instead of dumping everything).
+ */
+interface AIContextExtras {
+  /** Blocks the user has selected in the editor — highest-priority signal */
+  selectedBlocks?: { text?: string }[] | null;
+  /** Pages open in other split panes ("the other pane" awareness) */
+  openPanePages?: unknown[] | null;
+  /** Prebuilt conversation-state section (topics, resolved references) */
+  conversationSection?: string;
+  /** Prebuilt response-policy constraint section */
+  policySection?: string;
+  /** Request a model class from the router (fast/default/reasoning) */
+  modelClass?: "fast" | "default" | "reasoning";
 }
 
 interface AIManagerConfig {
@@ -56,7 +75,7 @@ interface HealthEntry {
 // Shared param shape for send/sendConversation/stream — every field here
 // is genuinely optional at call sites (e.g. MeetingWorkspace.jsx's
 // generateSummary only ever passes `prompt`).
-interface AISendOpts {
+interface AISendOpts extends AIContextExtras {
   system?: string;
   prompt?: string;
   page?: any;
@@ -71,18 +90,16 @@ interface AIConversationMessage {
   content?: string;
 }
 
-interface AISendConversationOpts {
+interface AISendConversationOpts extends AISendOpts {
   system?: string;
   messages: AIConversationMessage[];
-  page?: any;
-  pages?: any[];
-  agent?: string;
-  maxTokens?: number;
 }
 
 interface AIStreamOpts extends AISendOpts {
   messages?: AIConversationMessage[];
   onChunk?: (partial: string) => void;
+  /** cooperative cancellation — checked between chunks */
+  signal?: { aborted: boolean };
 }
 
 // ─── Default Config ─────────────────────────────────────────────────────────
@@ -390,7 +407,12 @@ class AIManager {
   /**
    * Try sending to a specific provider, returns result or throws
    */
-  async _tryProvider(providerId, { system, messages, maxTokens }) {
+  async _tryProvider(providerId, { system, messages, maxTokens, modelOverride }: {
+    system?: string;
+    messages: Array<{ role: string; content: string }>;
+    maxTokens?: number;
+    modelOverride?: string;
+  }) {
     const provider = getProvider(providerId);
     if (!provider) throw new Error(`Provider "${providerId}" not found`);
     const config = this.config.providers[providerId] || {};
@@ -399,7 +421,9 @@ class AIManager {
     return await provider.send({
       apiKey: config.apiKey,
       baseUrl: config.baseUrl || provider.baseUrl,
-      model: providerId === this.config.activeProvider ? (this.config.activeModel || provider.defaultModel) : provider.defaultModel,
+      model: providerId === this.config.activeProvider
+        ? (modelOverride || this.config.activeModel || provider.defaultModel)
+        : provider.defaultModel,
       system,
       messages,
       maxTokens: maxTokens || this.config.maxTokens
@@ -537,25 +561,51 @@ class AIManager {
   }
 
   /**
+   * Build the workspace-context string for a request, including any
+   * per-request extras (selection, open panes, conversation state).
+   */
+  _buildContextString(opts: { page?: any; pages?: any[] } & AIContextExtras): string {
+    if (!opts.page && !(opts.pages && opts.pages.length) && !opts.conversationSection && !opts.policySection) return "";
+    const parts: string[] = [];
+    const contextString = buildContext({
+      page: opts.page,
+      pages: opts.pages || [],
+      options: {
+        ...this.config.context,
+        selectedBlocks: opts.selectedBlocks ?? null,
+        openPanePages: (opts.openPanePages ?? null) as never,
+      },
+      memory: getMemory(),
+      userProfile: buildUserProfileContext()
+    });
+    if (contextString) parts.push(contextString);
+    if (opts.conversationSection) parts.push(opts.conversationSection);
+    if (opts.policySection) parts.push(opts.policySection);
+    return parts.join("\n\n---\n\n");
+  }
+
+  /** Resolve an optional model-class request to a concrete model id on the
+   * active provider. Returns undefined to keep the user's selected model. */
+  _resolveClassModel(modelClass?: AIContextExtras["modelClass"]): string | undefined {
+    if (!modelClass || modelClass === "default") return undefined;
+    try {
+      const sel = selectModel(modelClass);
+      return sel.providerId ? (sel.modelId || undefined) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Send an AI request (non-streaming) with auto-fallback
-   * @param {Object} opts - { system?, prompt, page?, pages?, agent?, maxTokens? }
+   * @param {Object} opts - { system?, prompt, page?, pages?, agent?, maxTokens?, contextExtras? }
    * @returns {Promise<string>}
    */
-  async send({ system, prompt, page, pages, agent, maxTokens }: AISendOpts) {
+  async send({ system, prompt, page, pages, agent, maxTokens, selectedBlocks, openPanePages, conversationSection, policySection, modelClass }: AISendOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
-    // Build context if page data is provided
-    let contextString = "";
-    if (page || pages) {
-      contextString = buildContext({
-        page,
-        pages: pages || [],
-        options: this.config.context,
-        memory: getMemory(),
-        userProfile: buildUserProfileContext()
-      });
-    }
+    const contextString = this._buildContextString({ page, pages, selectedBlocks, openPanePages, conversationSection, policySection });
 
     // Build system prompt with agent persona
     const agentId = agent || this.config.activeAgent;
@@ -566,14 +616,21 @@ class AIManager {
       return mockResponse("No AI provider configured");
     }
 
-    // Try active provider, then fallbacks
+    // Class-based routing keeps the user's provider; only the model id moves.
+    const classModel = this._resolveClassModel(modelClass);
+    const preferredModel = classModel || this.config.activeModel;
+
+    // Try active provider, then fallbacks (#12 quality-first degradation)
     const fallbacks = this._getFallbackProviders();
     const messages = [{ role: "user", content: prompt }];
     let lastError = "";
 
     for (const pid of [this.config.activeProvider, ...fallbacks]) {
       try {
-        const result = await this._tryProvider(pid, { system: fullSystem, messages, maxTokens });
+        const result = await this._tryProvider(pid, {
+          system: fullSystem, messages, maxTokens,
+          ...(pid === this.config.activeProvider && preferredModel ? { modelOverride: preferredModel } : {})
+        });
         if (looksLikeMockFailure(result)) {
           lastError = extractMockError(result);
           this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
@@ -594,24 +651,17 @@ class AIManager {
   }
 
   /**
-   * Send a multi-turn conversation
+   * Send a multi-turn conversation with auto-fallback across providers.
+   * Conversation context, intent and style are preserved across failover —
+   * the same messages go to the next candidate (#42).
    * @param {Object} opts - { system?, messages, page?, pages?, agent?, maxTokens? }
    * @returns {Promise<string>}
    */
-  async sendConversation({ system, messages, page, pages, agent, maxTokens }: AISendConversationOpts) {
+  async sendConversation({ system, messages, page, pages, agent, maxTokens, selectedBlocks, openPanePages, conversationSection, policySection, modelClass }: AISendConversationOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
-    let contextString = "";
-    if (page || pages) {
-      contextString = buildContext({
-        page,
-        pages: pages || [],
-        options: this.config.context,
-        memory: getMemory(),
-        userProfile: buildUserProfileContext()
-      });
-    }
+    const contextString = this._buildContextString({ page, pages, selectedBlocks, openPanePages, conversationSection, policySection });
 
     const agentId = agent || this.config.activeAgent;
     const fullSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
@@ -625,52 +675,52 @@ class AIManager {
       .filter(m => m.role === "user" || m.role === "assistant")
       .map(m => ({ role: m.role, content: m.text || m.content }));
 
-    try {
-      const result = await provider.send({
-        apiKey: providerConfig.apiKey,
-        baseUrl: providerConfig.baseUrl || provider.baseUrl,
-        model: this.config.activeModel || provider.defaultModel,
-        system: fullSystem,
-        messages: apiMessages,
-        maxTokens: maxTokens || this.config.maxTokens
-      });
-      if (looksLikeMockFailure(result)) {
-        throw new Error(extractMockError(result));
+    const classModel = this._resolveClassModel(modelClass);
+
+    const candidates = [this.config.activeProvider, ...this._getFallbackProviders()];
+    let lastError = "";
+    for (const pid of candidates) {
+      try {
+        const result = await this._tryProvider(pid, {
+          system: fullSystem,
+          messages: apiMessages,
+          maxTokens,
+          ...(pid === this.config.activeProvider && classModel ? { modelOverride: classModel } : {})
+        });
+        if (looksLikeMockFailure(result)) {
+          lastError = extractMockError(result);
+          this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
+          continue;
+        }
+        this._healthCache.set(pid, { status: "online", timestamp: Date.now() });
+        return this.guardResponse(result, pages, page);
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : "AI request failed";
+        this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
       }
-      return this.guardResponse(result, pages, page);
-    } catch (err) {
-      // Honest failure — panel catch blocks render friendly messages.
-      throw new Error(err instanceof Error ? err.message : "AI request failed");
     }
+    // Honest failure — panel catch blocks render friendly messages.
+    throw new Error(lastError || "All AI providers failed");
   }
 
   /**
-   * Stream an AI response
+   * Stream an AI response. Falls back through configured providers on
+   * failure and degrades gracefully to non-streaming when no provider
+   * supports streams. onChunk always receives the FULL accumulated text.
    * @param {Object} opts - { system?, prompt, page?, pages?, agent?, maxTokens?, onChunk }
    * @returns {Promise<string>} - Full accumulated response
    */
-  async stream({ system, prompt, messages, page, pages, agent, maxTokens, onChunk }: AIStreamOpts) {
+  async stream({ system, prompt, messages, page, pages, agent, maxTokens, onChunk, selectedBlocks, openPanePages, conversationSection, policySection, modelClass, signal }: AIStreamOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
-    let contextString = "";
-    if (page || pages) {
-      contextString = buildContext({
-        page,
-        pages: pages || [],
-        options: this.config.context,
-        memory: getMemory(),
-        userProfile: buildUserProfileContext()
-      });
-    }
+    const contextString = this._buildContextString({ page, pages, selectedBlocks, openPanePages, conversationSection, policySection });
 
     const agentId = agent || this.config.activeAgent;
     const fullSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
 
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
-      const fallback = mockResponse("No AI provider configured");
-      onChunk?.(fallback);
-      return fallback;
+      throw new Error("No AI provider configured");
     }
 
     // Build message list
@@ -683,48 +733,76 @@ class AIManager {
       apiMessages = [{ role: "user", content: prompt }];
     }
 
-    // If provider supports streaming, use it
-    if (typeof provider.stream === "function") {
+    const classModel = this._resolveClassModel(modelClass);
+    const candidates = [this.config.activeProvider, ...this._getFallbackProviders()];
+    let lastError = "";
+
+    for (const pid of candidates) {
+      const p = getProvider(pid);
+      if (!p) continue;
+      const cfg = this.config.providers[pid] || {};
+      if (p.requiresKey && !cfg.apiKey) continue;
+
+      // Preferred path: native streaming
+      if (typeof p.stream === "function") {
+        try {
+          let full = "";
+          const iterator = p.stream({
+            apiKey: cfg.apiKey,
+            baseUrl: cfg.baseUrl || p.baseUrl,
+            model: pid === this.config.activeProvider ? ((classModel || this.config.activeModel) || p.defaultModel) : p.defaultModel,
+            system: fullSystem,
+            messages: apiMessages,
+            maxTokens: maxTokens || this.config.maxTokens
+          });
+          for await (const chunk of iterator) {
+            if (signal?.aborted) break;
+            full += chunk;
+            onChunk?.(full);
+          }
+          if (signal?.aborted) {
+            return this.guardResponse(full + "\n\n*(stopped)*", pages, page);
+          }
+          if (looksLikeMockFailure(full)) {
+            lastError = extractMockError(full);
+            this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
+            continue;
+          }
+          this._healthCache.set(pid, { status: "online", timestamp: Date.now() });
+          return this.guardResponse(full, pages, page);
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : "streaming failed";
+          this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
+          continue;
+        }
+      }
+
+      // Degrade honestly to non-streaming rather than failing the request
       try {
-        let full = "";
-        const iterator = provider.stream({
-          apiKey: providerConfig.apiKey,
-          baseUrl: providerConfig.baseUrl || provider.baseUrl,
-          model: this.config.activeModel || provider.defaultModel,
+        const result = await p.send({
+          apiKey: cfg.apiKey,
+          baseUrl: cfg.baseUrl || p.baseUrl,
+          model: pid === this.config.activeProvider ? ((classModel || this.config.activeModel) || p.defaultModel) : p.defaultModel,
           system: fullSystem,
           messages: apiMessages,
           maxTokens: maxTokens || this.config.maxTokens
         });
-        for await (const chunk of iterator) {
-          full += chunk;
-          onChunk?.(full);
+        if (looksLikeMockFailure(result)) {
+          lastError = extractMockError(result);
+          this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
+          continue;
         }
-        return full;
+        this._healthCache.set(pid, { status: "online", timestamp: Date.now() });
+        const guarded = this.guardResponse(result, pages, page);
+        onChunk?.(guarded);
+        return guarded;
       } catch (err) {
-        const fallback = mockResponse(`Streaming failed: ${err.message}`);
-        onChunk?.(fallback);
-        return fallback;
+        lastError = err instanceof Error ? err.message : "request failed";
+        this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
       }
     }
 
-    // Fallback: non-streaming send, deliver all at once
-    try {
-      const result = await provider.send({
-        apiKey: providerConfig.apiKey,
-        baseUrl: providerConfig.baseUrl || provider.baseUrl,
-        model: this.config.activeModel || provider.defaultModel,
-        system: fullSystem,
-        messages: apiMessages,
-        maxTokens: maxTokens || this.config.maxTokens
-      });
-      const guarded = this.guardResponse(result, pages, page);
-      onChunk?.(guarded);
-      return guarded;
-    } catch (err) {
-      const fallback = mockResponse(`Request failed: ${err.message}`);
-      onChunk?.(fallback);
-      return fallback;
-    }
+    throw new Error(lastError || "All AI providers failed");
   }
 
   /**

@@ -158,8 +158,36 @@ async function pairMarkUsed(code: string) {
 
 /* ── actions ───────────────────────────────────────────────────────────── */
 
+/** Registers a code as active (status=waiting) so the browser can claim it. */
+async function pairInit(code: string) {
+  const res = await rest("/rest/v1/desktop_auth_pairs", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({
+      code,
+      status: "waiting",
+      claimed_at: null,
+      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    }),
+  });
+  if (!res.ok) throw httpError(500, "pair_init_failed", "Could not start pairing");
+}
+
 async function handleClaim(code: string, clerkJwt: string) {
   if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ status: "unknown_code" }, 400);
+
+  // The code must be REGISTERED by the desktop app (init) and still live.
+  // Stale codes from old tabs/links are rejected with a clear reason.
+  const existing = await pairFind(code);
+  if (!existing) {
+    return json({ error: "code_not_active", message: "This code isn't active. Open the Noska desktop app and use its current code." }, 400);
+  }
+  if (existing.status === "used") {
+    return json({ error: "code_used", message: "This code was already used. Get the current code from the app." }, 400);
+  }
+  if (new Date(existing.expires_at).getTime() < Date.now()) {
+    return json({ error: "code_expired", message: "This code expired. Click 'New code' in the app and retry." }, 400);
+  }
 
   await gotrueVerify(clerkJwt);
   const payload = decodeJwtPayload(clerkJwt);
@@ -235,6 +263,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     switch (body.action) {
+      case "init":
+        return await (async () => {
+          const code = String(body.code ?? "");
+          if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ error: "bad_code" }, 400);
+          await pairInit(code);
+          return json({ status: "waiting" });
+        })();
       case "claim": {
         const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "").trim();
         if (!jwt) return json({ error: "unauthorized", message: "Sign in first" }, 401);

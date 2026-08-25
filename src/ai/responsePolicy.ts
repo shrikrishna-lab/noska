@@ -57,8 +57,9 @@ const INTENT_SIGNALS: IntentSignal[] = [
   { re: /\b(should i|which should|help me decide|worth it|recommend)\b/i, intent: "decision_support" },
   { re: /\b(teach me|explain (like|to) (a|me as)|how does .* work|help me understand|eli5|study|learn|flashcards?)\b/i, intent: "learning" },
   { re: /\b(error|bug|not working|broken|fails?|failing|crash|stuck|debug|fix (this|the|it|my))\b/i, intent: "troubleshooting" },
-  { re: /\b(find|search|look (for|up)|locate|where (is|are)|show me|list)\b.*\b(pages?|notes?|docs?|tasks?|my workspace)\b/i, intent: "workspace_search" },
+  { re: /\b(find|search|look for|look(ing)? at|locate|where (is|are)|show me|list)\b[^.?!\n]*\b(pages?|notes?|docs?|tasks?|project|workspace)\b/i, intent: "workspace_search" },
   { re: /\b(research|investigate|dig into|gather (info|data)|sources?)\b/i, intent: "research" },
+  { re: /\b(why|what)\b[^.?!\n]*\b(behind|late|delayed|stuck|blocked|slower?|failing)\b/i, intent: "analysis" },
 
   { re: /^(hi|hey|hello|yo|sup|thanks|thank you|ty|good morning|good evening|good night|bye)[\s!.,?]*$/i, intent: "casual_conversation" },
   { re: /\b(how are you|who are you|what can you do|your name)\b/i, intent: "casual_conversation" },
@@ -173,7 +174,8 @@ export function estimateComplexity(text: string): Complexity {
   let score = 0;
   if (words > 40) score += 2;
   else if (words > 15) score += 1;
-  if (/\b(analy[sz]e|architect|design|trade-?offs?|security|scal(e|ability)|migrat|refactor|optimi[sz]e|compare|root cause)\b/i.test(t)) score += 2;
+  const domainHits = t.match(/\b(analy[sz]e\w*|architect\w*|design\w*|trade-?offs?|security|scal(e|ability)|migrat\w*|refactor\w*|optimi[sz]e\w*|compar\w*|root cause)\b/gi)?.length || 0;
+  score += Math.min(domainHits, 4);
   if (/\b(step by step|in depth|deep(dive)?|thorough|comprehensive|detailed)\b/i.test(t)) score += 1;
   if ((t.match(/\?/g)?.length || 0) > 1) score += 1;
   if (/\b(code|function|implement|algorithm|debug)\b/i.test(t)) score += 1;

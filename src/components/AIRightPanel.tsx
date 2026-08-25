@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
@@ -10,20 +10,33 @@ import {
   Home, MessageSquare, History, RotateCcw, SlidersHorizontal,
   Plus, Link, Paperclip, Search, Mic, AtSign, Terminal,
   ChevronRight, Bot, Zap, ShieldCheck, CheckCircle2, XCircle,
-  Loader2, Clock
+  Loader2, Clock, Key
 } from "lucide-react";
 import { aiManager } from "../ai/AIManager";
 import { getAgentList, getAgent } from "../ai/agents";
 import { uid, now } from "../utils/helpers";
 import { getAllRelations } from "../utils/pageLinks";
-import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
+import { hasToolCalls, stripToolCalls, parseToolCalls, runTool } from "../ai/tools";
+import { learnUserInteraction } from "../ai/userProfile";
+import { userHasPinnedModel } from "../ai/modelSelection";
+import { useUIActions } from "../contexts/UIContext";
+import {
+  detectRichIntents,
+  inferStyle,
+  estimateComplexity,
+  buildResponsePolicySection,
+  MODE_POLICIES,
+  type ChatMode,
+} from "../ai/responsePolicy";
+import { extractConversationState, resolveReference, generateChatTitle } from "../ai/conversation";
+import { auditResponse, qualityLabel } from "../ai/quality/responseQuality";
+import { renderChatMarkdown } from "../ai/chatMarkdown";
 import {
   classifyIntent,
   isAgenticIntent,
   agentRuntime,
   proposeAgent,
   proposeAutomation,
-  describeTrigger,
   respondToApproval,
   getPendingApprovals,
   subscribeApprovals,
@@ -31,14 +44,15 @@ import {
 import type { AgentProposal, AutomationProposal, ApprovalRequest, StepProgress } from "../ai/runtime";
 import { saveAgent, blankAgent } from "../features/agents/agentStore";
 import { saveAutomation, blankAutomation } from "../features/automations/automationStore";
+import { AgentProposalCardView, AutomationProposalCardView } from "./ai/ProposalCards";
 import { refreshDefinitions } from "../intelligence/triggerService";
 import { capture } from "../lib/posthog";
 import { globalVoiceController } from "../lib/voice/voice-controller";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 
-const SPRING = { type: "spring", stiffness: 400, damping: 28 };
-const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 };
+const SPRING = { type: "spring", stiffness: 400, damping: 28 } as const;
+const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 } as const;
 
 const LANGUAGES = [
   "Spanish", "French", "German", "Italian", "Portuguese",
@@ -46,7 +60,7 @@ const LANGUAGES = [
   "Dutch", "Polish", "Turkish", "Vietnamese", "Thai"
 ];
 
-/** Shared shape for the AI_ACTIONS / QUICK_ACTIONS entries below — `icon`
+/** Shared shape for the AI_ACTIONS / QUICK_ACTIONS entries below â€” `icon`
  * is always a real lucide-react component here (unlike Sidebar.jsx's
  * NoskaNavItem, no inline zero-arg icon components are used in this
  * file), so a plain LucideIcon is accurate without needing the wider
@@ -83,7 +97,7 @@ const QUICK_ACTIONS: AIActionDef[] = [
   { id: "flashcards", icon: LayoutDashboard, label: "Flashcards" },
 ];
 
-/** Intent-level power actions (#27/#38/#39) — these prefill requests that
+/** Intent-level power actions (#27/#38/#39) â€” these prefill requests that
  * route through the runtime's proposal flow or tool-capable steps. */
 const WORKFLOW_ACTIONS: AIActionDef[] = [
   {
@@ -136,7 +150,7 @@ const VIEW_META: Record<string, ViewMetaEntry> = {
 };
 
 /** Chat message shape actually produced/consumed here and in
- * ChatMessageBubble below — `text`/`html` are legacy/alternate fields
+ * ChatMessageBubble below â€” `text`/`html` are legacy/alternate fields
  * some older messages may carry (read via `message.text || message.content`
  * throughout), kept optional rather than assumed present since this file
  * never normalizes them away. `runSteps` marks a live agentic progress
@@ -153,11 +167,26 @@ interface AIChatMessage {
   latencyMs?: number;
   runId?: string;
   runSteps?: StepProgress[];
-  runStatus?: "running" | "completed" | "failed" | "interrupted";
+  runStatus?: "running" | "completed" | "failed" | "interrupted" | "rejected";
+  /** failed request — offers Retry instead of pretending nothing happened */
+  isError?: boolean;
+  /** user feedback emoji */
+  reactions?: string[];
+  /** renders an inline "Connect AI" action (setup nudge) */
+  setupAction?: boolean;
+}
+
+/** Parsed tool call awaiting user confirmation for destructive actions */
+interface PendingToolRun {
+  calls: Array<{ name: string; params: Record<string, unknown> }>;
+  /** visible (tool-stripped) assistant text shown before execution */
+  visibleText: string;
+  history: Array<{ role: string; content: string }>;
+  chatId: string;
 }
 
 /** Shape of `toolContext`, passed straight through to
- * `executeAllToolCalls` (src/ai/tools.ts) — mirrors the object literal
+ * `executeAllToolCalls` (src/ai/tools.ts) â€” mirrors the object literal
  * built by `toolContext` in src/App.tsx's `useMemo`. `actions` methods are
  * typed loosely (parameters that tools.ts passes positionally) since
  * tools.ts itself accepts them untyped (`context.actions.createPage(...)`
@@ -183,6 +212,10 @@ interface ToolContextShape {
   actions: ToolContextActions;
 }
 
+// â”€â”€â”€ Tool intelligence helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+import { DESTRUCTIVE_TOOLS, TOOL_LABELS, describeToolResult } from "../ai/toolSummaries";
+
 interface AIRightPanelProps {
   open: boolean;
   onClose: () => void;
@@ -190,7 +223,7 @@ interface AIRightPanelProps {
   pages: Page[];
   appView: string;
   pageMode: string;
-  /** Pages open in other panes/tabs (split-view context) — surfaced to the
+  /** Pages open in other panes/tabs (split-view context) â€” surfaced to the
    * AI so "the other pane" is meaningful and agents can target them. */
   openPanePages?: Page[];
   apiKey: string;
@@ -264,6 +297,11 @@ export default function AIRightPanel({
   const composerRef = useRef<HTMLInputElement>(null);
 
   const currentAgent = getAgent(activeAgent);
+  const uiActions = useUIActions();
+  const handleOpenAiSetup = useCallback(() => {
+    uiActions.setSettingsInitialTab("Noska AI");
+    uiActions.setSettingsOpen(true);
+  }, [uiActions]);
   const agents = getAgentList();
   const isConfigured = aiManager.isConfigured();
   const providerName = aiManager.getActiveProviderName();
@@ -307,7 +345,7 @@ export default function AIRightPanel({
     return chatId;
   }, [activeChatId, aiChats, onChatsChange, onActiveChat]);
 
-  /** Live agentic run state — progress bubble + proposal card. */
+  /** Live agentic run state â€” progress bubble + proposal card. */
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeSteps, setActiveSteps] = useState<StepProgress[]>([]);
   const [agentProposal, setAgentProposal] = useState<AgentProposal | null>(null);
@@ -317,27 +355,158 @@ export default function AIRightPanel({
 
   useEffect(() => subscribeApprovals((list) => setPendingApprovals(list)), []);
 
-  const handleSend = useCallback(async (text: string) => {
-    if (!text?.trim() || loading) return;
-    const chatId = ensureActiveChat();
-    const userMsg: AIChatMessage = { id: uid(), role: "user", content: text, createdAt: now() };
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
-    setPrompt("");
-    setLoading(true);
+  // â”€â”€ Response-intelligence state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const abortRef = useRef({ aborted: false });
+  const lastIntentRef = useRef<string | null>(null);
+  const titledChatsRef = useRef<Set<string>>(new Set());
+  const [mode, setMode] = useState<ChatMode>("auto");
+  /** Destructive tool calls waiting for explicit approval (#15) */
+  const [pendingToolConfirm, setPendingToolConfirm] = useState<PendingToolRun | null>(null);
+  /** Latest message list for handlers that must persist outside updaters */
+  const messagesRef = useRef<AIChatMessage[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-    capture("ai_generation", { model: aiProvider, provider: aiProvider });
-    setTokenEstimate(prev => prev + Math.ceil(text.length / 4));
+  /** Build the per-request constraint sections for the model (#3/#7/#9). */
+  const buildPolicySections = useCallback((text: string, history: AIChatMessage[]) => {
+    const priorState = extractConversationState(history.filter((m) => !m.runSteps && !m.isError));
+    const rich = detectRichIntents(text);
+    const style = inferStyle(text, {
+      recentUserMessages: history.filter((m) => m.role === "user").map((m) => m.text || m.content || "").slice(-4),
+    });
+    const modePolicy = MODE_POLICIES[mode] || MODE_POLICIES.auto;
 
-    const chats = aiChats.map(c => c.id === chatId ? { ...c, messages: updatedMessages, updatedAt: now() } : c) as unknown as AIChat[];
-    onChatsChange?.(chats);
+    let resolvedTarget: string | null = null;
+    if (rich.primary === "follow_up" || /\b(page|note)\b/i.test(text)) {
+      resolvedTarget = resolveReference(text, priorState, {
+        currentPageTitle: page?.title || null,
+        openPaneTitles: openPanePages.filter((p) => p.id !== page?.id).map((p) => p.title).filter(Boolean) as string[],
+      });
+    }
 
-    // ── Intelligent routing ──────────────────────────────────────────
-    const intentResult = classifyIntent(text);
+    const continuing = history.some((m) => m.role === "assistant");
+    const policySection = buildResponsePolicySection({ rich, style, mode: modePolicy, resolvedTarget, continuing });
+
+    const convoLines: string[] = [];
+    if (priorState.lastTopic) convoLines.push(`Last answer topic: "${priorState.lastTopic.slice(0, 160)}â€¦"`);
+    if (priorState.mentionedPages.length > 0) convoLines.push(`Pages mentioned earlier: ${priorState.mentionedPages.slice(0, 5).join(", ")}`);
+    const conversationSection = convoLines.length > 0 ? `## Conversation State\n${convoLines.join("\n")}` : "";
+
+    return { rich, style, modePolicy, policySection, conversationSection };
+  }, [mode, page?.title, openPanePages]);
+
+  /** Persist messages into the chat store. */
+  const persistMessages = useCallback((chatId: string, msgs: AIChatMessage[]) => {
+    setMessages(msgs);
+    onChatsChange?.(
+      (aiChats.map((c) => (c.id === chatId ? { ...c, messages: msgs, updatedAt: now() } : c)) as unknown as AIChat[])
+    );
+  }, [aiChats, onChatsChange]);
+
+  /** Semantic chat title after the first real exchange (#35). */
+  const maybeAutoTitle = useCallback(async (chatId: string, msgs: AIChatMessage[]) => {
+    if (titledChatsRef.current.has(chatId)) return;
+    const chat = aiChats.find((c) => c.id === chatId);
+    if (!chat || (chat.name && chat.name !== "New Chat")) {
+      titledChatsRef.current.add(chatId);
+      return;
+    }
+    titledChatsRef.current.add(chatId);
+    const title = await generateChatTitle(msgs);
+    if (title && title !== "New Chat") {
+      onChatsChange?.(aiChats.map((c) => (c.id === chatId ? { ...c, name: title } : c)) as unknown as AIChat[]);
+    }
+  }, [aiChats, onChatsChange]);
+
+  /**
+   * Execute parsed tool calls, synthesize an honest reply from the
+   * outcomes (#14), and append the final message. Never dumps raw JSON.
+   */
+  const executeAndSummarize = useCallback(async (
+    calls: Array<{ name: string; params: Record<string, unknown> }>,
+    history: Array<{ role: string; content: string }>,
+    chatId: string,
+    skippedLabels: string[] = [],
+  ) => {
+    const startedAt = Date.now();
+    const outcomes: string[] = [];
+    for (const call of calls) {
+      try {
+        const result = await runTool(call.name, call.params, toolContext);
+        outcomes.push(describeToolResult(call.name, true, result));
+      } catch (err) {
+        outcomes.push(describeToolResult(call.name, false, undefined, err instanceof Error ? err.message : err));
+      }
+    }
+    for (const s of skippedLabels) outcomes.push(`â¸ ${s} â€” skipped by you`);
+
+    const allFailed = outcomes.every((o) => o.startsWith("âœ•"));
+    const synthMessages = [
+      ...history,
+      {
+        role: "user",
+        content:
+          `You just executed workspace actions. Outcomes:\n${outcomes.join("\n")}\n\n` +
+          (allFailed
+            ? "None of the actions succeeded. Tell the user plainly what failed and suggest what to try next. Do NOT claim anything was created or changed."
+            : "Write your reply to the user based on these real outcomes. Reference actual page titles from the outcomes. Be brief."),
+      },
+    ];
+    const followUp = await aiManager.sendConversation({
+      messages: synthMessages,
+      page, pages,
+      policySection: buildPolicySections("tool outcome summary", []).policySection,
+    });
+    const finalContent = hasToolCalls(followUp) ? stripToolCalls(followUp) : followUp;
+    const latencyMs = Date.now() - startedAt;
+    const finalMsg: AIChatMessage = {
+      id: uid(), role: "assistant", content: finalContent, createdAt: now(),
+      model: modelName, provider: providerName, latencyMs,
+    };
+    const issues = auditResponse(finalContent, { toolResultsOk: !allFailed });
+    if (qualityLabel(issues)) capture("ai_response_quality", { label: qualityLabel(issues), surface: "panel" });
+    return finalMsg;
+  }, [toolContext, page, pages, modelName, providerName, buildPolicySections]);
+
+  /** Core completion flow shared by send / regenerate / retry. */
+  const runAssistantFlow = useCallback(async (chatId: string, baseMessages: AIChatMessage[]) => {
+    const text = [...baseMessages].reverse().find((m) => m.role === "user")?.content || "";
+    const history = baseMessages;
+
+    // â”€â”€ Intelligent routing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const intentResult = classifyIntent(text, {
+      hasHistory: history.length > 1,
+      previousIntent: (lastIntentRef.current || null) as never,
+    });
+    lastIntentRef.current = intentResult.intent;
+    const { rich, policySection, conversationSection } = buildPolicySections(text, history);
+
+    // Model class routing (#11): explicit modes win; Auto escalates only
+    // for genuinely complex requests AND when the user hasn't hand-picked
+    // a non-default model — an explicit choice always outranks inference.
+    const complexity = estimateComplexity(text);
+    const modelClass =
+      mode === "fast" ? ("fast" as const)
+      : mode === "deep" || mode === "research" ? ("reasoning" as const)
+      : !userHasPinnedModel() && complexity === "high" ? ("reasoning" as const)
+      : undefined;
 
     try {
+      // Setup guard (#19): never pretend to answer without a provider.
+      // Agent/automation PROPOSALS are exempt — they degrade offline.
+      const needsProvider = intentResult.intent !== "agent_intent" && intentResult.intent !== "automation_intent";
+      if (needsProvider && !aiManager.isConfigured()) {
+        const guidance: AIChatMessage = {
+          id: uid(), role: "assistant", createdAt: now(), setupAction: true,
+          content:
+            "Connect an AI provider first and I'm all yours.\n\nAdd a key (OpenRouter, Anthropic, OpenAI, Groq…) or point me at Ollama/LM Studio locally. Keys stay in your browser storage.",
+        };
+        persistMessages(chatId, [...history, guidance]);
+        onToast?.("Set an API key to start chatting");
+        return;
+      }
+
       if (intentResult.intent === "agent_intent" || intentResult.intent === "automation_intent") {
-        // Propose — never silently create (product rule).
+        // Propose â€” never silently create (product rule).
         setLoading(false);
         setProposalBusy(true);
         try {
@@ -352,21 +521,24 @@ export default function AIRightPanel({
         const infoMsg: AIChatMessage = {
           id: uid(), role: "assistant", createdAt: now(),
           content: intentResult.intent === "agent_intent"
-            ? "I've drafted an agent for you below — review it before creating."
-            : "I've drafted an automation for you below — review it before creating.",
+            ? "I've drafted an agent for you below â€” review it before creating."
+            : "I've drafted an automation for you below â€” review it before creating.",
         };
-        setMessages(prev => [...prev, infoMsg]);
+        persistMessages(chatId, [...history, infoMsg]);
+        void maybeAutoTitle(chatId, [...history, infoMsg]);
         return;
       }
 
-      if (isAgenticIntent(intentResult.intent) && aiManager.isConfigured()) {
-        // ── Agentic execution with live progress ─────────────────────
+      const forceAgentic = (MODE_POLICIES[mode]?.forceAgenticRouting && rich.route === "act") ||
+        rich.primary === "automation_request" || rich.primary === "agent_request";
+
+      if ((isAgenticIntent(intentResult.intent) || forceAgentic) && aiManager.isConfigured()) {
+        // â”€â”€ Agentic execution with live progress (#16/#32) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         const progressMsgId = uid();
         const progressMsg: AIChatMessage = { id: progressMsgId, role: "assistant", createdAt: now(), runSteps: [], runStatus: "running", runId: "" };
-        setMessages([...updatedMessages, progressMsg]);
+        setMessages([...history, progressMsg]);
 
-        // Split-pane context (#36): tell the worker about other open panes
-        // so "the page in the other pane" is actionable.
+        // Split-pane context (#22): tell the worker about other open panes
         const otherPanes = openPanePages.filter(p => p.id !== page?.id);
         const paneNote = otherPanes.length > 0
           ? `\n\nOther pages currently open in split panes: ${otherPanes.slice(0, 5).map(p => `"${p.title}"`).join(", ")}. If the user refers to another open page, work on that one.`
@@ -378,6 +550,7 @@ export default function AIRightPanel({
           sourceKind: "ai",
           trigger: "manual",
           instructions: paneNote || undefined,
+          conversationContext: conversationSection || undefined,
           getContext: () => ({ currentPage: toolContext.currentPage, pages: toolContext.pages, actions: toolContext.actions as unknown as Record<string, (...args: unknown[]) => unknown> }),
           onProgress: (steps, r) => {
             setActiveRunId(r.id);
@@ -387,74 +560,172 @@ export default function AIRightPanel({
         });
 
         setActiveRunId(null);
-        const finalContent = run.summary || (run.status === "completed" ? "Done." : "Something went wrong — see the steps above.");
+        const finalContent = run.summary || (run.status === "completed" ? "Done." : "Something went wrong â€” see the steps above.");
         const finalMsg: AIChatMessage = { id: uid(), role: "assistant", content: finalContent, createdAt: now(), model: modelName, provider: providerName };
-        let doneMessages = [...updatedMessages, progressMsg];
-        // Replace the progress bubble's status; append summary message
+        let doneMessages = [...history, progressMsg];
         doneMessages = doneMessages.map(m => m.id === progressMsgId ? { ...m, runSteps: run.steps, runStatus: run.status as AIChatMessage["runStatus"] } : m);
         doneMessages = [...doneMessages, finalMsg];
-        setMessages(doneMessages);
-        onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: doneMessages, updatedAt: now() } : c) as unknown as AIChat[]);
+        persistMessages(chatId, doneMessages);
+        void maybeAutoTitle(chatId, doneMessages);
         return;
       }
 
-      // ── Plain conversational Q&A (existing behavior preserved) ─────
-      const startedAt = Date.now();
-      const result = await aiManager.sendConversation({
-        messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+      // â”€â”€ Conversational streaming Q&A (#31) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      abortRef.current = { aborted: false };
+      const streamMsgId = uid();
+      const placeholder: AIChatMessage = { id: streamMsgId, role: "assistant", content: "", createdAt: now() };
+      setMessages([...history, placeholder]);
+
+      const apiHistory = history
+        .filter((m) => !m.runSteps && !m.isError && (m.role === "user" || m.role === "assistant"))
+        .map((m) => ({ role: m.role, content: m.content || m.text || "" }));
+
+      const selectedBlocks = (page?.blocks as Array<{ selected?: boolean; text?: string }> | undefined)?.filter((b) => b.selected) || [];
+
+      const result = await aiManager.stream({
+        messages: apiHistory,
         page, pages,
+        selectedBlocks,
+        openPanePages,
+        conversationSection,
+        policySection,
+        modelClass,
+        signal: abortRef.current,
+        onChunk: (partial: string) => {
+          setMessages(prev => prev.map(m => (m.id === streamMsgId ? { ...m, content: partial } : m)));
+        },
       });
-      const latencyMs = Date.now() - startedAt;
 
-      let processedMessages = updatedMessages;
+      let processedMessages: AIChatMessage[];
+      const visibleFirst = hasToolCalls(result) ? stripToolCalls(result) : result;
 
-      if (hasToolCalls(result)) {
-        const cleaned = stripToolCalls(result);
-        if (cleaned?.trim()) {
-          const toolMsg: AIChatMessage = { id: uid(), role: "assistant", content: cleaned, createdAt: now(), model: modelName, provider: providerName, latencyMs };
-          processedMessages = [...processedMessages, toolMsg];
-          setMessages(processedMessages);
-        }
-        const toolResults = await executeAllToolCalls(result, toolContext);
-        const toolResultText = toolResults.map((r: { name: string; error?: string; result?: unknown }) => {
-          const success = r.error ? `Error: ${r.error}` : JSON.stringify(r.result, null, 2);
-          return `Tool: ${r.name}\nResult: ${success}`;
-        }).join("\n\n");
-        const followUp = await aiManager.sendConversation({
-          messages: [
-            ...processedMessages.map(m => ({ role: m.role, content: m.content })),
-            { role: "user", content: `Tool execution results:\n${toolResultText}\n\nSummarize or continue based on these results.` }
-          ],
-          page, pages,
-        });
-        const finalContent = hasToolCalls(followUp) ? stripToolCalls(followUp) : followUp;
-        const finalMsg: AIChatMessage = { id: uid(), role: "assistant", content: finalContent, createdAt: now(), model: modelName, provider: providerName, latencyMs };
-        processedMessages = [...processedMessages, finalMsg];
-      } else {
-        const aiMsg: AIChatMessage = { id: uid(), role: "assistant", content: result, createdAt: now(), model: modelName, provider: providerName, latencyMs };
-        processedMessages = [...processedMessages, aiMsg];
+      if (!hasToolCalls(result)) {
+        // Keep the streamed bubble (same id) so nothing flickers/remounts
+        const aiMsg: AIChatMessage = { id: streamMsgId, role: "assistant", content: result, createdAt: now(), model: modelName, provider: providerName };
+        processedMessages = [...history, aiMsg];
+        const issues = auditResponse(result, { userMessage: text });
+        if (qualityLabel(issues)) capture("ai_response_quality", { label: qualityLabel(issues), surface: "panel" });
+        persistMessages(chatId, processedMessages);
+        void maybeAutoTitle(chatId, processedMessages);
+        return;
       }
 
-      setTokenEstimate(prev => prev + Math.ceil(result.length / 4));
+      // Tool calls requested â€” show the model's visible text first
+      const visibleMsg: AIChatMessage = { id: streamMsgId, role: "assistant", content: visibleFirst, createdAt: now(), model: modelName, provider: providerName };
+      processedMessages = [...history, visibleMsg];
+      persistMessages(chatId, processedMessages);
 
-      setMessages(processedMessages);
-      const finalChats = chats.map(c => c.id === chatId ? { ...c, messages: processedMessages, updatedAt: now() } : c) as unknown as AIChat[];
-      onChatsChange?.(finalChats);    } catch (err: unknown) {
+      const calls = parseToolCalls(result);
+      const destructive = calls.filter((c) => DESTRUCTIVE_TOOLS.has(c.name));
+      const safeCalls = calls.filter((c) => !DESTRUCTIVE_TOOLS.has(c.name));
+
+      if (destructive.length > 0) {
+        // Significant write â€” pause for explicit confirmation (#15/#18)
+        setPendingToolConfirm({
+          calls,
+          visibleText: visibleFirst,
+          history: [
+            ...apiHistory,
+            ...(visibleFirst ? [{ role: "assistant", content: visibleFirst }] : []),
+          ],
+          chatId,
+        });
+        return;
+      }
+
+      const finalMsg = await executeAndSummarize(safeCalls, [
+        ...apiHistory,
+        ...(visibleFirst ? [{ role: "assistant", content: visibleFirst }] : []),
+      ], chatId);
+      persistMessages(chatId, [...processedMessages, finalMsg]);
+      void maybeAutoTitle(chatId, [...processedMessages, finalMsg]);
+    } catch (err: unknown) {
       const message = err instanceof Error ? err.message : undefined;
       const friendly = message?.includes("not configured") || message?.includes("API key")
-        ? "AI provider not configured. Add an API key in Settings → AI Providers."
+        ? "AI provider not configured. Add an API key in Settings â†’ AI Providers."
         : message?.includes("fetch") || message?.includes("network") || message?.includes("Failed to fetch")
           ? "Network error. Check your internet connection and try again."
           : message?.includes("timeout") || message?.includes("timed out")
             ? "AI request timed out. Try again or use a different model."
             : `AI request failed. Please try again.`;
-      const errMsg: AIChatMessage = { id: uid(), role: "assistant", content: friendly, createdAt: now(), model: modelName, provider: providerName };
-      setMessages([...updatedMessages, errMsg]);
-      onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: [...updatedMessages, errMsg], updatedAt: now() } : c) as unknown as AIChat[]);
+      const errMsg: AIChatMessage = { id: uid(), role: "assistant", content: friendly, createdAt: now(), isError: true };
+      persistMessages(chatId, [...history, errMsg]);
     } finally {
       setLoading(false);
     }
-  }, [loading, messages, aiChats, activeChatId, page, pages, appView, pageMode, apiKey, aiProvider, nvidiaKey, toolContext, onChatsChange, onActiveChat, ensureActiveChat]);
+  }, [buildPolicySections, mode, openPanePages, page, pages, toolContext, modelName, providerName, persistMessages, maybeAutoTitle, executeAndSummarize, onToast]);
+
+  const handleSend = useCallback(async (text: string) => {
+    if (!text?.trim() || loading) return;
+    const chatId = ensureActiveChat();
+    const userMsg: AIChatMessage = { id: uid(), role: "user", content: text, createdAt: now() };
+    const updatedMessages = [...messages, userMsg];
+    setPrompt("");
+    setLoading(true);
+
+    capture("ai_generation", { model: aiProvider, provider: aiProvider });
+    setTokenEstimate(prev => prev + Math.ceil(text.length / 4));
+
+    // Passive style learning (#24) â€” cheap local signal accumulation.
+    try { learnUserInteraction(text); } catch { /* best effort */ }
+
+    persistMessages(chatId, updatedMessages);
+    await runAssistantFlow(chatId, updatedMessages);
+  }, [loading, messages, aiProvider, ensureActiveChat, persistMessages, runAssistantFlow]);
+
+  /** Regenerate: drop everything from `msgIndex` onward and rerun (#31). */
+  const handleRegenerate = useCallback(async (msgIndex: number) => {
+    if (loading) return;
+    const target = messages[msgIndex];
+    if (!target || target.role !== "user") return;
+    const truncated = messages.slice(0, msgIndex + 1);
+    const chatId = activeChatId || ensureActiveChat();
+    setLoading(true);
+    capture("ai_regenerate", {});
+    persistMessages(chatId, truncated);
+    await runAssistantFlow(chatId, truncated);
+  }, [loading, messages, activeChatId, ensureActiveChat, persistMessages, runAssistantFlow]);
+
+  /** Retry after an error bubble. */
+  const handleRetry = useCallback(async () => {
+    const lastErrIdx = messages.map((m) => m.isError).lastIndexOf(true);
+    if (lastErrIdx < 0) return;
+    await handleRegenerate(lastErrIdx - 1 >= 0 && messages[lastErrIdx - 1]?.role === "user" ? lastErrIdx - 1 : lastErrIdx);
+  }, [messages, handleRegenerate]);
+
+  /** User approved the destructive actions â€” run them now. */
+  const handleConfirmTools = useCallback(async () => {
+    const pending = pendingToolConfirm;
+    if (!pending || loading) return;
+    setPendingToolConfirm(null);
+    setLoading(true);
+    try {
+      const finalMsg = await executeAndSummarize(pending.calls, pending.history, pending.chatId);
+      const next = [...messagesRef.current, finalMsg];
+      persistMessages(pending.chatId, next);
+      void maybeAutoTitle(pending.chatId, next);
+    } finally {
+      setLoading(false);
+    }
+  }, [pendingToolConfirm, loading, executeAndSummarize, persistMessages, maybeAutoTitle]);
+
+  /** User declined destructive actions â€” run only the safe ones. */
+  const handleSkipDestructive = useCallback(async () => {
+    const pending = pendingToolConfirm;
+    if (!pending || loading) return;
+    setPendingToolConfirm(null);
+    setLoading(true);
+    try {
+      const skipped = pending.calls.filter((c) => DESTRUCTIVE_TOOLS.has(c.name)).map((c) => TOOL_LABELS[c.name] || c.name);
+      const safe = pending.calls.filter((c) => !DESTRUCTIVE_TOOLS.has(c.name));
+      const finalMsg = await executeAndSummarize(safe, pending.history, pending.chatId, skipped);
+      const next = [...messagesRef.current, finalMsg];
+      persistMessages(pending.chatId, next);
+      void maybeAutoTitle(pending.chatId, next);
+    } finally {
+      setLoading(false);
+    }
+  }, [pendingToolConfirm, loading, executeAndSummarize, persistMessages, maybeAutoTitle]);
 
   const handleQuickAction = useCallback((actionId: string) => {
     const action = AI_ACTIONS.find(a => a.id === actionId) || QUICK_ACTIONS.find(a => a.id === actionId) || WORKFLOW_ACTIONS.find(a => a.id === actionId);
@@ -493,7 +764,7 @@ export default function AIRightPanel({
       onToast?.(`Agent "${proposal.name}" created`);
       capture("agent_created_via_ai", { name: proposal.name });
     } catch {
-      onToast?.("Couldn't create the agent — try again");
+      onToast?.("Couldn't create the agent â€” try again");
     } finally {
       setProposalBusy(false);
     }
@@ -517,7 +788,7 @@ export default function AIRightPanel({
       onToast?.(`Automation "${proposal.name}" created`);
       capture("automation_created_via_ai", { name: proposal.name });
     } catch {
-      onToast?.("Couldn't create the automation — try again");
+      onToast?.("Couldn't create the automation â€” try again");
     } finally {
       setProposalBusy(false);
     }
@@ -577,15 +848,15 @@ export default function AIRightPanel({
               </div>
             </div>
 
-            {/* ===== PROVIDER · MODEL · HISTORY · MODES ===== */}
+            {/* ===== PROVIDER Â· MODEL Â· HISTORY Â· MODES ===== */}
             <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--border)] shrink-0 min-h-[30px] bg-[var(--surface-2)]/30">
               <span className="flex items-center gap-1 text-[9px] text-[var(--muted)]">
                 <Cpu size={8} />
                 <span className="capitalize">{providerName}</span>
               </span>
-              <span className="text-[8px] text-[var(--border)]">·</span>
+              <span className="text-[8px] text-[var(--border)]">Â·</span>
               <span className="text-[9px] text-[var(--muted)] truncate max-w-[80px]">{modelName}</span>
-              <span className="text-[8px] text-[var(--border)]">·</span>
+              <span className="text-[8px] text-[var(--border)]">Â·</span>
               <button
                 onClick={() => setShowHistory(!showHistory)}
                 className={`flex items-center gap-1 text-[9px] transition ${showHistory ? 'text-[var(--accent)]' : 'text-[var(--muted)] hover:text-[var(--text-secondary)]'}`}
@@ -626,7 +897,7 @@ export default function AIRightPanel({
                 </div>
                 {page && (
                   <>
-                    <div className="text-[8px] font-semibold text-[var(--muted)] uppercase tracking-wider mt-2 mb-1">Turn this into…</div>
+                    <div className="text-[8px] font-semibold text-[var(--muted)] uppercase tracking-wider mt-2 mb-1">Turn this intoâ€¦</div>
                     <div className="flex flex-wrap gap-1">
                       {WORKFLOW_ACTIONS.map((action) => (
                         <motion.button
@@ -700,8 +971,32 @@ export default function AIRightPanel({
                     onInsert={onInsert}
                     onReplaceText={onReplaceText}
                     onToast={onToast}
+                    onRegenerate={handleRegenerate}
+                    onOpenAiSetup={handleOpenAiSetup}
                   />
                 ))}
+
+                {/* Destructive action confirmation (#15) */}
+                {pendingToolConfirm && !loading && (
+                  <div className="mr-auto max-w-[92%] rounded-lg border border-[var(--warning)]/40 bg-[var(--warning)]/[0.06] px-2.5 py-2">
+                    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-[var(--warning)]">
+                      <ShieldCheck size={10} />
+                      Confirm before I continue
+                    </div>
+                    <p className="text-[9px] text-[var(--text-secondary)] mt-1">
+                      This involves deleting or overwriting content:
+                      {Array.from(new Set(pendingToolConfirm.calls.filter(c => DESTRUCTIVE_TOOLS.has(c.name)).map(c => TOOL_LABELS[c.name] || c.name))).join(", ")}.
+                    </p>
+                    <div className="flex gap-1.5 mt-2">
+                      <button onClick={handleConfirmTools} className="rounded-md bg-[var(--accent)] px-2 py-1 text-[9px] font-semibold text-white hover:opacity-90 transition">
+                        Run it
+                      </button>
+                      <button onClick={handleSkipDestructive} className="rounded-md border border-[var(--border)] px-2 py-1 text-[9px] font-medium text-[var(--muted)] hover:text-[var(--text)] transition">
+                        Skip that part
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Live agentic run progress */}
                 {activeRunId && activeSteps.length > 0 && loading && (
@@ -711,11 +1006,11 @@ export default function AIRightPanel({
                 {proposalBusy && (
                   <div className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] mr-auto max-w-[90%]">
                     <Loader2 size={11} className="text-[var(--accent)] animate-spin" />
-                    <span className="text-[10px] text-[var(--muted)]">Drafting proposal…</span>
+                    <span className="text-[10px] text-[var(--muted)]">Drafting proposalâ€¦</span>
                   </div>
                 )}
 
-                {/* Proposal cards — review before anything is created */}
+                {/* Proposal cards â€” review before anything is created */}
                 {agentProposal && (
                   <AgentProposalCardView
                     proposal={agentProposal}
@@ -825,6 +1120,27 @@ export default function AIRightPanel({
                       className="overflow-hidden"
                     >
                       <div className="px-3 pb-2.5 space-y-2">
+                        {/* Response mode (#33) â€” Auto is the default */}
+                        <div>
+                          <label className="text-[7px] font-semibold text-[var(--muted)] block mb-1 uppercase tracking-widest">Mode</label>
+                          <div className="flex flex-wrap gap-1">
+                            {(["auto", "fast", "deep", "agent", "learn", "research"] as ChatMode[]).map((m) => (
+                              <button
+                                key={m}
+                                onClick={() => setMode(m)}
+                                title={MODE_POLICIES[m].extraGuidance || "Noska decides how to respond"}
+                                className={`rounded px-1.5 py-0.5 text-[9px] capitalize transition ${
+                                  mode === m
+                                    ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20'
+                                    : 'bg-[var(--surface)]/30 text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--hover)]'
+                                }`}
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         {/* Agent */}
                         <div>
                           <label className="text-[7px] font-semibold text-[var(--muted)] block mb-1 uppercase tracking-widest">Agent</label>
@@ -1032,10 +1348,12 @@ export default function AIRightPanel({
                   </div>
                   {loading ? (
                     <button
-                      onClick={() => {}}
+                      onClick={() => { abortRef.current.aborted = true; }}
+                      title="Stop generating"
                       className="flex items-center gap-1 rounded-md bg-[var(--danger)]/10 text-[var(--danger)] hover:bg-[var(--danger)]/20 px-1.5 py-1 text-[9px] font-medium transition"
                     >
-                      <span className="w-1 h-1 rounded-full bg-[var(--danger)] animate-pulse" />
+                      <span className="w-1.5 h-1.5 rounded-sm bg-current" />
+                      Stop
                     </button>
                   ) : (
                     <motion.button
@@ -1066,9 +1384,11 @@ interface ChatMessageBubbleProps {
   onInsert?: (blocks: Block[]) => void;
   onReplaceText?: (text: string) => void;
   onToast?: (message: string) => void;
+  onRegenerate?: (index: number) => void;
+  onOpenAiSetup?: () => void;
 }
 
-/** Live progress for agentic runs — concise steps, never chain-of-thought. */
+/** Live progress for agentic runs â€” concise steps, never chain-of-thought. */
 function RunProgressBubble({ steps }: { steps: StepProgress[] }) {
   const iconFor = (status: StepProgress["status"]) => {
     switch (status) {
@@ -1087,7 +1407,7 @@ function RunProgressBubble({ steps }: { steps: StepProgress[] }) {
     >
       <div className="flex items-center gap-1.5 mb-1.5">
         <Bot size={10} className="text-[var(--accent)]" />
-        <span className="text-[10px] font-semibold text-[var(--text)]">Working…</span>
+        <span className="text-[10px] font-semibold text-[var(--text)]">Workingâ€¦</span>
       </div>
       <div className="space-y-1">
         {steps.map(s => (
@@ -1108,122 +1428,7 @@ function RunProgressBubble({ steps }: { steps: StepProgress[] }) {
   );
 }
 
-/** "Agent Ready" review card — nothing is created until the user confirms. */
-function AgentProposalCardView({ proposal, busy, onCreate, onDismiss }: {
-  proposal: AgentProposal;
-  busy: boolean;
-  onCreate: () => void;
-  onDismiss: () => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mr-auto w-full max-w-full rounded-xl border border-[var(--accent)]/25 bg-[var(--accent)]/[0.04] p-3"
-    >
-      <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-lg bg-[var(--accent)]/12 flex items-center justify-center">
-          <Bot size={12} className="text-[var(--accent)]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-[var(--text)] truncate">{proposal.name}</p>
-          <p className="text-[9px] text-[var(--muted)]">Agent Ready · {describeTrigger(proposal.trigger)}</p>
-        </div>
-      </div>
-
-      <p className="text-[10px] text-[var(--text-secondary)] mt-2 line-clamp-3">{proposal.description}</p>
-
-      <div className="mt-2 space-y-1">
-        <div className="flex items-center gap-1 text-[9px] text-[var(--muted)]">
-          <CheckCircle2 size={8} className="text-[var(--success)]" />
-          Context: {proposal.contextScope.length > 0 ? proposal.contextScope.join(", ") : "Workspace"}
-        </div>
-        <div className="flex items-center gap-1 text-[9px] text-[var(--muted)]">
-          <ShieldCheck size={8} className="text-[var(--success)]" />
-          Creates & updates pages · Deletes need approval
-        </div>
-      </div>
-
-      <details className="mt-2 group/proposal">
-        <summary className="cursor-pointer text-[9px] text-[var(--muted)] hover:text-[var(--text-secondary)] select-none">
-          Review instructions
-        </summary>
-        <p className="text-[9px] text-[var(--text-secondary)] bg-[var(--surface)] border border-[var(--border)] rounded-md p-2 mt-1 whitespace-pre-wrap max-h-28 overflow-y-auto scrollbar-thin">
-          {proposal.instructions}
-        </p>
-      </details>
-
-      <div className="flex gap-1.5 mt-2.5">
-        <button
-          onClick={onCreate}
-          disabled={busy}
-          className="flex-1 rounded-lg bg-[var(--accent)] px-2 py-1.5 text-[10px] font-semibold text-white hover:bg-[var(--accent)]/90 disabled:opacity-50 transition"
-        >
-          Create Agent
-        </button>
-        <button
-          onClick={onDismiss}
-          className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-[10px] font-medium text-[var(--muted)] hover:text-[var(--text)] transition"
-        >
-          Dismiss
-        </button>
-      </div>
-    </motion.div>
-  );
-}
-
-/** "Automation Ready" review card. */
-function AutomationProposalCardView({ proposal, busy, onCreate, onDismiss }: {
-  proposal: AutomationProposal;
-  busy: boolean;
-  onCreate: () => void;
-  onDismiss: () => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mr-auto w-full max-w-full rounded-xl border border-[var(--warning)]/25 bg-[var(--warning)]/[0.05] p-3"
-    >
-      <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-lg bg-[var(--warning)]/12 flex items-center justify-center">
-          <Zap size={12} className="text-[var(--warning)]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-[var(--text)] truncate">{proposal.name}</p>
-          <p className="text-[9px] text-[var(--muted)]">Automation Ready · {describeTrigger(proposal.trigger)}</p>
-        </div>
-      </div>
-
-      <div className="mt-2 space-y-0.5">
-        {proposal.actions.map((a, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)]">
-            <CheckCircle2 size={8} className="text-[var(--success)] shrink-0" />
-            {a.label}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex gap-1.5 mt-2.5">
-        <button
-          onClick={onCreate}
-          disabled={busy}
-          className="flex-1 rounded-lg bg-[var(--warning)] px-2 py-1.5 text-[10px] font-semibold text-white hover:bg-[var(--warning)]/90 disabled:opacity-50 transition"
-        >
-          Create Automation
-        </button>
-        <button
-          onClick={onDismiss}
-          className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-[10px] font-medium text-[var(--muted)] hover:text-[var(--text)] transition"
-        >
-          Dismiss
-        </button>
-      </div>
-    </motion.div>
-  );
-}
-
-function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceText, onToast }: ChatMessageBubbleProps) {
+function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceText, onToast, onRegenerate, onOpenAiSetup }: ChatMessageBubbleProps) {
   const isUser = message.role === 'user';
   const isFirstAi = index === 0 && !isUser;
 
@@ -1243,7 +1448,7 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
                 ? <CheckCircle2 size={10} className="text-[var(--success)]" />
                 : <XCircle size={10} className="text-[var(--danger)]" />}
               {message.runStatus === "completed" ? "Completed" : "Finished with issues"}
-              <span className="text-[8px] text-[var(--muted)] font-normal group-open/run:hidden">— show steps</span>
+              <span className="text-[8px] text-[var(--muted)] font-normal group-open/run:hidden">â€” show steps</span>
             </summary>
             <div className="mt-2">
               <RunProgressBubble steps={message.runSteps} />
@@ -1271,6 +1476,13 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
     onToast?.('Page content replaced');
   }, [onReplaceText, onToast]);
 
+  const rawContent = message.text || message.content || "";
+  // Safe markdown rendering â€” raw text is never injected as HTML (#31).
+  const renderedHtml = useMemo(
+    () => message.html || renderChatMarkdown(rawContent),
+    [message.html, rawContent]
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 6, scale: 0.98 }}
@@ -1281,12 +1493,14 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
       <div className={`rounded-lg px-2.5 py-1.5 text-[11px] leading-relaxed ${
         isUser
           ? 'bg-[var(--accent)] text-white shadow-sm'
-          : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]'
+          : message.isError
+            ? 'bg-[var(--danger)]/[0.06] text-[var(--text)] border border-[var(--danger)]/25'
+            : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]'
       }`}>
         {/* AI icon */}
         {!isUser && !isFirstAi && (
           <div className="absolute -left-5 top-1.5 w-3.5 h-3.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
-            <span className="text-[6px]">✦</span>
+            <span className="text-[6px]">âœ¦</span>
           </div>
         )}
 
@@ -1294,35 +1508,63 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
         {isUser ? (
           <span className="whitespace-pre-wrap">{message.text || message.content}</span>
         ) : (
-          <div className="ai-md-container" dangerouslySetInnerHTML={{ __html: message.html || message.text || message.content || "" }} />
+          <div className="ai-md-container ai-chat-md" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+        )}
+
+        {/* Error recovery (#31): retry instead of a dead end */}
+        {!isUser && message.isError && (
+          <button
+            onClick={() => onRegenerate?.(Math.max(index - 1, 0))}
+            className="mt-1.5 flex items-center gap-1 rounded-md bg-[var(--surface)] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--text-secondary)] hover:text-[var(--accent)] transition"
+          >
+            <RotateCcw size={8} /> Retry
+          </button>
+        )}
+
+        {/* Setup nudge: one-click route to Settings → Noska AI */}
+        {!isUser && message.setupAction && (
+          <button
+            onClick={() => { onOpenAiSetup?.(); capture("feature_used", { feature: "ai_setup_nudge" }); }}
+            className="mt-1.5 flex items-center gap-1 rounded-md bg-[var(--accent)] px-2 py-1 text-[9px] font-semibold text-white hover:opacity-90 transition"
+          >
+            <Key size={9} /> Connect AI now
+          </button>
         )}
 
         {/* Reactions + Actions */}
-        {!isUser && (message.text || message.content) && message.text !== '...' && message.content !== '...' && (
+        {!isUser && rawContent && rawContent !== '...' && (
           <div className="mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {['👍', '👎', '⭐'].map(r => (
+            {['ðŸ‘', 'ðŸ‘Ž', 'â­'].map(r => (
               <button
                 key={r}
-                className="grid h-3.5 w-3.5 place-items-center rounded text-[8px] text-[var(--muted)] hover:bg-[var(--hover)] transition"
+                onClick={() => capture("ai_feedback", { reaction: r, surface: "panel" })}
+                className={`grid h-3.5 w-3.5 place-items-center rounded text-[8px] text-[var(--muted)] hover:bg-[var(--hover)] transition ${message.reactions?.includes(r) ? "bg-[var(--accent)]/20" : ""}`}
               >
                 {r}
               </button>
             ))}
             <span className="w-px h-2.5 bg-[var(--border)] mx-0.5" />
             <button
-              onClick={() => handleInsertBelow(message.text || message.content || "")}
+              onClick={() => onRegenerate?.(Math.max(index - 1, 0))}
+              title="Regenerate this reply"
+              className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
+            >
+              <RotateCcw size={8} className="inline" /> Retry
+            </button>
+            <button
+              onClick={() => handleInsertBelow(rawContent)}
               className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
             >
               Insert below
             </button>
             <button
-              onClick={() => handleReplacePage(message.text || message.content || "")}
+              onClick={() => handleReplacePage(rawContent)}
               className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
             >
               Replace
             </button>
             <button
-              onClick={() => handleCopy(message.text || message.content || "")}
+              onClick={() => handleCopy(rawContent)}
               className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
             >
               Copy

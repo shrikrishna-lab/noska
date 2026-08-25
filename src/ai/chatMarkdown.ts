@@ -91,11 +91,11 @@ export function renderChatMarkdown(source: string | null | undefined): string {
     // Divider
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) { closeLists(); closeQuote(); flushTable(); out.push("<hr/>"); continue; }
 
-    // Headings
+    // Headings — h1 is demoted one level for chat scale; others keep theirs
     const h = trimmed.match(/^(#{1,4})\s+(.*)$/);
     if (h) {
       closeLists(); closeQuote(); flushTable();
-      const level = Math.min(h[1].length + 1, 5); // shift down one level: chat title already exists
+      const level = h[1].length === 1 ? 2 : Math.min(h[1].length, 5);
       out.push(`<h${level}>${renderInline(escapeHtml(h[2]))}</h${level}>`);
       continue;
     }

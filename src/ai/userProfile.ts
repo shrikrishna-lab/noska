@@ -61,7 +61,7 @@ export function buildUserProfileContext() {
   return `## User Profile\n${parts.join("\n")}`;
 }
 
-export function learnUserInteraction(text, pageTitle) {
+export function learnUserInteraction(text, pageTitle?) {
   const signals = [];
   if (/^[A-Z]/.test(text) && text.length > 20) signals.push("formal");
   if (/[!?]{2,}/.test(text)) signals.push("expressive");

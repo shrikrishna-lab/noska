@@ -202,8 +202,15 @@ export async function beginPairing(): Promise<void> {
   pollStatus = "waiting";
   pollError = null;
   emit();
-  const deadline = Date.now() + PAIRING_TTL_MS;
   const code = getOrCreatePairingCode();
+  // Register the code so the web can only claim THIS one (stale codes from
+  // old tabs are rejected server-side with a clear reason).
+  try {
+    await callFn({ action: "init", code });
+  } catch {
+    // Non-fatal: older edge deployments accept claims without init.
+  }
+  const deadline = Date.now() + PAIRING_TTL_MS;
   let consecutiveErrors = 0;
   while (Date.now() < deadline && pollStatus === "waiting") {
     try {

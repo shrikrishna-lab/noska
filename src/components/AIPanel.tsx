@@ -8,7 +8,20 @@ import { aiManager } from "../ai/AIManager";
 import { getAgentList, getAgent, buildAgentPrompt } from "../ai/agents";
 import { buildContext } from "../ai/ContextBuilder";
 import { textToBlocks, uid, now } from "../utils/helpers";
-import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
+import { hasToolCalls, stripToolCalls, parseToolCalls, runTool } from "../ai/tools";
+import {
+  classifyIntent,
+  isAgenticIntent,
+  agentRuntime,
+  proposeAgent,
+  proposeAutomation,
+} from "../ai/runtime";
+import type { AgentProposal, AutomationProposal, StepProgress } from "../ai/runtime";
+import { detectRichIntents, inferStyle, estimateComplexity, buildResponsePolicySection, MODE_POLICIES } from "../ai/responsePolicy";
+import { extractConversationState, resolveReference, quickTitle, generateChatTitle } from "../ai/conversation";
+import { learnUserInteraction } from "../ai/userProfile";
+import { DESTRUCTIVE_TOOLS, describeToolResult } from "../ai/toolSummaries";
+import { auditResponse, qualityLabel } from "../ai/quality/responseQuality";
 import { realtimeCollab } from "../lib/realtimeCollab";
 import { auditEngine } from "../lib/auditEngine";
 import { capture } from "../lib/posthog";
@@ -22,6 +35,10 @@ import PromptComposer from "./ai/PromptComposer";
 import ContextPanel from "./ai/ContextPanel";
 import CollabAura from "./ai/CollabAura";
 import ChatMessage from "./ai/ChatMessage";
+import { AgentProposalCardView, AutomationProposalCardView } from "./ai/ProposalCards";
+import { saveAgent, blankAgent } from "../features/agents/agentStore";
+import { saveAutomation, blankAutomation } from "../features/automations/automationStore";
+import { refreshDefinitions } from "../intelligence/triggerService";
 import type { AiModelSelection } from "./ui/ai-prompt-input";
 
 interface ChatPanelMessage {
@@ -32,6 +49,10 @@ interface ChatPanelMessage {
   model?: string;
   provider?: string;
   latencyMs?: number;
+  /** live agentic progress for this bubble */
+  runSteps?: StepProgress[];
+  runStatus?: "running" | "completed" | "failed" | "interrupted" | "rejected";
+  isError?: boolean;
 }
 
 interface ToolCallResult {
@@ -40,6 +61,24 @@ interface ToolCallResult {
   result?: { count?: number; [key: string]: unknown };
   error?: string;
   params: Record<string, unknown>;
+}
+
+// ─── Module-level intelligence helpers ──────────────────────────────────────
+
+/** True when the request needs workspace actions rather than an answer. */
+function richRouteIsAction(text: string): boolean {
+  return detectRichIntents(text).route === "act";
+}
+
+/** Normalize the app-provided tool context for the shared runtime/tools. */
+function buildRuntimeContext(toolContext: unknown): { currentPage: unknown; pages: unknown[]; actions: Record<string, (...args: unknown[]) => unknown> } {
+  const ctx = (toolContext || {}) as { currentPage?: unknown; pages?: unknown[]; actions?: Record<string, (...args: unknown[]) => unknown> };
+  return { currentPage: ctx.currentPage, pages: ctx.pages || [], actions: ctx.actions || {} };
+}
+
+/** Append per-request policy constraints to a persona system prompt. */
+function systemPromptWithPolicy(basePrompt: string, policySection: string): string {
+  return policySection ? `${basePrompt}\n\n---\n\n${policySection}` : basePrompt;
 }
 
 interface AIPanelProps {
@@ -94,7 +133,7 @@ export default function AIPanel({
   const [showContext, setShowContext] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyInput, setKeyInput] = useState("");
-  const [keyProvider, setKeyProvider] = useState("openrouter");
+  const [keyProvider, setKeyProvider] = useState(() => aiManager.getConfig().activeProvider || "openrouter");
   const [testingKey, setTestingKey] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Array<{ userId: string; userName: string }>>([]);
   const [auditEvents, setAuditEvents] = useState<unknown[]>([]);
@@ -102,6 +141,15 @@ export default function AIPanel({
   const [presenceUsers, setPresenceUsers] = useState<unknown[]>([]);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [chatFilter, setChatFilter] = useState("all");
+  // ── Intelligence state (parity with the AI right panel) ────────────────
+  const abortRef = useRef({ aborted: false });
+  const lastIntentRef = useRef<string | null>(null);
+  const titledChatsRef = useRef<Set<string>>(new Set());
+  /** latest settled message list, captured outside state updaters */
+  const finalRef = useRef<ChatPanelMessage[]>([]);
+  const [agentProposal, setAgentProposal] = useState<AgentProposal | null>(null);
+  const [automationProposal, setAutomationProposal] = useState<AutomationProposal | null>(null);
+  const [proposalBusy, setProposalBusy] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -202,7 +250,7 @@ export default function AIPanel({
       aiManager.setActiveProvider(keyProvider);
 
       if (testResult.ok) {
-        onToast?.(`${provider?.name || keyProvider} connected successfully!`);
+        onToast?.(`${provider?.name || keyProvider} connected · ${aiManager.getActiveModelName()}`);
       } else {
         onToast?.(`${provider?.name || keyProvider} configuration saved`);
       }
@@ -223,23 +271,24 @@ export default function AIPanel({
       setPrompt("");
 
       const userMsg: ChatPanelMessage = { role: "user", text };
-      const updatedMessages: ChatPanelMessage[] = [...messages, userMsg, { role: "ai", text: "..." }];
-      setMessages(updatedMessages);
+      const history: ChatPanelMessage[] = [...messages, userMsg];
+      // Streaming placeholder — grows chunk by chunk below
+      const withPlaceholder: ChatPanelMessage[] = [...history, { role: "ai", text: "..." }];
+      setMessages(withPlaceholder);
       setLoading(true);
       setExecutingTools(true);
       setToolResults([]);
 
-      // Update real active model if user changed it in selector
-      if (selection?.id) {
-        aiManager.setActiveModel(selection.id);
-      }
 
+      // Provider/model are applied & persisted at pick time in the
+      // composer (provider-aware). Labels below reflect the live choice.
       capture("ai_generation", { model: selection?.id || modelName });
+      try { learnUserInteraction(text); } catch { /* best effort */ }
 
-      // Update chat list
+      // Update chat list — semantic placeholder title, upgraded after reply
       const chatId = activeChatId || uid();
       if (!activeChatId) onActiveChat?.(chatId);
-      const title = text.slice(0, 48);
+      const title = quickTitle(text);
       const existing = aiChats.find((c) => c.id === chatId);
       const nextChats: AIChat[] = existing
         ? aiChats.map((c) => (c.id === chatId ? { ...c, updatedAt: now() } : c))
@@ -261,23 +310,137 @@ export default function AIPanel({
           ];
       onChatsChange?.(nextChats);
 
+      // ── Intelligent routing (parity with the right panel) ────────────
+      const intentResult = classifyIntent(text, {
+        hasHistory: messages.length > 0,
+        previousIntent: (lastIntentRef.current || null) as never,
+      });
+      lastIntentRef.current = intentResult.intent;
+
+      // ── Setup guard: never fake a reply without a provider (#19).
+      // Agent/automation proposals are exempt — they degrade offline.
+      const needsProvider =
+        intentResult.intent !== "agent_intent" && intentResult.intent !== "automation_intent";
+      if (needsProvider && !aiManager.isConfigured()) {
+        const guidance: ChatPanelMessage = {
+          role: "ai",
+          text:
+            "Before we can chat, connect an AI provider — I've opened the setup for you.\n\nAdd an API key (OpenRouter, Anthropic, OpenAI, Groq…) or point Noska at a local engine like Ollama. Your key stays in your browser storage.",
+        };
+        setMessages([...history, guidance]);
+        onChatsChange?.((prev) =>
+          prev.map((c) => (c.id === chatId ? { ...c, messages: [...history, guidance], updatedAt: now() } : c))
+        );
+        setShowKeyModal(true);
+        setLoading(false);
+        setExecutingTools(false);
+        onToast?.("Set an API key to start chatting");
+        return;
+      }
+
       try {
+        if (intentResult.intent === "agent_intent" || intentResult.intent === "automation_intent") {
+          setExecutingTools(false);
+          setLoading(false);
+          setProposalBusy(true);
+          try {
+            if (intentResult.intent === "agent_intent") {
+              setAgentProposal(await proposeAgent(text));
+            } else {
+              setAutomationProposal(await proposeAutomation(text));
+            }
+          } finally {
+            setProposalBusy(false);
+          }
+          const note: ChatPanelMessage = {
+            role: "ai",
+            text: intentResult.intent === "agent_intent"
+              ? "I've drafted an agent for you below — review it before creating."
+              : "I've drafted an automation for you below — review it before creating.",
+          };
+          const withNote: ChatPanelMessage[] = [...history, note];
+          setMessages(withNote);
+          onChatsChange?.((prev) =>
+            prev.map((c) => (c.id === chatId ? { ...c, messages: withNote, updatedAt: now() } : c))
+          );
+          return;
+        }
+
+        if ((isAgenticIntent(intentResult.intent) || richRouteIsAction(text)) && aiManager.isConfigured()) {
+          // ── Agentic run inside the full-screen chat ───────────────────
+          const runMsgIndex = history.length;
+          const progressMsg: ChatPanelMessage = { role: "ai", text: "Working…", runSteps: [], runStatus: "running" };
+          setMessages([...history, progressMsg]);
+
+          const priorState = extractConversationState(messages.filter((m) => m.role !== "system"));
+          const rich = detectRichIntents(text);
+          let resolvedTarget: string | null = null;
+          if (rich.primary === "follow_up" || /\bpage\b/i.test(text)) {
+            resolvedTarget = resolveReference(text, priorState, { currentPageTitle: page?.title || null });
+          }
+          const conversationLines: string[] = [];
+          if (priorState.lastTopic) conversationLines.push(`Last answer topic: "${priorState.lastTopic.slice(0, 160)}…"`);
+          if (priorState.mentionedPages.length > 0) conversationLines.push(`Pages mentioned earlier: ${priorState.mentionedPages.slice(0, 5).join(", ")}`);
+
+          const run = await agentRuntime.execute({
+            goal: text,
+            sourceId: "noska-ai",
+            sourceKind: "ai",
+            trigger: "manual",
+            conversationContext: conversationLines.length ? `## Conversation State\n${conversationLines.join("\n")}` : undefined,
+            ...(resolvedTarget ? { instructions: `The user most likely means: "${resolvedTarget}".` } : {}),
+            getContext: () => buildRuntimeContext(toolContext),
+            onProgress: (steps, r) => {
+              setMessages((prev) =>
+                prev.map((m, i) => (i === runMsgIndex ? { ...m, runSteps: steps, runStatus: r.status as ChatPanelMessage["runStatus"] } : m))
+              );
+            },
+          });
+
+          const finalText = run.summary || (run.status === "completed" ? "Done." : "Something went wrong — see the steps above.");
+          const doneMessages: ChatPanelMessage[] = [...history, {
+            role: "ai", text: finalText, model: selection?.id || modelName, provider: providerName,
+            runSteps: run.steps, runStatus: run.status as ChatPanelMessage["runStatus"],
+          }];
+          setMessages(doneMessages);
+          onChatsChange?.((prev) =>
+            prev.map((c) => (c.id === chatId ? { ...c, messages: doneMessages, updatedAt: now(), pageTitle: c.pageTitle || page?.title } : c))
+          );
+          void maybeUpgradeTitle(chatId, doneMessages);
+          setLoading(false);
+          setExecutingTools(false);
+          return;
+        }
+
         const contextString = buildContext({
           page: page || undefined,
           pages: pages || [],
           options: { ...currentAgent.context, includeMemory: true },
           memory: null
         });
-        const systemPrompt = buildAgentPrompt(activeAgent, contextString, { tools: true });
+
+        // Per-request policy constraints (#3) — appended to the persona.
+        const priorState = extractConversationState(messages);
+        const rich = detectRichIntents(text);
+        const style = inferStyle(text, { recentUserMessages: messages.filter(m => m.role === "user").map(m => m.text).slice(-4) });
+        const complexity = estimateComplexity(text);
+        const modelClass =
+          rich.primary === "casual_conversation" ? ("fast" as const)
+          : complexity === "high" ? ("reasoning" as const)
+          : undefined;
+        const policySection = buildResponsePolicySection({ rich, style, mode: MODE_POLICIES.auto, continuing: messages.some(m => m.role === "ai") });
 
         const startedAt = Date.now();
+        abortRef.current = { aborted: false };
         const result = await aiManager.stream({
-          system: systemPrompt,
+          system: systemPromptWithPolicy(buildAgentPrompt(activeAgent, contextString, { tools: true }), policySection),
           prompt: text,
-          messages: updatedMessages.slice(-20),
+          messages: history.slice(-20),
           page: page || undefined,
           pages: pages || undefined,
           agent: activeAgent,
+          modelClass,
+          signal: abortRef.current,
           onChunk: (chunk: string) => {
             setMessages((prev) => {
               const next = [...prev];
@@ -307,71 +470,135 @@ export default function AIPanel({
           return next;
         });
 
-        setLoading(false);
-
-        // Execute tool calls
+        // ── Tool execution + synthesis (#13/#14/#18) ─────────────────────
         if (hasToolCalls(responseText) && toolContext) {
-          const results: ToolCallResult[] = await executeAllToolCalls(responseText, toolContext);
-          setToolResults(results);
-          const cleaned = stripToolCalls(responseText);
+          const visible = stripToolCalls(responseText);
+          const calls = parseToolCalls(responseText);
+          const destructive = calls.filter((c) => DESTRUCTIVE_TOOLS.has(c.name));
+
+          // Show the model's visible text instead of raw tool syntax
           setMessages((prev) => {
             const next = [...prev];
             const last = next[next.length - 1];
             if (last?.role === "ai") {
-              next[next.length - 1] = { ...last, text: cleaned || last.text };
+              next[next.length - 1] = { ...last, text: visible || "Working on it…" };
             }
             return next;
           });
 
-          const failed = results.filter((r) => !r.ok);
-          if (failed.length > 0) {
-            onToast?.(`${failed.length} action${failed.length > 1 ? "s" : ""} failed`);
-          } else if (results.length > 0) {
-            onToast?.(`${results.length} action${results.length > 1 ? "s" : ""} completed`);
-          }
+          if (destructive.length > 0 && !window.confirm(
+            `This will ${destructive.map((c) => c.name.replace(/_/g, " ")).join(", ")}. Continue?`
+          )) {
+            // Declined — say so honestly and run nothing
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "ai") {
+                next[next.length - 1] = { ...last, text: `${visible ? visible + "\n\n" : ""}(Cancelled — you declined the destructive action.)` };
+              }
+              return next;
+            });
+          } else {
+            const outcomes: string[] = [];
+            const results: ToolCallResult[] = [];
+            for (const call of calls) {
+              try {
+                const r = await runTool(call.name, call.params, buildRuntimeContext(toolContext));
+                results.push({ name: call.name, ok: true, result: r as { count?: number }, params: call.params });
+                outcomes.push(describeToolResult(call.name, true, r));
+                auditEngine.log({
+                  pageId: page?.id,
+                  userId: realtimeCollab.getUser()?.userId || "ai",
+                  userName: currentAgent.name,
+                  action: "ai_edit",
+                  aiProvider: providerName,
+                  aiModel: activeSelectedModel,
+                  aiLatencyMs: latencyMs,
+                  detail: `${call.name}: ok`
+                });
+              } catch (err) {
+                results.push({ name: call.name, ok: false, error: err instanceof Error ? err.message : String(err), params: call.params });
+                outcomes.push(describeToolResult(call.name, false, undefined, err instanceof Error ? err.message : err));
+              }
+            }
+            setToolResults(results);
 
-          for (const r of results) {
-            if (r.ok) {
-              auditEngine.log({
-                pageId: page?.id,
-                userId: realtimeCollab.getUser()?.userId || "ai",
-                userName: currentAgent.name,
-                action: "ai_edit",
-                aiProvider: providerName,
-                aiModel: activeSelectedModel,
-                aiLatencyMs: latencyMs,
-                detail: `${r.name}: ${r.result?.count || 0} blocks`
+            // Synthesize a real answer over the outcomes — never dump JSON.
+            try {
+              const synth = await aiManager.sendConversation({
+                messages: [
+                  ...history.map(m => ({ role: m.role === "user" ? "user" : "assistant", text: m.text })).filter(m => m.text !== "..."),
+                  { role: "assistant", text: visible },
+                  {
+                    role: "user",
+                    text: `Workspace action outcomes:\n${outcomes.join("\n")}\n\nWrite your reply to the user based on these real outcomes. Reference actual page titles. Be brief.`,
+                  },
+                ],
+                page: page || undefined,
+                pages: pages || undefined,
+                agent: activeAgent,
               });
+              const finalText = hasToolCalls(synth) ? stripToolCalls(synth) : synth;
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "ai") next[next.length - 1] = { ...last, text: finalText };
+                return next;
+              });
+              const issues = auditResponse(finalText);
+              if (qualityLabel(issues)) capture("ai_response_quality", { label: qualityLabel(issues), surface: "chat" });
+            } catch {
+              const failed = results.filter(r => !r.ok);
+              const note = failed.length > 0
+                ? `Done, but ${failed.length} action${failed.length > 1 ? "s" : ""} failed: ${failed.map(f => f.name).join(", ")}.`
+                : `Done — ${results.length} action${results.length > 1 ? "s" : ""} completed.`;
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "ai") next[next.length - 1] = { ...last, text: `${visible ? visible + "\n\n" : ""}${note}` };
+                return next;
+              });
+            }
+
+            const failed = results.filter((r) => !r.ok);
+            if (failed.length > 0) {
+              onToast?.(`${failed.length} action${failed.length > 1 ? "s" : ""} failed`);
+            } else if (results.length > 0) {
+              onToast?.(`${results.length} action${results.length > 1 ? "s" : ""} completed`);
             }
           }
         }
 
         setExecutingTools(false);
 
-        const finalMessages: ChatPanelMessage[] = [
-          ...messages,
-          userMsg,
-          {
-            role: "ai",
-            text: responseText,
-            model: activeSelectedModel,
-            provider: providerName,
-            latencyMs
-          }
-        ];
-        onChatsChange?.((prev) =>
-          prev.map((c) =>
-            c.id === (activeChatId || chatId)
-              ? {
-                  ...c,
-                  messages: finalMessages,
-                  pageId: c.pageId || page?.id,
-                  pageTitle: c.pageTitle || page?.title,
-                  updatedAt: now()
-                }
-              : c
-          )
-        );
+        // Final persisted transcript — read the settled state once, then
+        // persist outside of any state updater (no side effects in setState).
+        await new Promise<void>((resolve) => {
+          finalRef.current = [];
+          setMessages((prev) => {
+            finalRef.current = prev;
+            return prev;
+          });
+          // React batches — settle on the next microtask after the update
+          setTimeout(resolve, 0);
+        });
+        {
+          const finalMessages: ChatPanelMessage[] = [...history, ...finalRef.current.slice(history.length)];
+          onChatsChange?.((chatPrev) =>
+            chatPrev.map((c) =>
+              c.id === chatId
+                ? {
+                    ...c,
+                    messages: finalMessages,
+                    pageId: c.pageId || page?.id,
+                    pageTitle: c.pageTitle || page?.title,
+                    updatedAt: now()
+                  }
+                : c
+            )
+          );
+          void maybeUpgradeTitle(chatId, finalMessages);
+        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         const friendly =
@@ -382,7 +609,7 @@ export default function AIPanel({
           const next = [...prev];
           const last = next[next.length - 1];
           if (last?.role === "ai") {
-            next[next.length - 1] = { ...last, text: friendly };
+            next[next.length - 1] = { ...last, text: friendly, isError: true };
           }
           return next;
         });
@@ -392,6 +619,68 @@ export default function AIPanel({
     },
     [prompt, loading, messages, activeChatId, page, pages, toolContext, currentAgent, activeAgent, modelName, providerName, aiChats, onActiveChat, onChatsChange, onToast]
   );
+
+  /** Upgrade placeholder titles to semantic ones after the first reply (#35). */
+  const maybeUpgradeTitle = async (id: string, msgs: ChatPanelMessage[]) => {
+    if (titledChatsRef.current.has(id)) return;
+    titledChatsRef.current.add(id);
+    try {
+      const better = await generateChatTitle(msgs.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text })));
+      if (better) {
+        onChatsChange?.((prev) => prev.map((c) => (c.id === id ? { ...c, name: better } : c)));
+      }
+    } catch { /* keep heuristic title */ }
+  };
+
+  /** Create a reviewed agent proposal (nothing was stored until now). */
+  const handleCreateAgentFromProposal = async (proposal: AgentProposal) => {
+    setProposalBusy(true);
+    try {
+      await saveAgent(blankAgent({
+        name: proposal.name || "New Agent",
+        description: proposal.description,
+        icon: proposal.icon,
+        instructions: proposal.instructions,
+        trigger: proposal.trigger,
+        contextScope: proposal.contextScope,
+        permissions: proposal.permissions,
+        status: "active",
+      }));
+      await refreshDefinitions();
+      setAgentProposal(null);
+      onToast?.(`Agent "${proposal.name}" created`);
+      capture("agent_created_via_ai", { name: proposal.name, surface: "chat" });
+    } catch {
+      onToast?.("Couldn't create the agent — try again");
+    } finally {
+      setProposalBusy(false);
+    }
+  };
+
+  /** Create a reviewed automation proposal. */
+  const handleCreateAutomationFromProposal = async (proposal: AutomationProposal) => {
+    setProposalBusy(true);
+    try {
+      await saveAutomation(blankAutomation({
+        name: proposal.name || "New Automation",
+        description: proposal.description,
+        icon: proposal.icon,
+        trigger: proposal.trigger,
+        conditions: proposal.conditions ?? null,
+        permissions: proposal.permissions,
+        steps: proposal.actions.map((a) => ({ id: uid(), label: a.label, kind: a.kind, instruction: a.instruction, toolName: a.toolName, toolParams: a.toolParams })),
+        status: "active",
+      }));
+      await refreshDefinitions();
+      setAutomationProposal(null);
+      onToast?.(`Automation "${proposal.name}" created`);
+      capture("automation_created_via_ai", { name: proposal.name, surface: "chat" });
+    } catch {
+      onToast?.("Couldn't create the automation — try again");
+    } finally {
+      setProposalBusy(false);
+    }
+  };
 
   const handleNewChat = () => {
     setMessages([]);
@@ -710,20 +999,48 @@ export default function AIPanel({
                     transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                     className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4 flex-1"
                   >
-                    {messages.map((m, i) => (
-                      <ChatMessage
-                        key={i}
-                        message={m}
-                        index={i}
-                        total={messages.length}
-                        isLastAi={i === messages.length - 1 && m.role === "ai"}
-                        onInsertBelow={handleInsertBelow}
-                        onReplace={handleReplace}
-                        onCopy={handleCopy}
-                        onBranch={handleBranch}
-                        onReaction={handleReaction}
+                    {messages.map((m, i) =>
+                      m.runSteps ? (
+                        <AgenticRunBubble key={`run-${i}`} message={m} />
+                      ) : (
+                        <ChatMessage
+                          key={i}
+                          message={m}
+                          index={i}
+                          total={messages.length}
+                          isLastAi={i === messages.length - 1 && m.role === "ai"}
+                          onInsertBelow={handleInsertBelow}
+                          onReplace={handleReplace}
+                          onCopy={handleCopy}
+                          onBranch={handleBranch}
+                          onReaction={handleReaction}
+                        />
+                      )
+                    )}
+
+                    {/* Proposal cards — nothing is created without review */}
+                    {agentProposal && (
+                      <AgentProposalCardView
+                        proposal={agentProposal}
+                        busy={proposalBusy}
+                        onCreate={() => void handleCreateAgentFromProposal(agentProposal)}
+                        onDismiss={() => setAgentProposal(null)}
                       />
-                    ))}
+                    )}
+                    {automationProposal && (
+                      <AutomationProposalCardView
+                        proposal={automationProposal}
+                        busy={proposalBusy}
+                        onCreate={() => void handleCreateAutomationFromProposal(automationProposal)}
+                        onDismiss={() => setAutomationProposal(null)}
+                      />
+                    )}
+                    {proposalBusy && (
+                      <div className="inline-flex items-center gap-2 rounded-full bg-[var(--surface-1)] border border-[var(--border)] px-4 py-2 text-xs text-[var(--muted)]">
+                        <Loader2 size={12} className="animate-spin text-[var(--accent)]" />
+                        Drafting proposal…
+                      </div>
+                    )}
 
                     {loading && messages[messages.length - 1]?.text === "..." && (
                       <div className="inline-flex items-center gap-2.5 rounded-full bg-[var(--surface-1)] border border-[var(--border)] px-4 py-2 text-xs text-[var(--text-secondary)] shadow-2xs">
@@ -771,7 +1088,11 @@ export default function AIPanel({
                 setPrompt={setPrompt}
                 onSend={handleSend}
                 loading={loading}
-                onAbort={() => setLoading(false)}
+                onAbort={() => {
+                  abortRef.current.aborted = true;
+                  setLoading(false);
+                  setExecutingTools(false);
+                }}
                 currentAgent={currentAgent}
                 page={page}
                 onOpenKeySetup={(providerId) => {
@@ -838,6 +1159,7 @@ export default function AIPanel({
                     {providers.map((p) => {
                       const isSelected = keyProvider === p.id;
                       const isLocal = p.type === "local";
+                      const isReady = !p.requiresKey || !!aiManager.getConfig().providers[p.id]?.apiKey;
                       return (
                         <button
                           key={p.id}
@@ -856,12 +1178,16 @@ export default function AIPanel({
                               : "bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text)] border-transparent"
                           }`}
                         >
-                          <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center justify-between w-full gap-1">
                             <span className="truncate">{p.name}</span>
-                            {isLocal && <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-500">Local</span>}
+                            {isLocal ? (
+                              <span className="text-[9px] px-1 rounded bg-cyan-500/10 text-cyan-500 shrink-0">Local</span>
+                            ) : isReady ? (
+                              <Check size={11} className="text-emerald-500 shrink-0" aria-label="Ready" />
+                            ) : null}
                           </div>
                           <span className="text-[9px] text-[var(--muted)] font-normal">
-                            {p.models?.length || 0} models
+                            {isReady && !isLocal ? "Ready" : `${p.models?.length || 0} models`}
                           </span>
                         </button>
                       );
@@ -938,5 +1264,40 @@ export default function AIPanel({
         )}
       </AnimatePresence>
     </motion.div>
+  );
+}
+
+/** Live agentic progress for the full-screen chat — concise steps only,
+ * never chain-of-thought (#32). Collapses to a summary once finished. */
+function AgenticRunBubble({ message }: { message: ChatPanelMessage }) {
+  const finished = message.runStatus && message.runStatus !== "running";
+  const failed = message.runStatus === "failed" || message.runStatus === "interrupted" || message.runStatus === "rejected";
+  return (
+    <div className={`max-w-[88%] rounded-xl border px-3 py-2 ${failed ? "border-[var(--danger)]/30 bg-[var(--danger)]/[0.05]" : "border-[var(--border)] bg-[var(--surface)]"}`}>
+      <details className="group/run" open={!finished}>
+        <summary className="cursor-pointer select-none flex items-center gap-2 text-xs font-semibold text-[var(--text)]">
+          {finished
+            ? (failed ? <span className="text-[var(--danger)]">●</span> : <span className="text-[var(--success)]">✓</span>)
+            : <Loader2 size={12} className="animate-spin text-[var(--accent)]" />}
+          {finished ? (failed ? "Finished with issues" : "Completed") : "Working…"}
+          {finished && <span className="text-[10px] text-[var(--muted)] font-normal group-open/run:hidden">— show steps</span>}
+        </summary>
+        <div className="mt-2 space-y-1">
+          {(message.runSteps || []).map((s) => (
+            <div key={s.stepId} className="flex items-center gap-2 text-xs">
+              <span className={
+                s.status === "done" ? "text-[var(--success)]"
+                : s.status === "running" ? "text-[var(--accent)]"
+                : s.status === "failed" ? "text-[var(--danger)]"
+                : "text-[var(--muted)]"
+              }>
+                {s.status === "done" ? "✓" : s.status === "running" ? "→" : s.status === "failed" ? "✕" : "·"}
+              </span>
+              <span className={s.status === "pending" ? "text-[var(--muted)]" : "text-[var(--text-secondary)]"}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
   );
 }

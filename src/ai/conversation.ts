@@ -103,7 +103,9 @@ export function resolveReference(
 
 // ─── Semantic chat titles ───────────────────────────────────────────────────
 
-function fallbackTitle(firstUserMessage: string): string {
+/** Instant heuristic title — used as the immediate placeholder and as the
+ * offline fallback for the model-generated title. */
+export function quickTitle(firstUserMessage: string): string {
   let t = (firstUserMessage || "").replace(/\s+/g, " ").trim();
   if (!t) return "New Chat";
   // Strip leading command words so titles read like topics
@@ -113,6 +115,10 @@ function fallbackTitle(firstUserMessage: string): string {
   const words = t.split(" ").slice(0, 6).join(" ");
   const title = words.charAt(0).toUpperCase() + words.slice(1);
   return title.slice(0, 48) || "New Chat";
+}
+
+function fallbackTitle(firstUserMessage: string): string {
+  return quickTitle(firstUserMessage);
 }
 
 /**

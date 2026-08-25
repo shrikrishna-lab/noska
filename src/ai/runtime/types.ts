@@ -261,6 +261,9 @@ export interface RuntimeJobOptions {
   maxSteps?: number;
   /** extra system-level instructions merged into every model call */
   instructions?: string;
+  /** ephemeral conversation-state section (topics, resolved references)
+   * injected into each model call so runs understand follow-ups */
+  conversationContext?: string;
   /** context pages to seed retrieval (workspace snapshot provider) */
   getContext?: () => ToolContextLike;
   onProgress?: (steps: StepProgress[], run: RunRecord) => void;

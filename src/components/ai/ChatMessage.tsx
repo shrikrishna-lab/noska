@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowDownToLine, Replace, Copy, ArrowUpFromLine } from 'lucide-react';
+import { renderChatMarkdown } from '../../ai/chatMarkdown';
+import { capture } from '../../lib/posthog';
 
 function ActionBtn({ icon: Icon, label, onClick }) {
   return (
@@ -21,6 +23,9 @@ export default function ChatMessage({
 }) {
   const isUser = message.role === 'user';
   const isFirstAi = index === 0 && !isUser;
+  const raw = message.text || '';
+  // Safe markdown rendering — model output is escaped before formatting.
+  const html = message.html || renderChatMarkdown(raw);
 
   return (
     <motion.div
@@ -28,9 +33,8 @@ export default function ChatMessage({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 24, delay: index === total - 1 ? 0.05 : 0 }}
       className={`group relative max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed ${
-        isUser
-          ? 'ml-auto bg-[var(--accent)] text-white font-medium shadow-sm'
-          : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]'
+        isUser ? 'ml-auto bg-[var(--accent)] text-white font-medium shadow-sm'
+               : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]'
       }`}
     >
       {/* AI icon for AI messages */}
@@ -44,7 +48,7 @@ export default function ChatMessage({
       {isUser ? (
         <span className="whitespace-pre-wrap">{message.text}</span>
       ) : (
-        <div className="ai-md-container" dangerouslySetInnerHTML={{ __html: message.html || message.text }} />
+        <div className="ai-md-container ai-chat-md" dangerouslySetInnerHTML={{ __html: html }} />
       )}
 
       {/* Reactions */}
@@ -53,7 +57,10 @@ export default function ChatMessage({
           {['👍', '👎', '⭐'].map(r => (
             <button
               key={r}
-              onClick={() => onReaction?.(index, r)}
+              onClick={() => {
+                onReaction?.(index, r);
+                try { capture('ai_feedback', { reaction: r, surface: 'chat' }); } catch { /* analytics optional */ }
+              }}
               className={`grid h-4 w-4 place-items-center rounded text-[10px] transition ${
                 message.reactions?.includes(r)
                   ? 'bg-[var(--accent)]/20 scale-110'

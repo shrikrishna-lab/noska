@@ -14,6 +14,8 @@ interface BuildContextOptions {
   includeUserProfile?: boolean;
   tokenBudget?: number;
   selectedBlocks?: { text?: string }[] | null;
+  /** Pages open in other split panes — makes "the other pane" meaningful */
+  openPanePages?: Page[] | null;
 }
 
 function estimateTokens(text: string) {
@@ -115,6 +117,40 @@ function buildTagsOverview(allPages: Page[]) {
   return entries.map(([tag, count]) => `${tag} (${count})`).join(", ");
 }
 
+/** Distinct lowercase words used for cheap relevance scoring. */
+function keywordsOf(text: string): Set<string> {
+  return new Set(
+    String(text || "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 3)
+  );
+}
+
+/**
+ * Rank candidate pages by keyword overlap with a focus text (current page
+ * title/tags/selection) before recency — so "recent pages" surfaces the
+ * pages that actually matter to this request (#20 relevance over recency).
+ */
+function rankByRelevance(candidates: Page[], focusText: string, limit: number): Page[] {
+  if (!focusText) {
+    return [...candidates]
+      .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
+      .slice(0, limit);
+  }
+  const focus = keywordsOf(focusText);
+  const scored = candidates.map((p) => {
+    const pageWords = keywordsOf(`${p.title} ${((p.tags as string[]) || []).join(" ")}`);
+    let overlap = 0;
+    for (const w of pageWords) if (focus.has(w)) overlap += 1;
+    // Recency as a tiebreaker (hours since update, smaller is better)
+    const ageHours = p.updatedAt ? (Date.now() - new Date(p.updatedAt).getTime()) / 3.6e6 : 1e9;
+    return { p, score: overlap * 100 - Math.min(ageHours / 24, 30) };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map((s) => s.p);
+}
+
 export function buildContext({
   page,
   pages = [],
@@ -136,10 +172,23 @@ export function buildContext({
     includeMemory = true,
     includeUserProfile = true,
     tokenBudget = 4096,
-    selectedBlocks = null
+    selectedBlocks = null,
+    openPanePages = null
   } = options;
 
   const sections = [];
+
+  // Split-pane awareness (#22): pages open in other panes are prime
+  // referents for "compare these" / "the other pane" requests.
+  if (openPanePages && openPanePages.length > 0) {
+    const paneSummaries = openPanePages
+      .filter((p) => p && p.id !== page?.id)
+      .slice(0, 3)
+      .map((p) => truncateToTokens(pageSummary(p, 4), 220));
+    if (paneSummaries.length > 0) {
+      sections.push(`## Open in Split Panes (user can see these right now)\n${paneSummaries.join("\n\n")}`);
+    }
+  }
 
   if (includeCurrentPage && page) {
     const parts = [];
@@ -211,12 +260,13 @@ export function buildContext({
     }
   }
 
-  // Recent pages
+  // Recent pages — relevance-ranked against the current page/selection
   if (includeRecentPages && pages.length > 0) {
-    const recent = pages
-      .filter(p => !p.trashed && p.id !== page?.id)
-      .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
-      .slice(0, 5);
+    const focusText = [page?.title, ((page?.tags as string[]) || []).join(" "), selectedBlocks?.map((b) => b.text || "").join(" ")]
+      .filter(Boolean)
+      .join(" ");
+    const candidates = pages.filter((p) => !p.trashed && p.id !== page?.id);
+    const recent = rankByRelevance(candidates, focusText, 5);
 
     if (recent.length > 0) {
       const recentBudget = Math.floor(tokenBudget * 0.1);

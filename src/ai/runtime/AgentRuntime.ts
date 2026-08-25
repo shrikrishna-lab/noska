@@ -336,6 +336,9 @@ export class AgentRuntime {
 
   private buildUserPrompt(instruction: string, options: RuntimeJobOptions): string {
     const sections: string[] = [];
+    if (options.conversationContext) {
+      sections.push(options.conversationContext);
+    }
     const agentMemory = options.sourceKind === "agent" ? recallAgentMemory(options.sourceId) : "";
     if (agentMemory) sections.push(agentMemory);
 

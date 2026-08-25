@@ -14,8 +14,24 @@ import AuthPage from "../components/auth/AuthPage";
 
 const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/desktop-auth`;
 const PENDING_KEY = "noska_pending_pair_code";
+const PENDING_TS_KEY = "noska_pending_pair_ts";
+const PENDING_MAX_AGE_MS = 3 * 60 * 1000;
 
-export function isValidPairCode(c: string): boolean {
+export function parkPendingCode(code: string) {
+  sessionStorage.setItem(PENDING_KEY, code);
+  sessionStorage.setItem(PENDING_TS_KEY, String(Date.now()));
+}
+
+function popPendingCode(): string | null {
+  const ts = Number(sessionStorage.getItem(PENDING_TS_KEY) || 0);
+  const code = sessionStorage.getItem(PENDING_KEY);
+  sessionStorage.removeItem(PENDING_TS_KEY);
+  if (!code) return null;
+  if (!ts || Date.now() - ts > PENDING_MAX_AGE_MS) return null;
+  return code;
+}
+
+function isValidPairCode(c: string): boolean {
   return /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(c);
 }
 
@@ -30,9 +46,13 @@ export async function claimPairCode(code: string, jwt: string): Promise<void> {
     body: JSON.stringify({ action: "claim", code }),
   });
   const json = await res.json().catch(() => ({}));
-      if (!res.ok || json.status === "unknown_code") {
-        throw new Error(json.message || json.error || "Could not link this code");
-      }
+  if (!res.ok) {
+    const reason = json.error || "";
+    if (reason === "code_not_active") throw new Error("This code isn't active. Open the Noska desktop app and use its current code.");
+    if (reason === "code_used") throw new Error("This code was already used. Click 'New code' in the app and retry.");
+    if (reason === "code_expired") throw new Error("This code expired. Click 'New code' in the app and retry.");
+    throw new Error(json.message || "Could not link this code");
+  }
       // Hand the user straight back to the installed app â€” the OS routes
       // noska:// to it, the single-instance handler focuses the window, and
       // its poller completes the session within ~3s.
@@ -87,7 +107,7 @@ export default function DesktopConnectPage() {
 
   // Park the code so the global watcher can claim it after any login redirect.
   useEffect(() => {
-    if (isValidPairCode(urlCode)) sessionStorage.setItem(PENDING_KEY, urlCode);
+    if (isValidPairCode(urlCode)) parkPendingCode(urlCode);
   }, [urlCode]);
 
   // Signed-in visitors: auto-link URL-provided codes (zero click).
