@@ -32,14 +32,6 @@ import { loadSession, refreshDesktopSession } from "./desktop/pairing";
 
 let refreshInFlight: Promise<string | null> | null = null;
 
-function refreshDesktopSession(): Promise<string | null> {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = refreshDesktopSession().finally(() => {
-    refreshInFlight = null;
-  });
-  return refreshInFlight;
-}
-
 /** The access token the desktop app should present to Supabase/edge fns. */
 export async function currentAccessToken(): Promise<string | null> {
   if (isDesktop()) return getDesktopAccessToken();
@@ -47,12 +39,16 @@ export async function currentAccessToken(): Promise<string | null> {
   return null;
 }
 
-async function getDesktopAccessToken(): Promise<string | null> {
+function getDesktopAccessToken(): Promise<string | null> {
   const s = loadSession();
   if (!s) return null;
   const freshForMs = 120 * 1000;
-  if (s.expires_at - Date.now() > freshForMs) return s.access_token;
-  return (await refreshDesktopSession()) ?? s.access_token; // fall back to old token on transient failure
+  if (s.expires_at - Date.now() > freshForMs) return Promise.resolve(s.access_token);
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = refreshDesktopSession().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
 }
 
 export const supabase = createClient<Database>(supabaseUrl || "", supabaseAnonKey || "", {

@@ -1,4 +1,4 @@
-// Desktop browser-pairing authentication.
+﻿// Desktop browser-pairing authentication.
 //
 // The desktop webview cannot complete Clerk logins (OAuth redirects die on
 // the custom origin), so authentication happens in the user's BROWSER:
@@ -6,7 +6,7 @@
 //   1. App shows a pairing code            2. User enters it at noska.me/connect-desktop
 //   3. Web verifies the Clerk session      4. Edge function links code -> user
 //   5. App exchanges the code for a real Supabase (GoTrue) session
-//   6. supabase-js owns refresh from there — same identity as web.
+//   6. supabase-js owns refresh from there â€” same identity as web.
 //
 // Identity is exposed as a Clerk-user-shaped object so the rest of the app
 // (App.tsx bootstrap) treats paired desktop users exactly like web users.
@@ -14,7 +14,7 @@
 import { isDesktop } from "./platform";
 
 export interface DesktopIdentity {
-  /** Supabase auth user id (UUID) — what RLS / auth.uid() resolves to. */
+  /** Supabase auth user id (UUID) â€” what RLS / auth.uid() resolves to. */
   id: string;
   email: string | null;
   fullName: string | null;
@@ -60,11 +60,11 @@ function anonKey(): string {
   return import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
 }
 
-/* ── session store ─────────────────────────────────────────────────────── */
+/* â”€â”€ session store â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export interface StoredSession {
   access_token: string;
-  refresh_code: string;
+  sid: string;
   expires_at: number; // epoch ms
   identity: DesktopIdentity;
 }
@@ -87,7 +87,15 @@ export function loadSession(): StoredSession | null {
 export function saveSession(s: StoredSession): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify(s));
   cachedIdentity = s.identity;
-  registerWithSupabase(s);
+  // Mirror into the shared supabase client so supabase.auth.getSession()
+  // callers (teams, agent runtime, â€¦) see the paired identity too.
+  import("../supabase")
+    .then(({ supabase }) =>
+      supabase.auth.setSession({
+        access_token: s.access_token,
+        refresh_token: s.sid,
+      }))
+    .catch(() => {});
   emit();
 }
 
@@ -105,7 +113,7 @@ export function getDesktopIdentity(): DesktopIdentity | null {
   return cachedIdentity;
 }
 
-/* ── tiny external store for React ─────────────────────────────────────── */
+/* â”€â”€ tiny external store for React â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -122,7 +130,7 @@ export function pairingVersion(): number {
   return version;
 }
 
-/* ── pairing code lifecycle ────────────────────────────────────────────── */
+/* â”€â”€ pairing code lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no I/L/O/0/1
 
@@ -163,7 +171,7 @@ async function callFn<T>(body: Record<string, unknown>): Promise<T> {
   return json as T;
 }
 
-/* ── polling loop ──────────────────────────────────────────────────────── */
+/* â”€â”€ polling loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 let polling = false;
 let pollStatus: PairingStatus = "idle";
@@ -204,7 +212,7 @@ export async function beginPairing(): Promise<void> {
       consecutiveErrors = 0;
       pollError = null;
       // pending -> keep waiting
-      // Row doesn't exist until the browser claims it — keep waiting either
+      // Row doesn't exist until the browser claims it â€” keep waiting either
       // way; the local deadline is what ends the wait.
     } catch (e) {
       consecutiveErrors++;
@@ -228,16 +236,16 @@ export function resetPairing(): void {
   emit();
 }
 
-/* ── refresh + logout ──────────────────────────────────────────────────── */
+/* â”€â”€ refresh + logout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /** Swaps the stored refresh code for a fresh JWT (server rotates the code). */
 export async function refreshDesktopSession(): Promise<string | null> {
   const s = loadSession();
-  if (!s?.refresh_code) return null;
+  if (!s?.sid) return null;
   try {
     const r = await callFn<{ status: string; session?: StoredSession }>({
       action: "refresh",
-      refresh_code: s.refresh_code,
+      sid: s.sid,
     });
     if (r.status === "complete" && r.session) {
       saveSession(r.session);
@@ -256,9 +264,6 @@ export function hasUsableSession(): boolean {
 }
 
 export function desktopSignOut(): void {
-  const s = loadSession();
-  if (s?.refresh_code) {
-    callFn({ action: "revoke", refresh_code: s.refresh_code }).catch(() => {});
-  }
+  // Desktop shares the web Clerk session — no remote revoke (would sign web out).
   clearSession();
 }
