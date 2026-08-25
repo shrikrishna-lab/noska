@@ -109,16 +109,18 @@ class VoiceController {
     }
 
     try {
-      // 1. Start audio context + real frequency analyser
-      const myGeneration = ++this.startGeneration;
-      this.micSession = await startMicrophoneCapture();
-
-      // A stop() (or newer start) may have superseded us while awaiting the
-      // permission prompt — release the orphaned mic instead of going live.
-      if (myGeneration !== this.startGeneration) {
-        this.micSession.stop();
+      // 1. Start audio context + real frequency analyser (non-blocking fallback)
+      try {
+        const myGeneration = ++this.startGeneration;
+        this.micSession = await startMicrophoneCapture();
+        if (myGeneration !== this.startGeneration && this.micSession) {
+          this.micSession.stop();
+          this.micSession = null;
+          return false;
+        }
+      } catch (micErr) {
+        console.warn("[Voice] Microphone analyser fallback active:", micErr);
         this.micSession = null;
-        return false;
       }
 
       // 2. Initialize Speech Recognition
@@ -163,16 +165,24 @@ class VoiceController {
         this.notify();
       }, 1000);
 
-      // Start real-time 12-band frequency analysis loop (throttled to ~30fps
-      // to avoid re-rendering every subscriber at display refresh rate)
-      let frameCount = 0;
+      // Start real-time 16-band frequency analysis loop with smooth animated fallback
+      let tick = 0;
       const updateFrequencies = () => {
-        if (!this.isListening || !this.micSession) return;
-        this.frequencyLevels = this.micSession.getFrequencyBands(16);
-        if (++frameCount % 2 === 0) this.notify();
+        if (!this.isListening) return;
+
+        if (this.micSession) {
+          this.frequencyLevels = this.micSession.getFrequencyBands(16);
+        } else {
+          tick += 0.25;
+          this.frequencyLevels = Array.from({ length: 16 }, (_, i) =>
+            Math.max(0.08, Math.min(0.9, 0.2 + 0.35 * Math.abs(Math.sin(tick + i * 0.45))))
+          );
+        }
+        this.notify();
         this.animFrameId = requestAnimationFrame(updateFrequencies);
       };
       this.animFrameId = requestAnimationFrame(updateFrequencies);
+
       return true;
     } catch (err: any) {
       this.cleanup();
