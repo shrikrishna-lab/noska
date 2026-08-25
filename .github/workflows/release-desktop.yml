@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ always() && needs.build-desktop.result == 'success' }}
     permissions:
-      contents: read
+      contents: write # drafts are only visible to tokens with write access
     steps:
       - uses: actions/checkout@v4
 
