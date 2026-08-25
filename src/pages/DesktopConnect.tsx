@@ -1,11 +1,11 @@
-// Web side of desktop pairing: the signed-in user enters the code shown in
+﻿// Web side of desktop pairing: the signed-in user enters the code shown in
 // the Noska desktop app; we link it to their Clerk identity server-side.
 //
 // Zero-click paths:
-//  - Arriving signed-in with ?code=… links immediately.
+//  - Arriving signed-in with ?code=â€¦ links immediately.
 //  - Arriving signed-out embeds the normal login UI; the moment a session
 //    exists (anywhere in the app), the pending code is claimed automatically
-//    via PairClaimWatcher — surviving the redirect into the workspace.
+//    via PairClaimWatcher â€” surviving the redirect into the workspace.
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -33,7 +33,7 @@ export async function claimPairCode(code: string, jwt: string): Promise<void> {
       if (!res.ok || json.status === "unknown_code") {
         throw new Error(json.message || json.error || "Could not link this code");
       }
-      // Hand the user straight back to the installed app — the OS routes
+      // Hand the user straight back to the installed app â€” the OS routes
       // noska:// to it, the single-instance handler focuses the window, and
       // its poller completes the session within ~3s.
       try { window.location.assign("noska://pair-complete"); } catch {}
@@ -41,7 +41,7 @@ export async function claimPairCode(code: string, jwt: string): Promise<void> {
 
 /**
  * Mounted globally (main.tsx). Whenever a Clerk session exists and a pairing
- * code is parked in sessionStorage, claims it once — even if the user has
+ * code is parked in sessionStorage, claims it once â€” even if the user has
  * already been routed into their workspace after logging in.
  */
 export function PairClaimWatcher() {
@@ -67,6 +67,13 @@ export function PairClaimWatcher() {
   }, [isLoaded, isSignedIn, getToken]);
 
   return null;
+}
+
+function friendly(err: Error): string {
+  if (/failed to fetch|networkerror|load failed|internet/i.test(err.message)) {
+    return "The request was blocked before it reached Noska. Disable ad-blockers/VPN for this page and try again.";
+  }
+  return err.message;
 }
 
 export default function DesktopConnectPage() {
@@ -98,7 +105,7 @@ export default function DesktopConnectPage() {
         setState("done");
       } catch (err) {
         setState("error");
-        setMessage((err as Error).message);
+        setMessage(friendly(err as Error));
       }
     })();
   }, [isLoaded, isSignedIn, urlCode, getToken]);
@@ -120,7 +127,7 @@ export default function DesktopConnectPage() {
       setState("done");
     } catch (err) {
       setState("error");
-      setMessage((err as Error).message);
+      setMessage(friendly(err as Error));
     }
   }
 
@@ -131,7 +138,7 @@ export default function DesktopConnectPage() {
         <h1 className="text-xl font-bold text-slate-900 text-center">Connect Noska Desktop</h1>
 
         {!isLoaded && (
-          <p className="text-center text-sm text-slate-500 mt-6">Checking sign-in…</p>
+          <p className="text-center text-sm text-slate-500 mt-6">Checking sign-inâ€¦</p>
         )}
 
         {/* Signed out: run the normal login UI right here. Once any session
@@ -156,7 +163,7 @@ export default function DesktopConnectPage() {
               disabled={state === "working"}
               className="h-11 rounded-lg bg-slate-800 text-white text-xs font-semibold hover:bg-slate-700 disabled:opacity-40"
             >
-              {state === "working" ? "Linking…" : "Link desktop app"}
+              {state === "working" ? "Linkingâ€¦" : "Link desktop app"}
             </button>
             {state === "error" && <p className="text-xs text-red-500 text-center">{message}</p>}
           </form>

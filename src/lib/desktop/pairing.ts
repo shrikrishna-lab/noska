@@ -50,7 +50,7 @@ export type PairingStatus = "idle" | "waiting" | "success" | "expired" | "error"
 
 const CODE_KEY = "noska_pairing_code";
 const SESSION_KEY = "noska_desktop_session";
-const POLL_MS = 3000;
+const POLL_MS = 4000;
 const PAIRING_TTL_MS = 10 * 60 * 1000;
 
 function functionsBase(): string {
