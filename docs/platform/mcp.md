@@ -244,3 +244,22 @@ client → GET /.well-known/oauth-protected-resource   (resource metadata)
 | ChatGPT / Claude / Cursor / OpenCode live E2E | ⏳ pending deploy |
 | Files tools | ❌ not exposed (no storage surface yet) |
 | semantic/hybrid search | ❌ feature-gated (no embeddings) |
+
+## Deploy + live verification (one command)
+
+```bash
+supabase login && supabase link --project-ref yxgtmzksnyarlivgxujf   # once
+
+npm run mcp:deploy                      # db push + deploy all 5 functions
+NOSKA_API_KEY=nsk_… npm run mcp:verify  # live protocol suite (exit 1 on failure)
+```
+
+The verify pass checks: transport reachability, auth enforcement (401 without
+credential, invalid key rejected), initialize, tools/list (70+), resources/list,
+prompts/list + prompts/get with live data, a real persisted create→fetch
+round-trip, the RED confirmation gate, and cleanup. It prints a PASS/FAIL
+matrix and is CI-friendly.
+
+After it passes: run the same endpoint through real clients
+(Claude / Cursor / ChatGPT connectors) — a client is "verified" only after an
+authenticated tools/call succeeds there.
