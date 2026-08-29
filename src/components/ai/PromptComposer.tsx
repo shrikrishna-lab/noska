@@ -42,7 +42,13 @@ function getSavedModelSelection(models: any[]): AiModelSelection {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.id) {
-        const found = models.find((m) => m.id === parsed.id);
+        const found = models.find(
+          (m) =>
+            m.id === parsed.id ||
+            m.id.toLowerCase() === parsed.id.toLowerCase() ||
+            m.id.endsWith(`/${parsed.id}`) ||
+            parsed.id.endsWith(`/${m.id}`)
+        );
         if (found) {
           return {
             id: found.id,
@@ -57,8 +63,28 @@ function getSavedModelSelection(models: any[]): AiModelSelection {
   } catch {}
 
   const activeModelId = aiManager.getActiveModel();
-  const found = activeModelId ? models.find((m) => m.id === activeModelId) : null;
-  const target = found || models[0];
+  if (activeModelId) {
+    const found = models.find(
+      (m) =>
+        m.id === activeModelId ||
+        m.id.toLowerCase() === activeModelId.toLowerCase() ||
+        m.id.endsWith(`/${activeModelId}`) ||
+        activeModelId.endsWith(`/${m.id}`)
+    );
+    if (found) {
+      return {
+        id: found.id,
+        effort: found.defaultEffort || "medium",
+        context: String(found.defaultContext || "128K"),
+        fast: found.defaultFast ?? true,
+        thinking: found.defaultThinking ?? false,
+      };
+    }
+  }
+
+  // Prioritize any configured/ready model if available
+  const readyModel = models.find((m) => m.configured || m.providerType === "local");
+  const target = readyModel || models[0];
 
   return {
     id: target?.id || "google/gemini-2.5-flash",

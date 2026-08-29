@@ -229,24 +229,31 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "gpt-4-turbo", name: "GPT-4 Turbo", context: 128000 }
     ],
     defaultModel: "gpt-4o",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking }: ProviderSendOpts) {
       if (!apiKey) return mockResponse("OpenAI key not configured");
+      const modelId = model || this.defaultModel;
+      const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3");
       try {
+        const payload: Record<string, any> = {
+          model: modelId,
+          max_tokens: maxTokens,
+          messages: [
+            ...(system ? [{ role: "system", content: system }] : []),
+            ...messages
+          ]
+        };
+        if (!isReasoning) {
+          payload.temperature = effort === "low" ? 0.2 : effort === "high" ? 0.7 : 0.4;
+        } else {
+          payload.reasoning_effort = effort || "medium";
+        }
         const res = await fetch(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
           },
-          body: JSON.stringify({
-            model: model || this.defaultModel,
-            max_tokens: maxTokens,
-            temperature: 0.4,
-            messages: [
-              ...(system ? [{ role: "system", content: system }] : []),
-              ...messages
-            ]
-          })
+          body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
@@ -255,28 +262,57 @@ const PROVIDERS: Record<string, AIProvider> = {
         return `${mockResponse("OpenAI request failed")}\n\n_Error: ${err.message}_`;
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048 }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking }: ProviderSendOpts) {
       if (!apiKey) { yield mockResponse("OpenAI key not configured"); return; }
+      const modelId = model || this.defaultModel;
+      const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3");
       try {
+        const payload: Record<string, any> = {
+          model: modelId,
+          max_tokens: maxTokens,
+          stream: true,
+          messages: [
+            ...(system ? [{ role: "system", content: system }] : []),
+            ...messages
+          ]
+        };
+        if (!isReasoning) {
+          payload.temperature = effort === "low" ? 0.2 : effort === "high" ? 0.7 : 0.4;
+        } else {
+          payload.reasoning_effort = effort || "medium";
+        }
         const res = await fetch(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
           },
-          body: JSON.stringify({
-            model: model || this.defaultModel,
-            max_tokens: maxTokens,
-            temperature: 0.4,
-            stream: true,
-            messages: [
-              ...(system ? [{ role: "system", content: system }] : []),
-              ...messages
-            ]
-          })
+          body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(await res.text());
-        yield* parseSSEStream(res);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === "data: [DONE]") continue;
+            if (trimmed.startsWith("data: ")) {
+              try {
+                const json = JSON.parse(trimmed.slice(6));
+                const reasoning = json.choices?.[0]?.delta?.reasoning_content || json.choices?.[0]?.delta?.reasoning;
+                if (reasoning) yield `<think>${reasoning}</think>`;
+                const delta = json.choices?.[0]?.delta?.content;
+                if (delta) yield delta;
+              } catch {}
+            }
+          }
+        }
       } catch (err) {
         yield `\n\n_Streaming error: ${err.message}_`;
       }

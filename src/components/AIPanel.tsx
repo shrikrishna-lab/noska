@@ -313,7 +313,7 @@ export default function AIPanel({
               if (last?.role === "ai") {
                 next[next.length - 1] = {
                   ...last,
-                  text: last.text === "..." ? chunk : last.text + chunk
+                  text: chunk || last.text
                 };
               }
               return next;
