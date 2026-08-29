@@ -15,13 +15,26 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
     throw new Error("Microphone API (getUserMedia) is not supported in this environment");
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-  });
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+  } catch (err: any) {
+    if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+      throw new Error(
+        "Microphone access denied. If the browser didn't ask for permission, go to Windows Settings → Privacy → Microphone and enable \"Let desktop apps access your microphone\", then reload the page."
+      );
+    }
+    if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+      throw new Error("No microphone found. Please connect a microphone and try again.");
+    }
+    throw new Error(`Microphone error: ${err.message || err}`);
+  }
 
   const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
   const audioCtx = new AudioContextClass();
