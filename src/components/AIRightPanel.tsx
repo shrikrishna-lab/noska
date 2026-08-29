@@ -17,6 +17,7 @@ import { getAgentList, getAgent } from "../ai/agents";
 import { uid, now } from "../utils/helpers";
 import { getAllRelations } from "../utils/pageLinks";
 import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
+import { renderAIMarkdown } from "../utils/aiMarkdownRenderer";
 import {
   classifyIntent,
   isAgenticIntent,
@@ -36,8 +37,8 @@ import { capture } from "../lib/posthog";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 
-const SPRING = { type: "spring", stiffness: 400, damping: 28 };
-const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 };
+const SPRING = { type: "spring", stiffness: 400, damping: 28 } as const;
+const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 } as const;
 
 const LANGUAGES = [
   "Spanish", "French", "German", "Italian", "Portuguese",
@@ -1268,7 +1269,12 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
         {isUser ? (
           <span className="whitespace-pre-wrap">{message.text || message.content}</span>
         ) : (
-          <div className="ai-md-container" dangerouslySetInnerHTML={{ __html: message.html || message.text || message.content || "" }} />
+          <div
+            className="ai-md-container"
+            dangerouslySetInnerHTML={{
+              __html: message.html || renderAIMarkdown(message.text || message.content || "")
+            }}
+          />
         )}
 
         {/* Reactions + Actions */}

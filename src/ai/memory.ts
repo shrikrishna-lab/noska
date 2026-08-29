@@ -140,11 +140,14 @@ export async function forgetMemory(key: string) {
 }
 
 export async function clearMemory() {
+  // FIX: Save all keys BEFORE clearing cache — the old code set cache={}
+  // then iterated Object.keys(cache) which was already empty, so Supabase
+  // records were never actually deleted.
+  const keysToDelete = Object.keys(cache || {});
   cache = {};
   saveToStorage({});
   try {
-    const allKeys = Object.keys(cache || {});
-    for (const key of allKeys) {
+    for (const key of keysToDelete) {
       await deleteAIMemory(key);
     }
   } catch (e) { console.warn("memory: clear failed", e); }

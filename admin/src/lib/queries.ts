@@ -482,7 +482,7 @@ export interface AiChatRow {
 export function useAiChats() {
   return useQuery({
     queryKey: ["admin", "aichats"],
-    queryFn: () => adminSelect<AiChatRow>("ai_chats", "id,name,chat_type,created_at,updated_at,user_id", { order: "created_at desc" }),
+    queryFn: () => adminSelect<AiChatRow>("ai_chats", "id,name,chat_type,messages,created_at,updated_at,user_id", { order: "created_at desc" }),
   });
 }
 
@@ -499,12 +499,72 @@ export function useAiUsageFromAudit() {
       const { data, error } = await supabase
         .rpc("admin_select", {
           p_session_token: token(), p_table: "audit_events",
-          p_select: "ai_model, ai_provider, ai_latency_ms, ai_cost, ai_prompt_tokens, ai_completion_tokens, created_at",
-          p_order_col: "created_at", p_order_dir: "desc", p_limit: 100,
+          p_select: "ai_model, ai_provider, ai_latency_ms, ai_cost, ai_prompt_tokens, ai_completion_tokens, user_id, user_name, created_at",
+          p_order_col: "created_at", p_order_dir: "desc", p_limit: 200,
         });
       if (error) throw error;
       return (data ?? []).filter((r: Record<string, unknown>) => r.ai_model != null);
     },
+  });
+}
+
+// ── Leaderboard: user_ai_usage_stats via admin RPC ──
+export interface LeaderboardRow {
+  user_id: string;
+  total_tokens: number;
+  total_messages: number;
+  total_sessions: number;
+  current_streak: number;
+  longest_streak: number;
+  active_days: number;
+  favorite_model: string | null;
+  total_cost: number;
+  avg_latency_ms: number;
+  last_active_at: string | null;
+}
+export function useLeaderboardStats() {
+  return useQuery({
+    queryKey: ["admin", "leaderboard"],
+    queryFn: () => adminSelect<LeaderboardRow>(
+      "user_ai_usage_stats",
+      "user_id, total_tokens, total_messages, total_sessions, current_streak, longest_streak, active_days, favorite_model, total_cost, avg_latency_ms, last_active_at",
+      { order: "total_tokens desc", limit: 50 },
+    ),
+    refetchInterval: 15000,
+  });
+}
+
+// ── Leaderboard fallback: computed from audit_events ──
+export interface AuditLeaderboardRow {
+  user_id: string;
+  user_name: string;
+  email: string | null;
+  avatar_url: string | null;
+  username: string | null;
+  total_messages: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  total_latency_ms: number;
+  avg_latency_ms: number;
+  total_cost: number;
+  current_streak: number;
+  longest_streak: number;
+  favorite_model: string | null;
+  active_days: number;
+  first_active_at: string | null;
+  last_active_at: string | null;
+}
+export function useLeaderboardFromAudit() {
+  return useQuery({
+    queryKey: ["admin", "leaderboard-audit"],
+    queryFn: async () => {
+      if (!SUPABASE_ENABLED || !supabase) return [];
+      const { data, error } = await supabase.rpc("admin_compute_leaderboard", { p_session_token: token() });
+      if (error) throw error;
+      return (data ?? []) as AuditLeaderboardRow[];
+    },
+    refetchInterval: 15000,
   });
 }
 
@@ -675,6 +735,37 @@ export function usePayments() {
   return useQuery({
     queryKey: ["admin", "payments"],
     queryFn: () => adminSelect<DbPayment>("payments", "*", { order: "paid_at desc" }),
+  });
+}
+
+export function useRefundPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_update", {
+        p_session_token: token(), p_table: "payments", p_id: id,
+        p_data: { status: "refunded", updated_at: new Date().toISOString() }, p_min_role: "admin",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "payments"] }),
+  });
+}
+
+// ── Teams (create) ──
+export function useCreateTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; description?: string | null; lead_name?: string | null }) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: token(), p_table: "teams",
+        p_data: { ...data, member_count: 0, workspace_count: 0 }, p_min_role: "support",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "teams"] }),
   });
 }
 

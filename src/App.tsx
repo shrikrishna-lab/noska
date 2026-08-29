@@ -144,6 +144,7 @@ function AppContent() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -715,6 +716,9 @@ function AppContent() {
       try {
         const profile = await fetchUserProfile(u.id);
         setCurrentUsername(profile?.username ?? null);
+        setCurrentUserAvatar(profile?.avatar_url || null);
+        const actualAvatar = profile?.avatar_url || u.imageUrl || '👤';
+        realtimeCollab.initUser(u.id, profile?.user_name || uname, actualAvatar);
         if (profile?.onboarding_complete) {
           // Returning user with no username yet (pre-existing account from
           // before this feature) — gate them with ClaimUsernameModal once
@@ -808,6 +812,9 @@ function AppContent() {
     try {
       existingProfile = await fetchUserProfile(userData.userId);
       setCurrentUsername(existingProfile?.username ?? null);
+      setCurrentUserAvatar(existingProfile?.avatar_url || null);
+      const actualAvatar = existingProfile?.avatar_url || userData.avatarUrl || '👤';
+      realtimeCollab.initUser(userData.userId, existingProfile?.user_name || uname, actualAvatar);
     } catch (e) {
       console.warn("App: failed to fetch user profile", e);
     }
@@ -2481,6 +2488,7 @@ function AppContent() {
             onLogout={handleLogout}
             currentUsername={currentUsername}
             currentUserEmail={currentUserEmail}
+            currentUserAvatar={currentUserAvatar}
           />
           <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)]">
             <WorkspaceTabBar
@@ -2698,6 +2706,10 @@ function AppContent() {
             onSelectPage={(p) => setActiveId(p.id)}
             onToast={showToast}
             toolContext={toolContext}
+            currentUsername={currentUsername}
+            currentUserEmail={currentUserEmail}
+            currentUserAvatar={currentUserAvatar}
+            currentUserId={currentUserId}
           /></Suspense>
           <Suspense fallback={null}><AIRightPanel
             open={aiRightOpen}
@@ -2800,6 +2812,7 @@ onLineage={() => setLineageOpen(true)}
                   realtimeCollab.initUser(currentUserId || "", name, avatar);
                 }}
                 onProfileAvatarChanged={(avatarUrl) => {
+                  setCurrentUserAvatar(avatarUrl);
                   const name = realtimeCollab.getUser()?.userName || "Workspace User";
                   realtimeCollab.initUser(currentUserId || "", name, avatarUrl || "👤");
                 }}
@@ -2823,6 +2836,7 @@ onLineage={() => setLineageOpen(true)}
                 realtimeCollab.initUser(currentUserId || "", name, avatar);
               }}
               onAvatarChanged={(avatarUrl) => {
+                setCurrentUserAvatar(avatarUrl);
                 const name = realtimeCollab.getUser()?.userName || "Workspace User";
                 realtimeCollab.initUser(currentUserId || "", name, avatarUrl || "👤");
               }}

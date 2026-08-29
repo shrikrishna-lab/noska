@@ -165,6 +165,18 @@ export const KNOWN_DEPRECATIONS: Record<string, ModelDeprecationInfo> = {
     reason: "Retired by Mistral AI in favor of Ministral 8B.",
     suggestedReplacement: "mistralai/mistral-small-latest",
   },
+  "gemma2-9b-it": {
+    isDiscontinued: true,
+    isDeprecating: false,
+    reason: "Decommissioned by Groq in favor of Llama 3.3 70B & Llama 3.1 8B.",
+    suggestedReplacement: "llama-3.1-8b-instant",
+  },
+  "groq/gemma2-9b-it": {
+    isDiscontinued: true,
+    isDeprecating: false,
+    reason: "Decommissioned by Groq in favor of Llama 3.3 70B & Llama 3.1 8B.",
+    suggestedReplacement: "llama-3.1-8b-instant",
+  },
 };
 
 export interface LiveCatalogModel {

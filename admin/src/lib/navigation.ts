@@ -90,7 +90,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/referrals", label: "Referrals", icon: Gift, group: "growth", capability: "users" },
   { to: "/subscriptions", label: "Subscriptions", icon: Layers, group: "growth", capability: "users" },
   { to: "/payments", label: "Payments", icon: CreditCard, group: "growth", capability: "users" },
-  { to: "/ai-usage", label: "AI Usage", icon: Bot, group: "platform", capability: "users" },
+  { to: "/ai-usage", label: "User AI Dashboard", icon: Bot, group: "platform", capability: "users" },
   { to: "/models", label: "Models", icon: Workflow, group: "platform", capability: "users" },
   { to: "/feature-flags", label: "Feature Flags", icon: Flag, group: "platform", capability: "monitoring" },
   { to: "/email-dashboard", label: "Email Dashboard", icon: BarChart3, group: "marketing", capability: "marketing" },

@@ -42,6 +42,8 @@ import { twMerge } from "tailwind-merge"
 import { aiManager } from "../../ai/AIManager"
 import { getAllProviders } from "../../ai/providers"
 import { modelCatalogService, KNOWN_DEPRECATIONS, type ModelDeprecationInfo } from "../../ai/ModelCatalogService"
+import { modelRegistry } from "../../ai/models/ModelRegistry"
+import { formatDefaultDisplayName } from "../../ai/models/ModelMetadataOverrides"
 import { VoiceInput } from "./voice-input"
 import { globalVoiceController } from "../../lib/voice/voice-controller"
 
@@ -193,6 +195,8 @@ export type AiModel = {
   defaultFast?: boolean
   defaultThinking?: boolean
   disabled?: boolean
+  freeBadge?: string
+  freeAccessConditions?: string[]
 }
 
 export type AiModelSelection = {
@@ -271,22 +275,68 @@ const DEFAULT_LOCAL_MODELS = {
   ]
 }
 
-/** Generates real models populated from the configured AI provider registry & live catalog */
+/** Generates real models populated from the dynamic ModelRegistry & live catalog */
 export function getRealAiModels(): AiModel[] {
   try {
+    const registryModels = modelRegistry.getAllModels()
     const statuses = aiManager.getProviderStatuses()
-    const liveCatalog = modelCatalogService.getCachedModels()
     const list: AiModel[] = []
     const seenIds = new Set<string>()
 
-    // 1. Process configured provider models
+    // 1. Convert dynamic ModelRegistry models
+    if (registryModels.length > 0) {
+      for (const m of registryModels) {
+        if (seenIds.has(m.id)) continue
+        seenIds.add(m.id)
+
+        const statusEntry = statuses.find(p => p.id === m.provider)
+        const isLocal = m.provider === "ollama" || m.provider === "lmstudio" || m.source === "local" || m.localState?.available
+        const isConfigured = statusEntry ? statusEntry.configured : false
+        const ctxStr = getAccurateContextForModel(m.apiModelId, m.contextWindow)
+
+        let freeBadge: string | undefined = undefined
+        if (isLocal) {
+          freeBadge = "[Local]"
+        } else if (m.freeAccess?.isFree) {
+          freeBadge = m.freeAccess.conditions?.some(c => c.toLowerCase().includes("rate limit"))
+            ? "[Free • Limited]"
+            : "[Free]"
+        }
+
+        list.push({
+          id: m.id,
+          label: m.displayName,
+          providerId: m.provider,
+          providerName: statusEntry?.name || formatDefaultDisplayName(m.provider),
+          providerType: isLocal ? "local" : "cloud",
+          configured: isConfigured,
+          requiresKey: !isLocal,
+          freeBadge,
+          freeAccessConditions: m.freeAccess?.conditions,
+          status: m.status === "shutdown" ? "discontinued" : m.status === "deprecated" ? "deprecating" : "active",
+          description: m.description || (isLocal
+            ? `Runs locally on your device via ${formatDefaultDisplayName(m.provider)} (100% private, offline).`
+            : `${statusEntry?.name || m.provider} · ${isConfigured ? "Key configured" : "API key required"} (${ctxStr} token context window).`),
+          efforts: ["high", "medium", "low"],
+          contexts: [ctxStr],
+          supportsFast: m.capabilities.streaming,
+          supportsThinking: m.capabilities.reasoning,
+          defaultEffort: m.capabilities.reasoning ? "high" : "medium",
+          defaultContext: ctxStr,
+          defaultFast: true,
+          defaultThinking: m.capabilities.reasoning,
+        })
+      }
+    }
+
+    // 2. Add any configured provider models not yet discovered
     for (const p of statuses) {
-      let models = p.models || []
-      if (models.length === 0 && DEFAULT_LOCAL_MODELS[p.id as keyof typeof DEFAULT_LOCAL_MODELS]) {
-        models = DEFAULT_LOCAL_MODELS[p.id as keyof typeof DEFAULT_LOCAL_MODELS]
+      let pModels = p.models || []
+      if (pModels.length === 0 && DEFAULT_LOCAL_MODELS[p.id as keyof typeof DEFAULT_LOCAL_MODELS]) {
+        pModels = DEFAULT_LOCAL_MODELS[p.id as keyof typeof DEFAULT_LOCAL_MODELS]
       }
 
-      for (const m of models) {
+      for (const m of pModels) {
         if (seenIds.has(m.id)) continue
         seenIds.add(m.id)
 
@@ -302,7 +352,7 @@ export function getRealAiModels(): AiModel[] {
           providerId: p.id,
           providerName: p.name,
           providerType: isLocal ? "local" : "cloud",
-          configured: p.configured || isLocal,
+          configured: p.configured,
           requiresKey: !isLocal,
           status: dep?.isDiscontinued ? "discontinued" : dep?.isDeprecating ? "deprecating" : "active",
           sunsetDate: dep?.sunsetDate,
@@ -320,40 +370,6 @@ export function getRealAiModels(): AiModel[] {
           defaultFast: isFast,
         })
       }
-    }
-
-    // 2. Process remaining models from live catalog (OpenRouter / Cloud / Discontinued registry)
-    for (const live of liveCatalog) {
-      if (seenIds.has(live.id)) continue
-      seenIds.add(live.id)
-
-      const ctxStr = getAccurateContextForModel(live.id, live.context)
-      const isDeepThink = live.id.toLowerCase().includes("r1") || live.id.toLowerCase().includes("pro") || live.id.toLowerCase().includes("opus") || live.id.toLowerCase().includes("o1") || live.id.toLowerCase().includes("o3") || live.id.toLowerCase().includes("thinking")
-      const isFast = isModelFast(live.id)
-      const dep = live.deprecation || modelCatalogService.getDeprecationInfo(live.id)
-      const openRouterConfigured = Boolean(aiManager.config?.providers?.openrouter?.apiKey)
-
-      list.push({
-        id: live.id,
-        label: live.name || live.id,
-        providerId: live.providerId || "openrouter",
-        providerName: live.providerName || "OpenRouter",
-        providerType: "cloud",
-        configured: openRouterConfigured,
-        requiresKey: true,
-        status: live.status || (dep?.isDiscontinued ? "discontinued" : dep?.isDeprecating ? "deprecating" : "active"),
-        sunsetDate: dep?.sunsetDate,
-        deprecationReason: dep?.reason,
-        suggestedReplacement: dep?.suggestedReplacement,
-        description: live.description || `${live.providerName} · ${ctxStr} token context window.`,
-        efforts: ["high", "medium", "low"],
-        contexts: [ctxStr],
-        supportsFast: isFast,
-        supportsThinking: isDeepThink,
-        defaultEffort: "high",
-        defaultContext: ctxStr,
-        defaultFast: isFast,
-      })
     }
 
     if (list.length > 0) return list
@@ -639,6 +655,18 @@ function ModelLabelParts({
   return (
     <span className={cn("flex min-w-0 items-center gap-1.5", className)}>
       <span className="text-foreground truncate font-medium">{model.label}</span>
+      {model.freeBadge && (
+        <span
+          className={cn(
+            "text-[9px] px-1 py-0.2 rounded font-medium shrink-0",
+            model.freeBadge === "[Local]"
+              ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20"
+              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+          )}
+        >
+          {model.freeBadge}
+        </span>
+      )}
       {mods.map((mod) => (
         <span
           key={mod}
@@ -1253,9 +1281,12 @@ function ModelSelectorDefaultItems() {
   // Listen for live background catalog updates
   const [, setCatalogVersion] = React.useState(0)
   React.useEffect(() => {
-    return modelCatalogService.subscribe(() => {
-      setCatalogVersion((v) => v + 1)
-    })
+    const unsub1 = modelCatalogService.subscribe(() => setCatalogVersion((v) => v + 1))
+    const unsub2 = modelRegistry.subscribe(() => setCatalogVersion((v) => v + 1))
+    return () => {
+      unsub1()
+      unsub2()
+    }
   }, [])
 
   // Group models by provider
@@ -1296,7 +1327,7 @@ function ModelSelectorDefaultItems() {
       if (!matchSearch) return false
 
       const isLocal = m.providerType === "local"
-      const isReady = m.configured || isLocal
+      const isReady = m.configured
       const id = m.id.toLowerCase()
       const isDead = m.status === "discontinued"
 
@@ -1310,10 +1341,10 @@ function ModelSelectorDefaultItems() {
       if (modelCategory === "local") return isLocal
       if (modelCategory === "sunset") return m.status === "discontinued" || m.status === "deprecating"
       if (modelCategory === "flagship") {
-        return ["claude-3-7", "gemini-2.5", "gpt-4o", "deepseek-r1", "llama-3.3", "o1", "o3-mini", "sonnet-4"].some((k) => id.includes(k)) && !isDead
+        return !isDead && (m.supportsThinking || m.supportsFast || m.providerType === "cloud")
       }
       if (modelCategory === "reasoning") {
-        return (m.supportsThinking || ["r1", "reason", "o1", "o3", "thinking", "pro", "opus"].some((k) => id.includes(k))) && !isDead
+        return !isDead && Boolean(m.supportsThinking)
       }
       return true
     })
@@ -1665,9 +1696,22 @@ function ModelSelectorItem({ model }: { model: AiModel }) {
         )}
         onClick={handleItemClick}
       >
-        {/* Left: Model Name */}
+        {/* Left: Model Name & Badges */}
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           <span className="truncate font-medium">{model.label}</span>
+          {model.freeBadge && (
+            <span
+              className={cn(
+                "text-[9px] px-1.5 py-0.2 rounded font-medium shrink-0 tracking-tight",
+                model.freeBadge === "[Local]"
+                  ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20"
+                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+              )}
+              title={model.freeAccessConditions?.join(", ") || (model.freeBadge === "[Local]" ? "Local execution on your device" : "Free API access")}
+            >
+              {model.freeBadge}
+            </span>
+          )}
         </div>
 
         {/* Right: Ready/Connect/Sunset Badge, Context Window, Fast, Info, Effort Chevron */}

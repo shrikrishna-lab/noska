@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { realtimeCollab } from '../../lib/realtimeCollab';
 import { aiManager } from '../../ai/AIManager';
+import { modelRegistry } from '../../ai/models/ModelRegistry';
 import {
   AiPromptInput,
   type AiModelSelection,
@@ -109,7 +110,11 @@ export default function PromptComposer({
   onConnectors,
   onToast,
 }: PromptComposerProps) {
-  const models = useMemo(() => getRealAiModels(), []);
+  const [modelVersion, setModelVersion] = useState(0);
+  useEffect(() => {
+    return modelRegistry.subscribe(() => setModelVersion(v => v + 1));
+  }, []);
+  const models = useMemo(() => getRealAiModels(), [modelVersion]);
   const [modelSelection, setModelSelection] = useState<AiModelSelection>(() => getSavedModelSelection(models));
   const [deepResearch, setDeepResearch] = useState(false);
   const [webSearch, setWebSearch] = useState(false);

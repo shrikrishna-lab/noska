@@ -121,6 +121,7 @@ interface SidebarProps {
    * TEST_MODE, or before the profile fetch resolves). */
   currentUsername?: string | null;
   currentUserEmail?: string | null;
+  currentUserAvatar?: string | null;
 }
 
 const Sidebar = memo(function Sidebar({
@@ -164,7 +165,8 @@ const Sidebar = memo(function Sidebar({
   onToast,
   onLogout,
   currentUsername,
-  currentUserEmail
+  currentUserEmail,
+  currentUserAvatar
 }: SidebarProps) {
   const recents = [...pages]
     .filter((p) => !p.hiddenFromRecents)
@@ -174,12 +176,11 @@ const Sidebar = memo(function Sidebar({
   // Real display identity, sourced from App.tsx's actual signed-in state
   // (currentUsername/currentUserEmail, backed by the real Supabase auth
   // session and user_profiles row) with a fallback to realtimeCollab's
-  // cached user for TEST_MODE / pre-fetch moments — no fake accounts,
-  // no localStorage-simulated multi-account list.
+  // cached user for TEST_MODE / pre-fetch moments.
   const collabUser = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
   const displayName = currentUsername ? `@${currentUsername}` : (collabUser?.userName || 'Workspace User');
   const displayEmail = currentUserEmail || collabUser?.userId || 'user@workspace';
-  const displayAvatar = collabUser?.userAvatar || '👤';
+  const displayAvatar = currentUserAvatar || collabUser?.userAvatar || '👤';
 
   const isAvatarUrl = typeof displayAvatar === "string" && (displayAvatar.startsWith("http://") || displayAvatar.startsWith("https://") || displayAvatar.startsWith("data:") || displayAvatar.startsWith("blob:"));
 

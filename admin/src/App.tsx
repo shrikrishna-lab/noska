@@ -161,6 +161,7 @@ export default function App() {
                       <Route path="subscriptions" element={<Suspense fallback={<PageLoading />}><Subscriptions /></Suspense>} />
                       <Route path="payments" element={<Suspense fallback={<PageLoading />}><Payments /></Suspense>} />
                       <Route path="ai-usage" element={<Suspense fallback={<PageLoading />}><AiUsage /></Suspense>} />
+                      <Route path="user-ai-dashboard" element={<Suspense fallback={<PageLoading />}><AiUsage /></Suspense>} />
                       <Route path="models" element={<Suspense fallback={<PageLoading />}><Models /></Suspense>} />
                       <Route path="launch-control" element={<Suspense fallback={<PageLoading />}><LaunchControl /></Suspense>} />
                       <Route path="landing-page" element={<Suspense fallback={<PageLoading />}><LandingPage /></Suspense>} />

@@ -7,6 +7,7 @@ import {
   ChevronDown, Search, Plus
 } from "lucide-react";
 import { aiManager } from "../ai/AIManager";
+import { AIError, isCancelled } from "../ai/core/AIError";
 import { getAgentList, getAgent, buildAgentPrompt } from "../ai/agents";
 import { buildContext } from "../ai/ContextBuilder";
 import { textToBlocks, uid, now } from "../utils/helpers";
@@ -16,6 +17,7 @@ import { auditEngine } from "../lib/auditEngine";
 import { capture } from "../lib/posthog";
 import { getAllProviders, testProviderConnection } from "../ai/providers";
 import type { Page, AIChat } from "../lib/supabaseService";
+import { recordUserAIUsage } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 
 import ChatSidebar from "./ai/ChatSidebar";
@@ -24,6 +26,11 @@ import PromptComposer from "./ai/PromptComposer";
 import ContextPanel from "./ai/ContextPanel";
 import CollabAura from "./ai/CollabAura";
 import ChatMessage from "./ai/ChatMessage";
+import NoskaThinkingIndicator from "./ai/NoskaThinkingIndicator";
+import ScrollToLatestButton from "./ai/ScrollToLatestButton";
+import { useActivityState } from "./ai/useActivityState";
+import { useChatScroll } from "./ai/useChatScroll";
+import { useStreamBuffer } from "./ai/useStreamBuffer";
 import { ProviderIcon, type AiModelSelection } from "./ui/ai-prompt-input";
 
 export function getSafePageIcon(icon?: string | null) {
@@ -40,6 +47,7 @@ export function getSafePageTitle(title?: string | null) {
 }
 
 interface ChatPanelMessage {
+  id?: string;
   role: string;
   text: string;
   html?: string;
@@ -47,6 +55,7 @@ interface ChatPanelMessage {
   model?: string;
   provider?: string;
   latencyMs?: number;
+  status?: 'streaming' | 'completed' | 'cancelled' | 'error';
 }
 
 interface ToolCallResult {
@@ -78,8 +87,13 @@ interface AIPanelProps {
   onAppend?: (blocks: Block[]) => void;
   onReplaceText?: (text: string) => void;
   onSelectPage?: (page: Page) => void;
+  onNewPage?: () => void;
   onToast?: (message: string) => void;
   toolContext?: unknown;
+  currentUsername?: string | null;
+  currentUserEmail?: string | null;
+  currentUserAvatar?: string | null;
+  currentUserId?: string | null;
 }
 
 export default function AIPanel({
@@ -98,14 +112,27 @@ export default function AIPanel({
   onAppend,
   onReplaceText,
   onSelectPage,
+  onNewPage,
   onToast,
-  toolContext
+  toolContext,
+  currentUsername,
+  currentUserEmail,
+  currentUserAvatar,
+  currentUserId
 }: AIPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<ChatPanelMessage[]>([]);
-  const [loading, setLoading] = useState(false);
   const [executingTools, setExecutingTools] = useState(false);
   const [toolResults, setToolResults] = useState<ToolCallResult[]>([]);
+  // AbortController for real cancellation of AI requests
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // New interaction systems
+  const activity = useActivityState();
+  const chatScroll = useChatScroll();
+  const streamBuffer = useStreamBuffer();
+  const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
+  // Backwards compat: derive `loading` from activity state
+  const loading = activity.isActive;
   const [activeAgent, setActiveAgent] = useState("assistant");
   const [showSidebar, setShowSidebar] = useState(false);
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
@@ -129,8 +156,6 @@ export default function AIPanel({
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [chatFilter, setChatFilter] = useState("all");
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
   const currentAgent = getAgent(activeAgent);
   const agents = getAgentList();
   const providerName = aiManager.getActiveProviderName();
@@ -152,10 +177,12 @@ export default function AIPanel({
     }
   }, [activeChatId, open]);
 
-  // Scroll to bottom on updates
+  // Intelligent scroll: follow latest during streaming
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, loading]);
+    if (activity.isGenerating) {
+      chatScroll.followLatest();
+    }
+  }, [messages, activity.isGenerating]);
 
   // Load audit events
   useEffect(() => {
@@ -243,17 +270,28 @@ export default function AIPanel({
   };
 
   const handleSend = useCallback(
-    async (overrideText?: string, selection?: AiModelSelection) => {
+    async (overrideText?: string, selection?: AiModelSelection, customBaseMessages?: ChatPanelMessage[]) => {
       const text = (overrideText || prompt).trim();
       if (!text || loading) return;
       setPrompt("");
 
+      const baseMsgs = customBaseMessages !== undefined ? customBaseMessages : messages;
       const userMsg: ChatPanelMessage = { role: "user", text };
-      const updatedMessages: ChatPanelMessage[] = [...messages, userMsg, { role: "ai", text: "..." }];
+      const updatedMessages: ChatPanelMessage[] = [...baseMsgs, userMsg, { role: "ai", text: "..." }];
       setMessages(updatedMessages);
-      setLoading(true);
+      activity.setActivity('connecting');
       setExecutingTools(true);
+      streamBuffer.reset();
+      chatScroll.startFollowing();
+      // Create AbortController for this generation
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       setToolResults([]);
+
+      // Scroll fully to latest on send
+      requestAnimationFrame(() => {
+        chatScroll.scrollToLatest();
+      });
 
       // Update real active model if user changed it in selector
       if (selection?.id) {
@@ -290,36 +328,53 @@ export default function AIPanel({
       try {
         const contextString = buildContext({
           page: page || undefined,
-          pages: pages || [],
-          options: { ...currentAgent.context, includeMemory: true },
+          pages: (pages || []).slice(0, 15),
+          options: { ...currentAgent.context, includeMemory: true, tokenBudget: 1500 },
           memory: null
         });
         const systemPrompt = buildAgentPrompt(activeAgent, contextString, { tools: true });
 
+        activity.setActivity('thinking');
+
+        // Register stream buffer flush callback
+        streamBuffer.onFlush((accumulated) => {
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role === "ai") {
+              next[next.length - 1] = {
+                ...last,
+                text: accumulated || last.text,
+                status: 'streaming' as const,
+              };
+            }
+            return next;
+          });
+        });
+
         const startedAt = Date.now();
+        let firstChunkReceived = false;
         const result = await aiManager.stream({
           system: systemPrompt,
           prompt: text,
-          messages: updatedMessages.slice(-20),
+          messages: updatedMessages.slice(-12),
           page: page || undefined,
           pages: pages || undefined,
           agent: activeAgent,
           effort: selection?.effort || "medium",
           thinking: selection?.thinking,
+          signal: controller.signal,
           onChunk: (chunk: string) => {
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              if (last?.role === "ai") {
-                next[next.length - 1] = {
-                  ...last,
-                  text: chunk || last.text
-                };
-              }
-              return next;
-            });
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              activity.setActivity('generating');
+            }
+            streamBuffer.appendChunk(chunk);
+            chatScroll.followLatest();
           }
         });
+        // Flush any remaining buffered content
+        streamBuffer.flush();
         const latencyMs = Date.now() - startedAt;
         const responseText = result || "";
         const activeSelectedModel = selection?.id || modelName;
@@ -335,18 +390,52 @@ export default function AIPanel({
           return next;
         });
 
-        setLoading(false);
+        chatScroll.stopFollowing();
 
         // Execute tool calls
+        let cleanedFinalText = stripToolCalls(responseText).trim();
+
         if (hasToolCalls(responseText) && toolContext) {
+          activity.setActivity('thinking');
           const results: ToolCallResult[] = await executeAllToolCalls(responseText, toolContext);
           setToolResults(results);
-          const cleaned = stripToolCalls(responseText);
+
+          const toolResultText = results.map((r: { name: string; error?: string; result?: unknown }) => {
+            const success = r.error ? `Error: ${r.error}` : JSON.stringify(r.result, null, 2);
+            return `Tool: ${r.name}\nResult: ${success}`;
+          }).join("\n\n");
+
+          // If the model didn't provide a substantive answer alongside tool calls, generate full synthesis
+          if (!cleanedFinalText || cleanedFinalText.length < 20) {
+            activity.setActivity('generating');
+            try {
+              const followUp = await aiManager.sendConversation({
+                messages: [
+                  ...baseMsgs.filter((m) => m.text !== "...").map((m) => ({ role: m.role, content: m.text })),
+                  { role: "user", content: text },
+                  { role: "assistant", content: responseText },
+                  { role: "user", content: `Tool execution completed with results:\n${toolResultText}\n\nBased on these workspace results, provide a comprehensive, beautifully formatted response answering the request: "${text}".` }
+                ],
+                page: page || undefined,
+                pages: pages || undefined,
+              });
+              if (followUp) {
+                cleanedFinalText = stripToolCalls(followUp).trim() || followUp;
+              }
+            } catch (followErr) {
+              console.warn("AIPanel tool follow-up generation:", followErr);
+            }
+          }
+
+          if (!cleanedFinalText) {
+            cleanedFinalText = `✨ Analyzed workspace & executed ${results.length} action${results.length > 1 ? 's' : ''}.`;
+          }
+
           setMessages((prev) => {
             const next = [...prev];
             const last = next[next.length - 1];
             if (last?.role === "ai") {
-              next[next.length - 1] = { ...last, text: cleaned || last.text };
+              next[next.length - 1] = { ...last, text: cleanedFinalText };
             }
             return next;
           });
@@ -375,18 +464,29 @@ export default function AIPanel({
         }
 
         setExecutingTools(false);
+        activity.setActivity('completed');
 
         const finalMessages: ChatPanelMessage[] = [
-          ...messages,
+          ...baseMsgs,
           userMsg,
           {
             role: "ai",
-            text: responseText,
+            text: cleanedFinalText || responseText,
             model: activeSelectedModel,
             provider: providerName,
             latencyMs
           }
         ];
+
+        // Record real-time user AI usage in Supabase database
+        const activeUserId = realtimeCollab.getUser()?.userId;
+        if (activeUserId && !activeUserId.startsWith("anon-")) {
+          recordUserAIUsage(activeUserId, {
+            promptTokens: Math.max(1, Math.round(text.length / 3.8)),
+            completionTokens: Math.max(1, Math.round((cleanedFinalText || responseText).length / 3.8)),
+            model: activeSelectedModel,
+          });
+        }
         onChatsChange?.((prev) =>
           prev.map((c) =>
             c.id === (activeChatId || chatId)
@@ -401,21 +501,44 @@ export default function AIPanel({
           )
         );
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        const friendly =
-          message?.includes("not configured") || message?.includes("API key")
+        // Handle cancellation silently (user pressed Stop)
+        if (isCancelled(err)) {
+          // Keep partial content, mark as cancelled
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role === "ai" && last.text !== "...") {
+              next[next.length - 1] = { ...last, status: 'cancelled' as const };
+            } else if (last?.role === "ai") {
+              // Remove the placeholder if no content was generated
+              next.pop();
+            }
+            return next;
+          });
+          activity.setActivity('cancelled');
+          setExecutingTools(false);
+          chatScroll.stopFollowing();
+          return;
+        }
+        // Use structured error messages from AIError
+        const friendly = err instanceof AIError
+          ? err.userMessage
+          : (err instanceof Error && (err.message?.includes("not configured") || err.message?.includes("API key")))
             ? "AI provider not configured. Click 'Setup Key' in the top bar to add your API key."
             : "AI request failed. Please try again.";
         setMessages((prev) => {
           const next = [...prev];
           const last = next[next.length - 1];
           if (last?.role === "ai") {
-            next[next.length - 1] = { ...last, text: friendly };
+            next[next.length - 1] = { ...last, text: friendly, status: 'error' as const };
           }
           return next;
         });
-        setLoading(false);
+        activity.setActivity('error');
         setExecutingTools(false);
+        chatScroll.stopFollowing();
+      } finally {
+        abortControllerRef.current = null;
       }
     },
     [prompt, loading, messages, activeChatId, page, pages, toolContext, currentAgent, activeAgent, modelName, providerName, aiChats, onActiveChat, onChatsChange, onToast]
@@ -458,6 +581,13 @@ export default function AIPanel({
       prev.map((c) => (c.id === id ? { ...c, name } : c))
     );
     onRenameChat?.(id, name);
+  };
+
+  const handleTogglePin = (id: string) => {
+    onChatsChange?.((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c))
+    );
+    onToast?.("Updated pin");
   };
 
   const handleDuplicate = (id: string) => {
@@ -521,11 +651,25 @@ export default function AIPanel({
   };
 
   const handleReaction = (index: number, reaction: string) => {
-    setMessages((prev) =>
-      prev.map((m, i) =>
-        i === index ? { ...m, reactions: [...(m.reactions || []), reaction] } : m
-      )
-    );
+    setMessages((prev) => {
+      const nextMessages = prev.map((m, i) => {
+        if (i !== index) return m;
+        const current = m.reactions || [];
+        const nextReactions = current.includes(reaction)
+          ? current.filter((r) => r !== reaction)
+          : [...current.filter((r) => r !== (reaction === '👍' ? '👎' : reaction === '👎' ? '👍' : '')), reaction];
+        return { ...m, reactions: nextReactions };
+      });
+
+      if (activeChatId) {
+        onChatsChange?.((allChats) =>
+          allChats.map((c) =>
+            c.id === activeChatId ? { ...c, messages: nextMessages, updatedAt: now() } : c
+          )
+        );
+      }
+      return nextMessages;
+    });
   };
 
   const hasMessages = messages.length > 0;
@@ -553,16 +697,29 @@ export default function AIPanel({
             <ChatSidebar
               chats={aiChats}
               activeChatId={activeChatId}
+              pages={pages}
+              activePageId={page?.id}
+              currentAgentName={currentAgent?.name}
               onSelect={handleSelectChat}
               onNew={handleNewChat}
+              onSelectPage={onSelectPage}
+              onNewPage={onNewPage}
+              onOpenKeyModal={() => setShowKeyModal(true)}
+              onOpenAgentMenu={() => setAgentMenuOpen(true)}
               onRename={handleRename}
               onArchive={handleArchive}
               onDelete={handleDelete}
               onDuplicate={handleDuplicate}
+              onTogglePin={handleTogglePin}
               searchQuery={chatSearchQuery}
               onSearchChange={setChatSearchQuery}
               filter={chatFilter}
               onFilterChange={setChatFilter}
+              workspaceName={page?.title || "Workspace"}
+              userName={currentUsername ? `@${currentUsername}` : (realtimeCollab.getUser()?.userName || "Workspace User")}
+              userAvatar={currentUserAvatar || realtimeCollab.getUser()?.userAvatar}
+              userEmail={currentUserEmail || realtimeCollab.getUser()?.userId}
+              userId={currentUserId || realtimeCollab.getUser()?.userId}
             />
           </motion.aside>
         )}
@@ -867,7 +1024,11 @@ export default function AIPanel({
         </header>
 
         {/* Clean Center Stage */}
-        <div className="flex-1 flex flex-col justify-between overflow-y-auto relative scrollbar-thin select-text bg-[#faf9f6] dark:bg-[#121214] bg-[radial-gradient(#e4e1d8_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:24px_24px]">
+        <div
+          ref={chatScroll.containerRef}
+          onScroll={chatScroll.handleScroll}
+          className="flex-1 flex flex-col justify-between overflow-y-auto relative scrollbar-thin select-text bg-[#faf9f6] dark:bg-[#121214] bg-[radial-gradient(#e4e1d8_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:24px_24px]"
+        >
           {/* Top Left Floating Quick Navigation Icon Dock */}
           {!hasMessages && (
             <div className="absolute top-4 left-4 hidden sm:block z-30">
@@ -882,97 +1043,107 @@ export default function AIPanel({
                 {/* 1. Workspace Brief */}
                 <div className="relative group">
                   <button
+                    type="button"
                     onClick={() => {
-                      setPrompt("Summarize all key workspace updates and priorities.");
-                      handleSend("Summarize all key workspace updates and priorities.");
+                      const p = "Summarize workspace status, key priorities, and open action items in a clean brief.";
+                      setPrompt(p);
+                      handleSend(p);
                     }}
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#706c64] dark:text-white/70 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
-                    aria-label="Workspace Brief"
+                    className="p-2 rounded-xl text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors"
+                    title="Workspace Brief"
                   >
-                    <BookOpen size={15} />
+                    <BookOpen size={16} />
                   </button>
-                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-md z-50">
+                  <div className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-md">
                     Workspace Brief
                   </div>
                 </div>
 
-                {/* 2. Doc Creator */}
+                {/* 2. PRD & Specs */}
                 <div className="relative group">
                   <button
+                    type="button"
                     onClick={() => {
-                      setPrompt("Draft a comprehensive technical document for this project.");
-                      handleSend("Draft a comprehensive technical document for this project.");
+                      const p = "Draft a comprehensive technical spec / PRD for the current feature or page.";
+                      setPrompt(p);
+                      handleSend(p);
                     }}
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#706c64] dark:text-white/70 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
-                    aria-label="Doc Creator"
+                    className="p-2 rounded-xl text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors"
+                    title="Technical Specs"
                   >
-                    <FileText size={15} />
+                    <FileText size={16} />
                   </button>
-                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-md z-50">
-                    Doc Creator
+                  <div className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-md">
+                    Technical Specs
                   </div>
                 </div>
 
                 {/* 3. Deep Research */}
                 <div className="relative group">
                   <button
+                    type="button"
                     onClick={() => {
-                      setPrompt("Conduct deep research and analyze missing requirements.");
-                      handleSend("Conduct deep research and analyze missing requirements.");
+                      const p = "Perform deep research across all notes and knowledge base in this workspace.";
+                      setPrompt(p);
+                      handleSend(p);
                     }}
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#706c64] dark:text-white/70 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
-                    aria-label="Deep Research"
+                    className="p-2 rounded-xl text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors"
+                    title="Deep Research"
                   >
-                    <Compass size={15} />
+                    <Compass size={16} />
                   </button>
-                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-md z-50">
+                  <div className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-md">
                     Deep Research
                   </div>
                 </div>
 
-                {/* 4. AI Settings */}
+                {/* 4. Multi-agent Workflows */}
                 <div className="relative group">
                   <button
-                    onClick={() => setShowKeyModal(true)}
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#706c64] dark:text-white/70 hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
-                    aria-label="AI Settings"
+                    type="button"
+                    onClick={() => {
+                      const p = "Analyze current workspace content and propose 3 automated agent workflows.";
+                      setPrompt(p);
+                      handleSend(p);
+                    }}
+                    className="p-2 rounded-xl text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors"
+                    title="Agent Workflows"
                   >
-                    <Sliders size={15} />
+                    <Layers size={16} />
                   </button>
-                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-md z-50">
-                    AI Settings
+                  <div className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-md">
+                    Agent Workflows
                   </div>
                 </div>
               </div>
             </div>
           )}
 
+          {/* Messages or Onboarding Screen */}
           {!hasMessages ? (
-            /* Pristine Visual Moodboard & AI Hub (Kiko / Wispr Flow Style) */
-            <div className="flex-1 flex flex-col items-center justify-between px-4 sm:px-8 py-8 max-w-5xl mx-auto w-full relative z-10 min-h-[640px]">
-              {/* Main Center Content */}
-              <div className="w-full flex flex-col items-center text-center my-auto space-y-7 pt-4">
-                {/* Hero Title */}
+            <div className="max-w-4xl mx-auto w-full px-4 sm:px-8 py-8 sm:py-12 flex flex-col items-center justify-center min-h-[80vh] text-center my-auto">
+              {/* Clean hero header */}
+              <div className="w-full flex flex-col items-center max-w-3xl mx-auto space-y-6">
                 <motion.div
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-2 max-w-xl mx-auto"
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                  className="space-y-2"
                 >
-                  <h1 className="text-3xl sm:text-4xl md:text-[46px] font-bold tracking-tight text-[#1c1b18] dark:text-white leading-[1.15] font-sans">
-                    Describe the task.
+                  <h1 className="text-2xl sm:text-3xl md:text-[34px] font-bold tracking-tight text-[#1c1b18] dark:text-white leading-tight font-sans">
+                    Tell us what you're thinking.
                     <br />
                     <span className="inline-flex items-center gap-2">
-                      We'll craft the output <span className="text-3xl sm:text-4xl">✦</span>
+                      We'll craft the output <span className="text-3xl sm:text-4xl text-purple-600 dark:text-purple-400">✦</span>
                     </span>
                   </h1>
-                  <p className="text-xs sm:text-sm text-[#706c64] dark:text-white/70 font-medium pt-1">
+                  <p className="text-xs sm:text-sm text-[#706c64] dark:text-white/70 font-medium">
                     Instant synthesis, technical specs, deep research, and creative workflows
                   </p>
                 </motion.div>
 
                 {/* ── Fan-Spread Interactive Noska AI Superpower Cards ── */}
-                <div className="w-full flex items-center justify-center gap-3 sm:gap-4 py-2 px-2 overflow-x-auto scrollbar-none">
+                <div className="w-full flex items-center justify-center gap-3 sm:gap-4 py-4 px-3 overflow-x-auto scrollbar-none">
                   {[
                     {
                       title: "Smart Summary",
@@ -980,10 +1151,11 @@ export default function AIPanel({
                       icon: "📝",
                       desc: "Key takeaways, priorities, and structured outline.",
                       colors: ["#ea580c", "#f97316", "#fb923c", "#fed7aa"],
-                      rotate: "-rotate-6",
+                      rotate: "-rotate-4",
                       hoverRotate: "hover:rotate-0",
                       promptText: "Summarize the key takeaways, decisions, and action items from this workspace.",
-                      bgGradient: "from-amber-100 via-orange-100 to-amber-200",
+                      bgGradient: "from-amber-100/90 via-orange-100/80 to-amber-200/90 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-amber-900/40",
+                      tagBg: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
                     },
                     {
                       title: "Specs & PRDs",
@@ -991,10 +1163,11 @@ export default function AIPanel({
                       icon: "📐",
                       desc: "Architecture blueprints, user flows, and data schemas.",
                       colors: ["#db2777", "#f472b6", "#fbcfe8", "#fdf2f8"],
-                      rotate: "-rotate-2",
+                      rotate: "-rotate-1",
                       hoverRotate: "hover:rotate-0",
                       promptText: "Draft a detailed Product Requirements Document (PRD) with architecture specs and API design.",
-                      bgGradient: "from-pink-100 via-rose-100 to-purple-100",
+                      bgGradient: "from-pink-100/90 via-rose-100/80 to-purple-100/90 dark:from-pink-950/40 dark:via-rose-950/30 dark:to-purple-950/40",
+                      tagBg: "bg-pink-500/15 text-pink-700 dark:text-pink-300",
                     },
                     {
                       title: "Deep Research",
@@ -1002,10 +1175,11 @@ export default function AIPanel({
                       icon: "🔬",
                       desc: "Cross-reference multi-page notes, citations, and web facts.",
                       colors: ["#15803d", "#22c55e", "#86efac", "#dcfce7"],
-                      rotate: "rotate-2",
+                      rotate: "rotate-1",
                       hoverRotate: "hover:rotate-0",
                       promptText: "Perform deep research across all workspace notes and synthesize comprehensive findings.",
-                      bgGradient: "from-emerald-100 via-teal-100 to-amber-100",
+                      bgGradient: "from-emerald-100/90 via-teal-100/80 to-amber-100/90 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-teal-900/40",
+                      tagBg: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
                     },
                     {
                       title: "Creative Ideation",
@@ -1013,54 +1187,62 @@ export default function AIPanel({
                       icon: "💡",
                       desc: "Break through creative blocks with fresh angles & drafts.",
                       colors: ["#4338ca", "#6366f1", "#a5b4fc", "#e0e7ff"],
-                      rotate: "rotate-6",
+                      rotate: "rotate-4",
                       hoverRotate: "hover:rotate-0",
                       promptText: "Brainstorm 8 innovative approaches and creative solutions for our current project.",
-                      bgGradient: "from-indigo-100 via-sky-100 to-violet-100",
+                      bgGradient: "from-indigo-100/90 via-sky-100/80 to-violet-100/90 dark:from-indigo-950/40 dark:via-sky-950/30 dark:to-violet-950/40",
+                      tagBg: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
                     },
                   ].map((card, idx) => (
                     <motion.div
                       key={card.title}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.08, duration: 0.3 }}
-                      whileHover={{ scale: 1.08, y: -8, zIndex: 30 }}
+                      initial={{ opacity: 0, y: 16, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{
+                        delay: idx * 0.05 + 0.05,
+                        type: "spring",
+                        stiffness: 340,
+                        damping: 24,
+                        mass: 0.7
+                      }}
+                      whileHover={{ scale: 1.04, y: -6, zIndex: 30 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={() => {
                         setPrompt(card.promptText);
                         handleSend(card.promptText);
                       }}
-                      className={`w-40 sm:w-44 shrink-0 rounded-2xl bg-white dark:bg-[#1c1c20] p-3 shadow-md hover:shadow-xl border border-[#e8e4db] dark:border-white/10 cursor-pointer transition-all duration-200 text-left ${card.rotate} ${card.hoverRotate}`}
+                      className={`noska-super-card w-40 sm:w-44 shrink-0 rounded-2xl bg-white/95 dark:bg-[#1c1c20]/95 backdrop-blur-md p-3.5 border border-[#e8e4db] dark:border-white/10 hover:border-purple-300 dark:hover:border-purple-600/60 cursor-pointer text-left ${card.rotate} ${card.hoverRotate}`}
                     >
                       {/* Image Preview Collage Thumbnail */}
-                      <div className={`h-24 sm:h-28 w-full rounded-xl bg-gradient-to-br ${card.bgGradient} p-2.5 flex flex-col justify-between overflow-hidden shadow-inner mb-2.5 border border-black/5`}>
+                      <div className={`h-24 sm:h-26 w-full rounded-xl bg-gradient-to-br ${card.bgGradient} p-2.5 flex flex-col justify-between overflow-hidden mb-3 border border-black/5 dark:border-white/5`}>
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-black/70 bg-white/80 backdrop-blur-xs px-1.5 py-0.5 rounded-md font-mono">
+                          <span className={`text-[9px] font-bold uppercase tracking-wider ${card.tagBg} backdrop-blur-xs px-1.5 py-0.5 rounded-md font-mono`}>
                             {card.tag}
                           </span>
-                          <span className="text-sm">{card.icon}</span>
+                          <span className="text-sm select-none">{card.icon}</span>
                         </div>
-                        <div className="space-y-1 opacity-75">
-                          <div className="h-2.5 w-3/4 rounded bg-white/80" />
-                          <div className="h-2 w-1/2 rounded bg-black/15" />
+                        <div className="space-y-1 opacity-70">
+                          <div className="h-2 w-3/4 rounded-full bg-black/10 dark:bg-white/20" />
+                          <div className="h-1.5 w-1/2 rounded-full bg-black/10 dark:bg-white/15" />
                         </div>
                       </div>
 
                       {/* Color Palette Dots */}
-                      <div className="flex items-center gap-1 mb-1.5">
+                      <div className="flex items-center gap-1 mb-2">
                         {card.colors.map((c, i) => (
                           <span
                             key={i}
-                            className="w-2.5 h-2.5 rounded-full border border-black/10 shadow-2xs"
+                            className="w-2.5 h-2.5 rounded-full border border-black/10 dark:border-white/10"
                             style={{ backgroundColor: c }}
                           />
                         ))}
                       </div>
 
                       {/* Title & Description */}
-                      <h4 className="text-xs font-bold text-[#1c1b18] dark:text-white">
+                      <h4 className="text-[13px] font-bold text-[#1c1b18] dark:text-white tracking-tight">
                         {card.title}
                       </h4>
-                      <p className="text-[10px] text-[#706c64] dark:text-white/60 line-clamp-2 mt-0.5 leading-snug">
+                      <p className="text-[10.5px] text-[#706c64] dark:text-white/60 line-clamp-2 mt-0.5 leading-relaxed">
                         {card.desc}
                       </p>
                     </motion.div>
@@ -1068,13 +1250,16 @@ export default function AIPanel({
                 </div>
 
                 {/* Centered Floating Prompt Input Composer */}
-                <div className="w-full max-w-2xl mx-auto pt-2">
+                <div className="w-full max-w-2xl mx-auto pt-4">
                   <PromptComposer
                     prompt={prompt}
                     setPrompt={setPrompt}
                     onSend={handleSend}
                     loading={loading}
-                    onAbort={() => setLoading(false)}
+                    onAbort={() => {
+                      abortControllerRef.current?.abort();
+                      activity.setActivity('cancelled');
+                    }}
                     currentAgent={currentAgent}
                     page={page}
                     onOpenKeySetup={(providerId) => {
@@ -1087,34 +1272,56 @@ export default function AIPanel({
               </div>
 
               {/* Bottom Subtle Footer Credit */}
-              <div className="text-[11px] font-medium text-[#a09c94] dark:text-white/40 pt-4">
+              <div className="text-[11px] font-medium text-[#a09c94] dark:text-white/40 pt-6">
                 Built with Intelligence · Noska AI
               </div>
             </div>
           ) : (
             /* Active Chat Stream */
-            <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
-              {messages.map((m, i) => (
-                <ChatMessage
-                  key={i}
-                  message={m}
-                  index={i}
-                  total={messages.length}
-                  isLastAi={i === messages.length - 1 && m.role === "ai"}
-                  onInsertBelow={handleInsertBelow}
-                  onReplace={handleReplace}
-                  onCopy={handleCopy}
-                  onBranch={handleBranch}
-                  onReaction={handleReaction}
-                />
-              ))}
+            <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4 relative">
+              {messages.map((m, i) => {
+                const isAnchorTarget = (i === messages.length - 2 && m.role === 'user') || (i === messages.length - 1 && m.role === 'user');
+                return (
+                  <div key={i} ref={isAnchorTarget ? lastUserMsgRef : undefined}>
+                    <ChatMessage
+                      message={m}
+                      index={i}
+                      total={messages.length}
+                      isLastAi={i === messages.length - 1 && m.role === "ai"}
+                      isStreaming={i === messages.length - 1 && activity.isGenerating}
+                      onInsertBelow={handleInsertBelow}
+                      onReplace={handleReplace}
+                      onCopy={handleCopy}
+                      onBranch={handleBranch}
+                      onReaction={handleReaction}
+                      onRetry={() => {
+                        if (m.role === 'user') {
+                          const prior = messages.slice(0, i);
+                          handleSend(m.text, undefined, prior);
+                        } else {
+                          const lastUser = [...messages.slice(0, i + 1)].reverse().find(msg => msg.role === 'user');
+                          if (lastUser?.text) {
+                            const userIdx = messages.indexOf(lastUser);
+                            const prior = userIdx !== -1 ? messages.slice(0, userIdx) : [];
+                            handleSend(lastUser.text, undefined, prior);
+                          }
+                        }
+                      }}
+                      onEditAndResend={(editIndex, newText) => {
+                        const prior = messages.slice(0, editIndex);
+                        handleSend(newText, undefined, prior);
+                      }}
+                    />
+                  </div>
+                );
+              })}
 
-              {loading && messages[messages.length - 1]?.text === "..." && (
-                <div className="inline-flex items-center gap-2.5 rounded-full bg-[var(--surface-1)] border border-[var(--border)] px-4 py-2 text-xs text-[var(--text-secondary)] shadow-2xs">
-                  <Loader2 size={13} className="animate-spin text-[var(--accent)]" />
-                  <span>{currentAgent.name} is reasoning...</span>
-                </div>
-              )}
+              {/* Noska Thinking / Activity Indicator */}
+              <NoskaThinkingIndicator
+                state={activity.state}
+                agentName={currentAgent.name}
+                visible={activity.isThinking || (activity.isActive && messages[messages.length - 1]?.text === "...")}
+              />
 
               {executingTools && toolResults.length > 0 && (
                 <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-3 space-y-1">
@@ -1135,20 +1342,27 @@ export default function AIPanel({
                   {typingUsers.map((u) => u.userName).join(", ")} is typing...
                 </div>
               )}
-
-              <div ref={messagesEndRef} />
             </div>
           )}
 
+          {/* Floating Scroll-to-Latest Button */}
+          <ScrollToLatestButton
+            visible={chatScroll.isDetached && activity.isGenerating}
+            onClick={chatScroll.scrollToLatest}
+          />
+
           {/* Bottom Prompt Composer when in active chat */}
           {hasMessages && (
-            <div className="max-w-3xl mx-auto w-full">
+            <div className="max-w-3xl mx-auto w-full sticky bottom-0 z-30 bg-gradient-to-t from-[#faf9f6] via-[#faf9f6]/95 to-transparent dark:from-[#121214] dark:via-[#121214]/95 pt-2 pb-2">
               <PromptComposer
                 prompt={prompt}
                 setPrompt={setPrompt}
                 onSend={handleSend}
                 loading={loading}
-                onAbort={() => setLoading(false)}
+                onAbort={() => {
+                  abortControllerRef.current?.abort();
+                  activity.setActivity('cancelled');
+                }}
                 currentAgent={currentAgent}
                 page={page}
                 onOpenKeySetup={(providerId) => {

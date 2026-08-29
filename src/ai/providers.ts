@@ -1,15 +1,34 @@
 /**
- * Noska AI V4 — Provider Registry
- * 
+ * Noska AI V5 — Provider Registry
+ *
  * Unified provider interface for cloud and local AI providers.
- * Each provider implements: send(), and optionally stream().
- * All providers gracefully handle missing keys by returning mock responses.
+ * 
+ * V5 changes from V4:
+ * - Every provider throws AIError instead of returning mockResponse()
+ * - Every provider accepts AbortSignal for cancellation
+ * - Every provider that supports streaming implements stream() with StreamEvent
+ * - Gemini API key moved from URL parameter to header (security fix)
+ * - NVIDIA maxTokens default fixed from 1000 to 2048
+ * - Anthropic stream extracts thinking blocks
+ * - All providers use normalized stream parsers from StreamProtocol
  */
 
+import {
+  AIError,
+  classifyProviderError,
+  classifyNetworkError,
+  configError,
+} from './core/AIError.js';
+import {
+  parseOpenAIStream,
+  parseAnthropicStream,
+  parseGeminiStream,
+  parseOllamaStream,
+  streamEventsToText,
+  type StreamEvent,
+} from './core/StreamProtocol.js';
+
 // ─── Types ──────────────────────────────────────────────────────────────────
-// Inferred from the provider object literals below — every provider here
-// implements send() and most implement stream(); only the local providers
-// (ollama, lmstudio) implement discoverModels(), so it's optional.
 
 export interface AIModel {
   id: string;
@@ -31,6 +50,7 @@ export interface ProviderSendOpts {
   maxTokens?: number;
   effort?: "low" | "medium" | "high";
   thinking?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface AIProvider {
@@ -44,7 +64,53 @@ export interface AIProvider {
   defaultModel: string;
   send(opts: ProviderSendOpts): Promise<string>;
   stream?(opts: ProviderSendOpts): AsyncGenerator<string>;
+  streamEvents?(opts: ProviderSendOpts): AsyncGenerator<StreamEvent>;
   discoverModels?(baseUrl?: string): Promise<AIModel[]>;
+}
+
+// ─── Shared Fetch Helper ────────────────────────────────────────────────────
+
+const CONNECTION_TIMEOUT = 30000;  // 30s connection timeout
+const STREAM_INACTIVITY_TIMEOUT = 90000; // 90s stream inactivity timeout
+
+/** Fetch with connection timeout and AbortSignal propagation */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+  timeoutMs = CONNECTION_TIMEOUT
+): Promise<Response> {
+  const controller = new AbortController();
+  const composedSignal = controller.signal;
+
+  // Wire user's abort signal
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
+
+  // Connection timeout
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, { ...init, signal: composedSignal });
+    clearTimeout(timer);
+    return res;
+  } catch (err: unknown) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+/** Check response status and throw AIError if not ok */
+async function checkResponse(res: Response, provider: string, model: string): Promise<void> {
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw classifyProviderError(provider, model, res.status, body, res);
+  }
 }
 
 // ─── Provider Definitions ───────────────────────────────────────────────────
@@ -58,106 +124,88 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://openrouter.ai/api/v1",
     keyPlaceholder: "sk-or-...",
     models: [
-      { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4.6 (Thinking)", context: 200000 },
-      { id: "anthropic/claude-opus-4-20250514", name: "Claude Opus 4.6 (Thinking)", context: 200000 },
-      { id: "anthropic/claude-3.5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 },
-      { id: "google/gemini-2.5-flash", name: "Gemini 3.7 Flash", context: 1000000 },
-      { id: "google/gemini-2.5-pro", name: "Gemini 3.1 Pro", context: 2000000 },
+      { id: "anthropic/claude-opus-4.6", name: "Claude Opus 4.6 (Thinking)", context: 200000 },
+      { id: "anthropic/claude-sonnet-5", name: "Claude Sonnet 5 (Thinking)", context: 200000 },
+      { id: "anthropic/claude-sonnet-4.6", name: "Claude Sonnet 4.6 (Thinking)", context: 200000 },
+      { id: "anthropic/claude-haiku-4.5", name: "Claude Haiku 4.5", context: 200000 },
+      { id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet (Thinking)", context: 200000 },
+      { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", context: 200000 },
+      { id: "anthropic/claude-3.5-haiku", name: "Claude 3.5 Haiku", context: 200000 },
+      { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000 },
+      { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 2000000 },
       { id: "openai/gpt-4o", name: "GPT-4o (Omni)", context: 128000 },
       { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", context: 128000 },
-      { id: "openai/o1", name: "OpenAI o1 (Thinking)", context: 200000 },
       { id: "openai/o3-mini", name: "OpenAI o3 Mini", context: 200000 },
+      { id: "openai/o1", name: "OpenAI o1 (Thinking)", context: 200000 },
       { id: "deepseek/deepseek-r1", name: "DeepSeek R1 (Thinking)", context: 65536 },
       { id: "deepseek/deepseek-chat", name: "DeepSeek V3", context: 65536 },
       { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B", context: 131072 },
       { id: "qwen/qwen-2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B", context: 32768 },
       { id: "mistralai/mistral-large-2407", name: "Mistral Large 2", context: 128000 }
     ],
-    defaultModel: "anthropic/claude-sonnet-4-20250514",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking }: ProviderSendOpts) {
-      if (!apiKey) return mockResponse("OpenRouter key not configured");
+    defaultModel: "anthropic/claude-opus-4.6",
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+      if (!apiKey) throw configError("OpenRouter");
+      const modelId = model || this.defaultModel;
+      const payload: Record<string, any> = {
+        model: modelId,
+        max_tokens: maxTokens,
+        temperature: effort === "low" ? 0.2 : effort === "high" ? 0.6 : 0.4,
+        messages: [
+          ...(system ? [{ role: "system", content: system }] : []),
+          ...messages
+        ]
+      };
+      if (effort) payload.reasoning = { effort };
       try {
-        const payload: Record<string, any> = {
-          model: model || this.defaultModel,
-          max_tokens: maxTokens,
-          temperature: effort === "low" ? 0.2 : effort === "high" ? 0.6 : 0.4,
-          messages: [
-            ...(system ? [{ role: "system", content: system }] : []),
-            ...messages
-          ]
-        };
-        if (effort) {
-          payload.reasoning = { effort };
-        }
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": window.location.origin,
+            "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://noska.me",
             "X-Title": "Noska"
           },
           body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, "OpenRouter", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("OpenRouter request failed")}\n\n_Error: ${err.message}_`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("OpenRouter", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking }: ProviderSendOpts) {
-      if (!apiKey) { yield mockResponse("OpenRouter key not configured"); return; }
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+      if (!apiKey) throw configError("OpenRouter");
+      const modelId = model || this.defaultModel;
+      const payload: Record<string, any> = {
+        model: modelId,
+        max_tokens: maxTokens,
+        temperature: effort === "low" ? 0.2 : effort === "high" ? 0.6 : 0.4,
+        stream: true,
+        messages: [
+          ...(system ? [{ role: "system", content: system }] : []),
+          ...messages
+        ]
+      };
+      if (effort) payload.reasoning = { effort };
       try {
-        const payload: Record<string, any> = {
-          model: model || this.defaultModel,
-          max_tokens: maxTokens,
-          temperature: effort === "low" ? 0.2 : effort === "high" ? 0.6 : 0.4,
-          stream: true,
-          messages: [
-            ...(system ? [{ role: "system", content: system }] : []),
-            ...messages
-          ]
-        };
-        if (effort) {
-          payload.reasoning = { effort };
-        }
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": window.location.origin,
+            "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://noska.me",
             "X-Title": "Noska"
           },
           body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed === "data: [DONE]") continue;
-            if (trimmed.startsWith("data: ")) {
-              try {
-                const json = JSON.parse(trimmed.slice(6));
-                const reasoning = json.choices?.[0]?.delta?.reasoning_content || json.choices?.[0]?.delta?.reasoning;
-                if (reasoning) yield `<think>${reasoning}</think>`;
-                const delta = json.choices?.[0]?.delta?.content;
-                if (delta) yield delta;
-              } catch { /* skip malformed chunks */ }
-            }
-          }
-        }
-      } catch (err) {
-        yield `\n\n_Streaming error: ${err.message}_`;
+        }, signal);
+        await checkResponse(res, "OpenRouter", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("OpenRouter", modelId, err as Error);
       }
     }
   },
@@ -170,46 +218,83 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
     keyPlaceholder: "AIza...",
     models: [
+      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash", context: 1000000 },
+      { id: "gemini-3.1-pro", name: "Gemini 3.1 Pro", context: 2000000 },
       { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000 },
       { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 2000000 },
       { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", context: 1000000 },
       { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite", context: 1000000 },
-      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", context: 2000000 },
-      { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", context: 1000000 }
+      { id: "gemini-2.0-pro-exp-02-05", name: "Gemini 2.0 Pro (Exp)", context: 2000000 },
+      { id: "gemini-2.0-flash-thinking-exp-01-21", name: "Gemini 2.0 Flash Thinking", context: 1000000 }
     ],
-    defaultModel: "gemini-2.5-flash",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) return mockResponse("Gemini key not configured");
+    defaultModel: "gemini-3.7-flash",
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
         const contents = messages.map(m => ({
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }]
         }));
-        const body: {
-          contents: typeof contents;
-          generationConfig: { maxOutputTokens: number; temperature: number };
-          systemInstruction?: { parts: { text: string }[] };
-        } = {
+        const body: Record<string, any> = {
           contents,
           generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
         };
         if (system) {
           body.systemInstruction = { parts: [{ text: system }] };
         }
-        const res = await fetch(
-          `${this.baseUrl}/models/${modelId}:generateContent?key=${apiKey}`,
+        const res = await fetchWithTimeout(
+          `${this.baseUrl}/models/${modelId}:generateContent`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey
+            },
             body: JSON.stringify(body)
-          }
+          },
+          signal
         );
-        if (!res.ok) throw new Error(await res.text());
+        await checkResponse(res, "Gemini", modelId);
         const data = await res.json();
-        return data.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
-      } catch (err) {
-        return `${mockResponse("Gemini request failed")}\n\n_Error: ${err.message}_`;
+        return data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "";
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Gemini", modelId, err as Error);
+      }
+    },
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Gemini");
+      const modelId = model || this.defaultModel;
+      try {
+        const contents = messages.map(m => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }]
+        }));
+        const body: Record<string, any> = {
+          contents,
+          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
+        };
+        if (system) {
+          body.systemInstruction = { parts: [{ text: system }] };
+        }
+        const res = await fetchWithTimeout(
+          `${this.baseUrl}/models/${modelId}:streamGenerateContent?alt=sse`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey
+            },
+            body: JSON.stringify(body)
+          },
+          signal
+        );
+        await checkResponse(res, "Gemini", modelId);
+        yield* streamEventsToText(parseGeminiStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Gemini", modelId, err as Error);
       }
     }
   },
@@ -222,15 +307,18 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.openai.com/v1",
     keyPlaceholder: "sk-...",
     models: [
+      { id: "gpt-5", name: "GPT-5 (Flagship)", context: 256000 },
+      { id: "gpt-4.5-preview", name: "GPT-4.5 Preview", context: 128000 },
       { id: "gpt-4o", name: "GPT-4o (Omni)", context: 128000 },
       { id: "gpt-4o-mini", name: "GPT-4o Mini", context: 128000 },
-      { id: "o1", name: "OpenAI o1 (Thinking)", context: 200000 },
+      { id: "o3", name: "OpenAI o3 (Reasoning)", context: 200000 },
       { id: "o3-mini", name: "OpenAI o3 Mini", context: 200000 },
-      { id: "gpt-4-turbo", name: "GPT-4 Turbo", context: 128000 }
+      { id: "o1", name: "OpenAI o1 (Thinking)", context: 200000 },
+      { id: "chatgpt-4o-latest", name: "ChatGPT 4o Latest", context: 128000 }
     ],
     defaultModel: "gpt-4o",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking }: ProviderSendOpts) {
-      if (!apiKey) return mockResponse("OpenAI key not configured");
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+      if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
       const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3");
       try {
@@ -247,23 +335,24 @@ const PROVIDERS: Record<string, AIProvider> = {
         } else {
           payload.reasoning_effort = effort || "medium";
         }
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
           },
           body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, "OpenAI", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("OpenAI request failed")}\n\n_Error: ${err.message}_`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("OpenAI", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking }: ProviderSendOpts) {
-      if (!apiKey) { yield mockResponse("OpenAI key not configured"); return; }
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+      if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
       const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3");
       try {
@@ -281,40 +370,19 @@ const PROVIDERS: Record<string, AIProvider> = {
         } else {
           payload.reasoning_effort = effort || "medium";
         }
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
           },
           body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed === "data: [DONE]") continue;
-            if (trimmed.startsWith("data: ")) {
-              try {
-                const json = JSON.parse(trimmed.slice(6));
-                const reasoning = json.choices?.[0]?.delta?.reasoning_content || json.choices?.[0]?.delta?.reasoning;
-                if (reasoning) yield `<think>${reasoning}</think>`;
-                const delta = json.choices?.[0]?.delta?.content;
-                if (delta) yield delta;
-              } catch {}
-            }
-          }
-        }
-      } catch (err) {
-        yield `\n\n_Streaming error: ${err.message}_`;
+        }, signal);
+        await checkResponse(res, "OpenAI", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("OpenAI", modelId, err as Error);
       }
     }
   },
@@ -327,16 +395,20 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.anthropic.com/v1",
     keyPlaceholder: "sk-ant-...",
     models: [
+      { id: "claude-opus-4-6", name: "Claude Opus 4.6 (Thinking)", context: 200000 },
+      { id: "claude-sonnet-5", name: "Claude Sonnet 5 (Thinking)", context: 200000 },
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", context: 200000 },
+      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", context: 200000 },
       { id: "claude-3-7-sonnet-20250219", name: "Claude 3.7 Sonnet (Thinking)", context: 200000 },
       { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", context: 200000 },
-      { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 },
-      { id: "claude-3-opus-20240229", name: "Claude 3 Opus", context: 200000 }
+      { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 }
     ],
-    defaultModel: "claude-3-7-sonnet-20250219",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) return mockResponse("Anthropic key not configured");
+    defaultModel: "claude-opus-4-6",
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Anthropic");
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${this.baseUrl}/messages`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -345,24 +417,26 @@ const PROVIDERS: Record<string, AIProvider> = {
             "anthropic-dangerous-direct-browser-access": "true"
           },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             stream: false,
             ...(system ? { system } : {}),
             messages
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, "Anthropic", modelId);
         const data = await res.json();
-        return data.content?.map(c => c.text).join("\n") || "";
-      } catch (err) {
-        return `${mockResponse("Anthropic request failed")}\n\n_Error: ${err.message}_`;
+        return data.content?.map((c: any) => c.text).join("\n") || "";
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Anthropic", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) { yield mockResponse("Anthropic key not configured"); return; }
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Anthropic");
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${this.baseUrl}/messages`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -371,36 +445,18 @@ const PROVIDERS: Record<string, AIProvider> = {
             "anthropic-dangerous-direct-browser-access": "true"
           },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             stream: true,
             ...(system ? { system } : {}),
             messages
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith("data: ")) continue;
-            try {
-              const json = JSON.parse(trimmed.slice(6));
-              if (json.type === "content_block_delta" && json.delta?.text) {
-                yield json.delta.text;
-              }
-            } catch { /* skip */ }
-          }
-        }
-      } catch (err) {
-        yield `\n\n_Streaming error: ${err.message}_`;
+        }, signal);
+        await checkResponse(res, "Anthropic", modelId);
+        yield* streamEventsToText(parseAnthropicStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Anthropic", modelId, err as Error);
       }
     }
   },
@@ -416,21 +472,25 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", context: 128000 },
       { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", context: 128000 },
       { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 70B (Groq)", context: 128000 },
-      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", context: 32768 },
-      { id: "gemma2-9b-it", name: "Gemma 2 9B", context: 8192 }
+      { id: "deepseek-r1-distill-qwen-32b", name: "DeepSeek R1 Qwen 32B (Groq)", context: 128000 },
+      { id: "qwen-2.5-32b", name: "Qwen 2.5 32B (Groq)", context: 32768 },
+      { id: "qwen-2.5-coder-32b", name: "Qwen 2.5 Coder 32B (Groq)", context: 32768 },
+      { id: "llama-3.2-11b-vision-preview", name: "Llama 3.2 11B Vision", context: 128000 },
+      { id: "llama-3.2-90b-vision-preview", name: "Llama 3.2 90B Vision", context: 128000 }
     ],
     defaultModel: "llama-3.3-70b-versatile",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) return mockResponse("Groq key not configured");
-      const attempt = async (): Promise<string> => {
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Groq");
+      const modelId = model || this.defaultModel;
+      try {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
           },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             temperature: 0.4,
             messages: [
@@ -438,28 +498,41 @@ const PROVIDERS: Record<string, AIProvider> = {
               ...messages
             ]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, "Groq", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      };
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Groq", modelId, err as Error);
+      }
+    },
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Groq");
+      const modelId = model || this.defaultModel;
       try {
-        try {
-          return await attempt();
-        } catch (err) {
-          // Free-tier TPM windows reset each minute — one patient retry.
-          if (/429|rate limit|tokens per minute/i.test(String(err.message))) {
-            await new Promise(r => setTimeout(r, 20000));
-            return await attempt();
-          }
-          throw err;
-        }
-      } catch (err) {
-        const msg = String(err.message || "");
-        const friendly = /429|rate limit|tokens per minute/i.test(msg)
-          ? "Groq rate limit reached — wait a minute or upgrade your plan tier."
-          : msg.slice(0, 300);
-        throw new Error(friendly);
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            stream: true,
+            messages: [
+              ...(system ? [{ role: "system", content: system }] : []),
+              ...messages
+            ]
+          })
+        }, signal);
+        await checkResponse(res, "Groq", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Groq", modelId, err as Error);
       }
     }
   },
@@ -472,28 +545,54 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.deepseek.com/v1",
     keyPlaceholder: "sk-…",
     models: [
-      { id: "deepseek-chat", name: "DeepSeek V3 Chat", context: 64000 },
-      { id: "deepseek-reasoner", name: "DeepSeek R1 Reasoner (Thinking)", context: 64000 }
+      { id: "deepseek-chat", name: "DeepSeek V3 Chat (671B)", context: 64000 },
+      { id: "deepseek-reasoner", name: "DeepSeek R1 Reasoner (Thinking)", context: 64000 },
+      { id: "deepseek-coder-v2.5", name: "DeepSeek Coder V2.5", context: 128000 },
+      { id: "deepseek-vl2", name: "DeepSeek Vision Language 2", context: 64000 }
     ],
     defaultModel: "deepseek-chat",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) return mockResponse("DeepSeek key not configured");
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("DeepSeek");
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             temperature: 0.4,
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, "DeepSeek", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("DeepSeek request failed")}\n\n_Error: ${err.message}_`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("DeepSeek", modelId, err as Error);
+      }
+    },
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("DeepSeek");
+      const modelId = model || this.defaultModel;
+      try {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            stream: true,
+            messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
+          })
+        }, signal);
+        await checkResponse(res, "DeepSeek", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("DeepSeek", modelId, err as Error);
       }
     }
   },
@@ -507,29 +606,57 @@ const PROVIDERS: Record<string, AIProvider> = {
     keyPlaceholder: "…",
     models: [
       { id: "mistral-large-latest", name: "Mistral Large 2", context: 128000 },
-      { id: "mistral-small-latest", name: "Mistral Small", context: 128000 },
-      { id: "codestral-latest", name: "Codestral", context: 256000 },
-      { id: "pixtral-large-latest", name: "Pixtral Large", context: 128000 }
+      { id: "mistral-small-latest", name: "Mistral Small (24B)", context: 128000 },
+      { id: "codestral-latest", name: "Codestral (256k)", context: 256000 },
+      { id: "pixtral-large-latest", name: "Pixtral Large (Vision)", context: 128000 },
+      { id: "pixtral-12b-2409", name: "Pixtral 12B", context: 128000 },
+      { id: "ministral-8b-latest", name: "Ministral 8B", context: 128000 },
+      { id: "ministral-3b-latest", name: "Ministral 3B", context: 128000 },
+      { id: "mistral-embed", name: "Mistral Embed", context: 8192 }
     ],
     defaultModel: "mistral-large-latest",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) return mockResponse("Mistral key not configured");
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Mistral");
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             temperature: 0.4,
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, "Mistral", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("Mistral request failed")}\n\n_Error: ${err.message}_`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Mistral", modelId, err as Error);
+      }
+    },
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Mistral");
+      const modelId = model || this.defaultModel;
+      try {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            stream: true,
+            messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
+          })
+        }, signal);
+        await checkResponse(res, "Mistral", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Mistral", modelId, err as Error);
       }
     }
   },
@@ -543,29 +670,57 @@ const PROVIDERS: Record<string, AIProvider> = {
     keyPlaceholder: "…",
     models: [
       { id: "meta-llama/Llama-3.3-70B-Instruct-Turbo", name: "Llama 3.3 70B Turbo", context: 131072 },
+      { id: "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo", name: "Llama 3.1 405B Turbo", context: 131072 },
+      { id: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", name: "Llama 3.1 8B Turbo", context: 131072 },
       { id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1 (Together)", context: 65536 },
+      { id: "deepseek-ai/DeepSeek-V3", name: "DeepSeek V3 (Together)", context: 65536 },
       { id: "Qwen/Qwen2.5-Coder-32B-Instruct", name: "Qwen 2.5 Coder 32B", context: 32768 },
-      { id: "mistralai/Mixtral-8x22B-Instruct-v0.1", name: "Mixtral 8x22B", context: 65536 }
+      { id: "Qwen/Qwen2.5-72B-Instruct-Turbo", name: "Qwen 2.5 72B Turbo", context: 32768 },
+      { id: "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF", name: "Nemotron 70B Turbo", context: 131072 }
     ],
     defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) return mockResponse("Together key not configured");
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Together");
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             temperature: 0.4,
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, "Together", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("Together request failed")}\n\n_Error: ${err.message}_`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Together", modelId, err as Error);
+      }
+    },
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("Together");
+      const modelId = model || this.defaultModel;
+      try {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            stream: true,
+            messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
+          })
+        }, signal);
+        await checkResponse(res, "Together", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Together", modelId, err as Error);
       }
     }
   },
@@ -580,27 +735,53 @@ const PROVIDERS: Record<string, AIProvider> = {
     models: [
       { id: "grok-2-latest", name: "Grok 2", context: 131072 },
       { id: "grok-2-vision-latest", name: "Grok 2 Vision", context: 131072 },
-      { id: "grok-beta", name: "Grok Beta", context: 131072 }
+      { id: "grok-2-1212", name: "Grok 2 (1212)", context: 131072 },
+      { id: "grok-2-vision-1212", name: "Grok 2 Vision (1212)", context: 131072 },
+      { id: "grok-beta", name: "Grok Beta Preview", context: 131072 }
     ],
     defaultModel: "grok-2-latest",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) return mockResponse("xAI key not configured");
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("xAI");
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             temperature: 0.4,
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, "xAI", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("xAI request failed")}\n\n_Error: ${err.message}_`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("xAI", modelId, err as Error);
+      }
+    },
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("xAI");
+      const modelId = model || this.defaultModel;
+      try {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            stream: true,
+            messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
+          })
+        }, signal);
+        await checkResponse(res, "xAI", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("xAI", modelId, err as Error);
       }
     }
   },
@@ -613,35 +794,205 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://integrate.api.nvidia.com/v1",
     keyPlaceholder: "nvapi-...",
     models: [
-      { id: "nvidia/llama-3.1-nemotron-70b-instruct", name: "Nemotron 70B", context: 131072 },
-      { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B (NIM)", context: 131072 },
-      { id: "deepseek-ai/deepseek-r1", name: "DeepSeek R1 (NIM)", context: 65536 }
+      { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct", context: 131072 },
+      { id: "nvidia/llama-3.1-nemotron-70b-instruct", name: "Nemotron 70B Instruct", context: 131072 },
+      { id: "deepseek-ai/deepseek-r1", name: "DeepSeek R1 (Thinking)", context: 65536 },
+      { id: "deepseek-ai/deepseek-v3", name: "DeepSeek V3 (671B)", context: 65536 },
+      { id: "meta/llama-3.1-405b-instruct", name: "Llama 3.1 405B Instruct", context: 131072 },
+      { id: "meta/llama-3.1-8b-instruct", name: "Llama 3.1 8B Instruct", context: 131072 },
+      { id: "qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B", context: 32768 },
+      { id: "mistralai/mistral-large-2407", name: "Mistral Large 2", context: 128000 },
+      { id: "microsoft/phi-3.5-moe-instruct", name: "Phi-3.5 MoE", context: 131072 }
     ],
-    defaultModel: "nvidia/llama-3.1-nemotron-70b-instruct",
-    async send({ apiKey, model, system, messages, maxTokens = 1000 }) {
-      if (!apiKey) return mockResponse("NVIDIA key not configured");
+    defaultModel: "meta/llama-3.3-70b-instruct",
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("NVIDIA");
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
+            "Accept": "application/json",
+            "Authorization": `Bearer ${apiKey.trim()}`
           },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: 0.5,
+            top_p: 1,
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
             ]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal, 45000);
+        await checkResponse(res, "NVIDIA", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("NVIDIA request failed")}\n\n_Error: ${err.message}_`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("NVIDIA", modelId, err as Error);
+      }
+    },
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError("NVIDIA");
+      const modelId = model || this.defaultModel;
+      try {
+        const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "Authorization": `Bearer ${apiKey.trim()}`
+          },
+          body: JSON.stringify({
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: 0.5,
+            top_p: 1,
+            stream: true,
+            messages: [
+              ...(system ? [{ role: "system", content: system }] : []),
+              ...messages
+            ]
+          })
+        }, signal, 45000);
+        await checkResponse(res, "NVIDIA", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("NVIDIA", modelId, err as Error);
+      }
+    }
+  },
+
+  opencode_zen: {
+    id: "opencode_zen",
+    name: "OpenCode Zen",
+    type: "cloud",
+    requiresKey: true,
+    baseUrl: "https://opencode.ai/zen/v1",
+    keyPlaceholder: "zen_...",
+    models: [],
+    defaultModel: "claude-sonnet-4-6",
+    async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, signal }) {
+      const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
+      const modelId = model || this.defaultModel;
+      if (!modelId) {
+        throw new AIError({
+          type: "config",
+          provider: "OpenCode Zen",
+          userMessage: "OpenCode Zen: No active model selected or discovered from configured endpoint.",
+        });
+      }
+      try {
+        const isAnthropic = modelId.toLowerCase().startsWith("claude-");
+        const endpoint = isAnthropic ? `${url}/messages` : `${url}/chat/completions`;
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json"
+        };
+        if (apiKey) {
+          headers["Authorization"] = `Bearer ${apiKey.trim()}`;
+          if (isAnthropic) {
+            headers["x-api-key"] = apiKey.trim();
+            headers["anthropic-version"] = "2023-06-01";
+          }
+        }
+
+        const body = isAnthropic
+          ? JSON.stringify({
+              model: modelId,
+              max_tokens: maxTokens,
+              ...(system ? { system } : {}),
+              messages: messages.map(m => ({ role: m.role, content: m.content }))
+            })
+          : JSON.stringify({
+              model: modelId,
+              max_tokens: maxTokens,
+              temperature: 0.4,
+              messages: [
+                ...(system ? [{ role: "system", content: system }] : []),
+                ...messages
+              ]
+            });
+
+        const res = await fetchWithTimeout(endpoint, {
+          method: "POST",
+          headers,
+          body,
+        }, signal);
+        await checkResponse(res, "OpenCode Zen", modelId);
+        const data = await res.json();
+        if (isAnthropic) {
+          return data.content?.[0]?.text || "";
+        }
+        return data.choices?.[0]?.message?.content || "";
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("OpenCode Zen", modelId, err as Error);
+      }
+    },
+    async *stream({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, signal }) {
+      const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
+      const modelId = model || this.defaultModel;
+      if (!modelId) {
+        throw new AIError({
+          type: "config",
+          provider: "OpenCode Zen",
+          userMessage: "OpenCode Zen: No active model selected or discovered from configured endpoint.",
+        });
+      }
+      try {
+        const isAnthropic = modelId.toLowerCase().startsWith("claude-");
+        const endpoint = isAnthropic ? `${url}/messages` : `${url}/chat/completions`;
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream"
+        };
+        if (apiKey) {
+          headers["Authorization"] = `Bearer ${apiKey.trim()}`;
+          if (isAnthropic) {
+            headers["x-api-key"] = apiKey.trim();
+            headers["anthropic-version"] = "2023-06-01";
+          }
+        }
+
+        const body = isAnthropic
+          ? JSON.stringify({
+              model: modelId,
+              max_tokens: maxTokens,
+              stream: true,
+              ...(system ? { system } : {}),
+              messages: messages.map(m => ({ role: m.role, content: m.content }))
+            })
+          : JSON.stringify({
+              model: modelId,
+              max_tokens: maxTokens,
+              temperature: 0.4,
+              stream: true,
+              messages: [
+                ...(system ? [{ role: "system", content: system }] : []),
+                ...messages
+              ]
+            });
+
+        const res = await fetchWithTimeout(endpoint, {
+          method: "POST",
+          headers,
+          body,
+        }, signal);
+        await checkResponse(res, "OpenCode Zen", modelId);
+        if (isAnthropic) {
+          yield* streamEventsToText(parseAnthropicStream(res, signal));
+        } else {
+          yield* streamEventsToText(parseOpenAIStream(res, signal));
+        }
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("OpenCode Zen", modelId, err as Error);
       }
     }
   },
@@ -659,7 +1010,9 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "qwen2.5-coder:latest", name: "Qwen 2.5 Coder (Local)", context: 32768 },
       { id: "mistral:latest", name: "Mistral 7B (Local)", context: 32768 },
       { id: "phi4:latest", name: "Phi-4 (Local)", context: 16384 },
-      { id: "gemma2:latest", name: "Gemma 2 (Local)", context: 8192 }
+      { id: "gemma2:latest", name: "Gemma 2 (Local)", context: 8192 },
+      { id: "codellama:latest", name: "CodeLlama (Local)", context: 16384 },
+      { id: "starcoder2:latest", name: "StarCoder 2 (Local)", context: 16384 }
     ],
     defaultModel: "llama3.3:latest",
     async discoverModels(baseUrl) {
@@ -668,7 +1021,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         const res = await fetch(`${url}/api/tags`);
         if (!res.ok) return [];
         const data = await res.json();
-        return (data.models || []).map(m => ({
+        return (data.models || []).map((m: any) => ({
           id: m.name,
           name: m.name,
           context: 32768
@@ -677,15 +1030,16 @@ const PROVIDERS: Record<string, AIProvider> = {
         return [];
       }
     },
-    async send({ baseUrl, model, system, messages, maxTokens = 2048 }) {
+    async send({ baseUrl, model, system, messages, maxTokens = 2048, signal }) {
       const url = baseUrl || this.baseUrl;
-      if (!model) return mockResponse("No Ollama model selected");
+      const modelId = model || this.defaultModel;
+      if (!modelId) throw configError("Ollama");
       try {
-        const res = await fetch(`${url}/api/chat`, {
+        const res = await fetchWithTimeout(`${url}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            model,
+            model: modelId,
             stream: false,
             options: { num_predict: maxTokens, temperature: 0.4 },
             messages: [
@@ -693,23 +1047,25 @@ const PROVIDERS: Record<string, AIProvider> = {
               ...messages
             ]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal, 60000); // Ollama may need longer timeout for initial load
+        await checkResponse(res, "Ollama", modelId);
         const data = await res.json();
         return data.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("Ollama request failed")}\n\n_Error: ${err.message}. Make sure Ollama is running._`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Ollama", modelId, err as Error);
       }
     },
-    async *stream({ baseUrl, model, system, messages, maxTokens = 2048 }) {
+    async *stream({ baseUrl, model, system, messages, maxTokens = 2048, signal }) {
       const url = baseUrl || this.baseUrl;
-      if (!model) { yield mockResponse("No Ollama model selected"); return; }
+      const modelId = model || this.defaultModel;
+      if (!modelId) throw configError("Ollama");
       try {
-        const res = await fetch(`${url}/api/chat`, {
+        const res = await fetchWithTimeout(`${url}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            model,
+            model: modelId,
             stream: true,
             options: { num_predict: maxTokens, temperature: 0.4 },
             messages: [
@@ -717,27 +1073,12 @@ const PROVIDERS: Record<string, AIProvider> = {
               ...messages
             ]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const json = JSON.parse(line);
-              if (json.message?.content) yield json.message.content;
-            } catch { /* skip */ }
-          }
-        }
-      } catch (err) {
-        yield `\n\n_Streaming error: ${err.message}_`;
+        }, signal, 60000);
+        await checkResponse(res, "Ollama", modelId);
+        yield* streamEventsToText(parseOllamaStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("Ollama", modelId, err as Error);
       }
     }
   },
@@ -751,8 +1092,13 @@ const PROVIDERS: Record<string, AIProvider> = {
     keyPlaceholder: "",
     models: [
       { id: "local-model", name: "LM Studio Active Model", context: 32768 },
-      { id: "qwen2.5-coder-7b-instruct", name: "Qwen 2.5 Coder 7B", context: 32768 },
-      { id: "llama-3.2-3b-instruct", name: "Llama 3.2 3B", context: 128000 }
+      { id: "llama-3.3-70b-instruct", name: "Llama 3.3 70B", context: 131072 },
+      { id: "deepseek-r1-distill-qwen-32b", name: "DeepSeek R1 Qwen 32B", context: 65536 },
+      { id: "qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B", context: 32768 },
+      { id: "mistral-small-instruct", name: "Mistral Small", context: 128000 },
+      { id: "phi-4-instruct", name: "Phi-4 Instruct", context: 16384 },
+      { id: "gemma-2-27b-it", name: "Gemma 2 27B", context: 8192 },
+      { id: "hermes-3-llama-3.1-8b", name: "Hermes 3 8B", context: 131072 }
     ],
     defaultModel: "local-model",
     async discoverModels(baseUrl) {
@@ -761,7 +1107,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         const res = await fetch(`${url}/models`);
         if (!res.ok) return [];
         const data = await res.json();
-        return (data.data || []).map(m => ({
+        return (data.data || []).map((m: any) => ({
           id: m.id,
           name: m.id,
           context: 32768
@@ -770,18 +1116,19 @@ const PROVIDERS: Record<string, AIProvider> = {
         return [];
       }
     },
-    async send({ baseUrl, apiKey, model, system, messages, maxTokens = 2048 }) {
+    async send({ baseUrl, apiKey, model, system, messages, maxTokens = 2048, signal }) {
       const url = baseUrl || this.baseUrl;
-      if (!model) return mockResponse("No LM Studio model selected");
+      const modelId = model || this.defaultModel;
+      if (!modelId) throw configError("LM Studio");
       try {
-        const res = await fetch(`${url}/chat/completions`, {
+        const res = await fetchWithTimeout(`${url}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             ...(apiKey ? { "Authorization": `Bearer ${apiKey}` } : {})
           },
           body: JSON.stringify({
-            model,
+            model: modelId,
             max_tokens: maxTokens,
             temperature: 0.4,
             messages: [
@@ -789,12 +1136,43 @@ const PROVIDERS: Record<string, AIProvider> = {
               ...messages
             ]
           })
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal, 60000);
+        await checkResponse(res, "LM Studio", modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse("LM Studio request failed")}\n\n_Error: ${err.message}. Make sure LM Studio server is running._`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("LM Studio", modelId, err as Error);
+      }
+    },
+    // NEW: LM Studio streaming
+    async *stream({ baseUrl, apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      const url = baseUrl || this.baseUrl;
+      const modelId = model || this.defaultModel;
+      if (!modelId) throw configError("LM Studio");
+      try {
+        const res = await fetchWithTimeout(`${url}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(apiKey ? { "Authorization": `Bearer ${apiKey}` } : {})
+          },
+          body: JSON.stringify({
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+            stream: true,
+            messages: [
+              ...(system ? [{ role: "system", content: system }] : []),
+              ...messages
+            ]
+          })
+        }, signal, 60000);
+        await checkResponse(res, "LM Studio", modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError("LM Studio", modelId, err as Error);
       }
     }
   }
@@ -806,41 +1184,17 @@ function mockResponse(reason = "local fallback") {
   return `**AI Draft** (offline)\n\nNoska AI is running in local mode. ${reason}.\n\n> Configure your preferred AI provider in **Settings → Noska AI** to unlock live responses.`;
 }
 
-async function* parseSSEStream(response) {
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed === "data: [DONE]") continue;
-      if (trimmed.startsWith("data: ")) {
-        try {
-          const json = JSON.parse(trimmed.slice(6));
-          const delta = json.choices?.[0]?.delta?.content;
-          if (delta) yield delta;
-        } catch { /* skip malformed chunks */ }
-      }
-    }
-  }
-}
-
 /**
  * Get provider definition by ID (built-ins + user-registered custom ones)
  */
-export function getProvider(id) {
+export function getProvider(id: string): AIProvider | null {
   return PROVIDERS[id] || customProviders.get(id) || null;
 }
 
 /**
  * Get all provider definitions
  */
-export function getAllProviders() {
+export function getAllProviders(): AIProvider[] {
   return [...Object.values(PROVIDERS), ...customProviders.values()];
 }
 
@@ -856,8 +1210,7 @@ export interface CustomProviderConfig {
   defaultModel?: string;
 }
 
-/** Build an AIProvider around ANY OpenAI-compatible chat-completions endpoint
- * (Groq, Together, Fireworks, vLLM, LM Studio, OpenRouter, Azure gateways…). */
+/** Build an AIProvider around ANY OpenAI-compatible chat-completions endpoint */
 export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
   const base = cfg.baseUrl.replace(/\/+$/, "");
   return {
@@ -869,14 +1222,15 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
     keyPlaceholder: "sk-… / API key",
     models: cfg.models.map((m) => ({ id: m.id, name: m.name || m.id, context: 128000 })),
     defaultModel: cfg.defaultModel || cfg.models[0]?.id || "",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) return mockResponse(`${cfg.name}: no API key set`);
+    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError(cfg.name);
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${base}/chat/completions`, {
+        const res = await fetchWithTimeout(`${base}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             temperature: 0.4,
             messages: [
@@ -884,22 +1238,24 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
               ...messages,
             ],
           }),
-        });
-        if (!res.ok) throw new Error(await res.text());
+        }, signal);
+        await checkResponse(res, cfg.name, modelId);
         const data = await res.json();
         return data.choices?.[0]?.message?.content || "";
-      } catch (err) {
-        return `${mockResponse(`${cfg.name} request failed`)}\n\n_Error: ${err.message}_`;
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError(cfg.name, modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048 }) {
-      if (!apiKey) { yield mockResponse(`${cfg.name}: no API key set`); return; }
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+      if (!apiKey) throw configError(cfg.name);
+      const modelId = model || this.defaultModel;
       try {
-        const res = await fetch(`${base}/chat/completions`, {
+        const res = await fetchWithTimeout(`${base}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
-            model: model || this.defaultModel,
+            model: modelId,
             max_tokens: maxTokens,
             temperature: 0.4,
             stream: true,
@@ -908,37 +1264,18 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
               ...messages,
             ],
           }),
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data:")) continue;
-            const payload = trimmed.slice(5).trim();
-            if (payload === "[DONE]") return;
-            try {
-              const json = JSON.parse(payload);
-              const delta = json.choices?.[0]?.delta?.content;
-              if (delta) yield delta;
-            } catch { /* partial chunk */ }
-          }
-        }
-      } catch (err) {
-        yield `${mockResponse(`${cfg.name} stream failed`)}\n\n_Error: ${err.message}_`;
+        }, signal);
+        await checkResponse(res, cfg.name, modelId);
+        yield* streamEventsToText(parseOpenAIStream(res, signal));
+      } catch (err: unknown) {
+        if (err instanceof AIError) throw err;
+        throw classifyNetworkError(cfg.name, modelId, err as Error);
       }
     },
   };
 }
 
-/** Register a custom provider for this session (called from AIManager init). */
+/** Register a custom provider for this session */
 export function registerCustomProvider(cfg: CustomProviderConfig): void {
   if (!cfg?.id || !cfg.baseUrl) return;
   customProviders.set(cfg.id, createCustomProvider(cfg));
@@ -968,8 +1305,8 @@ export function getProviderList() {
 /**
  * Test a provider connection by sending a minimal request
  */
-export async function testProviderConnection(providerId, config) {
-  const provider = PROVIDERS[providerId];
+export async function testProviderConnection(providerId: string, config: { apiKey?: string; baseUrl?: string; model?: string }) {
+  const provider = PROVIDERS[providerId] || customProviders.get(providerId);
   if (!provider) return { ok: false, error: "Unknown provider" };
   try {
     const result = await provider.send({
@@ -980,9 +1317,20 @@ export async function testProviderConnection(providerId, config) {
     });
     const isOk = result && !result.includes("offline") && !result.includes("failed") && !result.includes("not configured");
     return { ok: isOk, response: result.slice(0, 100) };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Connection test failed";
+    return { ok: false, error: message };
   }
 }
 
-export { PROVIDERS, mockResponse };
+/** Legacy providers return error banners as strings — detect them so the
+ * runtime never treats offline/error text as model output. */
+function looksLikeMockFailure(text: string): boolean {
+  return /\*\*AI Draft\*\* \(offline\)|is running in local mode|request failed/i.test(text || "");
+}
+function extractMockError(text: string): string {
+  const m = (text || "").match(/Error:\s*([\s\S]{0,240})/);
+  return m ? m[1].replace(/_/g, "").trim() : "provider returned an error";
+}
+
+export { PROVIDERS, mockResponse, looksLikeMockFailure, extractMockError };

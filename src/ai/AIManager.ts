@@ -1,20 +1,36 @@
 /**
- * Noska AI V4 — AI Manager
+ * Noska AI V5 — AI Manager
  * 
  * Central gateway for ALL AI requests in Noska.
- * Manages provider configuration, context building, and request routing.
+ * 
+ * V5 changes:
+ * - AbortSignal support throughout (real cancellation)
+ * - Exponential backoff retry for transient failures
+ * - Structured AIError instead of mockResponse() masking
+ * - Intelligence engine integration for adaptive reasoning
+ * - Context engine for intelligent history/memory management
+ * - Conversation state tracking
+ * - Diagnostics for every request
  * 
  * Usage:
  *   import { aiManager } from './ai/AIManager';
- *   aiManager.configure({ providers: { openrouter: { apiKey: '...' } }, activeProvider: 'openrouter', activeModel: '...' });
- *   const response = await aiManager.send({ system: '...', prompt: '...' });
+ *   const controller = new AbortController();
+ *   const response = await aiManager.stream({ prompt: '...', signal: controller.signal });
+ *   // To cancel: controller.abort();
  */
 
-import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, type AIProvider } from './providers.js';
+import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, type AIProvider, type ProviderSendOpts } from './providers.js';
 import { buildContext, buildMinimalContext } from './ContextBuilder.js';
 import { buildAgentPrompt, getAgent } from './agents.js';
 import { initializeMemory, getMemory } from './memory.js';
 import { buildUserProfileContext } from './userProfile.js';
+import { AIError, configError, isRetryable, isCancelled } from './core/AIError.js';
+import { createDiagnosticTracker } from './core/AIDiagnostics.js';
+import { analyzeRequest, type IntelligenceMode, type IntelligenceResult } from './core/IntelligenceEngine.js';
+import { buildOptimizedContext } from './core/ContextEngine.js';
+import { ConversationState } from './core/ConversationState.js';
+import { modelRegistry } from './models/ModelRegistry.js';
+import type { ProviderId } from './models/types.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,7 +51,7 @@ interface ContextSettings {
 
 interface AIManagerConfig {
   providers: Record<string, ProviderConfigEntry>;
-  /** User-defined OpenAI-compatible providers (#2 custom provider support) */
+  /** User-defined OpenAI-compatible providers */
   customProviders: Record<string, {
     id: string; name: string; baseUrl: string;
     models: Array<{ id: string; name?: string }>; defaultModel?: string;
@@ -46,6 +62,8 @@ interface AIManagerConfig {
   context: ContextSettings;
   maxTokens: number;
   streaming: boolean;
+  /** Intelligence mode: auto | fast | balanced | deep | maximum */
+  intelligenceMode: IntelligenceMode;
 }
 
 interface HealthEntry {
@@ -53,9 +71,6 @@ interface HealthEntry {
   timestamp: number;
 }
 
-// Shared param shape for send/sendConversation/stream — every field here
-// is genuinely optional at call sites (e.g. MeetingWorkspace.jsx's
-// generateSummary only ever passes `prompt`).
 interface AISendOpts {
   system?: string;
   prompt?: string;
@@ -65,6 +80,7 @@ interface AISendOpts {
   maxTokens?: number;
   effort?: "low" | "medium" | "high";
   thinking?: boolean;
+  signal?: AbortSignal;
 }
 
 interface AIConversationMessage {
@@ -82,6 +98,7 @@ interface AISendConversationOpts {
   maxTokens?: number;
   effort?: "low" | "medium" | "high";
   thinking?: boolean;
+  signal?: AbortSignal;
 }
 
 interface AIStreamOpts extends AISendOpts {
@@ -89,19 +106,14 @@ interface AIStreamOpts extends AISendOpts {
   onChunk?: (partial: string) => void;
 }
 
-// ─── Default Config ─────────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: AIManagerConfig = {
-  // Provider configs: { [providerId]: { apiKey?, baseUrl?, enabled? } }
   providers: {},
-  // User-defined OpenAI-compatible providers
   customProviders: {},
-  // Active provider + model
   activeProvider: null,
   activeModel: null,
-  // Active agent
   activeAgent: "assistant",
-  // Context settings
   context: {
     includeCurrentPage: true,
     includeRecentPages: true,
@@ -110,12 +122,14 @@ const DEFAULT_CONFIG: AIManagerConfig = {
     includeMemory: true,
     tokenBudget: 4096
   },
-  // Response settings
   maxTokens: 2048,
-  streaming: true
+  streaming: true,
+  intelligenceMode: "auto",
 };
 
 const STORAGE_KEY = "noska_ai_config";
+const MAX_RETRIES = 2;
+const BASE_RETRY_DELAY = 1000; // 1 second
 
 /** Legacy providers return error banners as strings — detect them so the
  * runtime never treats offline/error text as model output. */
@@ -127,6 +141,43 @@ function extractMockError(text: string): string {
   return m ? m[1].replace(/_/g, "").trim() : "provider returned an error";
 }
 
+// ─── Retry Logic ────────────────────────────────────────────────────────────
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  signal?: AbortSignal,
+  maxRetries = MAX_RETRIES,
+  diagnosticTracker?: ReturnType<typeof createDiagnosticTracker>
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (signal?.aborted) {
+      throw new AIError({
+        type: "cancelled",
+        provider: "",
+        retryable: false,
+        userMessage: "Generation stopped.",
+      });
+    }
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (isCancelled(err)) throw err;
+      if (!isRetryable(err) || attempt === maxRetries) throw err;
+
+      // Exponential backoff with jitter
+      diagnosticTracker?.incrementRetry();
+      const retryAfter = err instanceof AIError ? err.retryAfterSeconds : null;
+      const delay = retryAfter
+        ? retryAfter * 1000
+        : BASE_RETRY_DELAY * Math.pow(2, attempt) + Math.random() * 500;
+      await new Promise(r => setTimeout(r, Math.min(delay, 30000)));
+    }
+  }
+  throw lastError;
+}
+
 // ─── AI Manager Class ───────────────────────────────────────────────────────
 
 class AIManager {
@@ -135,9 +186,9 @@ class AIManager {
   _initialized: boolean;
   _healthCache: Map<string, HealthEntry>;
   _healthTimers: Map<string, ReturnType<typeof setTimeout>>;
-  /** True when the user (or Settings UI) deliberately picked a provider —
-   * legacy nvidiaKey/anthropicKey migration must never override it. */
   _hasExplicitSelection: boolean;
+  /** Per-conversation state tracker */
+  _conversationState: ConversationState;
 
   constructor() {
     this.config = { ...DEFAULT_CONFIG };
@@ -146,6 +197,7 @@ class AIManager {
     this._healthCache = new Map();
     this._healthTimers = new Map();
     this._hasExplicitSelection = false;
+    this._conversationState = new ConversationState();
   }
 
   _buildReasoningDirective(effort?: "low" | "medium" | "high", thinking?: boolean): string {
@@ -174,8 +226,6 @@ class AIManager {
       if (saved) {
         const parsed = JSON.parse(saved);
         this.config = { ...DEFAULT_CONFIG, ...parsed, context: { ...DEFAULT_CONFIG.context, ...parsed.context } };
-        // A deliberate provider choice (Settings → Noska AI) must never be
-        // stomped by legacy-key migration on later loads.
         this._hasExplicitSelection = Boolean(parsed.activeProvider);
       }
     } catch {
@@ -188,6 +238,12 @@ class AIManager {
     this._initialized = true;
     // Initialize AI memory (non-blocking)
     initializeMemory().catch(() => {});
+    // Trigger background dynamic discovery across all configured providers
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        modelRegistry.refreshAll(this.config.providers as any).catch(() => {});
+      }, 500);
+    }
   }
 
   /**
@@ -206,7 +262,6 @@ class AIManager {
     if (clean.models.length === 0) throw new Error("Add at least one model ID");
     registerCustomProvider(clean);
     this.config.customProviders = { ...this.config.customProviders, [id]: clean };
-    // First custom provider → make it active so agents work immediately.
     if (!this.config.activeProvider) {
       this.config.activeProvider = id;
       this.config.activeModel = clean.defaultModel || clean.models[0].id;
@@ -217,7 +272,7 @@ class AIManager {
     return id;
   }
 
-  /** Remove a custom provider (also deactivates it if it was active). */
+  /** Remove a custom provider */
   removeCustomProvider(id: string): void {
     unregisterCustomProvider(id);
     const next = { ...this.config.customProviders };
@@ -232,23 +287,17 @@ class AIManager {
     this._notify();
   }
 
-  /**
-   * Configure the AI manager (partial update)
-   */
-  configure(update) {
+  configure(update: Partial<AIManagerConfig>) {
     if (update.context) {
       this.config.context = { ...this.config.context, ...update.context };
-      delete update.context;
+      delete (update as any).context;
     }
     Object.assign(this.config, update);
     this._persist();
     this._notify();
   }
 
-  /**
-   * Set active provider and model
-   */
-  setActiveProvider(providerId, modelId = null) {
+  setActiveProvider(providerId: string, modelId: string | null = null) {
     const provider = getProvider(providerId);
     if (!provider) return;
     this.config.activeProvider = providerId;
@@ -257,9 +306,6 @@ class AIManager {
     this._notify();
   }
 
-  /**
-   * Set active model on the current provider
-   */
   setActiveModel(modelId: string | null) {
     this.config.activeModel = modelId;
     if (modelId) {
@@ -274,26 +320,17 @@ class AIManager {
     this._notify();
   }
 
-  /**
-   * Get the active model ID (raw, may be null before first selection)
-   */
   getActiveModel(): string | null {
     return this.config.activeModel;
   }
 
-  /**
-   * Set active agent
-   */
-  setActiveAgent(agentId) {
+  setActiveAgent(agentId: string) {
     this.config.activeAgent = agentId;
     this._persist();
     this._notify();
   }
 
-  /**
-   * Update a provider's config (API key, baseUrl, enabled state)
-   */
-  setProviderConfig(providerId, providerConfig) {
+  setProviderConfig(providerId: string, providerConfig: Partial<ProviderConfigEntry>) {
     this.config.providers = {
       ...this.config.providers,
       [providerId]: {
@@ -303,13 +340,15 @@ class AIManager {
     };
     this._persist();
     this._notify();
+
+    // Trigger dynamic discovery refresh for this provider
+    modelRegistry.refreshProvider(providerId as ProviderId, {
+      apiKey: providerConfig.apiKey,
+      baseUrl: providerConfig.baseUrl
+    }).catch(() => {});
   }
 
-  /**
-   * Check a provider's health by sending a minimal test request
-   * Results are cached for 60 seconds
-   */
-  async checkProviderHealth(providerId) {
+  async checkProviderHealth(providerId: string) {
     const cached = this._healthCache.get(providerId);
     if (cached && Date.now() - cached.timestamp < 60000) return cached.status;
 
@@ -333,9 +372,6 @@ class AIManager {
     }
   }
 
-  /**
-   * Check health of all configured providers
-   */
   async checkAllProviderHealth() {
     const providers = getAllProviders();
     const results = await Promise.allSettled(
@@ -347,42 +383,29 @@ class AIManager {
     }));
   }
 
-  /**
-   * Get the current configuration
-   */
   getConfig() {
     return { ...this.config };
   }
 
-  /**
-   * Get the active provider definition
-   */
   getActiveProvider() {
     if (!this.config.activeProvider) return null;
     return getProvider(this.config.activeProvider);
   }
 
-  /**
-   * Get active provider's display name
-   */
   getActiveProviderName() {
     const provider = this.getActiveProvider();
     return provider?.name || "Local";
   }
 
-  /**
-   * Get active model name
-   */
   getActiveModelName() {
     const provider = this.getActiveProvider();
     if (!provider) return "Offline";
+    const dynamic = modelRegistry.getModel(this.config.activeModel);
+    if (dynamic) return dynamic.displayName;
     const model = provider.models.find(m => m.id === this.config.activeModel);
     return model?.name || this.config.activeModel || provider.defaultModel;
   }
 
-  /**
-   * Check if the active provider has a valid configuration
-   */
   isConfigured() {
     const provider = this.getActiveProvider();
     if (!provider) return false;
@@ -391,51 +414,93 @@ class AIManager {
     return true;
   }
 
-  /**
-   * Get all enabled providers with their status
-   */
   getProviderStatuses() {
     return getAllProviders().map(p => {
       const config = this.config.providers[p.id] || {};
       const isEnabled = config.enabled !== false;
-      const hasKey = !p.requiresKey || Boolean(config.apiKey);
-      const isActive = this.config.activeProvider === p.id;
       const health = this._healthCache.get(p.id);
+      const isOnline = health?.status === "online";
+      // Cloud providers are configured if API key is set; local providers if online or explicitly configured
+      const isConfigured = p.requiresKey ? Boolean(config.apiKey) : (isOnline || Boolean(config.baseUrl));
+      const isActive = this.config.activeProvider === p.id;
+
+      // Get dynamic models from registry if available, fallback to static p.models
+      const dynamicModels = modelRegistry.getModelsForProvider(p.id as ProviderId);
+      const models = dynamicModels.length > 0
+        ? dynamicModels.map(m => ({ id: m.apiModelId, name: m.displayName, context: m.contextWindow || 128000 }))
+        : p.models;
+
       return {
         id: p.id,
         name: p.name,
         type: p.type,
         enabled: isEnabled,
-        configured: hasKey,
+        configured: isConfigured,
         active: isActive,
         health: health?.status || "unknown",
-        models: p.models,
-        defaultModel: p.defaultModel
+        models,
+        defaultModel: dynamicModels[0]?.apiModelId || p.defaultModel
       };
     });
   }
 
+  /** Get the conversation state tracker */
+  getConversationState(): ConversationState {
+    return this._conversationState;
+  }
+
+  /** Reset conversation state (new chat) */
+  resetConversationState(): void {
+    this._conversationState = new ConversationState();
+  }
+
   /**
-   * Try sending to a specific provider, returns result or throws
+   * Resolve a valid model ID for a given provider, falling back to default if model is invalid or decommissioned
    */
+  _resolveValidModel(provider: AIProvider, requestedModelId?: string | null): string {
+    const raw = requestedModelId || this.config.activeModel;
+    if (!raw) return provider.defaultModel;
+
+    // 1. Validate against dynamic ModelRegistry
+    const validation = modelRegistry.validateModel(raw, provider.id as ProviderId);
+    if (validation.valid) return validation.resolvedModelId;
+
+    // 2. Check provider's local models list
+    const found = provider.models.find(m => m.id === raw);
+    if (found) return found.id;
+    if (provider.type === "custom" || provider.id === "openrouter") return raw;
+
+    return validation.resolvedModelId || provider.defaultModel;
+  }
+
   /**
-   * Try sending to a specific provider, returns result or throws
+   * Try sending to a specific provider, returns result or throws AIError
    */
-  async _tryProvider(providerId, { system, messages, maxTokens, effort, thinking }: { system?: string; messages: any[]; maxTokens?: number; effort?: "low" | "medium" | "high"; thinking?: boolean }) {
+  async _tryProvider(providerId: string, opts: {
+    system?: string;
+    messages: any[];
+    maxTokens?: number;
+    effort?: "low" | "medium" | "high";
+    thinking?: boolean;
+    signal?: AbortSignal;
+  }) {
     const provider = getProvider(providerId);
-    if (!provider) throw new Error(`Provider "${providerId}" not found`);
+    if (!provider) throw new AIError({ type: "config", provider: providerId, retryable: false, userMessage: `Provider "${providerId}" not found` });
     const config = this.config.providers[providerId] || {};
-    if (provider.requiresKey && !config.apiKey) throw new Error(`Provider "${providerId}" not configured`);
+    if (provider.requiresKey && !config.apiKey) throw configError(providerId);
+
+    const model = this._resolveValidModel(provider, providerId === this.config.activeProvider ? this.config.activeModel : null);
 
     return await provider.send({
       apiKey: config.apiKey,
       baseUrl: config.baseUrl || provider.baseUrl,
-      model: providerId === this.config.activeProvider ? (this.config.activeModel || provider.defaultModel) : provider.defaultModel,
-      system,
-      messages,
-      maxTokens: maxTokens || this.config.maxTokens,
-      effort,
-      thinking
+      model,
+      system: opts.system,
+      messages: opts.messages,
+      maxTokens: opts.maxTokens || this.config.maxTokens,
+      effort: opts.effort,
+      thinking: opts.thinking,
+      signal: opts.signal,
     });
   }
 
@@ -457,7 +522,7 @@ class AIManager {
   /**
    * Guard against AI hallucination by checking response claims against known workspace data
    */
-  guardResponse(response, pages, currentPage) {
+  guardResponse(response: string, pages?: any[], currentPage?: any) {
     if (!response || !pages) return response;
 
     const lower = response.toLowerCase();
@@ -465,7 +530,7 @@ class AIManager {
     const knownIds = new Set(pages.filter(p => !p.trashed).map(p => p.id));
     const activeCount = pages.filter(p => !p.trashed).length;
 
-    let warnings = [];
+    let warnings: string[] = [];
 
     // Check for bold page titles that don't exist in workspace
     const boldMatches = response.match(/\*\*([^*]+)\*\*/g);
@@ -487,19 +552,21 @@ class AIManager {
 
   /**
    * Raw provider call used by the shared agent runtime.
+   * Now throws AIError instead of returning mockResponse().
    */
-  async sendRaw({ system, messages, maxTokens, providerId, modelId }: {
+  async sendRaw({ system, messages, maxTokens, providerId, modelId, signal }: {
     system?: string;
     messages: Array<{ role: string; content: string }>;
     maxTokens?: number;
     providerId?: string | null;
     modelId?: string | null;
+    signal?: AbortSignal;
   }): Promise<string> {
     const primaryPid = providerId || this.config.activeProvider;
-    if (!primaryPid) return mockResponse("No AI provider configured");
+    if (!primaryPid) throw configError("Noska AI");
 
     const candidates = [primaryPid, ...this._getFallbackProviders().filter((p) => p !== primaryPid)];
-    let lastFriendlyError = "";
+    let lastError: unknown = null;
     for (const pid of candidates) {
       try {
         const provider = getProvider(pid);
@@ -507,34 +574,42 @@ class AIManager {
         const config = this.config.providers[pid] || {};
         if (provider.requiresKey && !config.apiKey) continue;
         const model = pid === primaryPid && modelId ? modelId : provider.defaultModel;
-        const result = await provider.send({
+        const result = await withRetry(() => provider.send({
           apiKey: config.apiKey,
           baseUrl: config.baseUrl || provider.baseUrl,
           model,
           system,
           messages,
-          maxTokens: maxTokens || this.config.maxTokens
-        });
+          maxTokens: maxTokens || this.config.maxTokens,
+          signal,
+        }), signal);
+
         if (looksLikeMockFailure(result)) {
-          lastFriendlyError = extractMockError(result);
+          lastError = new Error(extractMockError(result));
           continue;
         }
         return result;
       } catch (err) {
-        lastFriendlyError = err instanceof Error ? err.message : "provider failed";
+        if (isCancelled(err)) throw err;
+        lastError = err;
       }
     }
-    throw new Error(lastFriendlyError || "All AI providers failed");
+    if (lastError instanceof AIError) throw lastError;
+    throw new AIError({
+      type: "unknown",
+      provider: primaryPid,
+      retryable: false,
+      userMessage: lastError instanceof Error ? lastError.message : "All AI providers failed",
+    });
   }
 
   /**
-   * Send an AI request (non-streaming) with auto-fallback
+   * Send an AI request (non-streaming) with retry and fallback
    */
-  async send({ system, prompt, page, pages, agent, maxTokens, effort, thinking }: AISendOpts) {
+  async send({ system, prompt, page, pages, agent, maxTokens, effort, thinking, signal }: AISendOpts) {
     const provider = this.getActiveProvider();
-    const providerConfig = this.config.providers[this.config.activeProvider] || {};
+    const providerConfig = this.config.providers[this.config.activeProvider || ""] || {};
 
-    // Build context if page data is provided
     let contextString = "";
     if (page || pages) {
       contextString = buildContext({
@@ -546,47 +621,34 @@ class AIManager {
       });
     }
 
-    // Build system prompt with agent persona & reasoning directives
     const agentId = agent || this.config.activeAgent;
     const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
     const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
 
-    // If no provider is configured, return mock
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
-      return mockResponse("No AI provider configured");
+      throw configError(this.config.activeProvider || "Noska AI");
     }
 
-    // Try active provider, then fallbacks
-    const fallbacks = this._getFallbackProviders();
-    const messages = [{ role: "user", content: prompt }];
-    let lastError = "";
+    const messages = [{ role: "user", content: prompt || "" }];
 
-    for (const pid of [this.config.activeProvider, ...fallbacks]) {
-      try {
-        const result = await this._tryProvider(pid, { system: fullSystem, messages, maxTokens, effort, thinking });
-        if (looksLikeMockFailure(result)) {
-          lastError = extractMockError(result);
-          this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
-          continue;
-        }
-        // Update health cache on success
-        this._healthCache.set(pid, { status: "online", timestamp: Date.now() });
-        return this.guardResponse(result, pages, page);
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : "provider failed";
-        this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
+    return await withRetry(async () => {
+      const result = await this._tryProvider(this.config.activeProvider!, {
+        system: fullSystem, messages, maxTokens, effort, thinking, signal
+      });
+      if (looksLikeMockFailure(result)) {
+        throw new Error(extractMockError(result));
       }
-    }
-
-    throw new Error(lastError || "All AI providers failed");
+      this._healthCache.set(this.config.activeProvider!, { status: "online", timestamp: Date.now() });
+      return this.guardResponse(result, pages, page);
+    }, signal);
   }
 
   /**
    * Send a multi-turn conversation
    */
-  async sendConversation({ system, messages, page, pages, agent, maxTokens, effort, thinking }: AISendConversationOpts) {
+  async sendConversation({ system, messages, page, pages, agent, maxTokens, effort, thinking, signal }: AISendConversationOpts) {
     const provider = this.getActiveProvider();
-    const providerConfig = this.config.providers[this.config.activeProvider] || {};
+    const providerConfig = this.config.providers[this.config.activeProvider || ""] || {};
 
     let contextString = "";
     if (page || pages) {
@@ -604,121 +666,196 @@ class AIManager {
     const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
 
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
-      return mockResponse("No AI provider configured");
+      throw configError(this.config.activeProvider || "Noska AI");
     }
 
     const apiMessages = messages
       .filter(m => m.role === "user" || m.role === "assistant")
-      .map(m => ({ role: m.role, content: m.text || m.content }));
+      .map(m => ({ role: m.role, content: m.text || m.content || "" }));
 
-    try {
+    return await withRetry(async () => {
+      const model = this._resolveValidModel(provider);
       const result = await provider.send({
         apiKey: providerConfig.apiKey,
         baseUrl: providerConfig.baseUrl || provider.baseUrl,
-        model: this.config.activeModel || provider.defaultModel,
+        model,
         system: fullSystem,
         messages: apiMessages,
         maxTokens: maxTokens || this.config.maxTokens,
         effort,
-        thinking
+        thinking,
+        signal,
       });
       if (looksLikeMockFailure(result)) {
         throw new Error(extractMockError(result));
       }
       return this.guardResponse(result, pages, page);
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : "AI request failed");
-    }
+    }, signal);
   }
 
   /**
-   * Stream an AI response
+   * Stream an AI response with cancellation, retry, and intelligence engine
    */
-  async stream({ system, prompt, messages, page, pages, agent, maxTokens, effort, thinking, onChunk }: AIStreamOpts) {
+  async stream({ system, prompt, messages, page, pages, agent, maxTokens, effort, thinking, onChunk, signal }: AIStreamOpts) {
     const provider = this.getActiveProvider();
-    const providerConfig = this.config.providers[this.config.activeProvider] || {};
+    const providerConfig = this.config.providers[this.config.activeProvider || ""] || {};
+    const diagnostics = createDiagnosticTracker(`req_${Date.now().toString(36)}`);
 
-    let contextString = "";
-    if (page || pages) {
-      contextString = buildContext({
-        page,
-        pages: pages || [],
-        options: this.config.context,
-        memory: getMemory(),
-        userProfile: buildUserProfileContext()
-      });
+    // ─── Intelligence Analysis ─────────────────────────────────────
+    const intelligence = analyzeRequest(prompt || "", this.config.intelligenceMode, {
+      hasHistory: (messages?.length || 0) > 0,
+    });
+    diagnostics.setIntelligence({
+      intent: intelligence.intent,
+      complexityScore: intelligence.complexityScore,
+      reasoningEffort: intelligence.reasoningEffort,
+      contextDepth: intelligence.contextDepth,
+      responseFormat: intelligence.responseFormat,
+    });
+
+    // ─── Conversation State ────────────────────────────────────────
+    if (prompt) {
+      this._conversationState.updateFromUserMessage(prompt);
     }
 
+    // ─── Resolve Dynamic Model & Context Parameters ───────────────
+    const resolvedModel = provider ? this._resolveValidModel(provider) : (this.config.activeModel || "unknown");
+    const registeredModel = modelRegistry.getModel(resolvedModel) || modelRegistry.getModel(this.config.activeModel);
+    const dynamicContextWindow = registeredModel?.contextWindow || provider?.models.find(m => m.id === resolvedModel)?.context || 128000;
+    const dynamicMaxOutputTokens = maxTokens || registeredModel?.maxOutputTokens || this.config.maxTokens || 8192;
+
+    // ─── Context Building ──────────────────────────────────────────
     const agentId = agent || this.config.activeAgent;
-    const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
-    const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
+    const contextResult = buildOptimizedContext({
+      page,
+      pages: pages || [],
+      messages: messages || [],
+      currentPrompt: prompt || "",
+      intelligence,
+      conversationState: this._conversationState,
+      contextWindow: dynamicContextWindow,
+      maxOutputTokens: dynamicMaxOutputTokens,
+      agentSystemPrompt: system || buildAgentPrompt(agentId, "", { tools: true }),
+    });
+
+    diagnostics.setContext({
+      contextBudget: contextResult.tokenEstimates.available,
+      contextTokenEstimate: contextResult.tokenEstimates.total,
+      historyTokens: contextResult.tokenEstimates.history,
+      memoryTokens: contextResult.tokenEstimates.memory,
+      workspaceTokens: contextResult.tokenEstimates.workspace,
+      historyMessageCount: messages?.length || 0,
+      prunedMessageCount: contextResult.prunedHistory.length,
+    });
+
+    // Build full system prompt with workspace context + memory + conversation state
+    const contextParts = [
+      contextResult.systemPrompt,
+      contextResult.workspaceContext,
+      contextResult.memoryContext,
+      contextResult.conversationStateContext,
+      contextResult.userProfile,
+    ].filter(Boolean);
+    const fullSystem = `${contextParts.join("\n\n---\n\n")}${this._buildReasoningDirective(effort || (intelligence.reasoningEffort === "high" || intelligence.reasoningEffort === "maximum" ? "high" : intelligence.reasoningEffort === "medium" ? "medium" : undefined), thinking)}`;
+
+    diagnostics.setModel(
+      this.config.activeProvider || "unknown",
+      resolvedModel
+    );
 
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
-      const fallback = mockResponse("No AI provider configured");
-      onChunk?.(fallback);
-      return fallback;
+      const err = configError(this.config.activeProvider || "Noska AI");
+      diagnostics.setError(err.userMessage);
+      diagnostics.finish("error", 0);
+      throw err;
     }
 
-    // Build message list
-    let apiMessages;
-    if (messages) {
-      apiMessages = messages
-        .filter(m => m.role === "user" || m.role === "assistant")
-        .map(m => ({ role: m.role, content: m.text || m.content }));
-    } else {
-      apiMessages = [{ role: "user", content: prompt }];
+    // Use pruned history from context engine instead of raw slice(-20)
+    const apiMessages = contextResult.prunedHistory.length > 0
+      ? contextResult.prunedHistory
+      : (messages || [])
+        .filter(m => m.role === "user" || m.role === "assistant" || m.role === "ai")
+        .map(m => ({ role: m.role === "ai" ? "assistant" : m.role, content: m.text || m.content || "" }));
+
+    // Add current prompt if not already in messages
+    if (prompt && !apiMessages.some(m => m.role === "user" && m.content === prompt)) {
+      apiMessages.push({ role: "user", content: prompt });
     }
 
-    // If provider supports streaming, use it
+    // ─── Stream with provider ──────────────────────────────────────
     if (typeof provider.stream === "function") {
       try {
         let full = "";
+        let firstChunk = true;
         const iterator = provider.stream({
           apiKey: providerConfig.apiKey,
           baseUrl: providerConfig.baseUrl || provider.baseUrl,
-          model: this.config.activeModel || provider.defaultModel,
+          model: resolvedModel,
           system: fullSystem,
           messages: apiMessages,
           maxTokens: maxTokens || this.config.maxTokens,
           effort,
-          thinking
+          thinking,
+          signal,
         });
         for await (const chunk of iterator) {
-          full += chunk;
+          if (signal?.aborted) break;
+          if (firstChunk) {
+            diagnostics.markFirstToken();
+            firstChunk = false;
+          }
+          full = chunk; // streamEventsToText yields accumulated text
           onChunk?.(full);
         }
+
+        // Update conversation state with response
+        this._conversationState.updateFromAIResponse(full);
+        this._healthCache.set(this.config.activeProvider!, { status: "online", timestamp: Date.now() });
+        diagnostics.finish("completed", full.length);
         return full;
-      } catch (err) {
-        const fallback = mockResponse(`Streaming failed: ${err.message}`);
-        onChunk?.(fallback);
-        return fallback;
+      } catch (err: unknown) {
+        if (isCancelled(err)) {
+          diagnostics.finish("cancelled", 0);
+          throw err;
+        }
+        diagnostics.setError(err instanceof Error ? err.message : "Stream failed");
+        diagnostics.finish("error", 0);
+        throw err;
       }
     }
 
-    // Fallback: non-streaming send, deliver all at once
+    // ─── Fallback: non-streaming send ──────────────────────────────
     try {
-      const result = await provider.send({
+      const result = await withRetry(() => provider.send({
         apiKey: providerConfig.apiKey,
         baseUrl: providerConfig.baseUrl || provider.baseUrl,
-        model: this.config.activeModel || provider.defaultModel,
+        model: resolvedModel,
         system: fullSystem,
         messages: apiMessages,
         maxTokens: maxTokens || this.config.maxTokens,
         effort,
-        thinking
-      });
+        thinking,
+        signal,
+      }), signal, MAX_RETRIES, diagnostics);
+
       const guarded = this.guardResponse(result, pages, page);
       onChunk?.(guarded);
+      this._conversationState.updateFromAIResponse(guarded);
+      diagnostics.finish("completed", guarded.length);
       return guarded;
-    } catch (err) {
-      const fallback = mockResponse(`Request failed: ${err.message}`);
-      onChunk?.(fallback);
-      return fallback;
+    } catch (err: unknown) {
+      if (isCancelled(err)) {
+        diagnostics.finish("cancelled", 0);
+        throw err;
+      }
+      diagnostics.setError(err instanceof Error ? err.message : "Request failed");
+      diagnostics.finish("error", 0);
+      throw err;
     }
   }
 
   /**
-   * Migrate from old config format (apiKey, aiProvider, nvidiaKey)
+   * Migrate from old config format
    */
   migrateFromLegacy({ apiKey, aiProvider, nvidiaKey }: { apiKey?: string; aiProvider?: string; nvidiaKey?: string }) {
     const updates: Record<string, ProviderConfigEntry> = {};
@@ -730,9 +867,6 @@ class AIManager {
     }
     if (Object.keys(updates).length > 0) {
       this.config.providers = { ...this.config.providers, ...updates };
-      // Only auto-switch the ACTIVE provider on first-ever migration —
-      // once the user picked one deliberately, legacy keys just register
-      // as available providers and never hijack the selection again.
       if (!this._hasExplicitSelection) {
         if (aiProvider === "nvidia" && nvidiaKey) {
           this.config.activeProvider = "nvidia";
@@ -750,10 +884,7 @@ class AIManager {
 
   // ─── Subscriptions ──────────────────────────────────────────────────────
 
-  /**
-   * Subscribe to config changes
-   */
-  subscribe(listener) {
+  subscribe(listener: (config: AIManagerConfig) => void) {
     this._listeners.add(listener);
     return () => this._listeners.delete(listener);
   }

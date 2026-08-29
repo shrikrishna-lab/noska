@@ -367,9 +367,163 @@ export async function saveAIChats(chats: AIChatInput[], userId: string): Promise
   if (error) throw error;
 }
 
-export async function deleteAIChat(id: string): Promise<void> {
-  const { error } = await supabase.from("ai_chats").delete().eq("id", id);
+export async function deleteAIChat(id: string, userId: string): Promise<void> {
+  requireOwner(userId);
+  const { error } = await supabase.from("ai_chats").delete().eq("id", id).eq("user_id", userId);
   if (error) throw error;
+}
+
+// ============ USER AI USAGE STATS ============
+
+export interface UserAIUsageStats {
+  userId: string;
+  totalSessions: number;
+  totalMessages: number;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  activeDays: number;
+  currentStreak: number;
+  longestStreak: number;
+  favoriteModel: string;
+  modelDistribution: Record<string, number>;
+  hourlyDistribution: Record<string, number>;
+  dailyActivity: Record<string, number>;
+  totalCost: number;
+  avgLatencyMs: number;
+  lastActiveAt?: string | null;
+}
+
+export async function fetchUserAIStats(userId: string): Promise<UserAIUsageStats | null> {
+  if (!userId) return null;
+  const client = supabase as any;
+  const { data, error } = await client
+    .from("user_ai_usage_stats")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error && error.code !== "42P01") return null;
+  if (!data) return null;
+
+  return {
+    userId: data.user_id,
+    totalSessions: data.total_sessions || 0,
+    totalMessages: data.total_messages || 0,
+    totalTokens: Number(data.total_tokens || 0),
+    promptTokens: Number(data.prompt_tokens || 0),
+    completionTokens: Number(data.completion_tokens || 0),
+    activeDays: data.active_days || 1,
+    currentStreak: data.current_streak || 1,
+    longestStreak: data.longest_streak || 1,
+    favoriteModel: data.favorite_model || "llama-3.3-70b-versatile",
+    modelDistribution: (data.model_distribution as Record<string, number>) || {},
+    hourlyDistribution: (data.hourly_distribution as Record<string, number>) || {},
+    dailyActivity: (data.daily_activity as Record<string, number>) || {},
+    totalCost: Number(data.total_cost || 0),
+    avgLatencyMs: data.avg_latency_ms || 0,
+    lastActiveAt: data.last_active_at,
+  };
+}
+
+export async function recordUserAIUsage(
+  userId: string,
+  usage: {
+    promptTokens?: number;
+    completionTokens?: number;
+    model?: string;
+    cost?: number;
+    latencyMs?: number;
+  }
+): Promise<void> {
+  if (!userId) return;
+  try {
+    const existing = await fetchUserAIStats(userId);
+    const pTokens = usage.promptTokens || 0;
+    const cTokens = usage.completionTokens || 0;
+    const model = usage.model || "llama-3.3-70b-versatile";
+    const cost = usage.cost || 0;
+    const latencyMs = usage.latencyMs || 0;
+
+    const modelDist = { ...(existing?.modelDistribution || {}) };
+    modelDist[model] = (modelDist[model] || 0) + 1;
+
+    const now = new Date();
+    const hourKey = String(now.getHours());
+    const dayKey = now.toISOString().split("T")[0];
+
+    const hourDist = { ...(existing?.hourlyDistribution || {}) };
+    hourDist[hourKey] = (hourDist[hourKey] || 0) + 1;
+
+    const dayDist = { ...(existing?.dailyActivity || {}) };
+    dayDist[dayKey] = (dayDist[dayKey] || 0) + 1;
+
+    const totalMsgs = (existing?.totalMessages || 0) + 1;
+    const totalToks = (existing?.totalTokens || 0) + pTokens + cTokens;
+    const prevTotalCost = existing?.totalCost || 0;
+    const prevAvgLatency = existing?.avgLatencyMs || 0;
+    const newTotalCost = prevTotalCost + cost;
+    const newAvgLatency = totalMsgs > 0
+      ? Math.round(((prevAvgLatency * (totalMsgs - 1)) + latencyMs) / totalMsgs)
+      : latencyMs;
+
+    const client = supabase as any;
+    await client.from("user_ai_usage_stats").upsert({
+      user_id: userId,
+      total_messages: totalMsgs,
+      total_tokens: totalToks,
+      prompt_tokens: (existing?.promptTokens || 0) + pTokens,
+      completion_tokens: (existing?.completionTokens || 0) + cTokens,
+      total_cost: newTotalCost,
+      avg_latency_ms: newAvgLatency,
+      favorite_model: Object.entries(modelDist).sort((a, b) => b[1] - a[1])[0]?.[0] || model,
+      model_distribution: modelDist,
+      hourly_distribution: hourDist,
+      daily_activity: dayDist,
+      last_active_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    }, { onConflict: "user_id" });
+  } catch (err) {
+    console.warn("supabaseService: recordUserAIUsage failed silently", err);
+  }
+}
+
+/** Fetches ALL users' AI usage stats for the leaderboard.
+ *  The user_ai_usage_stats RLS policy allows any authenticated user to read
+ *  all rows, so this works from the client side without admin RPCs. */
+export interface LeaderboardEntry {
+  userId: string;
+  totalTokens: number;
+  totalMessages: number;
+  totalSessions: number;
+  currentStreak: number;
+  longestStreak: number;
+  activeDays: number;
+  favoriteModel: string;
+  totalCost: number;
+  avgLatencyMs: number;
+  lastActiveAt: string | null;
+}
+
+export async function fetchAllUsersAIStats(): Promise<LeaderboardEntry[]> {
+  const client = supabase as any;
+  const { data, error } = await client
+    .from("user_ai_usage_stats")
+    .select("user_id, total_tokens, total_messages, total_sessions, current_streak, longest_streak, active_days, favorite_model, total_cost, avg_latency_ms, last_active_at")
+    .order("total_tokens", { ascending: false });
+  if (error) return [];
+  return (data || []).map((row: any) => ({
+    userId: row.user_id,
+    totalTokens: Number(row.total_tokens || 0),
+    totalMessages: row.total_messages || 0,
+    totalSessions: row.total_sessions || 0,
+    currentStreak: row.current_streak || 0,
+    longestStreak: row.longest_streak || 0,
+    activeDays: row.active_days || 0,
+    favoriteModel: row.favorite_model || "—",
+    totalCost: Number(row.total_cost || 0),
+    avgLatencyMs: row.avg_latency_ms || 0,
+    lastActiveAt: row.last_active_at || null,
+  }));
 }
 
 // ============ AI MEMORY ============
