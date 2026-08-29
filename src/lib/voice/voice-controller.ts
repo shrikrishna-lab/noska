@@ -9,7 +9,14 @@ import {
   isSpeechRecognitionSupported,
   SpeechRecognitionAdapter,
 } from "./speech-recognition";
-import { insertTextAtCursor, getActiveTypingElement } from "./active-input";
+import {
+  insertTextAtCursor,
+  streamTextIntoActiveInput,
+  startStreamingSession,
+  endStreamingSession,
+  getActiveTypingElement,
+} from "./active-input";
+import { getVoiceSettings, cleanVoiceTranscript, playVoiceChime } from "./voice-settings";
 import { useEffect, useState } from "react";
 
 export type VoiceState = "idle" | "starting" | "listening" | "stopping" | "error";
@@ -102,19 +109,23 @@ class VoiceController {
     }
 
     try {
+      startStreamingSession();
+
       // 1. Start audio context + real frequency analyser
       this.micSession = await startMicrophoneCapture();
 
       // 2. Initialize Speech Recognition
       this.recognitionAdapter = createBrowserSpeechRecognition({
-        onTranscript: (finalText, interimText) => {
-          const text = finalText || interimText;
-          if (text) {
-            // Insert directly at cursor in active input/editor
-            insertTextAtCursor(text);
-
-            // Call component or global subscribers
-            options?.onTranscript?.(text);
+        onTranscript: (finalText, interimText, fullTranscript) => {
+          const raw = fullTranscript || finalText || interimText;
+          if (raw) {
+            const settings = getVoiceSettings();
+            const text = cleanVoiceTranscript(raw, settings.smartClean);
+            if (options?.onTranscript) {
+              options.onTranscript(text);
+            } else {
+              streamTextIntoActiveInput(text);
+            }
             this.transcriptCallbacks.forEach((cb) => cb(text));
           }
         },
@@ -127,16 +138,17 @@ class VoiceController {
         },
         onEnd: () => {
           if (this.isListening) {
-            // Attempt auto reconnect if listening
+            // Auto-reconnect managed inside adapter
           }
         },
-      });
+      }, getVoiceSettings().language || "en-US");
 
       this.recognitionAdapter.start();
 
       this.isListening = true;
       this.state = "listening";
       this.notify();
+      playVoiceChime("start");
 
       console.log("[Voice] 🎤 Voice typing started");
 
@@ -146,10 +158,10 @@ class VoiceController {
         this.notify();
       }, 1000);
 
-      // Start real-time 12-band frequency analysis loop
+      // Start real-time frequency analysis loop
       const updateFrequencies = () => {
         if (!this.isListening || !this.micSession) return;
-        this.frequencyLevels = this.micSession.getFrequencyBands(12);
+        this.frequencyLevels = this.micSession.getFrequencyBands(13);
         this.notify();
         this.animFrameId = requestAnimationFrame(updateFrequencies);
       };
@@ -166,7 +178,9 @@ class VoiceController {
   }
 
   public stop() {
-    if (!this.isListening && this.state !== "starting") return;
+    if (this.isListening) {
+      playVoiceChime("stop");
+    }
     this.cleanup();
     this.notify();
   }
@@ -183,7 +197,9 @@ class VoiceController {
     this.state = "idle";
     this.isListening = false;
     this.time = 0;
-    this.frequencyLevels = new Array(12).fill(0.05);
+    this.frequencyLevels = new Array(13).fill(0.05);
+
+    endStreamingSession();
 
     if (this.timerId) {
       clearInterval(this.timerId);
@@ -207,17 +223,46 @@ class VoiceController {
     if (this.keyListenerAttached) return;
     this.keyListenerAttached = true;
 
-    // Shortcut: Ctrl + Shift + Space or Cmd + Shift + Space
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       const isMac = navigator.platform?.toUpperCase().indexOf("MAC") >= 0;
-      const modifier = isMac ? e.metaKey : e.ctrlKey;
+      const settings = getVoiceSettings();
+      const shortcut = settings.shortcut || "Ctrl+Shift+Space";
 
-      if (modifier && e.shiftKey && e.code === "Space") {
+      // Parse user configured shortcut
+      const parts = shortcut.toLowerCase().split("+");
+      const needsCtrl = parts.includes("ctrl") || parts.includes("control");
+      const needsMeta = parts.includes("cmd") || parts.includes("meta");
+      const needsAlt = parts.includes("alt") || parts.includes("option");
+      const needsShift = parts.includes("shift");
+      const keyName = parts[parts.length - 1];
+
+      const modMatch = (needsCtrl && e.ctrlKey) || (needsMeta && e.metaKey) || ((needsCtrl || needsMeta) && (isMac ? e.metaKey : e.ctrlKey)) || (!needsCtrl && !needsMeta);
+      const altMatch = needsAlt ? e.altKey : !e.altKey || needsAlt;
+      const shiftMatch = needsShift ? e.shiftKey : !e.shiftKey || needsShift;
+
+      let keyMatch = false;
+      if (keyName === "space" && e.code === "Space") keyMatch = true;
+      else if (keyName === "v" && e.code === "KeyV") keyMatch = true;
+      else if (keyName === "d" && e.code === "KeyD") keyMatch = true;
+      else if (e.key.toLowerCase() === keyName) keyMatch = true;
+
+      if (modMatch && altMatch && shiftMatch && keyMatch) {
         e.preventDefault();
         e.stopPropagation();
         this.toggle().catch((err) => console.warn("[Voice] Shortcut toggle failed:", err));
       }
     });
+  }
+
+  public getMicSession(): MicrophoneSession | null {
+    return this.micSession;
+  }
+
+  public getLiveFrequencyBands(count: number = 13): number[] {
+    if (this.micSession && this.isListening) {
+      return this.micSession.getFrequencyBands(count);
+    }
+    return this.frequencyLevels;
   }
 
   public getIsListening(): boolean {
@@ -259,23 +304,23 @@ export function useVoiceController(options?: {
     return unsub;
   }, []);
 
-  const toggle = () => {
+  const toggle = (opts?: { onTranscript?: (text: string) => void; onError?: (err: Error) => void }) => {
     if (state.isListening) {
       globalVoiceController.stop();
       options?.onStop?.();
     } else {
       globalVoiceController.start({
-        onTranscript: options?.onTranscript,
-        onError: options?.onError,
+        onTranscript: opts?.onTranscript || options?.onTranscript,
+        onError: opts?.onError || options?.onError,
       });
       options?.onStart?.();
     }
   };
 
-  const start = () => {
+  const start = (opts?: { onTranscript?: (text: string) => void; onError?: (err: Error) => void }) => {
     globalVoiceController.start({
-      onTranscript: options?.onTranscript,
-      onError: options?.onError,
+      onTranscript: opts?.onTranscript || options?.onTranscript,
+      onError: opts?.onError || options?.onError,
     });
     options?.onStart?.();
   };

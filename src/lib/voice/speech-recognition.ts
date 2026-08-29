@@ -1,9 +1,9 @@
 /**
- * Speech Recognition abstraction and adapter for continuous dictation.
+ * Speech Recognition abstraction and adapter for continuous real-time dictation.
  */
 
 export interface SpeechRecognitionCallbacks {
-  onTranscript: (finalText: string, interimText: string) => void;
+  onTranscript: (finalText: string, interimText: string, fullTranscript: string) => void;
   onError: (error: Error) => void;
   onEnd: () => void;
 }
@@ -39,25 +39,27 @@ export function createBrowserSpeechRecognition(
   let isExplicitStop = false;
 
   recognition.onresult = (event: any) => {
-    let finalTranscript = "";
-    let interimTranscript = "";
+    let accumulatedFinal = "";
+    let currentInterim = "";
 
-    for (let i = event.resultIndex; i < event.results.length; ++i) {
+    // Iterate through all results in the current session
+    for (let i = 0; i < event.results.length; ++i) {
       const item = event.results[i];
       const text = item[0]?.transcript || "";
       if (item.isFinal) {
-        finalTranscript += text;
+        accumulatedFinal += (accumulatedFinal ? " " : "") + text.trim();
       } else {
-        interimTranscript += text;
+        currentInterim += (currentInterim ? " " : "") + text.trim();
       }
     }
 
-    callbacks.onTranscript(finalTranscript, interimTranscript);
+    const fullTranscript = (accumulatedFinal + (accumulatedFinal && currentInterim ? " " : "") + currentInterim).trim();
+
+    callbacks.onTranscript(accumulatedFinal, currentInterim, fullTranscript);
   };
 
   recognition.onerror = (event: any) => {
     if (event.error === "no-speech") {
-      // Quiet silence is normal during dictation pause
       return;
     }
     if (event.error === "aborted" && isExplicitStop) {
@@ -69,7 +71,6 @@ export function createBrowserSpeechRecognition(
 
   recognition.onend = () => {
     if (!isExplicitStop) {
-      // Attempt continuous reconnect if the browser auto-stopped
       try {
         recognition.start();
         return;
@@ -94,18 +95,18 @@ export function createBrowserSpeechRecognition(
     stop: () => {
       isExplicitStop = true;
       try {
-        recognition.stop();
+        recognition.abort();
       } catch {
-        // Ignore if already stopped
+        try {
+          recognition.stop();
+        } catch {}
       }
     },
     abort: () => {
       isExplicitStop = true;
       try {
         recognition.abort();
-      } catch {
-        // Ignore if already aborted
-      }
+      } catch {}
     },
   };
 }

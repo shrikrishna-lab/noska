@@ -319,5 +319,7 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(fun
 
 export { default as PearlButton } from "./PearlButton";
 export { default as VoiceDictator } from "./voice-dictator";
-export { VoiceInput, VoiceFloatingIndicator } from "./voice-input";
+export { VoiceInput, VoiceFloatingIndicator, VoicePill, RealtimeEqualizer, StreamingWordText } from "./voice-input";
+export { default as VoiceCustomizationSettings } from "../settings/VoiceCustomizationSettings";
+export * from "../../lib/voice/voice-settings";
 

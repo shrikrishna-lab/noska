@@ -2445,6 +2445,7 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
 
     const valueRef = React.useRef(value)
     valueRef.current = value
+    const dictationBaseValueRef = React.useRef<string>("")
     const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
     const mirrorRef = React.useRef<HTMLDivElement | null>(null)
     const fieldId = React.useId()
@@ -2689,16 +2690,23 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
 
                 <VoiceInput
                   className={cn(
-                    "scale-90 origin-center",
+                    "origin-center",
                     (disabled || status === "loading" || talking) && "pointer-events-none opacity-40"
                   )}
-                  onStart={() => onDictationChange?.(true)}
-                  onStop={() => onDictationChange?.(false)}
-                  onTranscript={(text) => {
-                    setValue((prev) => {
-                      if (!prev) return text;
-                      return prev + " " + text;
-                    });
+                  onStart={() => {
+                    dictationBaseValueRef.current = valueRef.current || "";
+                    setDictationPhase("listening");
+                    onDictationChange?.(true);
+                  }}
+                  onStop={() => {
+                    dictationBaseValueRef.current = "";
+                    setDictationPhase("idle");
+                    onDictationChange?.(false);
+                  }}
+                  onTranscript={(transcript) => {
+                    const base = dictationBaseValueRef.current;
+                    const next = base ? `${base} ${transcript}` : transcript;
+                    setValue(next);
                   }}
                 />
                 <ActionButton

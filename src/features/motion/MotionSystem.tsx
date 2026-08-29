@@ -146,29 +146,6 @@ export const MotionInput = React.forwardRef<HTMLInputElement, MotionInputProps>(
           disabled ? "opacity-40 cursor-not-allowed" : "hover:border-[var(--border-strong)]"
         }`}
       >
-        {/* Floating placeholder */}
-        {placeholder && (
-          <motion.span
-            animate={
-              reducedMotion
-                ? {}
-                : {
-                    y: isFloating ? -16 : 0,
-                    scale: isFloating ? 0.8 : 1,
-                    color: error
-                      ? "rgba(239, 68, 68, 0.8)"
-                      : isFocused
-                      ? "var(--accent)"
-                      : "var(--secondary)"
-                  }
-            }
-            transition={SPRING_PRESETS.stiff}
-            className="absolute left-3 origin-left pointer-events-none select-none text-[13px] z-10"
-          >
-            {placeholder}
-          </motion.span>
-        )}
-
         {/* TextInput field */}
         <input
           ref={inputRef}
@@ -180,9 +157,10 @@ export const MotionInput = React.forwardRef<HTMLInputElement, MotionInputProps>(
           onSelect={handleSelection}
           disabled={disabled}
           type={inputType}
-          className={`w-full bg-transparent px-3 outline-none text-[13px] leading-8 text-[var(--text)] select-text disabled:cursor-not-allowed ${
+          placeholder={placeholder}
+          className={`w-full bg-transparent px-3.5 py-2 outline-none text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] select-text disabled:cursor-not-allowed ${
             isPassword ? "pr-8" : ""
-          } ${placeholder ? "pt-2 pb-0.5" : "py-1.5"}`}
+          }`}
           style={{
             // Hide native caret when custom caret is rendered
             caretColor: showCustomCaret ? "transparent" : "auto"
@@ -199,7 +177,7 @@ export const MotionInput = React.forwardRef<HTMLInputElement, MotionInputProps>(
               exit={{ opacity: 0 }}
               transition={SPRING_PRESETS.stiff}
               style={{
-                top: placeholder ? "58%" : "50%",
+                top: "50%",
                 left: 0
               }}
               className="absolute w-[2px] h-[14px] bg-[var(--accent)] -translate-y-1/2 pointer-events-none animate-caret-pulse z-10"

@@ -1,9 +1,20 @@
 /**
- * Active input tracking & cursor-preserving text insertion for global dictation.
+ * Active input tracking & smooth streaming word-by-word text insertion for global dictation.
  */
 
 let lastFocusedElement: HTMLElement | null = null;
 let lastSelectionRange: Range | null = null;
+
+interface StreamingSession {
+  target: HTMLElement;
+  initialValue: string;
+  startPos: number;
+  endPos: number;
+  initialPrefix: string;
+  initialSuffix: string;
+}
+
+let activeStreamSession: StreamingSession | null = null;
 
 if (typeof window !== "undefined") {
   // Track last focused input or contenteditable element
@@ -27,7 +38,9 @@ if (typeof window !== "undefined") {
       }
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
-        lastSelectionRange = sel.getRangeAt(0).cloneRange();
+        try {
+          lastSelectionRange = sel.getRangeAt(0).cloneRange();
+        } catch {}
       }
     },
     true
@@ -59,6 +72,76 @@ export function getActiveTypingElement(): HTMLElement | null {
   return null;
 }
 
+/** Starts a new streaming dictation session snapshotting the starting cursor position */
+export function startStreamingSession(targetOverride?: HTMLElement | null) {
+  const target = targetOverride || getActiveTypingElement();
+  if (!target) {
+    activeStreamSession = null;
+    return;
+  }
+
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    const start = target.selectionStart ?? target.value.length;
+    const end = target.selectionEnd ?? target.value.length;
+    const fullVal = target.value;
+    const initialPrefix = fullVal.substring(0, start);
+    const initialSuffix = fullVal.substring(end);
+
+    activeStreamSession = {
+      target,
+      initialValue: fullVal,
+      startPos: start,
+      endPos: end,
+      initialPrefix,
+      initialSuffix,
+    };
+  } else {
+    activeStreamSession = null;
+  }
+}
+
+/** Ends the streaming dictation session */
+export function endStreamingSession() {
+  activeStreamSession = null;
+}
+
+/** Streams text smoothly into active input word-by-word with live cursor positioning */
+export function streamTextIntoActiveInput(text: string, targetOverride?: HTMLElement | null): boolean {
+  if (!text) return false;
+
+  const target = targetOverride || activeStreamSession?.target || getActiveTypingElement();
+  if (!target) return false;
+
+  // 1. Standard Input / TextArea with smooth streaming replacement
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    target.focus();
+
+    if (!activeStreamSession || activeStreamSession.target !== target) {
+      startStreamingSession(target);
+    }
+
+    const session = activeStreamSession;
+    if (session) {
+      let textToInsert = text;
+      if (session.initialPrefix.length > 0 && !/\s$/.test(session.initialPrefix) && !/^[\s,.:;!?]/.test(textToInsert)) {
+        textToInsert = " " + textToInsert;
+      }
+
+      const nextVal = session.initialPrefix + textToInsert + session.initialSuffix;
+      const nextCursor = (session.initialPrefix + textToInsert).length;
+
+      target.value = nextVal;
+      target.setSelectionRange(nextCursor, nextCursor);
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+  }
+
+  // 2. Fallback to insertTextAtCursor for ContentEditable
+  return insertTextAtCursor(text, target);
+}
+
 /**
  * Inserts text at the current cursor position or replaces the selected text.
  */
@@ -78,7 +161,6 @@ export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | 
     const prefix = originalValue.substring(0, start);
     const suffix = originalValue.substring(end);
 
-    // If there's preceding text without trailing space and text doesn't start with space or punctuation, add space
     let textToInsert = text;
     if (prefix.length > 0 && !/\s$/.test(prefix) && !/^[\s,.:;!?]/.test(textToInsert)) {
       textToInsert = " " + textToInsert;
@@ -87,7 +169,6 @@ export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | 
     const nextValue = prefix + textToInsert + suffix;
     const nextCursorPos = start + textToInsert.length;
 
-    // Use setRangeText where available for native undo stack, fallback to value assignment
     if (typeof target.setRangeText === "function") {
       target.setRangeText(textToInsert, start, end, "end");
     } else {
@@ -95,7 +176,6 @@ export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | 
       target.setSelectionRange(nextCursorPos, nextCursorPos);
     }
 
-    // Trigger synthetic input events so React / frameworks detect the change
     target.dispatchEvent(new Event("input", { bubbles: true }));
     target.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
@@ -105,18 +185,14 @@ export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | 
   if (target.isContentEditable || target.getAttribute("contenteditable") === "true") {
     target.focus();
 
-    // Prefer document.execCommand('insertText') for native rich-text editor history / undo handling
     try {
       const executed = document.execCommand("insertText", false, text);
       if (executed) {
         target.dispatchEvent(new Event("input", { bubbles: true }));
         return true;
       }
-    } catch {
-      // Fall through to DOM selection insertion
-    }
+    } catch {}
 
-    // Fallback: DOM Range insertion
     const selection = window.getSelection();
     let range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : lastSelectionRange;
 
@@ -131,7 +207,6 @@ export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | 
       const textNode = document.createTextNode(text);
       range.insertNode(textNode);
 
-      // Move cursor after the inserted text
       range.setStartAfter(textNode);
       range.setEndAfter(textNode);
       selection?.removeAllRanges();

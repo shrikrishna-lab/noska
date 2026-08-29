@@ -1,5 +1,6 @@
 /**
- * Microphone capture & real-time audio frequency analysis for Noska Voice Input.
+ * High-performance Microphone capture & real-time vocal frequency analysis for Noska Voice Input.
+ * Features logarithmically-scaled vocal formant tracking (80Hz - 8kHz), AGC, and instant responsiveness.
  */
 
 export interface MicrophoneSession {
@@ -7,6 +8,7 @@ export interface MicrophoneSession {
   audioCtx: AudioContext;
   analyser: AnalyserNode;
   getFrequencyBands: (bandCount?: number) => number[];
+  getVolumeLevel: () => number;
   stop: () => void;
 }
 
@@ -20,7 +22,7 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
-        noiseSuppression: true,
+        noiseSuppression: false, // Don't suppress natural speech harmonics
         autoGainControl: true,
       },
     });
@@ -38,35 +40,84 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
 
   const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
   const audioCtx = new AudioContextClass();
+
+  // Crucial: ensure audio context is active
+  if (audioCtx.state === "suspended") {
+    await audioCtx.resume().catch(() => {});
+  }
+
   const source = audioCtx.createMediaStreamSource(stream);
   const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 64;
-  analyser.smoothingTimeConstant = 0.8;
+
+  // 256-point FFT gives 128 tight frequency bins with immediate ~5ms latency
+  analyser.fftSize = 256;
+  analyser.smoothingTimeConstant = 0.3; // Ultra snappy real-time response
+  analyser.minDecibels = -85;
+  analyser.maxDecibels = -10;
   source.connect(analyser);
 
-  const bufferLength = analyser.frequencyBinCount;
-  const dataArray = new Uint8Array(bufferLength);
+  const freqBufferLength = analyser.frequencyBinCount; // 128 bins
+  const freqData = new Uint8Array(freqBufferLength);
+  const timeData = new Uint8Array(analyser.fftSize);
 
-  const getFrequencyBands = (bandCount: number = 12): number[] => {
+  const sampleRate = audioCtx.sampleRate || 44100;
+  const binWidth = sampleRate / analyser.fftSize;
+
+  const getVolumeLevel = (): number => {
     if (audioCtx.state === "suspended") {
-      audioCtx.resume();
+      audioCtx.resume().catch(() => {});
     }
-    analyser.getByteFrequencyData(dataArray);
+    analyser.getByteTimeDomainData(timeData);
+    let sum = 0;
+    for (let i = 0; i < timeData.length; i++) {
+      const val = (timeData[i] - 128) / 128;
+      sum += val * val;
+    }
+    const rms = Math.sqrt(sum / timeData.length);
+    // Highly responsive curve for human voice
+    return Math.min(1, Math.max(0, rms * 6));
+  };
+
+  const getFrequencyBands = (bandCount: number = 13): number[] => {
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume().catch(() => {});
+    }
+    analyser.getByteFrequencyData(freqData);
+    const rmsVolume = getVolumeLevel();
+
+    // Human speech vocal formants (100Hz fundamental to 5000Hz harmonics)
+    const minFreq = 90;
+    const maxFreq = 5200;
+    const logMin = Math.log10(minFreq);
+    const logMax = Math.log10(maxFreq);
 
     const bands: number[] = [];
-    const step = Math.max(1, Math.floor(bufferLength / bandCount));
 
     for (let i = 0; i < bandCount; i++) {
+      const fStart = Math.pow(10, logMin + (i / bandCount) * (logMax - logMin));
+      const fEnd = Math.pow(10, logMin + ((i + 1) / bandCount) * (logMax - logMin));
+
+      const binStart = Math.max(0, Math.min(freqBufferLength - 1, Math.floor(fStart / binWidth)));
+      const binEnd = Math.max(binStart + 1, Math.min(freqBufferLength, Math.ceil(fEnd / binWidth)));
+
       let sum = 0;
       let count = 0;
-      for (let j = i * step; j < (i + 1) * step && j < bufferLength; j++) {
-        sum += dataArray[j];
+      for (let j = binStart; j < binEnd; j++) {
+        sum += freqData[j];
         count++;
       }
-      const avg = count > 0 ? sum / count : 0;
-      // Normalize to a value between 0.05 and 1.0
-      const normalized = Math.min(1, Math.max(0.05, avg / 255));
-      bands.push(normalized);
+
+      const rawAvg = count > 0 ? sum / count : 0;
+      // High-gain normalizer (normal voice is typically 20-90 byte value)
+      const normalized = Math.min(1, Math.max(0, rawAvg / 140));
+
+      // Formant sensitivity boost for mid frequencies (human vowels)
+      const formantMultiplier = 1 + Math.sin((i / bandCount) * Math.PI) * 0.4;
+      const amplified = Math.min(1, normalized * 1.8 * formantMultiplier);
+
+      // Blend with overall time-domain voice envelope
+      const finalLevel = Math.min(1, Math.max(0.02, amplified * 0.75 + rmsVolume * 0.45));
+      bands.push(finalLevel);
     }
 
     return bands;
@@ -74,11 +125,9 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
 
   const stop = () => {
     try {
-      stream.getTracks().forEach((track) => {
-        track.stop();
-      });
+      stream.getTracks().forEach((track) => track.stop());
       if (audioCtx.state !== "closed") {
-        audioCtx.close();
+        audioCtx.close().catch(() => {});
       }
     } catch (e) {
       console.warn("[Voice/Microphone] Error closing stream:", e);
@@ -90,6 +139,7 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
     audioCtx,
     analyser,
     getFrequencyBands,
+    getVolumeLevel,
     stop,
   };
 }

@@ -210,12 +210,12 @@ export default function ProfileModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 p-4 bg-black/15 flex items-center justify-center select-none"
+          className="fixed inset-0 z-50 p-4 bg-black/45 backdrop-blur-md saturate-[120%] flex items-center justify-center select-none"
           onMouseDown={onClose}
         >
           {/* Subtle soft localized glow behind the card */}
           <div
-            className="pointer-events-none fixed -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2 w-[400px] h-[460px] rounded-full blur-[60px]"
+            className="pointer-events-none fixed -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2 w-[440px] h-[500px] rounded-full blur-[80px] opacity-70"
             style={{ background: getProfileCardGradient().glow }}
           />
 
