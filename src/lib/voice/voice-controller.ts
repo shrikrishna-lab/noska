@@ -88,9 +88,11 @@ class VoiceController {
     this.state = "starting";
     this.error = null;
     this.time = 0;
+    this.notify();
 
     if (!isSpeechRecognitionSupported()) {
       const err = new Error("Speech recognition is not supported in this browser. Please use Chrome, Edge, or Arc.");
+      console.warn("[Voice] " + err.message);
       this.error = err;
       this.state = "error";
       this.notify();
@@ -117,6 +119,7 @@ class VoiceController {
           }
         },
         onError: (err) => {
+          console.warn("[Voice] Recognition error:", err.message);
           this.error = err;
           this.notify();
           options?.onError?.(err);
@@ -135,6 +138,8 @@ class VoiceController {
       this.state = "listening";
       this.notify();
 
+      console.log("[Voice] 🎤 Voice typing started");
+
       // Start elapsed timer
       this.timerId = setInterval(() => {
         this.time += 1;
@@ -152,6 +157,7 @@ class VoiceController {
     } catch (err: any) {
       this.cleanup();
       this.error = err instanceof Error ? err : new Error(String(err));
+      console.warn("[Voice] Failed to start:", this.error.message);
       this.state = "error";
       this.notify();
       options?.onError?.(this.error);
@@ -165,11 +171,11 @@ class VoiceController {
     this.notify();
   }
 
-  public toggle(options?: { onTranscript?: (text: string) => void; onError?: (err: Error) => void }) {
+  public async toggle(options?: { onTranscript?: (text: string) => void; onError?: (err: Error) => void }) {
     if (this.isListening) {
       this.stop();
     } else {
-      this.start(options);
+      await this.start(options);
     }
   }
 
@@ -209,7 +215,7 @@ class VoiceController {
       if (modifier && e.shiftKey && e.code === "Space") {
         e.preventDefault();
         e.stopPropagation();
-        this.toggle();
+        this.toggle().catch((err) => console.warn("[Voice] Shortcut toggle failed:", err));
       }
     });
   }
@@ -224,6 +230,10 @@ class VoiceController {
 
   public getFrequencyLevels(): number[] {
     return this.frequencyLevels;
+  }
+
+  public getError(): Error | null {
+    return this.error;
   }
 }
 

@@ -1125,9 +1125,17 @@ export default function Editor({
               )}
               <button
                 className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
-                  globalVoiceController.toggle();
+                  try {
+                    await globalVoiceController.toggle();
+                    const err = globalVoiceController.getError?.() || null;
+                    if (err) {
+                      onToast?.(`Voice typing error: ${err.message}`);
+                    }
+                  } catch (err: any) {
+                    onToast?.(`Voice typing failed: ${err?.message || "Unknown error"}`);
+                  }
                 }}
                 title="Toggle Voice Typing (Ctrl+Shift+Space)"
               >
