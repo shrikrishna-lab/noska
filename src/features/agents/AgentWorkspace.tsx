@@ -337,7 +337,7 @@ function PersonalAgentView({ pages, onToast }: { pages: unknown; onToast?: (m: s
             <input value={newSkill.name} onChange={e => setNewSkill(s => ({ ...s, name: e.target.value }))} placeholder="Skill name" className="w-full rounded bg-[var(--bg)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text)] outline-none" />
             <textarea value={newSkill.prompt} onChange={e => setNewSkill(s => ({ ...s, prompt: e.target.value }))} placeholder="Prompt the agent runs..." rows={2} className="w-full rounded bg-[var(--bg)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text)] outline-none resize-none" />
             <div className="flex gap-2">
-              <button onClick={() => { if (newSkill.name.trim()) { setSkills(prev => [...prev, { id: uid(), ...newSkill }]); setNewSkill({ name: '', prompt: '' }); setShowSkillEditor(false); }}} className="rounded bg-[var(--accent)] px-2.5 py-1 text-[10px] font-semibold text-white">Save Skill</button>
+              <button onClick={() => { if (newSkill.name.trim()) { setSkills(prev => [...prev, { id: uid(), ...newSkill }]); setNewSkill({ name: '', prompt: '' }); setShowSkillEditor(false); } }} className="rounded bg-[var(--accent)] px-2.5 py-1 text-[10px] font-semibold text-white">Save Skill</button>
               <button onClick={() => setShowSkillEditor(false)} className="text-[10px] text-[var(--muted)]">Cancel</button>
             </div>
           </div>
@@ -494,15 +494,15 @@ function AgentHealthBadge({ agentId, enabled }: { agentId: string; enabled: bool
   });
   const tone =
     health.status === "healthy" ? "text-[var(--success)]" :
-    health.status === "failing" ? "text-[var(--danger)]" :
-    health.status === "warning" ? "text-[var(--warning)]" : "text-[var(--muted)]";
+      health.status === "failing" ? "text-[var(--danger)]" :
+        health.status === "warning" ? "text-[var(--warning)]" : "text-[var(--muted)]";
   const dot =
     health.status === "healthy" ? "bg-[var(--success)]" :
-    health.status === "failing" ? "bg-[var(--danger)]" :
-    health.status === "warning" ? "bg-[var(--warning)]" : "bg-[var(--muted)]";
+      health.status === "failing" ? "bg-[var(--danger)]" :
+        health.status === "warning" ? "bg-[var(--warning)]" : "bg-[var(--muted)]";
   const label =
     health.status === "needs_configuration" ? "Needs setup"
-    : health.status.charAt(0).toUpperCase() + health.status.slice(1);
+      : health.status.charAt(0).toUpperCase() + health.status.slice(1);
   const reasons = `${label}: ${health.reasons.join(" · ")}`;
   return (
     <span title={reasons} className={`inline-flex items-center gap-1 text-[9px] font-semibold ${tone} shrink-0`}>
@@ -657,7 +657,7 @@ function AgentBuilder({ onSave, onCancel }: { pages: unknown; onSave: (draft: Ag
             <select value={accessForm.level} onChange={e => setAccessForm(a => ({ ...a, level: e.target.value }))} className="rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text)] outline-none">
               <option value="view">View</option><option value="full">Full Access</option>
             </select>
-            <button onClick={() => { if (accessForm.resourceId.trim()) { setForm(f => ({ ...f, accessGrants: [...f.accessGrants, { ...accessForm }] })); setAccessForm({ resourceType: 'page', resourceId: '', level: 'view' }); }}} className="rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[10px] font-semibold text-white"><Plus size={10} /></button>
+            <button onClick={() => { if (accessForm.resourceId.trim()) { setForm(f => ({ ...f, accessGrants: [...f.accessGrants, { ...accessForm }] })); setAccessForm({ resourceType: 'page', resourceId: '', level: 'view' }); } }} className="rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[10px] font-semibold text-white"><Plus size={10} /></button>
           </div>
         </div>
 

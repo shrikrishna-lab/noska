@@ -34,6 +34,7 @@ import {
   Code2,
   Mic,
   Cloud,
+  RotateCw,
   type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
@@ -43,6 +44,7 @@ import { PageIcon } from "./PageIcon";
 import ApiKeysManager from "../features/api/ApiKeysManager";
 import { aiManager } from "../ai/AIManager";
 import { getProviderList, testProviderConnection } from "../ai/providers";
+import { modelCatalogService } from "../ai/ModelCatalogService";
 import { getAgentList } from "../ai/agents";
 import {
   PROFILE_CARD_GRADIENTS_BY_CATEGORY,
@@ -1349,8 +1351,41 @@ function NoskaAISettings({
       </div>
 
       {/* ─── Providers Card ───────────────────────────────────────── */}
-      <div className="rounded-2xl bg-[#f8f6f0] p-6 shadow-sm divide-y divide-[#e8e4db]">
-        <div className="text-sm font-semibold text-[#1c1b18] pb-3">AI Providers</div>
+      <div className="rounded-2xl bg-[#f8f6f0] p-5 sm:p-6 shadow-sm divide-y divide-[#e8e4db] max-w-full overflow-hidden">
+        <div className="flex items-center justify-between pb-3 gap-2 flex-wrap">
+          <div>
+            <div className="text-sm font-semibold text-[#1c1b18] flex items-center gap-2">
+              <span>AI Providers</span>
+              <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Auto-Sync
+              </span>
+            </div>
+            <div className="text-xs text-[#706c64] mt-0.5">
+              Connect cloud API keys or local daemons. Models auto-sync in real time.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={async () => {
+              setTestingId("syncing");
+              try {
+                await modelCatalogService.fetchRealtimeCatalog(true);
+              } catch (err) {
+                console.warn(err);
+              } finally {
+                setTestingId(null);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#e8e4db] bg-white hover:bg-[#ede8df] text-xs font-semibold text-[#1c1b18] transition cursor-pointer shadow-xs shrink-0"
+            title="Force refresh models and live providers"
+          >
+            <RotateCw size={12} className={testingId === "syncing" ? "animate-spin text-purple-600" : ""} />
+            <span>Sync Models</span>
+          </button>
+        </div>
+
         {providerList.map((provider) => {
           const providerConfig = currentConfig.providers[provider.id] || {};
           const isActive = currentConfig.activeProvider === provider.id;
@@ -1359,12 +1394,12 @@ function NoskaAISettings({
           const isTesting = testingId === provider.id;
 
           return (
-            <div key={provider.id} className="py-4 first:pt-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className={`h-2 w-2 rounded-full flex-shrink-0 ${hasKey ? "bg-emerald-500" : "bg-[#b0aca3]"}`} />
-                  <div>
-                    <div className="flex items-center gap-2">
+            <div key={provider.id} className="py-4 first:pt-4 max-w-full overflow-hidden">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <div className={`h-2 w-2 rounded-full flex-shrink-0 mt-1.5 ${hasKey ? "bg-emerald-500" : "bg-[#b0aca3]"}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold text-[#1c1b18]">{provider.name}</span>
                       <span className="rounded-full bg-[#ede8df] px-2 py-0.5 text-[10px] text-[#706c64] font-semibold uppercase">
                         {provider.type}
@@ -1375,10 +1410,11 @@ function NoskaAISettings({
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-[#706c64] mt-0.5 truncate">
+                    {/* Wrapped model catalog text with responsive line wrapping */}
+                    <div className="text-[11.5px] text-[#706c64] mt-1 leading-relaxed break-words line-clamp-2 max-w-full">
                       {provider.models.length > 0
                         ? provider.models.map(m => m.name).join(", ")
-                        : provider.hasDiscover ? "Auto-discover models" : "No models"}
+                        : provider.hasDiscover ? "Auto-discover local models (Ollama / LM Studio)" : "No models configured"}
                     </div>
                   </div>
                 </div>
@@ -1386,7 +1422,7 @@ function NoskaAISettings({
                 {!isActive && hasKey && (
                   <button
                     onClick={() => handleSetActive(provider.id)}
-                    className="px-4 py-1.5 rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] text-[#1c1b18] text-xs font-semibold transition cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] text-[#1c1b18] text-xs font-semibold transition cursor-pointer shrink-0"
                   >
                     Select
                   </button>

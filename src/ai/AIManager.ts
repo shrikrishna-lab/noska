@@ -63,6 +63,8 @@ interface AISendOpts {
   pages?: any[];
   agent?: string;
   maxTokens?: number;
+  effort?: "low" | "medium" | "high";
+  thinking?: boolean;
 }
 
 interface AIConversationMessage {
@@ -78,6 +80,8 @@ interface AISendConversationOpts {
   pages?: any[];
   agent?: string;
   maxTokens?: number;
+  effort?: "low" | "medium" | "high";
+  thinking?: boolean;
 }
 
 interface AIStreamOpts extends AISendOpts {
@@ -142,6 +146,22 @@ class AIManager {
     this._healthCache = new Map();
     this._healthTimers = new Map();
     this._hasExplicitSelection = false;
+  }
+
+  _buildReasoningDirective(effort?: "low" | "medium" | "high", thinking?: boolean): string {
+    if (!effort && !thinking) return "";
+    let directive = "\n\n[REASONING ENGINE DIRECTIVE]";
+    if (effort === "low") {
+      directive += "\n- Reasoning Effort: LOW. Prioritize direct, concise, high-speed execution. Deliver direct answers with minimal preamble or redundant explanation.";
+    } else if (effort === "medium") {
+      directive += "\n- Reasoning Effort: MEDIUM. Provide balanced, structured, and comprehensive analysis with clear explanations and logical rationale.";
+    } else if (effort === "high") {
+      directive += "\n- Reasoning Effort: HIGH. Conduct deep, thorough reasoning. Analyze edge cases, explore alternative architectural paradigms, verify intermediate logic step-by-step, and synthesize high-depth solutions.";
+    }
+    if (thinking) {
+      directive += "\n- Deep Thinking Mode: Active. Perform internal chain-of-thought verification before formulating the final response.";
+    }
+    return directive;
   }
 
   /**
@@ -242,6 +262,14 @@ class AIManager {
    */
   setActiveModel(modelId: string | null) {
     this.config.activeModel = modelId;
+    if (modelId) {
+      for (const provider of getAllProviders()) {
+        if (provider.models.some((m) => m.id === modelId)) {
+          this.config.activeProvider = provider.id;
+          break;
+        }
+      }
+    }
     this._persist();
     this._notify();
   }
@@ -390,7 +418,10 @@ class AIManager {
   /**
    * Try sending to a specific provider, returns result or throws
    */
-  async _tryProvider(providerId, { system, messages, maxTokens }) {
+  /**
+   * Try sending to a specific provider, returns result or throws
+   */
+  async _tryProvider(providerId, { system, messages, maxTokens, effort, thinking }: { system?: string; messages: any[]; maxTokens?: number; effort?: "low" | "medium" | "high"; thinking?: boolean }) {
     const provider = getProvider(providerId);
     if (!provider) throw new Error(`Provider "${providerId}" not found`);
     const config = this.config.providers[providerId] || {};
@@ -402,7 +433,9 @@ class AIManager {
       model: providerId === this.config.activeProvider ? (this.config.activeModel || provider.defaultModel) : provider.defaultModel,
       system,
       messages,
-      maxTokens: maxTokens || this.config.maxTokens
+      maxTokens: maxTokens || this.config.maxTokens,
+      effort,
+      thinking
     });
   }
 
@@ -423,10 +456,6 @@ class AIManager {
 
   /**
    * Guard against AI hallucination by checking response claims against known workspace data
-   * @param {string} response - AI response text
-   * @param {Array} pages - Known workspace pages
-   * @param {Object} currentPage - Current page if any
-   * @returns {string} - Response with hallucination warning appended if suspicious
    */
   guardResponse(response, pages, currentPage) {
     if (!response || !pages) return response;
@@ -449,35 +478,6 @@ class AIManager {
       }
     }
 
-    // Check for quoted page titles that don't exist
-    const quoteMatches = response.match(/"([^"]+)"/g);
-    if (quoteMatches) {
-      for (const m of quoteMatches) {
-        const title = m.replace(/"/g, "").trim().toLowerCase();
-        if (title.length > 3 && !knownTitles.has(title) && !title.includes("current page") && !title.includes("workspace")) {
-          warnings.push(`${m}`);
-        }
-      }
-    }
-
-    // Check numeric page count claims
-    const countPatterns = [
-      /you have (\d+) pages/i,
-      /there are (\d+) pages/i,
-      /(\d+) pages in (your|the) workspace/i,
-      /total of (\d+) pages/i,
-      /(\d+) active pages/i
-    ];
-    for (const pattern of countPatterns) {
-      const match = lower.match(pattern);
-      if (match) {
-        const claimed = parseInt(match[1]);
-        if (claimed !== activeCount) {
-          warnings.push(`"${match[0].trim()}" (actual: ${activeCount})`);
-        }
-      }
-    }
-
     if (warnings.length > 0) {
       console.warn("AI response guard: potential hallucination detected", warnings);
     }
@@ -486,11 +486,7 @@ class AIManager {
   }
 
   /**
-   * Raw provider call used by the shared agent runtime. Unlike send/sendConversation
-   * this performs NO context building or agent persona injection — the caller owns
-   * the full prompt — and supports explicit provider/model overrides for model
-   * orchestration (fast/default/reasoning routing). Falls back through configured
-   * providers exactly like send().
+   * Raw provider call used by the shared agent runtime.
    */
   async sendRaw({ system, messages, maxTokens, providerId, modelId }: {
     system?: string;
@@ -510,8 +506,6 @@ class AIManager {
         if (!provider) continue;
         const config = this.config.providers[pid] || {};
         if (provider.requiresKey && !config.apiKey) continue;
-        // Explicit model override only applies to the requested provider;
-        // fallbacks always use their own defaults.
         const model = pid === primaryPid && modelId ? modelId : provider.defaultModel;
         const result = await provider.send({
           apiKey: config.apiKey,
@@ -521,15 +515,12 @@ class AIManager {
           messages,
           maxTokens: maxTokens || this.config.maxTokens
         });
-        // Some legacy providers return error banners as strings — treat those
-        // as failures so callers (agent runtime) never mistake them for output.
         if (looksLikeMockFailure(result)) {
           lastFriendlyError = extractMockError(result);
           continue;
         }
         return result;
       } catch (err) {
-        // Prefer provider-thrown messages (e.g. rate limit) over generic ones
         lastFriendlyError = err instanceof Error ? err.message : "provider failed";
       }
     }
@@ -538,10 +529,8 @@ class AIManager {
 
   /**
    * Send an AI request (non-streaming) with auto-fallback
-   * @param {Object} opts - { system?, prompt, page?, pages?, agent?, maxTokens? }
-   * @returns {Promise<string>}
    */
-  async send({ system, prompt, page, pages, agent, maxTokens }: AISendOpts) {
+  async send({ system, prompt, page, pages, agent, maxTokens, effort, thinking }: AISendOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
@@ -557,9 +546,10 @@ class AIManager {
       });
     }
 
-    // Build system prompt with agent persona
+    // Build system prompt with agent persona & reasoning directives
     const agentId = agent || this.config.activeAgent;
-    const fullSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
+    const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
+    const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
 
     // If no provider is configured, return mock
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
@@ -573,7 +563,7 @@ class AIManager {
 
     for (const pid of [this.config.activeProvider, ...fallbacks]) {
       try {
-        const result = await this._tryProvider(pid, { system: fullSystem, messages, maxTokens });
+        const result = await this._tryProvider(pid, { system: fullSystem, messages, maxTokens, effort, thinking });
         if (looksLikeMockFailure(result)) {
           lastError = extractMockError(result);
           this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
@@ -585,20 +575,16 @@ class AIManager {
       } catch (err) {
         lastError = err instanceof Error ? err.message : "provider failed";
         this._healthCache.set(pid, { status: "error", timestamp: Date.now() });
-        // Try next fallback
       }
     }
 
-    // Honest failure — the chat UI renders this as a real error message.
     throw new Error(lastError || "All AI providers failed");
   }
 
   /**
    * Send a multi-turn conversation
-   * @param {Object} opts - { system?, messages, page?, pages?, agent?, maxTokens? }
-   * @returns {Promise<string>}
    */
-  async sendConversation({ system, messages, page, pages, agent, maxTokens }: AISendConversationOpts) {
+  async sendConversation({ system, messages, page, pages, agent, maxTokens, effort, thinking }: AISendConversationOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
@@ -614,13 +600,13 @@ class AIManager {
     }
 
     const agentId = agent || this.config.activeAgent;
-    const fullSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
+    const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
+    const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
 
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
       return mockResponse("No AI provider configured");
     }
 
-    // Convert messages format: { role, text } → { role, content }
     const apiMessages = messages
       .filter(m => m.role === "user" || m.role === "assistant")
       .map(m => ({ role: m.role, content: m.text || m.content }));
@@ -632,24 +618,23 @@ class AIManager {
         model: this.config.activeModel || provider.defaultModel,
         system: fullSystem,
         messages: apiMessages,
-        maxTokens: maxTokens || this.config.maxTokens
+        maxTokens: maxTokens || this.config.maxTokens,
+        effort,
+        thinking
       });
       if (looksLikeMockFailure(result)) {
         throw new Error(extractMockError(result));
       }
       return this.guardResponse(result, pages, page);
     } catch (err) {
-      // Honest failure — panel catch blocks render friendly messages.
       throw new Error(err instanceof Error ? err.message : "AI request failed");
     }
   }
 
   /**
    * Stream an AI response
-   * @param {Object} opts - { system?, prompt, page?, pages?, agent?, maxTokens?, onChunk }
-   * @returns {Promise<string>} - Full accumulated response
    */
-  async stream({ system, prompt, messages, page, pages, agent, maxTokens, onChunk }: AIStreamOpts) {
+  async stream({ system, prompt, messages, page, pages, agent, maxTokens, effort, thinking, onChunk }: AIStreamOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider] || {};
 
@@ -665,7 +650,8 @@ class AIManager {
     }
 
     const agentId = agent || this.config.activeAgent;
-    const fullSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
+    const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
+    const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
 
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
       const fallback = mockResponse("No AI provider configured");
@@ -693,7 +679,9 @@ class AIManager {
           model: this.config.activeModel || provider.defaultModel,
           system: fullSystem,
           messages: apiMessages,
-          maxTokens: maxTokens || this.config.maxTokens
+          maxTokens: maxTokens || this.config.maxTokens,
+          effort,
+          thinking
         });
         for await (const chunk of iterator) {
           full += chunk;
@@ -715,7 +703,9 @@ class AIManager {
         model: this.config.activeModel || provider.defaultModel,
         system: fullSystem,
         messages: apiMessages,
-        maxTokens: maxTokens || this.config.maxTokens
+        maxTokens: maxTokens || this.config.maxTokens,
+        effort,
+        thinking
       });
       const guarded = this.guardResponse(result, pages, page);
       onChunk?.(guarded);

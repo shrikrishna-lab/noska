@@ -9,6 +9,8 @@ import {
   getRealAiModels,
 } from '../ui/ai-prompt-input';
 
+import LiveVoiceAssistant from './LiveVoiceAssistant';
+
 interface PromptComposerProps {
   prompt: string;
   setPrompt: (value: string) => void;
@@ -32,6 +34,41 @@ const WORKSPACE_PLACEHOLDERS = [
   "Brainstorm ideas or analyze structure...",
 ] as const;
 
+const SELECTION_STORAGE_KEY = "noska_active_model_selection";
+
+function getSavedModelSelection(models: any[]): AiModelSelection {
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem(SELECTION_STORAGE_KEY) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.id) {
+        const found = models.find((m) => m.id === parsed.id);
+        if (found) {
+          return {
+            id: found.id,
+            effort: parsed.effort || found.defaultEffort || "medium",
+            context: parsed.context || found.defaultContext || "128K",
+            fast: parsed.fast ?? found.defaultFast ?? true,
+            thinking: parsed.thinking ?? found.defaultThinking ?? false,
+          };
+        }
+      }
+    }
+  } catch {}
+
+  const activeModelId = aiManager.getActiveModel();
+  const found = activeModelId ? models.find((m) => m.id === activeModelId) : null;
+  const target = found || models[0];
+
+  return {
+    id: target?.id || "google/gemini-2.5-flash",
+    effort: target?.defaultEffort || "medium",
+    context: String(target?.defaultContext || "1M"),
+    fast: target?.defaultFast ?? true,
+    thinking: target?.defaultThinking ?? false,
+  };
+}
+
 export default function PromptComposer({
   prompt,
   setPrompt,
@@ -47,17 +84,19 @@ export default function PromptComposer({
   onToast,
 }: PromptComposerProps) {
   const models = useMemo(() => getRealAiModels(), []);
-  const initialModelId = aiManager.getActiveModel() || models[0]?.id || "anthropic/claude-sonnet-4-20250514";
-
-  const [modelSelection, setModelSelection] = useState<AiModelSelection>({
-    id: initialModelId,
-    effort: "high",
-    context: "200K",
-    fast: true,
-    thinking: false,
-  });
+  const [modelSelection, setModelSelection] = useState<AiModelSelection>(() => getSavedModelSelection(models));
   const [deepResearch, setDeepResearch] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
+
+  const handleModelSelectionChange = useCallback((next: AiModelSelection) => {
+    setModelSelection(next);
+    if (next?.id) {
+      aiManager.setActiveModel(next.id);
+      try {
+        localStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+    }
+  }, []);
 
   const handleSubmit = useCallback((value: string, selection: AiModelSelection) => {
     let finalPrompt = value;
@@ -77,6 +116,7 @@ export default function PromptComposer({
     }
   }, [setPrompt, page?.id]);
 
+  const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
   const status: AiPromptSendStatus = loading ? "loading" : "idle";
 
   return (
@@ -89,7 +129,7 @@ export default function PromptComposer({
         status={status}
         models={models}
         modelSelection={modelSelection}
-        onModelSelectionChange={setModelSelection}
+        onModelSelectionChange={handleModelSelectionChange}
         onOpenKeySetup={onOpenKeySetup}
         placeholders={WORKSPACE_PLACEHOLDERS}
         placeholderInterval={3200}
@@ -97,10 +137,20 @@ export default function PromptComposer({
         onDeepResearchChange={setDeepResearch}
         webSearch={webSearch}
         onWebSearchChange={setWebSearch}
+        onVoiceChange={(active) => setVoiceAssistantOpen(active)}
         onUploadFile={onUploadFile ?? (() => onToast?.("File uploader ready"))}
         onSkills={onSkills ?? (() => onToast?.("AI Skills activated"))}
         onConnectors={onConnectors ?? (() => onToast?.("Connectors ready"))}
         aria-label="AI prompt"
+      />
+
+      {/* 2-Way Conversational Voice Assistant Mode */}
+      <LiveVoiceAssistant
+        open={voiceAssistantOpen}
+        onClose={() => setVoiceAssistantOpen(false)}
+        page={page as any}
+        modelName={modelSelection.id}
+        onToast={onToast}
       />
 
       {/* Real-time processing feedback */}

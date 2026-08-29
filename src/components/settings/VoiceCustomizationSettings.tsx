@@ -33,6 +33,7 @@ import {
 } from "../../lib/voice/voice-settings";
 import { RealtimeEqualizer, StreamingWordText } from "../ui/voice-input";
 import { useVoiceController, globalVoiceController } from "../../lib/voice/voice-controller";
+import ElevenLabsVoiceSettings from "./ElevenLabsVoiceSettings";
 
 const THEMES: { id: PillTheme; label: string; bg: string; border: string; glow: string; desc: string }[] = [
   {
@@ -464,7 +465,7 @@ export default function VoiceCustomizationSettings() {
         </div>
 
         {/* 6. Smart Filler Word Cleaning */}
-        <div className="py-4 last:pb-0">
+        <div className="py-4">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold text-[#1c1b18]">Auto-Remove Filler Words</div>
@@ -480,7 +481,11 @@ export default function VoiceCustomizationSettings() {
             />
           </div>
         </div>
+
+        {/* 7. ElevenLabs Studio & Custom Voice Models Section */}
+        <ElevenLabsVoiceSettings />
       </div>
     </div>
   );
 }
+

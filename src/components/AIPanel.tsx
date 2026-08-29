@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Loader2, PanelLeftClose, PanelLeft, PanelRightOpen, PanelRightClose,
-  Key, Zap, MessageSquarePlus, Check, ExternalLink, Settings2
+  Key, Zap, MessageSquarePlus, Check, ExternalLink, Settings2,
+  Sparkles, BookOpen, Compass, Sliders, Layers, FileText,
+  ChevronDown, Search, Plus
 } from "lucide-react";
 import { aiManager } from "../ai/AIManager";
 import { getAgentList, getAgent, buildAgentPrompt } from "../ai/agents";
@@ -22,7 +24,20 @@ import PromptComposer from "./ai/PromptComposer";
 import ContextPanel from "./ai/ContextPanel";
 import CollabAura from "./ai/CollabAura";
 import ChatMessage from "./ai/ChatMessage";
-import type { AiModelSelection } from "./ui/ai-prompt-input";
+import { ProviderIcon, type AiModelSelection } from "./ui/ai-prompt-input";
+
+export function getSafePageIcon(icon?: string | null) {
+  if (!icon) return <span className="text-xs">📄</span>;
+  if (icon.startsWith("data:") || icon.startsWith("http")) {
+    return <img src={icon} alt="" className="w-3.5 h-3.5 object-cover rounded-xs" />;
+  }
+  return <span className="text-xs">{icon}</span>;
+}
+
+export function getSafePageTitle(title?: string | null) {
+  if (!title || title.startsWith("data:") || !title.trim()) return "Untitled";
+  return title;
+}
 
 interface ChatPanelMessage {
   role: string;
@@ -37,7 +52,7 @@ interface ChatPanelMessage {
 interface ToolCallResult {
   name: string;
   ok: boolean;
-  result?: { count?: number; [key: string]: unknown };
+  result?: { count?: number;[key: string]: unknown };
   error?: string;
   params: Record<string, unknown>;
 }
@@ -62,6 +77,7 @@ interface AIPanelProps {
   onInsert?: (blocks: Block[]) => void;
   onAppend?: (blocks: Block[]) => void;
   onReplaceText?: (text: string) => void;
+  onSelectPage?: (page: Page) => void;
   onToast?: (message: string) => void;
   toolContext?: unknown;
 }
@@ -81,6 +97,7 @@ export default function AIPanel({
   onRenameChat,
   onAppend,
   onReplaceText,
+  onSelectPage,
   onToast,
   toolContext
 }: AIPanelProps) {
@@ -91,6 +108,15 @@ export default function AIPanel({
   const [toolResults, setToolResults] = useState<ToolCallResult[]>([]);
   const [activeAgent, setActiveAgent] = useState("assistant");
   const [showSidebar, setShowSidebar] = useState(false);
+  const [pageMenuOpen, setPageMenuOpen] = useState(false);
+  const [pageSearch, setPageSearch] = useState("");
+  const [hoveredPage, setHoveredPage] = useState<Page | null>(null);
+
+  const filteredPages = useMemo(() => {
+    return (pages || []).filter(
+      (p) => !p.trashed && (!pageSearch.trim() || (p.title || "").toLowerCase().includes(pageSearch.toLowerCase()))
+    );
+  }, [pages, pageSearch]);
   const [showContext, setShowContext] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyInput, setKeyInput] = useState("");
@@ -134,7 +160,7 @@ export default function AIPanel({
   // Load audit events
   useEffect(() => {
     if (!page?.id) return;
-    auditEngine.getPageAudit(page.id, { limit: 20 }).then(setAuditEvents).catch(() => {});
+    auditEngine.getPageAudit(page.id, { limit: 20 }).then(setAuditEvents).catch(() => { });
   }, [page?.id]);
 
   // Typing indicator listener
@@ -244,21 +270,21 @@ export default function AIPanel({
       const nextChats: AIChat[] = existing
         ? aiChats.map((c) => (c.id === chatId ? { ...c, updatedAt: now() } : c))
         : [
-            {
-              id: chatId,
-              name: title,
-              pinned: false,
-              archived: false,
-              chatType: "private",
-              updatedAt: now(),
-              messages: [{ role: "user", text }],
-              pageId: page?.id ?? null,
-              pageTitle: page?.title ?? null,
-              collaborators: [],
-              createdAt: now()
-            } as AIChat,
-            ...aiChats
-          ];
+          {
+            id: chatId,
+            name: title,
+            pinned: false,
+            archived: false,
+            chatType: "private",
+            updatedAt: now(),
+            messages: [{ role: "user", text }],
+            pageId: page?.id ?? null,
+            pageTitle: page?.title ?? null,
+            collaborators: [],
+            createdAt: now()
+          } as AIChat,
+          ...aiChats
+        ];
       onChatsChange?.(nextChats);
 
       try {
@@ -278,6 +304,8 @@ export default function AIPanel({
           page: page || undefined,
           pages: pages || undefined,
           agent: activeAgent,
+          effort: selection?.effort || "medium",
+          thinking: selection?.thinking,
           onChunk: (chunk: string) => {
             setMessages((prev) => {
               const next = [...prev];
@@ -363,12 +391,12 @@ export default function AIPanel({
           prev.map((c) =>
             c.id === (activeChatId || chatId)
               ? {
-                  ...c,
-                  messages: finalMessages,
-                  pageId: c.pageId || page?.id,
-                  pageTitle: c.pageTitle || page?.title,
-                  updatedAt: now()
-                }
+                ...c,
+                messages: finalMessages,
+                pageId: c.pageId || page?.id,
+                pageTitle: c.pageTitle || page?.title,
+                updatedAt: now()
+              }
               : c
           )
         );
@@ -587,11 +615,10 @@ export default function AIPanel({
                           setActiveAgent(a.id);
                           setAgentMenuOpen(false);
                         }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left rounded-xl transition-colors ${
-                          activeAgent === a.id
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left rounded-xl transition-colors ${activeAgent === a.id
                             ? "bg-[var(--accent)]/15 text-[var(--text)] font-semibold"
                             : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-                        }`}
+                          }`}
                       >
                         <span
                           className="w-5 h-5 rounded-lg flex items-center justify-center text-xs shrink-0"
@@ -607,11 +634,184 @@ export default function AIPanel({
               </AnimatePresence>
             </div>
 
-            {/* Document Pill */}
+            {/* Interactive Document Page Switcher Pill */}
             {page && (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--surface-1)] border border-[var(--border)] text-xs text-[var(--text-secondary)]">
-                <span>{page.icon || "📄"}</span>
-                <span className="truncate max-w-[160px]">{page.title || "Untitled"}</span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPageMenuOpen(!pageMenuOpen)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface-1)] hover:bg-[var(--surface-2)] border border-[var(--border)] hover:border-[var(--border-strong)] text-xs text-[var(--text)] transition cursor-pointer shadow-2xs group"
+                  title="Click to switch active document context"
+                >
+                  <span className="flex items-center shrink-0">{getSafePageIcon(page.icon)}</span>
+                  <span className="truncate max-w-[140px] font-medium">{getSafePageTitle(page.title)}</span>
+                  <ChevronDown size={12} className={`text-[var(--muted)] transition-transform duration-200 ${pageMenuOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                <AnimatePresence>
+                  {pageMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 4, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                      onMouseLeave={() => setHoveredPage(null)}
+                      className="absolute left-0 top-full mt-2 w-72 sm:w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-2 shadow-2xl backdrop-blur-xl z-50 space-y-1.5"
+                    >
+                      {/* Search Bar */}
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]">
+                        <Search size={12} className="text-[var(--muted)] shrink-0" />
+                        <input
+                          type="text"
+                          autoFocus
+                          value={pageSearch}
+                          onChange={(e) => setPageSearch(e.target.value)}
+                          placeholder="Search pages..."
+                          className="w-full bg-transparent text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+                        />
+                      </div>
+
+                      {/* Page List with Live Content Preview */}
+                      <div className="max-h-64 overflow-y-auto scrollbar-thin space-y-1 pt-1">
+                        {filteredPages.map((p) => {
+                          const displayTitle = getSafePageTitle(p.title);
+                          
+                          // Extract inside text preview snippet
+                          const snippet = (p.blocks || [])
+                            .slice(0, 4)
+                            .map((b: any) => b.text || "")
+                            .filter(Boolean)
+                            .join(" ")
+                            .slice(0, 85);
+
+                          const isHovered = hoveredPage?.id === p.id;
+
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onMouseEnter={() => setHoveredPage(p)}
+                              onClick={() => {
+                                onSelectPage?.(p);
+                                setPageMenuOpen(false);
+                                setHoveredPage(null);
+                                setPageSearch("");
+                                onToast?.(`Switched active context to “${displayTitle}”`);
+                              }}
+                              className={`w-full flex items-start gap-2.5 p-2 rounded-xl text-left transition cursor-pointer ${
+                                p.id === page.id
+                                  ? "bg-[var(--accent)]/15 border border-[var(--accent)]/25 shadow-2xs"
+                                  : isHovered
+                                  ? "bg-[var(--surface-2)] text-[var(--text)] border border-[var(--border)]"
+                                  : "text-[var(--text-secondary)] hover:text-[var(--text)] border border-transparent"
+                              }`}
+                            >
+                              {/* Icon / Thumbnail */}
+                              <div className="w-5 h-5 rounded-md bg-[var(--surface-2)] flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
+                                {getSafePageIcon(p.icon)}
+                              </div>
+
+                              {/* Title & Inside Live Snippet Preview */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className={`text-xs truncate font-medium ${p.id === page.id ? "text-[var(--text)] font-semibold" : ""}`}>
+                                    {displayTitle}
+                                  </span>
+                                  {p.id === page.id && <Check size={12} className="text-[var(--accent)] shrink-0" />}
+                                </div>
+                                <p className="text-[10px] text-[var(--muted)] line-clamp-1 mt-0.5 leading-snug">
+                                  {snippet || "No content inside yet"}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                        {filteredPages.length === 0 && (
+                          <div className="text-center py-4 text-[11px] text-[var(--muted)]">
+                            No matching pages found
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Floating Live Inside Page Hover Preview Card ── */}
+                      <AnimatePresence>
+                        {hoveredPage && (
+                          <motion.div
+                            initial={{ opacity: 0, x: 8, scale: 0.97 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: 8, scale: 0.97 }}
+                            transition={{ duration: 0.15 }}
+                            className="hidden md:block absolute left-[calc(100%+8px)] top-0 w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-2xl backdrop-blur-2xl z-50 text-left space-y-3"
+                          >
+                            {/* Header / Cover */}
+                            <div className="space-y-1.5 pb-2 border-b border-[var(--border)]">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-sm shrink-0">
+                                  {getSafePageIcon(hoveredPage.icon)}
+                                </div>
+                                <h4 className="text-xs font-bold text-[var(--text)] truncate">
+                                  {getSafePageTitle(hoveredPage.title)}
+                                </h4>
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-[var(--muted)]">
+                                <span>{(hoveredPage.blocks || []).length} blocks</span>
+                                <span>•</span>
+                                <span>Active Workspace Document</span>
+                              </div>
+                            </div>
+
+                            {/* Formatted Inside Blocks Live Snapshot */}
+                            <div className="space-y-1.5 max-h-56 overflow-y-auto scrollbar-thin text-xs">
+                              {(hoveredPage.blocks || []).length > 0 ? (
+                                (hoveredPage.blocks || []).slice(0, 6).map((b: any, idx: number) => {
+                                  const text = b.text || "";
+                                  if (!text.trim()) return null;
+
+                                  if (b.type === "heading_1" || b.type === "heading_2") {
+                                    return (
+                                      <p key={b.id || idx} className="font-bold text-[var(--text)] text-xs pt-1">
+                                        {text}
+                                      </p>
+                                    );
+                                  }
+                                  if (b.type === "bullet_list" || b.type === "todo") {
+                                    return (
+                                      <div key={b.id || idx} className="flex items-start gap-1.5 text-[11px] text-[var(--text-secondary)]">
+                                        <span className="text-[var(--accent)]">•</span>
+                                        <span className="line-clamp-2 leading-relaxed">{text}</span>
+                                      </div>
+                                    );
+                                  }
+                                  if (b.type === "callout") {
+                                    return (
+                                      <div key={b.id || idx} className="p-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[11px] text-[var(--text)]">
+                                        {text}
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <p key={b.id || idx} className="text-[11px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
+                                      {text}
+                                    </p>
+                                  );
+                                })
+                              ) : (
+                                <div className="py-6 text-center text-xs text-[var(--muted)] italic">
+                                  Empty page — no text content yet
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Footer Tag */}
+                            <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[10px] text-[var(--muted)] font-medium">
+                              <span className="text-[var(--accent)]">✦ Click to select</span>
+                              <span>Live Preview</span>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             )}
           </div>
@@ -632,11 +832,10 @@ export default function AIPanel({
             <button
               type="button"
               onClick={() => setShowKeyModal(true)}
-              className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors border ${
-                isConfigured
+              className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors border ${isConfigured
                   ? "bg-[var(--surface-1)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border)]"
                   : "bg-[var(--accent)]/15 hover:bg-[var(--accent)]/25 text-[var(--text)] border-[var(--accent)]/30 font-medium"
-              }`}
+                }`}
             >
               <Key size={12} className={isConfigured ? "text-[var(--success)]" : "text-[var(--accent)]"} />
               <span>{isConfigured ? (modelName || providerName) : "Setup API Key"}</span>
@@ -647,11 +846,10 @@ export default function AIPanel({
             <button
               type="button"
               onClick={() => setShowContext(!showContext)}
-              className={`p-2 rounded-xl transition-colors ${
-                showContext
+              className={`p-2 rounded-xl transition-colors ${showContext
                   ? "text-[var(--accent)] bg-[var(--accent)]/15"
                   : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
-              }`}
+                }`}
               title="Page Context"
             >
               {showContext ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
@@ -669,40 +867,228 @@ export default function AIPanel({
         </header>
 
         {/* Clean Center Stage */}
-        <div className="flex-1 flex flex-col justify-between overflow-y-auto relative scrollbar-thin select-text">
-          {!hasMessages ? (
-            /* Pristine Centered Minimal Hero (ChatGPT / Perplexity / Cursor style) */
-            <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 max-w-2xl mx-auto w-full">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.25 }}
-                className="flex flex-col items-center text-center mb-8"
-              >
-                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--text)]">
-                  What can I help you with?
-                </h1>
-                <p className="text-sm text-[var(--muted)] mt-1.5 max-w-sm leading-relaxed">
-                  Search your workspace, write docs, or brainstorm ideas.
-                </p>
-              </motion.div>
+        <div className="flex-1 flex flex-col justify-between overflow-y-auto relative scrollbar-thin select-text bg-[#faf9f6] dark:bg-[#121214] bg-[radial-gradient(#e4e1d8_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:24px_24px]">
+          {/* Top Left Floating Quick Navigation Icon Dock */}
+          {!hasMessages && (
+            <div className="absolute top-4 left-4 hidden sm:block z-30">
+              <div className="rounded-2xl bg-white/95 dark:bg-[#1c1c20]/95 backdrop-blur-md p-1.5 shadow-[0_6px_24px_rgba(0,0,0,0.06)] border border-[#e8e4db] dark:border-white/10 flex flex-col items-center gap-1">
+                {/* Brand Icon Header */}
+                <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400 mb-0.5" title="Noska AI">
+                  <Sparkles size={15} />
+                </div>
 
-              {/* Centered Floating Prompt Input */}
-              <div className="w-full">
-                <PromptComposer
-                  prompt={prompt}
-                  setPrompt={setPrompt}
-                  onSend={handleSend}
-                  loading={loading}
-                  onAbort={() => setLoading(false)}
-                  currentAgent={currentAgent}
-                  page={page}
-                  onOpenKeySetup={(providerId) => {
-                    if (providerId) setKeyProvider(providerId);
-                    setShowKeyModal(true);
-                  }}
-                  onToast={onToast}
-                />
+                <div className="w-6 h-[1px] bg-[#e8e4db] dark:bg-white/10 my-0.5" />
+
+                {/* 1. Workspace Brief */}
+                <div className="relative group">
+                  <button
+                    onClick={() => {
+                      setPrompt("Summarize all key workspace updates and priorities.");
+                      handleSend("Summarize all key workspace updates and priorities.");
+                    }}
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#706c64] dark:text-white/70 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
+                    aria-label="Workspace Brief"
+                  >
+                    <BookOpen size={15} />
+                  </button>
+                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-md z-50">
+                    Workspace Brief
+                  </div>
+                </div>
+
+                {/* 2. Doc Creator */}
+                <div className="relative group">
+                  <button
+                    onClick={() => {
+                      setPrompt("Draft a comprehensive technical document for this project.");
+                      handleSend("Draft a comprehensive technical document for this project.");
+                    }}
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#706c64] dark:text-white/70 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
+                    aria-label="Doc Creator"
+                  >
+                    <FileText size={15} />
+                  </button>
+                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-md z-50">
+                    Doc Creator
+                  </div>
+                </div>
+
+                {/* 3. Deep Research */}
+                <div className="relative group">
+                  <button
+                    onClick={() => {
+                      setPrompt("Conduct deep research and analyze missing requirements.");
+                      handleSend("Conduct deep research and analyze missing requirements.");
+                    }}
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#706c64] dark:text-white/70 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
+                    aria-label="Deep Research"
+                  >
+                    <Compass size={15} />
+                  </button>
+                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-md z-50">
+                    Deep Research
+                  </div>
+                </div>
+
+                {/* 4. AI Settings */}
+                <div className="relative group">
+                  <button
+                    onClick={() => setShowKeyModal(true)}
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#706c64] dark:text-white/70 hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
+                    aria-label="AI Settings"
+                  >
+                    <Sliders size={15} />
+                  </button>
+                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1 rounded-lg bg-[#1c1b18] text-white text-[11px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-md z-50">
+                    AI Settings
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!hasMessages ? (
+            /* Pristine Visual Moodboard & AI Hub (Kiko / Wispr Flow Style) */
+            <div className="flex-1 flex flex-col items-center justify-between px-4 sm:px-8 py-8 max-w-5xl mx-auto w-full relative z-10 min-h-[640px]">
+              {/* Main Center Content */}
+              <div className="w-full flex flex-col items-center text-center my-auto space-y-7 pt-4">
+                {/* Hero Title */}
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-2 max-w-xl mx-auto"
+                >
+                  <h1 className="text-3xl sm:text-4xl md:text-[46px] font-bold tracking-tight text-[#1c1b18] dark:text-white leading-[1.15] font-sans">
+                    Describe the task.
+                    <br />
+                    <span className="inline-flex items-center gap-2">
+                      We'll craft the output <span className="text-3xl sm:text-4xl">✦</span>
+                    </span>
+                  </h1>
+                  <p className="text-xs sm:text-sm text-[#706c64] dark:text-white/70 font-medium pt-1">
+                    Instant synthesis, technical specs, deep research, and creative workflows
+                  </p>
+                </motion.div>
+
+                {/* ── Fan-Spread Interactive Noska AI Superpower Cards ── */}
+                <div className="w-full flex items-center justify-center gap-3 sm:gap-4 py-2 px-2 overflow-x-auto scrollbar-none">
+                  {[
+                    {
+                      title: "Smart Summary",
+                      tag: "SYNTHESIS",
+                      icon: "📝",
+                      desc: "Key takeaways, priorities, and structured outline.",
+                      colors: ["#ea580c", "#f97316", "#fb923c", "#fed7aa"],
+                      rotate: "-rotate-6",
+                      hoverRotate: "hover:rotate-0",
+                      promptText: "Summarize the key takeaways, decisions, and action items from this workspace.",
+                      bgGradient: "from-amber-100 via-orange-100 to-amber-200",
+                    },
+                    {
+                      title: "Specs & PRDs",
+                      tag: "SPEC WRITER",
+                      icon: "📐",
+                      desc: "Architecture blueprints, user flows, and data schemas.",
+                      colors: ["#db2777", "#f472b6", "#fbcfe8", "#fdf2f8"],
+                      rotate: "-rotate-2",
+                      hoverRotate: "hover:rotate-0",
+                      promptText: "Draft a detailed Product Requirements Document (PRD) with architecture specs and API design.",
+                      bgGradient: "from-pink-100 via-rose-100 to-purple-100",
+                    },
+                    {
+                      title: "Deep Research",
+                      tag: "RESEARCH",
+                      icon: "🔬",
+                      desc: "Cross-reference multi-page notes, citations, and web facts.",
+                      colors: ["#15803d", "#22c55e", "#86efac", "#dcfce7"],
+                      rotate: "rotate-2",
+                      hoverRotate: "hover:rotate-0",
+                      promptText: "Perform deep research across all workspace notes and synthesize comprehensive findings.",
+                      bgGradient: "from-emerald-100 via-teal-100 to-amber-100",
+                    },
+                    {
+                      title: "Creative Ideation",
+                      tag: "BRAINSTORM",
+                      icon: "💡",
+                      desc: "Break through creative blocks with fresh angles & drafts.",
+                      colors: ["#4338ca", "#6366f1", "#a5b4fc", "#e0e7ff"],
+                      rotate: "rotate-6",
+                      hoverRotate: "hover:rotate-0",
+                      promptText: "Brainstorm 8 innovative approaches and creative solutions for our current project.",
+                      bgGradient: "from-indigo-100 via-sky-100 to-violet-100",
+                    },
+                  ].map((card, idx) => (
+                    <motion.div
+                      key={card.title}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.08, duration: 0.3 }}
+                      whileHover={{ scale: 1.08, y: -8, zIndex: 30 }}
+                      onClick={() => {
+                        setPrompt(card.promptText);
+                        handleSend(card.promptText);
+                      }}
+                      className={`w-40 sm:w-44 shrink-0 rounded-2xl bg-white dark:bg-[#1c1c20] p-3 shadow-md hover:shadow-xl border border-[#e8e4db] dark:border-white/10 cursor-pointer transition-all duration-200 text-left ${card.rotate} ${card.hoverRotate}`}
+                    >
+                      {/* Image Preview Collage Thumbnail */}
+                      <div className={`h-24 sm:h-28 w-full rounded-xl bg-gradient-to-br ${card.bgGradient} p-2.5 flex flex-col justify-between overflow-hidden shadow-inner mb-2.5 border border-black/5`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-black/70 bg-white/80 backdrop-blur-xs px-1.5 py-0.5 rounded-md font-mono">
+                            {card.tag}
+                          </span>
+                          <span className="text-sm">{card.icon}</span>
+                        </div>
+                        <div className="space-y-1 opacity-75">
+                          <div className="h-2.5 w-3/4 rounded bg-white/80" />
+                          <div className="h-2 w-1/2 rounded bg-black/15" />
+                        </div>
+                      </div>
+
+                      {/* Color Palette Dots */}
+                      <div className="flex items-center gap-1 mb-1.5">
+                        {card.colors.map((c, i) => (
+                          <span
+                            key={i}
+                            className="w-2.5 h-2.5 rounded-full border border-black/10 shadow-2xs"
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Title & Description */}
+                      <h4 className="text-xs font-bold text-[#1c1b18] dark:text-white">
+                        {card.title}
+                      </h4>
+                      <p className="text-[10px] text-[#706c64] dark:text-white/60 line-clamp-2 mt-0.5 leading-snug">
+                        {card.desc}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Centered Floating Prompt Input Composer */}
+                <div className="w-full max-w-2xl mx-auto pt-2">
+                  <PromptComposer
+                    prompt={prompt}
+                    setPrompt={setPrompt}
+                    onSend={handleSend}
+                    loading={loading}
+                    onAbort={() => setLoading(false)}
+                    currentAgent={currentAgent}
+                    page={page}
+                    onOpenKeySetup={(providerId) => {
+                      if (providerId) setKeyProvider(providerId);
+                      setShowKeyModal(true);
+                    }}
+                    onToast={onToast}
+                  />
+                </div>
+              </div>
+
+              {/* Bottom Subtle Footer Credit */}
+              <div className="text-[11px] font-medium text-[#a09c94] dark:text-white/40 pt-4">
+                Built with Intelligence · Noska AI
               </div>
             </div>
           ) : (
@@ -784,11 +1170,11 @@ export default function AIPanel({
         onToggle={() => setShowContext(!showContext)}
       />
 
-      {/* Built-in Minimal API Key & Local Provider Setup Dialog */}
+      {/* Built-in AI Provider & Model Setup Dialog */}
       <AnimatePresence>
         {showKeyModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
             onClick={() => setShowKeyModal(false)}
           >
             <motion.div
@@ -796,118 +1182,198 @@ export default function AIPanel({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg rounded-3xl bg-[var(--surface-1)] border border-[var(--border)] p-6 shadow-2xl space-y-4"
+              className="w-full max-w-2xl rounded-3xl bg-[#fcfbf9] dark:bg-[#18181a] border border-[#e8e4db] dark:border-[#2e2e33] p-6 shadow-2xl space-y-5 text-left"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-semibold text-[var(--text)]">AI Provider & Model Setup</h3>
-                  <p className="text-xs text-[var(--muted)] mt-0.5">
-                    Connect cloud API keys or local AI engines (Ollama / LM Studio).
-                  </p>
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <div className="size-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                      <Sparkles size={16} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-[#1c1b18] dark:text-[#ececec]">AI Provider & Model Setup</h3>
+                      <p className="text-xs text-[#706c64] dark:text-[#a09c94]">
+                        Connect cloud AI engines or local offline models (Ollama / LM Studio).
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowKeyModal(false)}
-                  className="p-1.5 rounded-xl text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
+                  className="p-1.5 rounded-xl text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors cursor-pointer"
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-medium text-[var(--text-secondary)]">
-                      Select Provider
-                    </label>
-                    <span className="text-[10px] text-[var(--muted)]">
-                      {providers.find((p) => p.id === keyProvider)?.type === "local" ? "💻 Local Offline" : "☁️ Cloud Provider"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-48 overflow-y-auto p-1 border border-[var(--border)] rounded-2xl bg-[var(--surface-2)]/30 scrollbar-thin">
-                    {providers.map((p) => {
-                      const isSelected = keyProvider === p.id;
-                      const isLocal = p.type === "local";
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            setKeyProvider(p.id);
-                            if (isLocal) {
-                              setKeyInput(p.baseUrl);
-                            } else {
-                              setKeyInput("");
-                            }
-                          }}
-                          className={`p-2 rounded-xl text-xs font-medium transition-all text-left flex flex-col justify-between gap-1 border ${
-                            isSelected
-                              ? "bg-[var(--accent)]/15 text-[var(--text)] border-[var(--accent)]/40 font-semibold shadow-2xs"
-                              : "bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text)] border-transparent"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full">
-                            <span className="truncate">{p.name}</span>
-                            {isLocal && <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-500">Local</span>}
-                          </div>
-                          <span className="text-[9px] text-[var(--muted)] font-normal">
-                            {p.models?.length || 0} models
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Provider Grid */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-[#706c64] dark:text-[#a09c94]">
+                    Select Provider
+                  </label>
+                  <span className="text-[11px] text-[#706c64] dark:text-[#a09c94] font-medium">
+                    {providers.find((p) => p.id === keyProvider)?.type === "local" ? "💻 Local Offline Engine" : "☁️ Cloud Provider"}
+                  </span>
                 </div>
 
-                {providers.find((p) => p.id === keyProvider)?.type === "local" ? (
-                  <div>
-                    <label className="text-xs font-medium text-[var(--text-secondary)] block mb-1.5">
-                      Local Server Base URL
-                    </label>
-                    <input
-                      type="text"
-                      autoFocus
-                      placeholder={providers.find((p) => p.id === keyProvider)?.baseUrl || "http://localhost:11434"}
-                      value={keyInput || providers.find((p) => p.id === keyProvider)?.baseUrl || ""}
-                      onChange={(e) => setKeyInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveApiKey();
-                      }}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)]/50 transition-colors font-mono"
-                    />
-                    <p className="text-[11px] text-[var(--muted)] mt-1">
-                      Runs locally on your device with zero API keys required. Ensure the local daemon is active.
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="text-xs font-medium text-[var(--text-secondary)] block mb-1.5">
-                      {providers.find((p) => p.id === keyProvider)?.name} API Key
-                    </label>
-                    <input
-                      type="password"
-                      autoFocus
-                      placeholder={providers.find((p) => p.id === keyProvider)?.keyPlaceholder || "Paste API key..."}
-                      value={keyInput}
-                      onChange={(e) => setKeyInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveApiKey();
-                      }}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)]/50 transition-colors font-mono"
-                    />
-                    <p className="text-[11px] text-[var(--muted)] mt-1">
-                      Stored securely in your local browser storage and used for workspace requests.
-                    </p>
-                  </div>
-                )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1.5 border border-[#e8e4db] dark:border-[#2e2e33] rounded-2xl bg-[#ede8df]/30 dark:bg-[#232328]/30 scrollbar-thin">
+                  {providers.map((p) => {
+                    const isSelected = keyProvider === p.id;
+                    const isLocal = p.type === "local";
+                    const isConfigured = isLocal || Boolean(aiManager.config?.providers?.[p.id]?.apiKey);
+
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setKeyProvider(p.id);
+                          if (isLocal) {
+                            setKeyInput(p.baseUrl);
+                          } else {
+                            setKeyInput(aiManager.config?.providers?.[p.id]?.apiKey || "");
+                          }
+                        }}
+                        className={`p-2.5 rounded-2xl text-xs transition-all text-left flex items-center justify-between gap-2.5 border cursor-pointer ${
+                          isSelected
+                            ? "bg-[#ede8df] dark:bg-white/15 text-[#1c1b18] dark:text-white border-[#ded8cb] dark:border-white/20 font-semibold shadow-xs"
+                            : "bg-white/70 dark:bg-[#232328]/80 text-[#1c1b18] dark:text-[#ececec] hover:bg-[#ede8df]/60 dark:hover:bg-white/5 border-[#e8e4db] dark:border-[#2e2e33]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <ProviderIcon providerId={p.id} className="size-7 shrink-0" />
+                          <div className="flex flex-col min-w-0">
+                            <span className="truncate font-semibold text-[11px]">{p.name}</span>
+                            <span className="text-[9px] text-[#706c64] dark:text-[#a09c94] truncate">
+                              {isLocal ? "Local Engine" : `${p.models?.length || 0} models`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 flex items-center">
+                          {isConfigured ? (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold">
+                              Ready
+                            </span>
+                          ) : (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/15 text-sky-700 dark:text-sky-400 font-medium">
+                              Setup
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
+              {/* Active Provider Configurator Form */}
+              {(() => {
+                const currentProvider = providers.find((p) => p.id === keyProvider);
+                const isLocal = currentProvider?.type === "local";
+                const keyUrls: Record<string, string> = {
+                  openrouter: "https://openrouter.ai/keys",
+                  gemini: "https://aistudio.google.com/app/apikey",
+                  openai: "https://platform.openai.com/api-keys",
+                  anthropic: "https://console.anthropic.com/settings/keys",
+                  groq: "https://console.groq.com/keys",
+                  deepseek: "https://platform.deepseek.com/api_keys",
+                  mistral: "https://console.mistral.ai/api-keys/",
+                  together: "https://api.together.ai/settings/api-keys",
+                  xai: "https://console.x.ai/",
+                  nvidia: "https://build.nvidia.com/"
+                };
+                const keyUrl = currentProvider ? keyUrls[currentProvider.id] : null;
+
+                if (isLocal) {
+                  return (
+                    <div className="space-y-2 p-3.5 rounded-2xl bg-[#ede8df]/40 dark:bg-[#232328]/50 border border-[#e8e4db] dark:border-[#2e2e33]">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#1c1b18] dark:text-[#ececec]">
+                          {currentProvider?.name} Server URL
+                        </label>
+                        <div className="flex items-center gap-1.5 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setKeyInput("http://localhost:11434")}
+                            className="px-2 py-0.5 rounded-md bg-[#ede8df] dark:bg-white/10 text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white transition font-mono cursor-pointer"
+                          >
+                            Ollama (:11434)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setKeyInput("http://localhost:1234/v1")}
+                            className="px-2 py-0.5 rounded-md bg-[#ede8df] dark:bg-white/10 text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white transition font-mono cursor-pointer"
+                          >
+                            LM Studio (:1234)
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder={currentProvider?.baseUrl || "http://localhost:11434"}
+                        value={keyInput || currentProvider?.baseUrl || ""}
+                        onChange={(e) => setKeyInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveApiKey();
+                        }}
+                        className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-[#1c1b18] border border-[#e8e4db] dark:border-[#2e2e33] text-xs text-[#1c1b18] dark:text-[#ececec] placeholder:text-[#a09c94] outline-none focus:border-[#1c1b18]/40 dark:focus:border-white/40 transition-colors font-mono"
+                      />
+                      <p className="text-[11px] text-[#706c64] dark:text-[#a09c94]">
+                        Zero cloud keys required. Ensure your local daemon is running locally on your device.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-[#ede8df]/40 dark:bg-[#232328]/50 border border-[#e8e4db] dark:border-[#2e2e33]">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-[#1c1b18] dark:text-[#ececec]">
+                        {currentProvider?.name} API Key
+                      </label>
+                      {keyUrl && (
+                        <a
+                          href={keyUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 hover:underline font-medium cursor-pointer"
+                        >
+                          <span>Get {currentProvider?.name} Key</span>
+                          <ExternalLink size={10} />
+                        </a>
+                      )}
+                    </div>
+                    <div className="relative flex items-center">
+                      <input
+                        type="password"
+                        autoFocus
+                        placeholder={currentProvider?.keyPlaceholder || "Paste API key..."}
+                        value={keyInput}
+                        onChange={(e) => setKeyInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveApiKey();
+                        }}
+                        className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-[#1c1b18] border border-[#e8e4db] dark:border-[#2e2e33] text-xs text-[#1c1b18] dark:text-[#ececec] placeholder:text-[#a09c94] outline-none focus:border-[#1c1b18]/40 dark:focus:border-white/40 transition-colors font-mono pr-8"
+                      />
+                    </div>
+                    <p className="text-[11px] text-[#706c64] dark:text-[#a09c94]">
+                      Stored locally in your browser and used securely for workspace reasoning & completions.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#e8e4db] dark:border-[#2e2e33]">
                 <button
                   type="button"
                   onClick={() => setShowKeyModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-[#706c64] dark:text-[#a09c94] hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -918,7 +1384,7 @@ export default function AIPanel({
                     (!keyInput.trim() || testingKey)
                   }
                   onClick={handleSaveApiKey}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-[var(--foreground)] text-[var(--background)] hover:opacity-90 transition-all disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-semibold bg-[#1c1b18] hover:bg-black dark:bg-white dark:text-[#18181a] text-white transition-all disabled:opacity-40 cursor-pointer shadow-xs"
                 >
                   {testingKey ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                   <span>Save & Connect</span>

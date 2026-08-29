@@ -1,22 +1,39 @@
 // ============================================================================
-// Noska MCP v4 — full native control layer over the real Noska platform.
+// Noska MCP v5 — production choke point.
 //
-// Deploy: supabase functions deploy mcp --no-verify-jwt
-// Auth:    Authorization: Bearer nsk_… (user_api_keys, SHA-256 hashed)
-// Design:  thin server over tools.ts capability registry. Mutations are
-//          verified against persisted state; RED-risk ops require
-//          confirm:true; optional idempotency_key prevents duplicate
-//          mutations via the api_idempotency_keys table.
+// Every JSON-RPC request flows through, in order:
+//   authenticate → resolve tool → POLICY → RATE LIMIT → EXECUTION BUDGET
+//   → handler → VERIFY → AUDIT
+//
+// Policy decisions live in _shared/mcp/policy.ts — never in tools.
+// Audit rows never contain secrets or full arguments.
 // ============================================================================
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { authenticate, requireScope, McpError, type KeyRow, db } from "./shared.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { authenticate, McpError, type KeyRow } from "./shared.ts";
 import { PlatformError } from "../_shared/core/pure.ts";
+import { assertWorkspaceAccess } from "../_shared/capabilities/platform.ts";
+import {
+  authorizeTool, authorizeWorkspaceAction, PolicyError,
+  type PolicyTool, type WorkspaceContext,
+} from "../_shared/mcp/policy.ts";
 import { TOOLS } from "./tools.ts";
 import { TOOLS_V5 } from "./tools-v5.ts";
+import { TOOLS_V6, RESOURCES, PROMPTS, readResource, getPrompt } from "./tools-v6.ts";
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SERVER_NAME = "noska";
-const SERVER_VERSION = "5.0.0";
+const SERVER_VERSION = "5.1.0";
+
+const ALL_TOOLS = [...TOOLS, ...TOOLS_V5, ...TOOLS_V6];
+const RATE_LIMIT_PER_MINUTE = 120;
+const EXECUTIONS_PER_HOUR = 20;
+
+const svc = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+);
 
 function cors(origin: string): Record<string, string> {
   return {
@@ -34,8 +51,84 @@ interface RpcRequest {
   params?: Record<string, unknown>;
 }
 const rpcOk = (id: RpcRequest["id"], result: unknown) => ({ jsonrpc: "2.0", id, result });
-const rpcErr = (id: RpcRequest["id"], code: number | string, message: string) =>
-  ({ jsonrpc: "2.0", id, error: { code, message } });
+const rpcErr = (id: RpcRequest["id"], code: number | string, message: string, data?: unknown) =>
+  ({ jsonrpc: "2.0", id, error: { code, message, ...(data ? { data } : {}) } });
+
+/** Translate auth failures into the stable error contract (§34). */
+function authCodeFromMessage(message: string): string {
+  if (/revoked/i.test(message)) return "TOKEN_REVOKED";
+  if (/expired/i.test(message)) return "TOKEN_EXPIRED";
+  return "AUTH_REQUIRED";
+}
+
+/** Fixed-window rate limit, shared with the REST API budget. */
+async function rateLimit(key: KeyRow): Promise<void> {
+  const windowStart = new Date(Math.floor(Date.now() / 60000) * 60000).toISOString();
+  const { data, error } = await svc.rpc("consume_api_rate_limit", {
+    p_api_key_id: key.id,
+    p_window_start: windowStart,
+  });
+  if (error) {
+    console.error("[mcp] rate-limit rpc failed:", error.message);
+    return; // fail open, logged
+  }
+  if (Number(data ?? 0) > RATE_LIMIT_PER_MINUTE) {
+    const reset = Math.ceil(windowStart ? new Date(windowStart).getTime() / 1000 : 0) + 60;
+    throw PolicyErrors.rateLimited(Math.max(1, reset - Math.floor(Date.now() / 1000)));
+  }
+}
+
+/** Execution tools get a hard hourly budget per credential. */
+async function executionBudget(key: KeyRow): Promise<void> {
+  const since = new Date(Date.now() - 3_600_000).toISOString();
+  const { count, error } = await svc
+    .from("agent_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", key.user_id)
+    .gte("created_at", since);
+  if (error) return; // fail open, logged
+  if ((count ?? 0) >= EXECUTIONS_PER_HOUR) {
+    throw PolicyErrors.executionBudget(EXECUTIONS_PER_HOUR);
+  }
+}
+
+/** Workspace tools validate the requested workspace and map risk→action. */
+async function workspaceGuard(tool: PolicyTool, args: Record<string, unknown>): Promise<void> {
+  if (tool.group !== "workspace") return;
+  const wsId = typeof args.workspace_id === "string" && args.workspace_id.trim()
+    ? args.workspace_id.trim()
+    : null;
+  if (!wsId) return; // list-style tools scope to the user
+  const ws = await assertWorkspaceAccess(args.__userId as string, wsId);
+  const isOwner = ws.owner_id === args.__userId;
+  const { data: member } = await svc.from("workspace_members")
+    .select("role").eq("workspace_id", wsId).eq("user_id", args.__userId).maybeSingle();
+  const role = (isOwner ? "owner" : (member?.role as WorkspaceContext["role"]) ?? "none") as WorkspaceContext["role"];
+  const action = tool.risk === "GREEN" ? "read" : "write";
+  authorizeWorkspaceAction({ workspaceId: wsId, role }, action);
+}
+
+/** Append-only audit — metadata only, never secrets or full args. */
+async function audit(entry: {
+  key: KeyRow; tool: string; ok: boolean; code?: string;
+  latencyMs: number; client: string; requestId: string;
+}): Promise<void> {
+  svc.from("developer_audit_log").insert({
+    user_id: entry.key.user_id,
+    action: `mcp.${entry.tool}`,
+    resource: "tool",
+    resource_id: entry.tool,
+    surface: "mcp",
+    api_key_id: entry.key.id,
+    request_id: entry.requestId,
+    metadata: {
+      ok: entry.ok,
+      code: entry.code ?? null,
+      latency_ms: entry.latencyMs,
+      client: entry.client.slice(0, 60),
+    },
+  }).then(undefined, () => {});
+}
 
 Deno.serve(async (req: Request) => {
   const headers = cors(req.headers.get("origin") ?? "*");
@@ -45,8 +138,9 @@ Deno.serve(async (req: Request) => {
       name: SERVER_NAME, version: SERVER_VERSION, protocol: PROTOCOL_VERSION,
       transport: "streamable-http",
       capabilities: ALL_TOOLS.length,
-      groups: [...new Set(TOOLS.map((t) => t.group))],
-      usage: 'JSON-RPC 2.0 POSTs here · Authorization: Bearer nsk_…',
+      groups: [...new Set(ALL_TOOLS.map((t) => t.group))],
+      features: ["tools", "resources", "prompts"],
+      usage: 'JSON-RPC 2.0 POSTs here · Authorization: Bearer nsk_… (or ?key=)',
     }), { headers });
   }
   if (req.method === "DELETE") return new Response(null, { status: 204, headers });
@@ -59,22 +153,37 @@ Deno.serve(async (req: Request) => {
   }
   if (body.method?.startsWith("notifications/")) return new Response(null, { status: 202, headers });
 
-  /* ── Auth: EVERY JSON-RPC method requires a valid key ── */
+  /* ── Auth: EVERY method requires a valid credential ── */
   let KEY: KeyRow;
-  try { KEY = await authenticate(req); } catch (err) {
-    const e = err as McpError;
-    return new Response(JSON.stringify(rpcErr(body.id ?? null, e.code ?? "AUTH_REQUIRED", e.message)), { status: e.status ?? 401, headers });
+  try {
+    KEY = await authenticate(req);
+  } catch (err) {
+    const e = err as PlatformError;
+    const code = e.code === "AUTH_REQUIRED" ? authCodeFromMessage(e.message) : e.code;
+    return new Response(JSON.stringify(rpcErr(body.id ?? null, code, e.message)), { status: e.status ?? 401, headers });
   }
+
+  const client = (req.headers.get("user-agent") ?? "unknown").split("/")[0];
+  const requestId = crypto.randomUUID();
 
   try {
     switch (body.method) {
       case "initialize":
         return new Response(JSON.stringify(rpcOk(body.id, {
           protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: { listChanged: false } },
+          capabilities: {
+            tools: { listChanged: false },
+            resources: { subscribe: false, listChanged: false },
+            prompts: { listChanged: false },
+          },
           serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
           instructions:
-            "You are operating Noska — the user's personal knowledge workspace — through its native MCP control layer. Workflow: search/get-workspace-context to discover, fetch for markdown content (URL or UUID), create-pages/update-page/execute-command to write native blocks, list-tasks/create-task/update-task for todos, list-reviews/add-study-card/create-study-plan for spaced repetition, databases tools for collections/views, agent+automation CRUD for the Noska intelligence platform, verify after mutations. Every mutation returns ids/urls you can chain.",
+            "You are operating Noska — the user's personal knowledge workspace — through its native MCP control layer. " +
+            "Discover with search/get-workspace-context, read via fetch/resources, write with create-pages/append-blocks/execute-command, " +
+            "manage rich tasks, spaced repetition, databases, workspaces, templates and dashboards, " +
+            "execute agents and automations server-side (run-agent/run-automation with inspect/cancel/retry), " +
+            "and use noska_execute for bounded multi-step goals. Every mutation is verified against persisted state; " +
+            "destructive tools require confirm:true.",
         })), { headers });
 
       case "ping":
@@ -91,14 +200,46 @@ Deno.serve(async (req: Request) => {
           })),
         })), { headers });
 
+      /* ── MCP Resources (§16) ── */
+      case "resources/list":
+        return new Response(JSON.stringify(rpcOk(body.id, {
+          resources: [{
+            uri: "noska://workspace/current",
+            name: "Current workspace context",
+            description: "Compact snapshot: pages, open tasks, due reviews, agents, automations.",
+            mimeType: "application/json",
+          }],
+          resourceTemplates: RESOURCES,
+        })), { headers });
+
+      case "resources/read": {
+        const uri = String(body.params?.uri ?? "");
+        await rateLimit(KEY);
+        const contents = await readResource(uri, KEY);
+        return new Response(JSON.stringify(rpcOk(body.id, { contents })), { headers });
+      }
+
+      /* ── MCP Prompts (§17) ── */
+      case "prompts/list":
+        return new Response(JSON.stringify(rpcOk(body.id, { prompts: PROMPTS })), { headers });
+
+      case "prompts/get": {
+        const name = String(body.params?.name ?? "");
+        const args = (body.params?.arguments ?? {}) as Record<string, unknown>;
+        await rateLimit(KEY);
+        const prompt = await getPrompt(name, args, KEY);
+        return new Response(JSON.stringify(rpcOk(body.id, prompt)), { headers });
+      }
+
       case "tools/call": {
         const name = String(body.params?.name ?? "");
         const tool = ALL_TOOLS.find((t) => t.name === name);
-        if (!tool) return new Response(JSON.stringify(rpcErr(body.id, -32602, `Unknown tool "${name}"`)), { headers });
+        if (!tool) return new Response(JSON.stringify(rpcErr(body.id, -32602, `Unknown tool "${name}"`, { code: "TOOL_NOT_FOUND" })), { headers });
 
         const args = { ...((body.params?.arguments ?? {}) as Record<string, unknown>) };
+        (args as Record<string, unknown>).__userId = KEY.user_id;
 
-        /* Confirmation gate for destructive (RED) capabilities. */
+        /* Confirmation gate for destructive (RED) capabilities (§12). */
         let confirm = false;
         if (tool.risk === "RED") {
           confirm = args.confirm === true;
@@ -107,6 +248,7 @@ Deno.serve(async (req: Request) => {
             return new Response(JSON.stringify(rpcOk(body.id, {
               content: [{ type: "text", text: JSON.stringify({
                 status: "awaiting_confirmation",
+                error: "DESTRUCTIVE_ACTION_REQUIRES_CONFIRMATION",
                 tool: name,
                 risk: "RED",
                 how_to_proceed: "Re-call this tool with confirm:true in arguments once the user approves.",
@@ -116,51 +258,77 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        requireScope(KEY, tool.scope);
-
-        /* Idempotency replay (optional idempotency_key argument). */
-        const idemKey = typeof args.idempotency_key === "string" ? args.idempotency_key.trim() : "";
-        delete args.idempotency_key;
-
+        const t0 = Date.now();
         try {
-          const keyRow: KeyRow = KEY;
+          /* ── POLICY (single choke point) ── */
+          const policyTool: PolicyTool = {
+            name: tool.name, scope: tool.scope, risk: tool.risk,
+            executes: tool.group === "agents" && name.startsWith("run-")
+              || tool.group === "automations" && name.startsWith("run-")
+              || name === "noska_execute",
+          };
+          authorizeTool(KEY, policyTool);
+
+          /* ── RATE LIMIT ── */
+          await rateLimit(KEY);
+
+          /* ── EXECUTION BUDGET ── */
+          if (policyTool.executes) await executionBudget(KEY);
+
+          /* ── WORKSPACE GUARD ── */
+          await workspaceGuard(tool, args);
+          delete (args as Record<string, unknown>).__userId;
+
+          /* Idempotency replay (optional idempotency_key argument). */
+          const idemKey = typeof args.idempotency_key === "string" ? args.idempotency_key.trim() : "";
+          delete args.idempotency_key;
+
+          let payload: unknown;
           if (idemKey) {
-            const { data: prior } = await db.from("api_idempotency_keys")
-              .select("response_body,created_at").eq("api_key_id", keyRow.id).eq("idempotency_key", `${name}:${idemKey}`).maybeSingle();
+            const { data: prior } = await svc.from("api_idempotency_keys")
+              .select("response_body,created_at").eq("api_key_id", KEY.id).eq("idempotency_key", `${name}:${idemKey}`).maybeSingle();
             if (prior?.response_body && Date.now() - new Date((prior as { created_at: string }).created_at).getTime() < 86400000) {
-              return new Response(JSON.stringify(rpcOk(body.id, {
-                content: [{ type: "text", text: JSON.stringify({ ...(prior.response_body as object), idempotency_replayed: true }) }],
-              })), { headers });
+              payload = { ...(prior.response_body as object), idempotency_replayed: true };
             }
           }
 
-          const output = await tool.handler(args, keyRow);
-          const payload = tool.verifyTable
-            ? await attachVerification(keyRow, name, args, output, tool.verifyTable)
-            : output;
+          if (payload === undefined) {
+            const output = await tool.handler(args, KEY);
+            payload = tool.verifyTable
+              ? await attachVerification(KEY, name, args, output, tool.verifyTable)
+              : output;
 
-          if (idemKey) {
-            await db.from("api_idempotency_keys").upsert({
-              api_key_id: keyRow.id, idempotency_key: `${name}:${idemKey}`,
-              endpoint: `mcp:${name}`, response_status: 200,
-              response_body: payload as never,
-            }, { onConflict: "api_key_id,idempotency_key" }).then(undefined, () => {});
+            if (idemKey) {
+              await svc.from("api_idempotency_keys").upsert({
+                api_key_id: KEY.id, idempotency_key: `${name}:${idemKey}`,
+                endpoint: `mcp:${name}`, response_status: 200,
+                response_body: payload as never,
+              }, { onConflict: "api_key_id,idempotency_key" }).then(undefined, () => {});
+            }
           }
 
-          db.from("user_api_keys").update({ last_used_at: new Date().toISOString() })
-            .eq("id", keyRow.id).then(undefined, () => {});
+          svc.from("user_api_keys").update({ last_used_at: new Date().toISOString() })
+            .eq("id", KEY.id).then(undefined, () => {});
+          audit({ key: KEY, tool: name, ok: true, latencyMs: Date.now() - t0, client, requestId });
 
           return new Response(JSON.stringify(rpcOk(body.id, {
             content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
           })), { headers });
         } catch (err) {
-          if (err instanceof McpError || err instanceof PlatformError) {
-            return new Response(JSON.stringify(rpcOk(body.id, {
-              content: [{ type: "text", text: JSON.stringify({ error: err.code, message: err.message }) }],
-              isError: true,
-            })), { headers });
-          }
-          throw err;
+          const code = err instanceof PolicyError ? err.code
+            : err instanceof McpError || err instanceof PlatformError ? err.code : "TOOL_FAILED";
+          const message = err instanceof Error ? err.message : "Tool execution failed";
+          audit({ key: KEY, tool: name, ok: false, code, latencyMs: Date.now() - t0, client, requestId });
+          const status = err instanceof PolicyError ? err.status : err instanceof McpError || err instanceof PlatformError ? err.status : 500;
+          return new Response(JSON.stringify(rpcOk(body.id, {
+            content: [{ type: "text", text: JSON.stringify({
+              error: code,
+              message,
+              ...(err instanceof PolicyError ? err.extra : {}),
+            }) }],
+            isError: true,
+          })), { status: status >= 500 ? 200 : status, headers });
+          // Tool-level failures stay inside JSON-RPC 200 so clients can read the structured error.
         }
       }
 
@@ -168,11 +336,13 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify(rpcErr(body.id, -32601, `Method not found: ${body.method}`)), { headers });
     }
   } catch (err) {
+    if (err instanceof PolicyError) {
+      return new Response(JSON.stringify(rpcErr(body.id, err.code, err.message, err.extra)), { status: err.status, headers });
+    }
     console.error("[mcp] unhandled:", err);
     return new Response(JSON.stringify(rpcErr(body.id, -32603, "Internal error")), { status: 500, headers });
   }
 });
-
 
 /* Post-mutation verification: re-read the row and confirm it persisted. */
 import { db as _db } from "./shared.ts";

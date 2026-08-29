@@ -2695,6 +2695,7 @@ function AppContent() {
             onInsert={(blocks) => updateBlocks([...blocks, ...activePage.blocks])}
             onAppend={(blocks) => updateBlocks([...activePage.blocks, ...blocks])}
             onReplaceText={(text) => updateBlocks([{ id: uid(), type: "callout", text, meta: { tone: "tip", icon: "✦" } }, ...activePage.blocks])}
+            onSelectPage={(p) => setActiveId(p.id)}
             onToast={showToast}
             toolContext={toolContext}
           /></Suspense>

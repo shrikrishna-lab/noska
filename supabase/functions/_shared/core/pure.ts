@@ -70,6 +70,7 @@ export const CANONICAL_SCOPES = [
   "webhooks:manage",
   "events:read",
   "connections:manage",
+  "intelligence:execute",
 ] as const;
 
 export type Scope = (typeof CANONICAL_SCOPES)[number];

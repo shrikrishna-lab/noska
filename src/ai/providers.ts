@@ -29,6 +29,8 @@ export interface ProviderSendOpts {
   system?: string;
   messages: AIMessage[];
   maxTokens?: number;
+  effort?: "low" | "medium" | "high";
+  thinking?: boolean;
 }
 
 export interface AIProvider {
@@ -56,16 +58,37 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://openrouter.ai/api/v1",
     keyPlaceholder: "sk-or-...",
     models: [
-      { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", context: 200000 },
-      { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash", context: 1000000 },
-      { id: "openai/gpt-4o", name: "GPT-4o", context: 128000 },
+      { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4.6 (Thinking)", context: 200000 },
+      { id: "anthropic/claude-opus-4-20250514", name: "Claude Opus 4.6 (Thinking)", context: 200000 },
+      { id: "anthropic/claude-3.5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 },
+      { id: "google/gemini-2.5-flash", name: "Gemini 3.7 Flash", context: 1000000 },
+      { id: "google/gemini-2.5-pro", name: "Gemini 3.1 Pro", context: 2000000 },
+      { id: "openai/gpt-4o", name: "GPT-4o (Omni)", context: 128000 },
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", context: 128000 },
+      { id: "openai/o1", name: "OpenAI o1 (Thinking)", context: 200000 },
+      { id: "openai/o3-mini", name: "OpenAI o3 Mini", context: 200000 },
+      { id: "deepseek/deepseek-r1", name: "DeepSeek R1 (Thinking)", context: 65536 },
+      { id: "deepseek/deepseek-chat", name: "DeepSeek V3", context: 65536 },
       { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B", context: 131072 },
-      { id: "deepseek/deepseek-r1", name: "DeepSeek R1", context: 65536 }
+      { id: "qwen/qwen-2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B", context: 32768 },
+      { id: "mistralai/mistral-large-2407", name: "Mistral Large 2", context: 128000 }
     ],
     defaultModel: "anthropic/claude-sonnet-4-20250514",
-    async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking }: ProviderSendOpts) {
       if (!apiKey) return mockResponse("OpenRouter key not configured");
       try {
+        const payload: Record<string, any> = {
+          model: model || this.defaultModel,
+          max_tokens: maxTokens,
+          temperature: effort === "low" ? 0.2 : effort === "high" ? 0.6 : 0.4,
+          messages: [
+            ...(system ? [{ role: "system", content: system }] : []),
+            ...messages
+          ]
+        };
+        if (effort) {
+          payload.reasoning = { effort };
+        }
         const res = await fetch(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
@@ -74,15 +97,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             "HTTP-Referer": window.location.origin,
             "X-Title": "Noska"
           },
-          body: JSON.stringify({
-            model: model || this.defaultModel,
-            max_tokens: maxTokens,
-            temperature: 0.4,
-            messages: [
-              ...(system ? [{ role: "system", content: system }] : []),
-              ...messages
-            ]
-          })
+          body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
@@ -91,9 +106,22 @@ const PROVIDERS: Record<string, AIProvider> = {
         return `${mockResponse("OpenRouter request failed")}\n\n_Error: ${err.message}_`;
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048 }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking }: ProviderSendOpts) {
       if (!apiKey) { yield mockResponse("OpenRouter key not configured"); return; }
       try {
+        const payload: Record<string, any> = {
+          model: model || this.defaultModel,
+          max_tokens: maxTokens,
+          temperature: effort === "low" ? 0.2 : effort === "high" ? 0.6 : 0.4,
+          stream: true,
+          messages: [
+            ...(system ? [{ role: "system", content: system }] : []),
+            ...messages
+          ]
+        };
+        if (effort) {
+          payload.reasoning = { effort };
+        }
         const res = await fetch(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
@@ -102,16 +130,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             "HTTP-Referer": window.location.origin,
             "X-Title": "Noska"
           },
-          body: JSON.stringify({
-            model: model || this.defaultModel,
-            max_tokens: maxTokens,
-            temperature: 0.4,
-            stream: true,
-            messages: [
-              ...(system ? [{ role: "system", content: system }] : []),
-              ...messages
-            ]
-          })
+          body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(await res.text());
         const reader = res.body.getReader();
@@ -129,6 +148,8 @@ const PROVIDERS: Record<string, AIProvider> = {
             if (trimmed.startsWith("data: ")) {
               try {
                 const json = JSON.parse(trimmed.slice(6));
+                const reasoning = json.choices?.[0]?.delta?.reasoning_content || json.choices?.[0]?.delta?.reasoning;
+                if (reasoning) yield `<think>${reasoning}</think>`;
                 const delta = json.choices?.[0]?.delta?.content;
                 if (delta) yield delta;
               } catch { /* skip malformed chunks */ }
@@ -150,8 +171,11 @@ const PROVIDERS: Record<string, AIProvider> = {
     keyPlaceholder: "AIza...",
     models: [
       { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000 },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 1000000 },
-      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", context: 1000000 }
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 2000000 },
+      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", context: 1000000 },
+      { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite", context: 1000000 },
+      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", context: 2000000 },
+      { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", context: 1000000 }
     ],
     defaultModel: "gemini-2.5-flash",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
@@ -198,10 +222,11 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.openai.com/v1",
     keyPlaceholder: "sk-...",
     models: [
-      { id: "gpt-4o", name: "GPT-4o", context: 128000 },
+      { id: "gpt-4o", name: "GPT-4o (Omni)", context: 128000 },
       { id: "gpt-4o-mini", name: "GPT-4o Mini", context: 128000 },
-      { id: "o3", name: "o3", context: 200000 },
-      { id: "o4-mini", name: "o4 Mini", context: 200000 }
+      { id: "o1", name: "OpenAI o1 (Thinking)", context: 200000 },
+      { id: "o3-mini", name: "OpenAI o3 Mini", context: 200000 },
+      { id: "gpt-4-turbo", name: "GPT-4 Turbo", context: 128000 }
     ],
     defaultModel: "gpt-4o",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
@@ -266,10 +291,12 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.anthropic.com/v1",
     keyPlaceholder: "sk-ant-...",
     models: [
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", context: 200000 },
-      { id: "claude-haiku-3-20250307", name: "Claude Haiku 3.5", context: 200000 }
+      { id: "claude-3-7-sonnet-20250219", name: "Claude 3.7 Sonnet (Thinking)", context: 200000 },
+      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", context: 200000 },
+      { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 },
+      { id: "claude-3-opus-20240229", name: "Claude 3 Opus", context: 200000 }
     ],
-    defaultModel: "claude-sonnet-4-20250514",
+    defaultModel: "claude-3-7-sonnet-20250219",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
       if (!apiKey) return mockResponse("Anthropic key not configured");
       try {
@@ -350,11 +377,13 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.groq.com/openai/v1",
     keyPlaceholder: "gsk_...",
     models: [
-      { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", context: 131072 },
-      { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", context: 131072 },
-      { id: "qwen/qwen3.6-27b", name: "Qwen 3.6 27B", context: 131072 }
+      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", context: 128000 },
+      { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", context: 128000 },
+      { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 70B (Groq)", context: 128000 },
+      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", context: 32768 },
+      { id: "gemma2-9b-it", name: "Gemma 2 9B", context: 8192 }
     ],
-    defaultModel: "openai/gpt-oss-120b",
+    defaultModel: "llama-3.3-70b-versatile",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
       if (!apiKey) return mockResponse("Groq key not configured");
       const attempt = async (): Promise<string> => {
@@ -390,8 +419,6 @@ const PROVIDERS: Record<string, AIProvider> = {
           throw err;
         }
       } catch (err) {
-        // Surface failures honestly (runtime + panel render friendly messages);
-        // never let callers mistake an error response for model output.
         const msg = String(err.message || "");
         const friendly = /429|rate limit|tokens per minute/i.test(msg)
           ? "Groq rate limit reached — wait a minute or upgrade your plan tier."
@@ -410,7 +437,7 @@ const PROVIDERS: Record<string, AIProvider> = {
     keyPlaceholder: "sk-…",
     models: [
       { id: "deepseek-chat", name: "DeepSeek V3 Chat", context: 64000 },
-      { id: "deepseek-reasoner", name: "DeepSeek R1 Reasoner", context: 64000 }
+      { id: "deepseek-reasoner", name: "DeepSeek R1 Reasoner (Thinking)", context: 64000 }
     ],
     defaultModel: "deepseek-chat",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
@@ -443,9 +470,10 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.mistral.ai/v1",
     keyPlaceholder: "…",
     models: [
-      { id: "mistral-large-latest", name: "Mistral Large", context: 128000 },
+      { id: "mistral-large-latest", name: "Mistral Large 2", context: 128000 },
       { id: "mistral-small-latest", name: "Mistral Small", context: 128000 },
-      { id: "codestral-latest", name: "Codestral", context: 256000 }
+      { id: "codestral-latest", name: "Codestral", context: 256000 },
+      { id: "pixtral-large-latest", name: "Pixtral Large", context: 128000 }
     ],
     defaultModel: "mistral-large-latest",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
@@ -478,9 +506,10 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.together.xyz/v1",
     keyPlaceholder: "…",
     models: [
-      { id: "meta-llama/Llama-3.3-70B-Instruct-Turbo", name: "Llama 3.3 70B Turbo", context: 128000 },
-      { id: "Qwen/Qwen2.5-72B-Instruct-Turbo", name: "Qwen 2.5 72B", context: 128000 },
-      { id: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", name: "Llama 3.1 8B Turbo", context: 128000 }
+      { id: "meta-llama/Llama-3.3-70B-Instruct-Turbo", name: "Llama 3.3 70B Turbo", context: 131072 },
+      { id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1 (Together)", context: 65536 },
+      { id: "Qwen/Qwen2.5-Coder-32B-Instruct", name: "Qwen 2.5 Coder 32B", context: 32768 },
+      { id: "mistralai/Mixtral-8x22B-Instruct-v0.1", name: "Mixtral 8x22B", context: 65536 }
     ],
     defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
@@ -514,7 +543,8 @@ const PROVIDERS: Record<string, AIProvider> = {
     keyPlaceholder: "xai-…",
     models: [
       { id: "grok-2-latest", name: "Grok 2", context: 131072 },
-      { id: "grok-2-mini", name: "Grok 2 Mini", context: 131072 }
+      { id: "grok-2-vision-latest", name: "Grok 2 Vision", context: 131072 },
+      { id: "grok-beta", name: "Grok Beta", context: 131072 }
     ],
     defaultModel: "grok-2-latest",
     async send({ apiKey, model, system, messages, maxTokens = 2048 }) {
@@ -547,7 +577,9 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://integrate.api.nvidia.com/v1",
     keyPlaceholder: "nvapi-...",
     models: [
-      { id: "nvidia/llama-3.1-nemotron-70b-instruct", name: "Nemotron 70B", context: 32768 }
+      { id: "nvidia/llama-3.1-nemotron-70b-instruct", name: "Nemotron 70B", context: 131072 },
+      { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B (NIM)", context: 131072 },
+      { id: "deepseek-ai/deepseek-r1", name: "DeepSeek R1 (NIM)", context: 65536 }
     ],
     defaultModel: "nvidia/llama-3.1-nemotron-70b-instruct",
     async send({ apiKey, model, system, messages, maxTokens = 1000 }) {
@@ -585,8 +617,15 @@ const PROVIDERS: Record<string, AIProvider> = {
     requiresKey: false,
     baseUrl: "http://localhost:11434",
     keyPlaceholder: "",
-    models: [],
-    defaultModel: "",
+    models: [
+      { id: "llama3.3:latest", name: "Llama 3.3 70B (Local)", context: 131072 },
+      { id: "deepseek-r1:latest", name: "DeepSeek R1 (Local)", context: 65536 },
+      { id: "qwen2.5-coder:latest", name: "Qwen 2.5 Coder (Local)", context: 32768 },
+      { id: "mistral:latest", name: "Mistral 7B (Local)", context: 32768 },
+      { id: "phi4:latest", name: "Phi-4 (Local)", context: 16384 },
+      { id: "gemma2:latest", name: "Gemma 2 (Local)", context: 8192 }
+    ],
+    defaultModel: "llama3.3:latest",
     async discoverModels(baseUrl) {
       try {
         const url = baseUrl || this.baseUrl;
@@ -596,7 +635,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         return (data.models || []).map(m => ({
           id: m.name,
           name: m.name,
-          context: 8192
+          context: 32768
         }));
       } catch {
         return [];
@@ -674,8 +713,12 @@ const PROVIDERS: Record<string, AIProvider> = {
     requiresKey: false,
     baseUrl: "http://localhost:1234/v1",
     keyPlaceholder: "",
-    models: [],
-    defaultModel: "",
+    models: [
+      { id: "local-model", name: "LM Studio Active Model", context: 32768 },
+      { id: "qwen2.5-coder-7b-instruct", name: "Qwen 2.5 Coder 7B", context: 32768 },
+      { id: "llama-3.2-3b-instruct", name: "Llama 3.2 3B", context: 128000 }
+    ],
+    defaultModel: "local-model",
     async discoverModels(baseUrl) {
       try {
         const url = baseUrl || this.baseUrl;
@@ -685,7 +728,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         return (data.data || []).map(m => ({
           id: m.id,
           name: m.id,
-          context: 8192
+          context: 32768
         }));
       } catch {
         return [];

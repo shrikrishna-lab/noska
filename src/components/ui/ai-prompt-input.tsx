@@ -25,6 +25,10 @@ import {
   Sparkles,
   Search,
   SlidersHorizontal,
+  CircleHelp,
+  Check,
+  RotateCw,
+  AlertTriangle,
 } from "lucide-react"
 import {
   AnimatePresence,
@@ -37,7 +41,9 @@ import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { aiManager } from "../../ai/AIManager"
 import { getAllProviders } from "../../ai/providers"
+import { modelCatalogService, KNOWN_DEPRECATIONS, type ModelDeprecationInfo } from "../../ai/ModelCatalogService"
 import { VoiceInput } from "./voice-input"
+import { globalVoiceController } from "../../lib/voice/voice-controller"
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -50,9 +56,8 @@ const SPRING_PRESS = { type: "spring" as const, stiffness: 500, damping: 28 }
 const SPRING_ICON = { type: "spring" as const, duration: 0.3, bounce: 0 }
 
 const MENU_PANEL_CLASS = cn(
-  "bg-[var(--surface-1)] text-[var(--text)] origin-bottom-left overflow-hidden rounded-2xl border border-[var(--border)] p-1.5",
-  "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18),0_2px_12px_-2px_rgba(0,0,0,0.08)]",
-  "dark:shadow-[0_16px_48px_-8px_rgba(0,0,0,0.55),0_2px_12px_-2px_rgba(0,0,0,0.4)]",
+  "bg-[#fcfbf9] dark:bg-[#18181a] text-[#1c1b18] dark:text-[#ececec] origin-bottom-left overflow-hidden rounded-2xl border border-[#e8e4db] dark:border-[#2e2e33] p-1",
+  "shadow-[0_16px_36px_rgba(0,0,0,0.12)] dark:shadow-[0_20px_48px_rgba(0,0,0,0.7)]",
   "backdrop-blur-xl"
 )
 
@@ -164,7 +169,7 @@ const itemVariantsReduced = {
   show: { opacity: 1, transition: { duration: 0.12 } },
 }
 
-export type AiModelEffort = "high" | "medium" | "low"
+export type AiModelEffort = "low" | "medium" | "high"
 
 export type AiModel = {
   id: string
@@ -175,6 +180,10 @@ export type AiModel = {
   configured: boolean
   requiresKey: boolean
   description?: string
+  status?: "active" | "deprecating" | "discontinued"
+  sunsetDate?: string
+  deprecationReason?: string
+  suggestedReplacement?: string
   efforts?: AiModelEffort[]
   contexts?: Array<string | number>
   supportsFast?: boolean
@@ -206,6 +215,49 @@ export function formatContext(
   return String(context)
 }
 
+export function getAccurateContextForModel(modelId: string, reportedContext?: number | string): string {
+  const id = modelId.toLowerCase()
+  if (id.includes("gemini-2.5-pro") || id.includes("gemini-3.1-pro") || id.includes("gemini-1.5-pro")) return "2M"
+  if (id.includes("gemini-2.5-flash") || id.includes("gemini-3.7-flash") || id.includes("gemini-3.6-flash") || id.includes("gemini-3.5-flash") || id.includes("gemini-2.0") || id.includes("gemini-1.5-flash")) return "1M"
+  if (id.includes("claude-3-7") || id.includes("claude-sonnet-4") || id.includes("claude-opus-4") || id.includes("claude-3-5") || id.includes("claude-3-opus") || id.includes("claude-3-haiku")) return "200K"
+  if (id.includes("o1") || id.includes("o3") || id.includes("o4-mini")) return "200K"
+  if (id.includes("gpt-4o") || id.includes("gpt-4-turbo") || id.includes("gpt-4o-mini")) return "128K"
+  if (id.includes("llama-3.3") || id.includes("llama-3.1") || id.includes("llama3.3") || id.includes("llama3.1")) return "128K"
+  if (id.includes("qwen-2.5") || id.includes("qwen2.5")) return "128K"
+  if (id.includes("deepseek-r1") || id.includes("deepseek-v3") || id.includes("deepseek")) return "64K"
+  if (id.includes("mistral-large") || id.includes("codestral")) return "128K"
+  
+  if (reportedContext) {
+    const formatted = formatContext(reportedContext)
+    if (formatted) return formatted
+  }
+  return "128K"
+}
+
+export function isModelFast(modelId: string): boolean {
+  const id = modelId.toLowerCase()
+  if (
+    id.includes("flash-lite") ||
+    id.includes("gemini-2.5-flash") ||
+    id.includes("gemini-2.0-flash") ||
+    id.includes("gemini-1.5-flash") ||
+    id.includes("haiku") ||
+    id.includes("gpt-4o-mini") ||
+    id.includes("llama-3.1-8b") ||
+    id.includes("llama-3.2") ||
+    id.includes("qwen-2.5-coder:7b") ||
+    id.includes("qwen-2.5-coder-7b") ||
+    id.includes("mistral-small") ||
+    id.includes("groq")
+  ) {
+    if (id.includes("pro") || id.includes("opus") || id.includes("o1") || id.includes("o3") || id.includes("70b") || id.includes("r1") || id.includes("sonnet")) {
+      return false
+    }
+    return true
+  }
+  return false
+}
+
 /** Fallback local models for Ollama / LM Studio if no local daemon is currently reporting */
 const DEFAULT_LOCAL_MODELS = {
   ollama: [
@@ -219,12 +271,15 @@ const DEFAULT_LOCAL_MODELS = {
   ]
 }
 
-/** Generates real models populated from the configured AI provider registry */
+/** Generates real models populated from the configured AI provider registry & live catalog */
 export function getRealAiModels(): AiModel[] {
   try {
     const statuses = aiManager.getProviderStatuses()
+    const liveCatalog = modelCatalogService.getCachedModels()
     const list: AiModel[] = []
+    const seenIds = new Set<string>()
 
+    // 1. Process configured provider models
     for (const p of statuses) {
       let models = p.models || []
       if (models.length === 0 && DEFAULT_LOCAL_MODELS[p.id as keyof typeof DEFAULT_LOCAL_MODELS]) {
@@ -232,9 +287,14 @@ export function getRealAiModels(): AiModel[] {
       }
 
       for (const m of models) {
-        const ctxStr = formatContext(m.context) || "128K"
+        if (seenIds.has(m.id)) continue
+        seenIds.add(m.id)
+
+        const ctxStr = getAccurateContextForModel(m.id, m.context)
         const isLocal = p.type === "local"
-        const isDeepThink = m.id.toLowerCase().includes("r1") || m.id.toLowerCase().includes("pro") || m.id.toLowerCase().includes("opus") || m.id.toLowerCase().includes("o1") || m.id.toLowerCase().includes("o3")
+        const isDeepThink = m.id.toLowerCase().includes("r1") || m.id.toLowerCase().includes("pro") || m.id.toLowerCase().includes("opus") || m.id.toLowerCase().includes("o1") || m.id.toLowerCase().includes("o3") || m.id.toLowerCase().includes("thinking")
+        const isFast = isModelFast(m.id)
+        const dep = modelCatalogService.getDeprecationInfo(m.id)
 
         list.push({
           id: m.id,
@@ -244,19 +304,58 @@ export function getRealAiModels(): AiModel[] {
           providerType: isLocal ? "local" : "cloud",
           configured: p.configured || isLocal,
           requiresKey: !isLocal,
+          status: dep?.isDiscontinued ? "discontinued" : dep?.isDeprecating ? "deprecating" : "active",
+          sunsetDate: dep?.sunsetDate,
+          deprecationReason: dep?.reason,
+          suggestedReplacement: dep?.suggestedReplacement,
           description: isLocal
             ? `Runs locally on your device via ${p.name} (100% private, offline).`
-            : `${p.name} · ${p.configured ? "Key configured" : "API key required"} (${ctxStr} context limit).`,
+            : `${p.name} · ${p.configured ? "Key configured" : "API key required"} (${ctxStr} token context window).`,
           efforts: ["high", "medium", "low"],
           contexts: [ctxStr],
-          supportsFast: !isDeepThink,
+          supportsFast: isFast,
           supportsThinking: isDeepThink,
           defaultEffort: "high",
           defaultContext: ctxStr,
-          defaultFast: true,
+          defaultFast: isFast,
         })
       }
     }
+
+    // 2. Process remaining models from live catalog (OpenRouter / Cloud / Discontinued registry)
+    for (const live of liveCatalog) {
+      if (seenIds.has(live.id)) continue
+      seenIds.add(live.id)
+
+      const ctxStr = getAccurateContextForModel(live.id, live.context)
+      const isDeepThink = live.id.toLowerCase().includes("r1") || live.id.toLowerCase().includes("pro") || live.id.toLowerCase().includes("opus") || live.id.toLowerCase().includes("o1") || live.id.toLowerCase().includes("o3") || live.id.toLowerCase().includes("thinking")
+      const isFast = isModelFast(live.id)
+      const dep = live.deprecation || modelCatalogService.getDeprecationInfo(live.id)
+      const openRouterConfigured = Boolean(aiManager.config?.providers?.openrouter?.apiKey)
+
+      list.push({
+        id: live.id,
+        label: live.name || live.id,
+        providerId: live.providerId || "openrouter",
+        providerName: live.providerName || "OpenRouter",
+        providerType: "cloud",
+        configured: openRouterConfigured,
+        requiresKey: true,
+        status: live.status || (dep?.isDiscontinued ? "discontinued" : dep?.isDeprecating ? "deprecating" : "active"),
+        sunsetDate: dep?.sunsetDate,
+        deprecationReason: dep?.reason,
+        suggestedReplacement: dep?.suggestedReplacement,
+        description: live.description || `${live.providerName} · ${ctxStr} token context window.`,
+        efforts: ["high", "medium", "low"],
+        contexts: [ctxStr],
+        supportsFast: isFast,
+        supportsThinking: isDeepThink,
+        defaultEffort: "high",
+        defaultContext: ctxStr,
+        defaultFast: isFast,
+      })
+    }
+
     if (list.length > 0) return list
   } catch {
     // fallback
@@ -267,14 +366,31 @@ export function getRealAiModels(): AiModel[] {
 
 export const DEFAULT_AI_MODELS: AiModel[] = [
   {
-    id: "anthropic/claude-sonnet-4-20250514",
-    label: "Claude Sonnet 4",
+    id: "google/gemini-2.5-flash",
+    label: "Gemini 3.7 Flash Medium",
     providerId: "openrouter",
     providerName: "OpenRouter",
     providerType: "cloud",
     configured: false,
     requiresKey: true,
-    description: "State-of-the-art workspace reasoning.",
+    description: "Ultra-fast multimodal reasoning with hybrid thinking.",
+    efforts: ["high", "medium", "low"],
+    contexts: ["1M"],
+    supportsFast: true,
+    supportsThinking: true,
+    defaultEffort: "medium",
+    defaultContext: "1M",
+    defaultFast: true,
+  },
+  {
+    id: "anthropic/claude-sonnet-4-20250514",
+    label: "Claude Sonnet 4.6 (Thinking)",
+    providerId: "openrouter",
+    providerName: "OpenRouter",
+    providerType: "cloud",
+    configured: false,
+    requiresKey: true,
+    description: "State-of-the-art reasoning, code architecture, and deep analysis.",
     efforts: ["high", "medium", "low"],
     contexts: ["200K"],
     supportsFast: true,
@@ -284,38 +400,72 @@ export const DEFAULT_AI_MODELS: AiModel[] = [
     defaultFast: true,
   },
   {
-    id: "google/gemini-2.5-flash-preview",
-    label: "Gemini 2.5 Flash",
+    id: "anthropic/claude-opus-4-20250514",
+    label: "Claude Opus 4.6 (Thinking)",
     providerId: "openrouter",
     providerName: "OpenRouter",
     providerType: "cloud",
     configured: false,
     requiresKey: true,
-    description: "Ultra-fast long context reasoning for docs.",
+    description: "Maximum intelligence and creative synthesis.",
     efforts: ["high", "medium", "low"],
-    contexts: ["1M"],
+    contexts: ["200K"],
+    supportsFast: false,
+    supportsThinking: true,
+    defaultEffort: "high",
+    defaultContext: "200K",
+    defaultFast: false,
+  },
+  {
+    id: "google/gemini-2.5-pro",
+    label: "Gemini 3.1 Pro Low",
+    providerId: "openrouter",
+    providerName: "OpenRouter",
+    providerType: "cloud",
+    configured: false,
+    requiresKey: true,
+    description: "Deep reasoning across millions of document tokens.",
+    efforts: ["high", "medium", "low"],
+    contexts: ["2M"],
     supportsFast: true,
-    supportsThinking: false,
-    defaultEffort: "medium",
-    defaultContext: "1M",
+    supportsThinking: true,
+    defaultEffort: "low",
+    defaultContext: "2M",
     defaultFast: true,
   },
   {
     id: "openai/gpt-4o",
-    label: "GPT-4o",
+    label: "GPT-4o (Omni)",
     providerId: "openrouter",
     providerName: "OpenRouter",
     providerType: "cloud",
     configured: false,
     requiresKey: true,
-    description: "Multimodal reasoning and writing.",
+    description: "Versatile reasoning, writing, and instruction execution.",
     efforts: ["high", "medium", "low"],
     contexts: ["128K"],
     supportsFast: true,
-    supportsThinking: true,
+    supportsThinking: false,
     defaultEffort: "high",
     defaultContext: "128K",
     defaultFast: true,
+  },
+  {
+    id: "deepseek/deepseek-r1",
+    label: "DeepSeek R1 (Thinking)",
+    providerId: "openrouter",
+    providerName: "OpenRouter",
+    providerType: "cloud",
+    configured: false,
+    requiresKey: true,
+    description: "Open-weight reasoning powerhouse with chain of thought.",
+    efforts: ["high", "medium", "low"],
+    contexts: ["64K"],
+    supportsFast: false,
+    supportsThinking: true,
+    defaultEffort: "high",
+    defaultContext: "64K",
+    defaultFast: false,
   },
   {
     id: "llama3.3:latest",
@@ -475,29 +625,24 @@ function ModelLabelParts({
   if (!model) {
     return (
       <span className={cn("text-muted-foreground flex items-center gap-1.5", className)}>
-        <Key size={11} className="text-accent" />
-        <span>Setup API Key</span>
+        <Key size={11} className="text-purple-500 shrink-0" />
+        <span className="whitespace-nowrap">Setup API Key</span>
       </span>
     )
   }
 
   const mods: string[] = []
   if (selection.effort) mods.push(EFFORT_LABEL[selection.effort])
-  if (selection.fast) mods.push("Fast")
+  if (selection.fast && !selection.thinking) mods.push("Fast")
   if (selection.thinking) mods.push("Thinking")
 
   return (
-    <span className={cn("flex min-w-0 items-baseline gap-1.5", className)}>
+    <span className={cn("flex min-w-0 items-center gap-1.5", className)}>
       <span className="text-foreground truncate font-medium">{model.label}</span>
-      {model.providerName && (
-        <span className="text-muted-foreground/60 text-[10px] hidden sm:inline truncate">
-          · {model.providerName}
-        </span>
-      )}
       {mods.map((mod) => (
         <span
           key={mod}
-          className="text-muted-foreground/70 shrink-0 font-medium tabular-nums text-xs"
+          className="text-muted-foreground/70 shrink-0 font-medium text-xs"
         >
           {mod}
         </span>
@@ -920,6 +1065,7 @@ const ModelSelectorContent = React.forwardRef<
     models,
     activeIndex,
     optionIds,
+    selection,
   } = useModelSelectorContext("ModelSelectorContent")
 
   const [mounted, setMounted] = React.useState(false)
@@ -974,7 +1120,8 @@ const ModelSelectorContent = React.forwardRef<
   const list = children ?? <ModelSelectorDefaultItems />
   const editingModel = models.find((m) => m.id === editingId)
   const previewModel = models.find((m) => m.id === previewId)
-  const panelModel = editingModel ?? previewModel
+  const activeModel = models.find((m) => m.id === selection.id) || models[0]
+  const panelModel = editingModel ?? previewModel ?? activeModel
   const activeModelId = optionIds[activeIndex]
   const activeOptionId = activeModelId
     ? optionDomId(contentId, activeModelId)
@@ -997,7 +1144,7 @@ const ModelSelectorContent = React.forwardRef<
             zIndex: 50,
             ...style,
           }}
-          className={cn("flex origin-bottom-left items-end gap-3", className)}
+          className={cn("flex origin-bottom-left items-end gap-1.5", className)}
           {...props}
         >
           <div
@@ -1028,7 +1175,7 @@ const ModelSelectorContent = React.forwardRef<
 })
 ModelSelectorContent.displayName = "ModelSelectorContent"
 
-function ProviderIcon({ providerId, className }: { providerId: string; className?: string }) {
+export function ProviderIcon({ providerId, className }: { providerId: string; className?: string }) {
   const id = providerId.toLowerCase()
   if (id.includes("gemini") || id.includes("google")) {
     return (
@@ -1094,12 +1241,22 @@ function ProviderIcon({ providerId, className }: { providerId: string; className
 }
 
 function ModelSelectorDefaultItems() {
-  const { models, layoutGroupId, reduceMotion, editingId, setPreviewId, onOpenKeySetup, setOpen, selection } =
+  const { models, layoutGroupId, reduceMotion, editingId, setPreviewId, onOpenKeySetup, setOpen, selection, patchSelection } =
     useModelSelectorContext("ModelSelectorDefaultItems")
 
-  const [activeTab, setActiveTab] = React.useState<"providers" | "models">("providers")
+  const [activeTab, setActiveTab] = React.useState<"providers" | "models">("models")
+  const [modelCategory, setModelCategory] = React.useState<"all" | "ready" | "flagship" | "reasoning" | "local" | "connect" | "sunset">("all")
   const [selectedProviderId, setSelectedProviderId] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
+
+  // Listen for live background catalog updates
+  const [, setCatalogVersion] = React.useState(0)
+  React.useEffect(() => {
+    return modelCatalogService.subscribe(() => {
+      setCatalogVersion((v) => v + 1)
+    })
+  }, [])
 
   // Group models by provider
   const providersMap = React.useMemo(() => {
@@ -1129,19 +1286,49 @@ function ModelSelectorDefaultItems() {
     })
   }, [providersMap, search])
 
-  // Filtered flat models for "All Models" tab
+  // Filtered flat models for "All Models" tab with Category filters
   const filteredFlatModels = React.useMemo(() => {
     return models.filter((m) => {
       const matchSearch =
         m.label.toLowerCase().includes(search.toLowerCase()) ||
         m.providerName.toLowerCase().includes(search.toLowerCase()) ||
         m.id.toLowerCase().includes(search.toLowerCase())
-      return matchSearch
+      if (!matchSearch) return false
+
+      const isLocal = m.providerType === "local"
+      const isReady = m.configured || isLocal
+      const id = m.id.toLowerCase()
+      const isDead = m.status === "discontinued"
+
+      // In active tabs, hide models whose sunset has already passed unless explicitly searching or viewing the Sunset tab
+      if (modelCategory !== "sunset" && isDead && !search) {
+        return false
+      }
+
+      if (modelCategory === "ready") return isReady && !isDead
+      if (modelCategory === "connect") return !isReady && !isDead
+      if (modelCategory === "local") return isLocal
+      if (modelCategory === "sunset") return m.status === "discontinued" || m.status === "deprecating"
+      if (modelCategory === "flagship") {
+        return ["claude-3-7", "gemini-2.5", "gpt-4o", "deepseek-r1", "llama-3.3", "o1", "o3-mini", "sonnet-4"].some((k) => id.includes(k)) && !isDead
+      }
+      if (modelCategory === "reasoning") {
+        return (m.supportsThinking || ["r1", "reason", "o1", "o3", "thinking", "pro", "opus"].some((k) => id.includes(k))) && !isDead
+      }
+      return true
     })
-  }, [models, search])
+  }, [models, search, modelCategory])
 
   const selectedProvider = providersMap.find((p) => p.id === selectedProviderId)
-  const activeProviderModels = selectedProvider ? selectedProvider.models : []
+  const activeProviderModels = React.useMemo(() => {
+    if (!selectedProvider) return []
+    return selectedProvider.models.filter((m) => {
+      if (search) {
+        return m.label.toLowerCase().includes(search.toLowerCase()) || m.id.toLowerCase().includes(search.toLowerCase())
+      }
+      return m.status !== "discontinued"
+    })
+  }, [selectedProvider, search])
 
   return (
     <LayoutGroup id={layoutGroupId}>
@@ -1151,17 +1338,14 @@ function ModelSelectorDefaultItems() {
         animate="show"
         className={cn(
           MENU_PANEL_CLASS,
-          "flex w-[320px] sm:w-[340px] flex-col overflow-hidden shadow-2xl border border-[var(--border)]"
+          "flex w-[310px] sm:w-[335px] flex-col overflow-hidden shadow-2xl border border-[#e8e4db] dark:border-[#2e2e33]"
         )}
-        onMouseLeave={() => {
-          if (!editingId) setPreviewId(null)
-        }}
       >
-        {/* Streamlined Minimal Header */}
-        <div className="p-2.5 space-y-2 border-b border-[var(--border)] bg-[var(--surface-1)]">
+        {/* Streamlined Noska Header */}
+        <div className="p-2 space-y-2 border-b border-[#e8e4db] dark:border-[#2e2e33] bg-[#fcfbf9] dark:bg-[#18181a]">
           <div className="flex items-center justify-between gap-1.5">
             <div className="relative flex-1 flex items-center">
-              <Search size={12} className="absolute left-2.5 text-[var(--muted)]" />
+              <Search size={11} className="absolute left-2.5 text-[#706c64] dark:text-[#a09c94]" />
               <input
                 type="text"
                 placeholder={
@@ -1173,74 +1357,118 @@ function ModelSelectorDefaultItems() {
                 }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-[var(--surface-2)] text-[var(--text)] text-xs pl-7 pr-6 py-1.5 rounded-lg border border-[var(--border)] outline-none focus:border-[var(--accent)]/50 transition-colors placeholder:text-[var(--muted)]"
+                className="w-full bg-[#ede8df]/50 dark:bg-[#232328] text-[#1c1b18] dark:text-[#ececec] text-[11px] pl-7 pr-12 py-1 rounded-lg border border-[#e8e4db] dark:border-[#2e2e33] outline-none focus:border-[#1c1b18]/40 dark:focus:border-white/40 transition-colors placeholder:text-[#a09c94]"
               />
-              {search && (
+              <div className="absolute right-1.5 flex items-center gap-1">
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white cursor-pointer p-0.5"
+                  >
+                    <XIcon size={10} />
+                  </button>
+                )}
+                {/* Real-time Live Catalog Sync Button */}
                 <button
                   type="button"
-                  onClick={() => setSearch("")}
-                  className="absolute right-2 text-[var(--muted)] hover:text-[var(--text)] cursor-pointer"
+                  onClick={async () => {
+                    setIsRefreshing(true)
+                    await modelCatalogService.fetchRealtimeCatalog(true)
+                    setIsRefreshing(false)
+                  }}
+                  className="p-1 rounded-md text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-[#232328] transition cursor-pointer"
+                  title="Refresh live real-time models & sunset announcements across all providers"
                 >
-                  <XIcon size={11} />
+                  <RotateCw size={11} className={cn(isRefreshing && "animate-spin text-purple-500")} />
                 </button>
-              )}
+              </div>
             </div>
 
-            {/* Compact Mode Pill Switcher */}
+            {/* Noska Mode Pill Switcher */}
             {!selectedProvider && (
-              <div className="flex items-center p-0.5 bg-[var(--surface-2)] rounded-lg border border-[var(--border)] shrink-0 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("providers")}
-                  className={cn(
-                    "px-2 py-1 rounded-md transition-all font-medium cursor-pointer",
-                    activeTab === "providers"
-                      ? "bg-[var(--surface-1)] text-[var(--text)] shadow-xs font-semibold"
-                      : "text-[var(--muted)] hover:text-[var(--text)]"
-                  )}
-                >
-                  Providers
-                </button>
+              <div className="flex items-center p-0.5 bg-[#ede8df]/60 dark:bg-[#232328] rounded-lg border border-[#e8e4db] dark:border-[#2e2e33] shrink-0 text-[10px]">
                 <button
                   type="button"
                   onClick={() => setActiveTab("models")}
                   className={cn(
-                    "px-2 py-1 rounded-md transition-all font-medium cursor-pointer",
+                    "px-2 py-0.5 rounded-md transition-all font-medium cursor-pointer",
                     activeTab === "models"
-                      ? "bg-[var(--surface-1)] text-[var(--text)] shadow-xs font-semibold"
-                      : "text-[var(--muted)] hover:text-[var(--text)]"
+                      ? "bg-white dark:bg-[#2f2f36] text-[#1c1b18] dark:text-white shadow-xs font-semibold"
+                      : "text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white"
                   )}
                 >
                   Models
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("providers")}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md transition-all font-medium cursor-pointer",
+                    activeTab === "providers"
+                      ? "bg-white dark:bg-[#2f2f36] text-[#1c1b18] dark:text-white shadow-xs font-semibold"
+                      : "text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white"
+                  )}
+                >
+                  Providers
+                </button>
               </div>
             )}
           </div>
+
+          {/* Category Filter Chips for Models Tab */}
+          {!selectedProvider && activeTab === "models" && (
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none text-[10px]">
+              {[
+                { id: "all", label: "All" },
+                { id: "ready", label: "🟢 Ready" },
+                { id: "flagship", label: "⭐ Best Models" },
+                { id: "reasoning", label: "🧠 Reasoning" },
+                { id: "local", label: "💻 Local" },
+                { id: "connect", label: "🔌 Connect" },
+                { id: "sunset", label: "⚠️ Sunset / Retired" },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setModelCategory(cat.id as any)}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md whitespace-nowrap transition-all cursor-pointer font-medium",
+                    modelCategory === cat.id
+                      ? "bg-[#1c1b18] text-white dark:bg-white dark:text-[#18181a] font-semibold shadow-xs"
+                      : "bg-[#ede8df]/40 dark:bg-[#232328] text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white border border-[#e8e4db] dark:border-[#2e2e33]"
+                  )}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* View 1: Drilled-Down Provider Models */}
         {selectedProvider ? (
           <div className="flex flex-col">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)] bg-[var(--surface-2)]/30">
+            <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#e8e4db] dark:border-[#2e2e33] bg-[#ede8df]/30 dark:bg-[#232328]/50">
               <button
                 type="button"
                 onClick={() => setSelectedProviderId(null)}
-                className="flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--text)] font-medium transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-[11px] text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white font-medium transition-colors cursor-pointer"
               >
-                <ChevronLeftIcon size={14} />
-                <span>All Providers</span>
+                <ChevronLeftIcon size={13} />
+                <span>All</span>
               </button>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold text-[var(--text)]">{selectedProvider.name}</span>
+                <span className="text-[11px] font-semibold text-[#1c1b18] dark:text-white">{selectedProvider.name}</span>
                 {selectedProvider.configured || selectedProvider.type === "local" ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">Ready</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold">Ready</span>
                 ) : (
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 font-medium">Connect</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/15 text-sky-700 dark:text-sky-400 font-semibold">Connect</span>
                 )}
               </div>
             </div>
 
-            <ul role="presentation" className="flex max-h-60 overflow-y-auto flex-col gap-0.5 p-1.5 scrollbar-thin">
+            <ul role="presentation" className="flex max-h-56 overflow-y-auto flex-col gap-0.5 p-1 scrollbar-thin">
               {activeProviderModels.map((model) => (
                 <li key={model.id} role="none">
                   <ModelSelectorItem model={model} />
@@ -1249,26 +1477,26 @@ function ModelSelectorDefaultItems() {
             </ul>
 
             {!selectedProvider.configured && selectedProvider.type !== "local" && onOpenKeySetup && (
-              <div className="p-2 border-t border-[var(--border)] bg-sky-500/5">
+              <div className="p-1.5 border-t border-[#e8e4db] dark:border-[#2e2e33] bg-purple-500/5">
                 <button
                   type="button"
                   onClick={() => {
                     setOpen(false)
                     onOpenKeySetup(selectedProvider.id)
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-[var(--text)] text-xs font-medium transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-center gap-1.5 py-1 rounded-lg bg-[#1c1b18] hover:bg-black dark:bg-white/10 dark:hover:bg-white/15 text-white text-[11px] font-medium transition-colors cursor-pointer"
                 >
-                  <Key size={12} className="text-sky-500" />
-                  <span>Connect {selectedProvider.name} API Key</span>
+                  <Key size={11} className="text-purple-400" />
+                  <span>Connect API Key</span>
                 </button>
               </div>
             )}
           </div>
         ) : activeTab === "providers" ? (
-          /* View 2: Providers List matching Image 2 style */
-          <ul role="presentation" className="flex max-h-64 overflow-y-auto flex-col gap-0.5 p-1.5 scrollbar-thin">
+          /* View 2: Providers List */
+          <ul role="presentation" className="flex max-h-56 overflow-y-auto flex-col gap-0.5 p-1 scrollbar-thin">
             {filteredProviders.length === 0 ? (
-              <div className="py-6 text-center text-xs text-[var(--muted)]">
+              <div className="py-5 text-center text-xs text-[#706c64] dark:text-[#a09c94]">
                 No matching providers found.
               </div>
             ) : (
@@ -1282,38 +1510,37 @@ function ModelSelectorDefaultItems() {
                       variants={reduceMotion ? itemVariantsReduced : itemVariants}
                       onClick={() => setSelectedProviderId(provider.id)}
                       className={cn(
-                        "group/item relative flex w-full items-center justify-between gap-2.5 rounded-xl px-2.5 py-2 cursor-pointer",
-                        "transition-all duration-150 text-xs",
+                        "group/item relative flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 cursor-pointer text-xs transition-colors",
                         hasSelectedModel
-                          ? "bg-[var(--surface-2)] text-[var(--text)] font-semibold border border-[var(--border)]"
-                          : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)]/70 hover:text-[var(--text)]"
+                          ? "bg-[#ede8df] dark:bg-white/10 text-[#1c1b18] dark:text-white font-semibold border border-[#ded8cb] dark:border-white/15"
+                          : "text-[#1c1b18] dark:text-[#ececec] hover:bg-[#ede8df]/60 dark:hover:bg-white/5"
                       )}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <ProviderIcon providerId={provider.id} />
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <ProviderIcon providerId={provider.id} className="size-6" />
                         <div className="flex flex-col min-w-0">
-                          <span className="truncate font-semibold text-[var(--text)]">{provider.name}</span>
-                          <span className="text-[10px] text-[var(--muted)] truncate">
+                          <span className="truncate font-semibold text-[11px]">{provider.name}</span>
+                          <span className="text-[9px] text-[#706c64] dark:text-[#a09c94] truncate">
                             {provider.models.length} model{provider.models.length !== 1 ? "s" : ""}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {isLocal ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-medium">
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 font-medium">
                             Local
                           </span>
                         ) : provider.configured ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-medium">
                             Ready
                           </span>
                         ) : (
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 font-medium hover:bg-sky-500/20 transition-colors">
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/15 text-sky-700 dark:text-sky-400 font-medium hover:bg-sky-500/25 transition-colors">
                             Connect
                           </span>
                         )}
-                        <ChevronRightIcon size={13} className="text-[var(--muted)] opacity-50 group-hover/item:opacity-100 transition-opacity" />
+                        <ChevronRightIcon size={12} className="text-[#706c64] dark:text-[#a09c94] opacity-70 group-hover/item:opacity-100 transition-opacity" />
                       </div>
                     </motion.div>
                   </li>
@@ -1322,40 +1549,198 @@ function ModelSelectorDefaultItems() {
             )}
           </ul>
         ) : (
-          /* View 3: All Models (Direct Flat Model Selection) */
-          <ul role="presentation" className="flex max-h-64 overflow-y-auto flex-col gap-0.5 p-1.5 scrollbar-thin">
-            {filteredFlatModels.length === 0 ? (
-              <div className="py-6 text-center text-xs text-[var(--muted)]">
-                No matching models found.
-              </div>
-            ) : (
-              filteredFlatModels.map((model) => (
-                <li key={model.id} role="none">
-                  <ModelSelectorItem model={model} />
-                </li>
-              ))
-            )}
-          </ul>
+          /* View 3: All Models */
+          <div className="flex flex-col">
+            <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold text-[#706c64] dark:text-[#a09c94] uppercase tracking-wider border-b border-[#e8e4db] dark:border-[#2e2e33] mb-0.5 flex items-center justify-between">
+              <span>Model</span>
+              <span className="text-[9px] text-[#a09c94] font-normal normal-case">Context / Speed</span>
+            </div>
+            <ul role="presentation" className="flex max-h-56 overflow-y-auto flex-col gap-0.5 p-1 scrollbar-thin">
+              {filteredFlatModels.length === 0 ? (
+                <div className="py-5 text-center text-xs text-[#706c64] dark:text-[#a09c94]">
+                  No matching models found.
+                </div>
+              ) : (
+                filteredFlatModels.map((model) => (
+                  <li key={model.id} role="none">
+                    <ModelSelectorItem model={model} />
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
         )}
 
-        {/* Footer: Manage Providers / API Keys (Matching Image 2 footer) */}
+        {/* Footer: Manage Providers / API Keys */}
         {onOpenKeySetup && !selectedProvider && (
-          <div className="p-2 border-t border-[var(--border)] bg-[var(--surface-2)]/30">
+          <div className="p-1.5 border-t border-[#e8e4db] dark:border-[#2e2e33] bg-[#ede8df]/40 dark:bg-[#18181a]/60">
             <button
               type="button"
               onClick={() => {
                 setOpen(false)
                 onOpenKeySetup()
               }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors text-left font-medium cursor-pointer"
+              className="w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] text-[#1c1b18] dark:text-[#ececec] hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors text-left font-medium cursor-pointer whitespace-nowrap"
             >
-              <Key size={13} className="text-[var(--accent)]" />
-              <span>Manage connectors & API keys</span>
+              <Key size={12} className="text-purple-600 dark:text-purple-400 shrink-0" />
+              <span className="truncate">Manage connectors & API keys</span>
             </button>
           </div>
         )}
       </motion.div>
     </LayoutGroup>
+  )
+}
+
+function ModelSelectorItem({ model }: { model: AiModel }) {
+  const {
+    selection,
+    selectModel,
+    reduceMotion,
+    layoutGroupId,
+    contentId,
+    activeIndex,
+    setActiveIndex,
+    optionIds,
+    editingId,
+    setEditingId,
+    setPreviewId,
+    getConfigFor,
+    patchSelection,
+    onOpenKeySetup,
+    setOpen,
+  } = useModelSelectorContext("ModelSelectorItem")
+
+  const [showEffortMenu, setShowEffortMenu] = React.useState(false)
+  const isActive = model.id === selection.id
+  const optionIndex = optionIds.indexOf(model.id)
+  const isHighlighted = optionIndex === activeIndex && optionIndex >= 0
+  const isDisabled = !model.disabled
+  const config = getConfigFor(model)
+  const optionId = optionDomId(contentId, model.id)
+  const isLocal = model.providerType === "local"
+
+  const optionRef = React.useRef<HTMLDivElement | null>(null)
+
+  React.useEffect(() => {
+    if (isHighlighted) {
+      optionRef.current?.scrollIntoView({ block: "nearest" })
+    }
+  }, [isHighlighted])
+
+  const handleSelectEffort = (eff: "low" | "medium" | "high", e: React.MouseEvent) => {
+    e.stopPropagation()
+    selectModel(model.id)
+    patchSelection({ ...config, id: model.id, effort: eff })
+    setShowEffortMenu(false)
+    setOpen(false)
+  }
+
+  const handleItemClick = () => {
+    selectModel(model.id)
+    patchSelection({ ...config, id: model.id, effort: selection.id === model.id && selection.effort ? selection.effort : model.defaultEffort || "medium" })
+    setOpen(false)
+  }
+
+  const currentEffort = isActive ? selection.effort || "medium" : "medium"
+
+  return (
+    <div
+      className="relative w-full"
+      onMouseEnter={() => {
+        if (optionIndex >= 0) {
+          setActiveIndex(optionIndex)
+          if (!editingId) setPreviewId(model.id)
+        }
+      }}
+      onMouseLeave={() => setShowEffortMenu(false)}
+    >
+      <motion.div
+        variants={reduceMotion ? itemVariantsReduced : itemVariants}
+        className={cn(
+          "group/item relative flex w-full items-center justify-between gap-1.5 rounded-xl px-2 py-1.5 cursor-pointer text-[11px] transition-colors",
+          isActive
+            ? "bg-[#ede8df] dark:bg-white/10 text-[#1c1b18] dark:text-white font-semibold border border-[#ded8cb] dark:border-white/15"
+            : "text-[#1c1b18] dark:text-[#ececec] hover:bg-[#ede8df]/60 dark:hover:bg-white/5"
+        )}
+        onClick={handleItemClick}
+      >
+        {/* Left: Model Name */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="truncate font-medium">{model.label}</span>
+        </div>
+
+        {/* Right: Ready/Connect/Sunset Badge, Context Window, Fast, Info, Effort Chevron */}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Discontinued / Sunset Notice Badges */}
+          {model.status === "discontinued" ? (
+            <span
+              className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-semibold shrink-0"
+              title={model.sunsetDate ? `Retired on ${model.sunsetDate}. Migration: ${model.suggestedReplacement || "N/A"}` : "Discontinued by provider"}
+            >
+              Retired
+            </span>
+          ) : model.status === "deprecating" ? (
+            <span
+              className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold shrink-0"
+              title={`Sunset announced: ${model.sunsetDate || "Soon"}. ${model.suggestedReplacement ? `Migrate to ${model.suggestedReplacement}` : ""}`}
+            >
+              Sunset {model.sunsetDate ? `(${model.sunsetDate})` : ""}
+            </span>
+          ) : model.configured || isLocal ? (
+            <span
+              className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold shrink-0"
+              title={`${model.providerName} is configured and ready`}
+            >
+              Ready
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (onOpenKeySetup) {
+                  setOpen(false)
+                  onOpenKeySetup(model.providerId)
+                }
+              }}
+              className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/15 hover:bg-sky-500/25 text-sky-700 dark:text-sky-400 font-semibold transition-colors cursor-pointer shrink-0"
+              title={`Click to connect ${model.providerName} API key`}
+            >
+              Connect
+            </button>
+          )}
+
+          {/* Exact Real Context Window Badge */}
+          <span
+            className="text-[9px] px-1.5 py-0.2 rounded bg-[#ede8df]/80 dark:bg-white/5 text-[#706c64] dark:text-[#a09c94] font-mono font-medium"
+            title={`${model.label} context limit: ${model.defaultContext || "128K"} tokens`}
+          >
+            {model.defaultContext || "128K"}
+          </span>
+
+          {model.supportsFast && (
+            <span className="text-[9px] px-1 py-0.2 rounded bg-[#ede8df] dark:bg-white/10 text-[#706c64] dark:text-[#a09c94] font-semibold">
+              Fast
+            </span>
+          )}
+
+          {/* Info Icon with Accurate Context Specs */}
+          <div
+            className="text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white p-0.5 rounded cursor-help"
+            title={`${model.label} · ${model.providerName} (${model.configured || isLocal ? "Ready" : "Key required"}) · Context: ${model.defaultContext || "128K"} tokens`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CircleHelp size={11} />
+          </div>
+
+          {/* Chevron indicator */}
+          <div className="text-[#706c64] dark:text-[#a09c94] p-0.5">
+            <ChevronRightIcon size={12} />
+          </div>
+        </div>
+      </motion.div>
+    </div>
   )
 }
 
@@ -1375,92 +1760,152 @@ function ModelSidePanel({
         editing ? `${model.label} settings` : `${model.label} details`
       }
       {...flyoutPresence(reduceMotion)}
-      className={cn(MENU_PANEL_CLASS, "flex w-60 shrink-0 flex-col gap-2.5 p-3.5")}
+      className={cn(MENU_PANEL_CLASS, "flex w-52 shrink-0 flex-col gap-2 p-2.5 shadow-2xl border border-[#e8e4db] dark:border-[#2e2e33]")}
     >
       {editing ? (
         <ModelEditPanelContent model={model} />
       ) : (
-        <ModelInfoPanelContent model={model} />
+        <ModelSidePanelContent model={model} />
       )}
     </motion.aside>
   )
 }
 
-function ModelInfoPanelContent({ model }: { model: AiModel }) {
-  const { onOpenKeySetup, setOpen } = useModelSelectorContext("ModelInfoPanelContent")
-  const contexts = model.contexts
-    ?.map((context) => formatContext(context))
-    .filter(Boolean)
-    .join(" · ")
+function ModelSidePanelContent({ model }: { model: AiModel }) {
+  const { onOpenKeySetup, setOpen, selection, selectModel, patchSelection, getConfigFor } =
+    useModelSelectorContext("ModelSidePanelContent")
 
+  const config = getConfigFor(model)
   const isLocal = model.providerType === "local"
+  const isReady = model.configured || isLocal
+  const contexts = model.contexts?.map((c) => formatContext(c)).filter(Boolean).join(" · ")
+  const isSelectedModel = selection.id === model.id
+  const currentEffort = isSelectedModel ? (selection.effort || "medium") : (model.defaultEffort || "medium")
+
+  const handleSelectEffort = (effort: AiModelEffort, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    selectModel(model.id)
+    patchSelection({ ...config, id: model.id, effort })
+    setOpen(false)
+  }
 
   return (
-    <>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[var(--text)] text-xs font-semibold">{model.label}</div>
-          <div className="text-[10px] text-[var(--muted)] flex items-center gap-1 mt-0.5">
+    <div className="flex flex-col gap-2 text-left">
+      {/* Model Name Header */}
+      <div className="flex items-start justify-between gap-1.5 pb-1.5 border-b border-[#e8e4db] dark:border-[#2e2e33]">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11.5px] font-semibold text-[#1c1b18] dark:text-white leading-tight truncate">
+            {model.label}
+          </div>
+          <div className="text-[10px] text-[#706c64] dark:text-[#a09c94] flex items-center gap-1 mt-0.5">
             {isLocal ? <Laptop size={10} /> : <Cloud size={10} />}
-            <span>{model.providerName}</span>
+            <span className="truncate">{model.providerName}</span>
           </div>
         </div>
-        {model.configured || isLocal ? (
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
-            {isLocal ? "Local AI" : "Ready"}
+        {model.status === "discontinued" ? (
+          <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-semibold shrink-0">
+            Retired
+          </span>
+        ) : model.status === "deprecating" ? (
+          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold shrink-0">
+            Sunset
+          </span>
+        ) : isReady ? (
+          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold shrink-0">
+            Ready
           </span>
         ) : (
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
-            Key needed
+          <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/15 text-sky-700 dark:text-sky-400 font-semibold shrink-0">
+            Connect
           </span>
         )}
       </div>
 
-      {model.description ? (
-        <p className="text-[var(--muted)] text-[11px] leading-relaxed">
+      {/* Model Info Description */}
+      {model.description && (
+        <p className="text-[10px] text-[#706c64] dark:text-[#a09c94] leading-relaxed line-clamp-2">
           {model.description}
         </p>
-      ) : null}
+      )}
 
-      {contexts ? (
-        <div className="mt-1 flex flex-col gap-0.5">
-          <span className="text-[var(--muted)] text-[9px] font-semibold uppercase">
-            Context Limit
-          </span>
-          <span className="text-[var(--text)] text-xs font-mono">
-            {contexts}
-          </span>
+      {/* Antigravity-Grade Reasoning Effort Segmented Box */}
+      <div className="space-y-1">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-[#706c64] dark:text-[#a09c94] px-0.5">
+          Reasoning Effort
         </div>
-      ) : null}
+        <div className="p-0.5 bg-[#ede8df]/40 dark:bg-white/5 rounded-lg border border-[#e8e4db] dark:border-white/10 flex flex-col gap-0.5">
+          {(["low", "medium", "high"] as const).map((eff) => {
+            const isEffortActive = isSelectedModel && currentEffort === eff
+            return (
+              <button
+                key={eff}
+                type="button"
+                onClick={(e) => handleSelectEffort(eff, e)}
+                className={cn(
+                  "w-full flex items-center justify-between px-2 py-1 rounded-md text-[10.5px] transition cursor-pointer text-left font-medium",
+                  isEffortActive
+                    ? "bg-white dark:bg-[#2f2f36] text-[#1c1b18] dark:text-white font-semibold shadow-xs"
+                    : "text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df]/60 dark:hover:bg-white/5"
+                )}
+              >
+                <span>{eff === "low" ? "Low" : eff === "medium" ? "Medium" : "High"}</span>
+                {isEffortActive && <Check size={11} className="text-[#1c1b18] dark:text-white" />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
-      {!model.configured && !isLocal && onOpenKeySetup && (
+      {/* Deprecation / Sunset Callout Alert */}
+      {(model.status === "deprecating" || model.status === "discontinued") && (
+        <div className={cn(
+          "p-2 rounded-xl border text-[10.5px] space-y-1 text-left mt-0.5",
+          model.status === "discontinued"
+            ? "bg-rose-500/10 border-rose-500/20 text-rose-800 dark:text-rose-300"
+            : "bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300"
+        )}>
+          <div className="flex items-center gap-1.5 font-bold text-[10.5px]">
+            <AlertTriangle size={11} className="shrink-0" />
+            <span>{model.status === "discontinued" ? "Discontinued" : "Sunset Notice"}</span>
+          </div>
+          {model.sunsetDate && (
+            <div className="text-[10px]">
+              Shutdown: <span className="font-semibold">{model.sunsetDate}</span>
+            </div>
+          )}
+          {model.suggestedReplacement && (
+            <div className="text-[9.5px] pt-0.5">
+              <span>Migrate to: </span>
+              <span className="font-mono font-semibold underline">{model.suggestedReplacement}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Context info */}
+      {contexts && (
+        <div className="flex items-center justify-between text-[10px] px-1 text-[#706c64] dark:text-[#a09c94] pt-0.5 border-t border-[#e8e4db]/60 dark:border-white/5">
+          <span>Context limit</span>
+          <span className="font-mono font-medium text-[#1c1b18] dark:text-white">{contexts}</span>
+        </div>
+      )}
+
+      {/* Connect API Key button if not configured */}
+      {!isReady && onOpenKeySetup && (
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation()
             setOpen(false)
             onOpenKeySetup(model.providerId)
           }}
-          className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-[var(--accent)]/15 hover:bg-[var(--accent)]/25 text-[var(--text)] text-xs font-medium transition-colors"
+          className="mt-1 w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-[#1c1b18] hover:bg-black dark:bg-white/10 dark:hover:bg-white/15 text-white text-[10.5px] font-medium transition-colors whitespace-nowrap cursor-pointer shadow-xs"
         >
-          <Key size={12} />
-          <span>Connect {model.providerName} Key</span>
+          <Key size={11} className="text-purple-400 shrink-0" />
+          <span className="truncate">Connect {model.providerName} Key</span>
         </button>
       )}
-
-      {isLocal && onOpenKeySetup && (
-        <button
-          type="button"
-          onClick={() => {
-            setOpen(false)
-            onOpenKeySetup(model.providerId)
-          }}
-          className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-1)] text-[var(--text)] text-xs font-medium border border-[var(--border)] transition-colors"
-        >
-          <Laptop size={12} />
-          <span>Configure {model.providerName} URL</span>
-        </button>
-      )}
-    </>
+    </div>
   )
 }
 
@@ -1531,156 +1976,7 @@ function ModelEditPanelContent({ model }: { model: AiModel }) {
   )
 }
 
-function ModelSelectorItem({ model }: { model: AiModel }) {
-  const {
-    selection,
-    selectModel,
-    reduceMotion,
-    layoutGroupId,
-    contentId,
-    activeIndex,
-    setActiveIndex,
-    optionIds,
-    editingId,
-    setEditingId,
-    setPreviewId,
-    getConfigFor,
-    patchSelection,
-    onOpenKeySetup,
-    setOpen,
-  } = useModelSelectorContext("ModelSelectorItem")
 
-  const isActive = model.id === selection.id
-  const isEditing = editingId === model.id
-  const optionIndex = optionIds.indexOf(model.id)
-  const isHighlighted = optionIndex === activeIndex && optionIndex >= 0
-  const isDisabled = !!model.disabled
-  const config = getConfigFor(model)
-  const optionId = optionDomId(contentId, model.id)
-  const isLocal = model.providerType === "local"
-
-  const optionRef = React.useRef<HTMLDivElement | null>(null)
-
-  React.useEffect(() => {
-    if (isHighlighted) {
-      optionRef.current?.scrollIntoView({ block: "nearest" })
-    }
-  }, [isHighlighted])
-
-  const handleItemClick = () => {
-    if (isDisabled) return
-    if (!model.configured && model.requiresKey && onOpenKeySetup) {
-      setOpen(false)
-      onOpenKeySetup(model.providerId)
-      return
-    }
-    selectModel(model.id)
-  }
-
-  return (
-    <motion.div
-      variants={reduceMotion ? itemVariantsReduced : itemVariants}
-      className={cn(
-        "group/item relative flex w-full items-center gap-1 rounded-xl",
-        "transition-colors duration-150",
-        isActive ? "text-[var(--text)] font-medium" : "text-[var(--text-secondary)]",
-        isHighlighted && !isActive && "bg-[var(--surface-2)]",
-        isEditing && "bg-[var(--surface-2)]",
-        isDisabled && "pointer-events-none opacity-40"
-      )}
-      onMouseEnter={() => {
-        if (!isDisabled && optionIndex >= 0) {
-          setActiveIndex(optionIndex)
-          if (!editingId) setPreviewId(model.id)
-        }
-      }}
-    >
-      {isActive ? (
-        <motion.span
-          layoutId={`${layoutGroupId}-active`}
-          className="bg-[var(--surface-2)] absolute inset-0 rounded-xl"
-          transition={SPRING_SOFT}
-        />
-      ) : null}
-
-      <div
-        ref={optionRef}
-        id={optionId}
-        role="option"
-        aria-selected={isActive}
-        aria-disabled={isDisabled || undefined}
-        data-slot="model-selector-item"
-        onClick={handleItemClick}
-        className={cn(
-          "relative z-10 flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-xs",
-          !isDisabled && "active:scale-[0.98]"
-        )}
-      >
-        <div className="min-w-0 flex-1 flex items-center justify-between gap-1.5">
-          <div className="flex flex-col min-w-0">
-            <span className="text-[var(--text)] truncate font-medium">{model.label}</span>
-            <span className="text-[10px] text-[var(--muted)] truncate flex items-center gap-1">
-              {isLocal ? <Laptop size={9} /> : <Cloud size={9} />}
-              <span>{model.providerName}</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-            {isLocal ? (
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
-                Local
-              </span>
-            ) : model.configured ? (
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
-                Ready
-              </span>
-            ) : (
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center gap-0.5 font-medium">
-                <Key size={9} /> Add Key
-              </span>
-            )}
-          </div>
-        </div>
-
-        {isActive ? (
-          <MenuCheckmark
-            visible
-            reduceMotion={reduceMotion}
-            className="text-[var(--text)]"
-          />
-        ) : (
-          <span className="size-3.5 shrink-0" aria-hidden />
-        )}
-      </div>
-
-      <button
-        type="button"
-        data-slot="model-selector-edit"
-        aria-label={`Edit ${model.label} settings`}
-        disabled={isDisabled}
-        onClick={(event) => {
-          event.stopPropagation()
-          if (isEditing) {
-            setEditingId(null)
-            return
-          }
-          patchSelection({ ...config, id: model.id })
-          setEditingId(model.id)
-        }}
-        className={cn(
-          "relative z-10 mr-1 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg",
-          "text-[var(--muted)] opacity-0 transition-opacity",
-          "hover:bg-[var(--surface-3)] hover:text-[var(--text)]",
-          "focus:outline-none group-hover/item:opacity-100",
-          (isEditing || isHighlighted) && "opacity-100",
-          isEditing && "bg-[var(--surface-3)] text-[var(--text)]"
-        )}
-      >
-        <PencilIcon className="size-3" aria-hidden />
-      </button>
-    </motion.div>
-  )
-}
 
 export type AiPromptModel = AiModel
 export type AiPromptSendStatus = "idle" | "loading" | "success"
@@ -2664,7 +2960,7 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
                     disabled={disabled || sessionLocked}
                   >
                     <ModelSelectorTrigger className="h-8">
-                      <ModelSelectorValue className="max-w-44 sm:max-w-64" />
+                      <ModelSelectorValue className="max-w-[280px] sm:max-w-[420px]" />
                     </ModelSelectorTrigger>
                     <ModelSelectorContent side="top" />
                   </ModelSelector>
@@ -2688,26 +2984,33 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
                   ) : null}
                 </AnimatePresence>
 
-                <VoiceInput
-                  className={cn(
-                    "origin-center",
-                    (disabled || status === "loading" || talking) && "pointer-events-none opacity-40"
-                  )}
-                  onStart={() => {
-                    dictationBaseValueRef.current = valueRef.current || "";
-                    setDictationPhase("listening");
-                    onDictationChange?.(true);
+                <MicButton
+                  disabled={disabled || status === "loading" || talking}
+                  phase={dictationPhase}
+                  onToggle={() => {
+                    if (dictating) {
+                      globalVoiceController.stop();
+                      dictationBaseValueRef.current = "";
+                      setDictationPhase("idle");
+                      onDictationChange?.(false);
+                    } else {
+                      dictationBaseValueRef.current = valueRef.current || "";
+                      setDictationPhase("recording");
+                      onDictationChange?.(true);
+                      globalVoiceController.start({
+                        onTranscript: (transcript) => {
+                          const base = dictationBaseValueRef.current;
+                          const next = base ? `${base} ${transcript}` : transcript;
+                          setValue(next);
+                        },
+                        onError: () => {
+                          setDictationPhase("idle");
+                          onDictationChange?.(false);
+                        },
+                      });
+                    }
                   }}
-                  onStop={() => {
-                    dictationBaseValueRef.current = "";
-                    setDictationPhase("idle");
-                    onDictationChange?.(false);
-                  }}
-                  onTranscript={(transcript) => {
-                    const base = dictationBaseValueRef.current;
-                    const next = base ? `${base} ${transcript}` : transcript;
-                    setValue(next);
-                  }}
+                  reduceMotion={reduceMotion}
                 />
                 <ActionButton
                   disabled={disabled}

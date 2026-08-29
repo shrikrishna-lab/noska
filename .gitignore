@@ -43,6 +43,14 @@ src/pages/support/
 
 # Dev/test artifacts
 test-page.cjs
+*.cjs
+*.log
+*.pem
+*.cer
+*.pfx
+dist-buildtest/
+nuls
+scripts/noska-*.mjs
 admin/src/lib/more_hooks.txt
 console-after-typing.txt
 /*.png
