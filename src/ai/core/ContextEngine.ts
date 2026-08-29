@@ -191,9 +191,9 @@ function pruneHistory(
     .filter(m => m.role === "user" || m.role === "assistant" || m.role === "ai")
     .map(m => ({
       role: m.role === "ai" ? "assistant" : m.role,
-      content: m.text || m.content || "",
+      content: (m.text || m.content || "").trim(),
     }))
-    .filter(m => m.content.length > 0);
+    .filter(m => m.content.length > 0 && m.content !== "..." && m.content !== "…");
 
   if (formatted.length === 0) return [];
 

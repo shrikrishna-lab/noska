@@ -244,6 +244,10 @@ export class ModelDiscoveryService {
       }
     }
 
+    const pricing = override?.pricing || item.pricing;
+    const aliases = override?.aliases || item.aliases;
+    const knowledgeCutoff = override?.knowledgeCutoff || item.knowledgeCutoff;
+
     return {
       id,
       provider,
@@ -253,9 +257,10 @@ export class ModelDiscoveryService {
       version: item.version,
       contextWindow,
       maxOutputTokens,
+      knowledgeCutoff,
       capabilities,
       reasoningModes: override?.reasoningModes || item.reasoningModes,
-      pricing: item.pricing,
+      pricing,
       freeAccess,
       protocol: item.protocol,
       endpoint: item.endpoint,
@@ -263,7 +268,8 @@ export class ModelDiscoveryService {
       source,
       localState: item.localState,
       createdAt: item.createdAt ? String(item.createdAt) : undefined,
-      lastVerifiedAt: new Date().toISOString(),
+      lastVerifiedAt: item.lastVerifiedAt || new Date().toISOString(),
+      aliases,
       description: item.description,
       enabled: true,
     };

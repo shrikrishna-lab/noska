@@ -12,35 +12,43 @@ export class AnthropicModelDiscovery implements ModelDiscoveryAdapter {
 
   async listModels(config?: ProviderDiscoveryConfig): Promise<DiscoveredModel[]> {
     if (!config?.apiKey) {
-      throw new Error("Anthropic API key required for live model discovery");
+      return this.getOfficialSnapshotModels();
     }
 
     const baseUrl = config.baseUrl || "https://api.anthropic.com/v1";
-    const res = await fetch(`${baseUrl}/models`, {
-      method: "GET",
-      headers: {
-        "x-api-key": config.apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-        "Content-Type": "application/json",
-      },
-      signal: config.signal,
-    });
+    try {
+      const res = await fetch(`${baseUrl}/models`, {
+        method: "GET",
+        headers: {
+          "x-api-key": config.apiKey.trim(),
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+          "Content-Type": "application/json",
+        },
+        signal: config.signal,
+      });
 
-    if (!res.ok) {
-      throw new Error(`Anthropic API error (${res.status}): ${await res.text().catch(() => "")}`);
+      if (!res.ok) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      const json = await res.json();
+      const rawList: unknown[] = Array.isArray(json?.data) ? json.data : [];
+
+      const models: DiscoveredModel[] = [];
+      for (const raw of rawList) {
+        const normalized = this.normalizeModel(raw);
+        if (normalized) models.push(normalized);
+      }
+
+      if (models.length === 0) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      return models;
+    } catch {
+      return this.getOfficialSnapshotModels();
     }
-
-    const json = await res.json();
-    const rawList: unknown[] = Array.isArray(json?.data) ? json.data : [];
-
-    const models: DiscoveredModel[] = [];
-    for (const raw of rawList) {
-      const normalized = this.normalizeModel(raw);
-      if (normalized) models.push(normalized);
-    }
-
-    return models;
   }
 
   normalizeModel(raw: any): DiscoveredModel | null {
@@ -95,5 +103,21 @@ export class AnthropicModelDiscovery implements ModelDiscoveryAdapter {
       status: "available",
       raw,
     };
+  }
+
+  getOfficialSnapshotModels(): DiscoveredModel[] {
+    const rawIds = [
+      "claude-opus-5",
+      "claude-sonnet-5",
+      "claude-fable-5",
+      "claude-mythos-5",
+      "claude-haiku-4-5",
+      "claude-3-7-sonnet-20250219",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-haiku-20241022",
+      "claude-3-opus-20240229"
+    ];
+
+    return rawIds.map(id => this.normalizeModel({ id, object: "model", display_name: id })!).filter(Boolean);
   }
 }

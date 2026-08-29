@@ -293,9 +293,13 @@ export default function AIPanel({
         chatScroll.scrollToLatest();
       });
 
-      // Update real active model if user changed it in selector
+      // Update real active provider & model if user changed it in selector
       if (selection?.id) {
-        aiManager.setActiveModel(selection.id);
+        if (selection.providerId) {
+          aiManager.setActiveProvider(selection.providerId, selection.id);
+        } else {
+          aiManager.setActiveModel(selection.id);
+        }
       }
 
       capture("ai_generation", { model: selection?.id || modelName });
@@ -354,10 +358,15 @@ export default function AIPanel({
 
         const startedAt = Date.now();
         let firstChunkReceived = false;
+        const priorHistory = baseMsgs
+          .filter(m => m.text && m.text !== "...")
+          .map(m => ({ role: m.role, content: m.text }))
+          .slice(-12);
+
         const result = await aiManager.stream({
           system: systemPrompt,
           prompt: text,
-          messages: updatedMessages.slice(-12),
+          messages: priorHistory,
           page: page || undefined,
           pages: pages || undefined,
           agent: activeAgent,
@@ -378,6 +387,15 @@ export default function AIPanel({
         const latencyMs = Date.now() - startedAt;
         const responseText = result || "";
         const activeSelectedModel = selection?.id || modelName;
+
+        if (!responseText && !hasToolCalls(responseText)) {
+          throw new AIError({
+            type: "unknown",
+            provider: providerName,
+            retryable: true,
+            userMessage: `${providerName || "AI Provider"}: No response received. Please verify provider connectivity and try again.`,
+          });
+        }
 
         setMessages((prev) => {
           const next = [...prev];

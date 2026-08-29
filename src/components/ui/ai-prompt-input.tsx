@@ -201,6 +201,7 @@ export type AiModel = {
 
 export type AiModelSelection = {
   id: string
+  providerId?: string
   effort?: AiModelEffort
   context?: string
   fast?: boolean

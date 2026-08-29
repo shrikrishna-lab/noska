@@ -76,7 +76,7 @@ export class ModelRegistry {
    * Get latest up to 10 models for a provider (all for OpenCode Zen)
    */
   public getLatestModelsForProvider(providerId: ProviderId, max: number = 10): NoskaModel[] {
-    const list = this.getModelsForProvider(providerId);
+    const list = this.getModelsForProvider(providerId).filter(m => m.status !== "shutdown" && m.status !== "deprecated");
     if (providerId === "opencode_zen") return list;
     return list.slice(0, max);
   }

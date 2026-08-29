@@ -13,33 +13,41 @@ export class OpenAIModelDiscovery implements ModelDiscoveryAdapter {
 
   async listModels(config?: ProviderDiscoveryConfig): Promise<DiscoveredModel[]> {
     if (!config?.apiKey) {
-      throw new Error("OpenAI API key required for live model discovery");
+      return this.getOfficialSnapshotModels();
     }
 
     const baseUrl = config.baseUrl || "https://api.openai.com/v1";
-    const res = await fetch(`${baseUrl}/models`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: config.signal,
-    });
+    try {
+      const res = await fetch(`${baseUrl}/models`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${config.apiKey.trim()}`,
+          "Content-Type": "application/json",
+        },
+        signal: config.signal,
+      });
 
-    if (!res.ok) {
-      throw new Error(`OpenAI API error (${res.status}): ${await res.text().catch(() => "")}`);
+      if (!res.ok) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      const json = await res.json();
+      const rawList: unknown[] = Array.isArray(json?.data) ? json.data : [];
+
+      const models: DiscoveredModel[] = [];
+      for (const raw of rawList) {
+        const normalized = this.normalizeModel(raw);
+        if (normalized) models.push(normalized);
+      }
+
+      if (models.length === 0) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      return models;
+    } catch {
+      return this.getOfficialSnapshotModels();
     }
-
-    const json = await res.json();
-    const rawList: unknown[] = Array.isArray(json?.data) ? json.data : [];
-
-    const models: DiscoveredModel[] = [];
-    for (const raw of rawList) {
-      const normalized = this.normalizeModel(raw);
-      if (normalized) models.push(normalized);
-    }
-
-    return models;
   }
 
   normalizeModel(raw: any): DiscoveredModel | null {
@@ -100,5 +108,26 @@ export class OpenAIModelDiscovery implements ModelDiscoveryAdapter {
       status: lowerId.includes("preview") ? "preview" : "available",
       raw,
     };
+  }
+
+  getOfficialSnapshotModels(): DiscoveredModel[] {
+    const rawIds = [
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+      "gpt-5.5",
+      "gpt-5.4",
+      "gpt-5.3-codex",
+      "gpt-5",
+      "o3",
+      "o3-mini",
+      "o1",
+      "o1-mini",
+      "gpt-4o",
+      "gpt-4o-mini",
+      "chatgpt-4o-latest"
+    ];
+
+    return rawIds.map(id => this.normalizeModel({ id, object: "model" })!).filter(Boolean);
   }
 }

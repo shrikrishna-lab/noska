@@ -12,33 +12,41 @@ export class GeminiModelDiscovery implements ModelDiscoveryAdapter {
 
   async listModels(config?: ProviderDiscoveryConfig): Promise<DiscoveredModel[]> {
     if (!config?.apiKey) {
-      throw new Error("Gemini API key required for live model discovery");
+      return this.getOfficialSnapshotModels();
     }
 
     const baseUrl = config.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
-    const res = await fetch(`${baseUrl}/models`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": config.apiKey,
-      },
-      signal: config.signal,
-    });
+    try {
+      const res = await fetch(`${baseUrl}/models`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": config.apiKey.trim(),
+        },
+        signal: config.signal,
+      });
 
-    if (!res.ok) {
-      throw new Error(`Gemini API error (${res.status}): ${await res.text().catch(() => "")}`);
+      if (!res.ok) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      const json = await res.json();
+      const rawList: unknown[] = Array.isArray(json?.models) ? json.models : [];
+
+      const models: DiscoveredModel[] = [];
+      for (const raw of rawList) {
+        const normalized = this.normalizeModel(raw);
+        if (normalized) models.push(normalized);
+      }
+
+      if (models.length === 0) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      return models;
+    } catch {
+      return this.getOfficialSnapshotModels();
     }
-
-    const json = await res.json();
-    const rawList: unknown[] = Array.isArray(json?.models) ? json.models : [];
-
-    const models: DiscoveredModel[] = [];
-    for (const raw of rawList) {
-      const normalized = this.normalizeModel(raw);
-      if (normalized) models.push(normalized);
-    }
-
-    return models;
   }
 
   normalizeModel(raw: any): DiscoveredModel | null {
@@ -116,5 +124,22 @@ export class GeminiModelDiscovery implements ModelDiscoveryAdapter {
       status: lowerId.includes("preview") || lowerId.includes("exp") ? "preview" : "available",
       raw,
     };
+  }
+
+  getOfficialSnapshotModels(): DiscoveredModel[] {
+    const rawModels = [
+      { name: "models/gemini-3.7-flash", displayName: "Gemini 3.7 Flash", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 65536 },
+      { name: "models/gemini-3.6-flash", displayName: "Gemini 3.6 Flash", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 65536 },
+      { name: "models/gemini-3.5-flash", displayName: "Gemini 3.5 Flash", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 65536 },
+      { name: "models/gemini-3.5-flash-lite", displayName: "Gemini 3.5 Flash Lite", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 65536 },
+      { name: "models/gemini-3.1-pro-preview", displayName: "Gemini 3.1 Pro (Preview)", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 2097152, outputTokenLimit: 65536 },
+      { name: "models/gemini-3-flash-preview", displayName: "Gemini 3 Flash (Preview)", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 65536 },
+      { name: "models/gemini-2.5-flash", displayName: "Gemini 2.5 Flash", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 65536 },
+      { name: "models/gemini-2.5-pro", displayName: "Gemini 2.5 Pro", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 2097152, outputTokenLimit: 65536 },
+      { name: "models/gemini-2.0-flash", displayName: "Gemini 2.0 Flash", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 8192 },
+      { name: "models/gemini-2.0-flash-lite", displayName: "Gemini 2.0 Flash Lite", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 8192 }
+    ];
+
+    return rawModels.map(raw => this.normalizeModel(raw)!).filter(Boolean);
   }
 }

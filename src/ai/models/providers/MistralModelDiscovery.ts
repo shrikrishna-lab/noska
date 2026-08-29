@@ -11,33 +11,41 @@ export class MistralModelDiscovery implements ModelDiscoveryAdapter {
 
   async listModels(config?: ProviderDiscoveryConfig): Promise<DiscoveredModel[]> {
     if (!config?.apiKey) {
-      throw new Error("Mistral API key required for live model discovery");
+      return this.getOfficialSnapshotModels();
     }
 
     const baseUrl = config.baseUrl || "https://api.mistral.ai/v1";
-    const res = await fetch(`${baseUrl}/models`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: config.signal,
-    });
+    try {
+      const res = await fetch(`${baseUrl}/models`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${config.apiKey.trim()}`,
+          "Content-Type": "application/json",
+        },
+        signal: config.signal,
+      });
 
-    if (!res.ok) {
-      throw new Error(`Mistral API error (${res.status}): ${await res.text().catch(() => "")}`);
+      if (!res.ok) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      const json = await res.json();
+      const rawList: unknown[] = Array.isArray(json?.data) ? json.data : [];
+
+      const models: DiscoveredModel[] = [];
+      for (const raw of rawList) {
+        const normalized = this.normalizeModel(raw);
+        if (normalized) models.push(normalized);
+      }
+
+      if (models.length === 0) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      return models;
+    } catch {
+      return this.getOfficialSnapshotModels();
     }
-
-    const json = await res.json();
-    const rawList: unknown[] = Array.isArray(json?.data) ? json.data : [];
-
-    const models: DiscoveredModel[] = [];
-    for (const raw of rawList) {
-      const normalized = this.normalizeModel(raw);
-      if (normalized) models.push(normalized);
-    }
-
-    return models;
   }
 
   normalizeModel(raw: any): DiscoveredModel | null {
@@ -83,5 +91,20 @@ export class MistralModelDiscovery implements ModelDiscoveryAdapter {
       status: "available",
       raw,
     };
+  }
+
+  getOfficialSnapshotModels(): DiscoveredModel[] {
+    const rawIds = [
+      "mistral-medium-2508",
+      "mistral-medium-2505",
+      "codestral-2508",
+      "codestral-latest",
+      "devstral-latest",
+      "mistral-code-agent-latest",
+      "mistral-large-latest",
+      "mistral-small-latest"
+    ];
+
+    return rawIds.map(id => this.normalizeModel({ id, object: "model", name: id })!).filter(Boolean);
   }
 }

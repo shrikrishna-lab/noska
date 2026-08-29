@@ -218,17 +218,17 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
     keyPlaceholder: "AIza...",
     models: [
-      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash", context: 1000000 },
-      { id: "gemini-3.1-pro", name: "Gemini 3.1 Pro", context: 2000000 },
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000 },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 2000000 },
-      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", context: 1000000 },
-      { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite", context: 1000000 },
-      { id: "gemini-2.0-pro-exp-02-05", name: "Gemini 2.0 Pro (Exp)", context: 2000000 },
-      { id: "gemini-2.0-flash-thinking-exp-01-21", name: "Gemini 2.0 Flash Thinking", context: 1000000 }
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1048576 },
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 2097152 },
+      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", context: 1048576 },
+      { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite", context: 1048576 },
+      { id: "gemini-2.0-pro-exp-02-05", name: "Gemini 2.0 Pro (Exp)", context: 2097152 },
+      { id: "gemini-2.0-flash-thinking-exp-01-21", name: "Gemini 2.0 Flash Thinking", context: 1048576 },
+      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", context: 2097152 },
+      { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", context: 1048576 }
     ],
-    defaultModel: "gemini-3.7-flash",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    defaultModel: "gemini-2.5-flash",
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
       if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
@@ -236,10 +236,13 @@ const PROVIDERS: Record<string, AIProvider> = {
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }]
         }));
-        const body: Record<string, any> = {
-          contents,
-          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
-        };
+        const generationConfig: Record<string, any> = { maxOutputTokens: maxTokens, temperature: 0.4 };
+        if (modelId.includes("3.7") || modelId.includes("3.6") || modelId.includes("3.5") || modelId.includes("thinking") || thinking) {
+          generationConfig.thinkingConfig = {
+            thinkingBudget: effort === "high" ? 16000 : effort === "low" ? 2048 : 8000
+          };
+        }
+        const body: Record<string, any> = { contents, generationConfig };
         if (system) {
           body.systemInstruction = { parts: [{ text: system }] };
         }
@@ -263,7 +266,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Gemini", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
       if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
@@ -271,10 +274,13 @@ const PROVIDERS: Record<string, AIProvider> = {
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }]
         }));
-        const body: Record<string, any> = {
-          contents,
-          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
-        };
+        const generationConfig: Record<string, any> = { maxOutputTokens: maxTokens, temperature: 0.4 };
+        if (modelId.includes("3.7") || modelId.includes("3.6") || modelId.includes("3.5") || modelId.includes("thinking") || thinking) {
+          generationConfig.thinkingConfig = {
+            thinkingBudget: effort === "high" ? 16000 : effort === "low" ? 2048 : 8000
+          };
+        }
+        const body: Record<string, any> = { contents, generationConfig };
         if (system) {
           body.systemInstruction = { parts: [{ text: system }] };
         }
@@ -307,20 +313,20 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.openai.com/v1",
     keyPlaceholder: "sk-...",
     models: [
-      { id: "gpt-5", name: "GPT-5 (Flagship)", context: 256000 },
-      { id: "gpt-4.5-preview", name: "GPT-4.5 Preview", context: 128000 },
+      { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Flagship Reasoning)", context: 1050000 },
+      { id: "gpt-5.6-terra", name: "GPT-5.6 Terra (Balanced Agent)", context: 1050000 },
+      { id: "gpt-5.6-luna", name: "GPT-5.6 Luna (Fast Efficient)", context: 1050000 },
+      { id: "o3-mini", name: "OpenAI o3 Mini (Reasoning)", context: 200000 },
+      { id: "o1", name: "OpenAI o1 (Thinking)", context: 200000 },
       { id: "gpt-4o", name: "GPT-4o (Omni)", context: 128000 },
       { id: "gpt-4o-mini", name: "GPT-4o Mini", context: 128000 },
-      { id: "o3", name: "OpenAI o3 (Reasoning)", context: 200000 },
-      { id: "o3-mini", name: "OpenAI o3 Mini", context: 200000 },
-      { id: "o1", name: "OpenAI o1 (Thinking)", context: 200000 },
       { id: "chatgpt-4o-latest", name: "ChatGPT 4o Latest", context: 128000 }
     ],
-    defaultModel: "gpt-4o",
+    defaultModel: "gpt-5.6-sol",
     async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
       if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
-      const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3");
+      const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.includes("gpt-5") || Boolean(thinking);
       try {
         const payload: Record<string, any> = {
           model: modelId,
@@ -354,7 +360,7 @@ const PROVIDERS: Record<string, AIProvider> = {
     async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
       if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
-      const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3");
+      const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.includes("gpt-5") || Boolean(thinking);
       try {
         const payload: Record<string, any> = {
           model: modelId,
@@ -395,19 +401,32 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://api.anthropic.com/v1",
     keyPlaceholder: "sk-ant-...",
     models: [
-      { id: "claude-opus-4-6", name: "Claude Opus 4.6 (Thinking)", context: 200000 },
-      { id: "claude-sonnet-5", name: "Claude Sonnet 5 (Thinking)", context: 200000 },
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", context: 200000 },
+      { id: "claude-opus-5", name: "Claude Opus 5 (Deep Reasoning)", context: 1000000 },
+      { id: "claude-sonnet-5", name: "Claude Sonnet 5 (High-Speed)", context: 1000000 },
+      { id: "claude-fable-5", name: "Claude Fable 5", context: 1000000 },
       { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", context: 200000 },
-      { id: "claude-3-7-sonnet-20250219", name: "Claude 3.7 Sonnet (Thinking)", context: 200000 },
+      { id: "claude-3-7-sonnet-20250219", name: "Claude 3.7 Sonnet (Hybrid Thinking)", context: 200000 },
       { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", context: 200000 },
       { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 }
     ],
-    defaultModel: "claude-opus-4-6",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    defaultModel: "claude-opus-5",
+    async send({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, signal }) {
       if (!apiKey) throw configError("Anthropic");
       const modelId = model || this.defaultModel;
+      const isAdaptiveThinking = modelId.includes("claude-3-7") || modelId.includes("5") || Boolean(thinking);
       try {
+        const payload: Record<string, any> = {
+          model: modelId,
+          max_tokens: Math.max(maxTokens, 4096),
+          stream: false,
+          ...(system ? { system } : {}),
+          messages
+        };
+        if (isAdaptiveThinking) {
+          const budget = effort === "high" ? 16000 : effort === "low" ? 2048 : 8000;
+          payload.thinking = { type: "enabled", budget_tokens: budget };
+          payload.max_tokens = Math.max(payload.max_tokens, budget + 4096);
+        }
         const res = await fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
           headers: {
@@ -416,13 +435,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             "anthropic-version": "2023-06-01",
             "anthropic-dangerous-direct-browser-access": "true"
           },
-          body: JSON.stringify({
-            model: modelId,
-            max_tokens: maxTokens,
-            stream: false,
-            ...(system ? { system } : {}),
-            messages
-          })
+          body: JSON.stringify(payload)
         }, signal);
         await checkResponse(res, "Anthropic", modelId);
         const data = await res.json();
@@ -432,10 +445,23 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Anthropic", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, signal }) {
       if (!apiKey) throw configError("Anthropic");
       const modelId = model || this.defaultModel;
+      const isAdaptiveThinking = modelId.includes("claude-3-7") || modelId.includes("5") || Boolean(thinking);
       try {
+        const payload: Record<string, any> = {
+          model: modelId,
+          max_tokens: Math.max(maxTokens, 4096),
+          stream: true,
+          ...(system ? { system } : {}),
+          messages
+        };
+        if (isAdaptiveThinking) {
+          const budget = effort === "high" ? 16000 : effort === "low" ? 2048 : 8000;
+          payload.thinking = { type: "enabled", budget_tokens: budget };
+          payload.max_tokens = Math.max(payload.max_tokens, budget + 4096);
+        }
         const res = await fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
           headers: {
@@ -444,13 +470,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             "anthropic-version": "2023-06-01",
             "anthropic-dangerous-direct-browser-access": "true"
           },
-          body: JSON.stringify({
-            model: modelId,
-            max_tokens: maxTokens,
-            stream: true,
-            ...(system ? { system } : {}),
-            messages
-          })
+          body: JSON.stringify(payload)
         }, signal);
         await checkResponse(res, "Anthropic", modelId);
         yield* streamEventsToText(parseAnthropicStream(res, signal));
@@ -794,17 +814,18 @@ const PROVIDERS: Record<string, AIProvider> = {
     baseUrl: "https://integrate.api.nvidia.com/v1",
     keyPlaceholder: "nvapi-...",
     models: [
-      { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct", context: 131072 },
-      { id: "nvidia/llama-3.1-nemotron-70b-instruct", name: "Nemotron 70B Instruct", context: 131072 },
-      { id: "deepseek-ai/deepseek-r1", name: "DeepSeek R1 (Thinking)", context: 65536 },
-      { id: "deepseek-ai/deepseek-v3", name: "DeepSeek V3 (671B)", context: 65536 },
-      { id: "meta/llama-3.1-405b-instruct", name: "Llama 3.1 405B Instruct", context: 131072 },
-      { id: "meta/llama-3.1-8b-instruct", name: "Llama 3.1 8B Instruct", context: 131072 },
-      { id: "qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B", context: 32768 },
-      { id: "mistralai/mistral-large-2407", name: "Mistral Large 2", context: 128000 },
-      { id: "microsoft/phi-3.5-moe-instruct", name: "Phi-3.5 MoE", context: 131072 }
+      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", name: "Nemotron 3.5 Lightning (Thinking)", context: 131072 },
+      { id: "deepseek-ai/deepseek-v4-pro-0813", name: "DeepSeek V4 Pro", context: 131072 },
+      { id: "minimaxai/minimax-m3", name: "MiniMax M3", context: 1000000 },
+      { id: "moonshotai/kimi-k3", name: "Kimi K3", context: 131072 },
+      { id: "openai/gpt-oss-120b", name: "GPT OSS 120B", context: 131072 },
+      { id: "google/gemma-4-31b-it", name: "Gemma 4 31B", context: 131072 },
+      { id: "nvidia/nemotron-3-ultra-550b-a55b", name: "Nemotron 3 Ultra 550B", context: 131072 },
+      { id: "poolside/laguna-xs-2.1", name: "Laguna XS 2.1", context: 131072 },
+      { id: "mistralai/mistral-nemotron", name: "Mistral Nemotron", context: 131072 },
+      { id: "meta/llama-3.2-90b-vision-instruct", name: "Llama 3.2 90B Vision", context: 131072 }
     ],
-    defaultModel: "meta/llama-3.3-70b-instruct",
+    defaultModel: "nvidia/nemotron-3.5-lightning-30b-a3b",
     async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
       if (!apiKey) throw configError("NVIDIA");
       const modelId = model || this.defaultModel;

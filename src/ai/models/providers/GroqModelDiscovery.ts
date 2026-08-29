@@ -12,33 +12,41 @@ export class GroqModelDiscovery implements ModelDiscoveryAdapter {
 
   async listModels(config?: ProviderDiscoveryConfig): Promise<DiscoveredModel[]> {
     if (!config?.apiKey) {
-      throw new Error("Groq API key required for live model discovery");
+      return this.getOfficialSnapshotModels();
     }
 
     const baseUrl = config.baseUrl || "https://api.groq.com/openai/v1";
-    const res = await fetch(`${baseUrl}/models`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: config.signal,
-    });
+    try {
+      const res = await fetch(`${baseUrl}/models`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${config.apiKey.trim()}`,
+          "Content-Type": "application/json",
+        },
+        signal: config.signal,
+      });
 
-    if (!res.ok) {
-      throw new Error(`Groq API error (${res.status}): ${await res.text().catch(() => "")}`);
+      if (!res.ok) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      const json = await res.json();
+      const rawList: unknown[] = Array.isArray(json?.data) ? json.data : [];
+
+      const models: DiscoveredModel[] = [];
+      for (const raw of rawList) {
+        const normalized = this.normalizeModel(raw);
+        if (normalized) models.push(normalized);
+      }
+
+      if (models.length === 0) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      return models;
+    } catch {
+      return this.getOfficialSnapshotModels();
     }
-
-    const json = await res.json();
-    const rawList: unknown[] = Array.isArray(json?.data) ? json.data : [];
-
-    const models: DiscoveredModel[] = [];
-    for (const raw of rawList) {
-      const normalized = this.normalizeModel(raw);
-      if (normalized) models.push(normalized);
-    }
-
-    return models;
   }
 
   normalizeModel(raw: any): DiscoveredModel | null {
@@ -98,5 +106,19 @@ export class GroqModelDiscovery implements ModelDiscoveryAdapter {
       status: "available",
       raw,
     };
+  }
+
+  getOfficialSnapshotModels(): DiscoveredModel[] {
+    const rawIds = [
+      "openai/gpt-oss-120b",
+      "qwen/qwen3.8-27b",
+      "qwen/qwen3.6-27b",
+      "groq/compound",
+      "openai/gpt-oss-20b",
+      "meta-llama/llama-prompt-guard-2-86m",
+      "allam-2-7b"
+    ];
+
+    return rawIds.map(id => this.normalizeModel({ id, object: "model", active: true })!).filter(Boolean);
   }
 }

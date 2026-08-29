@@ -80,14 +80,14 @@ export class OpenRouterModelDiscovery implements ModelDiscoveryAdapter {
         }
       : undefined;
 
-    const isFree = promptCost === 0 && completionCost === 0 && !requiresSub;
+    const isFree = (promptCost === 0 && completionCost === 0 && !requiresSub) || id.endsWith(":free") || lowerId.includes(":free");
     const freeAccess = isFree
       ? {
           isFree: true,
           status: "free" as const,
           source: "catalog" as const,
           verifiedAt: new Date().toISOString(),
-          conditions: raw.description?.toLowerCase().includes("rate limit") ? ["Rate limited free access"] : undefined,
+          conditions: ["OpenRouter Free Tier"],
         }
       : {
           isFree: false,
@@ -96,7 +96,7 @@ export class OpenRouterModelDiscovery implements ModelDiscoveryAdapter {
           verifiedAt: new Date().toISOString(),
         };
 
-    // Check OpenRouter metadata fields first
+    // Check OpenRouter metadata fields
     const modality = String(raw.architecture?.modality || "");
     const supportedParams: string[] = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : [];
 
@@ -111,12 +111,14 @@ export class OpenRouterModelDiscovery implements ModelDiscoveryAdapter {
       lowerId.includes("o3");
 
     const isVision =
+      modality.includes("image->text") ||
       modality.includes("image") ||
       modality.includes("multimodal") ||
       lowerId.includes("vision") ||
       lowerId.includes("vl") ||
       lowerId.includes("4o") ||
-      lowerId.includes("gemini");
+      lowerId.includes("gemini") ||
+      lowerId.includes("claude-3");
 
     const supportsTools =
       supportedParams.length > 0
@@ -140,7 +142,7 @@ export class OpenRouterModelDiscovery implements ModelDiscoveryAdapter {
         audio: modality.includes("audio"),
         video: modality.includes("video"),
         imageGeneration: false,
-        structuredOutput: supportedParams.length > 0 ? supportedParams.includes("response_format") : true,
+        structuredOutput: true,
         mcp: true,
         agentMode: true,
       },
@@ -148,5 +150,21 @@ export class OpenRouterModelDiscovery implements ModelDiscoveryAdapter {
       status: "available",
       raw,
     };
+  }
+
+  getOfficialSnapshotModels(): DiscoveredModel[] {
+    const rawIds = [
+      { id: "z-ai/glm-5.2:free", name: "GLM 5.2 (Free)", pricing: { prompt: "0", completion: "0" } },
+      { id: "minimax/minimax-m3:free", name: "MiniMax M3 (Free)", pricing: { prompt: "0", completion: "0" } },
+      { id: "nvidia/nemotron-3.5-lightning:free", name: "Nemotron 3.5 Lightning (Free)", pricing: { prompt: "0", completion: "0" } },
+      { id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B (Free)", pricing: { prompt: "0", completion: "0" } },
+      { id: "poolside/laguna-s-2.1:free", name: "Laguna S 2.1 (Free)", pricing: { prompt: "0", completion: "0" } },
+      { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B Instruct (Free)", pricing: { prompt: "0", completion: "0" } },
+      { id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet", architecture: { modality: "image->text" } },
+      { id: "openai/gpt-4o", name: "GPT-4o (Omni)", architecture: { modality: "image->text" } },
+      { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", architecture: { modality: "image->text" } }
+    ];
+
+    return rawIds.map(raw => this.normalizeModel({ ...raw, context_length: 128000 })!).filter(Boolean);
   }
 }

@@ -309,10 +309,23 @@ class AIManager {
   setActiveModel(modelId: string | null) {
     this.config.activeModel = modelId;
     if (modelId) {
-      for (const provider of getAllProviders()) {
-        if (provider.models.some((m) => m.id === modelId)) {
-          this.config.activeProvider = provider.id;
-          break;
+      // 1. Check dynamic ModelRegistry first
+      const registered = modelRegistry.getModel(modelId);
+      if (registered?.provider) {
+        this.config.activeProvider = registered.provider;
+      } else if (modelId.includes("/")) {
+        const prefix = modelId.split("/")[0];
+        const matchingProvider = getAllProviders().find(p => p.id === prefix);
+        if (matchingProvider) {
+          this.config.activeProvider = matchingProvider.id;
+        }
+      } else {
+        // 2. Check static provider models
+        for (const provider of getAllProviders()) {
+          if (provider.models.some((m) => m.id === modelId)) {
+            this.config.activeProvider = provider.id;
+            break;
+          }
         }
       }
     }
@@ -770,15 +783,19 @@ class AIManager {
       throw err;
     }
 
-    // Use pruned history from context engine instead of raw slice(-20)
-    const apiMessages = contextResult.prunedHistory.length > 0
-      ? contextResult.prunedHistory
-      : (messages || [])
-        .filter(m => m.role === "user" || m.role === "assistant" || m.role === "ai")
-        .map(m => ({ role: m.role === "ai" ? "assistant" : m.role, content: m.text || m.content || "" }));
+    // Use pruned history from context engine, stripping out any temporary loading placeholders
+    const rawHistory = (messages || [])
+      .filter(m => m.role === "user" || m.role === "assistant" || m.role === "ai")
+      .map(m => ({ role: m.role === "ai" ? "assistant" : m.role, content: (m.text || m.content || "").trim() }))
+      .filter(m => m.content.length > 0 && m.content !== "..." && m.content !== "…");
 
-    // Add current prompt if not already in messages
-    if (prompt && !apiMessages.some(m => m.role === "user" && m.content === prompt)) {
+    const historyMessages = contextResult.prunedHistory.length > 0
+      ? contextResult.prunedHistory.filter(m => m.content !== "..." && m.content !== "…")
+      : rawHistory;
+
+    // Ensure the current user prompt is strictly the final user message in the payload
+    const apiMessages: Array<{ role: string; content: string }> = [...historyMessages];
+    if (prompt && (!apiMessages.length || apiMessages[apiMessages.length - 1].content !== prompt || apiMessages[apiMessages.length - 1].role !== "user")) {
       apiMessages.push({ role: "user", content: prompt });
     }
 

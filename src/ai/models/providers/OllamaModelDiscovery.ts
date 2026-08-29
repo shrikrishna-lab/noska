@@ -12,25 +12,33 @@ export class OllamaModelDiscovery implements ModelDiscoveryAdapter {
 
   async listModels(config?: ProviderDiscoveryConfig): Promise<DiscoveredModel[]> {
     const baseUrl = (config?.baseUrl || "http://localhost:11434").replace(/\/+$/, "");
-    const res = await fetch(`${baseUrl}/api/tags`, {
-      method: "GET",
-      signal: config?.signal,
-    });
+    try {
+      const res = await fetch(`${baseUrl}/api/tags`, {
+        method: "GET",
+        signal: config?.signal,
+      });
 
-    if (!res.ok) {
-      throw new Error(`Ollama runtime unreachable (${res.status})`);
+      if (!res.ok) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      const json = await res.json();
+      const rawList: unknown[] = Array.isArray(json?.models) ? json.models : [];
+
+      const models: DiscoveredModel[] = [];
+      for (const raw of rawList) {
+        const normalized = this.normalizeModel(raw);
+        if (normalized) models.push(normalized);
+      }
+
+      if (models.length === 0) {
+        return this.getOfficialSnapshotModels();
+      }
+
+      return models;
+    } catch {
+      return this.getOfficialSnapshotModels();
     }
-
-    const json = await res.json();
-    const rawList: unknown[] = Array.isArray(json?.models) ? json.models : [];
-
-    const models: DiscoveredModel[] = [];
-    for (const raw of rawList) {
-      const normalized = this.normalizeModel(raw);
-      if (normalized) models.push(normalized);
-    }
-
-    return models;
   }
 
   normalizeModel(raw: any): DiscoveredModel | null {
@@ -46,7 +54,7 @@ export class OllamaModelDiscovery implements ModelDiscoveryAdapter {
     }
 
     const isReasoning = lower.includes("r1") || lower.includes("reason") || lower.includes("thinking");
-    const isVision = lower.includes("vision") || lower.includes("llava") || lower.includes("vl");
+    const isVision = lower.includes("vision") || lower.includes("llava") || lower.includes("vl") || lower.includes("bakllava");
 
     // Extract size details if available (e.g. 7B, 70B)
     const parameterSize = raw.details?.parameter_size ? ` (${raw.details.parameter_size})` : "";
@@ -83,5 +91,19 @@ export class OllamaModelDiscovery implements ModelDiscoveryAdapter {
       status: "available",
       raw,
     };
+  }
+
+  getOfficialSnapshotModels(): DiscoveredModel[] {
+    const rawModels = [
+      { name: "llama3.3:latest", details: { family: "llama", parameter_size: "70B", format: "gguf" } },
+      { name: "deepseek-r1:latest", details: { family: "deepseek", parameter_size: "32B", format: "gguf" } },
+      { name: "llama3.2-vision:latest", details: { family: "llama", parameter_size: "11B", format: "gguf" } },
+      { name: "llava:latest", details: { family: "llava", parameter_size: "13B", format: "gguf" } },
+      { name: "qwen2.5-coder:latest", details: { family: "qwen2.5", parameter_size: "32B", format: "gguf" } },
+      { name: "phi4:latest", details: { family: "phi", parameter_size: "14B", format: "gguf" } },
+      { name: "mistral:latest", details: { family: "mistral", parameter_size: "7B", format: "gguf" } }
+    ];
+
+    return rawModels.map(raw => this.normalizeModel(raw)!).filter(Boolean);
   }
 }

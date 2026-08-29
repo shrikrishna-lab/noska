@@ -28,6 +28,10 @@ export interface ModelCapabilities {
   video: boolean;
   imageGeneration: boolean;
   structuredOutput: boolean;
+  webSearch?: boolean;
+  fileSearch?: boolean;
+  codeExecution?: boolean;
+  computerUse?: boolean;
   mcp: boolean;
   agentMode: boolean;
 }
@@ -85,6 +89,7 @@ export interface NoskaModel {
 
   contextWindow?: number;
   maxOutputTokens?: number;
+  knowledgeCutoff?: string;
 
   capabilities: ModelCapabilities;
   reasoningModes?: string[];
@@ -100,6 +105,7 @@ export interface NoskaModel {
 
   createdAt?: string;
   lastVerifiedAt?: string;
+  aliases?: string[];
 
   description?: string;
   enabled: boolean;
@@ -113,6 +119,7 @@ export interface DiscoveredModel {
   version?: string;
   contextWindow?: number;
   maxOutputTokens?: number;
+  knowledgeCutoff?: string;
   capabilities?: Partial<ModelCapabilities>;
   reasoningModes?: string[];
   pricing?: ModelPricing;
@@ -122,6 +129,8 @@ export interface DiscoveredModel {
   status?: ModelLifecycleStatus;
   localState?: LocalModelRuntimeState;
   createdAt?: string | number;
+  lastVerifiedAt?: string;
+  aliases?: string[];
   description?: string;
   raw?: unknown;
 }

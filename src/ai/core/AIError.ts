@@ -96,6 +96,18 @@ export function classifyProviderError(
   const body = (errorBody || "").slice(0, 500);
 
   if (statusCode === 401 || statusCode === 403) {
+    if (body.includes("CreditsError") || body.includes("No payment method") || body.includes("insufficient_quota")) {
+      return new AIError({
+        type: "auth",
+        provider,
+        model,
+        statusCode,
+        retryable: false,
+        userMessage: `${provider}: No credits on account for this model. Select a [Free] model (like Nemotron 3.5 Lightning [Free]) or add credits at ${provider === "OpenCode Zen" ? "opencode.ai/zen" : "provider console"}.`,
+        technicalMessage: body,
+        requestId,
+      });
+    }
     return new AIError({
       type: "auth",
       provider,
@@ -115,20 +127,23 @@ export function classifyProviderError(
       model,
       statusCode,
       retryable: false,
-      userMessage: `${provider}: Model "${model}" not found or not available.`,
+      userMessage: `${provider}: Model "${model}" is not available on this endpoint.`,
       technicalMessage: body,
       requestId,
     });
   }
 
   if (statusCode === 429) {
+    const isFreeLimit = body.includes("FreeUsageLimitError") || body.includes("free");
     return new AIError({
       type: "rate_limit",
       provider,
       model,
       statusCode,
-      retryable: true,
-      userMessage: `${provider}: Rate limit reached. Retrying automatically…`,
+      retryable: !isFreeLimit,
+      userMessage: isFreeLimit
+        ? `${provider}: Free tier rate limit reached. Please wait a moment or try another free model.`
+        : `${provider}: Rate limit reached. Retrying automatically…`,
       technicalMessage: body,
       requestId,
       retryAfterSeconds,
@@ -142,13 +157,25 @@ export function classifyProviderError(
       model,
       statusCode,
       retryable: false,
-      userMessage: `${provider}: Request entity too large (413). Rate/token limit reached. Switch to Gemini 2.5 Flash / OpenRouter or shorten prompt.`,
+      userMessage: `${provider}: Request entity too large (413). Shorten prompt or switch model.`,
       technicalMessage: body,
       requestId,
     });
   }
 
   if (statusCode === 400 || statusCode === 422) {
+    if (body.includes("Model is unavailable") || body.includes("Upstream request failed")) {
+      return new AIError({
+        type: "server",
+        provider,
+        model,
+        statusCode,
+        retryable: false,
+        userMessage: `${provider}: Model "${model}" is temporarily unavailable upstream. Try Nemotron 3.5 Lightning (Free) or Laguna S 2.1 (Free).`,
+        technicalMessage: body,
+        requestId,
+      });
+    }
     return new AIError({
       type: "invalid_request",
       provider,
