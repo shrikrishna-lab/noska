@@ -56,6 +56,7 @@ import { AnimatedSparkle } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss, TextArea } from "./ui";
 import { emojis, covers, blockFor, getPagePermission, renderInlineMarkdown, softDelete, getDescendants, turnInto } from "../utils/helpers";
 import { richTextToPlainText, plainTextToRichText } from "../utils/richText";
+import { globalVoiceController } from "../lib/voice/voice-controller";
 
 // Searchable emoji catalog for the /emoji picker (keyword-indexed).
 const EMOJI_CATALOG = [
@@ -1126,11 +1127,12 @@ export default function Editor({
                 className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onVoiceCapture?.();
+                  globalVoiceController.toggle();
                 }}
+                title="Toggle Voice Typing (Ctrl+Shift+Space)"
               >
                 <Mic size={12} />
-                <span>Voice capture</span>
+                <span>Voice typing</span>
               </button>
             </div>
           )}
@@ -2100,18 +2102,30 @@ const Block = memo(function Block({
     }
     if (e.key === "Enter" && !e.shiftKey && block.type !== "code") {
       e.preventDefault();
-      onAdd("text", "");
+      const newBlockId = crypto.randomUUID();
+      onAdd("text", "", newBlockId);
       setTimeout(
         () => {
-          const next = inputRef.current?.closest(".noska-block")?.nextSibling as Element | null;
-          // Text blocks render as contenteditable, not textarea/input — try
-          // both so the caret actually moves into the freshly added block.
+          const nextEl = document.querySelector(`[data-block-id="${newBlockId}"]`);
           const focusable =
-            next?.querySelector<HTMLElement>("textarea, input") ||
-            next?.querySelector<HTMLElement>("[contenteditable='true']");
-          focusable?.focus();
+            nextEl?.querySelector<HTMLElement>("[contenteditable='true']") ||
+            nextEl?.querySelector<HTMLElement>("textarea, input") ||
+            (inputRef.current?.closest(".noska-block")?.nextSibling as Element | null)?.querySelector<HTMLElement>("[contenteditable='true'], textarea, input");
+          if (focusable) {
+            focusable.focus();
+            if (focusable.getAttribute("contenteditable") === "true") {
+              const sel = window.getSelection();
+              if (sel) {
+                const range = document.createRange();
+                range.selectNodeContents(focusable);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+            }
+          }
         },
-        0
+        10
       );
     }
     if (e.key === "Backspace" && !block.text) onDelete();
@@ -2133,11 +2147,24 @@ const Block = memo(function Block({
         e.preventDefault();
         const targetEl = document.querySelector(`[data-block-id="${flat[targetIdx].id}"]`);
         if (targetEl) {
-          const input = targetEl.querySelector<HTMLTextAreaElement | HTMLInputElement>("textarea, input");
+          const input =
+            targetEl.querySelector<HTMLElement>("[contenteditable='true']") ||
+            targetEl.querySelector<HTMLTextAreaElement | HTMLInputElement>("textarea, input");
           if (input) {
             input.focus();
-            const len = input.value?.length || 0;
-            input.setSelectionRange(len, len);
+            if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
+              const len = input.value?.length || 0;
+              input.setSelectionRange(len, len);
+            } else if (input.getAttribute("contenteditable") === "true") {
+              const sel = window.getSelection();
+              if (sel) {
+                const range = document.createRange();
+                range.selectNodeContents(input);
+                range.collapse(dir === 1);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+            }
           }
         }
       }
@@ -2156,10 +2183,30 @@ const Block = memo(function Block({
     // Ctrl+Shift+Enter to add block above
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "Enter") {
       e.preventDefault();
-      onAddAbove("text", "");
+      const newBlockId = crypto.randomUUID();
+      onAddAbove("text", "", newBlockId);
       setTimeout(
-        () => (inputRef.current?.closest(".noska-block")?.previousSibling as Element | null)?.querySelector<HTMLElement>("textarea,input")?.focus(),
-        0
+        () => {
+          const prevEl = document.querySelector(`[data-block-id="${newBlockId}"]`);
+          const focusable =
+            prevEl?.querySelector<HTMLElement>("[contenteditable='true']") ||
+            prevEl?.querySelector<HTMLElement>("textarea, input") ||
+            (inputRef.current?.closest(".noska-block")?.previousSibling as Element | null)?.querySelector<HTMLElement>("[contenteditable='true'], textarea, input");
+          if (focusable) {
+            focusable.focus();
+            if (focusable.getAttribute("contenteditable") === "true") {
+              const sel = window.getSelection();
+              if (sel) {
+                const range = document.createRange();
+                range.selectNodeContents(focusable);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+            }
+          }
+        },
+        10
       );
     }
   };
@@ -2380,7 +2427,19 @@ const Block = memo(function Block({
         </div>
       )}
 
-      <div className="relative min-w-0 flex-1">
+      <div
+        className="relative min-w-0 flex-1 cursor-text"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            const focusable =
+              e.currentTarget.querySelector<HTMLElement>("[contenteditable='true']") ||
+              e.currentTarget.querySelector<HTMLElement>("textarea, input");
+            if (focusable && document.activeElement !== focusable) {
+              focusable.focus();
+            }
+          }
+        }}
+      >
         {renderBlockEditor(
           block,
           index,

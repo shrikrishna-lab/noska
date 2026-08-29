@@ -8,7 +8,7 @@ import { WorkspaceProvider, useWorkspace } from "./contexts/WorkspaceContext";
 import { AIProvider, useAI } from "./contexts/AIContext";
 import { TabProvider, useTabs } from "./contexts/TabContext";
 import { WorkspaceTabBar } from "./components/tabs/WorkspaceTabBar";
-import { Confetti, Toast } from "./components/ui";
+import { Confetti, Toast, VoiceFloatingIndicator } from "./components/ui";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import Editor from "./components/Editor";
@@ -1139,7 +1139,12 @@ function AppContent() {
     if (ticketPending) return;
     if (location.pathname === "/waitlist" || location.pathname === "/banned") return;
     if (appFlowState === "auth") {
-      if (location.pathname !== "/login") navigate("/login", { replace: true });
+      if (location.pathname !== "/login") {
+        if (import.meta.env.DEV && location.pathname !== "/" && !location.pathname.startsWith("/login")) {
+          sessionStorage.setItem("noska_dev_deep_link", location.pathname);
+        }
+        navigate("/login", { replace: true });
+      }
       return;
     }
     if (appFlowState === "onboarding") {
@@ -2082,9 +2087,9 @@ function AppContent() {
     setAppView("page");
   };
 
-  const handleUnlockPage = async (pageId: string, passphrase: string) => {
+  const handleUnlockPage = async (pageId: string, passphrase: string): Promise<boolean> => {
     const page = pages.find((p) => p.id === pageId);
-    if (!page) return;
+    if (!page) return false;
     try {
       const decrypted = await decryptData(page.encryptedBlocks, passphrase, page.iv, page.salt);
       const blocks = JSON.parse(decrypted);
@@ -2094,9 +2099,10 @@ function AppContent() {
         )
       );
       setDecryptionKeys((prev) => ({ ...prev, [pageId]: passphrase }));
+      return true;
     } catch (err) {
       console.error("Decryption failed", err);
-      throw err;
+      return false;
     }
   };
 
@@ -2286,15 +2292,6 @@ function AppContent() {
     updateBlocks(blocks);
   };
 
-  const blocks = activePage?.blocks || [];
-  const allTodosDone = blocks.some((b) => b.type === "todo") && blocks.filter((b) => b.type === "todo").every((b) => b.checked);
-  useEffect(() => {
-    if (!allTodosDone) return;
-    setConfetti(true);
-    const t = setTimeout(() => setConfetti(false), 1600);
-    return () => clearTimeout(t);
-  }, [allTodosDone]);
-
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--bg)] text-[var(--muted)]">
@@ -2435,6 +2432,7 @@ function AppContent() {
           <AnimatePresence>
             {toast && <Toast message={toast} onDone={() => setToast("")} />}
           </AnimatePresence>
+          <VoiceFloatingIndicator />
           {needsUsernameClaim && currentUserId && (
             <ClaimUsernameModal
               userId={currentUserId}

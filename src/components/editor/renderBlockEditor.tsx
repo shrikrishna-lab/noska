@@ -212,6 +212,7 @@ export default function renderBlockEditor(
           className="mt-1.5 h-4 w-4 accent-[var(--accent)] cursor-pointer"
         />
         <RichTextEditor
+          ref={ref}
           richText={richText}
           onRichTextChange={(rt, pt) => onPatch({
             properties: { ...(block.properties || {}), richText: rt },
@@ -252,6 +253,7 @@ export default function renderBlockEditor(
           </button>
           <div className="flex-1 min-w-0">
             <RichTextEditor
+              ref={ref}
               richText={richText}
               onRichTextChange={(rt, pt) => onPatch({
                 properties: { ...(block.properties || {}), richText: rt },
@@ -507,7 +509,7 @@ export default function renderBlockEditor(
   if (block.type === "linked-view") return <LinkedViewBlock block={block} onPatch={onPatch} isLocked={isLocked} pages={pages} page={page} apiKey={apiKey} aiProvider={aiProvider} onNavigate={onNavigate} />;
   
   if (block.type === "callout") {
-    return <CalloutBlock block={block} cls={cls} isLocked={isLocked} onPatch={onPatch} onKeyDown={onKeyDown} onFocus={onFocus} onBlur={onBlur} onPasteUrl={onPasteUrl} />;
+    return <CalloutBlock block={block} cls={cls} isLocked={isLocked} onPatch={onPatch} onKeyDown={onKeyDown} onFocus={onFocus} onBlur={onBlur} onPasteUrl={onPasteUrl} innerRef={ref} />;
   }
   if (block.type === "bullet") {
     const richText = block.properties?.richText != null
@@ -517,6 +519,7 @@ export default function renderBlockEditor(
       <div className="flex gap-2">
         <span className="pt-1.5 text-[var(--secondary)]">•</span>
         <RichTextEditor
+          ref={ref}
           as="div"
           richText={richText}
           onRichTextChange={(rt, pt) => onPatch({
@@ -541,6 +544,7 @@ export default function renderBlockEditor(
       <div className="flex gap-2">
         <span className="pt-1.5 text-[var(--secondary)]">{index + 1}.</span>
         <RichTextEditor
+          ref={ref}
           as="div"
           richText={richText}
           onRichTextChange={(rt, pt) => onPatch({
@@ -742,6 +746,7 @@ export default function renderBlockEditor(
       <div className={cls}>
         {isFocused || !block.text ? (
           <RichTextEditor
+            ref={ref}
             value={block.text}
             onChange={(text) => onPatch({ text })}
             onKeyDown={onKeyDown}
@@ -780,6 +785,7 @@ export default function renderBlockEditor(
         </button>
         <div className="flex-1">
           <RichTextEditor
+            ref={ref}
             richText={richText}
             onRichTextChange={(rt, pt) => onPatch({
               properties: { ...(block.properties || {}), richText: rt },
@@ -866,6 +872,7 @@ export default function renderBlockEditor(
       : markdownToRichText(block.text || '');
     return (
       <RichTextEditor
+        ref={ref}
         richText={richText}
         onRichTextChange={(rt, pt) => onPatch({
           properties: { ...(block.properties || {}), richText: rt },
@@ -889,6 +896,7 @@ export default function renderBlockEditor(
     return (
       <div className="border-l-[3px] border-[var(--accent)] pl-4 py-2 my-2 rounded-r-lg bg-[var(--callout)]">
         <RichTextEditor
+          ref={ref}
           richText={richText}
           onRichTextChange={(rt, pt) => onPatch({
             properties: { ...(block.properties || {}), richText: rt },
@@ -913,6 +921,7 @@ export default function renderBlockEditor(
     const headingTag = block.type;
     return (
       <RichTextEditor
+        ref={ref}
         as={headingTag}
         richText={richText}
         onRichTextChange={(rt, pt) => onPatch({
@@ -982,9 +991,10 @@ interface CalloutBlockProps {
   onFocus?: () => void;
   onBlur?: () => void;
   onPasteUrl?: (url: string) => void;
+  innerRef?: React.RefObject<any>;
 }
 
-function CalloutBlock({ block, cls, isLocked, onPatch, onKeyDown, onFocus, onBlur, onPasteUrl }: CalloutBlockProps) {
+function CalloutBlock({ block, cls, isLocked, onPatch, onKeyDown, onFocus, onBlur, onPasteUrl, innerRef }: CalloutBlockProps) {
   const [emojiOpen, setEmojiOpen] = React.useState(false);
   const emojiRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
@@ -1037,6 +1047,7 @@ function CalloutBlock({ block, cls, isLocked, onPatch, onKeyDown, onFocus, onBlu
           )}
         </div>
         <RichTextEditor
+          ref={innerRef}
           richText={richText}
           onRichTextChange={(rt, pt) => onPatch({
             properties: { ...(block.properties || {}), richText: rt },

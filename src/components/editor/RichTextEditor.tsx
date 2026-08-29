@@ -66,7 +66,7 @@ interface RichTextModeProps {
   as?: React.ElementType;
 }
 
-function RichTextMode({
+const RichTextMode = React.forwardRef<HTMLElement, RichTextModeProps>(function RichTextMode({
   richText,
   onRichTextChange,
   readOnly,
@@ -77,11 +77,20 @@ function RichTextMode({
   onBlur,
   onPasteUrl,
   as: WrapperComponent = "div"
-}: RichTextModeProps) {
+}: RichTextModeProps, forwardedRef) {
   const divRef = useRef<HTMLElement | null>(null);
   const isInternal = useRef(false);
   const [isComposing, setIsComposing] = useState(false);
   const commands = useMemo(() => new EditorCommands(null), []);
+
+  const setRef = useCallback((el: HTMLElement | null) => {
+    divRef.current = el;
+    if (typeof forwardedRef === 'function') {
+      forwardedRef(el);
+    } else if (forwardedRef) {
+      (forwardedRef as React.MutableRefObject<HTMLElement | null>).current = el;
+    }
+  }, [forwardedRef]);
 
   const syncToRichText = useCallback((): RichTextSpan[] | null => {
     const el = divRef.current;
@@ -257,7 +266,7 @@ function RichTextMode({
 
   return (
     <WrapperComponent
-      ref={divRef}
+      ref={setRef}
       contentEditable={!readOnly}
       suppressContentEditableWarning
       onInput={handleInput}
@@ -273,7 +282,7 @@ function RichTextMode({
       style={{ minHeight: "1.5em", cursor: "text" }}
     />
   );
-}
+});
 
 interface MarkdownModeProps {
   value: string | null | undefined;
@@ -287,7 +296,7 @@ interface MarkdownModeProps {
   onPasteUrl?: (url: string) => void;
 }
 
-function MarkdownMode({
+const MarkdownMode = React.forwardRef<HTMLDivElement, MarkdownModeProps>(function MarkdownMode({
   value,
   onChange,
   readOnly,
@@ -297,9 +306,18 @@ function MarkdownMode({
   onFocus,
   onBlur,
   onPasteUrl
-}: MarkdownModeProps) {
+}: MarkdownModeProps, forwardedRef) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const isInternal = useRef(false);
+
+  const setRef = useCallback((el: HTMLDivElement | null) => {
+    divRef.current = el;
+    if (typeof forwardedRef === 'function') {
+      forwardedRef(el);
+    } else if (forwardedRef) {
+      (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    }
+  }, [forwardedRef]);
 
   const syncToMarkdown = useCallback(() => {
     const el = divRef.current;
@@ -437,7 +455,7 @@ function MarkdownMode({
 
   return (
     <div
-      ref={divRef}
+      ref={setRef}
       contentEditable={!readOnly}
       suppressContentEditableWarning
       onInput={handleInput}
@@ -450,7 +468,7 @@ function MarkdownMode({
       style={{ minHeight: "1.5em", cursor: "text" }}
     />
   );
-}
+});
 
 // RichTextEditor is a dual-mode component: callers pass EITHER a
 // `richText`-based prop set (RichTextModeProps) OR a `value`/`onChange`
@@ -463,14 +481,16 @@ function MarkdownMode({
 // instruction, so the runtime branch below is preserved exactly as-is.
 type RichTextEditorProps = RichTextModeProps | MarkdownModeProps;
 
-export default function RichTextEditor(props: RichTextEditorProps) {
+const RichTextEditor = React.forwardRef<HTMLElement, RichTextEditorProps>(function RichTextEditor(props, ref) {
   const hasRichText = 'richText' in props && props.richText !== undefined;
 
   if (hasRichText) {
-    return <RichTextMode {...(props as RichTextModeProps)} />;
+    return <RichTextMode ref={ref} {...(props as RichTextModeProps)} />;
   }
 
-  return <MarkdownMode {...(props as MarkdownModeProps)} />;
-}
+  return <MarkdownMode ref={ref as React.ForwardedRef<HTMLDivElement>} {...(props as MarkdownModeProps)} />;
+});
+
+export default RichTextEditor;
 
 export { richTextToHtml, htmlToRichText, richTextToPlainText, normalizeRichText, isEmptyRichText };
