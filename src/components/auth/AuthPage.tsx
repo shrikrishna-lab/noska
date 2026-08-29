@@ -54,7 +54,15 @@ const { signIn, errors, fetchStatus } = useSignIn();
   const finishSignIn = async () => {
     const { error: finalizeError } = await signIn.finalize({
       navigate: async ({ decorateUrl }) => {
-        const url = decorateUrl("/dashboard");
+        let target = "/dashboard";
+        if (import.meta.env.DEV) {
+          const saved = sessionStorage.getItem("noska_dev_deep_link");
+          if (saved) {
+            target = saved;
+            sessionStorage.removeItem("noska_dev_deep_link");
+          }
+        }
+        const url = decorateUrl(target);
         if (url.startsWith("http")) {
           window.location.href = url;
         } else {

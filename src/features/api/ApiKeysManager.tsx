@@ -44,6 +44,8 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
   const [newName, setNewName] = useState("");
   const [newScopes, setNewScopes] = useState<string[]>(["pages:read"]);
   const [newExpiry, setNewExpiry] = useState<number | null>(30);
+  const [newReadOnly, setNewReadOnly] = useState(false);
+  const [newAllowedTools, setNewAllowedTools] = useState("");
   const [revealedKey, setRevealedKey] = useState<{ raw: string; name: string } | null>(null);
   const [copiedRaw, setCopiedRaw] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ kind: "revoke" | "delete"; key: ApiKeyRecord } | null>(null);
@@ -78,11 +80,19 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
     }
     setCreating(true);
     try {
-      const { record, rawKey } = await createApiKey(userId, { name: newName, scopes: newScopes, expiresInDays: newExpiry });
+      const { record, rawKey } = await createApiKey(userId, {
+        name: newName,
+        scopes: newScopes,
+        expiresInDays: newExpiry,
+        readOnly: newReadOnly,
+        allowedTools: newAllowedTools.split(",").map((t) => t.trim()).filter(Boolean),
+      });
       setKeys((prev) => [record, ...prev]);
       setRevealedKey({ raw: rawKey, name: record.name });
       setNewName("");
       setNewScopes(["pages:read"]);
+    setNewReadOnly(false);
+    setNewAllowedTools("");
       onToast?.("API key created — copy it now, it won't be shown again.");
     } catch (e) {
       onToast?.(e instanceof Error ? e.message : "Failed to create key.");
@@ -185,6 +195,23 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
             })}
           </div>
         </div>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-1.5 text-[11px] text-[var(--secondary)]">
+            <input
+              type="checkbox"
+              checked={newReadOnly}
+              onChange={(e) => setNewReadOnly(e.target.checked)}
+              className="accent-[var(--accent)]"
+            />
+            Read-only (blocks all mutating tools)
+          </label>
+        </div>
+        <input
+          value={newAllowedTools}
+          onChange={(e) => setNewAllowedTools(e.target.value)}
+          placeholder="Optional tool allowlist - e.g. search, fetch, list-tasks (empty = all scope-permitted tools)"
+          className="mb-3 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-[11px] text-[var(--text)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
         <div className="flex items-center justify-between gap-3">
           <select
             value={newExpiry ?? ""}

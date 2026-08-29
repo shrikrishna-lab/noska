@@ -153,6 +153,13 @@ if (timeoutRef.current) {
         await new Promise((r) => setTimeout(r, 600));
 
         const go = (path: string) => {
+          if (import.meta.env.DEV) {
+            const saved = sessionStorage.getItem("noska_dev_deep_link");
+            if (saved) {
+              path = saved;
+              sessionStorage.removeItem("noska_dev_deep_link");
+            }
+          }
           if (window.opener) {
             window.close();
           } else {
