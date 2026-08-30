@@ -74,7 +74,7 @@ export default function AIAnalyticsDashboard({
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isLive, setIsLive] = useState(false);
 
-  // 1. Fetch & Subscribe in REAL-TIME from Supabase by user_id
+  // 1. Fetch & Subscribe in REAL-TIME from Supabase by user_id ONLY when open
   useEffect(() => {
     if (!open || !userId) return;
 
@@ -83,12 +83,12 @@ export default function AIAnalyticsDashboard({
       if (isMounted && res) setDbStats(res);
     }).catch(console.warn);
 
-    // Fetch leaderboard data
-    fetchAllUsersAIStats().then((res) => {
+    // Fetch top 20 leaderboard data
+    fetchAllUsersAIStats(20).then((res) => {
       if (isMounted) setLeaderboard(res);
     }).catch(console.warn);
 
-    // Supabase realtime channel for user_ai_usage_stats table
+    // Supabase realtime channel strictly filtered to the current user
     const channel = supabase
       .channel(`user-ai-stats-${userId}`)
       .on(
@@ -105,26 +105,6 @@ export default function AIAnalyticsDashboard({
             fetchUserAIStats(userId).then((res) => {
               if (isMounted && res) setDbStats(res);
             }).catch(console.warn);
-            // Refresh leaderboard on any change
-            fetchAllUsersAIStats().then((res) => {
-              if (isMounted) setLeaderboard(res);
-            }).catch(console.warn);
-          }
-        }
-      )
-      .subscribe();
-
-    // Also subscribe to all user_ai_usage_stats changes for leaderboard updates
-    const leaderboardChannel = supabase
-      .channel("leaderboard-all-users")
-      .on(
-        "postgres_changes" as any,
-        { event: "*", schema: "public", table: "user_ai_usage_stats" },
-        () => {
-          if (isMounted) {
-            fetchAllUsersAIStats().then((res) => {
-              if (isMounted) setLeaderboard(res);
-            }).catch(console.warn);
           }
         }
       )
@@ -133,9 +113,20 @@ export default function AIAnalyticsDashboard({
     return () => {
       isMounted = false;
       supabase.removeChannel(channel);
-      supabase.removeChannel(leaderboardChannel);
     };
   }, [open, userId]);
+
+  // Fetch updated leaderboard when switching to leaderboard tab
+  useEffect(() => {
+    if (!open || tab !== "leaderboard") return;
+    let isMounted = true;
+    fetchAllUsersAIStats(20).then((res) => {
+      if (isMounted) setLeaderboard(res);
+    }).catch(console.warn);
+    return () => {
+      isMounted = false;
+    };
+  }, [open, tab]);
 
   // 2. Compute 100% real authentic analytics strictly from real user chats & messages & database
   const analytics = useMemo(() => {

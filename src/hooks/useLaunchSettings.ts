@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabaseAnon } from '../lib/supabase';
+import { getCachedOrFetch, invalidateStaticCache } from '../lib/staticContentCache';
+import { EgressMonitor } from '../lib/egressMonitor';
 
 export type LaunchMode = 'waitlist' | 'early_beta' | 'closed_beta' | 'open_beta' | 'public' | 'maintenance';
 
@@ -94,44 +96,39 @@ export interface LandingContent {
 }
 
 const DEFAULT_SETTINGS: LaunchSettings = {
-  id: '', launch_mode: 'waitlist', login_mode: 'login', custom_login_url: null,
-  launch_date: null, countdown_enabled: false, auto_switch_mode: null, auto_switch_at: null,
-  maintenance_title: 'Scheduled Maintenance', maintenance_message: 'We are performing scheduled maintenance. We will be back shortly.',
-  registration_enabled: true, show_pricing: true, show_blog: true, show_docs: true,
-  show_changelog: true, show_login: true, show_signup: true, show_waitlist: true,
-  show_discord: true, show_community: true, show_social_links: true,
+  id: '',
+  launch_mode: 'waitlist',
+  login_mode: 'login',
+  custom_login_url: null,
+  launch_date: null,
+  countdown_enabled: false,
+  auto_switch_mode: null,
+  auto_switch_at: null,
+  maintenance_title: 'Scheduled Maintenance',
+  maintenance_message: 'We are performing scheduled maintenance. We will be back shortly.',
+  registration_enabled: true,
+  show_pricing: true,
+  show_blog: true,
+  show_docs: true,
+  show_changelog: true,
+  show_login: true,
+  show_signup: true,
+  show_waitlist: true,
+  show_discord: true,
+  show_community: true,
+  show_social_links: true,
   page_visibility: { blog: true, pricing: true, templates: true, roadmap: true, careers: true, community: true },
-  route_protection: {}, updated_at: null, published: true,
+  route_protection: {},
+  updated_at: null,
+  published: true,
 };
 
 function useSupabaseQuery(table: string) {
   return supabaseAnon?.from(table as never);
 }
 
-const listeners: Record<string, Set<() => void>> = {};
-let realtimeInit = false;
-
-function initRealtime() {
-  if (!supabaseAnon || realtimeInit) return;
-  realtimeInit = true;
-
-  const tables = [
-    { channel: 'launch-settings-changes', table: 'launch_settings' },
-    { channel: 'cta-button-changes', table: 'cta_buttons' },
-    { channel: 'announcement-bar-changes', table: 'announcement_bar' },
-    { channel: 'landing-content-changes', table: 'landing_content' },
-    { channel: 'social-links-changes', table: 'social_links' },
-    { channel: 'waitlist-settings-changes', table: 'waitlist_settings' },
-    { channel: 'seo-settings-changes', table: 'seo_settings' },
-  ];
-
-  for (const { channel: name, table } of tables) {
-    supabaseAnon
-      .channel(name)
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table },
-        () => { listeners[name]?.forEach((fn) => fn()); })
-      .subscribe();
-  }
+export function invalidateLaunchCache(prefix?: string) {
+  invalidateStaticCache(prefix ? `launch_${prefix}` : 'launch_');
 }
 
 export function useLaunchSettings(): { settings: LaunchSettings; loading: boolean } {
@@ -139,25 +136,35 @@ export function useLaunchSettings(): { settings: LaunchSettings; loading: boolea
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabaseAnon) { setLoading(false); return; }
-    initRealtime();
-
-    const fetchSettings = async () => {
-      const { data } = await useSupabaseQuery('launch_settings')?.select('*').limit(1).single() ?? {};
-      if (data) setSettings({ ...DEFAULT_SETTINGS, ...data as unknown as LaunchSettings });
+    if (!supabaseAnon) {
       setLoading(false);
-    };
+      return;
+    }
 
-    fetchSettings();
+    let isMounted = true;
+    getCachedOrFetch<LaunchSettings>(
+      'launch_settings',
+      async () => {
+        EgressMonitor.logEvent('query', 'launch_settings');
+        const { data } = (await useSupabaseQuery('launch_settings')?.select('*').limit(1).single()) ?? {};
+        return data ? { ...DEFAULT_SETTINGS, ...(data as unknown as LaunchSettings) } : DEFAULT_SETTINGS;
+      },
+      5 * 60 * 1000
+    )
+      .then((data) => {
+        if (isMounted) {
+          setSettings(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('useLaunchSettings load error:', err);
+        if (isMounted) setLoading(false);
+      });
 
-    const key = 'launch-settings-changes';
-    if (!listeners[key]) listeners[key] = new Set();
-    const refetch = async () => {
-      const { data } = await useSupabaseQuery('launch_settings')?.select('*').limit(1).single() ?? {};
-      if (data) setSettings({ ...DEFAULT_SETTINGS, ...data as unknown as LaunchSettings });
+    return () => {
+      isMounted = false;
     };
-    listeners[key].add(refetch);
-    return () => { listeners[key].delete(refetch); };
   }, []);
 
   return { settings, loading };
@@ -166,10 +173,44 @@ export function useLaunchSettings(): { settings: LaunchSettings; loading: boolea
 const DEFAULT_CTAS: Record<string, CTAButton> = {};
 
 function makeDefaultCTA(id: string, text: string, dest: string, variant = 'primary', priority = 0): CTAButton {
-  return { id: '', button_id: id, button_text: text, destination: dest, variant, color: 'default', icon: null, open_in_new_tab: false, visible: true, enabled: true, animation: 'none', priority, confirmation_text: null, requires_auth: false, launch_mode_override: {}, ab_variants: [], ab_enabled: false };
+  return {
+    id: '',
+    button_id: id,
+    button_text: text,
+    destination: dest,
+    variant,
+    color: 'default',
+    icon: null,
+    open_in_new_tab: false,
+    visible: true,
+    enabled: true,
+    animation: 'none',
+    priority,
+    confirmation_text: null,
+    requires_auth: false,
+    launch_mode_override: {},
+    ab_variants: [],
+    ab_enabled: false,
+  };
 }
 
-['navbar_login','navbar_cta','navbar_demo','hero_primary','hero_secondary','footer_cta','pricing_cta','final_cta_primary','final_cta_secondary','mobile_login','mobile_cta','launch_hero_primary','launch_hero_secondary','launch_navbar_login','launch_navbar_cta'].forEach((id) => {
+[
+  'navbar_login',
+  'navbar_cta',
+  'navbar_demo',
+  'hero_primary',
+  'hero_secondary',
+  'footer_cta',
+  'pricing_cta',
+  'final_cta_primary',
+  'final_cta_secondary',
+  'mobile_login',
+  'mobile_cta',
+  'launch_hero_primary',
+  'launch_hero_secondary',
+  'launch_navbar_login',
+  'launch_navbar_cta',
+].forEach((id) => {
   DEFAULT_CTAS[id] = makeDefaultCTA(id, id.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()), '/');
 });
 
@@ -201,54 +242,61 @@ export function useCTAButtons(): {
   const { settings } = useLaunchSettings();
 
   useEffect(() => {
-    if (!supabaseAnon) { setLoading(false); return; }
-    initRealtime();
-
-    const fetchCTAs = async () => {
-      const { data } = await useSupabaseQuery('cta_buttons')?.select('*').order('priority') ?? {};
-      if (data) {
-        const map: Record<string, CTAButton> = {};
-        for (const btn of (data as unknown as CTAButton[])) {
-          map[btn.button_id] = btn;
-        }
-        setCtaMap((prev) => ({ ...prev, ...map }));
-      }
+    if (!supabaseAnon) {
       setLoading(false);
-    };
-
-    fetchCTAs();
-
-    const key = 'cta-button-changes';
-    if (!listeners[key]) listeners[key] = new Set();
-    const refetch = async () => {
-      const { data } = await useSupabaseQuery('cta_buttons')?.select('*').order('priority') ?? {};
-      if (data) {
-        const map: Record<string, CTAButton> = {};
-        for (const btn of (data as unknown as CTAButton[])) {
-          map[btn.button_id] = btn;
-        }
-        setCtaMap((prev) => ({ ...prev, ...map }));
-      }
-    };
-    listeners[key].add(refetch);
-    return () => { listeners[key].delete(refetch); };
-  }, []);
-
-  const getButton = useCallback((buttonId: string): CTAButton => {
-    const btn = ctaMap[buttonId];
-    if (!btn) return DEFAULT_CTAS[buttonId] ?? makeDefaultCTA(buttonId, buttonId, '/', 'primary', 0);
-
-    const override = (btn.launch_mode_override ?? {})[settings.launch_mode];
-    if (override) return { ...btn, destination: override };
-
-    if (btn.destination === '/login' || btn.button_id.includes('login')) {
-      if (settings.login_mode === 'launch') return { ...btn, destination: '/launch' };
-      if (settings.login_mode === 'waitlist') return { ...btn, destination: '/waitlist' };
-      if (settings.login_mode === 'custom' && settings.custom_login_url) return { ...btn, destination: settings.custom_login_url };
+      return;
     }
 
-    return btn;
-  }, [ctaMap, settings]);
+    let isMounted = true;
+    getCachedOrFetch<Record<string, CTAButton>>(
+      'launch_cta_buttons',
+      async () => {
+        EgressMonitor.logEvent('query', 'cta_buttons');
+        const { data } = (await useSupabaseQuery('cta_buttons')?.select('*').order('priority')) ?? {};
+        const map: Record<string, CTAButton> = {};
+        if (data) {
+          for (const btn of data as unknown as CTAButton[]) {
+            map[btn.button_id] = btn;
+          }
+        }
+        return map;
+      },
+      5 * 60 * 1000
+    )
+      .then((map) => {
+        if (isMounted) {
+          setCtaMap((prev) => ({ ...prev, ...map }));
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('useCTAButtons load error:', err);
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const getButton = useCallback(
+    (buttonId: string): CTAButton => {
+      const btn = ctaMap[buttonId];
+      if (!btn) return DEFAULT_CTAS[buttonId] ?? makeDefaultCTA(buttonId, buttonId, '/', 'primary', 0);
+
+      const override = (btn.launch_mode_override ?? {})[settings.launch_mode];
+      if (override) return { ...btn, destination: override };
+
+      if (btn.destination === '/login' || btn.button_id.includes('login')) {
+        if (settings.login_mode === 'launch') return { ...btn, destination: '/launch' };
+        if (settings.login_mode === 'waitlist') return { ...btn, destination: '/waitlist' };
+        if (settings.login_mode === 'custom' && settings.custom_login_url) return { ...btn, destination: settings.custom_login_url };
+      }
+
+      return btn;
+    },
+    [ctaMap, settings]
+  );
 
   const getDestination = useCallback((buttonId: string): string => getButton(buttonId).destination, [getButton]);
   const getButtonText = useCallback((buttonId: string): string => getButton(buttonId).button_text, [getButton]);
@@ -261,81 +309,150 @@ export function useAnnouncementBar(): { bar: AnnouncementBarData | null; loading
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabaseAnon) { setLoading(false); return; }
-    initRealtime();
-
-    const fetch = async () => {
-      const { data } = await useSupabaseQuery('announcement_bar')?.select('*').limit(1).single() ?? {};
-      if (data) setBar(data as unknown as AnnouncementBarData);
+    if (!supabaseAnon) {
       setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    getCachedOrFetch<AnnouncementBarData | null>(
+      'launch_announcement_bar',
+      async () => {
+        EgressMonitor.logEvent('query', 'announcement_bar');
+        const { data } = (await useSupabaseQuery('announcement_bar')?.select('*').limit(1).single()) ?? {};
+        return (data as unknown as AnnouncementBarData) || null;
+      },
+      5 * 60 * 1000
+    )
+      .then((data) => {
+        if (isMounted) {
+          setBar(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('useAnnouncementBar load error:', err);
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
     };
-
-    fetch();
-
-    const key = 'announcement-bar-changes';
-    if (!listeners[key]) listeners[key] = new Set();
-    listeners[key].add(fetch);
-    return () => { listeners[key].delete(fetch); };
   }, []);
 
   return { bar, loading };
 }
 
-export function useLandingContent(): { content: LandingContent[]; getSection: (section: string) => LandingContent | undefined; loading: boolean } {
+export function useLandingContent(): {
+  content: LandingContent[];
+  getSection: (section: string) => LandingContent | undefined;
+  loading: boolean;
+} {
   const [content, setContent] = useState<LandingContent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabaseAnon) { setLoading(false); return; }
-    initRealtime();
-
-    const fetch = async () => {
-      const { data } = await useSupabaseQuery('landing_content')?.select('*').order('sort_order') ?? {};
-      if (data) setContent(data as unknown as LandingContent[]);
+    if (!supabaseAnon) {
       setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    getCachedOrFetch<LandingContent[]>(
+      'launch_landing_content',
+      async () => {
+        EgressMonitor.logEvent('query', 'landing_content');
+        const { data } = (await useSupabaseQuery('landing_content')?.select('*').order('sort_order')) ?? {};
+        return (data as unknown as LandingContent[]) || [];
+      },
+      5 * 60 * 1000
+    )
+      .then((data) => {
+        if (isMounted) {
+          setContent(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('useLandingContent load error:', err);
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
     };
-
-    fetch();
-
-    const key = 'landing-content-changes';
-    if (!listeners[key]) listeners[key] = new Set();
-    listeners[key].add(fetch);
-    return () => { listeners[key].delete(fetch); };
   }, []);
 
-  const getSection = useCallback((section: string): LandingContent | undefined => content.find((c) => c.section === section && c.active), [content]);
+  const getSection = useCallback(
+    (section: string): LandingContent | undefined => content.find((c) => c.section === section && c.active),
+    [content]
+  );
   return { content, getSection, loading };
 }
 
-export function useSubmitWaitlist(): { submit: (data: { email: string; name?: string; company?: string; role?: string; country?: string; referral_code?: string; phone?: string }) => Promise<{ success: boolean; error?: string }>; submitting: boolean } {
+export function useSubmitWaitlist(): {
+  submit: (data: {
+    email: string;
+    name?: string;
+    company?: string;
+    role?: string;
+    country?: string;
+    referral_code?: string;
+    phone?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  submitting: boolean;
+} {
   const [submitting, setSubmitting] = useState(false);
 
-  const submit = useCallback(async (data: { email: string; name?: string; company?: string; role?: string; country?: string; referral_code?: string; phone?: string }): Promise<{ success: boolean; error?: string }> => {
-    setSubmitting(true);
-    try {
-      const BASE = import.meta.env.VITE_SUPABASE_URL;
-      if (!supabaseAnon || !BASE) {
-        const res = await fetch(`${BASE}/functions/v1/waitlist-signup`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-        const result = await res.json();
-        if (!res.ok) return { success: false, error: result.error ?? 'Failed to join' };
+  const submit = useCallback(
+    async (data: {
+      email: string;
+      name?: string;
+      company?: string;
+      role?: string;
+      country?: string;
+      referral_code?: string;
+      phone?: string;
+    }): Promise<{ success: boolean; error?: string }> => {
+      setSubmitting(true);
+      try {
+        const BASE = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseAnon || !BASE) {
+          const res = await fetch(`${BASE}/functions/v1/waitlist-signup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+          const result = await res.json();
+          if (!res.ok) return { success: false, error: result.error ?? 'Failed to join' };
+          return { success: true };
+        }
+
+        const { data: existing } =
+          (await useSupabaseQuery('waitlist_entries')?.select('id').eq('email' as never, data.email).maybeSingle()) ??
+          {};
+        if (existing) return { success: false, error: 'This email is already on the waitlist.' };
+
+        const { error } =
+          (await useSupabaseQuery('waitlist_entries')?.insert({
+            email: data.email,
+            name: data.name ?? null,
+            provider: 'direct',
+            status: 'waiting',
+            country: data.country ?? null,
+            joined_at: new Date().toISOString(),
+            referral_count: 0,
+          } as never)) ?? {};
+        if (error) return { success: false, error: error.message };
         return { success: true };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Failed to join waitlist' };
+      } finally {
+        setSubmitting(false);
       }
-
-      const { data: existing } = await useSupabaseQuery('waitlist_entries')
-        ?.select('id').eq('email' as never, data.email).maybeSingle() ?? {};
-      if (existing) return { success: false, error: 'This email is already on the waitlist.' };
-
-      const { error } = await useSupabaseQuery('waitlist_entries')
-        ?.insert({ email: data.email, name: data.name ?? null, provider: 'direct', status: 'waiting', country: data.country ?? null, joined_at: new Date().toISOString(), referral_count: 0 } as never) ?? {};
-      if (error) return { success: false, error: error.message };
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Failed to join waitlist' };
-    } finally { setSubmitting(false); }
-  }, []);
+    },
+    []
+  );
 
   return { submit, submitting };
 }
@@ -374,25 +491,39 @@ export function useSEOSettings(pagePath: string): { seo: SEOSettingsData | null;
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabaseAnon) { setLoading(false); return; }
-    initRealtime();
-
-    const fetchSEO = async () => {
-      const { data: result } = await useSupabaseQuery('seo_settings')?.select('*').eq('page_path' as never, pagePath).maybeSingle() ?? {};
-      if (result) setData(result as unknown as SEOSettingsData);
+    if (!supabaseAnon) {
       setLoading(false);
-    };
+      return;
+    }
 
-    fetchSEO();
+    let isMounted = true;
+    getCachedOrFetch<SEOSettingsData | null>(
+      `launch_seo_${pagePath}`,
+      async () => {
+        EgressMonitor.logEvent('query', 'seo_settings', { pagePath });
+        const { data: result } =
+          (await useSupabaseQuery('seo_settings')
+            ?.select('page_path, title, description, og_image, og_title, og_description, twitter_card, twitter_site, keywords, robots, canonical_url')
+            .eq('page_path' as never, pagePath)
+            .maybeSingle()) ?? {};
+        return (result as unknown as SEOSettingsData) || null;
+      },
+      10 * 60 * 1000
+    )
+      .then((result) => {
+        if (isMounted) {
+          setData(result);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('useSEOSettings load error:', err);
+        if (isMounted) setLoading(false);
+      });
 
-    const key = 'seo-settings-changes';
-    if (!listeners[key]) listeners[key] = new Set();
-    const refetch = async () => {
-      const { data: result } = await useSupabaseQuery('seo_settings')?.select('*').eq('page_path' as never, pagePath).maybeSingle() ?? {};
-      if (result) setData(result as unknown as SEOSettingsData);
+    return () => {
+      isMounted = false;
     };
-    listeners[key].add(refetch);
-    return () => { listeners[key].delete(refetch); };
   }, [pagePath]);
 
   return { seo: data, loading };
@@ -403,50 +534,78 @@ export function useWaitlistSettingsData(): { waitlistSettings: WaitlistSettingsD
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabaseAnon) { setLoading(false); return; }
-    initRealtime();
-
-    const fetch = async () => {
-      const { data: result } = await useSupabaseQuery('waitlist_settings')?.select('*').limit(1).single() ?? {};
-      if (result) setData(result as unknown as WaitlistSettingsData);
+    if (!supabaseAnon) {
       setLoading(false);
-    };
+      return;
+    }
 
-    fetch();
+    let isMounted = true;
+    getCachedOrFetch<WaitlistSettingsData | null>(
+      'launch_waitlist_settings',
+      async () => {
+        EgressMonitor.logEvent('query', 'waitlist_settings');
+        const { data: result } = (await useSupabaseQuery('waitlist_settings')?.select('*').limit(1).single()) ?? {};
+        return (result as unknown as WaitlistSettingsData) || null;
+      },
+      5 * 60 * 1000
+    )
+      .then((result) => {
+        if (isMounted) {
+          setData(result);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('useWaitlistSettingsData load error:', err);
+        if (isMounted) setLoading(false);
+      });
 
-    const key = 'waitlist-settings-changes';
-    if (!listeners[key]) listeners[key] = new Set();
-    const refetch = async () => {
-      const { data: result } = await useSupabaseQuery('waitlist_settings')?.select('*').limit(1).single() ?? {};
-      if (result) setData(result as unknown as WaitlistSettingsData);
+    return () => {
+      isMounted = false;
     };
-    listeners[key].add(refetch);
-    return () => { listeners[key].delete(refetch); };
   }, []);
 
   return { waitlistSettings: data, loading };
 }
 
-export function useSocialLinks(): { links: Array<{ platform: string; url: string; label: string | null; active: boolean }>; loading: boolean } {
+export function useSocialLinks(): {
+  links: Array<{ platform: string; url: string; label: string | null; active: boolean }>;
+  loading: boolean;
+} {
   const [links, setLinks] = useState<Array<{ platform: string; url: string; label: string | null; active: boolean }>>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabaseAnon) { setLoading(false); return; }
-    initRealtime();
-
-    const fetch = async () => {
-      const { data } = await useSupabaseQuery('social_links')?.select('platform, url, label, active').order('sort_order') ?? {};
-      if (data) setLinks(data as unknown as Array<{ platform: string; url: string; label: string | null; active: boolean }>);
+    if (!supabaseAnon) {
       setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    getCachedOrFetch<Array<{ platform: string; url: string; label: string | null; active: boolean }>>(
+      'launch_social_links',
+      async () => {
+        EgressMonitor.logEvent('query', 'social_links');
+        const { data } =
+          (await useSupabaseQuery('social_links')?.select('platform, url, label, active').order('sort_order')) ?? {};
+        return (data as unknown as Array<{ platform: string; url: string; label: string | null; active: boolean }>) || [];
+      },
+      10 * 60 * 1000
+    )
+      .then((data) => {
+        if (isMounted) {
+          setLinks(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('useSocialLinks load error:', err);
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
     };
-
-    fetch();
-
-    const key = 'social-links-changes';
-    if (!listeners[key]) listeners[key] = new Set();
-    listeners[key].add(fetch);
-    return () => { listeners[key].delete(fetch); };
   }, []);
 
   return { links, loading };

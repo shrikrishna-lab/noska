@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, ChevronDown } from 'lucide-react';
 import { Reveal } from './components/Reveal';
 import { supabaseAnon } from '../../lib/supabase';
+import { getCachedOrFetch } from '../../lib/staticContentCache';
+import { EgressMonitor } from '../../lib/egressMonitor';
 import './Changelog.css';
 
 interface ChangelogEntry {
@@ -21,21 +23,35 @@ export default function Changelog() {
   const [openIndex, setOpenIndex] = useState(0);
 
   useEffect(() => {
-    async function fetch() {
+    let isMounted = true;
+    async function fetchChangelog() {
       setLoading(true);
-      const { data, error } = await (supabaseAnon as any)
-        .from('changelog_entries')
-        .select('*')
-        .eq('published', true)
-        .order('created_at', { ascending: false });
-      if (error) {
-        console.error('Failed to fetch changelog:', error);
-      } else {
-        setEntries(data ?? []);
+      try {
+        const data = await getCachedOrFetch<ChangelogEntry[]>(
+          'marketing_changelog',
+          async () => {
+            EgressMonitor.logEvent('query', 'changelog_entries');
+            const { data: result, error } = await (supabaseAnon as any)
+              .from('changelog_entries')
+              .select('*')
+              .eq('published', true)
+              .order('created_at', { ascending: false });
+            if (error) throw error;
+            return (result ?? []) as ChangelogEntry[];
+          },
+          10 * 60 * 1000
+        );
+        if (isMounted) setEntries(data);
+      } catch (err) {
+        console.error('Failed to fetch changelog:', err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-      setLoading(false);
     }
-    fetch();
+    fetchChangelog();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return (

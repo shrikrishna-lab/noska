@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, ArrowRight, Tag, Search, Clock, Sparkles, Mail, Check, BookOpen, TrendingUp, X } from 'lucide-react';
 import { Reveal, Stagger, staggerItem } from './components/Reveal';
 import { supabaseAnon } from '../../lib/supabase';
+import { getCachedOrFetch } from '../../lib/staticContentCache';
+import { EgressMonitor } from '../../lib/egressMonitor';
 import './Blog.css';
 
 interface BlogPost {
@@ -99,27 +101,41 @@ export default function Blog() {
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     async function fetchPosts() {
       setLoading(true);
       try {
-        const { data, error } = await (supabaseAnon as any)
-          .from('blog_posts')
-          .select('*')
-          .eq('published', true)
-          .order('published_at', { ascending: false });
+        const postsData = await getCachedOrFetch<BlogPost[]>(
+          'marketing_blog_posts',
+          async () => {
+            EgressMonitor.logEvent('query', 'blog_posts (summary)');
+            const { data, error } = await (supabaseAnon as any)
+              .from('blog_posts')
+              .select('id, title, slug, excerpt, author, cover_image, tags, published_at, read_time, featured')
+              .eq('published', true)
+              .order('published_at', { ascending: false });
 
-        if (!error && data && data.length > 0) {
-          setPosts(data);
-        } else {
-          setPosts(fallbackPosts);
+            if (!error && data && data.length > 0) {
+              return data as BlogPost[];
+            }
+            return fallbackPosts;
+          },
+          5 * 60 * 1000
+        );
+
+        if (isMounted) {
+          setPosts(postsData);
         }
       } catch {
-        setPosts(fallbackPosts);
+        if (isMounted) setPosts(fallbackPosts);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     fetchPosts();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const allTags = useMemo(() => {

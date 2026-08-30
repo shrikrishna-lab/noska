@@ -78,7 +78,7 @@ import {
   migrateLegacyIds,
   slugifyWorkspaceName
 } from "./utils/helpers";
-import { storageApi } from "./utils/storage";
+import { storageApi, initStorageSyncBaseline } from "./utils/storage";
 import {
   normalizePages,
   getPageSubtreeIds,
@@ -623,6 +623,7 @@ function AppContent() {
         loadedPages = purgeExpiredTrash(
           normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })))
         );
+        initStorageSyncBaseline(loadedPages, loadedChats);
         setPages(loadedPages);
         setAiChats(loadedChats);
 
@@ -854,6 +855,7 @@ function AppContent() {
           fetchAIChats(userData.userId)
         ]);
         const normalized = normalizePages(remotePages.map(p => ({ ...p, content: p.content || [] })));
+        initStorageSyncBaseline(normalized, remoteChats);
         setPages(normalized);
         setAiChats(remoteChats);
         if (normalized.length > 0) {

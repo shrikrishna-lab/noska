@@ -194,30 +194,25 @@ export async function fetchPages(userId?: string | null): Promise<Page[]> {
   return (data || []).map(mapPageFromDb);
 }
 
-export async function savePage(page: PageInput, userId: string): Promise<Page> {
+export async function savePage(page: PageInput, userId: string): Promise<void> {
   requireOwner(userId);
   const dbPage = { ...mapPageToDb(page), user_id: userId };
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("pages")
-    .upsert(dbPage, { onConflict: "id" })
-    .select()
-    .single();
+    .upsert(dbPage, { onConflict: "id" });
   if (error) throw error;
-  return mapPageFromDb(data);
 }
 
-export async function savePages(pages: PageInput[], userId: string): Promise<Page[]> {
+export async function savePages(pages: PageInput[], userId: string): Promise<void> {
   requireOwner(userId);
-  if (!pages.length) return [];
+  if (!pages.length) return;
   const dbPages = pages
     .map((p) => ({ ...mapPageToDb(p), user_id: userId }))
     .sort((a, b) => (a.parent_id ? 1 : 0) - (b.parent_id ? 1 : 0));
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("pages")
-    .upsert(dbPages, { onConflict: "id" })
-    .select();
+    .upsert(dbPages, { onConflict: "id" });
   if (error) throw error;
-  return (data || []).map(mapPageFromDb);
 }
 
 /** Updates a shared page's content WITHOUT ever touching `user_id` —
@@ -228,18 +223,15 @@ export async function savePages(pages: PageInput[], userId: string): Promise<Pag
  * write permission (`pages_update_own_or_editor` — see migration
  * rls_page_permissions_and_shared_pages): this will fail server-side if
  * `editorUserId` doesn't actually have a `can_edit` grant on this page. */
-export async function updateSharedPage(pageId: string, patch: PageInput, editorUserId: string): Promise<Page> {
+export async function updateSharedPage(pageId: string, patch: PageInput, editorUserId: string): Promise<void> {
   requireOwner(editorUserId);
   const dbPatch = mapPageToDb(patch) as Partial<TablesInsert<"pages">>;
   delete dbPatch.id;
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("pages")
     .update(dbPatch)
-    .eq("id", pageId)
-    .select()
-    .single();
+    .eq("id", pageId);
   if (error) throw error;
-  return mapPageFromDb(data);
 }
 
 export async function deletePage(id: string): Promise<void> {
@@ -309,41 +301,26 @@ export async function fetchAIChats(userId?: string | null): Promise<AIChat[]> {
   }));
 }
 
-export async function saveAIChat(chat: AIChatInput, userId: string): Promise<AIChat> {
+export async function saveAIChat(chat: AIChatInput, userId: string): Promise<void> {
   requireOwner(userId);
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("ai_chats")
     .upsert(
       {
         id: chat.id,
         name: chat.name || chat.title || "New chat",
-        messages: chat.messages || [],
+        messages: (chat.messages || []) as unknown as Json,
         pinned: chat.pinned || false,
         archived: chat.archived || false,
         chat_type: chat.chatType || "private",
         page_id: chat.pageId || null,
         page_title: chat.pageTitle || null,
-        collaborators: chat.collaborators || [],
+        collaborators: (chat.collaborators || []) as unknown as Json,
         user_id: userId,
       } as TablesInsert<"ai_chats">,
       { onConflict: "id" }
-    )
-    .select()
-    .single();
+    );
   if (error) throw error;
-  return {
-    id: data.id,
-    name: data.name || "New chat",
-    messages: (data.messages as unknown[]) || [],
-    pinned: data.pinned || false,
-    archived: data.archived || false,
-    chatType: (data.chat_type as ChatType) || "private",
-    pageId: data.page_id || null,
-    pageTitle: data.page_title || null,
-    collaborators: (data.collaborators as unknown[]) || [],
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
-  };
 }
 
 export async function saveAIChats(chats: AIChatInput[], userId: string): Promise<void> {
@@ -504,12 +481,14 @@ export interface LeaderboardEntry {
   lastActiveAt: string | null;
 }
 
-export async function fetchAllUsersAIStats(): Promise<LeaderboardEntry[]> {
+export async function fetchAllUsersAIStats(limit = 20): Promise<LeaderboardEntry[]> {
   const client = supabase as any;
   const { data, error } = await client
     .from("user_ai_usage_stats")
     .select("user_id, total_tokens, total_messages, total_sessions, current_streak, longest_streak, active_days, favorite_model, total_cost, avg_latency_ms, last_active_at")
-    .order("total_tokens", { ascending: false });
+    .order("total_tokens", { ascending: false })
+    .order("user_id", { ascending: true })
+    .limit(limit);
   if (error) return [];
   return (data || []).map((row: any) => ({
     userId: row.user_id,
@@ -1150,13 +1129,18 @@ export interface MarketplaceTemplateInput {
   accessLocked?: boolean;
   addCount?: number;
   rating?: number;
-  ratingCount?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export async function fetchMarketplaceTemplates(
   filters: MarketplaceTemplateFilters = {}
 ): Promise<Tables<"marketplace_templates">[]> {
-  let query = supabase.from("marketplace_templates").select("*");
+  const limit = filters.limit ?? 50;
+  const offset = filters.offset ?? 0;
+  let query = supabase.from("marketplace_templates").select(
+    "id, title, description, category, template_type, price, is_pro, owner_id, status, add_count, rating, rating_count, tags, icon, cover_image, author_name, created_at, updated_at"
+  );
   if (filters.status) query = query.eq("status", filters.status);
   else query = query.eq("status", "published");
   if (filters.category) query = query.eq("category", filters.category);
@@ -1165,10 +1149,10 @@ export async function fetchMarketplaceTemplates(
   if (filters.search) query = query.ilike("title", `%${filters.search}%`);
   const orderCol = filters.orderBy || "add_count";
   const orderDir = filters.orderDir || "desc";
-  query = query.order(orderCol, { ascending: orderDir === "asc" });
+  query = query.order(orderCol, { ascending: orderDir === "asc" }).range(offset, offset + limit - 1);
   const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+  return (data || []) as Tables<"marketplace_templates">[];
 }
 
 export async function fetchTemplateById(id: string): Promise<Tables<"marketplace_templates"> | null> {

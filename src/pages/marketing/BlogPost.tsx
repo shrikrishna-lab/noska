@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, ArrowLeft, User, Clock, Heart, Bookmark, Share2, Check, Copy, Sparkles, MessageSquare } from 'lucide-react';
 import { supabaseAnon } from '../../lib/supabase';
+import { getCachedOrFetch } from '../../lib/staticContentCache';
+import { EgressMonitor } from '../../lib/egressMonitor';
 import './BlogPost.css';
 
 interface BlogPostData {
@@ -177,36 +179,47 @@ export default function BlogPost() {
   const [scrollProgress, setScrollProgress] = useState(0);
 
   useEffect(() => {
+    let isMounted = true;
     async function fetchPost() {
       if (!slug) return;
       setLoading(true);
       try {
-        const { data, error } = await (supabaseAnon as any)
-          .from('blog_posts')
-          .select('*')
-          .eq('slug', slug)
-          .eq('published', true)
-          .single();
+        const postData = await getCachedOrFetch<BlogPostData | null>(
+          `marketing_blog_post_${slug}`,
+          async () => {
+            EgressMonitor.logEvent('query', 'blog_post', { slug });
+            const { data, error } = await (supabaseAnon as any)
+              .from('blog_posts')
+              .select('*')
+              .eq('slug', slug)
+              .eq('published', true)
+              .single();
 
-        if (!error && data) {
-          setPost(data as BlogPostData);
-        } else if (fallbackArticles[slug]) {
-          setPost(fallbackArticles[slug]);
-        } else {
-          // Default fallback if unknown slug
-          setPost(fallbackArticles['spatial-note-taking-systems']);
+            if (!error && data) {
+              return data as BlogPostData;
+            }
+            return fallbackArticles[slug] || fallbackArticles['spatial-note-taking-systems'];
+          },
+          10 * 60 * 1000
+        );
+
+        if (isMounted) {
+          setPost(postData || fallbackArticles['spatial-note-taking-systems']);
         }
       } catch {
-        if (slug && fallbackArticles[slug]) {
-          setPost(fallbackArticles[slug]);
-        } else {
-          setPost(fallbackArticles['spatial-note-taking-systems']);
+        if (isMounted) {
+          setPost(fallbackArticles[slug] || fallbackArticles['spatial-note-taking-systems']);
         }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
     fetchPost();
+    return () => {
+      isMounted = false;
+    };
   }, [slug]);
 
   // Track scroll progress for top indicator bar

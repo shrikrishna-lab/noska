@@ -3,6 +3,8 @@ import { useParams, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import { supabaseAnon } from '../../lib/supabase';
+import { getCachedOrFetch } from '../../lib/staticContentCache';
+import { EgressMonitor } from '../../lib/egressMonitor';
 import './Legal.css';
 
 interface LegalPage {
@@ -20,18 +22,36 @@ export default function Legal() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetch() {
+    let isMounted = true;
+    async function fetchPage() {
       setLoading(true);
-      const { data, error } = await (supabaseAnon as any)
-        .from('legal_pages')
-        .select('*')
-        .eq('slug', slug)
-        .eq('published', true)
-        .single();
-      if (!error) setPage(data as LegalPage | null);
-      setLoading(false);
+      try {
+        const pageData = await getCachedOrFetch<LegalPage | null>(
+          `marketing_legal_${slug}`,
+          async () => {
+            EgressMonitor.logEvent('query', 'legal_pages', { slug });
+            const { data, error } = await (supabaseAnon as any)
+              .from('legal_pages')
+              .select('*')
+              .eq('slug', slug)
+              .eq('published', true)
+              .single();
+            if (!error && data) return data as LegalPage;
+            return null;
+          },
+          10 * 60 * 1000
+        );
+        if (isMounted) setPage(pageData);
+      } catch {
+        if (isMounted) setPage(null);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     }
-    fetch();
+    fetchPage();
+    return () => {
+      isMounted = false;
+    };
   }, [slug]);
 
   if (loading) {

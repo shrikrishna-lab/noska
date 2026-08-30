@@ -170,18 +170,6 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     return () => { supabase.removeChannel(channel) }
   }, [currentTeam, refreshMembers, refreshInvites])
 
-  useEffect(() => {
-    if (!userId) return
-    const channel = supabase
-      .channel("team_invites_global")
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "team_invites" },
-        () => { refreshInvites() }
-      )
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [userId, refreshInvites])
-
   return (
     <TeamContext.Provider value={{
       teams,

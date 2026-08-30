@@ -70,7 +70,7 @@ describe("owner-required write guards (Property 6)", () => {
     );
   });
 
-  it("savePages returns [] for empty input with a valid owner (no throw)", async () => {
-    await expect(savePages([], "user-123")).resolves.toEqual([]);
+  it("savePages resolves for empty input with a valid owner (no throw)", async () => {
+    await expect(savePages([], "user-123")).resolves.toBeUndefined();
   });
 });
