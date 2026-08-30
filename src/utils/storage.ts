@@ -205,25 +205,10 @@ export function storageApi() {
       }
 
       if (key === "aiChats") {
+        // AI chats are stored 100% locally on device / browser cache (instant, offline-first, private)
         try {
-          const chats = JSON.parse(value);
-          if (Array.isArray(chats)) {
-            let hasDirty = false;
-            for (const c of chats) {
-              if (!c?.id) continue;
-              const sig = JSON.stringify(c);
-              if (syncedChatsMap.get(c.id) !== sig) {
-                dirtyChatsMap.set(c.id, c);
-                hasDirty = true;
-              }
-            }
-            if (hasDirty) {
-              scheduleChatsSync(userId);
-            }
-          }
-        } catch (e) {
-          console.warn("storage: failed to parse and sync dirty chats", e);
-        }
+          localStorage.setItem("noska_ai_chats", value);
+        } catch {}
       }
 
       return { ok: true };

@@ -73,7 +73,7 @@ export const BLOCK_DEFINITIONS: BlockDefinition[] = [
     type: "button",
     label: "Button",
     icon: "🔘",
-    defaultContent: { text: "Click Here", url: "https://noska.dev", bg_color: "#6366f1", text_color: "#ffffff", border_radius: 6, full_width: false },
+    defaultContent: { text: "Click Here", url: "https://noska.me", bg_color: "#6366f1", text_color: "#ffffff", border_radius: 6, full_width: false },
     fields: [
       { key: "text", label: "Button Text", type: "text" },
       { key: "url", label: "Link URL", type: "url" },
@@ -200,7 +200,7 @@ export const BLOCK_DEFINITIONS: BlockDefinition[] = [
     type: "signature",
     label: "Signature",
     icon: "✍",
-    defaultContent: { name: "The Noska Team", title: "", email: "hello@noska.dev", avatar_url: "" },
+    defaultContent: { name: "The Noska Team", title: "", email: "hello@noska.me", avatar_url: "" },
     fields: [
       { key: "name", label: "Name", type: "text" },
       { key: "title", label: "Title", type: "text" },

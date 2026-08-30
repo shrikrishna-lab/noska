@@ -70,7 +70,7 @@ function buildStarterBlocks(templateType: string): EmailBlock[] {
         makeBlock("hero", { image_url: "https://placehold.co/600x300/6366f1/ffffff?text=Welcome" }),
         makeBlock("heading", { text: "Welcome aboard!", level: "h1", align: "center" }),
         makeBlock("paragraph", { text: "We're thrilled to have you with us. Here's what you can expect next." }),
-        makeBlock("button", { text: "Get Started", url: "https://noska.dev" }),
+        makeBlock("button", { text: "Get Started", url: "https://noska.me" }),
         makeBlock("divider", {}),
         makeBlock("signature", {}),
         makeBlock("footer", {}),
@@ -125,7 +125,7 @@ function buildStarterBlocks(templateType: string): EmailBlock[] {
         makeBlock("logo", { alignment: "center" }),
         makeBlock("heading", { text: "Hello!", align: "center" }),
         makeBlock("paragraph", { text: "Your email content goes here." }),
-        makeBlock("button", { text: "Learn More", url: "https://noska.dev" }),
+        makeBlock("button", { text: "Learn More", url: "https://noska.me" }),
         makeBlock("footer", {}),
       ];
   }

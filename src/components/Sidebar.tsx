@@ -402,7 +402,7 @@ const Sidebar = memo(function Sidebar({
         </div>
 
         {/* Scrollable Sidebar Content */}
-        <div className="flex-1 overflow-y-auto pb-2 scrollbar-thin fade-edges-y">
+        <div className="flex-1 overflow-y-auto pb-2 scroll-smooth overscroll-contain transition-all duration-150 scrollbar-thin scrollbar-thumb-[var(--border)] hover:scrollbar-thumb-[var(--muted)]/40 fade-edges-y">
           {/* 1. Core Workspace Links */}
           <NoskaSection title="Workspace" defaultExpanded={true}>
             <NoskaNavItem icon={AnimatedFolder} label="Home" active={appView === "home"} onClick={(e) => onView("home", selectOptionsFromEvent(e))} />
@@ -533,7 +533,7 @@ const Sidebar = memo(function Sidebar({
           >
             <AnimatedPlus size={11} className="shrink-0 text-white" />
             <span className="flex-1 text-white font-medium truncate">New Creation</span>
-            <kbd className="text-[8px] text-white/80 font-mono bg-[var(--hover)] px-1 py-0.5 rounded leading-none shrink-0 border border-[var(--border)] tracking-wider uppercase select-none">Ctrl+N</kbd>
+            <kbd className="text-[8.5px] text-white font-mono bg-black/20 dark:bg-white/20 px-1.5 py-0.5 rounded leading-none shrink-0 border border-white/20 tracking-wider uppercase select-none">Ctrl+P</kbd>
           </button>
         </div>
       </div>

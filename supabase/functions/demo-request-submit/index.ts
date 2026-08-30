@@ -7,7 +7,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? ""
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "onboarding@resend.dev"
-const NOTIFY_EMAIL = Deno.env.get("NOTIFY_EMAIL") ?? "hello@noska.dev"
+const NOTIFY_EMAIL = Deno.env.get("NOTIFY_EMAIL") ?? "hello@noska.me"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +31,7 @@ async function sendNotification(name: string, email: string, company: string, em
       ${message ? `<tr><td style="padding: 8px 0; color: #6b7280;">Message</td><td style="padding: 8px 0;"><strong>${message}</strong></td></tr>` : ""}
     </table>
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-    <p style="color: #6b7280; font-size: 13px;">View in admin: <a href="https://noska.dev/control/demo-requests" style="color: #7c3aed;">noska.dev/control/demo-requests</a></p>
+    <p style="color: #6b7280; font-size: 13px;">View in admin: <a href="https://noska.me/control/demo-requests" style="color: #7c3aed;">noska.me/control/demo-requests</a></p>
   </div>`
 
   try {

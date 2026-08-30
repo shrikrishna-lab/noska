@@ -233,23 +233,47 @@ export function playVoiceChime(type: "start" | "stop") {
   } catch {}
 }
 
-/** Clean speech transcript from filler words ("um", "uh", repeated words) */
+/** Clean speech transcript from filler words, auto-convert spoken punctuation, and smart-format casing (Wispr Flow style) */
 export function cleanVoiceTranscript(text: string, enabled: boolean = true): string {
-  if (!text || !enabled) return text;
+  if (!text) return text;
   let cleaned = text;
 
-  // Remove filler words
-  cleaned = cleaned.replace(/\b(um|uh|erm|ah|like you know|you know what I mean|sort of)\b/gi, "");
+  if (enabled) {
+    // 1. Spoken punctuation conversions (Wispr Flow style)
+    cleaned = cleaned
+      .replace(/\b(period|full stop)\b/gi, ".")
+      .replace(/\b(comma)\b/gi, ",")
+      .replace(/\b(question mark)\b/gi, "?")
+      .replace(/\b(exclamation mark|exclamation point)\b/gi, "!")
+      .replace(/\b(new line|next line)\b/gi, "\n")
+      .replace(/\b(new paragraph)\b/gi, "\n\n")
+      .replace(/\b(colon)\b/gi, ":")
+      .replace(/\b(semicolon)\b/gi, ";")
+      .replace(/\b(open quote|start quote)\b/gi, ' "')
+      .replace(/\b(close quote|end quote)\b/gi, '" ')
+      .replace(/\b(dash|hyphen)\b/gi, " — ");
 
-  // Remove immediate stuttering / duplicate words e.g. "the the" -> "the"
-  cleaned = cleaned.replace(/\b(\w+)\s+\1\b/gi, "$1");
+    // 2. Remove filler words & conversational hesitations
+    cleaned = cleaned.replace(/\b(um|uh|erm|ah|umm|uhh|you know what I mean)\b/gi, "");
 
-  // Clean double spaces
-  cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+    // 3. Remove immediate duplicate stutter words e.g. "the the" -> "the"
+    cleaned = cleaned.replace(/\b([a-zA-Z]+)\s+\1\b/gi, "$1");
 
-  // Smart capitalization
-  if (cleaned.length > 0) {
-    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    // 4. Clean up spaces around punctuation
+    cleaned = cleaned
+      .replace(/\s+([.,!?:;])/g, "$1")
+      .replace(/([.,!?:;])(?=[^\s\d])/g, "$1 ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    // 5. Smart Sentence Capitalization (Wispr Flow engine)
+    cleaned = cleaned.replace(/(^\s*|[.!?\n]\s+)([a-z])/g, (_, boundary, letter) => {
+      return boundary + letter.toUpperCase();
+    });
+
+    if (cleaned.length > 0) {
+      cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
   }
 
   return cleaned;

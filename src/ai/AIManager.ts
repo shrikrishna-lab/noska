@@ -401,8 +401,15 @@ class AIManager {
   }
 
   getActiveProvider() {
-    if (!this.config.activeProvider) return null;
-    return getProvider(this.config.activeProvider);
+    if (this.config.activeProvider) {
+      const p = getProvider(this.config.activeProvider);
+      if (p) return p;
+    }
+    const fallbacks = this._getFallbackProviders();
+    if (fallbacks.length > 0) {
+      return getProvider(fallbacks[0]);
+    }
+    return getProvider("opencode_zen") || getProvider("openrouter");
   }
 
   getActiveProviderName() {
@@ -425,6 +432,10 @@ class AIManager {
     const config = this.config.providers[provider.id];
     if (provider.requiresKey && !config?.apiKey) return false;
     return true;
+  }
+
+  getAllProviders() {
+    return getAllProviders();
   }
 
   getProviderStatuses() {
@@ -620,9 +631,6 @@ class AIManager {
    * Send an AI request (non-streaming) with retry and fallback
    */
   async send({ system, prompt, page, pages, agent, maxTokens, effort, thinking, signal }: AISendOpts) {
-    const provider = this.getActiveProvider();
-    const providerConfig = this.config.providers[this.config.activeProvider || ""] || {};
-
     let contextString = "";
     if (page || pages) {
       contextString = buildContext({
@@ -638,6 +646,16 @@ class AIManager {
     const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
     const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
 
+    let provider = this.getActiveProvider();
+    let providerConfig = provider ? (this.config.providers[provider.id] || {}) : {};
+    if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
+      const fallbackPid = this._getFallbackProviders()[0];
+      if (fallbackPid) {
+        provider = getProvider(fallbackPid);
+        providerConfig = this.config.providers[fallbackPid] || {};
+      }
+    }
+
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
       throw configError(this.config.activeProvider || "Noska AI");
     }
@@ -645,14 +663,30 @@ class AIManager {
     const messages = [{ role: "user", content: prompt || "" }];
 
     return await withRetry(async () => {
-      const result = await this._tryProvider(this.config.activeProvider!, {
-        system: fullSystem, messages, maxTokens, effort, thinking, signal
-      });
-      if (looksLikeMockFailure(result)) {
-        throw new Error(extractMockError(result));
+      try {
+        const result = await this._tryProvider(provider!.id, {
+          system: fullSystem, messages, maxTokens, effort, thinking, signal
+        });
+        if (looksLikeMockFailure(result)) {
+          throw new Error(extractMockError(result));
+        }
+        this._healthCache.set(this.config.activeProvider!, { status: "online", timestamp: Date.now() });
+        return this.guardResponse(result, pages, page);
+      } catch (err: unknown) {
+        if (isCancelled(err)) throw err;
+        const fallbacks = this._getFallbackProviders().filter(id => id !== provider!.id);
+        for (const fbId of fallbacks) {
+          try {
+            const fbResult = await this._tryProvider(fbId, {
+              system: fullSystem, messages, maxTokens, effort, thinking, signal
+            });
+            if (fbResult && !looksLikeMockFailure(fbResult)) {
+              return this.guardResponse(fbResult, pages, page);
+            }
+          } catch {}
+        }
+        throw err;
       }
-      this._healthCache.set(this.config.activeProvider!, { status: "online", timestamp: Date.now() });
-      return this.guardResponse(result, pages, page);
     }, signal);
   }
 
@@ -710,8 +744,15 @@ class AIManager {
    * Stream an AI response with cancellation, retry, and intelligence engine
    */
   async stream({ system, prompt, messages, page, pages, agent, maxTokens, effort, thinking, onChunk, signal }: AIStreamOpts) {
-    const provider = this.getActiveProvider();
-    const providerConfig = this.config.providers[this.config.activeProvider || ""] || {};
+    let provider = this.getActiveProvider();
+    let providerConfig = provider ? (this.config.providers[provider.id] || {}) : {};
+    if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
+      const fallbackPid = this._getFallbackProviders()[0];
+      if (fallbackPid) {
+        provider = getProvider(fallbackPid);
+        providerConfig = this.config.providers[fallbackPid] || {};
+      }
+    }
     const diagnostics = createDiagnosticTracker(`req_${Date.now().toString(36)}`);
 
     // ─── Intelligence Analysis ─────────────────────────────────────
@@ -836,6 +877,43 @@ class AIManager {
           throw err;
         }
         diagnostics.setError(err instanceof Error ? err.message : "Stream failed");
+
+        // Intelligent Cross-Provider Self-Healing Fallback
+        const fallbacks = this._getFallbackProviders().filter(id => id !== provider.id);
+        for (const fallbackId of fallbacks) {
+          const fallbackProvider = getProvider(fallbackId);
+          const fallbackConfig = this.config.providers[fallbackId] || {};
+          if (fallbackProvider && (fallbackConfig.apiKey || !fallbackProvider.requiresKey) && typeof fallbackProvider.stream === "function") {
+            try {
+              const fbModel = this._resolveValidModel(fallbackProvider);
+              let full = "";
+              const fbIterator = fallbackProvider.stream({
+                apiKey: fallbackConfig.apiKey,
+                baseUrl: fallbackConfig.baseUrl || fallbackProvider.baseUrl,
+                model: fbModel,
+                system: fullSystem,
+                messages: apiMessages,
+                maxTokens: maxTokens || this.config.maxTokens,
+                effort,
+                thinking,
+                signal,
+              });
+              for await (const chunk of fbIterator) {
+                if (signal?.aborted) break;
+                full = chunk;
+                onChunk?.(full);
+              }
+              if (full) {
+                this._conversationState.updateFromAIResponse(full);
+                diagnostics.finish("completed", full.length);
+                return full;
+              }
+            } catch {
+              // Continue to next fallback if this one fails
+            }
+          }
+        }
+
         diagnostics.finish("error", 0);
         throw err;
       }

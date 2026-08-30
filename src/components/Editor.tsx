@@ -114,7 +114,7 @@ import AIFlashcardGenerator from "../features/study/AIFlashcardGenerator";
 import BacklinksPanel from "./editor/BacklinksPanel";
 import SelectionAIBar from "./editor/SelectionAIBar";
 import VersionHistoryPanel from "./editor/VersionHistoryPanel";
-import InlineAIBar from "./editor/InlineAIBar";
+import NotionAIBar from "./editor/NotionAIBar";
 import renderBlockEditor from "./editor/renderBlockEditor";
 import FloatingFormatToolbar from "./editor/FloatingFormatToolbar";
 
@@ -494,7 +494,7 @@ export default function Editor({
   const titleRef = useRef(null);
   const editorContainerRef = useRef(null);
   const pageOptionsRef = useRef<HTMLDivElement>(null);
-  const blockCtx = useRef<EditorCallbackContext>({ onBlockPatch: () => {}, onBlocks: () => {}, onMoveBlock: () => {} });
+  const blockCtx = useRef<EditorCallbackContext>({ onBlockPatch: () => { }, onBlocks: () => { }, onMoveBlock: () => { } });
 
   interface SelectionState {
     text: string;
@@ -757,7 +757,7 @@ export default function Editor({
         // Keep last 50
         localStorage.setItem(auditKey, JSON.stringify(stored.slice(-50)));
         loadVersionHistory();
-      } catch {}
+      } catch { }
     }, 5000);
     return () => clearTimeout(timer);
   }, [page?.id, page?.blocks, loadVersionHistory]);
@@ -786,10 +786,10 @@ export default function Editor({
         setSelection({
           text,
           rect: {
-            top: rect.top - parentRect.top + scrollTop,
-            left: rect.left - parentRect.left + scrollLeft,
+            top: rect.top,
+            left: rect.left,
             width: rect.width,
-            height: rect.height
+            height: rect.height,
           },
           blockId,
           selStart,
@@ -812,25 +812,22 @@ export default function Editor({
         const pct = Math.round((target.scrollTop / total) * 100);
         onScrollPercent?.(pct);
       }}
-      className={`min-h-0 flex-1 overflow-y-auto scrollbar-thin relative transition-all duration-200 ${
-        page.fontStyle === "serif" ? "font-serif" : page.fontStyle === "mono" ? "font-mono" : "font-sans"
-      }`}
+      className={`min-h-0 flex-1 overflow-y-auto scrollbar-thin relative transition-all duration-200 ${page.fontStyle === "serif" ? "font-serif" : page.fontStyle === "mono" ? "font-mono" : "font-sans"
+        }`}
       style={page.pageBg ? { background: page.pageBg } : undefined}
     >
       {/* Cover Banner — full width of editor container or constrained by coverSize without viewport overflow */}
       {Boolean(page.cover) && (
         <div
-          className={`transition-all duration-300 relative group/banner select-none overflow-hidden ${
-            !page.coverSize || page.coverSize === "full"
+          className={`transition-all duration-300 relative group/banner select-none overflow-hidden ${!page.coverSize || page.coverSize === "full"
               ? "w-full"
               : page.coverSize === "wide"
-              ? "max-w-5xl mx-auto rounded-b-xl"
-              : page.coverSize === "small"
-              ? "max-w-[480px] mx-auto rounded-b-xl"
-              : "max-w-[720px] mx-auto rounded-b-xl"
-          } ${
-            isRepositioningCover ? "ring-2 ring-blue-500/60 cursor-grab active:cursor-grabbing" : ""
-          }`}
+                ? "max-w-5xl mx-auto rounded-b-xl"
+                : page.coverSize === "small"
+                  ? "max-w-[480px] mx-auto rounded-b-xl"
+                  : "max-w-[720px] mx-auto rounded-b-xl"
+            } ${isRepositioningCover ? "ring-2 ring-blue-500/60 cursor-grab active:cursor-grabbing" : ""
+            }`}
           style={{
             height: (page.coverHeight || 160) + "px",
             background: typeof page.cover === "string" && (page.cover.startsWith('linear-gradient') || page.cover.startsWith('radial-gradient'))
@@ -902,11 +899,9 @@ export default function Editor({
         </div>
       )}
 
-      <div className={`mx-auto px-16 ${page.cover ? "pt-4 pb-10" : "py-10"} transition-all duration-200 ${
-        page.fullWidth ? "max-w-full px-8" : "max-w-[720px]"
-      } ${
-        page.smallText ? "noska-small-text text-xs" : ""
-      }`}
+      <div className={`mx-auto px-16 ${page.cover ? "pt-4 pb-10" : "py-10"} transition-all duration-200 ${page.fullWidth ? "max-w-full px-8" : "max-w-[720px]"
+        } ${page.smallText ? "noska-small-text text-xs" : ""
+        }`}
         onClick={(e) => {
           if (!page.isLocked && (page.blocks || []).length > 0 && e.target === e.currentTarget) {
             const lastBlock = page.blocks[page.blocks.length - 1];
@@ -915,102 +910,102 @@ export default function Editor({
         }}
       >
         <div className="mb-2 flex items-center justify-between gap-2 relative min-h-[32px]">
-            <div className="flex items-center gap-2">
-              {page.isLocked && (
-                <span className="flex items-center gap-1 rounded bg-[var(--danger)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--danger)]">
-                  🔒 Locked
-                </span>
-              )}
-              {permission === 'view' && !page.isLocked && (
-                <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">
-                  👁 View only
-                </span>
-              )}
-              {page.sharedRole && (
-                <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]" title="Shared with you — you are not the owner of this page">
-                  🤝 Shared {page.sharedRole === "editor" ? "· can edit" : page.sharedRole === "commenter" ? "· can comment" : "· view only"}
-                </span>
-              )}
-            </div>
+          <div className="flex items-center gap-2">
+            {page.isLocked && (
+              <span className="flex items-center gap-1 rounded bg-[var(--danger)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--danger)]">
+                🔒 Locked
+              </span>
+            )}
+            {permission === 'view' && !page.isLocked && (
+              <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">
+                👁 View only
+              </span>
+            )}
+            {page.sharedRole && (
+              <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]" title="Shared with you — you are not the owner of this page">
+                🤝 Shared {page.sharedRole === "editor" ? "· can edit" : page.sharedRole === "commenter" ? "· can comment" : "· view only"}
+              </span>
+            )}
+          </div>
 
-            <div className="flex items-center gap-1 ml-auto">
-              <div className="relative flex items-center">
-                <div ref={pageOptionsRef} className="flex items-center">
-                  <button
-                    onClick={() => {
-                      if (!pageMenuOpen) {
-                        const rect = pageOptionsRef.current?.getBoundingClientRect();
-                        const menuW = 300;
-                        const margin = 8;
-                        let left = (rect?.left ?? 0) - menuW + 32;
-                        if (left + menuW > window.innerWidth - margin) {
-                          left = Math.max(margin, window.innerWidth - menuW - margin);
-                        }
-                        if (left < margin) left = margin;
-                        let top = (rect?.bottom ?? 0) + 4;
-                        const maxMenuH = 560;
-                        if (top + maxMenuH > window.innerHeight - margin) {
-                          top = Math.max(margin, (rect?.top ?? top) - maxMenuH);
-                        }
-                        setPageMenuPos({ top, left });
+          <div className="flex items-center gap-1 ml-auto">
+            <div className="relative flex items-center">
+              <div ref={pageOptionsRef} className="flex items-center">
+                <button
+                  onClick={() => {
+                    if (!pageMenuOpen) {
+                      const rect = pageOptionsRef.current?.getBoundingClientRect();
+                      const menuW = 300;
+                      const margin = 8;
+                      let left = (rect?.left ?? 0) - menuW + 32;
+                      if (left + menuW > window.innerWidth - margin) {
+                        left = Math.max(margin, window.innerWidth - menuW - margin);
                       }
-                      setPageMenuOpen(!pageMenuOpen);
-                    }}
-                    className="grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
-                    title="Page options"
-                  >
-                    <MoreHorizontal size={18} />
-                  </button>
-                </div>
-                {pageMenuOpen && createPortal(
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setPageMenuOpen(false)} />
-                    <div
-                      className="fixed z-50"
-                      style={{ top: pageMenuPos.top, left: pageMenuPos.left }}
-                    >
-                      <PageOptionsMenu
-                        open={pageMenuOpen}
-                        onClose={() => setPageMenuOpen(false)}
-                        page={page}
-                        onAction={(action) => {
-                          setPageMenuOpen(false);
-                          switch (action) {
-                            case "trash": onTrashPage?.(page.id); break;
-                            case "duplicate": onDuplicateBlock?.(page.id); break;
-                            case "present": setPresentationMode(true); break;
-                            case "suggest": setSuggestEdits(v => !v); onToast?.(`Suggest edits ${!suggestEdits ? "ON" : "OFF"}`); break;
-                            case "move-to": setMoveToOpen(true); break;
-                            case "customize": setCustomizeOpen(true); break;
-                            case "import": setImportDialogOpen(true); break;
-                            case "export": handleExport(); break;
-                            case "wiki": handleWikiConversion(); break;
-                            case "history": setHistoryOpen(true); break;
-                            case "analytics": setAnalyticsOpen(true); break;
-                            case "ai": onAskAI?.(); break;
-                            default: break;
-                          }
-                        }}
-                        wordCount={wordCount}
-                        lastEditedBy={page?.lastEditedBy || realtimeCollab.getUser()?.userName || "Workspace User"}
-                        lastEditedAt={page?.lastEditedAt || page?.updatedAt}
-                        onPagePatch={onPagePatch}
-                        onToast={onToast}
-                        onTrash={onTrashPage}
-                        onDuplicatePage={() => onDuplicateBlock?.(page.id)}
-                        onImport={() => setImportDialogOpen(true)}
-                        onExport={handleExport}
-                        onAnalytics={() => setAnalyticsOpen(true)}
-                        onHistory={() => setHistoryOpen(true)}
-                        onAskAI={onAskAI}
-                      />
-                    </div>
-                  </>,
-                  document.body
-                )}
+                      if (left < margin) left = margin;
+                      let top = (rect?.bottom ?? 0) + 4;
+                      const maxMenuH = 560;
+                      if (top + maxMenuH > window.innerHeight - margin) {
+                        top = Math.max(margin, (rect?.top ?? top) - maxMenuH);
+                      }
+                      setPageMenuPos({ top, left });
+                    }
+                    setPageMenuOpen(!pageMenuOpen);
+                  }}
+                  className="grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+                  title="Page options"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
               </div>
+              {pageMenuOpen && createPortal(
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setPageMenuOpen(false)} />
+                  <div
+                    className="fixed z-50"
+                    style={{ top: pageMenuPos.top, left: pageMenuPos.left }}
+                  >
+                    <PageOptionsMenu
+                      open={pageMenuOpen}
+                      onClose={() => setPageMenuOpen(false)}
+                      page={page}
+                      onAction={(action) => {
+                        setPageMenuOpen(false);
+                        switch (action) {
+                          case "trash": onTrashPage?.(page.id); break;
+                          case "duplicate": onDuplicateBlock?.(page.id); break;
+                          case "present": setPresentationMode(true); break;
+                          case "suggest": setSuggestEdits(v => !v); onToast?.(`Suggest edits ${!suggestEdits ? "ON" : "OFF"}`); break;
+                          case "move-to": setMoveToOpen(true); break;
+                          case "customize": setCustomizeOpen(true); break;
+                          case "import": setImportDialogOpen(true); break;
+                          case "export": handleExport(); break;
+                          case "wiki": handleWikiConversion(); break;
+                          case "history": setHistoryOpen(true); break;
+                          case "analytics": setAnalyticsOpen(true); break;
+                          case "ai": onAskAI?.(); break;
+                          default: break;
+                        }
+                      }}
+                      wordCount={wordCount}
+                      lastEditedBy={page?.lastEditedBy || realtimeCollab.getUser()?.userName || "Workspace User"}
+                      lastEditedAt={page?.lastEditedAt || page?.updatedAt}
+                      onPagePatch={onPagePatch}
+                      onToast={onToast}
+                      onTrash={onTrashPage}
+                      onDuplicatePage={() => onDuplicateBlock?.(page.id)}
+                      onImport={() => setImportDialogOpen(true)}
+                      onExport={handleExport}
+                      onAnalytics={() => setAnalyticsOpen(true)}
+                      onHistory={() => setHistoryOpen(true)}
+                      onAskAI={onAskAI}
+                    />
+                  </div>
+                </>,
+                document.body
+              )}
             </div>
           </div>
+        </div>
         <Breadcrumbs pageId={page.id} pages={pages} onNavigate={onNavigate} />
         <AnimatePresence>
           {findOpen && (
@@ -1209,11 +1204,10 @@ export default function Editor({
                 <div className="relative">
                   <button
                     onClick={(e) => { e.stopPropagation(); setActiveCommentBlockId(activeCommentBlockId === "__title__" ? null : "__title__"); }}
-                    className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${
-                      (page.comments || []).some(c => c.blockId === "__title__" && !c.resolvedAt)
+                    className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${(page.comments || []).some(c => c.blockId === "__title__" && !c.resolvedAt)
                         ? "text-[var(--accent)] opacity-100"
                         : "text-[var(--muted)] opacity-0 group-hover/title:opacity-100"
-                    } hover:bg-[var(--hover)]`}
+                      } hover:bg-[var(--hover)]`}
                     aria-label="Toggle comments on title"
                   >
                     <MessageCircle size={13} />
@@ -1249,31 +1243,31 @@ export default function Editor({
                   page.titleWeight === "normal"
                     ? 400
                     : page.titleWeight === "semibold"
-                    ? 600
-                    : page.titleWeight === "bold"
-                    ? 700
-                    : 800,
+                      ? 600
+                      : page.titleWeight === "bold"
+                        ? 700
+                        : 800,
                 fontFamily:
                   page.titleFont === "serif"
                     ? "Georgia, Cambria, serif"
                     : page.titleFont === "mono"
-                    ? "JetBrains Mono, Fira Code, monospace"
-                    : "inherit",
+                      ? "JetBrains Mono, Fira Code, monospace"
+                      : "inherit",
                 textAlign: (page.titleAlign as any) || "left",
                 letterSpacing:
                   page.titleTracking === "tighter"
                     ? "-0.04em"
                     : page.titleTracking === "tight"
-                    ? "-0.025em"
-                    : page.titleTracking === "wide"
-                    ? "0.05em"
-                    : "-0.015em",
+                      ? "-0.025em"
+                      : page.titleTracking === "wide"
+                        ? "0.05em"
+                        : "-0.015em",
                 ...(page.titleColor && page.titleColor !== "default"
                   ? {
-                      backgroundImage: TITLE_GRADIENTS.find((g) => g.id === page.titleColor)?.style || "none",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent"
-                    }
+                    backgroundImage: TITLE_GRADIENTS.find((g) => g.id === page.titleColor)?.style || "none",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent"
+                  }
                   : {})
               }}
               className="flex-1 min-w-0 bg-transparent leading-tight text-[var(--text)] outline-none placeholder:text-[var(--muted)] mt-1 transition-all"
@@ -1309,51 +1303,51 @@ export default function Editor({
         {(page.blocks || []).length === 0 && <EmptyState onAdd={() => onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked} />}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(e.active.id)} onDragEnd={handleDragEnd}>
           <SortableContext items={flatBlockIds} strategy={verticalListSortingStrategy}>
-          <div
-            ref={containerRef}
-            className="space-y-1 relative" role="region" aria-label="Page content"
-            onPointerDown={handleDragSelectStart}
-          >
-          {/* Selection drag marquee */}
-          {selectionMode && selectionRect && (
             <div
-              className="absolute z-30 rounded-md border border-[var(--accent)]/50 bg-[var(--accent)]/10 pointer-events-none"
-              style={{
-                left: selectionRect.x,
-                top: selectionRect.y,
-                width: selectionRect.width,
-                height: selectionRect.height,
-              }}
-            />
-          )}
-          <EditorBlockList
-            renderedBlocks={renderedBlocks}
-            page={page}
-            pages={pages}
-            selectedBlockIds={selectedBlockIds}
-            openSlashForBlockId={openSlashForBlockId}
-            onClearOpenSlash={handleClearOpenSlash}
-            setOpenSlashForBlockId={setOpenSlashForBlockId}
-            blockCtx={blockCtx}
-            handlePointerDown={handlePointerDown}
-            activeCommentBlockId={activeCommentBlockId}
-            setActiveCommentBlockId={setActiveCommentBlockId}
-            pageComments={page.comments || []}
-            handleAddComment={handleAddComment}
-            handleResolveComment={handleResolveComment}
-            onAskAI={onAskAI}
-            onFocusBlock={onFocusBlock}
-            ghostWriterEnabled={ghostWriterEnabled}
-            apiKey={apiKey}
-            aiProvider={aiProvider}
-            nvidiaKey={nvidiaKey}
-            onToast={onToast}
-            onUpdatePage={onUpdatePage}
-            onPagePatch={onPagePatch}
-            onCreateSubpage={onCreateSubpage}
-            onNavigate={onNavigate}
-          />
-          </div>
+              ref={containerRef}
+              className="space-y-1 relative" role="region" aria-label="Page content"
+              onPointerDown={handleDragSelectStart}
+            >
+              {/* Selection drag marquee */}
+              {selectionMode && selectionRect && (
+                <div
+                  className="absolute z-30 rounded-md border border-[var(--accent)]/50 bg-[var(--accent)]/10 pointer-events-none"
+                  style={{
+                    left: selectionRect.x,
+                    top: selectionRect.y,
+                    width: selectionRect.width,
+                    height: selectionRect.height,
+                  }}
+                />
+              )}
+              <EditorBlockList
+                renderedBlocks={renderedBlocks}
+                page={page}
+                pages={pages}
+                selectedBlockIds={selectedBlockIds}
+                openSlashForBlockId={openSlashForBlockId}
+                onClearOpenSlash={handleClearOpenSlash}
+                setOpenSlashForBlockId={setOpenSlashForBlockId}
+                blockCtx={blockCtx}
+                handlePointerDown={handlePointerDown}
+                activeCommentBlockId={activeCommentBlockId}
+                setActiveCommentBlockId={setActiveCommentBlockId}
+                pageComments={page.comments || []}
+                handleAddComment={handleAddComment}
+                handleResolveComment={handleResolveComment}
+                onAskAI={onAskAI}
+                onFocusBlock={onFocusBlock}
+                ghostWriterEnabled={ghostWriterEnabled}
+                apiKey={apiKey}
+                aiProvider={aiProvider}
+                nvidiaKey={nvidiaKey}
+                onToast={onToast}
+                onUpdatePage={onUpdatePage}
+                onPagePatch={onPagePatch}
+                onCreateSubpage={onCreateSubpage}
+                onNavigate={onNavigate}
+              />
+            </div>
           </SortableContext>
           <DragOverlay>
             {activeId ? <DragGhostBlock block={flatBlockMap[activeId]} /> : null}
@@ -1450,61 +1444,64 @@ export default function Editor({
 
       </div>
 
-      <AnimatePresence>
-        {/* Selection AI bar exposes format/replace/insert — all mutations,
-            gated on isEditable (not just isLocked). */}
-        {selection.text && isEditable && (
-          <SelectionAIBar
-            selection={selection}
-            apiKey={apiKey}
-            aiProvider={aiProvider}
-            nvidiaKey={nvidiaKey}
-            onFormat={(type) => {
-              const targetBlock = page.blocks.find(b => b.id === selection.blockId);
-              if (targetBlock) {
-                const text = targetBlock.text;
-                const selText = selection.text;
-                const start = selection.selStart ?? text.indexOf(selText);
-                const end = selection.selEnd ?? start + selText.length;
-                let formatted = selText;
-                if (type === "bold") formatted = `**${selText}**`;
-                else if (type === "italic") formatted = `*${selText}*`;
-                else if (type === "underline") formatted = `<u>${selText}</u>`;
-                else if (type === "code") formatted = `\`${selText}\``;
-                else if (type === "strikethrough") formatted = `~~${selText}~~`;
-                else if (type === "clear") {
-                  formatted = selText.replace(/[\*\_~`]|<\/?u>/g, "");
-                }
-                const newText = text.slice(0, start) + formatted + text.slice(end);
-                onBlockPatch(selection.blockId, { text: newText });
+      {/* Unified Global Floating Format & Expandable AI Skills Toolbar */}
+      {selection.text && !page.isLocked && (
+        <FloatingFormatToolbar
+          selection={selection}
+          onClose={() => setSelection({ text: "", rect: null, blockId: null })}
+          onFormat={(formatKey) => {
+            const targetBlock = page.blocks.find(b => b.id === selection.blockId);
+            if (targetBlock) {
+              const text = targetBlock.text || "";
+              const selText = selection.text;
+              const start = selection.selStart ?? text.indexOf(selText);
+              const end = selection.selEnd ?? start + selText.length;
+              let formatted = selText;
+              if (formatKey === "bold") formatted = `**${selText}**`;
+              else if (formatKey === "italic") formatted = `*${selText}*`;
+              else if (formatKey === "underline") formatted = `<u>${selText}</u>`;
+              else if (formatKey === "code") formatted = `\`${selText}\``;
+              else if (formatKey === "strikethrough") formatted = `~~${selText}~~`;
+              else if (formatKey === "clear") formatted = selText.replace(/[\*\_~`]|<\/?u>/g, "");
+              else if (formatKey.startsWith("color-")) {
+                const colorVar = formatKey.slice(6);
+                formatted = `@@${colorVar}:${selText}@@`;
               }
-              setSelection({ text: "", rect: null, blockId: null });
-            }}
-            onReplace={(newText) => {
-              const targetBlock = page.blocks.find(b => b.id === selection.blockId);
-              if (targetBlock) {
-                const text = targetBlock.text;
-                const start = selection.selStart ?? text.indexOf(selection.text);
-                const end = selection.selEnd ?? start + selection.text.length;
-                const replacedText = text.slice(0, start) + newText + text.slice(end);
-                onBlockPatch(selection.blockId, { text: replacedText });
-              }
-              setSelection({ text: "", rect: null, blockId: null });
-            }}
-            onInsert={(newText) => {
+              const newText = text.slice(0, start) + formatted + text.slice(end);
+              onBlockPatch(selection.blockId!, { text: newText });
+            }
+          }}
+          onReplace={(newText) => {
+            const targetBlock = page.blocks.find(b => b.id === selection.blockId);
+            if (targetBlock) {
+              const text = targetBlock.text || "";
+              const start = selection.selStart ?? text.indexOf(selection.text);
+              const end = selection.selEnd ?? start + selection.text.length;
+              const replacedText = text.slice(0, start) + newText + text.slice(end);
+              onBlockPatch(selection.blockId!, { text: replacedText });
+            }
+            setSelection({ text: "", rect: null, blockId: null });
+          }}
+          onInsert={(newText) => {
+            if (selection.blockId) {
               onAddBlock(selection.blockId, "text", newText);
-              setSelection({ text: "", rect: null, blockId: null });
-            }}
-            onClose={() => setSelection({ text: "", rect: null, blockId: null })}
-            onToast={onToast}
-            page={page}
-            onBlockPatch={onBlockPatch}
-            onPagePatch={onPagePatch}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Presentation Mode */}
+            }
+            setSelection({ text: "", rect: null, blockId: null });
+          }}
+          onTurnInto={(newType) => {
+            const targetBlock = page.blocks.find(b => b.id === selection.blockId);
+            if (targetBlock) {
+              onBlockPatch(targetBlock.id, { ...blockForTreeConversion(targetBlock, newType, targetBlock.text) });
+            }
+          }}
+          onComment={() => {
+            if (selection.blockId) setActiveCommentBlockId(selection.blockId);
+          }}
+          apiKey={apiKey}
+          aiProvider={aiProvider}
+          nvidiaKey={nvidiaKey}
+        />
+      )}
       {presentationMode && (
         <div className="fixed inset-0 z-[200] bg-[var(--bg)] flex flex-col overflow-y-auto">
           <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur-sm">
@@ -1817,7 +1814,7 @@ const Block = memo(function Block({
   // menu opens on a real keystroke — not when clicking into / focusing a block
   // whose text already contains "/".
   const slashKeyPressedRef = useRef(false);
-  
+
   const slashRef = useOutsideDismiss(slashOpen, () => setSlashOpen(false));
   const mentionRef = useOutsideDismiss<HTMLDivElement>(mentionOpen, () => setMentionOpen(false));
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -2035,25 +2032,15 @@ const Block = memo(function Block({
         }
         return;
       }
-      // Open inline AI bar when pressing space on empty block or after "/"
-      const trimmed = (block.text || "").trim();
-      const ta = e.target as Node;
-      const sel = window.getSelection();
-      let cursorPos = 0;
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        const pre = document.createRange();
-        pre.selectNodeContents(ta);
-        pre.setEnd(range.startContainer, range.startOffset);
-        cursorPos = pre.toString().length;
-      }
-      const atEnd = cursorPos === (block.text || "").length;
-      if (!inlineAI && atEnd && (trimmed === "" || trimmed === "/")) {
+      // Open Notion AI bar ONLY when pressing Space on a completely empty block or single "/"
+      const rawText = block.text || "";
+      if (!inlineAI && (rawText === "" || rawText === "/")) {
         e.preventDefault();
         const blockEl = (e.target as HTMLElement).closest(".noska-block");
         inlineAIBlockRef.current = blockEl?.getAttribute("data-block-id") ?? null;
         const rect = blockEl?.getBoundingClientRect();
-        setInlineAI({ top: (rect?.bottom || 0) + 4, left: (rect?.left || 0), text: trimmed });
+        setInlineAI({ top: (rect?.bottom || 0) + 8, left: (rect?.left || 0), text: "" });
+        return;
       }
       return;
     }
@@ -2405,11 +2392,10 @@ const Block = memo(function Block({
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setActiveCommentBlockId(activeCommentBlockId === block.id ? null : block.id); }}
-              className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${
-                (pageComments || []).some(c => c.blockId === block.id && !c.resolvedAt)
+              className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${(pageComments || []).some(c => c.blockId === block.id && !c.resolvedAt)
                   ? "text-[var(--accent)] opacity-100"
                   : "text-[var(--muted)] opacity-0 group-hover:opacity-100"
-              } hover:bg-[var(--hover)]`}
+                } hover:bg-[var(--hover)]`}
               aria-label="Toggle comments"
             >
               <MessageCircle size={13} />
@@ -2481,17 +2467,6 @@ const Block = memo(function Block({
             }
           }
         )}
-        
-        {/* Render GhostSuggestion inline at the end when focused */}
-        {isFocused && suggestion && !page.isLocked && (
-          <div className="absolute right-2 bottom-1.5 pointer-events-none select-none flex items-center gap-1.5 opacity-70 bg-[var(--surface)] px-2 py-0.5 rounded border border-[var(--border-strong)] text-xs text-[var(--muted)] z-10 shadow-sm">
-            <span className="italic">{suggestion}</span>
-            <span className="bg-[var(--hover)] px-1 rounded text-[9px] font-mono border border-[var(--border)] font-semibold text-[var(--text)]">Tab</span>
-          </div>
-        )}
-        
-        <FloatingFormatToolbar blockId={block.id} inputRef={inputRef} onFormat={applyFormat} />
-
         <TypedSlashCommandMenu
           ref={slashRef}
           open={slashOpen}
@@ -2519,7 +2494,7 @@ const Block = memo(function Block({
                 Link to page
               </div>
               <div className="max-h-60 overflow-auto scrollbar-thin space-y-0.5">
-                {(!mentionQuery || ["today","tomorrow","next week","next month","monday","tuesday","wednesday","thursday","friday","saturday","sunday"].some(d => d.startsWith(mentionQuery.toLowerCase()))) && (
+                {(!mentionQuery || ["today", "tomorrow", "next week", "next month", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].some(d => d.startsWith(mentionQuery.toLowerCase()))) && (
                   <div className="px-1 py-1 text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">Dates</div>
                 )}
                 {(!mentionQuery || "today".startsWith(mentionQuery.toLowerCase())) && (
@@ -2661,42 +2636,33 @@ const Block = memo(function Block({
           )}
         </AnimatePresence>
 
-        {createPortal(
-          <AnimatePresence>
-            {inlineAI && (
-              <InlineAIBar
-                text={inlineAI.text}
-                apiKey={apiKey}
-                aiProvider={aiProvider}
-                nvidiaKey={nvidiaKey}
-                style={{ top: inlineAI.top, left: inlineAI.left }}
-                onClose={() => {
-                  setInlineAI(null);
-                  const id = inlineAIBlockRef.current;
-                  inlineAIBlockRef.current = null;
-                  if (id) {
-                    const el = document.querySelector(`[data-block-id="${id}"]`);
-                    const input = el?.querySelector<HTMLElement>("[contenteditable], textarea, input");
-                    requestAnimationFrame(() => input?.focus());
-                  }
-                }}
-                onResult={(result) => {
-                  onPatch({ text: result });
-                  setInlineAI(null);
-                  const id = inlineAIBlockRef.current;
-                  inlineAIBlockRef.current = null;
-                  if (id) {
-                    const el = document.querySelector(`[data-block-id="${id}"]`);
-                    const input = el?.querySelector<HTMLElement>("[contenteditable], textarea, input");
-                    requestAnimationFrame(() => input?.focus());
-                  }
-                }}
-              />
-            )}
-          </AnimatePresence>,
-          document.body
+        {inlineAI && (
+          <NotionAIBar
+            blockId={inlineAIBlockRef.current || block.id}
+            blockText={inlineAI.text}
+            pageContext={page.title + "\n" + (page.blocks || []).map((b) => b.text).filter(Boolean).join("\n")}
+            position={inlineAI}
+            onClose={() => {
+              setInlineAI(null);
+              inlineAIBlockRef.current = null;
+              inputRef.current?.focus();
+            }}
+            onReplace={(newText) => {
+              onPatch({ text: newText });
+              setInlineAI(null);
+              inlineAIBlockRef.current = null;
+            }}
+            onInsertBelow={(newText) => {
+              onAdd("text", newText);
+              setInlineAI(null);
+              inlineAIBlockRef.current = null;
+            }}
+            apiKey={apiKey}
+            aiProvider={aiProvider}
+            nvidiaKey={nvidiaKey}
+          />
         )}
-        
+
         <FloatingMenu open={blockContextOpen} anchorRef={menuButtonRef} onClose={() => setBlockContextOpen(false)} width={260}>
           <BlockContextMenu
             open={blockContextOpen}

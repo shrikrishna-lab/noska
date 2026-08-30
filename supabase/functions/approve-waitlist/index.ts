@@ -9,6 +9,16 @@ function generateCode(): string {
   return Math.random().toString(36).substring(2, 10).toUpperCase()
 }
 
+async function clerkApi(path: string, method: string, body?: unknown): Promise<Response | null> {
+  const key = Deno.env.get("CLERK_SECRET_KEY")
+  if (!key) return null
+  return fetch(`https://api.clerk.com/v1${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+}
+
 async function getResendConfig(): Promise<{ apiKey: string; fromEmail: string }> {
   const envKey = Deno.env.get("RESEND_API_KEY") ?? ""
   const envFrom = Deno.env.get("FROM_EMAIL") ?? ""
@@ -49,8 +59,6 @@ Deno.serve(async (req: Request) => {
     const sessionToken = authHeader.replace(/^Bearer\s+/i, "").trim()
     if (!sessionToken) return respond({ error: "Unauthorized" }, 401)
 
-    // require_admin_role returns the acting admin's uuid — use it for
-    // approved_by (the column is a uuid FK, not a display name).
     const { data: adminId, error: authErr } = await supabase.rpc("require_admin_role", {
       p_token: sessionToken,
       p_min_role: "support",
@@ -77,9 +85,25 @@ Deno.serve(async (req: Request) => {
 
     const inviteCode = generateCode()
     const now = new Date().toISOString()
-    // No invite_expires_at: admin approval is an explicit, durable decision.
-    // A 7-day expiry previously hard-blocked approved users ("Invite Expired")
-    // in WaitlistGate if they signed up late.
+    const appUrl = Deno.env.get("PUBLIC_SITE_URL") ?? "https://noska.me"
+    const redirectUrl = `${appUrl}/sso-callback`
+
+    let clerkInvitationId: string | null = null
+    let clerkInvitationUrl: string | null = null
+
+    const clerkRes = await clerkApi("/invitations", "POST", {
+      email_address: entry.email,
+      redirect_url: redirectUrl,
+    })
+    if (clerkRes && clerkRes.ok) {
+      const clerkData = await clerkRes.json()
+      clerkInvitationId = clerkData.id ?? null
+      clerkInvitationUrl = clerkData.url ?? null
+    } else {
+      if (clerkRes) {
+        console.error("Clerk invitation failed:", clerkRes.status, await clerkRes.text().catch(() => ""))
+      }
+    }
 
     const { error: updateErr } = await supabase
       .from("waitlist_entries")
@@ -91,6 +115,7 @@ Deno.serve(async (req: Request) => {
         approved_by: approvedBy,
         email_status: "queued",
         email_queued_at: now,
+        ...(clerkInvitationId ? { clerk_entry_id: clerkInvitationId } : {}),
       })
       .eq("id", waitlistId)
 
@@ -112,7 +137,7 @@ Deno.serve(async (req: Request) => {
         <p>Hey ${entry.name},</p>
         <p>Great news — you've been approved from the waitlist! You can now create your account and start using Noska.</p>
         <p style="margin: 24px 0;"><strong>Your invite code:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 14px;">${inviteCode}</code></p>
-        <a href="${Deno.env.get("PUBLIC_SITE_URL") ?? "https://noska.dev"}/invite/${inviteCode}" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invitation</a>
+        <a href="${clerkInvitationUrl ?? `${appUrl}/invite/${inviteCode}`}" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invitation</a>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
         <p style="color: #6b7280; font-size: 12px;">If you didn't sign up for Noska, you can ignore this email.</p>
       </div>`
@@ -141,7 +166,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return respond({ success: true, invite_code: inviteCode })
+    return respond({
+      success: true,
+      invite_code: inviteCode,
+      clerk_invitation_id: clerkInvitationId,
+      clerk_invitation_url: clerkInvitationUrl,
+    })
   } catch (err) {
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), {
       status: 500,

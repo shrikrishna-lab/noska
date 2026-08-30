@@ -361,7 +361,7 @@ async function handleSendInvite(payload: { waitlist_id: string; name: string; em
     <p>Hey ${payload.name},</p>
     <p>You've been invited to join Noska — the intelligent workspace for teams.</p>
     <p>Click the button below to create your account and get started:</p>
-    <a href="https://noska.dev/launch?ref=invite" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invite</a>
+    <a href="https://noska.me/launch?ref=invite" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invite</a>
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
     <p style="color: #6b7280; font-size: 12px;">If you didn't sign up, you can ignore this email.</p>
   </div>`;

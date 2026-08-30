@@ -1,6 +1,6 @@
 /**
  * High-performance Microphone capture & real-time vocal frequency analysis for Noska Voice Input.
- * Features logarithmically-scaled vocal formant tracking (80Hz - 8kHz), AGC, and instant responsiveness.
+ * Features logarithmically-scaled vocal formant tracking (80Hz - 6.5kHz), adaptive dynamic gain, and instant 60fps responsiveness.
  */
 
 export interface MicrophoneSession {
@@ -29,7 +29,7 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
   } catch (err: any) {
     if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
       throw new Error(
-        "Microphone access denied. If the browser didn't ask for permission, go to Windows Settings → Privacy → Microphone and enable \"Let desktop apps access your microphone\", then reload the page."
+        "Microphone access denied. Please allow microphone permissions in your browser or system settings."
       );
     }
     if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
@@ -51,9 +51,9 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
 
   // 256-point FFT gives 128 tight frequency bins with immediate ~5ms latency
   analyser.fftSize = 256;
-  analyser.smoothingTimeConstant = 0.3; // Ultra snappy real-time response
-  analyser.minDecibels = -85;
-  analyser.maxDecibels = -10;
+  analyser.smoothingTimeConstant = 0.25; // Ultra snappy real-time response
+  analyser.minDecibels = -90;
+  analyser.maxDecibels = -15;
   source.connect(analyser);
 
   const freqBufferLength = analyser.frequencyBinCount; // 128 bins
@@ -62,6 +62,8 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
 
   const sampleRate = audioCtx.sampleRate || 44100;
   const binWidth = sampleRate / analyser.fftSize;
+
+  let peakVolume = 0.15; // Dynamic auto-gain tracker
 
   const getVolumeLevel = (): number => {
     if (audioCtx.state === "suspended") {
@@ -74,8 +76,16 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
       sum += val * val;
     }
     const rms = Math.sqrt(sum / timeData.length);
-    // Highly responsive curve for human voice
-    return Math.min(1, Math.max(0, rms * 6));
+
+    // Dynamic AGC tracker
+    if (rms > peakVolume) {
+      peakVolume = Math.min(1.0, rms * 1.2);
+    } else {
+      peakVolume = Math.max(0.12, peakVolume * 0.995); // Gentle decay
+    }
+
+    const normalized = rms / Math.max(0.08, peakVolume);
+    return Math.min(1, Math.max(0, normalized * 1.4));
   };
 
   const getFrequencyBands = (bandCount: number = 13): number[] => {
@@ -85,9 +95,9 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
     analyser.getByteFrequencyData(freqData);
     const rmsVolume = getVolumeLevel();
 
-    // Human speech vocal formants (100Hz fundamental to 5000Hz harmonics)
+    // Human speech vocal formants (90Hz fundamental to 5200Hz harmonics)
     const minFreq = 90;
-    const maxFreq = 5200;
+    const maxFreq = 5400;
     const logMin = Math.log10(minFreq);
     const logMax = Math.log10(maxFreq);
 
@@ -100,23 +110,29 @@ export async function startMicrophoneCapture(): Promise<MicrophoneSession> {
       const binStart = Math.max(0, Math.min(freqBufferLength - 1, Math.floor(fStart / binWidth)));
       const binEnd = Math.max(binStart + 1, Math.min(freqBufferLength, Math.ceil(fEnd / binWidth)));
 
+      let maxVal = 0;
       let sum = 0;
       let count = 0;
       for (let j = binStart; j < binEnd; j++) {
-        sum += freqData[j];
+        const v = freqData[j];
+        if (v > maxVal) maxVal = v;
+        sum += v;
         count++;
       }
 
-      const rawAvg = count > 0 ? sum / count : 0;
-      // High-gain normalizer (normal voice is typically 20-90 byte value)
-      const normalized = Math.min(1, Math.max(0, rawAvg / 140));
+      const rawAvg = count > 0 ? (sum / count) * 0.6 + maxVal * 0.4 : 0;
+      
+      // High-sensitivity logarithmic scaling for vocal detection
+      const rawNormalized = Math.min(1, Math.max(0, rawAvg / 110));
 
-      // Formant sensitivity boost for mid frequencies (human vowels)
-      const formantMultiplier = 1 + Math.sin((i / bandCount) * Math.PI) * 0.4;
-      const amplified = Math.min(1, normalized * 1.8 * formantMultiplier);
+      // Vocal bell curve boost centered on formant frequencies (300Hz - 2.8kHz)
+      const centerFactor = Math.sin((i / (bandCount - 1)) * Math.PI);
+      const formantMultiplier = 1.0 + centerFactor * 0.85;
+      
+      const bandEnergy = Math.min(1, rawNormalized * 1.9 * formantMultiplier);
 
-      // Blend with overall time-domain voice envelope
-      const finalLevel = Math.min(1, Math.max(0.02, amplified * 0.75 + rmsVolume * 0.45));
+      // Blend frequency band with RMS volume for rich, organic movement
+      const finalLevel = Math.min(1, Math.max(0.04, bandEnergy * 0.8 + rmsVolume * 0.5));
       bands.push(finalLevel);
     }
 

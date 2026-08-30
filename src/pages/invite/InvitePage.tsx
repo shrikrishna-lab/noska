@@ -183,6 +183,9 @@ export function InvitePage() {
           <div className="mb-6 text-center">
             <h1 className="text-lg font-semibold text-slate-800">Welcome{invitee?.name ? `, ${invitee.name}` : ""}!</h1>
             <p className="mt-1 text-sm text-slate-500">You've been invited to join <strong className="text-slate-700">Noska</strong>.</p>
+            {invitee?.email && (
+              <p className="mt-1 text-xs text-slate-400">{invitee.email}</p>
+            )}
           </div>
 
           <AnimatePresence mode="wait">
@@ -201,7 +204,14 @@ export function InvitePage() {
             />
           </div>
 
-          <p className="mt-6 text-xs text-slate-400">
+          <div className="mt-4 text-center">
+            <p className="text-xs text-slate-400">
+              Already have an account?{" "}
+              <a href="/login" className="text-slate-600 font-medium hover:underline">Sign in</a>
+            </p>
+          </div>
+
+          <p className="mt-4 text-xs text-slate-400">
             By continuing, you agree to Noska's Terms of Service and Privacy Policy.
           </p>
         </motion.div>

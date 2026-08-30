@@ -122,12 +122,17 @@ export default function PromptComposer({
   const handleModelSelectionChange = useCallback((next: AiModelSelection) => {
     setModelSelection(next);
     if (next?.id) {
-      aiManager.setActiveModel(next.id);
+      const found = models.find(m => m.id === next.id);
+      if (found?.providerId) {
+        aiManager.setActiveProvider(found.providerId, next.id);
+      } else {
+        aiManager.setActiveModel(next.id);
+      }
       try {
         localStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify(next));
       } catch {}
     }
-  }, []);
+  }, [models]);
 
   const handleSubmit = useCallback((value: string, selection: AiModelSelection) => {
     let finalPrompt = value;

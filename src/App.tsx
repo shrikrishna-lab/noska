@@ -552,19 +552,28 @@ function AppContent() {
 
       // 2. Fetch data from Supabase (filtered by user_id if logged in)
       try {
-        const [remotePages, remoteSettings, remoteChats] = await Promise.all([
+        const [remotePages, remoteSettings] = await Promise.all([
           // Anonymous visitors only need the auth screen. Avoid querying
           // owner-scoped tables before Clerk has supplied a session token;
           // those requests are expected to be rejected by Supabase RLS and
           // otherwise surface a misleading startup warning in production.
           userId ? fetchPages(userId) : Promise.resolve([]),
-          userId ? fetchSettings() : Promise.resolve({}),
-          userId ? fetchAIChats(userId) : Promise.resolve([])
+          userId ? fetchSettings() : Promise.resolve({})
         ]);
         if (!mounted) return;
         loadedPages = remotePages;
         loadedSettings = remoteSettings;
-        loadedChats = remoteChats;
+
+        // AI chats are stored 100% locally in browser localStorage / cache (private, instant, offline-first)
+        try {
+          const localSavedChats = localStorage.getItem("noska_ai_chats");
+          if (localSavedChats) {
+            const parsed = JSON.parse(localSavedChats);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              loadedChats = parsed;
+            }
+          }
+        } catch {}
       } catch (e) {
         console.warn("Supabase load failed", e);
       }
@@ -850,14 +859,19 @@ function AppContent() {
       // Returning user signing in mid-session (the initial mount bootstrap
       // already ran before this sign-in completed) — load their data now.
       try {
-        const [remotePages, remoteChats] = await Promise.all([
-          fetchPages(userData.userId),
-          fetchAIChats(userData.userId)
-        ]);
+        const remotePages = await fetchPages(userData.userId);
         const normalized = normalizePages(remotePages.map(p => ({ ...p, content: p.content || [] })));
-        initStorageSyncBaseline(normalized, remoteChats);
         setPages(normalized);
-        setAiChats(remoteChats);
+        // AI chats are stored 100% locally on device / browser cache
+        try {
+          const localSavedChats = localStorage.getItem("noska_ai_chats");
+          if (localSavedChats) {
+            const parsed = JSON.parse(localSavedChats);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setAiChats(parsed);
+            }
+          }
+        } catch {}
         if (normalized.length > 0) {
           setActiveId(normalized[0].id);
           setStackedPageIds([normalized[0].id]);
@@ -992,6 +1006,19 @@ function AppContent() {
         const useCaseValue = Array.isArray(formData.useCase) ? formData.useCase.join(",") : formData.useCase;
         await setOnboardingComplete(userId, useCaseValue, formData.workspaceName, formData.username);
         setCurrentUsername(formData.username || currentUsername);
+
+        // Track workspace creation on waitlist entry for admin analytics
+        if (clerkUser?.primaryEmailAddress?.emailAddress) {
+          try {
+            await supabase
+              .from("waitlist_entries")
+              .update({ workspace_created_at: new Date().toISOString() })
+              .eq("email", clerkUser.primaryEmailAddress.emailAddress.toLowerCase())
+              .in("status", ["invited", "accepted", "approved"]);
+          } catch {
+            // Non-critical: don't block onboarding if tracking fails
+          }
+        }
       } catch (e) {}
     }
     setAppFlowState("workspace");
@@ -1195,9 +1222,9 @@ function AppContent() {
       e.preventDefault();
       setPaletteOpen(true);
     }
-    if (mod && e.key.toLowerCase() === "n") {
+    if (mod && (e.key.toLowerCase() === "p" || e.key.toLowerCase() === "n") && !e.shiftKey) {
       e.preventDefault();
-      openNewPage();
+      addPage("blank");
     }
     if (e.key === "?") setHelpOpen(true);
     if (mod && e.key.toLowerCase() === "z") {
@@ -2458,7 +2485,7 @@ function AppContent() {
             setWorkspaceName={setWorkspaceName}
             onToggle={() => setSidebarOpen(!sidebarOpen)}
             onSelect={handlePageSelect}
-            onNew={(template) => template === "blank" ? openNewPage() : addPage(template)}
+            onNew={(template) => addPage(template || "blank")}
             onSearch={() => setPaletteOpen(true)}
             onTrash={() => setTrashOpen(true)}
             onSettings={handleOpenSettings}

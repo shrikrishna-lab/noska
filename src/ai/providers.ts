@@ -73,7 +73,26 @@ export interface AIProvider {
 const CONNECTION_TIMEOUT = 30000;  // 30s connection timeout
 const STREAM_INACTIVITY_TIMEOUT = 90000; // 90s stream inactivity timeout
 
-/** Fetch with connection timeout and AbortSignal propagation */
+const PROXY_MAP: Record<string, string> = {
+  "https://opencode.ai/zen/v1": "/api/proxy/opencode",
+  "https://openrouter.ai/api/v1": "/api/proxy/openrouter",
+  "https://api.anthropic.com/v1": "/api/proxy/anthropic",
+  "https://api.openai.com/v1": "/api/proxy/openai",
+  "https://generativelanguage.googleapis.com/v1beta": "/api/proxy/gemini",
+  "https://api.groq.com/openai/v1": "/api/proxy/groq",
+  "https://api.deepseek.com/v1": "/api/proxy/deepseek",
+  "https://api.mistral.ai/v1": "/api/proxy/mistral",
+  "https://api.together.xyz/v1": "/api/proxy/together",
+  "https://api.x.ai/v1": "/api/proxy/xai",
+  "https://integrate.api.nvidia.com/v1": "/api/proxy/nvidia",
+};
+
+/**
+ * Fetch wrapper that adds:
+ * 1. Connection timeout (configurable per request)
+ * 2. AbortSignal composition
+ * 3. Automatic browser CORS/proxy fallback
+ */
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -83,7 +102,6 @@ async function fetchWithTimeout(
   const controller = new AbortController();
   const composedSignal = controller.signal;
 
-  // Wire user's abort signal
   if (signal) {
     if (signal.aborted) {
       controller.abort();
@@ -101,6 +119,19 @@ async function fetchWithTimeout(
     return res;
   } catch (err: unknown) {
     clearTimeout(timer);
+    // Automatic browser CORS proxy fallback for all providers
+    if (typeof window !== "undefined" && !url.includes("/api/proxy/")) {
+      for (const [targetUrl, proxyPrefix] of Object.entries(PROXY_MAP)) {
+        if (url.startsWith(targetUrl)) {
+          const proxyUrl = url.replace(targetUrl, `${window.location.origin}${proxyPrefix}`);
+          try {
+            return await fetch(proxyUrl, { ...init, signal: composedSignal });
+          } catch {
+            break;
+          }
+        }
+      }
+    }
     throw err;
   }
 }
@@ -894,9 +925,24 @@ const PROVIDERS: Record<string, AIProvider> = {
     type: "cloud",
     requiresKey: true,
     baseUrl: "https://opencode.ai/zen/v1",
-    keyPlaceholder: "zen_...",
-    models: [],
-    defaultModel: "claude-sonnet-4-6",
+    keyPlaceholder: "sk-...",
+    models: [
+      { id: "nemotron-3.5-lightning-free", name: "Nemotron 3.5 Lightning [Free ⚡]", context: 131072 },
+      { id: "nemotron-3-ultra-free", name: "Nemotron 3 Ultra [Free ⚡]", context: 131072 },
+      { id: "laguna-s-2.1-free", name: "Laguna S 2.1 [Free ⚡]", context: 65536 },
+      { id: "mimo-v2.5-free", name: "Mimo v2.5 [Free ⚡]", context: 65536 },
+      { id: "claude-sonnet-5", name: "Claude Sonnet 5 (Zen)", context: 200000 },
+      { id: "claude-opus-5", name: "Claude Opus 5 (Zen)", context: 200000 },
+      { id: "claude-opus-4-8", name: "Claude Opus 4.8 (Zen)", context: 200000 },
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Zen)", context: 200000 },
+      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5 (Zen)", context: 200000 },
+      { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Zen)", context: 200000 },
+      { id: "gpt-5.5-pro", name: "GPT-5.5 Pro (Zen)", context: 200000 },
+      { id: "grok-4.6", name: "Grok 4.6 (Zen)", context: 131072 },
+      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash (Zen)", context: 1000000 },
+      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro (Zen)", context: 65536 }
+    ],
+    defaultModel: "nemotron-3.5-lightning-free",
     async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, signal }) {
       const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
       const modelId = model || this.defaultModel;
@@ -944,12 +990,14 @@ const PROVIDERS: Record<string, AIProvider> = {
           headers,
           body,
         }, signal);
+
         await checkResponse(res, "OpenCode Zen", modelId);
         const data = await res.json();
         if (isAnthropic) {
           return data.content?.[0]?.text || "";
         }
-        return data.choices?.[0]?.message?.content || "";
+        const choice = data.choices?.[0];
+        return choice?.message?.content || choice?.message?.reasoning || "";
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("OpenCode Zen", modelId, err as Error);
@@ -1005,6 +1053,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           headers,
           body,
         }, signal);
+
         await checkResponse(res, "OpenCode Zen", modelId);
         if (isAnthropic) {
           yield* streamEventsToText(parseAnthropicStream(res, signal));

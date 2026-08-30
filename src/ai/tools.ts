@@ -248,6 +248,25 @@ const DEFINITIONS = [
       cards: { type: "string", desc: "JSON array of cards: [{\"front\":\"question\",\"answer\":\"answer\"}]", required: true },
       heading: { type: "string", desc: "Section heading (default 'Study Cards')", required: false }
     }
+  },
+  {
+    name: "call_subagent",
+    description: "Delegate a subtask to a specialist subagent (e.g. 'researcher', 'coder', 'writer', 'analyst', 'organizer') to execute focused work, gather data, write code, or perform analysis, and return the synthesized result.",
+    params: {
+      agent: { type: "string", desc: "Specialist subagent: 'researcher', 'coder', 'writer', 'analyst', 'organizer'", required: true },
+      task: { type: "string", desc: "Specific subtask or objective to delegate to this subagent", required: true },
+      context: { type: "string", desc: "Optional focused context or data for the subagent", required: false }
+    }
+  },
+  {
+    name: "create_subagent",
+    description: "Create and register a new specialized workspace subagent with custom instructions and persona.",
+    params: {
+      name: { type: "string", desc: "Name of the new subagent (e.g. 'SEO Specialist', 'Database Architect')", required: true },
+      description: { type: "string", desc: "Role and capabilities description", required: true },
+      instructions: { type: "string", desc: "System prompt instructions for this subagent", required: true },
+      icon: { type: "string", desc: "Emoji icon for the subagent", required: false }
+    }
   }
 ];
 
@@ -826,6 +845,54 @@ async function executeTool(name, params, context) {
         status: target.status || 'draft',
         priority: target.priority || 'medium',
         suggestions
+      };
+    }
+
+    case "call_subagent": {
+      const targetAgentId = params.agent?.toLowerCase()?.trim() || "assistant";
+      const task = params.task || "";
+      const extraContext = params.context ? `\n\nContext:\n${params.context}` : "";
+      
+      const subagentPrompt = `You are a specialized subagent (${targetAgentId}) assigned a focused objective by the primary coordinator.\n\nObjective: ${task}${extraContext}\n\nExecute this objective thoroughly and return clear, structured data and findings so the primary agent can synthesize the final output.`;
+
+      const { aiManager } = await import("./AIManager");
+      const result = await aiManager.send({
+        agent: targetAgentId,
+        prompt: subagentPrompt,
+        page: currentPage,
+        pages: pages,
+      });
+
+      return {
+        subagent: targetAgentId,
+        task,
+        status: "completed",
+        output: result
+      };
+    }
+
+    case "create_subagent": {
+      const name = params.name?.trim() || "Subagent";
+      const description = params.description?.trim() || "Custom Workspace Subagent";
+      const instructions = params.instructions?.trim() || "";
+      const icon = params.icon || "🤖";
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+      const { registerCustomAgent } = await import("./agents");
+      registerCustomAgent({
+        id,
+        name,
+        description,
+        icon,
+        system: instructions,
+      });
+
+      return {
+        id,
+        name,
+        description,
+        icon,
+        status: "registered"
       };
     }
 

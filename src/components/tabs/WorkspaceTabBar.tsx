@@ -290,14 +290,14 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
       {/* Scrollable Tabs Container */}
       <div
         ref={containerRef}
-        className="flex flex-1 items-end gap-1 overflow-x-auto no-scrollbar pt-1"
+        className="flex flex-row flex-nowrap flex-1 items-end gap-1 overflow-x-auto no-scrollbar pt-1 min-w-0"
         style={{ scrollBehavior: "smooth" }}
       >
         <Reorder.Group
           axis="x"
           values={tabs}
           onReorder={reorderTabs}
-          className="flex items-end gap-1 shrink-0"
+          className="flex flex-row flex-nowrap items-end gap-1 shrink-0"
         >
           {tabs.map((tab) => {
             const isActive = tab.id === activeTabId;
@@ -313,7 +313,7 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
                 onMouseEnter={(e) => schedulePreview(e, tab)}
                 onMouseLeave={cancelPreview}
                 title={meta.breadcrumb || meta.title}
-                className={`group/tab relative flex h-[30px] items-center gap-1.5 rounded-t-[8px] px-2.5 transition-all cursor-pointer select-none outline-none ${
+                className={`group/tab relative flex flex-row flex-nowrap shrink-0 h-[30px] items-center gap-1.5 rounded-t-[8px] px-2.5 transition-all cursor-pointer select-none outline-none ${
                   isActive
                     ? "bg-[var(--bg)] text-[var(--text)] font-medium border-t border-x border-[var(--border)] shadow-[0_-2px_6px_rgba(0,0,0,0.05)] z-10"
                     : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] border-t border-x border-transparent"

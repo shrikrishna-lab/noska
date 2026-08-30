@@ -658,6 +658,7 @@ export interface DbWaitlistEntry {
   email_clicked_at: string | null;
   first_login_at: string | null;
   workspace_created_at: string | null;
+  clerk_entry_id: string | null;
   github_id: string | null;
   google_id: string | null;
   microsoft_id: string | null;

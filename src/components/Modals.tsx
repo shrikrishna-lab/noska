@@ -35,6 +35,7 @@ import {
   Mic,
   Cloud,
   RotateCw,
+  Keyboard,
   type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
@@ -443,6 +444,7 @@ export function SettingsModal({
               <div className="space-y-0.5">
                 {[
                   { id: "General", label: "General", icon: Settings },
+                  { id: "Shortcuts", label: "Shortcuts", icon: Keyboard },
                   { id: "Voice & Dictation", label: "Voice & Dictation", icon: Mic },
                   { id: "Noska AI", label: "Noska AI", icon: Sparkles },
                   { id: "Developer", label: "Developer", icon: Code2 },
@@ -569,6 +571,84 @@ export function SettingsModal({
                 </p>
               </div>
               <ApiKeysManager userId={currentUserId} onToast={(msg) => setSaveStatus(msg)} />
+            </div>
+          )}
+
+          {tab === "Shortcuts" && (
+            <div className="max-w-2xl space-y-6 pb-16 font-sans">
+              <div className="pt-1">
+                <h1 className="text-[32px] font-normal tracking-tight font-serif text-[#1c1b18]">
+                  Keyboard Shortcuts
+                </h1>
+                <p className="text-xs text-[#706c64] mt-1">
+                  Customize your global workspace hotkeys. Default for New Creation is set to Ctrl+P.
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-[#f8f6f0] p-6 shadow-sm divide-y divide-[#e8e4db] space-y-1">
+                <div className="py-3.5 first:pt-0 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-[#1c1b18]">New Creation / Page</div>
+                    <div className="text-xs text-[#706c64] mt-0.5">Quickly create a new blank page or document</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
+                      Ctrl + P
+                    </kbd>
+                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Default</span>
+                  </div>
+                </div>
+
+                <div className="py-3.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-[#1c1b18]">Search Workspace</div>
+                    <div className="text-xs text-[#706c64] mt-0.5">Open command palette & document search</div>
+                  </div>
+                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
+                    Ctrl + K
+                  </kbd>
+                </div>
+
+                <div className="py-3.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-[#1c1b18]">Toggle Sidebar</div>
+                    <div className="text-xs text-[#706c64] mt-0.5">Collapse or expand the navigation sidebar</div>
+                  </div>
+                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
+                    Ctrl + \
+                  </kbd>
+                </div>
+
+                <div className="py-3.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-[#1c1b18]">Notion AI Inline Bar</div>
+                    <div className="text-xs text-[#706c64] mt-0.5">Trigger AI generation on an empty block</div>
+                  </div>
+                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
+                    Space / /ai
+                  </kbd>
+                </div>
+
+                <div className="py-3.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-[#1c1b18]">Voice & Dictation Mode</div>
+                    <div className="text-xs text-[#706c64] mt-0.5">Start speech-to-text recording</div>
+                  </div>
+                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
+                    Ctrl + Shift + V
+                  </kbd>
+                </div>
+
+                <div className="py-3.5 last:pb-0 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-[#1c1b18]">Undo & Redo</div>
+                    <div className="text-xs text-[#706c64] mt-0.5">Revert or reapply document block edits</div>
+                  </div>
+                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
+                    Ctrl + Z / Ctrl + Y
+                  </kbd>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1517,7 +1597,7 @@ function NoskaAISettings({
             <input
               type="checkbox"
               checked={(currentConfig.context as unknown as Record<string, boolean>)?.[key] !== false}
-              onChange={(e) => aiManager.configure({ context: { [key]: e.target.checked } })}
+              onChange={(e) => aiManager.configure({ context: { ...currentConfig.context, [key]: e.target.checked } })}
               className="h-4 w-4 rounded accent-[#1c1b18] cursor-pointer"
             />
           </div>

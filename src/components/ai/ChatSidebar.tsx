@@ -4,7 +4,8 @@ import {
   Plus, Search, MessageSquare, Pin, Archive, ArchiveRestore,
   MoreHorizontal, Trash2, Copy, Edit3, Sparkles, ChevronDown,
   ChevronRight, FileText, Bot, Sliders, Layers, Terminal,
-  Code2, Check, X, Settings2, Share2, Folder, FolderPlus
+  Code2, Check, X, Settings2, Share2, Folder, FolderPlus,
+  HardDrive
 } from 'lucide-react';
 import type { AIChat, Page } from '../../lib/supabaseService';
 import AIAnalyticsDashboard from './AIAnalyticsDashboard';
@@ -730,7 +731,18 @@ export default function ChatSidebar({
         </div>
       </div>
 
-      {/* 4. Bottom Workspace / User Profile Badge */}
+      {/* 4. Local-First Storage Privacy & Cache Notice */}
+      <div className="mx-2.5 my-1.5 p-2 rounded-xl bg-purple-500/10 dark:bg-purple-400/10 border border-purple-500/20 dark:border-purple-400/20 text-[11px] text-[#706c64] dark:text-[#a09c94]">
+        <div className="flex items-center gap-1.5 font-semibold text-purple-700 dark:text-purple-300 mb-0.5">
+          <HardDrive size={12} className="shrink-0" />
+          <span>Note: 100% Local Storage</span>
+        </div>
+        <p className="leading-snug text-[10.5px]">
+          Your AI chats and history are saved strictly in your local browser cache & machine. Private, offline-ready, and never stored on remote servers.
+        </p>
+      </div>
+
+      {/* 5. Bottom Workspace / User Profile Badge */}
       <div className="p-2.5 border-t border-[#e8e4db] dark:border-white/10 shrink-0 bg-[#f4f2ec] dark:bg-[#18181a]">
         <div 
           onClick={() => setDashboardOpen(true)}

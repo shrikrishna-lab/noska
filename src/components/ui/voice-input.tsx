@@ -137,31 +137,25 @@ export function RealtimeEqualizer({
           const pulse = (Math.sin(time * 4 + i * 1.2) * 0.5 + 0.5) * 4;
           targetH = Math.max(minD, Math.min(maxD, isListening ? raw * 18 + minD : minD + pulse));
         } else {
-          const curve = Math.max(0.25, 1 - (i / barCount) * 0.65);
-          const minH = i >= barCount - 3 ? 2.5 : 3;
-          const maxH = i >= barCount - 3 ? 5 : 16;
+          const minH = 2.5;
+          const maxH = 16;
 
           if (isListening) {
-            const rawFreq = freqs[i] || 0.05;
-            const ambientWave = (Math.sin(time * 3.5 + i * 0.55) * 0.5 + 0.5) * (i >= barCount - 3 ? 2 : 4);
-            const voiceReaction = rawFreq * 18 * curve * (settings.sensitivityBoost / 2.5);
-
-            if (voiceReaction > 3.5) {
-              targetH = Math.max(minH, Math.min(maxH, voiceReaction));
-            } else {
-              targetH = Math.max(minH, Math.min(maxH, minH + ambientWave));
-            }
+            const rawFreq = freqs[i] || 0.04;
+            const ambient = (Math.sin(time * 4.0 + i * 0.6) * 0.5 + 0.5) * 2.0;
+            const voiceH = minH + rawFreq * (maxH - minH) * 1.4 * (settings.sensitivityBoost / 2.5);
+            targetH = Math.max(minH, Math.min(maxH, rawFreq > 0.08 ? voiceH : minH + ambient));
           } else {
             targetH = minH;
           }
         }
 
-        const prev = currentHeightsRef.current[i] || 3;
+        const prev = currentHeightsRef.current[i] || 2.5;
         let next: number;
         if (targetH > prev) {
-          next = prev + (targetH - prev) * 0.65;
+          next = prev + (targetH - prev) * 0.75; // Snappy voice attack
         } else {
-          next = prev + (targetH - prev) * 0.16;
+          next = prev + (targetH - prev) * 0.22; // Natural vocal decay
         }
         currentHeightsRef.current[i] = next;
 
@@ -208,9 +202,9 @@ export function RealtimeEqualizer({
           className={cn(
             "rounded-full flex-shrink-0 transition-opacity duration-150",
             BAR_COLOR_CLASSES[activeColor] || "bg-white",
-            i >= barCount - 3 ? (activeStyle === "dense_24" ? "w-[1.5px] opacity-75" : "w-[2px] opacity-75") : activeStyle === "dense_24" ? "w-[1.5px] opacity-100" : "w-[2px] opacity-100"
+            activeStyle === "dense_24" ? "w-[1.5px]" : "w-[2.5px]"
           )}
-          style={{ height: "3px" }}
+          style={{ height: "2.5px" }}
         />
       ))}
     </div>

@@ -10,11 +10,13 @@ import {
   Home, MessageSquare, History, RotateCcw, SlidersHorizontal,
   Plus, Link, Paperclip, Search, Mic, AtSign, Terminal,
   ChevronRight, Bot, Zap, ShieldCheck, CheckCircle2, XCircle,
-  Loader2, Clock
+  Loader2, Clock, ArrowUp, Check, ThumbsUp, ThumbsDown, Copy,
+  ArrowDownToLine, Trash2, RefreshCw
 } from "lucide-react";
 import { aiManager } from "../ai/AIManager";
+import { getAllProviders, getProvider } from "../ai/providers";
 import { getAgentList, getAgent } from "../ai/agents";
-import { uid, now } from "../utils/helpers";
+import { uid, now, timeAgo } from "../utils/helpers";
 import { getAllRelations } from "../utils/pageLinks";
 import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
 import { renderAIMarkdown } from "../utils/aiMarkdownRenderer";
@@ -242,6 +244,11 @@ export default function AIRightPanel({
     });
   }, [relations]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showModeMenu, setShowModeMenu] = useState(false);
+  const [aiMode, setAiMode] = useState("Inspiration");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLInputElement>(null);
@@ -251,6 +258,30 @@ export default function AIRightPanel({
   const isConfigured = aiManager.isConfigured();
   const providerName = aiManager.getActiveProviderName();
   const modelName = aiManager.getActiveModelName();
+  const activeModelId = aiManager.getActiveModel();
+  const allProviders = useMemo(() => getAllProviders(), []);
+
+  const filteredProviders = useMemo(() => {
+    if (!modelSearch.trim()) return allProviders;
+    const q = modelSearch.toLowerCase();
+    return allProviders
+      .map((prov) => {
+        const matchesProv = prov.name.toLowerCase().includes(q) || prov.id.toLowerCase().includes(q);
+        const matchingModels = prov.models.filter(
+          (m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
+        );
+        if (matchesProv) return prov;
+        if (matchingModels.length > 0) return { ...prov, models: matchingModels };
+        return null;
+      })
+      .filter(Boolean) as typeof allProviders;
+  }, [allProviders, modelSearch]);
+
+  const handleSelectModel = (providerId: string, modelId: string) => {
+    aiManager.setActiveProvider(providerId, modelId);
+    setShowModelPicker(false);
+    onToast?.(`Switched AI Model to ${modelId}`);
+  };
 
   const currentView = useMemo(() => {
     const effectiveView = pageMode === "canvas" ? "canvas" : pageMode === "graph" ? "graph" : appView;
@@ -312,7 +343,14 @@ export default function AIRightPanel({
     capture("ai_generation", { model: aiProvider, provider: aiProvider });
     setTokenEstimate(prev => prev + Math.ceil(text.length / 4));
 
-    const chats = aiChats.map(c => c.id === chatId ? { ...c, messages: updatedMessages, updatedAt: now() } : c) as unknown as AIChat[];
+    const existing = aiChats.find(c => c.id === chatId);
+    const updatedChat: AIChat = existing
+      ? { ...existing, messages: updatedMessages, updatedAt: now(), name: (existing.name === "New Chat" || !existing.name) ? text.slice(0, 36) : existing.name }
+      : { id: chatId, name: text.slice(0, 36), messages: updatedMessages, createdAt: now(), updatedAt: now(), chatType: "private" } as unknown as AIChat;
+    
+    const chats = existing
+      ? (aiChats.map(c => c.id === chatId ? updatedChat : c) as unknown as AIChat[])
+      : ([...aiChats, updatedChat] as unknown as AIChat[]);
     onChatsChange?.(chats);
 
     // ── Intelligent routing ──────────────────────────────────────────
@@ -422,7 +460,8 @@ export default function AIRightPanel({
 
       setMessages(processedMessages);
       const finalChats = chats.map(c => c.id === chatId ? { ...c, messages: processedMessages, updatedAt: now() } : c) as unknown as AIChat[];
-      onChatsChange?.(finalChats);    } catch (err: unknown) {
+      onChatsChange?.(finalChats);
+    } catch (err: unknown) {
       const message = err instanceof Error ? err.message : undefined;
       const friendly = message?.includes("not configured") || message?.includes("API key")
         ? "AI provider not configured. Add an API key in Settings → AI Providers."
@@ -430,7 +469,7 @@ export default function AIRightPanel({
           ? "Network error. Check your internet connection and try again."
           : message?.includes("timeout") || message?.includes("timed out")
             ? "AI request timed out. Try again or use a different model."
-            : `AI request failed. Please try again.`;
+            : message || "AI request failed. Please try again.";
       const errMsg: AIChatMessage = { id: uid(), role: "assistant", content: friendly, createdAt: now(), model: modelName, provider: providerName };
       setMessages([...updatedMessages, errMsg]);
       onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: [...updatedMessages, errMsg], updatedAt: now() } : c) as unknown as AIChat[]);
@@ -529,403 +568,372 @@ export default function AIRightPanel({
           />
 
           <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="fixed top-0 right-0 z-50 h-full w-[380px] max-w-[90vw] bg-[var(--panel)] border-l border-[var(--border)] shadow-[var(--shadow-floating)] flex flex-col"
+            initial={{ x: '100%', opacity: 0.8 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '100%', opacity: 0.8 }}
+            transition={{ type: "spring", stiffness: 420, damping: 32 }}
+            className="fixed top-0 right-0 z-50 h-full w-[410px] max-w-[92vw] bg-[var(--panel)] text-[var(--text)] border-l border-[var(--border)] shadow-[var(--shadow-floating)] flex flex-col font-sans select-none"
           >
-            {/* ===== HEADER ===== */}
-            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--border)] shrink-0">
-              <div className="w-5 h-5 rounded-md bg-[var(--accent)]/10 flex items-center justify-center shrink-0">
-                <Sparkles size={10} className="text-[var(--accent)]" />
-              </div>
-              <span className="text-[12px] font-semibold text-[var(--text)] flex-1 tracking-tight">AI</span>
-              <div className="flex items-center gap-1">
-                {isConfigured && (
-                  <span className="text-[9px] text-[var(--muted)] bg-[var(--surface-2)]/60 px-1.5 py-0.5 rounded font-mono truncate max-w-[90px]">
-                    {modelName}
-                  </span>
-                )}
-                <span className="flex items-center gap-0.5 rounded-md bg-[var(--surface-2)]/60 px-1.5 py-0.5 text-[8px] text-[var(--muted)] font-mono">
-                  <kbd className="leading-none">&#8984;K</kbd>
-                </span>
+            {/* ===== MINIMALIST THEMED HEADER ===== */}
+            <div className="flex items-center justify-between px-3.5 py-3 border-b border-[var(--border)] shrink-0 bg-[var(--surface)]/40 backdrop-blur-md">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-lg bg-[var(--accent)]/15 border border-[var(--accent)]/30 flex items-center justify-center text-[var(--accent)] shadow-2xs shrink-0">
+                  <Sparkles size={12} />
+                </div>
+                <span className="text-[13px] font-semibold text-[var(--text)] tracking-tight shrink-0">Noska AI</span>
+                
+                {/* ── Interactive Model Picker Trigger ── */}
                 <button
+                  type="button"
+                  onClick={() => setShowModelPicker(!showModelPicker)}
+                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--surface-2)]/70 hover:bg-[var(--hover)] border border-[var(--border)] text-[10px] font-mono text-[var(--text-secondary)] hover:text-[var(--text)] transition cursor-pointer truncate max-w-[140px]"
+                  title="Select AI Model"
+                >
+                  <Cpu size={10} className="text-[var(--accent)] shrink-0" />
+                  <span className="truncate">{modelName}</span>
+                  <ChevronDown size={9} className="text-[var(--muted)] shrink-0" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessages([]);
+                    setPrompt("");
+                  }}
+                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition cursor-pointer"
+                  title="New chat"
+                >
+                  <Plus size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(!showHistory)}
+                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                    showHistory
+                      ? "text-[var(--accent)] bg-[var(--accent)]/10"
+                      : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]"
+                  }`}
+                  title="Chat history"
+                >
+                  <History size={14} />
+                </button>
+                <button
+                  type="button"
                   onClick={onClose}
-                  className="p-1 rounded text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition"
+                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition cursor-pointer"
                   aria-label="Close AI panel"
                 >
-                  <X size={13} />
+                  <X size={14} />
                 </button>
               </div>
             </div>
 
-            {/* ===== PROVIDER · MODEL · HISTORY · MODES ===== */}
-            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--border)] shrink-0 min-h-[30px] bg-[var(--surface-2)]/30">
-              <span className="flex items-center gap-1 text-[9px] text-[var(--muted)]">
-                <Cpu size={8} />
-                <span className="capitalize">{providerName}</span>
-              </span>
-              <span className="text-[8px] text-[var(--border)]">·</span>
-              <span className="text-[9px] text-[var(--muted)] truncate max-w-[80px]">{modelName}</span>
-              <span className="text-[8px] text-[var(--border)]">·</span>
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className={`flex items-center gap-1 text-[9px] transition ${showHistory ? 'text-[var(--accent)]' : 'text-[var(--muted)] hover:text-[var(--text-secondary)]'}`}
-              >
-                <History size={8} />
-                History
-              </button>
-              <div className="flex-1" />
-              <select
-                value={targetLang}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => setTargetLang(e.target.value)}
-                className="bg-transparent text-[9px] text-[var(--muted)] outline-none cursor-pointer hover:text-[var(--text-secondary)] transition"
-                aria-label="Target language"
-              >
-                {LANGUAGES.slice(0, 5).map((lang) => (
-                  <option key={lang} value={lang}>{lang}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* ===== SCROLLABLE BODY ===== */}
-            <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin">
-              {/* ===== QUICK ACTIONS ===== */}
-              <div className="px-3 py-2.5 border-b border-[var(--border)]">
-                <div className="flex flex-wrap gap-1">
-                  {QUICK_ACTIONS.map((action) => (
-                    <motion.button
-                      key={action.id}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => handleQuickAction(action.id)}
-                      className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)]/40 hover:bg-[var(--accent)]/8 hover:border-[var(--accent)]/20 px-2 py-1 text-[10px] text-[var(--text-secondary)] hover:text-[var(--accent)] transition"
-                    >
-                      <action.icon size={9} className="shrink-0" />
-                      {action.label}
-                    </motion.button>
-                  ))}
-                </div>
-                {page && (
-                  <>
-                    <div className="text-[8px] font-semibold text-[var(--muted)] uppercase tracking-wider mt-2 mb-1">Turn this into…</div>
-                    <div className="flex flex-wrap gap-1">
-                      {WORKFLOW_ACTIONS.map((action) => (
-                        <motion.button
-                          key={action.id}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.97 }}
-                          onClick={() => handleQuickAction(action.id)}
-                          title={`Turn "${page.title?.slice(0, 30) || "this page"}" into ${action.label.toLowerCase()}`}
-                          className="flex items-center gap-1.5 rounded-md border border-[var(--warning)]/25 bg-[var(--warning)]/[0.05] hover:bg-[var(--warning)]/12 px-2 py-1 text-[10px] text-[var(--secondary)] hover:text-[var(--warning)] transition"
-                        >
-                          <action.icon size={9} className="shrink-0" />
-                          {action.label}
-                        </motion.button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* ===== CONTEXT INFO ===== */}
-              <div className="px-3 py-2 border-b border-[var(--border)] space-y-1.5">
-                <div className="flex items-center gap-2 text-[9px]">
-                  <Globe size={9} className="text-[var(--accent)] shrink-0" />
-                  <span className="text-[var(--text-secondary)] font-medium">Current page</span>
-                  <span className="text-[var(--muted)] truncate">{page?.title || contextLabel}</span>
-                </div>
-                {selectedText && (
-                  <div className="flex items-start gap-2 text-[9px]">
-                    <PenLine size={9} className="text-[var(--muted)] shrink-0 mt-0.5" />
-                    <span className="text-[var(--muted)] line-clamp-1">{selectedText}</span>
-                  </div>
-                )}
-                {attachments.length > 0 && (
-                  <div className="flex items-center gap-2 text-[9px]">
-                    <Paperclip size={9} className="text-[var(--muted)] shrink-0" />
-                    <span className="text-[var(--muted)]">{attachments.length} attachment{attachments.length > 1 ? 's' : ''}</span>
-                  </div>
-                )}
-                {linkedPages.length > 0 && (
-                  <div className="flex items-center gap-2 text-[9px]">
-                    <Link size={9} className="text-[var(--muted)] shrink-0" />
-                    <span className="text-[var(--muted)]">{linkedPages.length} linked page{linkedPages.length > 1 ? 's' : ''}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* ===== CONVERSATION ===== */}
-              <div className="px-3 py-2 space-y-1.5 min-h-[80px]">
-                {!hasMessages && !loading && (
-                  <div className="flex flex-col items-center justify-center py-6 text-center">
-                    <div className="w-8 h-8 rounded-lg bg-[var(--accent)]/6 flex items-center justify-center mb-2">
-                      <Sparkles size={14} className="text-[var(--accent)]" />
-                    </div>
-                    <p className="text-[11px] font-medium text-[var(--text)] mb-0.5">Ask anything</p>
-                    <p className="text-[9px] text-[var(--muted)] max-w-[200px] leading-relaxed">
-                      {page
-                        ? `Ask about "${page.title}" or give general instructions`
-                        : "Write, search, edit pages, or analyze your workspace"
-                      }
-                    </p>
-                  </div>
-                )}
-
-                {messages.map((msg, i) => (
-                  <ChatMessageBubble
-                    key={msg.id}
-                    message={msg}
-                    index={i}
-                    total={messages.length}
-                    page={page}
-                    onInsert={onInsert}
-                    onReplaceText={onReplaceText}
-                    onToast={onToast}
-                  />
-                ))}
-
-                {/* Live agentic run progress */}
-                {activeRunId && activeSteps.length > 0 && loading && (
-                  <RunProgressBubble steps={activeSteps} />
-                )}
-
-                {proposalBusy && (
-                  <div className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] mr-auto max-w-[90%]">
-                    <Loader2 size={11} className="text-[var(--accent)] animate-spin" />
-                    <span className="text-[10px] text-[var(--muted)]">Drafting proposal…</span>
-                  </div>
-                )}
-
-                {/* Proposal cards — review before anything is created */}
-                {agentProposal && (
-                  <AgentProposalCardView
-                    proposal={agentProposal}
-                    busy={proposalBusy}
-                    onCreate={() => handleCreateAgentFromProposal(agentProposal)}
-                    onDismiss={() => setAgentProposal(null)}
-                  />
-                )}
-                {automationProposal && (
-                  <AutomationProposalCardView
-                    proposal={automationProposal}
-                    busy={proposalBusy}
-                    onCreate={() => handleCreateAutomationFromProposal(automationProposal)}
-                    onDismiss={() => setAutomationProposal(null)}
-                  />
-                )}
-
-                {loading && (
-                  <div className="flex items-center gap-2 py-1 px-1">
-                    <div className="flex gap-0.5">
-                      <span className="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style={{animationDelay: '0ms'}} />
-                      <span className="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style={{animationDelay: '100ms'}} />
-                      <span className="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style={{animationDelay: '200ms'}} />
-                    </div>
-                    <span className="text-[9px] text-[var(--muted)]">{currentAgent.name} is thinking...</span>
-                  </div>
-                )}
-
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* ===== AI ACTIONS ===== */}
-              <div className="border-t border-[var(--border)]">
-                <button
-                  onClick={() => setActionsOpen(!actionsOpen)}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-medium text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition"
-                  aria-expanded={actionsOpen}
+            {/* ===== MODEL SELECTOR POPOVER ===== */}
+            <AnimatePresence>
+              {showModelPicker && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="border-b border-[var(--border)] bg-[var(--surface)] p-3.5 shrink-0 shadow-lg z-20 space-y-2.5"
                 >
-                  <Sparkles size={8} className="text-[var(--accent)]" />
-                  <span>AI Actions</span>
-                  <span className="text-[8px] text-[var(--muted)] ml-0.5">({AI_ACTIONS.length})</span>
-                  <motion.div
-                    animate={{ rotate: actionsOpen ? 180 : 0 }}
-                    transition={SPRING}
-                    className="ml-auto"
-                  >
-                    <ChevronDown size={9} />
-                  </motion.div>
-                </button>
-
-                <AnimatePresence>
-                  {actionsOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden"
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text)] flex items-center gap-1.5">
+                      <Cpu size={12} className="text-[var(--accent)]" />
+                      Select AI Model
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowModelPicker(false)}
+                      className="text-[11px] text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
                     >
-                      <div className="grid grid-cols-2 gap-1 px-3 pb-2.5">
-                        {AI_ACTIONS.map((action, i) => (
-                          <motion.button
-                            key={action.id}
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.08, delay: i * 0.015 }}
-                            whileHover={{ scale: 1.01, backgroundColor: "var(--hover)" }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleQuickAction(action.id)}
-                            className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)]/20 hover:border-[var(--accent)]/15 px-2 py-1.5 text-left transition"
-                          >
-                            <action.icon size={8} className="text-[var(--accent)] shrink-0" />
-                            <span className="text-[9px] text-[var(--text-secondary)] truncate">{action.label}</span>
-                          </motion.button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                      Close
+                    </button>
+                  </div>
 
-              {/* ===== ADVANCED ===== */}
-              <div className="border-t border-[var(--border)]">
-                <button
-                  onClick={() => setAdvancedOpen(!advancedOpen)}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-medium text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition"
-                  aria-expanded={advancedOpen}
-                >
-                  <Settings2 size={8} className="text-[var(--muted)]" />
-                  <span>Advanced</span>
-                  <motion.div
-                    animate={{ rotate: advancedOpen ? 180 : 0 }}
-                    transition={SPRING}
-                    className="ml-auto"
-                  >
-                    <ChevronDown size={9} />
-                  </motion.div>
-                </button>
+                  {/* Search Bar */}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/80 border border-[var(--border)] text-xs">
+                    <Search size={11} className="text-[var(--muted)] shrink-0" />
+                    <input
+                      type="text"
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      placeholder="Search models (e.g. Llama, Claude, GPT)..."
+                      className="flex-1 bg-transparent text-[11px] text-[var(--text)] outline-none border-none placeholder:text-[var(--muted)]"
+                    />
+                    {modelSearch && (
+                      <button type="button" onClick={() => setModelSearch("")} className="text-[10px] text-[var(--muted)] hover:text-[var(--text)]">
+                        <X size={10} />
+                      </button>
+                    )}
+                  </div>
 
-                <AnimatePresence>
-                  {advancedOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-3 pb-2.5 space-y-2">
-                        {/* Agent */}
-                        <div>
-                          <label className="text-[7px] font-semibold text-[var(--muted)] block mb-1 uppercase tracking-widest">Agent</label>
-                          <div className="flex flex-wrap gap-1">
-                            {agents.map((a) => (
+                  {/* Provider & Model Cards */}
+                  <div className="max-h-60 overflow-y-auto space-y-2.5 scrollbar-thin pr-1">
+                    {filteredProviders.map((prov) => (
+                      <div key={prov.id} className="space-y-1.5">
+                        <div className="text-[10.5px] font-semibold text-[var(--muted)] flex items-center gap-1.5 uppercase tracking-wide">
+                          <span>{prov.name}</span>
+                          {aiManager.getConfig().providers[prov.id]?.apiKey && (
+                            <span className="text-[8.5px] px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold lowercase">configured</span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {prov.models.map((m) => {
+                            const isSelected = activeModelId === m.id;
+                            const isFast = /instant|mini|8b|haiku/i.test(m.id);
+                            const isHighIQ = /70b|405b|opus|large/i.test(m.id);
+                            const isReasoning = /r1|o1|reason/i.test(m.id);
+                            return (
                               <button
-                                key={a.id}
-                                onClick={() => handleSwitchAgent(a.id)}
-                                className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] transition ${
-                                  activeAgent === a.id
-                                    ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20'
-                                    : 'bg-[var(--surface)]/30 text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--hover)]'
+                                key={m.id}
+                                type="button"
+                                onClick={() => handleSelectModel(prov.id, m.id)}
+                                className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-[var(--accent)]/12 border-[var(--accent)] text-[var(--text)] shadow-xs font-medium'
+                                    : 'bg-[var(--surface-2)]/40 border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:border-[var(--accent)]/40'
                                 }`}
                               >
-                                <span>{a.icon}</span>
-                                <span>{a.name}</span>
+                                <div className="truncate flex-1 min-w-0 pr-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate text-xs font-semibold text-[var(--text)]">{m.name}</span>
+                                    {isReasoning && (
+                                      <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 font-medium">Reasoning</span>
+                                    )}
+                                    {isHighIQ && (
+                                      <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 font-medium">Flagship</span>
+                                    )}
+                                    {isFast && (
+                                      <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium">Fast ⚡</span>
+                                    )}
+                                  </div>
+                                  <div className="text-[9.5px] text-[var(--muted)] truncate font-mono mt-0.5">{m.id}</div>
+                                </div>
+                                {isSelected ? (
+                                  <div className="w-5 h-5 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shrink-0">
+                                    <Check size={11} strokeWidth={3} />
+                                  </div>
+                                ) : (
+                                  <div className="w-4 h-4 rounded-full border border-[var(--border)] shrink-0 opacity-40 hover:opacity-100" />
+                                )}
                               </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Provider + Model */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[7px] font-semibold text-[var(--muted)] block mb-1 uppercase tracking-widest">Provider</label>
-                            <div className="flex items-center gap-1 rounded border border-[var(--border)] bg-[var(--surface)]/30 px-1.5 py-1">
-                              <Cpu size={7} className="text-[var(--muted)] shrink-0" />
-                              <span className="text-[9px] text-[var(--text-secondary)] capitalize truncate">{providerName}</span>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-[7px] font-semibold text-[var(--muted)] block mb-1 uppercase tracking-widest">Model</label>
-                            <div className="flex items-center gap-1 rounded border border-[var(--border)] bg-[var(--surface)]/30 px-1.5 py-1">
-                              <span className="text-[9px] text-[var(--text-secondary)] truncate" title={modelName}>{modelName}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Language */}
-                        <div>
-                          <label className="text-[7px] font-semibold text-[var(--muted)] block mb-1 uppercase tracking-widest">Target Language</label>
-                          <div className="flex items-center gap-1 rounded border border-[var(--border)] bg-[var(--surface)]/30 px-1.5 py-1">
-                            <Languages size={7} className="text-[var(--muted)] shrink-0" />
-                            <select
-                              value={targetLang}
-                              onChange={(e: ChangeEvent<HTMLSelectElement>) => setTargetLang(e.target.value)}
-                              className="flex-1 bg-transparent text-[9px] text-[var(--text-secondary)] outline-none appearance-none cursor-pointer"
-                            >
-                              {LANGUAGES.map((lang) => (
-                                <option key={lang} value={lang}>{lang}</option>
-                              ))}
-                            </select>
-                            <ChevronDown size={7} className="text-[var(--muted)] pointer-events-none" />
-                          </div>
-                        </div>
-
-                        {/* Usage */}
-                        <div>
-                          <label className="text-[7px] font-semibold text-[var(--muted)] block mb-1 uppercase tracking-widest">Usage</label>
-                          <div className="flex items-center gap-1 rounded border border-[var(--border)] bg-[var(--surface)]/30 px-1.5 py-1">
-                            <span className="text-[9px] text-[var(--text-secondary)]">
-                              {tokenEstimate > 0 ? `~${tokenEstimate.toLocaleString()} tokens` : 'No activity yet'}
-                            </span>
-                          </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* ===== CHAT HISTORY ===== */}
-              {showHistory && currentHistory.length > 0 && (
-                <div className="border-t border-[var(--border)]">
-                  <div className="px-3 py-2 space-y-1">
-                    <div className="text-[8px] font-semibold text-[var(--muted)] uppercase tracking-wider px-1">Recent conversations</div>
-                    {currentHistory.map((chat) => (
-                      <button
-                        key={chat.id}
-                        onClick={() => { onSelectChat?.(chat.id); setShowHistory(false); }}
-                        className={`w-full flex items-center gap-2 rounded px-1.5 py-1 text-left transition text-[9px] hover:bg-[var(--hover)] ${
-                          chat.id === activeChatId ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'
-                        }`}
-                      >
-                        <MessageSquare size={8} className="shrink-0" />
-                        <span className="truncate flex-1">{chat.name || 'Untitled'}</span>
-                        <span className="text-[8px] text-[var(--muted)] shrink-0">{chat.messages?.length || 0} msgs</span>
-                      </button>
                     ))}
+                    {filteredProviders.length === 0 && (
+                      <div className="py-6 text-center text-xs text-[var(--muted)]">
+                        No models matching "{modelSearch}"
+                      </div>
+                    )}
                   </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* ===== QUICK ACTIONS PILLS ===== */}
+            <div className="px-3.5 py-2 border-b border-[var(--border)] shrink-0 bg-[var(--surface)]/20 overflow-x-auto scrollbar-none flex items-center gap-1.5">
+              {QUICK_ACTIONS.slice(0, 5).map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={() => handleQuickAction(action.id)}
+                  className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/10 px-2.5 py-1 text-[11px] text-[var(--text-secondary)] hover:text-[var(--accent)] transition-all cursor-pointer shrink-0 font-medium shadow-2xs"
+                >
+                  <action.icon size={11} className="text-[var(--accent)]" />
+                  <span>{action.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* ===== SCROLLABLE CHAT FEED ===== */}
+            <div className="flex-1 overflow-y-auto min-h-0 p-3.5 scrollbar-thin space-y-3 select-text">
+              {/* Clean Empty State */}
+              {!hasMessages && !loading && (
+                <div className="flex flex-col items-center justify-center py-12 text-center select-none">
+                  <div className="relative mb-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--accent)]/10 border border-[var(--accent)]/20 flex items-center justify-center text-[var(--accent)] shadow-xs">
+                      <Sparkles size={22} />
+                    </div>
+                  </div>
+                  <h3 className="text-[14px] font-semibold text-[var(--text)] mb-1">
+                    Ask Noska AI
+                  </h3>
+                  <p className="text-[11.5px] text-[var(--muted)] max-w-[240px] leading-relaxed mb-4">
+                    {page
+                      ? `Summarize, query, or edit "${page.title}"`
+                      : "Draft, brainstorm, or explore your workspace"
+                    }
+                  </p>
+                  {page && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--surface-2)] text-[11px] text-[var(--text-secondary)] font-medium border border-[var(--border)]">
+                      <Globe size={11} className="text-[var(--accent)]" />
+                      <span className="truncate max-w-[180px]">{page.title}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Spacer for composer */}
-              <div className="h-2" />
+              {/* Chat Messages */}
+              {messages.map((msg, i) => (
+                <ChatMessageBubble
+                  key={msg.id}
+                  message={msg}
+                  index={i}
+                  total={messages.length}
+                  page={page}
+                  onInsert={onInsert}
+                  onReplaceText={onReplaceText}
+                  onToast={onToast}
+                />
+              ))}
+
+              {/* Live Run Progress */}
+              {activeRunId && activeSteps.length > 0 && loading && (
+                <RunProgressBubble steps={activeSteps} />
+              )}
+
+              {proposalBusy && (
+                <div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] mr-auto max-w-[90%]">
+                  <Loader2 size={13} className="text-[var(--accent)] animate-spin" />
+                  <span className="text-xs">Drafting proposal…</span>
+                </div>
+              )}
+
+              {/* Proposal Cards */}
+              {agentProposal && (
+                <AgentProposalCardView
+                  proposal={agentProposal}
+                  busy={proposalBusy}
+                  onCreate={() => handleCreateAgentFromProposal(agentProposal)}
+                  onDismiss={() => setAgentProposal(null)}
+                />
+              )}
+              {automationProposal && (
+                <AutomationProposalCardView
+                  proposal={automationProposal}
+                  busy={proposalBusy}
+                  onCreate={() => handleCreateAutomationFromProposal(automationProposal)}
+                  onDismiss={() => setAutomationProposal(null)}
+                />
+              )}
+
+              {loading && (
+                <div className="flex items-center gap-2 py-2 px-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--border)] mr-auto">
+                  <div className="flex gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <span className="text-xs text-[var(--muted)] font-medium">Noska AI is writing...</span>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
+
+            {/* ===== CHAT HISTORY DRAWER ===== */}
+            <AnimatePresence>
+              {showHistory && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="border-t border-[var(--border)] bg-[var(--surface)] p-3.5 shrink-0 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
+                      <History size={11} className="text-[var(--accent)]" />
+                      Recent Conversations
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowHistory(false)}
+                      className="text-[10px] text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto space-y-1.5 scrollbar-thin pr-1">
+                    {currentHistory.map((chat) => (
+                      <div
+                        key={chat.id}
+                        onClick={() => {
+                          onSelectChat?.(chat.id);
+                          setShowHistory(false);
+                        }}
+                        className={`group/chat flex items-center justify-between w-full p-2 rounded-xl text-left transition cursor-pointer border ${
+                          chat.id === activeChatId
+                            ? 'bg-[var(--accent)]/15 border-[var(--accent)]/40 text-[var(--accent)] font-medium shadow-2xs'
+                            : 'bg-[var(--surface-2)]/30 border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="w-6 h-6 rounded-lg bg-[var(--surface-2)] flex items-center justify-center shrink-0 text-[var(--muted)]">
+                            <MessageSquare size={11} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-xs font-medium text-[var(--text)]">
+                              {chat.name || 'Untitled conversation'}
+                            </div>
+                            <div className="text-[9.5px] text-[var(--muted)]">
+                              {timeAgo(chat.updatedAt)} • {chat.messages?.length || 0} messages
+                            </div>
+                          </div>
+                        </div>
+
+                        {onDeleteChat && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteChat(chat.id);
+                            }}
+                            className="opacity-0 group-hover/chat:opacity-100 p-1 rounded-md text-[var(--muted)] hover:text-red-500 hover:bg-red-500/10 transition cursor-pointer shrink-0 ml-1.5"
+                            title="Delete conversation"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {currentHistory.length === 0 && (
+                      <div className="py-5 text-center text-xs text-[var(--muted)]">
+                        No previous chats saved
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* ===== PENDING APPROVALS ===== */}
             {pendingApprovals.length > 0 && (
-              <div className="shrink-0 border-t border-[var(--border)] bg-[var(--warning)]/5 px-3 py-2 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-[9px] font-semibold text-[var(--warning)]">
-                  <ShieldCheck size={10} />
-                  Approval required ({pendingApprovals.length})
+              <div className="shrink-0 border-t border-[var(--border)] bg-[var(--warning)]/10 px-3.5 py-2 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--warning)]">
+                  <ShieldCheck size={13} />
+                  Approval Required ({pendingApprovals.length})
                 </div>
-                {pendingApprovals.map(apr => (
-                  <div key={apr.id} className="rounded-lg bg-[var(--surface)] border border-[var(--border)] p-2">
-                    <p className="text-[10px] text-[var(--text)] font-medium truncate">{apr.action}</p>
-                    <p className="text-[9px] text-[var(--muted)] mt-0.5">{apr.reason}</p>
-                    <div className="flex gap-1.5 mt-1.5">
+                {pendingApprovals.map((apr) => (
+                  <div key={apr.id} className="rounded-xl bg-[var(--surface)] border border-[var(--border)] p-2.5 shadow-xs">
+                    <p className="text-xs text-[var(--text)] font-medium truncate">{apr.action}</p>
+                    <p className="text-[11px] text-[var(--muted)] mt-0.5">{apr.reason}</p>
+                    <div className="flex gap-2 mt-2">
                       <button
+                        type="button"
                         onClick={() => respondToApproval(apr.id, true)}
-                        className="rounded-md bg-[var(--success)]/15 text-[var(--success)] hover:bg-[var(--success)]/25 px-2 py-1 text-[9px] font-semibold transition"
+                        className="rounded-lg bg-[var(--success)] text-white hover:opacity-90 px-3 py-1 text-xs font-semibold transition cursor-pointer"
                       >
                         Approve
                       </button>
                       <button
+                        type="button"
                         onClick={() => respondToApproval(apr.id, false)}
-                        className="rounded-md bg-[var(--danger)]/10 text-[var(--danger)] hover:bg-[var(--danger)]/20 px-2 py-1 text-[9px] font-semibold transition"
+                        className="rounded-lg bg-[var(--surface-2)] hover:bg-[var(--hover)] text-[var(--text)] px-3 py-1 text-xs font-semibold transition cursor-pointer border border-[var(--border)]"
                       >
                         Decline
                       </button>
@@ -935,93 +943,50 @@ export default function AIRightPanel({
               </div>
             )}
 
-            {/* ===== CONTEXT PILLS ABOVE COMPOSER ===== */}
-            <div className="shrink-0 px-3 pt-1.5 pb-0 flex items-center gap-1 flex-wrap border-t border-[var(--border)]">
-              {page && (
-                <span className="flex items-center gap-1 rounded-md bg-[var(--accent)]/8 px-1.5 py-0.5 text-[9px] font-medium text-[var(--accent)]">
-                  <Globe size={8} />
-                  {page.title?.slice(0, 18)}
-                </span>
-              )}
-              {openPanePages.length > 0 && (
-                <span className="flex items-center gap-1 rounded-md bg-[var(--surface-2)]/60 px-1.5 py-0.5 text-[8px] text-[var(--muted)]" title={openPanePages.map(p => p.title).join(", ")}>
-                  <LayoutGrid size={7} />
-                  +{openPanePages.length} open pane{openPanePages.length !== 1 ? "s" : ""}
-                </span>
-              )}
-              {currentAgent && (
-                <span className="flex items-center gap-1 rounded-md bg-[var(--surface-2)]/60 px-1.5 py-0.5 text-[9px] text-[var(--text-secondary)]">
-                  <Sparkles size={8} />
-                  {currentAgent.name}
-                </span>
-              )}
-              {isConfigured && (
-                <span className="flex items-center gap-1 rounded-md bg-[var(--surface-2)]/60 px-1.5 py-0.5 text-[8px] text-[var(--muted)] font-mono">
-                  {modelName}
-                </span>
-              )}
-              <span className="flex items-center gap-1 rounded-md bg-[var(--surface-2)]/60 px-1.5 py-0.5 text-[8px] text-[var(--muted)]">
-                <Cpu size={7} />
-                {providerName}
-              </span>
-            </div>
-
-            {/* ===== COMPACT COMPOSER ===== */}
-            <div className="shrink-0 px-3 pb-2.5 pt-1.5">
-              <div className={`rounded-lg border transition-all duration-200 bg-[var(--surface)] ${
-                prompt ? 'border-[var(--accent)]/20 shadow-[0_0_0_1px_var(--accent-alpha)]' : 'border-[var(--border)]'
+            {/* ===== SLEEK THEMED COMPOSER (BOTTOM) ===== */}
+            <div className="shrink-0 p-3.5 border-t border-[var(--border)] bg-[var(--surface)]/40 backdrop-blur-md">
+              <div className={`rounded-2xl border transition-all duration-200 bg-[var(--surface)] shadow-xs ${
+                prompt ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/15' : 'border-[var(--border)]'
               }`}>
-                <div className="flex items-end gap-1 px-2 py-1">
-                  <div className="flex items-center gap-0.5">
-                    <button className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition" title="Attach">
-                      <Plus size={10} />
-                    </button>
-                    <button className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition" title="Search">
-                      <Search size={10} />
-                    </button>
-                    <button className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition" title="Voice input">
-                      <Mic size={10} />
-                    </button>
-                    <button className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition" title="Mention">
-                      <AtSign size={10} />
-                    </button>
-                    <button className="p-1 rounded text-[var(--muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover)] transition" title="Commands">
-                      <Terminal size={10} />
-                    </button>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <input
-                      ref={composerRef}
-                      type="text"
-                      value={prompt}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPrompt(e.target.value)}
-                      onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSend(prompt);
-                        }
-                      }}
-                      placeholder="Ask anything..."
-                      className="w-full bg-transparent text-[11px] text-[var(--text)] outline-none placeholder:text-[var(--muted)] px-1 py-1"
-                    />
-                  </div>
+                <div className="flex items-center gap-2 px-3.5 py-2.5">
+                  <input
+                    ref={composerRef}
+                    type="text"
+                    value={prompt}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setPrompt(e.target.value)}
+                    onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend(prompt);
+                      }
+                    }}
+                    placeholder="Ask Noska AI anything..."
+                    style={{ outline: "none", border: "none", boxShadow: "none", background: "transparent" }}
+                    className="flex-1 bg-transparent text-[13px] text-[var(--text)] outline-none border-none ring-0 placeholder:text-[var(--muted)]"
+                  />
+
                   {loading ? (
                     <button
+                      type="button"
                       onClick={() => {}}
-                      className="flex items-center gap-1 rounded-md bg-[var(--danger)]/10 text-[var(--danger)] hover:bg-[var(--danger)]/20 px-1.5 py-1 text-[9px] font-medium transition"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] transition cursor-pointer shrink-0"
                     >
-                      <span className="w-1 h-1 rounded-full bg-[var(--danger)] animate-pulse" />
+                      <Loader2 size={13} className="animate-spin text-[var(--accent)]" />
                     </button>
                   ) : (
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                    <button
+                      type="button"
                       onClick={() => handleSend(prompt)}
                       disabled={!prompt.trim()}
-                      className="flex items-center gap-1 rounded-md bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-25 px-1.5 py-1 text-[9px] font-medium transition"
+                      className={`flex h-7 w-7 items-center justify-center rounded-full transition-all cursor-pointer shrink-0 ${
+                        prompt.trim()
+                          ? 'bg-[var(--text)] text-[var(--panel)] hover:opacity-90 shadow-sm scale-100'
+                          : 'bg-[var(--surface-2)] text-[var(--muted)] opacity-50 cursor-not-allowed'
+                      }`}
+                      title="Send prompt (Enter)"
                     >
-                      Send
-                    </motion.button>
+                      <ArrowUp size={13} strokeWidth={2.5} />
+                    </button>
                   )}
                 </div>
               </div>
@@ -1050,36 +1015,22 @@ function RunProgressBubble({ steps }: { steps: StepProgress[] }) {
       case "done": return <CheckCircle2 size={9} className="text-[var(--success)] shrink-0" />;
       case "running": return <Loader2 size={9} className="text-[var(--accent)] animate-spin shrink-0" />;
       case "failed": return <XCircle size={9} className="text-[var(--danger)] shrink-0" />;
-      case "awaiting_approval": return <Clock size={9} className="text-[var(--warning)] shrink-0" />;
-      default: return <span className="w-[9px] h-[9px] rounded-full border border-[var(--border)] shrink-0" />;
+      default: return <Clock size={9} className="text-[var(--muted)] shrink-0" />;
     }
   };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mr-auto max-w-[90%] rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2.5 py-2"
-    >
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <Bot size={10} className="text-[var(--accent)]" />
-        <span className="text-[10px] font-semibold text-[var(--text)]">Working…</span>
-      </div>
-      <div className="space-y-1">
-        {steps.map(s => (
-          <div key={s.stepId} className="flex items-start gap-1.5">
-            {iconFor(s.status)}
-            <div className="min-w-0">
-              <span className={`text-[10px] leading-tight ${s.status === "pending" ? "text-[var(--muted)]" : "text-[var(--text-secondary)]"}`}>
-                {s.label}
-              </span>
-              {s.detail && s.status !== "done" && (
-                <p className="text-[9px] text-[var(--muted)] truncate">{s.detail}</p>
-              )}
-            </div>
+    <div className="rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2.5 py-2 space-y-1">
+      <div className="text-[9px] font-semibold text-[var(--muted)] uppercase tracking-wider">Working on your request…</div>
+      <div className="space-y-0.5">
+        {steps.map((step) => (
+          <div key={step.stepId} className="flex items-center gap-1.5 text-[10px] text-[var(--text)]">
+            {iconFor(step.status)}
+            <span className="truncate">{step.label}</span>
           </div>
         ))}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -1092,47 +1043,29 @@ function AgentProposalCardView({ proposal, busy, onCreate, onDismiss }: {
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mr-auto w-full max-w-full rounded-xl border border-[var(--accent)]/25 bg-[var(--accent)]/[0.04] p-3"
+      className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/[0.04] p-3 text-[11px] shadow-sm mr-auto max-w-[92%]"
     >
-      <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-lg bg-[var(--accent)]/12 flex items-center justify-center">
-          <Bot size={12} className="text-[var(--accent)]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-[var(--text)] truncate">{proposal.name}</p>
-          <p className="text-[9px] text-[var(--muted)]">Agent Ready · {describeTrigger(proposal.trigger)}</p>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-base">{proposal.icon || "🤖"}</span>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-[var(--text)] truncate">{proposal.name}</div>
+          <div className="text-[9px] text-[var(--muted)]">Ready to create agent</div>
         </div>
       </div>
-
-      <p className="text-[10px] text-[var(--text-secondary)] mt-2 line-clamp-3">{proposal.description}</p>
-
-      <div className="mt-2 space-y-1">
-        <div className="flex items-center gap-1 text-[9px] text-[var(--muted)]">
-          <CheckCircle2 size={8} className="text-[var(--success)]" />
-          Context: {proposal.contextScope.length > 0 ? proposal.contextScope.join(", ") : "Workspace"}
-        </div>
-        <div className="flex items-center gap-1 text-[9px] text-[var(--muted)]">
-          <ShieldCheck size={8} className="text-[var(--success)]" />
-          Creates & updates pages · Deletes need approval
+      <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed mb-2 line-clamp-3">{proposal.description}</p>
+      <div className="mb-2 space-y-1">
+        <div className="text-[9px] text-[var(--text-secondary)] flex items-center gap-1">
+          <Clock size={8} className="text-[var(--accent)] shrink-0" />
+          When: {describeTrigger(proposal.trigger)}
         </div>
       </div>
-
-      <details className="mt-2 group/proposal">
-        <summary className="cursor-pointer text-[9px] text-[var(--muted)] hover:text-[var(--text-secondary)] select-none">
-          Review instructions
-        </summary>
-        <p className="text-[9px] text-[var(--text-secondary)] bg-[var(--surface)] border border-[var(--border)] rounded-md p-2 mt-1 whitespace-pre-wrap max-h-28 overflow-y-auto scrollbar-thin">
-          {proposal.instructions}
-        </p>
-      </details>
-
       <div className="flex gap-1.5 mt-2.5">
         <button
           onClick={onCreate}
           disabled={busy}
-          className="flex-1 rounded-lg bg-[var(--accent)] px-2 py-1.5 text-[10px] font-semibold text-white hover:bg-[var(--accent)]/90 disabled:opacity-50 transition"
+          className="flex-1 rounded-lg bg-[var(--accent)] px-2 py-1.5 text-[10px] font-semibold text-white hover:opacity-90 disabled:opacity-50 transition"
         >
           Create Agent
         </button>
@@ -1156,34 +1089,35 @@ function AutomationProposalCardView({ proposal, busy, onCreate, onDismiss }: {
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mr-auto w-full max-w-full rounded-xl border border-[var(--warning)]/25 bg-[var(--warning)]/[0.05] p-3"
+      className="rounded-xl border border-[var(--warning)]/30 bg-[var(--warning)]/[0.04] p-3 text-[11px] shadow-sm mr-auto max-w-[92%]"
     >
-      <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-lg bg-[var(--warning)]/12 flex items-center justify-center">
-          <Zap size={12} className="text-[var(--warning)]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-[var(--text)] truncate">{proposal.name}</p>
-          <p className="text-[9px] text-[var(--muted)]">Automation Ready · {describeTrigger(proposal.trigger)}</p>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-base">⚡</span>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-[var(--text)] truncate">{proposal.name}</div>
+          <div className="text-[9px] text-[var(--muted)]">Ready to create automation</div>
         </div>
       </div>
-
-      <div className="mt-2 space-y-0.5">
-        {proposal.actions.map((a, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)]">
+      <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed mb-2 line-clamp-2">{proposal.description}</p>
+      <div className="mb-2 space-y-1">
+        <div className="text-[9px] text-[var(--text-secondary)] flex items-center gap-1">
+          <Clock size={8} className="text-[var(--warning)] shrink-0" />
+          When: {describeTrigger(proposal.trigger)}
+        </div>
+        {proposal.actions.map((a, idx) => (
+          <div key={idx} className="text-[9px] text-[var(--text-secondary)] flex items-center gap-1">
             <CheckCircle2 size={8} className="text-[var(--success)] shrink-0" />
             {a.label}
           </div>
         ))}
       </div>
-
       <div className="flex gap-1.5 mt-2.5">
         <button
           onClick={onCreate}
           disabled={busy}
-          className="flex-1 rounded-lg bg-[var(--warning)] px-2 py-1.5 text-[10px] font-semibold text-white hover:bg-[var(--warning)]/90 disabled:opacity-50 transition"
+          className="flex-1 rounded-lg bg-[var(--warning)] px-2 py-1.5 text-[10px] font-semibold text-white hover:opacity-90 disabled:opacity-50 transition"
         >
           Create Automation
         </button>
@@ -1201,6 +1135,8 @@ function AutomationProposalCardView({ proposal, busy, onCreate, onDismiss }: {
 function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceText, onToast }: ChatMessageBubbleProps) {
   const isUser = message.role === 'user';
   const isFirstAi = index === 0 && !isUser;
+  const [copied, setCopied] = useState(false);
+  const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
 
   // Agentic run progress bubbles render as a step list, not markdown.
   if (!isUser && message.runSteps) {
@@ -1253,14 +1189,14 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
       transition={{ type: 'spring', stiffness: 400, damping: 28, delay: index === total - 1 ? 0.03 : 0 }}
       className={`group relative ${isUser ? 'ml-auto' : 'mr-auto'} max-w-[90%]`}
     >
-      <div className={`rounded-lg px-2.5 py-1.5 text-[11px] leading-relaxed ${
+      <div className={`rounded-xl px-3 py-2 text-[11.5px] leading-relaxed ${
         isUser
-          ? 'bg-[var(--accent)] text-white shadow-sm'
-          : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]'
+          ? 'bg-[var(--accent)] text-white shadow-xs'
+          : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] shadow-2xs'
       }`}>
         {/* AI icon */}
         {!isUser && !isFirstAi && (
-          <div className="absolute -left-5 top-1.5 w-3.5 h-3.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
+          <div className="absolute -left-5 top-2 w-3.5 h-3.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
             <span className="text-[6px]">✦</span>
           </div>
         )}
@@ -1277,35 +1213,70 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
           />
         )}
 
-        {/* Reactions + Actions */}
+        {/* Reactions + Actions Bar */}
         {!isUser && (message.text || message.content) && message.text !== '...' && message.content !== '...' && (
-          <div className="mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {['👍', '👎', '⭐'].map(r => (
+          <div className="mt-2 pt-1.5 border-t border-[var(--border)]/60 flex items-center gap-1.5 transition-opacity">
+            <div className="flex items-center gap-0.5 bg-[var(--surface-2)]/60 p-0.5 rounded-md border border-[var(--border)]">
               <button
-                key={r}
-                className="grid h-3.5 w-3.5 place-items-center rounded text-[8px] text-[var(--muted)] hover:bg-[var(--hover)] transition"
+                type="button"
+                onClick={() => setReaction(reaction === 'up' ? null : 'up')}
+                className={`p-1 rounded text-[10px] transition cursor-pointer ${
+                  reaction === 'up'
+                    ? 'text-[var(--accent)] bg-[var(--accent)]/15 font-semibold'
+                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+                title="Good response"
               >
-                {r}
+                <ThumbsUp size={10} />
               </button>
-            ))}
-            <span className="w-px h-2.5 bg-[var(--border)] mx-0.5" />
+              <button
+                type="button"
+                onClick={() => setReaction(reaction === 'down' ? null : 'down')}
+                className={`p-1 rounded text-[10px] transition cursor-pointer ${
+                  reaction === 'down'
+                    ? 'text-[var(--danger)] bg-[var(--danger)]/15 font-semibold'
+                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+                title="Poor response"
+              >
+                <ThumbsDown size={10} />
+              </button>
+            </div>
+
+            <div className="flex-1" />
+
             <button
+              type="button"
+              onClick={() => {
+                handleCopy(message.text || message.content || "");
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1600);
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-[var(--muted)] hover:text-[var(--text)] bg-[var(--surface-2)]/50 hover:bg-[var(--hover)] border border-[var(--border)] transition cursor-pointer font-medium"
+              title="Copy markdown"
+            >
+              {copied ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
+              <span>{copied ? "Copied" : "Copy"}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => handleInsertBelow(message.text || message.content || "")}
-              className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-[var(--muted)] hover:text-[var(--text)] bg-[var(--surface-2)]/50 hover:bg-[var(--hover)] border border-[var(--border)] transition cursor-pointer font-medium"
+              title="Insert below active block"
             >
-              Insert below
+              <ArrowDownToLine size={10} />
+              <span>Insert</span>
             </button>
+
             <button
+              type="button"
               onClick={() => handleReplacePage(message.text || message.content || "")}
-              className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-[var(--muted)] hover:text-[var(--text)] bg-[var(--surface-2)]/50 hover:bg-[var(--hover)] border border-[var(--border)] transition cursor-pointer font-medium"
+              title="Replace page text"
             >
-              Replace
-            </button>
-            <button
-              onClick={() => handleCopy(message.text || message.content || "")}
-              className="text-[8px] text-[var(--muted)] hover:text-[var(--text-secondary)] px-1 py-0.5 rounded hover:bg-[var(--hover)] transition"
-            >
-              Copy
+              <RefreshCw size={10} />
+              <span>Replace</span>
             </button>
           </div>
         )}

@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { supabaseAnon } from "../../lib/supabase";
 import { TEST_MODE } from "../../lib/envGuard";
 import { motion } from "framer-motion";
-import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert } from "lucide-react";
+import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert, RefreshCw } from "lucide-react";
 
 type GateStatus = "checking" | "approved" | "waiting" | "not_on_waitlist" | "expired" | "banned" | "suspended" | "error";
 
@@ -23,6 +23,114 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+
+  const checkStatus = useCallback(async () => {
+    if (TEST_MODE || !enabled || !clerkUser || !supabaseAnon) return;
+    const email = clerkUser.emailAddresses?.[0]?.emailAddress;
+    if (!email) return;
+
+    try {
+      const clerkId = clerkUser.id;
+      const { data: bypass } = await supabaseAnon
+        .rpc("check_bypass_waitlist" as never, { p_user_id: clerkId, p_email: email.toLowerCase() } as never) as never;
+      if (bypass === true) {
+        setStatus("approved");
+        return;
+      }
+
+      const { data } = await supabaseAnon
+        .rpc("get_waitlist_status" as never, { p_email: email.toLowerCase() } as never) as never;
+      const result = (data ?? {}) as { entry?: Record<string, unknown> | null; approved?: boolean };
+
+      if (!result.entry) {
+        setStatus(result.approved ? "approved" : "not_on_waitlist");
+        return;
+      }
+
+      const entry = result.entry;
+      let pos = entry.position as number | undefined;
+      let aheadCount: number | undefined = undefined;
+
+      try {
+        const { data: rpcData } = await supabaseAnon
+          .rpc("get_waitlist_position" as never, { p_email: email.toLowerCase() } as never) as never;
+        const first = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+        const result2 = first as { pos: number; ahead: number; total_pending: number } | null;
+        if (result2 && typeof result2.pos === "number" && result2.pos > 0) {
+          pos = result2.pos;
+          aheadCount = result2.ahead;
+        }
+      } catch {
+        // ignore — fall back to stored position
+      }
+
+      if (pos && aheadCount === undefined) {
+        aheadCount = Math.max(pos - 1, 0);
+      }
+
+      setEntryData({
+        position: pos,
+        ahead_count: aheadCount,
+        joined_at: entry.joined_at as string | undefined,
+        status: entry.status as string | undefined,
+        invite_expires_at: entry.invite_expires_at as string | undefined,
+        ban_reason: entry.ban_reason as string | undefined,
+        suspension_reason: entry.suspension_reason as string | undefined,
+      });
+
+      const s = entry.status as string;
+      if (s === "banned") { setStatus("banned"); return; }
+      if (s === "suspended") { setStatus("suspended"); return; }
+      if (result.approved) {
+        if (s === "invited" && !entry.invite_expires_at) { setStatus("approved"); return; }
+        if (s === "invited" && entry.invite_expires_at && new Date(entry.invite_expires_at as string) < new Date()) {
+          setStatus("approved");
+          return;
+        }
+        setStatus("approved");
+        return;
+      }
+      if (s === "expired") { setStatus("expired"); return; }
+      if (s === "approved" || s === "invited" || s === "accepted") {
+        if (s === "invited" && entry.invite_expires_at && new Date(entry.invite_expires_at as string) < new Date()) {
+          setStatus("expired");
+          return;
+        }
+        setStatus("approved");
+        return;
+      }
+      setStatus("waiting");
+      setLastChecked(new Date());
+    } catch {
+      setStatus("approved");
+    }
+  }, [clerkUser, enabled]);
+
+  useEffect(() => {
+    if (TEST_MODE) { setStatus("approved"); return; }
+    if (!enabled) { setStatus("approved"); return; }
+    if (!clerkUser) { setStatus("error"); return; }
+    const email = clerkUser.emailAddresses?.[0]?.emailAddress;
+    if (!email) { setStatus("error"); return; }
+
+    if (!supabaseAnon) {
+      setStatus("approved");
+      return;
+    }
+
+    setStatus("checking");
+    checkStatus();
+  }, [clerkUser, refreshNonce, enabled, checkStatus]);
+
+  // Auto-refresh when in waiting state — poll every 30 seconds
+  useEffect(() => {
+    if (status !== "waiting") return;
+    const interval = setInterval(() => {
+      setRefreshNonce((n) => n + 1);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [status]);
 
   useEffect(() => {
     // TEST_MODE (local-only, never production — see envGuard) exists for
@@ -495,8 +603,18 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
       </div>
 
       <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6, maxWidth: 280, margin: '0 auto 20px auto' }}>
-        An admin needs to approve your access. You'll receive a confirmation email when you're approved.
+        An admin needs to approve your access. You'll receive a confirmation email when you're approved. This page auto-refreshes.
       </p>
+
+      {/* Auto-refresh indicator */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16,
+        fontSize: 11, color: '#94a3b8'
+      }}>
+        <RefreshCw style={{ width: 12, height: 12, animation: 'spin 2s linear infinite' }} />
+        <span>Checking every 30s{lastChecked ? ` · Last: ${lastChecked.toLocaleTimeString()}` : ""}</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
 
       {/* Sign Out Button */}
       <button 

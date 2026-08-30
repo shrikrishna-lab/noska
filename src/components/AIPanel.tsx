@@ -295,8 +295,17 @@ export default function AIPanel({
 
       // Update real active provider & model if user changed it in selector
       if (selection?.id) {
-        if (selection.providerId) {
-          aiManager.setActiveProvider(selection.providerId, selection.id);
+        let targetProviderId = (selection as any).providerId;
+        if (!targetProviderId) {
+          for (const p of getAllProviders()) {
+            if (p.models?.some((m) => m.id === selection.id)) {
+              targetProviderId = p.id;
+              break;
+            }
+          }
+        }
+        if (targetProviderId) {
+          aiManager.setActiveProvider(targetProviderId, selection.id);
         } else {
           aiManager.setActiveModel(selection.id);
         }
@@ -538,12 +547,14 @@ export default function AIPanel({
           chatScroll.stopFollowing();
           return;
         }
-        // Use structured error messages from AIError
+
+        // Use structured error messages directly from the LLM provider
         const friendly = err instanceof AIError
           ? err.userMessage
           : (err instanceof Error && (err.message?.includes("not configured") || err.message?.includes("API key")))
             ? "AI provider not configured. Click 'Setup Key' in the top bar to add your API key."
-            : "AI request failed. Please try again.";
+            : err instanceof Error ? err.message : "AI request failed. Please try again.";
+
         setMessages((prev) => {
           const next = [...prev];
           const last = next[next.length - 1];

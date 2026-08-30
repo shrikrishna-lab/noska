@@ -1,5 +1,6 @@
 /**
  * Active input tracking & smooth streaming word-by-word text insertion for global dictation.
+ * Supports standard HTML inputs, textareas, and contenteditable block editors (RichTextEditor).
  */
 
 let lastFocusedElement: HTMLElement | null = null;
@@ -7,6 +8,7 @@ let lastSelectionRange: Range | null = null;
 
 interface StreamingSession {
   target: HTMLElement;
+  isContentEditable: boolean;
   initialValue: string;
   startPos: number;
   endPos: number;
@@ -57,6 +59,7 @@ export function isTypingElement(el: HTMLElement | null): boolean {
   }
   if (tag === "textarea") return true;
   if (el.isContentEditable) return true;
+  if (el.getAttribute("contenteditable") === "true") return true;
   if (el.getAttribute("role") === "textbox") return true;
   return false;
 }
@@ -69,7 +72,34 @@ export function getActiveTypingElement(): HTMLElement | null {
   if (lastFocusedElement && document.body.contains(lastFocusedElement)) {
     return lastFocusedElement;
   }
+  // Fallback: search for active rich-text block or editable element in the viewport
+  if (typeof document !== "undefined") {
+    const editorTarget = document.querySelector(
+      ".rich-text-editor[contenteditable='true'], [contenteditable='true']:not([readonly]), textarea:not([readonly]), input[type='text']:not([readonly])"
+    ) as HTMLElement | null;
+    if (editorTarget) {
+      lastFocusedElement = editorTarget;
+      return editorTarget;
+    }
+  }
   return null;
+}
+
+/** Helper to get character offset of selection within a contenteditable element */
+function getContentEditableCursorOffset(el: HTMLElement): number {
+  try {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !el.contains(sel.anchorNode)) {
+      return (el.innerText || el.textContent || "").length;
+    }
+    const range = sel.getRangeAt(0);
+    const preRange = document.createRange();
+    preRange.selectNodeContents(el);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    return preRange.toString().length;
+  } catch {
+    return (el.innerText || el.textContent || "").length;
+  }
 }
 
 /** Starts a new streaming dictation session snapshotting the starting cursor position */
@@ -89,9 +119,26 @@ export function startStreamingSession(targetOverride?: HTMLElement | null) {
 
     activeStreamSession = {
       target,
+      isContentEditable: false,
       initialValue: fullVal,
       startPos: start,
       endPos: end,
+      initialPrefix,
+      initialSuffix,
+    };
+  } else if (target.isContentEditable || target.getAttribute("contenteditable") === "true") {
+    target.focus();
+    const fullVal = target.innerText || target.textContent || "";
+    const offset = getContentEditableCursorOffset(target);
+    const initialPrefix = fullVal.substring(0, offset);
+    const initialSuffix = fullVal.substring(offset);
+
+    activeStreamSession = {
+      target,
+      isContentEditable: true,
+      initialValue: fullVal,
+      startPos: offset,
+      endPos: offset,
       initialPrefix,
       initialSuffix,
     };
@@ -138,8 +185,44 @@ export function streamTextIntoActiveInput(text: string, targetOverride?: HTMLEle
     }
   }
 
-  // 2. Fallback to insertTextAtCursor for ContentEditable
-  return insertTextAtCursor(text, target);
+  // 2. ContentEditable / RichTextEditor Block Streaming
+  if (target.isContentEditable || target.getAttribute("contenteditable") === "true") {
+    target.focus();
+
+    if (!activeStreamSession || activeStreamSession.target !== target) {
+      startStreamingSession(target);
+    }
+
+    const session = activeStreamSession;
+    if (session) {
+      let textToInsert = text;
+      if (session.initialPrefix.length > 0 && !/\s$/.test(session.initialPrefix) && !/^[\s,.:;!?]/.test(textToInsert)) {
+        textToInsert = " " + textToInsert;
+      }
+
+      const nextText = session.initialPrefix + textToInsert + session.initialSuffix;
+
+      target.innerText = nextText;
+
+      // Restore cursor position to the end of the newly streamed text
+      try {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        range.collapse(false);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch {}
+
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+
+    return insertTextAtCursor(text, target);
+  }
+
+  return false;
 }
 
 /**

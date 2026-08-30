@@ -142,6 +142,28 @@ if (timeoutRef.current) {
           }
         } catch {}
 
+        // Track first login and update waitlist status for approved entries.
+        try {
+          const { data: waitlistEntry } = await supabaseAnon
+            .from("waitlist_entries" as never)
+            .select("id, status, first_login_at" as never)
+            .eq("email" as never, email.toLowerCase())
+            .in("status" as never, ["invited", "approved", "accepted"] as never)
+            .maybeSingle() as { data: { id: string; status: string; first_login_at: string | null } | null };
+
+          if (waitlistEntry && !waitlistEntry.first_login_at) {
+            await supabaseAnon
+              .from("waitlist_entries" as never)
+              .update({
+                first_login_at: new Date().toISOString(),
+                status: "accepted",
+              } as never)
+              .eq("id" as never, waitlistEntry.id);
+          }
+        } catch {
+          // Non-critical: don't block sign-in if tracking fails
+        }
+
         // Waitlist membership is a separate marketing workflow. It must not
         // block a successful application sign-in; new users should continue
         // into Noska's own onboarding UI. Only an explicit ban blocks access.

@@ -33,8 +33,39 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   const [apiKey, setApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState("nvidia");
   const [nvidiaKey, setNvidiaKey] = useState("");
-  const [aiChats, setAiChats] = useState<AIChat[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [aiChats, setAiChats] = useState<AIChat[]>(() => {
+    try {
+      const saved = localStorage.getItem("noska_ai_chats");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+  const [activeChatId, setActiveChatId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("noska_active_chat_id") || null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Automatically persist chats to localStorage so chats never disappear on refresh/navigation
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("noska_ai_chats", JSON.stringify(aiChats));
+    } catch {}
+  }, [aiChats]);
+
+  // Persist active chat ID
+  React.useEffect(() => {
+    try {
+      if (activeChatId) localStorage.setItem("noska_active_chat_id", activeChatId);
+      else localStorage.removeItem("noska_active_chat_id");
+    } catch {}
+  }, [activeChatId]);
+
   const [ghostWriterEnabled, setGhostWriterEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("noska_ghost_writer_enabled");

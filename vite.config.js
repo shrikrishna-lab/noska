@@ -42,6 +42,74 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: ["app.noska.me", "localhost", "127.0.0.1", "app.localhost"],
     https: httpsConfig,
+    proxy: {
+      "/api/proxy/opencode": {
+        target: "https://opencode.ai/zen/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/opencode/, ""),
+        secure: false,
+      },
+      "/api/proxy/openrouter": {
+        target: "https://openrouter.ai/api/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/openrouter/, ""),
+        secure: false,
+      },
+      "/api/proxy/anthropic": {
+        target: "https://api.anthropic.com/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/anthropic/, ""),
+        secure: false,
+      },
+      "/api/proxy/openai": {
+        target: "https://api.openai.com/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/openai/, ""),
+        secure: false,
+      },
+      "/api/proxy/gemini": {
+        target: "https://generativelanguage.googleapis.com/v1beta",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/gemini/, ""),
+        secure: false,
+      },
+      "/api/proxy/groq": {
+        target: "https://api.groq.com/openai/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/groq/, ""),
+        secure: false,
+      },
+      "/api/proxy/deepseek": {
+        target: "https://api.deepseek.com/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/deepseek/, ""),
+        secure: false,
+      },
+      "/api/proxy/mistral": {
+        target: "https://api.mistral.ai/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/mistral/, ""),
+        secure: false,
+      },
+      "/api/proxy/together": {
+        target: "https://api.together.xyz/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/together/, ""),
+        secure: false,
+      },
+      "/api/proxy/xai": {
+        target: "https://api.x.ai/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/xai/, ""),
+        secure: false,
+      },
+      "/api/proxy/nvidia": {
+        target: "https://integrate.api.nvidia.com/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/nvidia/, ""),
+        secure: false,
+      },
+    },
     // Ignore Rust build artifacts — chokidar crashes with EBUSY on Windows
     // when tauri build outputs get locked/replaced mid-watch.
     watch: {

@@ -129,35 +129,35 @@ export const DEFAULT_ADMIN_USERS: AdminUser[] = [
   {
     id: "u-001",
     name: "Aarav Patel",
-    email: "aarav@noska.dev",
+    email: "aarav@noska.me",
     role: "super_admin",
     avatarUrl: null
   },
   {
     id: "u-002",
     name: "Mira Chen",
-    email: "mira@noska.dev",
+    email: "mira@noska.me",
     role: "admin",
     avatarUrl: null
   },
   {
     id: "u-003",
     name: "Diego Martinez",
-    email: "diego@noska.dev",
+    email: "diego@noska.me",
     role: "developer",
     avatarUrl: null
   },
   {
     id: "u-004",
     name: "Yuki Tanaka",
-    email: "yuki@noska.dev",
+    email: "yuki@noska.me",
     role: "support",
     avatarUrl: null
   },
   {
     id: "u-005",
     name: "Lena Brooks",
-    email: "lena@noska.dev",
+    email: "lena@noska.me",
     role: "marketing",
     avatarUrl: null
   }

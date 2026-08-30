@@ -284,13 +284,30 @@ export function Waitlist() {
         p_min_role: "support",
       });
       if (fallback.error) { toast.error(fallback.error.message || error?.message || "Failed to approve"); return false; }
+      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
+        old?.map((e) => e.id === row.id ? { ...e, status: "invited", approved_at: new Date().toISOString(), invite_sent: true } : e)
+      );
+      qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
       toast.success(`${row.name} approved; invite email pending`);
+      return true;
     }
+    // Edge function succeeded — may have created a Clerk invitation
+    const hasClerkInvitation = !!data.clerk_invitation_id;
     qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
-      old?.map((e) => e.id === row.id ? { ...e, status: "invited", approved_at: new Date().toISOString(), invite_sent: true } : e)
+      old?.map((e) => e.id === row.id ? {
+        ...e,
+        status: "invited",
+        approved_at: new Date().toISOString(),
+        invite_sent: true,
+        ...(data.clerk_invitation_id ? { clerk_entry_id: data.clerk_invitation_id } : {}),
+      } : e)
     );
     qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
-    toast.success(`${row.name} approved & invited`);
+    if (hasClerkInvitation) {
+      toast.success(`${row.name} approved — Clerk invitation sent + email delivered`);
+    } else {
+      toast.success(`${row.name} approved & invited via email`);
+    }
     return true;
   };
 

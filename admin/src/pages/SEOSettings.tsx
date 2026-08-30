@@ -122,7 +122,7 @@ export function SEOSettingsPage() {
           </div>
           <div className="space-y-2">
             <Label>Canonical URL</Label>
-            <Input value={canonical} onChange={(e) => setCanonical(e.target.value)} placeholder="https://noska.dev/page" />
+            <Input value={canonical} onChange={(e) => setCanonical(e.target.value)} placeholder="https://noska.me/page" />
           </div>
         </CardContent>
       </Card>
@@ -140,7 +140,7 @@ export function SEOSettingsPage() {
           </div>
           <div className="space-y-2">
             <Label>OG Image URL</Label>
-            <Input value={ogImage} onChange={(e) => setOgImage(e.target.value)} placeholder="https://noska.dev/og-image.png" />
+            <Input value={ogImage} onChange={(e) => setOgImage(e.target.value)} placeholder="https://noska.me/og-image.png" />
           </div>
         </CardContent>
       </Card>

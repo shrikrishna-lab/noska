@@ -321,19 +321,23 @@ export default function VoiceCapture({
       recognition.lang = "en-US";
 
       recognition.onresult = (event: any) => {
-        let final = "";
-        let interim = "";
+        let accumulatedFinal = "";
+        let currentInterim = "";
         for (let i = 0; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript + " ";
-          } else {
-            interim += event.results[i][0].transcript;
+          const item = event.results[i];
+          if (item && item[0]) {
+            const chunk = item[0].transcript || "";
+            if (item.isFinal) {
+              accumulatedFinal += (accumulatedFinal ? " " : "") + chunk.trim();
+            } else {
+              currentInterim += (currentInterim ? " " : "") + chunk.trim();
+            }
           }
         }
-        if (final) {
-          setTranscript((prev) => prev + final);
+        if (accumulatedFinal) {
+          setTranscript(accumulatedFinal);
         }
-        setInterimText(interim);
+        setInterimText(currentInterim);
       };
 
       recognition.onerror = (event: any) => {

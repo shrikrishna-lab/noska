@@ -12,7 +12,7 @@ test.describe("admin select dropdown", () => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    const loginForm = page.getByPlaceholder("admin@noska.dev");
+    const loginForm = page.getByPlaceholder("admin@noska.me");
     if (await loginForm.isVisible({ timeout: 2000 }).catch(() => false)) {
       await loginForm.fill(process.env.TEST_ADMIN_EMAIL!);
       await page.getByPlaceholder("Enter your password").fill(process.env.TEST_ADMIN_PASSWORD!);
