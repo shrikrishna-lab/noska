@@ -118,7 +118,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
         return prev;
       }
 
-      // Check if existing tab matches target
+      // 1. Check if existing tab matches target in this pane -> switch to it
       const existing = activePane.tabs.find((t) => t.type === targetType && t.targetId === targetId);
       if (existing) {
         return {
@@ -133,7 +133,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // If active tab was an initial placeholder, replace it
+      // 2. If active tab was an initial placeholder, replace it
       if (currentActiveTab && currentActiveTab.targetId === "initial") {
         return {
           ...prev,
@@ -149,21 +149,65 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // Otherwise update active tab in current active pane
+      // 3. If active tab is pinned, never overwrite it -> append a new tab
+      if (currentActiveTab?.pinned) {
+        const newTabId = generateId("tab");
+        return {
+          ...prev,
+          panes: {
+            ...prev.panes,
+            [activePane.id]: {
+              ...activePane,
+              tabs: [...activePane.tabs, { id: newTabId, type: targetType, targetId }],
+              activeTabId: newTabId
+            }
+          }
+        };
+      }
+
+      // 4. If target is a newly created/selected page not currently open in a tab,
+      // append a new tab rather than destroying the current active tab
+      const newTabId = generateId("tab");
       return {
         ...prev,
         panes: {
           ...prev.panes,
           [activePane.id]: {
             ...activePane,
-            tabs: activePane.tabs.map((t) =>
-              t.id === activePane.activeTabId ? { ...t, type: targetType, targetId } : t
-            )
+            tabs: [...activePane.tabs, { id: newTabId, type: targetType, targetId }],
+            activeTabId: newTabId
           }
         }
       };
     });
   }, [appView, activeId]);
+
+  // Prune trashed/deleted pages from open tabs automatically
+  useEffect(() => {
+    if (!pages || pages.length === 0) return;
+    const trashedIds = new Set(pages.filter((p) => p.trashed).map((p) => p.id));
+    if (trashedIds.size === 0) return;
+
+    setEngineState((prev) => {
+      let changed = false;
+      const nextPanes = { ...prev.panes };
+      for (const [paneId, pane] of Object.entries(nextPanes)) {
+        const remainingTabs = pane.tabs.filter((t) => !(t.type === "page" && trashedIds.has(t.targetId)));
+        if (remainingTabs.length !== pane.tabs.length) {
+          changed = true;
+          const newActiveTabId = remainingTabs.some((t) => t.id === pane.activeTabId)
+            ? pane.activeTabId
+            : remainingTabs[0]?.id || "";
+          nextPanes[paneId] = {
+            ...pane,
+            tabs: remainingTabs.length > 0 ? remainingTabs : [{ id: generateId("tab"), type: "view", targetId: "home" }],
+            activeTabId: newActiveTabId || Object.values(remainingTabs)[0]?.id || ""
+          };
+        }
+      }
+      return changed ? { ...prev, panes: nextPanes } : prev;
+    });
+  }, [pages]);
 
   // Synchronize global activeId & appView when activePane changes
   const onNavigatePane = useCallback((type: "page" | "view", targetId: string) => {

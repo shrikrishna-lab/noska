@@ -195,7 +195,7 @@ export default function ViewPreview({ view, pages, sharedPages = [], pendingInvi
             {recent.slice(0, 4).map((page) => (
               <div key={page.id} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 text-left">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[13px]">{page.icon || "📝"}</span>
+                  <PageIcon icon={page.icon} size={13} fallback="📝" />
                   <span className="truncate text-[11px] font-semibold text-[var(--text)]">{page.title || "Untitled"}</span>
                   {page.isEncrypted && <Lock size={9} className="text-[var(--danger)] shrink-0" />}
                 </div>
@@ -351,8 +351,8 @@ export default function ViewPreview({ view, pages, sharedPages = [], pendingInvi
         <div className="grid gap-1.5 sm:grid-cols-2">
           {recent.slice(0, 4).map((page) => (
             <div key={page.id} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 text-left">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[13px]">{page.icon || "📝"}</span>
+                <div className="flex items-center gap-1.5">
+                <PageIcon icon={page.icon} size={13} fallback="📝" />
                 <span className="truncate text-[11px] font-semibold text-[var(--text)]">{page.title || "Untitled"}</span>
               </div>
               {renderBlockStats(page)}

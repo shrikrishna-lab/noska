@@ -14,4 +14,5 @@ export const C = {
   text: "#1a1a2e",
   purple: "#7c3aed",
   purpleLight: "rgba(124,58,237,0.08)",
+  accent: "#7c3aed",
 };

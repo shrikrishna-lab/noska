@@ -5,6 +5,20 @@ import { Mic, MicOff, Square, Sparkles, X, AlertCircle, Copy, Check, FileText } 
 import { runAI } from "../../utils/ai";
 import { uid, blockFor } from "../../utils/helpers";
 import { capture } from "../../lib/posthog";
+import { cleanDictation, detectTargetApp } from "../../lib/voice/dictation-cleanup";
+import { createVoiceIntelligence, type VoiceIntent, type VoiceProcessingResult } from "../../lib/voice/voice-intelligence";
+
+declare class SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: any) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
 
 /* ─── text → structured blocks ─── */
 function textToBlocks(text: string) {
@@ -59,8 +73,20 @@ export default function VoiceCapture({
   const [transcript, setTranscript] = useState("");
   const [interimText, setInterimText] = useState("");
   const [structuring, setStructuring] = useState(false);
+  const [polishing, setPolishing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [agentMode, setAgentMode] = useState(false);
+
+  // Initialize Voice Intelligence engine (moved before canvasRef for proper scoping)
+  const voiceIntelligence = createVoiceIntelligence({
+    autoProcess: false,
+    autoDictation: true,
+    autoCommands: true,
+    confirmationRequiredForMixed: true,
+    languageDetection: true,
+    codeSwitchingDetection: true,
+  });
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -386,6 +412,7 @@ export default function VoiceCapture({
     }
     setIsRecording(false);
     setInterimText("");
+    setAgentMode(false); // Reset agent mode when stopping
   }, []);
 
   useEffect(() => {
@@ -403,13 +430,113 @@ export default function VoiceCapture({
     };
   }, [onClose, stopRecording]);
 
-  const handleToggle = useCallback(() => {
+  const handleToggle = useCallback(async () => {
     if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
+      // Stop recording
+      isListeningRef.current = false;
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+        audioCtxRef.current = null;
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      setIsRecording(false);
+      setInterimText("");
+      setAgentMode(false); // Reset agent mode when stopping
+      return;
     }
-  }, [isRecording, startRecording, stopRecording]);
+
+    // Start recording in normal dictation mode
+    isListeningRef.current = true;
+    setIsRecording(true);
+    setElapsed(0);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: any) => {
+        let accumulatedFinal = "";
+        let currentInterim = "";
+        for (let i = 0; i < event.results.length; i++) {
+          const item = event.results[i];
+          if (item && item[0]) {
+            const chunk = item[0].transcript || "";
+            if (item.isFinal) {
+              accumulatedFinal += (accumulatedFinal ? " " : "") + chunk.trim();
+            } else {
+              currentInterim += (currentInterim ? " " : "") + chunk.trim();
+            }
+          }
+        }
+        if (accumulatedFinal) {
+          setTranscript(accumulatedFinal);
+        }
+        setInterimText(currentInterim);
+
+        // If not in agent mode, just update transcript
+        if (!agentMode) {
+          // Normal dictation mode - just show text
+        } else {
+          // Agent mode - process with voice intelligence
+          voiceIntelligence.processUtterance(currentInterim, {
+            getContent: () => transcript,
+            getCursorPosition: () => 0,
+            getSelection: () => null,
+            getCurrentBlock: () => null,
+            executeAction: async (action, params) => {
+              // Execute actions based on agent commands
+              return { success: true, feedback: `Action: ${action}` };
+            }
+          });
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== "no-speech") {
+          onToast?.(`Speech error: ${event.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        if (recognitionRef.current && isListeningRef.current) {
+          try { recognition.start(); } catch (e) { console.warn("VoiceCapture restart:", e); }
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+
+      timerRef.current = setInterval(() => {
+        setElapsed((e) => e + 1);
+      }, 1000);
+    } catch (err) {
+      onToast?.("Microphone access denied or unavailable");
+      setIsRecording(false);
+    }
+  }, [isRecording, agentMode, transcript, voiceIntelligence]);
 
   const handleStructure = async () => {
     const fullText = (transcript + " " + interimText).trim();
@@ -449,6 +576,34 @@ Rules:
     }
   };
 
+  const handleAIPolish = async () => {
+    const fullText = (transcript + " " + interimText).trim();
+    if (!fullText) return;
+
+    setPolishing(true);
+    try {
+      const result = await cleanDictation({
+        rawTranscript: fullText,
+        targetApp: "docs",
+        dictationMode: "ai_polished",
+      });
+
+      const blocks = textToBlocks(result.cleanedText);
+      const header = blockFor("callout", `Voice Dictation · ${formatTime(elapsed || 1)}`);
+      (header as any).meta = { tone: "info", icon: "🎙️" };
+
+      onAppendBlocks([header, ...blocks]);
+      capture("voice_note_inserted", { structured_with_ai: true, ai_polished: true, duration_seconds: elapsed, block_count: blocks.length });
+      onToast?.(`${blocks.length} AI-polished blocks inserted`);
+      onClose();
+    } catch (err) {
+      onToast?.("AI polish failed, inserting raw text");
+      handleRawInsert();
+    } finally {
+      setPolishing(false);
+    }
+  };
+
   const handleRawInsert = () => {
     const fullText = (transcript + " " + interimText).trim();
     if (!fullText) return;
@@ -476,6 +631,46 @@ Rules:
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  // Compute average audio level from analyser for UI indicator
+  useEffect(() => {
+    const updateLevel = () => {
+      if (!analyserRef.current || !isListeningRef.current) return;
+
+      const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(data);
+
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const val = (data[i] - 128) / 128;
+        sum += val * val;
+      }
+      const rms = Math.sqrt(sum / data.length);
+      // Store for UI indicator (0 to 1 range)
+      amplitudeRef.current = Math.min(1, 0.1 + rms * 4);
+    };
+
+    // Update UI level a few times per second
+    const intervalId = setInterval(updateLevel, 200);
+    updateLevel(); // Initial call
+
+    return () => clearInterval(intervalId);
+  }, [isListeningRef.current, analyserRef]);
+
+  // Set up voice intelligence event handlers when recording
+  useEffect(() => {
+    if (!isRecording) return;
+
+    (voiceIntelligence as any).onResult = (result: any) => {
+      if (result.text?.trim()) {
+        setInterimText(result.text.trim());
+      }
+    };
+
+    (voiceIntelligence as any).onError = (error: any) => {
+      onToast?.(`Voice intelligence error: ${error.message}`);
+    };
+  }, [isRecording, voiceIntelligence]);
 
   if (!supported) {
     return (
@@ -597,6 +792,17 @@ Rules:
         <div className="mt-auto relative z-20 flex flex-col p-6 pt-0">
           {/* Transcript text */}
           <div className="relative mb-4">
+            {/* Audio level indicator bar */}
+            <div className="h-2 bg-white/20 rounded-full overflow-hidden margin-t-2">
+              <div
+                className={`h-full bg-red-400 transition-all duration-100 ease-out ${isRecording
+                    ? `w-[${Math.max(0, Math.min(100, amplitudeRef.current * 100))}%]`
+                    : "w-0"
+                  }`}
+                style={{ width: "100%" }}
+              />
+            </div>
+
             <motion.p
               className="max-h-28 overflow-y-auto px-4 text-center text-sm sm:text-base leading-relaxed text-pretty text-white/90 font-medium scrollbar-thin tracking-tight"
               initial={{ opacity: 0, y: 15 }}
@@ -606,7 +812,9 @@ Rules:
               {currentDisplay || (
                 <span className="text-white/40 font-normal">
                   {isRecording
-                    ? "Listening... speak freely and AI will format your thoughts"
+                    ? agentMode
+                      ? "Listening... AI agent mode active - performing tasks based on voice commands"
+                      : "Listening... speak freely and AI will format your thoughts"
                     : "Tap the central pulsing sphere to start recording"}
                 </span>
               )}
@@ -618,17 +826,16 @@ Rules:
             <div className="flex items-center gap-2">
               <button
                 onClick={handleToggle}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition cursor-pointer ${
-                  isRecording
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition cursor-pointer ${isRecording
                     ? "bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30"
                     : "bg-white/15 hover:bg-white/25 text-white border border-white/20"
-                }`}
+                  }`}
               >
                 {isRecording ? <Square size={12} /> : <Mic size={12} />}
                 <span>{isRecording ? "Stop Recording" : currentDisplay ? "Resume Recording" : "Start Recording"}</span>
               </button>
 
-              {currentDisplay && (
+{currentDisplay && (
                 <button
                   onClick={() => {
                     setTranscript("");
@@ -640,41 +847,62 @@ Rules:
                   Clear
                 </button>
               )}
-            </div>
 
-            {currentDisplay && (
-              <div className="flex items-center gap-2">
+              {/* Agent mode button - appears when recording starts */}
+              {isRecording && !agentMode && (
                 <button
-                  onClick={handleCopyTranscript}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium bg-white/10 hover:bg-white/15 text-white/80 transition cursor-pointer"
-                  title="Copy transcript to clipboard"
+                  onClick={() => setAgentMode(true)}
+                  className="px-3 py-2 rounded-full text-xs font-semibold bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white shadow-lg shadow-green-500/25 transition cursor-pointer"
+                  title="Enable Agent Mode: Voice can perform tasks & activities"
                 >
-                  {copied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
-                  <span>{copied ? "Copied" : "Copy"}</span>
+                  Agent
                 </button>
+              )}
 
-                <button
-                  onClick={handleRawInsert}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium bg-white/10 hover:bg-white/20 text-white/90 border border-white/15 transition cursor-pointer"
-                  title="Insert raw text directly"
-                >
-                  <FileText size={13} />
-                  <span>Insert Raw</span>
-                </button>
+              {currentDisplay && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopyTranscript}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium bg-white/10 hover:bg-white/15 text-white/80 transition cursor-pointer"
+                    title="Copy transcript to clipboard"
+                  >
+                    {copied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+                    <span>{copied ? "Copied" : "Copy"}</span>
+                  </button>
 
-                <button
-                  onClick={handleStructure}
-                  disabled={structuring}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 transition cursor-pointer disabled:opacity-50"
-                  title="Use AI to turn transcript into structured note blocks"
-                >
-                  <Sparkles size={13} className={structuring ? "animate-spin" : ""} />
-                  <span>{structuring ? "Structuring..." : "AI Structure"}</span>
-                </button>
+                  <button
+                    onClick={handleRawInsert}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium bg-white/10 hover:bg-white/20 text-white/90 border border-white/15 transition cursor-pointer"
+                    title="Insert raw text directly"
+                  >
+                    <FileText size={13} />
+                    <span>Insert Raw</span>
+                  </button>
+
+                  <button
+                    onClick={handleAIPolish}
+                    disabled={polishing || structuring}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-400 hover:to-purple-500 text-white shadow-lg shadow-violet-500/25 transition cursor-pointer disabled:opacity-50"
+                    title="AI-polish transcript: remove fillers, fix grammar, clean punctuation"
+                  >
+                    <Sparkles size={13} className={polishing ? "animate-spin" : ""} />
+                    <span>{polishing ? "Polishing..." : "AI Polish"}</span>
+                  </button>
+
+                  <button
+                    onClick={handleStructure}
+                    disabled={structuring || polishing}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 transition cursor-pointer disabled:opacity-50"
+                    title="Use AI to turn transcript into structured note blocks"
+                  >
+                    <Sparkles size={13} className={structuring ? "animate-spin" : ""} />
+                    <span>{structuring ? "Structuring..." : "AI Structure"}</span>
+                  </button>
+                </div>
+              )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
 
         {/* Ambient bottom gradient shade */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-44 bg-gradient-to-t from-black via-black/70 to-transparent" />

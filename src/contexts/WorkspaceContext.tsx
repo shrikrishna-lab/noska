@@ -119,12 +119,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }, 500);
   }, []);
 
+  const commitPagesRef = useRef<Page[]>(pages);
+  commitPagesRef.current = pages;
+
   const commitPages = useCallback((next: Page[]) => {
-    setHistory((h) => [...h.slice(-24), pages]);
+    setHistory((h) => [...h.slice(-24), commitPagesRef.current]);
     setFuture([]);
     setPages(next);
     persistToLocalStorage(next);
-  }, [pages, persistToLocalStorage]);
+  }, [persistToLocalStorage]);
 
   const togglePageCollapse = useCallback((id: string) => {
     setCollapsedPages((prev) => {
@@ -139,21 +142,21 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     setHistory((h) => {
       if (!h.length) return h;
       const previous = h[h.length - 1];
-      setFuture((f) => [pages, ...f]);
+      setFuture((f) => [commitPagesRef.current, ...f]);
       setPages(previous);
       return h.slice(0, -1);
     });
-  }, [pages]);
+  }, []);
 
   const redo = useCallback(() => {
     setFuture((f) => {
       if (!f.length) return f;
       const next = f[0];
-      setHistory((h) => [...h, pages]);
+      setHistory((h) => [...h, commitPagesRef.current]);
       setPages(next);
       return f.slice(1);
     });
-  }, [pages]);
+  }, []);
 
   const state: WorkspaceState = useMemo(() => ({
     pages, sharedPages, activeId, workspaceName, pendingInvites,

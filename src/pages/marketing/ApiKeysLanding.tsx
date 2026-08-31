@@ -78,7 +78,7 @@ export default function ApiKeysLanding() {
 
   return (
     <div className="api-page">
-      <CursorFollower variant="apikeys" />
+      <CursorFollower variant="apikeys" label="API Keys" />
 
       {/* ══ Hero ══ */}
       <section className="api-hero">
@@ -275,6 +275,7 @@ export default function ApiKeysLanding() {
                 duration={1200}
                 accent="#17161B"
                 className="api-rotate-btn"
+                onComplete={() => {}}
               />
               <ol>
                 <li>New secret generated &amp; shown <b>once</b></li>

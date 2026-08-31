@@ -24,7 +24,7 @@ const FEATURES = [
 
 const cardVariants = {
   hidden: { opacity: 0, y: 22 },
-  visible: (i) => ({ opacity: 1, y: 0, transition: { duration: 0.5, delay: (i % 3) * 0.08, ease: [0.16, 1, 0.3, 1] } }),
+  visible: (i: number) => ({ opacity: 1, y: 0, transition: { duration: 0.5, delay: (i % 3) * 0.08, ease: [0.16, 1, 0.3, 1] as const } }),
 };
 
 /**

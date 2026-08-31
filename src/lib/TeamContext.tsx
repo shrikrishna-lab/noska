@@ -170,6 +170,20 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     return () => { supabase.removeChannel(channel) }
   }, [currentTeam, refreshMembers, refreshInvites])
 
+  // Global invite listener — picks up new invitations for ANY team the user
+  // belongs to, not just the currently selected one.
+  useEffect(() => {
+    const channel = supabase
+      .channel("team_invites_global")
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "team_invites" },
+        () => { refreshInvites(); refreshTeams() }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [refreshInvites, refreshTeams])
+
   return (
     <TeamContext.Provider value={{
       teams,

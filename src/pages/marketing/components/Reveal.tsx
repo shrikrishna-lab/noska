@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 
-const EASE = [0.16, 1, 0.3, 1];
+const EASE = [0.16, 1, 0.3, 1] as const;
 
 /**
  * Scroll-triggered fade/rise-in wrapper used across the marketing site.

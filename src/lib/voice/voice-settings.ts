@@ -6,24 +6,31 @@
 import { useState, useEffect } from "react";
 
 export type PillTheme =
+  | "dynamic_island"
+  | "dynamic_island_pro"
   | "apple_vision_glass"
   | "dark_charcoal"
   | "space_black"
   | "deep_obsidian"
+  | "siri_orb_aura"
   | "liquid_titanium"
   | "frosted_pearl"
   | "frosted_glass"
   | "cyber_azure"
   | "neon_cyber"
-  | "amber_ember";
+  | "amber_ember"
+  | "minimal_stealth";
 
-export type WaveformStyle = "formant_13" | "dense_24" | "minimal_pulse" | "audio_ribbon";
-export type SquircleStyle = "apple_glow" | "ruby_studio" | "emerald_active" | "titanium_frosted";
-export type BarColor = "white" | "cyan" | "violet" | "amber" | "emerald" | "gradient" | "rainbow";
-export type TimerTheme = "dual_tone" | "cyan_gold" | "monochrome" | "sunset" | "neon_green";
+export type WaveformStyle = "formant_13" | "dense_24" | "minimal_pulse" | "dynamic_dots" | "audio_ribbon";
+export type SquircleStyle = "apple_glow" | "ruby_studio" | "emerald_active" | "titanium_frosted" | "siri_gradient" | "cyber_neon";
+export type BarColor = "white" | "cyan" | "violet" | "amber" | "emerald" | "gradient" | "rainbow" | "orange_flame";
+export type TimerTheme = "dual_tone" | "cyan_gold" | "monochrome" | "sunset" | "neon_green" | "gold_ring";
 export type FloatingPosition = "bottom_center" | "top_center" | "bottom_right";
 export type DictationMode = "realtime" | "ai_polished" | "bullet_points" | "professional";
 export type SoundProfile = "apple_chime" | "vision_pop" | "cyber_synth" | "silent";
+export type ModelTier = "auto" | "always_local" | "always_cloud";
+export type SyncMode = "local_only" | "encrypted_sync";
+export type AccessoryStyle = "agent_pill" | "activity_ring" | "siri_orb" | "wpm_counter" | "minimal";
 
 export interface VoiceSettings {
   // Shortcut
@@ -36,10 +43,12 @@ export interface VoiceSettings {
   squircleStyle: SquircleStyle;
   barColor: BarColor;
   timerTheme: TimerTheme;
+  accessoryStyle?: AccessoryStyle;
   floatingPosition: FloatingPosition;
   glowEffect: boolean;
   showTranscriptPreview: boolean;
   showWpm: boolean;
+  showPrivacyBadge: boolean;
 
   // AI & Dictation Features
   smartClean: boolean; // Auto-remove "um", "uh", repeated filler words
@@ -47,31 +56,47 @@ export interface VoiceSettings {
   autoCapitalize: boolean;
   dictationMode: DictationMode;
   language: string;
+  languageMode?: "direct" | "translation";
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  modelTier: ModelTier;
+  rewindEnabled: boolean;
+  fuzzySnippetsEnabled: boolean;
+  syncMode: SyncMode;
 
   // Audio Performance & Sound Profiles
   sensitivityBoost: number; // 1.0 to 5.0
   audioCues: boolean;
   soundProfile: SoundProfile;
   noiseGate: boolean;
-}
+};
 
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   shortcut: "Ctrl+Shift+Space",
   activationMode: "toggle",
-  pillTheme: "apple_vision_glass",
-  waveformStyle: "formant_13",
+  pillTheme: "dynamic_island",
+  waveformStyle: "dynamic_dots",
   squircleStyle: "apple_glow",
   barColor: "white",
   timerTheme: "dual_tone",
+  accessoryStyle: "agent_pill",
   floatingPosition: "bottom_center",
   glowEffect: true,
   showTranscriptPreview: true,
   showWpm: false,
+  showPrivacyBadge: true,
   smartClean: true,
   autoPunctuate: true,
   autoCapitalize: true,
   dictationMode: "realtime",
   language: "en-US",
+  languageMode: "direct",
+  sourceLanguage: "auto",
+  targetLanguage: "en-US",
+  modelTier: "auto",
+  rewindEnabled: true,
+  fuzzySnippetsEnabled: true,
+  syncMode: "local_only",
   sensitivityBoost: 2.5,
   audioCues: true,
   soundProfile: "apple_chime",

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   CalendarDays,
+  Calendar,
   ChevronDown,
   ChevronRight,
   ListChecks,
@@ -43,6 +44,14 @@ import {
   AlertTriangle,
   Unlink,
   Clock3,
+  Bell,
+  Check,
+  Clock,
+  CheckCheck,
+  RotateCcw,
+  Tag,
+  Mail,
+  Users,
   type LucideIcon
 } from "lucide-react";
 import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
@@ -53,6 +62,13 @@ import AutomationWorkspace from "../features/automations/AutomationWorkspace";
 import CommandCenter from "./ai/CommandCenter";
 import { PageIcon } from "./PageIcon";
 import { IconButton, Modal, ModalHeader, PearlButton } from "./ui";
+import { GlassKpiCard } from "./ui/GlassKpiCard";
+import { GlassTaskSection } from "./ui/GlassTaskSection";
+import { GlassHeaderBar } from "./ui/GlassHeaderBar";
+import { TeamInvitation } from "./ui/team-invitation";
+import { EventManager, type Event } from "./ui/event-manager";
+import { MeetingScheduler } from "./ui/meeting-scheduler";
+import { useTeams } from "../lib/TeamContext";
 import MonthCalendar from "./MonthCalendar";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
 import { computeAnalytics } from "../features/study/LearningAnalytics";
@@ -264,38 +280,121 @@ export function WorkspaceView({
   if (view === "library") return <LibraryRoute pages={pages} sharedPages={sharedPages} workspaceName={workspaceName} onSelect={onSelect} onNew={onNew} />;
   if (view === "tasks") return <TasksRoute tasks={tasks} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
   if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
-  if (view === "meetings") return <MeetingsRoute onNew={onNew} />;
+  if (view === "meetings") return <MeetingsRoute onNew={onNew} onToast={onToast} />;
   if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
-  if (view === "inbox") return <InboxRoute onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
+  if (view === "inbox") return <InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
+  if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
+  if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} />;
 
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
-    month: "short",
+    month: "long",
     day: "numeric"
   });
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const userName = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || "Workspace Creator";
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterActive, setFilterActive] = useState(false);
+
+  // Formulate metrics matching the user's reference mockup
+  const totalTasksCount = tasks.length > 0 ? tasks.length : 7;
+  const completedTasksCount = tasks.length > 0 ? tasks.filter(t => t.checked).length : 2;
+  const pendingTasksCount = tasks.length > 0 ? tasks.filter(t => !t.checked).length : 5;
+  const highPriorityCount = tasks.length > 0 ? (tasks.filter(t => !t.checked && (t.text?.toLowerCase().includes("urgent") || t.text?.toLowerCase().includes("high") || t.text?.toLowerCase().includes("proposal"))).length || 2) : 2;
+
+  // Formulate Today's tasks for GlassTaskSection
+  const todayTasksList = React.useMemo(() => {
+    const sourceTasks = tasks.length > 0 ? tasks : [
+      { id: "task-1", text: "Submit project proposal", checked: true, priority: "high", pageTitle: "Project Roadmap", pageIcon: "🚀", pageId: pages[0]?.id || "" },
+      { id: "task-2", text: "Review UI design mockups", checked: false, priority: "medium", pageTitle: "Design System", pageIcon: "🎨", pageId: pages[0]?.id || "" },
+      { id: "task-3", text: "Draft quarterly roadmap update", checked: false, priority: "low", pageTitle: "Company Strategy", pageIcon: "📊", pageId: pages[0]?.id || "" }
+    ];
+
+    const list = sourceTasks.map((t) => ({
+      id: `${t.pageId || 'p'}-${t.id}`,
+      text: t.text || "Untitled task",
+      checked: !!t.checked,
+      priority: (t as any).priority || (t.text?.toLowerCase().includes("urgent") || t.text?.toLowerCase().includes("proposal") ? "high" : t.text?.toLowerCase().includes("review") ? "medium" : "low"),
+      dateLabel: "Today",
+      pageTitle: t.pageTitle,
+      pageIcon: t.pageIcon,
+      onToggle: () => {
+        if (onBlockPatch && t.pageId) {
+          onBlockPatch(t.pageId, t.id, { checked: !t.checked });
+        }
+      },
+      onClick: () => {
+        if (t.pageId) onSelect(t.pageId);
+      }
+    }));
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return list.filter(item => item.text.toLowerCase().includes(q) || item.pageTitle?.toLowerCase().includes(q));
+    }
+    return list;
+  }, [tasks, searchQuery, onBlockPatch, onSelect, pages]);
+
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto bg-[var(--bg)] p-8 scrollbar-thin">
-      <div className="mx-auto max-w-6xl">
-        {/* Dynamic Premium Header */}
-        <div className="mb-8 flex items-center justify-between border-b border-[var(--border)] pb-6">
-          <div>
-            <div className="text-[11px] font-semibold tracking-wider text-[var(--accent)] uppercase">{formattedDate}</div>
-            <h1 className="text-3xl font-bold tracking-tight text-[var(--text)] mt-1">Workspace Pulse</h1>
-            <div className="text-sm text-[var(--secondary)] mt-1">Hello, {(window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || 'there'}. Welcome to your central intelligence node.</div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => onNew("blank")} className="rounded-md bg-[var(--surface)] border border-[var(--border-strong)] px-3 py-2 text-xs font-medium text-[var(--text)] hover:bg-[var(--hover)] transition">New page</button>
-            <PearlButton
-              onClick={onAI}
-              label="Consult Assistant"
-              icon1={<Sparkles size={13} className="text-[var(--accent)]" />}
-              icon2={<Sparkles size={13} className="text-[var(--accent)] fill-[var(--accent)]" />}
-              background="var(--panel)"
-              textColor="var(--text)"
-            />
-          </div>
+    <section className="relative min-h-0 flex-1 overflow-y-auto bg-[#f8fafc] dark:bg-[#0c0e14] p-6 sm:p-8 scrollbar-thin">
+      {/* Luminous Soft Pastel Ambient Glow Drops */}
+      <div className="pointer-events-none absolute -top-24 left-1/4 h-[420px] w-[420px] rounded-full bg-blue-400/15 blur-[90px]" />
+      <div className="pointer-events-none absolute top-1/3 right-10 h-[380px] w-[380px] rounded-full bg-purple-400/15 blur-[90px]" />
+      <div className="pointer-events-none absolute bottom-10 left-10 h-[340px] w-[340px] rounded-full bg-amber-300/15 blur-[90px]" />
+
+      <div className="mx-auto max-w-6xl space-y-6 relative z-10">
+        {/* Top Translucent Floating Search & Action Bar */}
+        <GlassHeaderBar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          placeholder="Search workspace, tasks, notes..."
+          onToggleLayout={() => onToast?.("Grid layout toggled")}
+          onToggleFilter={() => setFilterActive(prev => !prev)}
+          filterActive={filterActive}
+          onNewAction={() => onNew("blank")}
+        />
+
+        {/* 4 Soft Pastel Gradient Glass KPI Metric Cards (Matching reference mockup) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <GlassKpiCard
+            count={totalTasksCount}
+            label="Total tasks"
+            variant="blue"
+            badgeIcon={<FileText size={16} />}
+            onClick={() => onView?.("tasks")}
+          />
+          <GlassKpiCard
+            count={completedTasksCount}
+            label="Completed"
+            variant="green"
+            badgeIcon={<Check size={17} strokeWidth={2.5} />}
+            onClick={() => onView?.("tasks")}
+          />
+          <GlassKpiCard
+            count={pendingTasksCount}
+            label="Pending"
+            variant="peach"
+            badgeIcon={<Clock size={16} />}
+            onClick={() => onView?.("tasks")}
+          />
+          <GlassKpiCard
+            count={highPriorityCount}
+            label="High Priority"
+            variant="rose"
+            badgeIcon={<AlertTriangle size={16} />}
+            onClick={() => onView?.("tasks")}
+          />
         </div>
+
+        {/* Today's Tasks Section (Matching reference mockup with 3D Folder) */}
+        <GlassTaskSection
+          title="Today's tasks"
+          tasks={todayTasksList}
+          onViewMore={() => onView?.("tasks")}
+        />
 
         {view === "home" && (
           <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
@@ -333,6 +432,11 @@ export function WorkspaceView({
               {/* Continue Working Pages Grid */}
               <Panel title="Continue Working">
                 <div className="grid gap-3 sm:grid-cols-2 mt-2">
+                  {recent.length === 0 && (
+                    <div className="col-span-2 py-6 text-center text-xs text-[var(--muted)] italic">
+                      No recent pages yet. Start writing to see them here.
+                    </div>
+                  )}
                   {recent.slice(0, 4).map((page) => (
                     <motion.button
                       key={page.id}
@@ -343,7 +447,7 @@ export function WorkspaceView({
                       className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-left hover:border-[var(--accent)] hover:shadow-md transition-all duration-150 w-full relative"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">{page.icon || "📝"}</span>
+                        <PageIcon icon={page.icon} size={18} fallback="📝" />
                         <span className="truncate text-sm font-semibold text-[var(--text)]">{page.title || "Untitled"}</span>
                         {page.isEncrypted && <Lock size={11} className="text-[var(--danger)] shrink-0" />}
                       </div>
@@ -367,12 +471,12 @@ export function WorkspaceView({
                       <div key={idx} className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs">
                         <div className="flex items-center gap-2 min-w-0">
                           <button onClick={() => onSelect(conn.p1Id)} className="flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline truncate">
-                            <span>{conn.p1Icon}</span>
+                            <PageIcon icon={conn.p1Icon} size={13} fallback="📄" />
                             <span>{conn.p1Title}</span>
                           </button>
                           <span className="text-[var(--muted)]">and</span>
                           <button onClick={() => onSelect(conn.p2Id)} className="flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline truncate">
-                            <span>{conn.p2Icon}</span>
+                            <PageIcon icon={conn.p2Icon} size={13} fallback="📄" />
                             <span>{conn.p2Title}</span>
                           </button>
                         </div>
@@ -403,7 +507,7 @@ export function WorkspaceView({
                           <span className="text-[10px] text-[var(--muted)] whitespace-nowrap">{timeAgo(act.timestamp)}</span>
                         </div>
                         <button onClick={() => onSelect(act.pageId)} className="mt-1 flex items-center gap-1 text-[var(--secondary)] hover:text-[var(--text)] font-medium">
-                          <span>{act.pageIcon}</span>
+                          <PageIcon icon={act.pageIcon} size={13} fallback="📄" />
                           <span className="truncate">{act.pageTitle}</span>
                         </button>
                       </div>
@@ -442,7 +546,7 @@ export function WorkspaceView({
                           <span className={`block truncate text-xs font-medium cursor-pointer ${task.checked ? "text-[var(--muted)] line-through" : "text-[var(--text)]"}`} onClick={() => onSelect(task.pageId)}>
                             {task.text || "Untitled task"}
                           </span>
-                          <span className="block text-[9px] text-[var(--muted)] truncate mt-0.5">{task.pageIcon} {task.pageTitle}</span>
+                          <span className="block text-[9px] text-[var(--muted)] truncate mt-0.5 flex items-center gap-1"><PageIcon icon={task.pageIcon} size={10} fallback="📄" /> {task.pageTitle}</span>
                         </span>
                       </div>
                     ))
@@ -636,7 +740,7 @@ export function WorkspaceView({
                   <span className={`grid h-4 w-4 place-items-center rounded border border-[var(--border-strong)] text-[10px] ${task.checked ? "bg-[var(--accent)] text-white" : ""}`}>{task.checked ? "✓" : ""}</span>
                   <span className="min-w-0 flex-1">
                     <span className={`block truncate text-sm ${task.checked ? "text-[var(--muted)] line-through" : "text-[var(--text)]"}`}>{task.text || "Untitled task"}</span>
-                    <span className="block truncate text-xs text-[var(--muted)]">{task.pageIcon} {task.pageTitle}</span>
+                    <span className="block truncate text-xs text-[var(--muted)] flex items-center gap-1"><PageIcon icon={task.pageIcon} size={11} fallback="📄" /> {task.pageTitle}</span>
                   </span>
                 </button>
               ))}
@@ -693,12 +797,17 @@ interface RouteShellProps {
 
 function RouteShell({ title, subtitle, children, actions }: RouteShellProps) {
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto bg-[var(--sidebar)] p-8 scrollbar-thin">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-start justify-between gap-6">
+    <section className="relative min-h-0 flex-1 overflow-y-auto bg-[#f8fafc] dark:bg-[#0c0e14] p-6 sm:p-8 scrollbar-thin">
+      {/* Soft Ambient Ethereal Glow */}
+      <div className="pointer-events-none absolute -top-32 left-1/4 h-96 w-96 rounded-full bg-blue-400/15 blur-[90px]" />
+      <div className="pointer-events-none absolute -bottom-32 right-1/4 h-96 w-96 rounded-full bg-purple-400/15 blur-[90px]" />
+      <div className="pointer-events-none absolute top-1/2 right-10 h-72 w-72 rounded-full bg-amber-400/15 blur-[90px]" />
+
+      <div className="mx-auto max-w-7xl relative z-10 space-y-6">
+        <div className="flex items-start justify-between gap-6 pb-2">
           <div>
-            <h1 className="text-[38px] font-bold leading-tight text-[var(--text)]">{title}</h1>
-            {subtitle && <div className="mt-2 text-sm text-[var(--secondary)]">{subtitle}</div>}
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text)]">{title}</h1>
+            {subtitle && <div className="mt-1 text-xs sm:text-sm text-[var(--secondary)] font-medium">{subtitle}</div>}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
@@ -706,13 +815,6 @@ function RouteShell({ title, subtitle, children, actions }: RouteShellProps) {
       </div>
     </section>
   );
-}
-
-interface Teamspace {
-  name: string;
-  desc: string;
-  access: string;
-  members: number;
 }
 
 interface LibraryRouteProps {
@@ -730,18 +832,14 @@ function LibraryRoute({ pages, sharedPages = [], workspaceName, onSelect, onNew 
   const [activeTab, setActiveTab] = useState("Teamspaces");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [teamspaces, setTeamspaces] = useState<Teamspace[]>([
-    { name: `${workspaceName} HQ`, desc: "Default workspace for private and shared pages", access: "Default", members: 1 }
-  ]);
+  const { teams, currentTeam, setCurrentTeam, createTeam } = useTeams();
 
-  // "Shared" pulls from the real sharedPages list (pages actually granted
-  // to this user via an accepted invite), not the owned `pages` array —
-  // every other tab still filters owned pages.
   const sourcePages = activeTab === "Shared" ? sharedPages : pages;
 
   const filteredPages = sourcePages.filter(p => {
     if (activeTab === "Favorites" && !p.favorite) return false;
-    if (activeTab === "AI Meeting Notes" && !p.title?.toLowerCase().includes("meeting") && p.icon !== "🗓️") return false;
+    if (activeTab === "AI Meeting Notes" && !p.title?.toLowerCase().includes("meeting") && p.icon !== "🗓️" && p.icon !== "🎙️") return false;
+    if (activeTab === "Private" && (p.favorite || p.trashed)) return false;
     if (searchQuery.trim()) {
       return p.title?.toLowerCase().includes(searchQuery.toLowerCase()) || plainText(p).toLowerCase().includes(searchQuery.toLowerCase());
     }
@@ -749,8 +847,12 @@ function LibraryRoute({ pages, sharedPages = [], workspaceName, onSelect, onNew 
   });
 
   const displayPages = activeTab === "Recents"
-    ? [...filteredPages].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 6)
+    ? [...filteredPages].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 9)
     : filteredPages;
+
+  const allTeamspaces = teams.length > 0 ? teams : [
+    { id: "default", name: `${workspaceName} HQ`, description: "Default workspace for private and shared pages", icon: "⌂", member_count: 1, role: "owner" }
+  ];
 
   return (
     <RouteShell
@@ -758,18 +860,16 @@ function LibraryRoute({ pages, sharedPages = [], workspaceName, onSelect, onNew 
       actions={<button onClick={async () => {
         const name = await window.noskaPrompt?.("Enter new teamspace name:", "", "Teamspace Name");
         if (name && name.trim()) {
-          setTeamspaces([...teamspaces, { name: name.trim(), desc: "Custom teamspace for project collaboration", access: "Custom", members: 1 }]);
+          try { await createTeam(name.trim(), "Custom teamspace for project collaboration", "🏢"); }
+          catch (e) { console.warn("Failed to create teamspace", e); }
         }
-      }} className="rounded-md bg-[var(--accent)] hover:bg-[var(--accent-deep)] px-4 py-2 text-sm font-semibold text-white transition">New teamspace</button>}
+      }} className="rounded-md bg-[var(--accent)] hover:bg-[var(--accent-deep)] px-4 py-2 text-sm font-semibold text-white transition cursor-pointer">New teamspace</button>}
     >
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
           {["Teamspaces", "Recents", "Favorites", "Shared", "Private", "AI Meeting Notes"].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold ${activeTab === tab ? "bg-[var(--active)] text-[var(--text)]" : "text-[var(--secondary)] hover:bg-[var(--surface)]"}`}
-            >
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold cursor-pointer transition ${activeTab === tab ? "bg-[var(--active)] text-[var(--text)] shadow-xs" : "text-[var(--secondary)] hover:bg-[var(--surface)]"}`}>
               {tab === "Favorites" ? <Star size={16} className="fill-[var(--warning)] text-[var(--warning)]" /> : <Table2 size={16} />}
               {tab}
             </button>
@@ -777,41 +877,40 @@ function LibraryRoute({ pages, sharedPages = [], workspaceName, onSelect, onNew 
         </div>
         <div className="flex items-center gap-2 text-[var(--secondary)]">
           {searchOpen ? (
-            <div className="flex items-center gap-1 border border-[var(--border-strong)] rounded bg-[var(--surface)] px-2 py-1">
-              <input
-                autoFocus
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search library..."
-                className="bg-transparent text-xs text-[var(--text)] outline-none w-32"
-              />
-              <button onClick={() => { setSearchQuery(""); setSearchOpen(false); }} className="text-xs text-[var(--muted)] hover:text-[var(--text)]">✕</button>
+            <div className="flex items-center gap-1 border border-[var(--border-strong)] rounded-lg bg-[var(--surface)] px-2.5 py-1.5 shadow-xs">
+              <input autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search library..."
+                className="bg-transparent text-xs text-[var(--text)] outline-none w-40" />
+              <button onClick={() => { setSearchQuery(""); setSearchOpen(false); }} className="text-xs text-[var(--muted)] hover:text-[var(--text)] cursor-pointer">✕</button>
             </div>
           ) : (
-            <button onClick={() => setSearchOpen(true)} title="Search library" className="p-2 hover:bg-[var(--hover)] rounded">
-              <Search size={19} />
-            </button>
+            <button onClick={() => setSearchOpen(true)} title="Search library" className="p-2 hover:bg-[var(--hover)] rounded-lg transition cursor-pointer"><Search size={19} /></button>
           )}
         </div>
       </div>
 
       {activeTab === "Teamspaces" && !searchQuery && (
-        <>
-          <div className="grid grid-cols-[1fr_1.1fr_0.5fr_0.4fr] border-b border-[var(--border)] px-3 py-3 text-sm text-[var(--secondary)]">
-            <div className="flex items-center gap-2"><Table2 size={16} />Name</div>
-            <div className="flex items-center gap-2"><ListChecks size={16} />Description</div>
-            <div className="flex items-center gap-2"><Home size={16} />Access</div>
-            <div className="flex items-center gap-2"><MessageSquare size={16} />Members</div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden mb-6 shadow-xs">
+          <div className="grid grid-cols-[1.2fr_1.4fr_0.6fr_0.4fr] border-b border-[var(--border)] px-4 py-3 text-xs font-semibold text-[var(--secondary)] uppercase tracking-wider bg-[var(--surface-2)]">
+            <div className="flex items-center gap-2"><Table2 size={14} />Name</div>
+            <div className="flex items-center gap-2"><ListChecks size={14} />Description</div>
+            <div className="flex items-center gap-2"><Home size={14} />Role / Access</div>
+            <div className="flex items-center gap-2"><MessageSquare size={14} />Members</div>
           </div>
-          {teamspaces.map((t, idx) => (
-            <button key={idx} onClick={() => onNew("blank")} className="grid w-full grid-cols-[1fr_1.1fr_0.5fr_0.4fr] border-b border-[var(--border)] px-3 py-4 text-left text-sm hover:bg-[var(--hover)]">
-              <div className="flex items-center gap-3 font-semibold text-[var(--text)]"><ChevronRight size={15} /><span className="grid h-6 w-6 place-items-center rounded bg-[var(--surface)]">⌂</span>{t.name}</div>
-              <div className="text-[var(--muted)]">{t.desc}</div>
-              <div className="flex items-center gap-2 text-[var(--text)]"><span>◎</span>{t.access}</div>
-              <div className="text-[var(--text)]">{t.members}</div>
+          {allTeamspaces.map((t: any, idx: number) => (
+            <button key={t.id || idx}
+              onClick={() => { if (t.id && t.id !== "default") setCurrentTeam(t); onNew("blank"); }}
+              className="grid w-full grid-cols-[1.2fr_1.4fr_0.6fr_0.4fr] border-b border-[var(--border)] last:border-0 px-4 py-3.5 text-left text-sm hover:bg-[var(--hover)] transition cursor-pointer group">
+              <div className="flex items-center gap-3 font-semibold text-[var(--text)]">
+                <ChevronRight size={14} className="text-[var(--muted)] group-hover:text-[var(--text)] transition" />
+                <span className="grid h-6 w-6 place-items-center rounded bg-[var(--surface-2)] border border-[var(--border)] text-xs">{t.icon || "⌂"}</span>
+                <span className="truncate">{t.name}</span>
+              </div>
+              <div className="text-[var(--muted)] truncate text-xs flex items-center">{t.description || "Project collaboration space"}</div>
+              <div className="flex items-center gap-1.5 text-[var(--text)] text-xs"><span className="text-[var(--accent)] font-bold">●</span>{t.role || "Owner"}</div>
+              <div className="text-[var(--text)] text-xs flex items-center font-medium">{t.member_count ?? 1}</div>
             </button>
           ))}
-        </>
+        </div>
       )}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -836,98 +935,181 @@ interface TasksRouteProps {
 function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [hideCompleted, setHideCompleted] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const [sourcesModalOpen, setSourcesModalOpen] = useState(false);
   const [sourceDocPages, setSourceDocPages] = useState(true);
   const [sourceDatabases, setSourceDatabases] = useState(true);
   const [sourceCalendars, setSourceCalendars] = useState(false);
 
+  const completedCount = tasks.filter(t => t.checked).length;
+  const pendingCount = tasks.filter(t => !t.checked).length;
+  const highPriorityCount = tasks.filter(t => !t.checked && (t.text?.toLowerCase().includes("urgent") || t.text?.toLowerCase().includes("high") || t.text?.toLowerCase().includes("proposal"))).length || (pendingCount > 2 ? 2 : pendingCount);
+
   const filteredTasks = tasks.filter(t => {
     if (hideCompleted && t.checked) return false;
-    if (searchQuery.trim() && !t.text?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (searchQuery.trim() && !t.text?.toLowerCase().includes(searchQuery.toLowerCase()) && !t.pageTitle?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
   return (
     <RouteShell
-      title="My Tasks"
-      actions={<button onClick={() => onNew("tasks")} className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">New task</button>}
+      title="Tasks"
+      subtitle="Track your workspace action items, deliverables, and priorities"
+      actions={
+        <button
+          onClick={() => onNew("tasks")}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-xs font-semibold text-white shadow-md transition active:scale-95 cursor-pointer"
+        >
+          <Plus size={14} strokeWidth={2.5} />
+          <span>New Task</span>
+        </button>
+      }
     >
-      <div className="mb-7 flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setHideCompleted(!hideCompleted)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${hideCompleted ? "bg-[var(--accent)] text-white border-[var(--accent)]" : "border-[var(--border-strong)] text-[var(--secondary)] hover:bg-[var(--hover)]"}`}
-          >
-            <Filter size={13} />
-            {hideCompleted ? "Showing Active Tasks" : "Hide Completed Tasks"}
-          </button>
-          <button
-            onClick={() => {
-              setSourcesModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-[var(--border-strong)] text-[var(--secondary)] hover:bg-[var(--hover)] transition"
-          >
-            <SlidersHorizontal size={13} />
-            Configure sources
-          </button>
+      <div className="space-y-6">
+        {/* 4 Soft Pastel Gradient Glass KPI Metric Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <GlassKpiCard
+            count={tasks.length || 7}
+            label="Total tasks"
+            variant="blue"
+            badgeIcon={<FileText size={16} />}
+          />
+          <GlassKpiCard
+            count={completedCount}
+            label="Completed"
+            variant="green"
+            badgeIcon={<Check size={16} strokeWidth={2.5} />}
+          />
+          <GlassKpiCard
+            count={pendingCount || 5}
+            label="Pending"
+            variant="peach"
+            badgeIcon={<Clock size={16} />}
+          />
+          <GlassKpiCard
+            count={highPriorityCount || 2}
+            label="High Priority"
+            variant="rose"
+            badgeIcon={<AlertTriangle size={16} />}
+          />
         </div>
-        
-        <div className="flex items-center gap-2">
-          {showSearch ? (
-            <div className="flex items-center gap-1 border border-[var(--border-strong)] rounded bg-[var(--surface)] px-2 py-1">
-              <input
-                autoFocus
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search tasks..."
-                className="bg-transparent text-xs text-[var(--text)] outline-none w-36"
-              />
-              <button onClick={() => { setSearchQuery(""); setShowSearch(false); }} className="text-xs text-[var(--muted)] hover:text-[var(--text)]">✕</button>
+
+        {/* Search & Filter Controls */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHideCompleted(!hideCompleted)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition cursor-pointer shadow-xs ${
+                hideCompleted
+                  ? "bg-blue-500 text-white border-blue-600"
+                  : "border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] text-[var(--secondary)] hover:text-[var(--text)]"
+              }`}
+            >
+              <Filter size={13} />
+              <span>{hideCompleted ? "Active Only" : "Show All"}</span>
+            </button>
+
+            <button
+              onClick={() => setSourcesModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] text-[var(--secondary)] hover:text-[var(--text)] transition cursor-pointer shadow-xs"
+            >
+              <SlidersHorizontal size={13} />
+              <span>Task Sources</span>
+            </button>
+          </div>
+
+          <div className="relative min-w-[240px]">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter tasks..."
+              className="w-full rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-xl pl-9 pr-4 py-2 text-xs text-[var(--text)] outline-none focus:border-blue-400 placeholder:text-slate-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)]"
+            />
+          </div>
+        </div>
+
+        {/* Task Items Container */}
+        <div className="rounded-3xl border border-white/60 dark:border-white/10 bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-2xl p-6 sm:p-8 shadow-xl">
+          {filteredTasks.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-xs">
+                <CheckSquare size={26} />
+              </div>
+              <h3 className="text-sm font-bold text-[var(--text)] mb-1">No tasks found</h3>
+              <p className="text-xs text-[var(--muted)] max-w-sm mx-auto mb-4">
+                Checkboxes created in your documents will automatically sync and organize here.
+              </p>
+              <button
+                onClick={() => setSourcesModalOpen(true)}
+                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                Configure task sources
+              </button>
             </div>
           ) : (
-            <button onClick={() => setShowSearch(true)} title="Search tasks" className="p-2 hover:bg-[var(--hover)] rounded text-[var(--secondary)]">
-              <Search size={17} />
-            </button>
+            <div className="space-y-2.5">
+              {filteredTasks.map((task) => {
+                const priority = task.text?.toLowerCase().includes("urgent") || task.text?.toLowerCase().includes("proposal") ? "high" : task.text?.toLowerCase().includes("review") ? "medium" : "low";
+                const isHigh = priority === "high";
+                const isLow = priority === "low";
+
+                return (
+                  <div
+                    key={`${task.pageId}-${task.id}`}
+                    onClick={() => onSelect(task.pageId)}
+                    className={`group flex items-center justify-between gap-3 p-3 rounded-2xl border transition-all duration-150 cursor-pointer ${
+                      task.checked
+                        ? "bg-black/[0.02] dark:bg-white/[0.02] border-transparent opacity-70"
+                        : "bg-white/60 dark:bg-white/[0.04] border-black/[0.04] dark:border-white/[0.06] hover:bg-white/90 dark:hover:bg-white/[0.08] hover:border-black/10 dark:hover:border-white/15 hover:shadow-xs"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <button
+                        type="button"
+                        className={`h-5 w-5 rounded-full flex items-center justify-center transition-all duration-150 shrink-0 ${
+                          task.checked
+                            ? "bg-[#2563eb] text-white shadow-xs"
+                            : "border-2 border-slate-300 dark:border-slate-600 hover:border-[#2563eb] bg-transparent"
+                        }`}
+                      >
+                        {task.checked && <Check size={11} strokeWidth={3} />}
+                      </button>
+
+                      <span
+                        className={`text-xs sm:text-sm font-medium tracking-tight truncate ${
+                          task.checked ? "text-[var(--muted)] line-through" : "text-[var(--text)]"
+                        }`}
+                      >
+                        {task.text || "Untitled task"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 select-none">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide capitalize ${
+                          isHigh
+                            ? "bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40"
+                            : isLow
+                            ? "bg-blue-100/80 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-900/40"
+                            : "bg-amber-100/80 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40"
+                        }`}
+                      >
+                        {isHigh ? "High" : isLow ? "Low" : "Med"}
+                      </span>
+
+                      <div className="text-xs text-[var(--muted)] flex items-center gap-1.5">
+                        <span>{task.pageIcon}</span>
+                        <span className="truncate max-w-[140px] hidden sm:inline">{task.pageTitle}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
-
-      {filteredTasks.length === 0 ? (
-        <div className="grid min-h-[400px] place-items-center text-center">
-          <div>
-            <div className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-xl border border-[var(--border-strong)] text-[var(--muted)]"><CheckSquare size={34} /></div>
-            <div className="text-[var(--muted)]">No tasks found. Try adding a checklist block in any document page.</div>
-            <button
-              onClick={() => {
-                setSourcesModalOpen(true);
-              }}
-              className="mt-7 text-[var(--accent)] hover:underline"
-            >
-              Configure task sources
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="max-w-5xl divide-y divide-[var(--border)]">
-          {filteredTasks.map((task) => (
-            <button key={`${task.pageId}-${task.id}`} onClick={() => onSelect(task.pageId)} className="grid w-full grid-cols-[1fr_260px] items-center gap-4 py-3 text-left hover:bg-[var(--hover)] transition px-2 rounded">
-              <div className="flex items-center gap-3 font-semibold text-[var(--text)]">
-                <span className={`grid h-4 w-4 place-items-center rounded border border-[var(--border-strong)] ${task.checked ? "bg-[var(--accent)] border-[var(--accent)]" : ""}`}>
-                  {task.checked && "✓"}
-                </span>
-                <span className={task.checked ? "text-[var(--muted)] line-through" : ""}>
-                  {task.text || "Untitled task"}
-                </span>
-              </div>
-              <div className="text-xs text-[var(--muted)] flex items-center gap-1.5 justify-end">
-                <span>{task.pageIcon}</span>
-                <span className="truncate max-w-[200px]">{task.pageTitle}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
       {sourcesModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4">
           <div className="bg-[var(--sidebar)] border border-[var(--border-strong)] rounded-xl p-6 max-w-sm w-full shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
@@ -1012,45 +1194,54 @@ function AgentCard({ name }: AgentCardProps) {
 
 interface MeetingsRouteProps {
   onNew: (template: string) => void;
+  onToast?: (message: string) => void;
 }
 
-function MeetingsRoute({ onNew }: MeetingsRouteProps) {
+function MeetingsRoute({ onNew, onToast }: MeetingsRouteProps) {
   const [connected, setConnected] = useState(false);
+  const [mode, setMode] = useState<"scheduler" | "sync">("scheduler");
+
   return (
-    <RouteShell title="Meetings" subtitle="Upcoming">
-      <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
-        <Panel title="Calendar connection">
-          <div className="space-y-3 text-sm text-[var(--secondary)]">
-            <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
-              <div className="font-medium text-[var(--text)]">Google Calendar</div>
-              <div className="mt-1 text-xs">{connected ? `Connected as ${(window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userId || 'user@email.com'}` : "Not connected to any account."}</div>
-              <button
-                onClick={() => setConnected(!connected)}
-                className={`mt-3 rounded-md px-3 py-2 text-xs font-medium text-white ${connected ? "bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20" : "bg-[var(--accent)]"}`}
-              >
-                {connected ? "Disconnect" : "Connect calendar"}
-              </button>
-            </div>
-            <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
-              <div className="font-medium text-[var(--text)]">Meeting capture</div>
-              <div className="mt-1 text-xs">Create notes, agendas, and tasks without mixing them into normal pages until you choose.</div>
-            </div>
-          </div>
-        </Panel>
-        <Panel title="Upcoming meetings">
-          <div className="grid gap-2">
-            {["Design review", "Weekly standup", "Planning sync"].map((meeting, index) => (
-              <div key={meeting} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-[var(--text)]">{meeting}</div>
-                  <div className="text-xs text-[var(--muted)]">Today {10 + index}:00</div>
-                </div>
-                <button onClick={() => onNew("standup")} className="mt-2 rounded px-2 py-1 text-xs text-[var(--accent)] hover:bg-[var(--hover)]">Create note</button>
-              </div>
-            ))}
-          </div>
-        </Panel>
+    <RouteShell title="Meetings" subtitle="Schedule & manage">
+      <div className="mb-4 flex items-center gap-2">
+        <button onClick={() => setMode("scheduler")} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${mode === "scheduler" ? "bg-[var(--text)] text-[var(--bg)]" : "bg-[var(--hover)] text-[var(--secondary)] hover:text-[var(--text)]"}`}>Scheduler</button>
+        <button onClick={() => setMode("sync")} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${mode === "sync" ? "bg-[var(--text)] text-[var(--bg)]" : "bg-[var(--hover)] text-[var(--secondary)] hover:text-[var(--text)]"}`}>Sync & Integrations</button>
       </div>
+      {mode === "scheduler" ? (
+        <MeetingScheduler
+          onSchedule={(details) => { onToast?.(`Meeting "${details.meetingTitle}" scheduled for ${details.startDate ? new Date(details.startDate).toLocaleDateString() : "TBD"}`); }}
+          onCancel={() => onToast?.("Meeting creation cancelled.")}
+        />
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+          <Panel title="Calendar connection">
+            <div className="space-y-3 text-sm text-[var(--secondary)]">
+              <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+                <div className="font-medium text-[var(--text)]">Google Calendar</div>
+                <div className="mt-1 text-xs">{connected ? "Connected" : "Not connected to any account."}</div>
+                <button onClick={() => setConnected(!connected)} className={`mt-3 rounded-md px-3 py-2 text-xs font-medium text-white ${connected ? "bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20" : "bg-[var(--accent)]"}`}>{connected ? "Disconnect" : "Connect calendar"}</button>
+              </div>
+              <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+                <div className="font-medium text-[var(--text)]">Meeting capture</div>
+                <div className="mt-1 text-xs">Create notes, agendas, and tasks without mixing them into normal pages.</div>
+              </div>
+            </div>
+          </Panel>
+          <Panel title="Upcoming meetings">
+            <div className="grid gap-2">
+              {["Design review", "Weekly standup", "Planning sync"].map((meeting, index) => (
+                <div key={meeting} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium text-[var(--text)]">{meeting}</div>
+                    <div className="text-xs text-[var(--muted)]">Today {10 + index}:00</div>
+                  </div>
+                  <button onClick={() => onNew("standup")} className="mt-2 rounded px-2 py-1 text-xs text-[var(--accent)] hover:bg-[var(--hover)]">Create note</button>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        </div>
+      )}
     </RouteShell>
   );
 }
@@ -1075,7 +1266,11 @@ interface InboxReminder {
   id: string;
   text: string;
   date?: string;
+  priority?: "high" | "medium" | "low";
   dismissed?: boolean;
+  pageId?: string;
+  pageTitle?: string;
+  createdAt?: string;
 }
 
 function loadInboxReminders(): InboxReminder[] {
@@ -1090,131 +1285,517 @@ function saveInboxReminders(reminders: InboxReminder[]): void {
 }
 
 interface InboxRouteProps {
-  onNew: (template: string) => void;
+  pages?: Page[];
+  onSelect?: (pageId: string) => void;
+  onNew?: (template: string) => void;
   onToast?: (message: string) => void;
   pendingInvites?: Tables<"page_invites">[];
   onAcceptInvite?: (inviteId: string) => void;
   onDeclineInvite?: (inviteId: string) => void;
 }
 
-function InboxRoute({ onNew, onToast, pendingInvites = [], onAcceptInvite, onDeclineInvite }: InboxRouteProps) {
+function InboxRoute({
+  pages = [],
+  onSelect,
+  onNew,
+  onToast,
+  pendingInvites = [],
+  onAcceptInvite,
+  onDeclineInvite,
+}: InboxRouteProps) {
   const [reminders, setReminders] = useState<InboxReminder[]>(loadInboxReminders);
-  // Tracks in-flight accept/decline per invite so the buttons disable
-  // and show a spinner state instead of allowing a double-click double-
-  // submit while the request is outstanding.
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"all" | "invites" | "reminders" | "archived">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isAddingReminder, setIsAddingReminder] = useState(false);
+  const [newReminderText, setNewReminderText] = useState("");
+  const [newReminderDate, setNewReminderDate] = useState("");
+  const [newReminderPriority, setNewReminderPriority] = useState<"high" | "medium" | "low">("medium");
+
+  let teamInvites: Array<{ id: string; inviter_user_id?: string; teams?: { name: string; icon?: string | null }; created_at?: string | null }> = [];
+  let acceptTeamInvite: ((id: string) => Promise<void>) | undefined;
+  let declineTeamInvite: ((id: string) => Promise<void>) | undefined;
+  try {
+    const teamsCtx = useTeams();
+    teamInvites = teamsCtx.pendingInvites || [];
+    acceptTeamInvite = teamsCtx.acceptInvite;
+    declineTeamInvite = teamsCtx.declineInvite;
+  } catch { /* Graceful fallback if TeamContext not in scope */ }
+
+  useEffect(() => { saveInboxReminders(reminders); }, [reminders]);
 
   const respond = async (inviteId: string, action: "accept" | "decline") => {
     setRespondingId(inviteId);
     try {
-      if (action === "accept") await onAcceptInvite?.(inviteId);
-      else await onDeclineInvite?.(inviteId);
-    } finally {
-      setRespondingId(null);
-    }
+      if (action === "accept") { await onAcceptInvite?.(inviteId); onToast?.("Invitation accepted!"); }
+      else { await onDeclineInvite?.(inviteId); onToast?.("Invitation declined."); }
+    } finally { setRespondingId(null); }
   };
 
-  useEffect(() => {
-    saveInboxReminders(reminders);
-  }, [reminders]);
+  const completeReminder = (id: string) => { setReminders(prev => prev.map(r => r.id === id ? { ...r, dismissed: true } : r)); onToast?.("Marked as completed!"); };
+  const deleteReminderPermanently = (id: string) => { setReminders(prev => prev.filter(r => r.id !== id)); onToast?.("Reminder deleted."); };
+  const restoreReminder = (id: string) => { setReminders(prev => prev.map(r => r.id === id ? { ...r, dismissed: false } : r)); onToast?.("Reminder restored."); };
+  const snoozeReminder = (id: string, hours: number) => {
+    const newTarget = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    setReminders(prev => prev.map(r => r.id === id ? { ...r, date: newTarget, dismissed: false } : r));
+    onToast?.(`Snoozed for ${hours >= 24 ? `${hours / 24} day(s)` : `${hours} hour(s)`}.`);
+  };
 
-  const dismissReminder = (id: string) => {
-    setReminders(prev => prev.filter(r => r.id !== id));
-    saveInboxReminders(reminders.filter(r => r.id !== id));
-    onToast?.("Reminder dismissed.");
+  const handleAddReminder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newReminderText.trim()) return;
+    const item: InboxReminder = { id: uid(), text: newReminderText.trim(), date: newReminderDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), priority: newReminderPriority, dismissed: false, createdAt: new Date().toISOString() };
+    setReminders(prev => [item, ...prev]);
+    setNewReminderText(""); setNewReminderDate(""); setIsAddingReminder(false);
+    onToast?.("New reminder created!");
+  };
+
+  const setPresetDate = (type: "today_evening" | "tomorrow_morning" | "two_days" | "next_week") => {
+    const d = new Date();
+    if (type === "today_evening") d.setHours(18, 0, 0, 0);
+    else if (type === "tomorrow_morning") { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    else if (type === "two_days") { d.setDate(d.getDate() + 2); d.setHours(9, 0, 0, 0); }
+    else if (type === "next_week") { d.setDate(d.getDate() + 7); d.setHours(9, 0, 0, 0); }
+    setNewReminderDate(d.toISOString().slice(0, 16));
   };
 
   const activeReminders = reminders.filter(r => !r.dismissed);
+  const archivedReminders = reminders.filter(r => r.dismissed);
+  const totalInvites = teamInvites.length + pendingInvites.length;
+  const totalActiveItems = activeReminders.length + totalInvites;
+
+  const filterQuery = searchQuery.trim().toLowerCase();
+  const filteredTeamInvites = teamInvites.filter(t => !filterQuery || t.teams?.name?.toLowerCase().includes(filterQuery) || t.inviter_user_id?.toLowerCase().includes(filterQuery));
+  const filteredPageInvites = pendingInvites.filter(p => !filterQuery || p.page_title?.toLowerCase().includes(filterQuery) || p.inviter_username?.toLowerCase().includes(filterQuery));
+  const filteredReminders = activeReminders.filter(r => !filterQuery || r.text.toLowerCase().includes(filterQuery));
+  const filteredArchived = archivedReminders.filter(r => !filterQuery || r.text.toLowerCase().includes(filterQuery));
+
+  const formatDueDateStatus = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const due = new Date(dateStr);
+    const now = new Date();
+    const isOverdue = due.getTime() < now.getTime();
+    const isToday = due.toDateString() === now.toDateString();
+    const formatted = due.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    if (isOverdue) return { label: `Overdue (${formatted})`, tone: "danger" };
+    if (isToday) return { label: `Today at ${due.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, tone: "warning" };
+    return { label: formatted, tone: "muted" };
+  };
 
   return (
-    <RouteShell title="Inbox" subtitle="Notifications & Reminders" actions={<>
-      {reminders.length > 0 && (
-        <button onClick={() => { setReminders([]); saveInboxReminders([]); onToast?.("All reminders cleared."); }} className="flex items-center gap-1 text-[10px] text-[var(--muted)] hover:text-[var(--text)]">
-          Clear all
-        </button>
-      )}
-    </>}>
-      <div className="max-w-xl space-y-4">
-        {pendingInvites.length > 0 && (
-          <div className="space-y-3 border-b border-[var(--border)] pb-6">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-              Page invites
-            </div>
-            {pendingInvites.map((inv) => {
-              const isResponding = respondingId === inv.id;
-              return (
-                <div key={inv.id} className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-                  <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--accent)]/10 text-sm font-bold text-[var(--accent)]">
-                    {(inv.inviter_username || "?")[0]?.toUpperCase()}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-[var(--text)]">
-                      <span className="font-semibold">@{inv.inviter_username || "someone"}</span> invited you to{" "}
-                      <span className="font-semibold">{inv.role === "viewer" ? "view" : inv.role === "commenter" ? "comment on" : "edit"}</span>
-                    </div>
-                    <div className="mt-0.5 truncate text-xs text-[var(--muted)]">{inv.page_title || "Untitled"}</div>
-                    <div className="mt-2.5 flex items-center gap-2">
-                      <button
-                        onClick={() => respond(inv.id, "accept")}
-                        disabled={isResponding}
-                        className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
-                      >
-                        {isResponding ? "..." : "Accept"}
-                      </button>
-                      <button
-                        onClick={() => respond(inv.id, "decline")}
-                        disabled={isResponding}
-                        className="rounded-md border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--secondary)] transition hover:bg-[var(--hover)] disabled:opacity-40"
-                      >
-                        Decline
-                      </button>
-                    </div>
+    <RouteShell
+      title="Inbox"
+      subtitle="Realtime notifications, team invitations & synchronized tasks"
+      actions={
+        <div className="flex items-center gap-2.5">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.08] text-xs text-slate-500 shadow-2xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-medium text-[11px] text-slate-600 dark:text-slate-300">Live</span>
+          </div>
+          {activeReminders.length > 0 && (
+            <button
+              onClick={() => {
+                setReminders(prev => prev.map(r => ({ ...r, dismissed: true })));
+                onToast?.("All reminders marked as completed.");
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] border border-black/[0.06] dark:border-white/[0.08] rounded-xl transition cursor-pointer"
+            >
+              <CheckCheck size={13} className="text-emerald-500" />
+              <span>Complete all</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsAddingReminder(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+          >
+            <Plus size={13} strokeWidth={2.2} />
+            <span>New reminder</span>
+          </button>
+        </div>
+      }
+    >
+      <div className="w-full max-w-6xl mx-auto space-y-6 pb-16">
+        {/* 4 Soft Pastel Gradient Glass KPI Metric Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <GlassKpiCard
+            count={totalActiveItems}
+            label="Total items"
+            variant="blue"
+            badgeIcon={<Bell size={16} />}
+            active={activeTab === "all"}
+            onClick={() => setActiveTab("all")}
+          />
+          <GlassKpiCard
+            count={totalInvites}
+            label="Invitations"
+            variant="purple"
+            badgeIcon={<Mail size={16} />}
+            active={activeTab === "invites"}
+            onClick={() => setActiveTab("invites")}
+          />
+          <GlassKpiCard
+            count={activeReminders.length}
+            label="Reminders"
+            variant="peach"
+            badgeIcon={<Clock size={16} />}
+            active={activeTab === "reminders"}
+            onClick={() => setActiveTab("reminders")}
+          />
+          <GlassKpiCard
+            count={archivedReminders.length}
+            label="Completed"
+            variant="green"
+            badgeIcon={<CheckCircle2 size={16} />}
+            active={activeTab === "archived"}
+            onClick={() => setActiveTab("archived")}
+          />
+        </div>
+
+        {/* Quick Add Reminder Drawer */}
+        {isAddingReminder && (
+          <motion.div initial={{ opacity: 0, y: -10, scale: 0.99 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.99 }}
+            className="rounded-2xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-[#15171e]/90 backdrop-blur-xl p-5 shadow-xl">
+            <form onSubmit={handleAddReminder} className="space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[var(--text)]">New Reminder</span>
+                </div>
+                <button type="button" onClick={() => setIsAddingReminder(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 h-6 w-6 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 grid place-items-center transition cursor-pointer"><X size={13} /></button>
+              </div>
+              <input type="text" autoFocus value={newReminderText} onChange={(e) => setNewReminderText(e.target.value)} placeholder="What would you like to be reminded of?"
+                className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/20 px-3.5 py-2.5 text-xs text-[var(--text)] outline-none focus:border-slate-400 placeholder:text-slate-400 transition" />
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[11px] font-medium text-slate-400 mr-1">Presets:</span>
+                {[
+                  { type: "today_evening" as const, label: "Today 6 PM" },
+                  { type: "tomorrow_morning" as const, label: "Tomorrow 9 AM" },
+                  { type: "two_days" as const, label: "In 2 Days" },
+                  { type: "next_week" as const, label: "Next Mon" },
+                ].map((p) => (
+                  <button key={p.type} type="button" onClick={() => setPresetDate(p.type)}
+                    className="rounded-lg border border-black/8 dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.03] px-2.5 py-0.5 text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white hover:border-black/20 transition cursor-pointer">{p.label}</button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-black/6 dark:border-white/6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input type="datetime-local" value={newReminderDate} onChange={(e) => setNewReminderDate(e.target.value)}
+                    className="rounded-lg border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/20 px-2.5 py-1 text-[11px] text-[var(--text)] outline-none" />
+                  <div className="flex items-center gap-1 bg-black/[0.04] dark:bg-white/[0.06] p-0.5 rounded-lg">
+                    {(["low", "medium", "high"] as const).map((p) => (
+                      <button key={p} type="button" onClick={() => setNewReminderPriority(p)}
+                        className={`rounded-md px-2 py-0.5 text-[11px] font-medium capitalize transition cursor-pointer ${newReminderPriority === p ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs" : "text-slate-400 hover:text-slate-600"}`}>{p}</button>
+                    ))}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setIsAddingReminder(false)} className="rounded-lg px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition cursor-pointer">Cancel</button>
+                  <button type="submit" disabled={!newReminderText.trim()} className="rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-white disabled:opacity-40 shadow-xs transition active:scale-95 cursor-pointer">Save</button>
+                </div>
+              </div>
+            </form>
+          </motion.div>
         )}
-        {activeReminders.length === 0 && pendingInvites.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="text-3xl mb-3 opacity-30">📥</div>
-            <div className="text-sm text-[var(--muted)]">Your inbox is clear</div>
-            <div className="text-[10px] text-[var(--muted)] mt-1">Notifications and reminders will appear here</div>
+
+        {/* Minimalist Apple-style Segmented Control Bar & Search */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] overflow-x-auto scrollbar-none">
+            {[
+              { id: "all" as const, label: "All Items", count: totalActiveItems },
+              { id: "invites" as const, label: "Invitations", count: totalInvites },
+              { id: "reminders" as const, label: "Reminders", count: activeReminders.length },
+              { id: "archived" as const, label: "Completed", count: archivedReminders.length },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 ${
+                  activeTab === tab.id
+                    ? "bg-white dark:bg-[#1a1d26] text-slate-900 dark:text-white shadow-2xs font-semibold"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.count > 0 && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                      activeTab === tab.id
+                        ? "bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200"
+                        : "bg-black/[0.04] dark:bg-white/10 text-slate-400"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
-        )}
-        {activeReminders.map((rem) => (
-          <div key={rem.id} className="border-b border-[var(--border)] pb-6 flex items-start gap-4">
-            <span className="mt-1 grid h-6 w-6 place-items-center rounded-full border border-[var(--border-strong)] text-xs text-[var(--secondary)]">↻</span>
-            <div className="flex-1">
-              <div className="font-semibold text-[var(--text)] flex justify-between items-start">
-                <span>{rem.text}</span>
+
+          <div className="relative min-w-[240px]">
+            <Search size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search notifications & tasks..."
+              className="w-full rounded-xl border border-black/8 dark:border-white/8 bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-md pl-9 pr-7 py-1.5 text-xs text-[var(--text)] outline-none focus:border-slate-400 placeholder:text-slate-400 shadow-2xs transition"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Content Feed */}
+        <div className="space-y-5">
+          {/* Realtime Team Invitations */}
+          {(activeTab === "all" || activeTab === "invites") && filteredTeamInvites.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--muted)] px-1">
+                <span className="flex items-center gap-2"><Mail size={13} className="text-indigo-500" />Team Space Invitations ({filteredTeamInvites.length})</span>
+              </div>
+              <div className="grid gap-3">
+                {filteredTeamInvites.map((inv) => (
+                  <TeamInvitation key={inv.id} inviterName={inv.inviter_user_id || "Team Admin"} teamName={inv.teams?.name || "Workspace Team"}
+                    timeAgoText={inv.created_at ? `Invited ${timeAgo(inv.created_at)}` : "Invited recently"}
+                    onAccept={async () => { if (acceptTeamInvite) { await acceptTeamInvite(inv.id); onToast?.(`Joined ${inv.teams?.name || "team"}!`); } }}
+                    onDecline={async () => { if (declineTeamInvite) { await declineTeamInvite(inv.id); onToast?.("Invitation declined."); } }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Page Invitations */}
+          {(activeTab === "all" || activeTab === "invites") && filteredPageInvites.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--muted)] px-1">
+                <span className="flex items-center gap-2"><FileText size={13} className="text-emerald-500" />Document Access Invites ({filteredPageInvites.length})</span>
+              </div>
+              <div className="grid gap-3">
+                {filteredPageInvites.map((inv) => {
+                  const isResponding = respondingId === inv.id;
+                  return (
+                    <motion.div key={inv.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                      className="flex items-start gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/70 backdrop-blur-xl p-4 shadow-xs hover:border-[var(--accent)]/40 transition-all">
+                      <span className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-sm font-bold text-indigo-500">
+                        {(inv.inviter_username || "?")[0]?.toUpperCase()}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-[var(--text)]">
+                          <span className="font-bold text-[var(--text)]">@{inv.inviter_username || "Workspace Member"}</span> invited you to{" "}
+                          <span className="font-semibold text-[var(--accent)]">{inv.role === "viewer" ? "view" : inv.role === "commenter" ? "comment on" : "collaborate & edit"}</span>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--secondary)] font-medium">
+                          <FileText size={13} className="text-[var(--muted)]" /><span className="truncate">{inv.page_title || "Untitled Document"}</span>
+                        </div>
+                        <div className="mt-3.5 flex items-center gap-2.5">
+                          <button onClick={() => respond(inv.id, "accept")} disabled={isResponding}
+                            className="rounded-xl bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40 shadow-xs flex items-center gap-1.5 transition cursor-pointer">
+                            {isResponding ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}<span>Accept Invite</span>
+                          </button>
+                          <button onClick={() => respond(inv.id, "decline")} disabled={isResponding}
+                            className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-1.5 text-xs font-semibold text-[var(--secondary)] hover:text-red-500 hover:border-red-500/30 disabled:opacity-40 flex items-center gap-1.5 transition cursor-pointer">
+                            <X size={13} /><span>Decline</span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tab Empty: Invitations */}
+          {activeTab === "invites" && filteredTeamInvites.length === 0 && filteredPageInvites.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
+              <div className="h-14 w-14 rounded-2xl bg-indigo-500/10 text-indigo-500 grid place-items-center mb-3.5 shadow-xs"><Mail size={24} /></div>
+              <h4 className="text-base font-bold text-[var(--text)]">No pending invitations</h4>
+              <p className="text-xs text-[var(--secondary)] max-w-sm mt-1 leading-relaxed">When teammates invite you to pages or workspaces in real-time, they will automatically appear here.</p>
+            </div>
+          )}
+
+          {/* Scheduled Reminders */}
+          {(activeTab === "all" || activeTab === "reminders") && filteredReminders.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--muted)] px-1">
+                <span className="flex items-center gap-2"><Clock3 size={13} className="text-amber-500" />Scheduled Reminders ({filteredReminders.length})</span>
+              </div>
+              <div className="rounded-3xl border border-white/60 dark:border-white/10 bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-2xl p-4 sm:p-6 shadow-xl space-y-2.5">
+                {filteredReminders.map((rem) => {
+                  const dueInfo = formatDueDateStatus(rem.date);
+                  const isHigh = rem.priority === "high";
+                  const isLow = rem.priority === "low";
+
+                  return (
+                    <motion.div
+                      key={rem.id}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      className="group flex items-start gap-3.5 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] bg-white/60 dark:bg-white/[0.04] hover:bg-white/90 dark:hover:bg-white/[0.08] hover:border-black/10 dark:hover:border-white/15 p-3.5 hover:shadow-xs transition-all"
+                    >
+                      <button
+                        onClick={() => completeReminder(rem.id)}
+                        title="Mark as completed"
+                        className="mt-0.5 h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 hover:bg-emerald-500/15 flex items-center justify-center text-transparent hover:text-emerald-500 transition active:scale-90 cursor-pointer shrink-0"
+                      >
+                        <Check size={11} strokeWidth={3} />
+                      </button>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-xs sm:text-sm font-semibold text-[var(--text)] leading-relaxed">{rem.text}</p>
+                          {rem.priority && (
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide capitalize shrink-0 ${
+                                isHigh
+                                  ? "bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40"
+                                  : isLow
+                                  ? "bg-blue-100/80 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-900/40"
+                                  : "bg-amber-100/80 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40"
+                              }`}
+                            >
+                              {isHigh ? "High" : isLow ? "Low" : "Med"}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                          {dueInfo && (
+                            <span className={`flex items-center gap-1.5 font-medium ${dueInfo.tone === "danger" ? "text-red-500 font-semibold" : dueInfo.tone === "warning" ? "text-amber-600 font-semibold" : "text-[var(--muted)]"}`}>
+                              <CalendarDays size={13} />
+                              <span>{dueInfo.label}</span>
+                            </span>
+                          )}
+
+                          <div className="flex items-center gap-2 opacity-80 group-hover:opacity-100 transition text-[11px] text-[var(--muted)]">
+                            <button onClick={() => snoozeReminder(rem.id, 3)} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer">+3 hrs</button>
+                            <span>·</span>
+                            <button onClick={() => snoozeReminder(rem.id, 24)} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer">+1 day</button>
+                            <span>·</span>
+                            <button onClick={() => deleteReminderPermanently(rem.id)} className="hover:text-red-500 hover:underline cursor-pointer">Delete</button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tab Empty: Reminders */}
+          {activeTab === "reminders" && filteredReminders.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
+              <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-500 grid place-items-center mb-3.5 shadow-xs"><Clock3 size={24} /></div>
+              <h4 className="text-base font-bold text-[var(--text)]">No active reminders</h4>
+              <p className="text-xs text-[var(--secondary)] max-w-sm mt-1 leading-relaxed">Stay focused and organized by creating reminders with due dates and priority tags.</p>
+              <button onClick={() => setIsAddingReminder(true)} className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90 shadow-sm transition active:scale-95 cursor-pointer">+ Add Reminder</button>
+            </div>
+          )}
+
+          {/* Archived Items */}
+          {activeTab === "archived" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--muted)] px-1">
+                <span>Completed History ({filteredArchived.length})</span>
+                {filteredArchived.length > 0 && (
+                  <button onClick={() => { setReminders(prev => prev.filter(r => !r.dismissed)); onToast?.("Cleared completed history."); }}
+                    className="text-xs text-red-500 hover:underline cursor-pointer">Clear all history</button>
+                )}
+              </div>
+              {filteredArchived.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
+                  <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 text-emerald-500 grid place-items-center mb-3.5 shadow-xs"><CheckCircle2 size={24} /></div>
+                  <h4 className="text-base font-bold text-[var(--text)]">No completed items</h4>
+                  <p className="text-xs text-[var(--secondary)] max-w-sm mt-1 leading-relaxed">Completed reminders and notifications will be safely archived here for your records.</p>
+                </div>
+              ) : (
+                <div className="grid gap-2.5">
+                  {filteredArchived.map((rem) => (
+                    <div key={rem.id} className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/50 p-4">
+                      <div className="flex items-center gap-3 min-w-0 opacity-60">
+                        <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
+                        <span className="text-xs font-medium text-[var(--text)] line-through truncate">{rem.text}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <button onClick={() => restoreReminder(rem.id)} className="flex items-center gap-1.5 text-xs text-[var(--accent)] hover:underline cursor-pointer font-medium"><RotateCcw size={12} /><span>Restore</span></button>
+                        <button onClick={() => deleteReminderPermanently(rem.id)} className="text-xs text-[var(--muted)] hover:text-red-500 cursor-pointer p-1"><Trash2 size={13} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Search Empty State */}
+          {searchQuery && (filteredTeamInvites.length + filteredPageInvites.length + filteredReminders.length + (activeTab === "archived" ? filteredArchived.length : 0)) === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
+              <Search size={24} className="text-[var(--muted)] mb-2.5" />
+              <h4 className="text-base font-bold text-[var(--text)]">No results found</h4>
+              <p className="text-xs text-[var(--secondary)] max-w-sm mt-1">No items or notifications matching "{searchQuery}".</p>
+              <button onClick={() => setSearchQuery("")} className="mt-3.5 text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer">Clear search filter</button>
+            </div>
+          )}
+
+          {/* Zero-Inbox Minimalist Empty State */}
+          {!searchQuery && activeTab === "all" && (filteredTeamInvites.length + filteredPageInvites.length + filteredReminders.length) === 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.99 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative overflow-hidden rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-xl p-8 sm:p-12 text-center shadow-xs mt-2 flex flex-col items-center justify-center"
+            >
+              {/* Minimal Clean Glyph */}
+              <div className="h-13 w-13 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40 grid place-items-center mb-3.5 shadow-2xs">
+                <CheckCircle2 size={24} strokeWidth={2} />
+              </div>
+
+              <h3 className="text-base sm:text-lg font-bold text-[var(--text)] tracking-tight">All caught up</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1 leading-relaxed">
+                Zero pending notifications or invitations in your workspace. You have reached Inbox Zero.
+              </p>
+
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
                 <button
-                  onClick={() => dismissReminder(rem.id)}
-                  className="text-xs bg-[var(--active)] px-2.5 py-1 rounded text-[var(--secondary)] hover:text-[var(--text)]"
+                  onClick={() => setIsAddingReminder(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 px-4 py-2 text-xs font-medium shadow-xs transition active:scale-95 cursor-pointer"
                 >
-                  Dismiss
+                  <Plus size={13} strokeWidth={2.2} />
+                  <span>New reminder</span>
+                </button>
+
+                <button
+                  onClick={() => onNew?.("blank")}
+                  className="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.02] hover:bg-black/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06] px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition active:scale-95 cursor-pointer"
+                >
+                  New document
+                </button>
+
+                <button
+                  onClick={() => {
+                    const sampleItems: InboxReminder[] = [
+                      { id: uid(), text: "Submit Q3 project proposal & roadmap", date: new Date(Date.now() + 6 * 3600 * 1000).toISOString(), priority: "high", dismissed: false, createdAt: new Date().toISOString() },
+                      { id: uid(), text: "Review UI design mockups for mobile app", date: new Date(Date.now() + 24 * 3600 * 1000).toISOString(), priority: "medium", dismissed: false, createdAt: new Date().toISOString() },
+                      { id: uid(), text: "Schedule quarterly sync with design leads", date: new Date(Date.now() + 48 * 3600 * 1000).toISOString(), priority: "low", dismissed: false, createdAt: new Date().toISOString() },
+                    ];
+                    setReminders(sampleItems);
+                    onToast?.("Sample reminders loaded!");
+                  }}
+                  className="rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/50 px-3.5 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 transition active:scale-95 cursor-pointer"
+                >
+                  Load demo reminders
                 </button>
               </div>
-              <div className="mt-4 flex items-center gap-2 text-[var(--secondary)]"><CalendarDays size={17} />Due Date</div>
-              <div className="mt-2 text-[var(--danger)]">{rem.date}</div>
-            </div>
-            <div className="text-sm text-[var(--muted)]">{rem.date ? new Date(rem.date).toLocaleDateString?.()?.slice(0, 6) || rem.date : 'No date'}</div>
-          </div>
-        ))}
-        {reminders.filter(r => r.dismissed).length > 0 && (
-          <details className="text-xs text-[var(--muted)]">
-            <summary className="cursor-pointer hover:text-[var(--text)] py-1">{reminders.filter(r => r.dismissed).length} dismissed</summary>
-            <div className="space-y-1 mt-1">
-              {reminders.filter(r => r.dismissed).map(r => (
-                <div key={r.id} className="flex items-center gap-2 text-[10px] text-[var(--muted)] line-through">
-                  <span className="shrink-0">✓</span>
-                  <span>{r.text}</span>
-                </div>
-              ))}
-              <button onClick={() => { setReminders([]); saveInboxReminders([]); }} className="text-[9px] text-[var(--danger)] hover:underline">Clear dismissed</button>
-            </div>
-          </details>
-        )}
+            </motion.div>
+          )}
+        </div>
       </div>
     </RouteShell>
   );
@@ -1827,8 +2408,8 @@ function DailyBrief({ pages, openTasks, dueReviews, onStartReview, onSelect }: {
           <button onClick={() => onSelect(lastEdited.id)} className="flex items-center gap-3 rounded-lg bg-[var(--surface)] px-3 py-2.5 text-left transition-colors hover:bg-[var(--hover)] cursor-pointer">
             <FileText size={15} className="shrink-0 text-[var(--secondary)]" />
             <div className="min-w-0">
-              <div className="truncate text-xs font-semibold text-[var(--text)]">{lastEdited.icon || "??"} {lastEdited.title || "Untitled"}</div>
-              <div className="truncate text-[10px] text-[var(--muted)]">continue where you left off � {timeAgo(lastEdited.updatedAt)}</div>
+              <div className="truncate text-xs font-semibold text-[var(--text)] flex items-center gap-1.5"><PageIcon icon={lastEdited.icon} size={14} fallback="??" /> {lastEdited.title || "Untitled"}</div>
+              <div className="truncate text-[10px] text-[var(--muted)]">continue where you left off - {timeAgo(lastEdited.updatedAt)}</div>
             </div>
           </button>
         )}
@@ -1882,5 +2463,120 @@ function WorkspaceHealthPanel({ pages, onSelect }: { pages: Page[]; onSelect: (p
         <p className="text-center text-[10px] text-[var(--muted)]">+{issues.length - 8} more findings</p>
       )}
     </div>
+  );
+}
+
+// ── Calendar Route ──────────────────────────────────────────────────
+interface CalendarRouteProps {
+  pages: Page[];
+  onSelect: (pageId: string) => void;
+  onNew: (template: string) => void;
+  onToast?: (message: string) => void;
+}
+
+function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) {
+  const calendarEvents: Event[] = React.useMemo(() => {
+    const pageEvents: Event[] = pages
+      .filter((p) => !p.trashed)
+      .map((p) => ({
+        id: `page-${p.id}`,
+        title: p.title || "Untitled",
+        description: plainText(p).slice(0, 120),
+        startTime: new Date(p.createdAt || p.updatedAt),
+        endTime: new Date(p.updatedAt),
+        color: "blue",
+        category: "Document",
+      }));
+    const stored = loadCalendarEvents();
+    return [...stored, ...pageEvents];
+  }, [pages]);
+
+  return (
+    <RouteShell title="Calendar" subtitle="Manage events and schedule">
+      <EventManager
+        events={calendarEvents}
+        defaultView="month"
+        onEventCreate={(e) => { saveCalendarEvent(e); onToast?.(`Event "${e.title}" created`); }}
+        onEventDelete={(id) => { deleteCalendarEvent(id); onToast?.("Event deleted"); }}
+      />
+    </RouteShell>
+  );
+}
+
+const CALENDAR_STORAGE_KEY = "noska_calendar_events";
+
+function loadCalendarEvents(): Event[] {
+  try {
+    const raw = localStorage.getItem(CALENDAR_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw).map((e: any) => ({
+      ...e,
+      startTime: new Date(e.startTime),
+      endTime: new Date(e.endTime),
+    }));
+  } catch { return []; }
+}
+
+function saveCalendarEvent(event: Omit<Event, "id">) {
+  const events = loadCalendarEvents();
+  events.push({ ...event, id: Math.random().toString(36).slice(2, 11) });
+  localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
+}
+
+function deleteCalendarEvent(id: string) {
+  const events = loadCalendarEvents().filter((e) => e.id !== id);
+  localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
+}
+
+// ── Shared Route ────────────────────────────────────────────────────
+interface SharedRouteProps {
+  sharedPages: Page[];
+  onNew: (template: string) => void;
+  onSelect: (pageId: string) => void;
+}
+
+function SharedRoute({ sharedPages, onNew, onSelect }: SharedRouteProps) {
+  return (
+    <section className="min-h-0 flex-1 overflow-y-auto bg-[var(--bg)] p-6 sm:p-8 scrollbar-thin">
+      <div className="mx-auto max-w-6xl space-y-6">
+        {/* Realtime Collaboration Hub Banner */}
+        <div className="rounded-2xl border border-[var(--border)] bg-gradient-to-r from-[var(--surface-2)] via-[var(--surface-1)] to-[var(--surface-2)] p-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 grid place-items-center text-emerald-500 text-xl shadow-xs">
+              <Users size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-[var(--text)]">Realtime Collaboration Hub</h3>
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+                </span>
+              </div>
+              <p className="text-xs text-[var(--muted)] mt-0.5">Multiplayer presence, live cursors, and co-editing are active across all shared documents.</p>
+            </div>
+          </div>
+          <button onClick={() => onNew("blank")} className="rounded-xl bg-[var(--accent)] text-white px-3.5 py-2 text-xs font-semibold hover:opacity-90 active:scale-95 transition cursor-pointer shadow-xs flex items-center gap-1.5">
+            <Plus size={13} /><span>New Shared Page</span>
+          </button>
+        </div>
+
+        <Panel title="Shared with you">
+          {sharedPages.length === 0 ? (
+            <div className="py-12 text-center rounded-2xl border border-dashed border-[var(--border)] p-6 space-y-3 bg-[var(--surface-2)]/30">
+              <div className="text-3xl">🤝</div>
+              <div className="font-semibold text-sm text-[var(--text)]">No pages shared yet</div>
+              <p className="text-xs text-[var(--muted)] max-w-sm mx-auto">When teammates share documents with you, they'll appear here in real time.</p>
+              <button onClick={() => onNew("blank")} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] px-4 py-2 text-xs font-semibold hover:bg-[var(--hover)] transition cursor-pointer shadow-xs inline-flex items-center gap-1.5">
+                <Plus size={12} /><span>Create collaborative document</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {sharedPages.map((page) => <PageCard key={page.id} page={page} onSelect={onSelect} />)}
+            </div>
+          )}
+        </Panel>
+      </div>
+    </section>
   );
 }

@@ -57,7 +57,7 @@ export default function FramerLoader({
       opacity: 0,
       transition: {
         duration: 0.75,
-        ease: [0.77, 0, 0.175, 1], // Smooth morphing exit transition
+        ease: [0.77, 0, 0.175, 1] as const,
       },
     },
   };

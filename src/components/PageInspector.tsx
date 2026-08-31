@@ -12,6 +12,7 @@ import { getAllRelations } from '../utils/pageLinks';
 import { auditEngine } from '../lib/auditEngine';
 import type { LucideIcon } from 'lucide-react';
 import { PageIcon } from './PageIcon';
+import { CollabPanel } from '../features/collab/CollabPanel';
 
 
 const TABS = [
@@ -992,6 +993,14 @@ function AITab({ page, pages, onAskAI }) {
   );
 }
 
+function getCollabUser(): { id: string; name: string; avatar?: string } {
+  try {
+    const collab = (window as any).realtimeCollab;
+    const u = collab?.getUser?.();
+    return { id: u?.userId || 'local', name: u?.userName || 'You', avatar: u?.userAvatar };
+  } catch { return { id: 'local', name: 'You' }; }
+}
+
 export default function PageInspector({
   page, pages, pageId, activeId,
   onPatchPage, onSelect, onAskAI, onRestoreVersion, onToast,
@@ -1034,7 +1043,10 @@ export default function PageInspector({
         {activeTab === 'properties' && <PropertiesTab page={page} pages={pages} onPatchPage={onPatchPage} />}
         {activeTab === 'relationships' && <RelationshipsTab page={page} pages={pages} />}
         {activeTab === 'activity' && <ActivityTab page={page} pageId={pageId} />}
-        {activeTab === 'collaboration' && <CollaborationTab pageId={pageId} page={page} />}
+        {activeTab === 'collaboration' && (() => {
+          const user = getCollabUser();
+          return <CollabPanel pageId={pageId} userId={user.id} userName={user.name} userAvatar={user.avatar} />;
+        })()}
         {activeTab === 'versions' && <VersionsTab page={page} pageId={pageId} onRestoreVersion={onRestoreVersion} />}
         {activeTab === 'audit' && <AuditTab pageId={pageId} />}
         {activeTab === 'ai' && <AITab page={page} pages={pages} onAskAI={onAskAI} />}

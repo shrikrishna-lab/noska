@@ -2,9 +2,9 @@ import React, { type MouseEventHandler, type ReactNode } from "react";
 import { motion, type TargetAndTransition } from "framer-motion";
 
 // Reusable Spring Configs
-const softSpring = { type: "spring", stiffness: 350, damping: 28 };
-const stiffSpring = { type: "spring", stiffness: 500, damping: 30 };
-const bouncySpring = { type: "spring", stiffness: 450, damping: 18 };
+const softSpring = { type: "spring" as const, stiffness: 350, damping: 28 };
+const stiffSpring = { type: "spring" as const, stiffness: 500, damping: 30 };
+const bouncySpring = { type: "spring" as const, stiffness: 450, damping: 18 };
 
 const hoverScale: TargetAndTransition = { scale: 1.08, transition: stiffSpring };
 const pressScale: TargetAndTransition = { scale: 0.94, transition: stiffSpring };
@@ -467,6 +467,27 @@ export function AnimatedRedo({ size = 16, color = "currentColor", className = ""
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 7v6h-6" />
         <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7" />
+      </svg>
+    </IconWrapper>
+  );
+}
+
+// 39. AnimatedMeetingScheduler
+export function AnimatedMeetingScheduler({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
+  return (
+    <IconWrapper hoverAnim={{ scale: 1.1, y: -1 }} pressAnim={{ scale: 0.92 }} className={className} {...props}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {/* Calendar Body */}
+        <rect x="3" y="4" width="18" height="17" rx="3" />
+        <line x1="16" y1="2" x2="16" y2="5" />
+        <line x1="8" y1="2" x2="8" y2="5" />
+        <line x1="3" y1="9" x2="21" y2="9" />
+        {/* Meeting Target / Clock Badge */}
+        <circle cx="14" cy="15" r="3.5" fill="currentColor" fillOpacity="0.15" />
+        <circle cx="14" cy="15" r="3.5" strokeWidth="1.7" />
+        <path d="M14 13.5v1.5l1 1" strokeWidth="1.7" />
+        {/* Event indicator dot */}
+        <circle cx="7.5" cy="14" r="1" fill="currentColor" />
       </svg>
     </IconWrapper>
   );

@@ -5,7 +5,7 @@ interface AudioVisualizerProps {
   stream?: MediaStream | null;
   /** Or pass an existing AnalyserNode directly. */
   analyserNode?: AnalyserNode | null;
-  /** Number of radial bars (should be power of 2). Default 64. */
+  /** Number of frequency bands (should be power of 2). Default 64. */
   barCount?: number;
   /** Inner radius of the radial ring in px. Default 40. */
   initialRadius?: number;
@@ -23,6 +23,12 @@ interface AudioVisualizerProps {
   active?: boolean;
   /** Optional className for the wrapper div. */
   className?: string;
+  /** Sensitivity boost for visualization (1.0 to 5.0). Higher = more responsive. */
+  sensitivityBoost?: number;
+  /** Visualization style: "bars" (vertical bars), "radial" (current), "spectrum" (frequency spectrum) */
+  style?: "bars" | "radial" | "spectrum";
+  /** Smoothing constant for audio data (0 to 1). Higher = smoother, lower = more responsive. */
+  smoothing?: number;
 }
 
 export default function AudioVisualizer({
@@ -37,12 +43,17 @@ export default function AudioVisualizer({
   backgroundColor = "transparent",
   active = true,
   className = "",
+  sensitivityBoost = 2.5,
+  style = "radial",
+  smoothing = 0.8,
 }: AudioVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number>(0);
   const [ready, setReady] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [avgEnergy, setAvgEnergy] = useState(0);
 
   // Setup audio analyser from stream
   useEffect(() => {
@@ -54,6 +65,8 @@ export default function AudioVisualizer({
 
     if (!stream || !active) {
       setReady(false);
+      setIsSpeaking(false);
+      setAvgEnergy(0);
       return;
     }
 
@@ -65,21 +78,56 @@ export default function AudioVisualizer({
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = barCount * 4;
-      analyser.smoothingTimeConstant = 0.82;
+      analyser.smoothingTimeConstant = smoothing || 0.8;
       source.connect(analyser);
       analyserRef.current = analyser;
       setReady(true);
     } catch {
       setReady(false);
+      setIsSpeaking(false);
+      setAvgEnergy(0);
     }
 
+    // Real-time energy monitoring
+    const monitorEnergy = () => {
+      if (!analyserRef.current || !isSpeaking) return;
+
+      const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(data);
+
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        sum += data[i];
+      }
+      const energy = sum / data.length;
+      const normalized = Math.min(1, energy / 128);
+
+      setAvgEnergy(normalized);
+
+      // Speak detection threshold
+      if (normalized > 0.3) {
+        setIsSpeaking(true);
+      } else if (normalized < 0.1) {
+        setIsSpeaking(false);
+      }
+
+      rafRef.current = requestAnimationFrame(monitorEnergy);
+    };
+
+    // Start monitoring after a short delay to let audio settle
+    const energyId = setTimeout(monitorEnergy, 100);
+
     return () => {
+      clearTimeout(energyId);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       audioCtxRef.current?.close().catch(() => {});
       audioCtxRef.current = null;
       analyserRef.current = null;
       setReady(false);
+      setIsSpeaking(false);
+      setAvgEnergy(0);
     };
-  }, [stream, externalAnalyser, active, barCount]);
+  }, [stream, externalAnalyser, active, barCount, smoothing]);
 
   // Resolve dot color — read CSS variable at runtime
   const resolvedColor = useCallback(() => {
@@ -89,7 +137,7 @@ export default function AudioVisualizer({
     return val || "#6c63ff";
   }, [dotColor]);
 
-  // Draw loop
+  // Draw loop for radial/bar visualization
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -122,59 +170,119 @@ export default function AudioVisualizer({
 
       if (ready && analyserRef.current && active) {
         analyserRef.current.getByteFrequencyData(freqData);
-        const angleStep = (2 * Math.PI) / barCount;
 
-        for (let i = 0; i < barCount / 2; i++) {
-          const freqIndex = i * 2;
-          const energy = freqData[freqIndex] || 0;
-          const barLength = Math.max(0, Math.min(maxBarLength, (energy / 255) * maxBarLength));
-          const angle = i * angleStep;
-          const dotSize = 0.8 + (energy / 255) * 2;
-          const dotAlpha = 0.15 + (energy / 255) * 0.85;
+        if (style === "bars") {
+          // Vertical bar graph style
+          const barWidth = (size * 0.8) / (barCount / 2);
+          const barSpacing = barWidth * 0.1;
 
-          ctx.fillStyle = color;
-          ctx.globalAlpha = dotAlpha;
+          for (let i = 0; i < barCount / 2; i++) {
+            const freqIndex = i * 2;
+            const energy = freqData[freqIndex] || 0;
+            // Apply sensitivity boost and map to bar length
+            const adjustedEnergy = Math.min(255, energy * sensitivityBoost);
+            const barLength = Math.max(2, (adjustedEnergy / 255) * maxBarLength);
 
-          // Forward direction
-          ctx.save();
-          ctx.rotate(angle);
-          for (let j = 0; j < barLength; j += dotSpacing) {
-            ctx.beginPath();
-            ctx.arc(initialRadius + j, 0, dotSize, 0, 2 * Math.PI);
-            ctx.fill();
+            ctx.fillStyle = color;
+            ctx.globalAlpha = 0.8 + (adjustedEnergy / 255) * 0.3;
+
+            // Draw bar
+            ctx.fillRect(
+              0,
+              -barLength / 2,
+              barWidth,
+              barLength
+            );
+
+            // Rotate to position
+            ctx.save();
+            ctx.rotate((i * (2 * Math.PI)) / (barCount / 2) - Math.PI / 2);
+            ctx.translate(-size / 4, 0);
+            ctx.fillRect(0, 0, barWidth, barLength);
+            ctx.restore();
           }
-          ctx.restore();
+        } else if (style === "spectrum") {
+          // Frequency spectrum style - horizontal bars
+          const barWidth = size / (barCount / 2);
+          const barSpacing = barWidth * 0.1;
 
-          // Mirror direction
-          ctx.save();
-          ctx.rotate(angle + Math.PI);
-          for (let j = 0; j < barLength; j += dotSpacing) {
-            ctx.beginPath();
-            ctx.arc(initialRadius + j, 0, dotSize, 0, 2 * Math.PI);
-            ctx.fill();
+          for (let i = 0; i < barCount / 2; i++) {
+            const freqIndex = i * 2;
+            const energy = freqData[freqIndex] || 0;
+            const adjustedEnergy = Math.min(255, energy * sensitivityBoost);
+            const barLength = Math.max(2, (adjustedEnergy / 255) * (maxBarLength * 0.6));
+
+            ctx.fillStyle = color;
+            ctx.globalAlpha = 0.6 + (adjustedEnergy / 255) * 0.5;
+
+            const barX = i * barWidth + barWidth / 4;
+            const barY = -barLength / 2;
+
+            ctx.fillRect(barX, barY, barWidth * 0.8, barLength);
           }
-          ctx.restore();
+        } else {
+          // Radial/dot style (original)
+          const angleStep = (2 * Math.PI) / barCount;
+
+          for (let i = 0; i < barCount / 2; i++) {
+            const freqIndex = i * 2;
+            const energy = freqData[freqIndex] || 0;
+            const barLength = Math.max(0, Math.min(maxBarLength, (energy / 255) * maxBarLength));
+            const dotSize = 0.8 + (energy / 255) * 2;
+            const dotAlpha = 0.15 + (energy / 255) * 0.85;
+
+            ctx.fillStyle = color;
+            ctx.globalAlpha = dotAlpha;
+
+            // Forward direction
+            ctx.save();
+            ctx.rotate(angleStep * i);
+            for (let j = 0; j < barLength; j += dotSpacing) {
+              ctx.beginPath();
+              ctx.arc(initialRadius + j, 0, dotSize, 0, 2 * Math.PI);
+              ctx.fill();
+            }
+            ctx.restore();
+
+            // Mirror direction
+            ctx.save();
+            ctx.rotate(angleStep * i + Math.PI);
+            for (let j = 0; j < barLength; j += dotSpacing) {
+              ctx.beginPath();
+              ctx.arc(initialRadius + j, 0, dotSize, 0, 2 * Math.PI);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+          ctx.globalAlpha = 1;
         }
-        ctx.globalAlpha = 1;
       } else {
-        // Idle pulse ring
-        const time = Date.now() * 0.003;
-        const pulse = 0.3 + 0.2 * Math.sin(time);
-        ctx.globalAlpha = pulse;
+        // Idle state - show subtle pulse based on energy
+        const pulse = 0.3 + 0.2 * Math.sin(Date.now() * 0.003);
+        const idleEnergy = avgEnergy > 0 ? avgEnergy : pulse;
+
+        ctx.globalAlpha = idleEnergy;
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(0, 0, initialRadius, 0, 2 * Math.PI);
         ctx.stroke();
 
-        // Inner small glow dot
-        ctx.globalAlpha = 0.4 + 0.3 * Math.sin(time * 1.5);
+        // Inner glow based on energy
+        ctx.globalAlpha = 0.3 + idleEnergy * 0.4;
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.arc(0, 0, 3, 0, 2 * Math.PI);
         ctx.fill();
 
-        ctx.globalAlpha = 1;
+        // Speak indicator when voice detected
+        if (isSpeaking) {
+          ctx.globalAlpha = 0.6;
+          ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+          ctx.beginPath();
+          ctx.arc(0, 0, initialRadius + 5, 0, 2 * Math.PI);
+          ctx.fill();
+        }
       }
 
       ctx.restore();
@@ -187,7 +295,7 @@ export default function AudioVisualizer({
       running = false;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [ready, active, size, barCount, initialRadius, maxBarLength, dotSpacing, backgroundColor, resolvedColor]);
+  }, [ready, active, size, barCount, initialRadius, maxBarLength, dotSpacing, backgroundColor, style, sensitivityBoost, smoothing, avgEnergy, isSpeaking]);
 
   return (
     <div
@@ -197,7 +305,7 @@ export default function AudioVisualizer({
       <canvas
         ref={canvasRef}
         style={{ width: size, height: size, display: "block" }}
-        aria-hidden="true"
+        aria-label={isSpeaking ? "Voice active visualizer" : "Voice idle visualizer"}
       />
     </div>
   );

@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
 import { useTeams } from "../../lib/TeamContext"
-import { useOutsideDismiss } from "../ui"
 import TeamSettingsModal from "./TeamSettingsModal"
+import { Plus, Settings, Mail, X } from "lucide-react"
 
 interface TeamSwitcherProps {
   workspaceName: string
@@ -14,15 +13,13 @@ const TEAM_ICONS = ["👥", "💼", "🎨", "⚙️", "📊", "🚀", "🎯", "�
 export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProps) {
   const {
     teams, currentTeam, setCurrentTeam, pendingInvites,
-    createTeam, deleteTeam, refreshTeams, loading,
+    createTeam, deleteTeam, acceptInvite, declineInvite, refreshTeams, loading,
   } = useTeams()
-  const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState("")
   const [newIcon, setNewIcon] = useState("👥")
   const [settingsTeam, setSettingsTeam] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const ref = useOutsideDismiss<HTMLDivElement>(open, () => { setOpen(false); setCreating(false) })
 
   useEffect(() => {
     if (creating && inputRef.current) inputRef.current.focus()
@@ -35,141 +32,170 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
       setNewName("")
       setNewIcon("👥")
       setCreating(false)
-      setOpen(false)
     } catch (e) {
       console.warn("Failed to create team:", e)
     }
   }
 
-  const handleDelete = async (teamId: string) => {
-    const ok = await window.noskaConfirm?.("Delete this team? All members will be removed.")
-    if (ok) {
-      await deleteTeam(teamId)
-    }
-  }
-
   return (
-    <>
-      <div ref={ref} className="relative">
-        <button
-          onClick={() => setOpen(!open)}
-          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--hover)] transition text-left group"
-        >
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm shrink-0">
-            {currentTeam ? currentTeam.icon || "👥" : "🏠"}
+    <div className="space-y-1.5 select-none">
+      {/* Pending Invites Banner if any */}
+      {pendingInvites.length > 0 && (
+        <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/10 p-2 space-y-1.5 mb-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--accent)]">
+            <Mail size={12} />
+            <span>Team Invitations ({pendingInvites.length})</span>
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-semibold text-[var(--text)] truncate leading-none">
-              {currentTeam ? currentTeam.name : "Personal"}
-            </div>
-            <div className="text-[9px] text-[var(--muted)] truncate mt-0.5">
-              {currentTeam ? `${currentTeam.member_count ?? 0} members` : "Your workspace"}
-            </div>
-          </div>
-          {pendingInvites.length > 0 && (
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-              {pendingInvites.length}
-            </div>
-          )}
-          <svg className="h-3 w-3 text-[var(--muted)] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
-
-        <AnimatePresence>
-          {open && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              className="absolute bottom-full left-0 mb-1 w-64 rounded-xl border border-[var(--border)] bg-[var(--sidebar)] shadow-xl z-50 overflow-hidden"
-            >
-              <div className="px-3 py-2 border-b border-[var(--border)]">
-                <div className="text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider">Teams</div>
+          {pendingInvites.map((inv) => (
+            <div key={inv.id} className="flex items-center justify-between bg-[var(--surface)] p-1.5 rounded-lg border border-[var(--border)] text-xs">
+              <div className="truncate min-w-0 pr-1">
+                <span className="font-semibold text-[var(--text)]">{inv.teams?.name || "Teamspace"}</span>
+                <span className="text-[10px] text-[var(--muted)] block">as {inv.role}</span>
               </div>
-
-              <div className="py-1 max-h-64 overflow-y-auto">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
-                  onClick={() => { setCurrentTeam(null); setOpen(false) }}
-                  className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-[var(--hover)] transition ${!currentTeam ? "bg-[var(--active)]" : ""}`}
+                  onClick={() => acceptInvite(inv.id)}
+                  className="bg-emerald-500 text-white rounded px-2 py-0.5 text-[10px] font-semibold hover:opacity-90 transition cursor-pointer"
                 >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm">🏠</div>
-                  <div>
-                    <div className="font-medium text-[var(--text)]">Personal</div>
-                    <div className="text-[10px] text-[var(--muted)]">{workspaceName}</div>
-                  </div>
+                  Accept
                 </button>
-
-                {teams.map((team) => (
-                  <div key={team.id} className="group/item relative">
-                    <button
-                      onClick={() => { setCurrentTeam(team); setOpen(false); onView?.("teamspace") }}
-                      className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-[var(--hover)] transition ${currentTeam?.id === team.id ? "bg-[var(--active)]" : ""}`}
-                    >
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm">
-                        {team.icon || "👥"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-[var(--text)] truncate">{team.name}</div>
-                        <div className="text-[10px] text-[var(--muted)]">{team.member_count ?? 0} members</div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => setSettingsTeam(team.id)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover/item:flex h-6 w-6 items-center justify-center rounded hover:bg-[var(--surface-2)] text-[var(--muted)]"
-                      title="Team settings"
-                    >
-                      ⚙️
-                    </button>
-                  </div>
-                ))}
+                <button
+                  onClick={() => declineInvite(inv.id)}
+                  className="text-[var(--muted)] hover:text-[var(--text)] rounded p-0.5 text-[10px] transition cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-              <div className="border-t border-[var(--border)] p-2">
-                {creating ? (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <select
-                        value={newIcon}
-                        onChange={(e) => setNewIcon(e.target.value)}
-                        className="w-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-center text-lg outline-none"
-                      >
-                        {TEAM_ICONS.map((ic) => (
-                          <option key={ic} value={ic}>{ic}</option>
-                        ))}
-                      </select>
-                      <input
-                        ref={inputRef}
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") setCreating(false) }}
-                        placeholder="Team name..."
-                        className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={handleCreate} className="flex-1 rounded-lg bg-[var(--accent)] py-1.5 text-sm font-medium text-white hover:opacity-90 transition">
-                        Create
-                      </button>
-                      <button onClick={() => setCreating(false)} className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--hover)] transition">
-                        Cancel
-                      </button>
-                    </div>
+      {/* 1. Personal Workspace Option */}
+      <button
+        onClick={() => {
+          setCurrentTeam(null)
+          onView?.("library")
+        }}
+        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left transition-all duration-150 cursor-pointer group border ${
+          !currentTeam
+            ? "bg-[var(--surface-2)] text-[var(--text)] shadow-xs border-[var(--border-strong)]"
+            : "border-transparent text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--border)]"
+        }`}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--surface-3)] border border-[var(--border)] text-xs shadow-xs shrink-0">
+            🏠
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-[var(--text)] truncate leading-tight">Personal</div>
+            <div className="text-[9.5px] text-[var(--muted)] truncate">Your workspace</div>
+          </div>
+        </div>
+        {!currentTeam && (
+          <span className="text-[9.5px] font-bold text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded-md border border-[var(--accent)]/20">
+            Active
+          </span>
+        )}
+      </button>
+
+      {/* 2. List of Real Teamspaces */}
+      {teams.map((team) => {
+        const isActive = currentTeam?.id === team.id
+        return (
+          <div key={team.id} className="relative group/item">
+            <button
+              onClick={() => {
+                setCurrentTeam(team)
+                onView?.("teamspace")
+              }}
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left transition-all duration-150 cursor-pointer border ${
+                isActive
+                  ? "bg-[var(--surface-2)] text-[var(--text)] shadow-xs border-[var(--border-strong)]"
+                  : "border-transparent text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--border)]"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0 pr-6">
+                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--surface-3)] border border-[var(--border)] text-xs shadow-xs shrink-0">
+                  {team.icon || "👥"}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-[var(--text)] truncate leading-tight">{team.name}</div>
+                  <div className="text-[9.5px] text-[var(--muted)] truncate">
+                    {team.member_count ?? 1} members · Teamspace
                   </div>
-                ) : (
-                  <button
-                    onClick={() => setCreating(true)}
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition"
-                  >
-                    <span className="text-lg leading-none">+</span>
-                    <span>Create team</span>
-                  </button>
-                )}
+                </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              {isActive && (
+                <span className="text-[9.5px] font-bold text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded-md border border-[var(--accent)]/20">
+                  Active
+                </span>
+              )}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setSettingsTeam(team.id)
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover/item:grid h-6 w-6 place-items-center rounded-lg hover:bg-[var(--surface-3)] text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+              title="Team Settings & Members"
+            >
+              <Settings size={12} />
+            </button>
+          </div>
+        )
+      })}
+
+      {/* 3. Inline Create New Teamspace */}
+      {creating ? (
+        <div className="space-y-2 p-2 bg-[var(--surface)] rounded-xl border border-[var(--border-strong)] shadow-xs mt-1">
+          <div className="flex items-center gap-1.5">
+            <select
+              value={newIcon}
+              onChange={(e) => setNewIcon(e.target.value)}
+              className="w-9 h-7 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] text-center text-xs outline-none cursor-pointer"
+            >
+              {TEAM_ICONS.map((ic) => (
+                <option key={ic} value={ic}>{ic}</option>
+              ))}
+            </select>
+            <input
+              ref={inputRef}
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreate()
+                if (e.key === "Escape") setCreating(false)
+              }}
+              placeholder="Teamspace name..."
+              className="flex-1 min-w-0 h-7 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]"
+            />
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              onClick={handleCreate}
+              disabled={!newName.trim()}
+              className="flex-1 h-7 rounded-lg bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 disabled:opacity-40 transition cursor-pointer"
+            >
+              Create
+            </button>
+            <button
+              onClick={() => setCreating(false)}
+              className="h-7 rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--muted)] hover:bg-[var(--hover)] transition cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setCreating(true)}
+          className="w-full flex items-center justify-start gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition cursor-pointer"
+        >
+          <Plus size={13} className="text-[var(--accent)]" />
+          <span>New teamspace</span>
+        </button>
+      )}
 
       {settingsTeam && (
         <TeamSettingsModal
@@ -177,6 +203,6 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
           onClose={() => setSettingsTeam(null)}
         />
       )}
-    </>
+    </div>
   )
 }

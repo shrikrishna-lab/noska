@@ -121,12 +121,87 @@ class VoiceController {
           if (raw) {
             const settings = getVoiceSettings();
             const text = cleanVoiceTranscript(raw, settings.smartClean);
-            if (options?.onTranscript) {
-              options.onTranscript(text);
-            } else {
-              streamTextIntoActiveInput(text);
+
+            if (finalText) {
+              const activeEl = getActiveTypingElement();
+              const selection = window.getSelection();
+              const selectedText = selection?.toString()?.trim();
+
+              // 1. Signature Feature: Rewind Hands-Free Self-Correction
+              if (settings.rewindEnabled !== false) {
+                try {
+                  const { classifyRewindTrigger, executeRewind } = require("./rewind-engine");
+                  const rewindResult = classifyRewindTrigger(raw);
+                  if (rewindResult.isRewind) {
+                    const rewound = executeRewind(rewindResult, activeEl);
+                    if (rewound) {
+                      const msg = rewindResult.isDelete ? "↺ Erased previous utterance" : `↺ Rewound: ${rewindResult.correctionText}`;
+                      this.transcriptCallbacks.forEach((cb) => cb(msg));
+                      return; // Successfully self-corrected in-place!
+                    }
+                  }
+                } catch {
+                  // If module import fails, continue smoothly
+                }
+              }
+
+              // 2. Voice Edit Mode (Selection + Spoken Edit Command)
+              if (selectedText && selectedText.length > 0) {
+                import("./voice-edit").then(({ voiceEdit, looksLikeEditInstruction }) => {
+                  if (looksLikeEditInstruction(raw)) {
+                    voiceEdit({
+                      selectedText,
+                      instruction: raw,
+                      targetApp: "docs",
+                    }).then((result) => {
+                      if (result.wasAIEdited && result.editedText) {
+                        if (activeEl && (activeEl as HTMLInputElement).setRangeText) {
+                          const input = activeEl as HTMLInputElement;
+                          const start = input.selectionStart || 0;
+                          const end = input.selectionEnd || 0;
+                          input.setRangeText(result.editedText, start, end, "end");
+                          input.dispatchEvent(new Event("input", { bubbles: true }));
+                        } else if (selection && selection.rangeCount > 0) {
+                          const range = selection.getRangeAt(0);
+                          range.deleteContents();
+                          range.insertNode(document.createTextNode(result.editedText));
+                          selection.collapseToEnd();
+                        }
+                        this.transcriptCallbacks.forEach((cb) => cb(result.editedText));
+                      }
+                    }).catch(() => {
+                      streamTextIntoActiveInput(text);
+                      this.transcriptCallbacks.forEach((cb) => cb(text));
+                    });
+                    return;
+                  }
+                  this._handleDictation(raw, text, settings, options);
+                }).catch(() => {
+                  this._handleDictation(raw, text, settings, options);
+                });
+                return;
+              }
+
+              // 3. Fuzzy / Semantic Voice Snippets
+              if (settings.fuzzySnippetsEnabled !== false) {
+                try {
+                  const { matchVoiceSnippet } = require("./snippet-engine");
+                  const snippetResult = matchVoiceSnippet(raw, "docs");
+                  if (snippetResult.matched && snippetResult.expandedText) {
+                    if (options?.onTranscript) {
+                      options.onTranscript(snippetResult.expandedText);
+                    } else {
+                      streamTextIntoActiveInput(snippetResult.expandedText);
+                    }
+                    this.transcriptCallbacks.forEach((cb) => cb(snippetResult.expandedText));
+                    return;
+                  }
+                } catch {}
+              }
             }
-            this.transcriptCallbacks.forEach((cb) => cb(text));
+
+            // 4. Standard dictation path (no selection or interim text)
+            this._handleDictation(raw, text, settings, options);
           }
         },
         onError: (err) => {
@@ -174,6 +249,57 @@ class VoiceController {
       this.notify();
       options?.onError?.(this.error);
       this.errorCallbacks.forEach((cb) => cb(this.error!));
+    }
+  }
+
+  /**
+   * Internal: route transcript through dictation cleanup (AI-polished or local).
+   * Extracted so both the main handler and the voice-edit fallback can use it.
+   */
+  private _handleDictation(
+    raw: string,
+    localCleanedText: string,
+    settings: ReturnType<typeof getVoiceSettings>,
+    options?: { onTranscript?: (text: string) => void }
+  ) {
+    if (settings.dictationMode === "ai_polished" || settings.dictationMode === "professional") {
+      import("./dictation-cleanup").then(({ cleanDictation }) => {
+        cleanDictation({
+          rawTranscript: raw,
+          targetApp: "docs",
+          dictationMode: settings.dictationMode,
+        }).then((result) => {
+          if (result.cleanedText) {
+            if (options?.onTranscript) {
+              options.onTranscript(result.cleanedText);
+            } else {
+              streamTextIntoActiveInput(result.cleanedText);
+            }
+            this.transcriptCallbacks.forEach((cb) => cb(result.cleanedText));
+          }
+        }).catch(() => {
+          if (options?.onTranscript) {
+            options.onTranscript(localCleanedText);
+          } else {
+            streamTextIntoActiveInput(localCleanedText);
+          }
+          this.transcriptCallbacks.forEach((cb) => cb(localCleanedText));
+        });
+      }).catch(() => {
+        if (options?.onTranscript) {
+          options.onTranscript(localCleanedText);
+        } else {
+          streamTextIntoActiveInput(localCleanedText);
+        }
+        this.transcriptCallbacks.forEach((cb) => cb(localCleanedText));
+      });
+    } else {
+      if (options?.onTranscript) {
+        options.onTranscript(localCleanedText);
+      } else {
+        streamTextIntoActiveInput(localCleanedText);
+      }
+      this.transcriptCallbacks.forEach((cb) => cb(localCleanedText));
     }
   }
 

@@ -181,6 +181,14 @@ export function streamTextIntoActiveInput(text: string, targetOverride?: HTMLEle
       target.setSelectionRange(nextCursor, nextCursor);
       target.dispatchEvent(new Event("input", { bubbles: true }));
       target.dispatchEvent(new Event("change", { bubbles: true }));
+
+      // Track utterance in Rewind buffer
+      try {
+        import("./rewind-engine").then(({ recordUtterance }) => {
+          recordUtterance(target, textToInsert.trim(), session.initialPrefix.length, nextCursor, session.initialPrefix, session.initialSuffix);
+        });
+      } catch {}
+
       return true;
     }
   }
@@ -216,6 +224,13 @@ export function streamTextIntoActiveInput(text: string, targetOverride?: HTMLEle
 
       target.dispatchEvent(new Event("input", { bubbles: true }));
       target.dispatchEvent(new Event("change", { bubbles: true }));
+
+      try {
+        import("./rewind-engine").then(({ recordUtterance }) => {
+          recordUtterance(target, textToInsert.trim(), session.initialPrefix.length, session.initialPrefix.length + textToInsert.length, session.initialPrefix, session.initialSuffix);
+        });
+      } catch {}
+
       return true;
     }
 

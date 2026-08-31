@@ -41,6 +41,7 @@ import {
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
 import CustomProviders from "./settings/CustomProviders";
 import VoiceCustomizationSettings from "./settings/VoiceCustomizationSettings";
+import ShortcutsSettings from "./ShortcutsSettings";
 import { PageIcon } from "./PageIcon";
 import ApiKeysManager from "../features/api/ApiKeysManager";
 import { aiManager } from "../ai/AIManager";
@@ -562,12 +563,13 @@ export function SettingsModal({
           )}
 
           {tab === "Developer" && (
-            <div className="max-w-xl space-y-6">
-              <div>
-                <h2 className="text-[32px] font-bold">Developer</h2>
-                <p className="mt-1 text-sm text-[var(--secondary)]">
-                  Build on your workspace with the Noska API — pages, tasks, reviews, search and more.
-                  Try endpoints live in the API Console.
+            <div className="max-w-2xl space-y-6 pb-16 font-sans">
+              <div className="pt-1">
+                <h1 className="text-[28px] font-normal tracking-tight font-serif text-[#1c1b18] dark:text-white">
+                  Developer & API Keys
+                </h1>
+                <p className="text-xs text-[#706c64] dark:text-white/60 mt-1">
+                  Build custom scripts and integrations with the Noska REST API — access pages, databases, tasks, AI agents, and automations.
                 </p>
               </div>
               <ApiKeysManager userId={currentUserId} onToast={(msg) => setSaveStatus(msg)} />
@@ -575,81 +577,7 @@ export function SettingsModal({
           )}
 
           {tab === "Shortcuts" && (
-            <div className="max-w-2xl space-y-6 pb-16 font-sans">
-              <div className="pt-1">
-                <h1 className="text-[32px] font-normal tracking-tight font-serif text-[#1c1b18]">
-                  Keyboard Shortcuts
-                </h1>
-                <p className="text-xs text-[#706c64] mt-1">
-                  Customize your global workspace hotkeys. Default for New Creation is set to Ctrl+P.
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-[#f8f6f0] p-6 shadow-sm divide-y divide-[#e8e4db] space-y-1">
-                <div className="py-3.5 first:pt-0 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-[#1c1b18]">New Creation / Page</div>
-                    <div className="text-xs text-[#706c64] mt-0.5">Quickly create a new blank page or document</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
-                      Ctrl + P
-                    </kbd>
-                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Default</span>
-                  </div>
-                </div>
-
-                <div className="py-3.5 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-[#1c1b18]">Search Workspace</div>
-                    <div className="text-xs text-[#706c64] mt-0.5">Open command palette & document search</div>
-                  </div>
-                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
-                    Ctrl + K
-                  </kbd>
-                </div>
-
-                <div className="py-3.5 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-[#1c1b18]">Toggle Sidebar</div>
-                    <div className="text-xs text-[#706c64] mt-0.5">Collapse or expand the navigation sidebar</div>
-                  </div>
-                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
-                    Ctrl + \
-                  </kbd>
-                </div>
-
-                <div className="py-3.5 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-[#1c1b18]">Notion AI Inline Bar</div>
-                    <div className="text-xs text-[#706c64] mt-0.5">Trigger AI generation on an empty block</div>
-                  </div>
-                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
-                    Space / /ai
-                  </kbd>
-                </div>
-
-                <div className="py-3.5 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-[#1c1b18]">Voice & Dictation Mode</div>
-                    <div className="text-xs text-[#706c64] mt-0.5">Start speech-to-text recording</div>
-                  </div>
-                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
-                    Ctrl + Shift + V
-                  </kbd>
-                </div>
-
-                <div className="py-3.5 last:pb-0 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-[#1c1b18]">Undo & Redo</div>
-                    <div className="text-xs text-[#706c64] mt-0.5">Revert or reapply document block edits</div>
-                  </div>
-                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-[#ede8df] text-[#1c1b18] rounded-lg border border-[#ded8cb] shadow-xs">
-                    Ctrl + Z / Ctrl + Y
-                  </kbd>
-                </div>
-              </div>
-            </div>
+            <ShortcutsSettings />
           )}
 
           {tab === "Profile" && (

@@ -1,6 +1,6 @@
 // Premium spring physics and motion definitions for Noska Loader and Auth
-export const SPRING_PREMIUM = { type: "spring", stiffness: 220, damping: 28 };
-export const SPRING_GENTLE = { type: "spring", stiffness: 180, damping: 24 };
+export const SPRING_PREMIUM = { type: "spring", stiffness: 220, damping: 28 } as const;
+export const SPRING_GENTLE = { type: "spring", stiffness: 180, damping: 24 } as const;
 
 export const logoVariants = {
   initial: { scale: 0.9, opacity: 0 },
@@ -8,7 +8,7 @@ export const logoVariants = {
     scale: 1, 
     opacity: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 150,
       damping: 20,
     }
@@ -25,7 +25,7 @@ export const logoVariants = {
     transition: {
       duration: 4,
       repeat: Infinity,
-      ease: "easeInOut"
+      ease: "easeInOut" as const,
     }
   }
 };
@@ -37,7 +37,7 @@ export const revealVariants = {
     y: 0,
     scale: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 160,
       damping: 24,
       staggerChildren: 0.08,
@@ -49,8 +49,8 @@ export const revealVariants = {
     y: -12,
     scale: 0.99,
     transition: {
-      type: "tween",
-      ease: [0.7, 0, 0.84, 0], // expo-in
+      type: "tween" as const,
+      ease: [0.7, 0, 0.84, 0] as const, // expo-in
       duration: 0.3,
     }
   }
@@ -62,7 +62,7 @@ export const itemVariants = {
     opacity: 1,
     y: 0,
     transition: { 
-      type: "spring", 
+      type: "spring" as const, 
       stiffness: 200, 
       damping: 22 
     }
@@ -73,10 +73,10 @@ export const screenTransitionVariants = {
   initial: { opacity: 0 },
   animate: { 
     opacity: 1, 
-    transition: { duration: 0.5, ease: "easeOut" } 
+    transition: { duration: 0.5, ease: "easeOut" as const } 
   },
   exit: { 
     opacity: 0, 
-    transition: { duration: 0.4, ease: "easeIn" } 
+    transition: { duration: 0.4, ease: "easeIn" as const } 
   }
 };

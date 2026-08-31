@@ -1,12 +1,12 @@
 export const NODE_SPRING = {
-  type: "spring",
+  type: "spring" as const,
   stiffness: 260,
   damping: 26,
   mass: 0.8
 };
 
 export const BASE_SPRING = {
-  type: "spring",
+  type: "spring" as const,
   stiffness: 200,
   damping: 24,
   mass: 0.9
@@ -22,11 +22,11 @@ export const NODE_VARIANTS = {
   hover: {
     scale: 1.05,
     y: -2,
-    transition: { type: "spring", stiffness: 300, damping: 20 }
+    transition: { type: "spring" as const, stiffness: 300, damping: 20 }
   },
   tap: {
     scale: 0.98,
-    transition: { type: "spring", stiffness: 400, damping: 15 }
+    transition: { type: "spring" as const, stiffness: 400, damping: 15 }
   }
 };
 
@@ -35,7 +35,7 @@ export const FADE_IN_VARIANTS = {
   animate: {
     opacity: 1,
     y: 0,
-    transition: { type: "spring", stiffness: 220, damping: 22 }
+    transition: { type: "spring" as const, stiffness: 220, damping: 22 }
   },
   exit: {
     opacity: 0,

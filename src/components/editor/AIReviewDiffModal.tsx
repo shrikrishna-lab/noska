@@ -6,7 +6,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, AlertTriangle, Check, X, ArrowRight, Layers } from "lucide-react";
-import type { AIReviewDiff } from "../../collaboration/types";
+import type { AIReviewDiff } from "../../features/collab/types";
 
 interface AIReviewDiffModalProps {
   diff: AIReviewDiff | null;

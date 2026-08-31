@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, FileText, Clock, Brain, BarChart3, type LucideIcon } from 'lucide-react';
+import { PageIcon } from '../PageIcon';
 
 interface CollapsibleSectionProps {
   icon: LucideIcon;
@@ -79,11 +80,7 @@ export default function ContextPanel({ page, auditEvents = [], open, onToggle })
                   <div className="flex items-center gap-1 text-[9px] text-[var(--muted)]">
                     <span>{page.blocks?.length || 0} blocks</span>
                     <span>·</span>
-                    {page.icon && (page.icon.startsWith("data:") || page.icon.startsWith("http")) ? (
-                      <img src={page.icon} alt="" className="w-3 h-3 object-contain inline-block rounded-xs" />
-                    ) : (
-                      <span>{page.icon || '📝'}</span>
-                    )}
+                    <PageIcon icon={page.icon} size={12} fallback="📝" />
                   </div>
                   {page.tags?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">

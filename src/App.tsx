@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspens
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { isDesktop } from "./lib/desktop/platform";
 import { getDesktopIdentity, subscribePairing, pairingVersion } from "./lib/desktop/pairing";
+import { handleShortcutEvent } from "./lib/shortcuts";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { UIProvider, useUI } from "./contexts/UIContext";
 import { WorkspaceProvider, useWorkspace } from "./contexts/WorkspaceContext";
@@ -331,14 +332,17 @@ function AppContent() {
   const withSharedPermission = (p: Page): Page =>
     ({ ...p, permission: p.sharedRole === "editor" ? "edit" as const : "view" as const });
 
-  const activeOwnedMatch = pages.find((p) => p.id === activeId && !p.trashed);
-  const activeSharedMatch = !activeOwnedMatch ? sharedPages.find((p) => p.id === activeId) : undefined;
+  const activeOwnedMatch = useMemo(() => pages.find((p) => p.id === activeId && !p.trashed), [pages, activeId]);
+  const activeSharedMatch = useMemo(() => !activeOwnedMatch ? sharedPages.find((p) => p.id === activeId) : undefined, [activeOwnedMatch, sharedPages, activeId]);
   const isSharedActivePage = !activeOwnedMatch && !!activeSharedMatch;
-  const activePage = activeOwnedMatch
-    || (activeSharedMatch ? withSharedPermission(activeSharedMatch) : undefined)
-    || pages.find((p) => !p.trashed);
-  const visiblePages = pages.filter((p) => !p.trashed);
-  const trashPages = pages.filter((p) => p.trashed);
+  const activePage = useMemo(() =>
+    activeOwnedMatch
+      || (activeSharedMatch ? withSharedPermission(activeSharedMatch) : undefined)
+      || pages.find((p) => !p.trashed),
+    [activeOwnedMatch, activeSharedMatch, pages]
+  );
+  const visiblePages = useMemo(() => pages.filter((p) => !p.trashed), [pages]);
+  const trashPages = useMemo(() => pages.filter((p) => p.trashed), [pages]);
   const pageText = activePage ? plainText(activePage) : "";
 
   const toolContext = useMemo(() => ({
@@ -1271,6 +1275,13 @@ function AppContent() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Centralized shortcut handler (fires for all customizable shortcuts)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => handleShortcutEvent(e);
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, []);
+
   const normalizePageTree = (sourcePages: Page[], orderHints: Map<string, string[]> = new Map()) => normalizePages(sourcePages, orderHints);
 
   const sortSiblings = (sourcePages: Page[], parentId: string | null, orderedIds: string[] = []): Page[] => {
@@ -1774,7 +1785,10 @@ function AppContent() {
     }
     commitPages(normalizePageTree(nextPages));
     setActiveId(next.id);
+    setStackedPageIds([next.id]);
     setAppView("page");
+    openTab("page", next.id, { inNewTab: true, makeActive: true });
+    setRenameFocusId(next.id);
     if (options.modal) {
       setNewPageDraft(next);
       setNewPageOpen(true);
@@ -2328,6 +2342,14 @@ function AppContent() {
     updateBlocks(blocks);
   };
 
+  const handleToggleSidebar = useCallback(() => setSidebarOpen(prev => !prev), []);
+  const handleNewPage = useCallback((template?: string) => addPage(template || "blank"), [addPage]);
+  const handleTrashPage = useCallback((id: string) => updatePage(id, { trashed: true }), [updatePage]);
+  const handleTabNewPage = useCallback((template?: string) => {
+    const newId = addPage(template || "blank");
+    if (newId) setRenameFocusId(newId);
+  }, [addPage, setRenameFocusId]);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--bg)] text-[var(--muted)]">
@@ -2483,9 +2505,9 @@ function AppContent() {
             activeId={activeId}
             workspaceName={workspaceName}
             setWorkspaceName={setWorkspaceName}
-            onToggle={() => setSidebarOpen(!sidebarOpen)}
+            onToggle={handleToggleSidebar}
             onSelect={handlePageSelect}
-            onNew={(template) => addPage(template || "blank")}
+            onNew={handleNewPage}
             onSearch={() => setPaletteOpen(true)}
             onTrash={() => setTrashOpen(true)}
             onSettings={handleOpenSettings}
@@ -2504,7 +2526,7 @@ function AppContent() {
             onRemoveFromRecents={removeFromRecents}
             onToggleOffline={toggleOffline}
             onCopyLink={copyPageLink}
-            onTrashPage={(id) => updatePage(id, { trashed: true })}
+            onTrashPage={handleTrashPage}
             collapsedPages={collapsedPages}
             onToggleCollapse={togglePageCollapse}
             onReview={() => setReviewOpen(true)}
@@ -2525,10 +2547,7 @@ function AppContent() {
               sharedPages={sharedPages}
               pendingInvites={pendingInvites}
               aiChats={aiChats}
-              onNewPage={(template) => {
-                const newId = addPage(template || "blank");
-                if (newId) setRenameFocusId(newId);
-              }}
+              onNewPage={handleTabNewPage}
               onCopyLink={copyPageLink}
             />
             <Topbar
@@ -2560,13 +2579,13 @@ function AppContent() {
               onRemoveEncryption={handleRemoveEncryption}
             />
             <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
-              <AnimatePresence mode="wait">
+              <AnimatePresence>
                 <motion.div
-                  key={appView === "page" ? `${appView}-${activeId}-${pageMode}` : appView}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  key={appView === "page" ? `workspace-editor-${pageMode}` : appView}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.1 }}
                   className="flex-1 flex flex-col min-h-0 overflow-hidden"
                 >
                   {appView === "page" ? (
@@ -2657,7 +2676,7 @@ function AppContent() {
                         onCreateSubpage={(pId, afterBlockId, title) =>
                           createSubpageAtBlock(pId, afterBlockId, title)
                         }
-                        onTrashPage={(id) => updatePage(id, { trashed: true })}
+            onTrashPage={handleTrashPage}
                         onNewPage={(template) => addPage(template)}
                       />
                     )

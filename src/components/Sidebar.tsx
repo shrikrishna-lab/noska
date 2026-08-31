@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, memo } from "react";
+import React, { useState, useRef, useEffect, memo, useMemo } from "react";
 import type { ReactNode, ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -37,7 +37,8 @@ import {
   AnimatedTrash,
   AnimatedSend,
   AnimatedUpload,
-  AnimatedDownload
+  AnimatedDownload,
+  AnimatedMeetingScheduler
 } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss } from "./ui";
 import { timeAgo, plainText, emojis } from "../utils/helpers";
@@ -168,10 +169,13 @@ const Sidebar = memo(function Sidebar({
   currentUserEmail,
   currentUserAvatar
 }: SidebarProps) {
-  const recents = [...pages]
-    .filter((p) => !p.hiddenFromRecents)
+  const recents = useMemo(() => [...pages]
+    .filter((p) => !p.hiddenFromRecents && !p.trashed)
     .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
-    .slice(0, 5);
+    .slice(0, 5),
+  [pages]);
+
+  const rootPageIds = useMemo(() => pages.filter(p => !p.parentId).map(p => p.id), [pages]);
 
   // Real display identity, sourced from App.tsx's actual signed-in state
   // (currentUsername/currentUserEmail, backed by the real Supabase auth
@@ -408,6 +412,7 @@ const Sidebar = memo(function Sidebar({
             <NoskaNavItem icon={AnimatedFolder} label="Home" active={appView === "home"} onClick={(e) => onView("home", selectOptionsFromEvent(e))} />
             <NoskaNavItem icon={AnimatedAI} label="AI Workspace" active={false} onClick={onAIFull} />
             <NoskaNavItem icon={AnimatedHistory} label="Calendar" active={appView === "calendar"} onClick={(e) => onView("calendar", selectOptionsFromEvent(e))} />
+            <NoskaNavItem icon={AnimatedMeetingScheduler} label="Meeting Scheduler" active={appView === "meetings"} onClick={(e) => onView("meetings", selectOptionsFromEvent(e))} />
             <NoskaNavItem icon={AnimatedBell} label="Inbox" active={appView === "inbox"} onClick={(e) => onView("inbox", selectOptionsFromEvent(e))} badge={pendingInvitesCount} />
           </NoskaSection>
 
@@ -461,7 +466,7 @@ const Sidebar = memo(function Sidebar({
           {/* 6. Page Tree Documents */}
           <NoskaSection title="Private Documents" defaultExpanded={true}>
             <PageTree
-              content={pages.filter(p => !p.parentId).map(p => p.id)}
+              content={rootPageIds}
               allBlocks={pages}
               activeId={activeId}
               collapsedPages={collapsedPages}
@@ -489,8 +494,9 @@ const Sidebar = memo(function Sidebar({
           </NoskaSection>
 
           {/* 7. Collaboration Space */}
-          <NoskaSection title="Shared Space" defaultExpanded={false}>
-            <NoskaNavItem icon={AnimatedPlus} label="Start collaboration" onClick={(e) => onView("shared", selectOptionsFromEvent(e))} active={appView === "shared"} muted compact />
+          <NoskaSection title="Shared Space" defaultExpanded={true}>
+            <NoskaNavItem icon={Users} label="Collaboration Hub" onClick={(e) => onView("shared", selectOptionsFromEvent(e))} active={appView === "shared"} compact />
+            <NoskaNavItem icon={AnimatedPlus} label="Start collaboration" onClick={() => onShare?.()} muted compact />
           </NoskaSection>
 
           {/* 9. Spaced Recall & Console */}
@@ -576,13 +582,13 @@ interface RecentsPageItemProps {
   onRemove: (pageId: string) => void;
 }
 
-function RecentsPageItem({ page, active, onSelect, onRemove }: RecentsPageItemProps) {
+function RecentsPageItemBase({ page, active, onSelect, onRemove }: RecentsPageItemProps) {
   const wordCount = page.blocks ? page.blocks.reduce((acc, b) => acc + (b.text ? b.text.split(/\s+/).filter(Boolean).length : 0), 0) : 0;
   return (
     <div className={`group relative flex min-h-[26px] items-center rounded-lg transition-all duration-150 text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]`}>
       {active && (
         <motion.div
-          layoutId="sidebar-active-bg"
+          layoutId="recents-active-bg"
           transition={{ type: "spring", stiffness: 380, damping: 30 }}
           className="absolute inset-0 bg-[var(--active)] border border-[var(--border)] shadow-sm rounded-lg z-0"
         />
@@ -615,6 +621,7 @@ function RecentsPageItem({ page, active, onSelect, onRemove }: RecentsPageItemPr
     </div>
   );
 }
+const RecentsPageItem = React.memo(RecentsPageItemBase);
 
 interface NoskaSectionProps {
   title: string;
@@ -688,7 +695,7 @@ function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ari
     >
       {active && (
         <motion.div
-          layoutId="sidebar-active-bg"
+          layoutId="nav-active-bg"
           transition={{ type: "spring", stiffness: 380, damping: 30 }}
           className="absolute inset-0 bg-[var(--active)] border border-[var(--border)] shadow-sm rounded-lg z-0"
         />

@@ -81,6 +81,7 @@ interface AISendOpts {
   effort?: "low" | "medium" | "high";
   thinking?: boolean;
   signal?: AbortSignal;
+  temperature?: number;
 }
 
 interface AIConversationMessage {

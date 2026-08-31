@@ -208,7 +208,7 @@ function HoverToolbar({ onAddInside, onMenu, onFavorite, onAI, onPeek, isFavorit
 // components (AnimatedBookmark, AnimatedTrash, etc. — see
 // src/components/ui/icons/index.tsx), which share the same size/className
 // prop shape as LucideIcon but aren't LucideIcon instances themselves.
-type MenuActionIcon = LucideIcon | ((props: { size?: number; className?: string }) => JSX.Element);
+type MenuActionIcon = LucideIcon | ((props: { size?: number; className?: string }) => React.JSX.Element);
 
 interface PageMenuActionProps {
   icon: MenuActionIcon;
@@ -256,7 +256,7 @@ interface BranchExpandedProps extends TreeHandlerProps {
   collapsedPages: Set<string>;
 }
 
-function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCollapse, onSelect, onAddInside, onPatchPage, onDuplicatePage, onRenamePage, onTrashPage, onCopyLink, onRemoveFromRecents, onToggleOffline, onToast }: BranchExpandedProps) {
+function BranchExpandedBase({ page, allBlocks, activeId, collapsedPages, onToggleCollapse, onSelect, onAddInside, onPatchPage, onDuplicatePage, onRenamePage, onTrashPage, onCopyLink, onRemoveFromRecents, onToggleOffline, onToast }: BranchExpandedProps) {
   const [childHoverId, setChildHoverId] = useState<string | null>(null);
   if (!collapsedPages.has(page.id) && page.content?.length) {
     const children = page.content.filter(id => isPageEntity(allBlocks.find(b => b.id === id)));
@@ -304,6 +304,7 @@ function BranchExpanded({ page, allBlocks, activeId, collapsedPages, onToggleCol
   }
   return null;
 }
+const BranchExpanded = React.memo(BranchExpandedBase);
 
 interface PremiumBranchProps extends TreeHandlerProps {
   page: Page;
@@ -314,12 +315,13 @@ interface PremiumBranchProps extends TreeHandlerProps {
   parentHovered: boolean;
 }
 
-function PremiumBranch({
+function PremiumBranchBase({
   page, depth, active, hasChildren, expanded, onToggleCollapse,
   onSelect, onAddInside, onPatchPage, parentHovered,
   onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
   onRemoveFromRecents, onToggleOffline, onToast,
 }: PremiumBranchProps) {
+  const { splitPage } = useTabs();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -456,6 +458,7 @@ function PremiumBranch({
     </div>
   );
 }
+const PremiumBranch = React.memo(PremiumBranchBase);
 
 interface PremiumPageItemProps extends TreeHandlerProps {
   page: Page;
@@ -470,7 +473,7 @@ interface PremiumPageItemProps extends TreeHandlerProps {
   activeId: string | null;
 }
 
-function PremiumPageItem({
+function PremiumPageItemBase({
   page, active, selected, hasChildren, expanded,
   depth, ancestors, onToggleCollapse, onSelect, onPatchPage,
   onAddInside, allBlocks, collapsedPages, activeId,
@@ -664,19 +667,25 @@ function PremiumPageItem({
     </div>
   );
 }
+const PremiumPageItem = React.memo(PremiumPageItemBase);
+
+interface SortablePremiumItemProps extends PremiumPageItemProps {
+  id: string;
+  focused?: boolean;
+}
 
 function SortablePremiumItem({ id, focused, ...props }: SortablePremiumItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
+    transition: transition || "transform 200ms cubic-bezier(0.2, 0, 0, 1), opacity 200ms ease",
+    opacity: isDragging ? 0.35 : 1,
     position: 'relative',
-    zIndex: isDragging ? 10 : 1,
+    zIndex: isDragging ? 20 : 1,
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
-      <div {...listeners} className="cursor-grab active:cursor-grabbing">
+      <div {...listeners} className="cursor-grab active:cursor-grabbing select-none transition-transform duration-150 active:scale-[0.99]">
         <PremiumPageItem {...props} />
       </div>
     </div>
@@ -691,15 +700,16 @@ interface DragGhostProps {
 function DragGhost({ page, depth }: DragGhostProps) {
   return (
     <motion.div
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
+      initial={{ scale: 0.95, opacity: 0, y: 4 }}
+      animate={{ scale: 1.03, opacity: 1, y: 0 }}
       exit={{ scale: 0.95, opacity: 0 }}
-      className="flex min-h-[28px] items-center gap-2 rounded-lg bg-[var(--surface-2)] border border-[var(--accent)]/50 shadow-xl px-2.5 py-1 text-[12px] text-[var(--text)] font-semibold backdrop-blur-sm"
+      transition={{ type: "spring", stiffness: 450, damping: 28 }}
+      className="flex min-h-[30px] items-center gap-2 rounded-lg bg-[var(--surface-2)] border border-[var(--accent)] shadow-2xl px-3 py-1.5 text-[12px] text-[var(--text)] font-semibold backdrop-blur-md z-50 cursor-grabbing pointer-events-none"
     >
-      <GripVertical size={10} className="text-[var(--muted)] shrink-0" />
+      <GripVertical size={11} className="text-[var(--accent)] shrink-0" />
       <div style={{ width: depth * 14 }} className="shrink-0" />
       <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
-      <span className="truncate">{page.title || 'Untitled'}</span>
+      <span className="truncate max-w-[200px]">{page.title || 'Untitled'}</span>
     </motion.div>
   );
 }
@@ -742,7 +752,12 @@ export default function PageTree({
   const visibleIds: string[] = useMemo(() => visibleItems.map(p => p.id), [visibleItems]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 4,
+        tolerance: 5,
+      }
+    })
   );
 
   const handleSelect = useCallback((pageId: string, options: PageSelectOptions = {}) => {

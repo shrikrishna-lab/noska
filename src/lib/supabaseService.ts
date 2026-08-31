@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
-import type { Json, Tables, TablesInsert, TablesUpdate } from "../../types/supabase";
 import type { Block, LineageEntry } from "../../types/blocks";
+export type { Block, LineageEntry };
 import type {
   AgentAccessLevel,
   AgentResourceType,
@@ -13,6 +13,7 @@ import type {
   PayoutStatus,
   TemplateAdditionStatus,
 } from "../../types/enums";
+import type { Tables, TablesInsert, TablesUpdate, Json } from "../../types/supabase";
 
 // Refuse any owner-scoped write that lacks an authenticated user id. Under the
 // owner-scoped RLS model a null/empty owner would either fail the WITH CHECK
@@ -1111,6 +1112,8 @@ export interface MarketplaceTemplateFilters {
   search?: string;
   orderBy?: string;
   orderDir?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
 }
 
 export interface MarketplaceTemplateInput {
@@ -1129,6 +1132,7 @@ export interface MarketplaceTemplateInput {
   accessLocked?: boolean;
   addCount?: number;
   rating?: number;
+  ratingCount?: number;
   limit?: number;
   offset?: number;
 }
@@ -1139,7 +1143,7 @@ export async function fetchMarketplaceTemplates(
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
   let query = supabase.from("marketplace_templates").select(
-    "id, title, description, category, template_type, price, is_pro, owner_id, status, add_count, rating, rating_count, tags, icon, cover_image, author_name, created_at, updated_at"
+    "id, title, description, category, template_type, price, owner_id, status, add_count, rating, rating_count, tags, icon, cover_image, author_name, created_at, updated_at"
   );
   if (filters.status) query = query.eq("status", filters.status);
   else query = query.eq("status", "published");
@@ -1152,7 +1156,7 @@ export async function fetchMarketplaceTemplates(
   query = query.order(orderCol, { ascending: orderDir === "asc" }).range(offset, offset + limit - 1);
   const { data, error } = await query;
   if (error) throw error;
-  return (data || []) as Tables<"marketplace_templates">[];
+  return (data || []) as unknown as Tables<"marketplace_templates">[];
 }
 
 export async function fetchTemplateById(id: string): Promise<Tables<"marketplace_templates"> | null> {

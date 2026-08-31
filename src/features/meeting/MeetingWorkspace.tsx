@@ -12,8 +12,8 @@ import {
 import { aiManager } from "../../ai/AIManager";
 import { uid } from "../../utils/helpers";
 
-const SPRING = { type: "spring", stiffness: 300, damping: 30 };
-const TAB_SPRING = { type: "spring", stiffness: 400, damping: 28 };
+const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
+const TAB_SPRING = { type: "spring" as const, stiffness: 400, damping: 28 };
 
 const TABS = [
   { id: "notes", label: "Notes", icon: Edit3 },

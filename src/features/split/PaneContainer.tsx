@@ -300,6 +300,7 @@ export default function PaneContainer({
                 />
               ) : (
                 <Editor
+                  key={activePage.id}
                   page={activePage}
                   pages={pages}
                   renameFocusId={renameFocusId}

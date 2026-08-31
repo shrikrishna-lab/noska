@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import {
   Smile,
   Sliders,
@@ -69,10 +69,10 @@ export default function PageIconBlock({
     setImportedIcons(getImportedIcons());
   }, [open]);
 
-  // Long-press detection for free drag
-  const [canDrag, setCanDrag] = useState(false);
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Drag detection — hold+drag to move, long press to open picker
   const isDraggingRef = useRef(false);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const dragControls = useDragControls();
 
   // Position calculation for popover
   const updateCoords = useCallback(() => {
@@ -239,14 +239,16 @@ export default function PageIconBlock({
     boxStyleClass = "hover:bg-[var(--hover)]/60";
   }
 
-  // Pointer event handlers for Long Press vs Click
+  // Pointer event handlers — hold+drag to move, long press to open picker
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!isEditable || page.isLocked) return;
     isDraggingRef.current = false;
+    dragControls.start(e);
     longPressTimerRef.current = setTimeout(() => {
-      setCanDrag(true);
-      isDraggingRef.current = true;
-    }, 280);
+      if (!isDraggingRef.current) {
+        onOpen();
+      }
+    }, 400);
   };
 
   const handlePointerUp = () => {
@@ -257,7 +259,6 @@ export default function PageIconBlock({
     if (!isDraggingRef.current) {
       onOpen();
     }
-    setCanDrag(false);
   };
 
   const handlePointerCancel = () => {
@@ -265,7 +266,6 @@ export default function PageIconBlock({
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-    setCanDrag(false);
   };
 
   if (!page.icon) return null;
@@ -277,16 +277,21 @@ export default function PageIconBlock({
     >
       <motion.div
         ref={iconRef}
-        drag={canDrag}
+        drag
         dragMomentum={false}
+        dragControls={dragControls}
+        dragListener={false}
         onDragStart={() => {
           isDraggingRef.current = true;
+          if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+          }
         }}
         onDragEnd={(_e, info) => {
           const nextX = Math.round(iconOffsetX + info.offset.x);
           const nextY = Math.round(iconOffsetY + info.offset.y);
           onPagePatch({ iconOffsetX: nextX, iconOffsetY: nextY });
-          setCanDrag(false);
           updateCoords();
         }}
         onPointerDown={handlePointerDown}
@@ -301,10 +306,8 @@ export default function PageIconBlock({
           width: `${iconSize + iconPadding * 2}px`,
           height: `${iconSize + iconPadding * 2}px`
         }}
-        className={`group/icon relative flex items-center justify-center cursor-pointer transition-shadow ${boxStyleClass} ${
-          canDrag ? "cursor-grabbing ring-2 ring-[var(--noska-blue)] shadow-2xl scale-105" : "cursor-pointer"
-        }`}
-        title="Click to customize • Hold & Drag to move freely"
+        className={`group/icon relative flex items-center justify-center cursor-grab active:cursor-grabbing transition-shadow ${boxStyleClass}`}
+        title="Click to customize • Drag to move freely • Long press to open"
       >
         {isUrl ? (
           <img

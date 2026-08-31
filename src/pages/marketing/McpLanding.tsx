@@ -53,8 +53,8 @@ const SESSION = [
 ];
 
 function useTypedSession(started) {
-  const [lines, setLines] = useState([]);
-  const timer = useRef(0);
+  const [lines, setLines] = useState<any[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | number>(0);
   useEffect(() => {
     if (!started) return;
     let li = 0, ci = 0, alive = true;
@@ -171,7 +171,7 @@ export default function McpLanding() {
     <div className="mcp-page">
       <McpAtmosphere />
       <ScrollProgress />
-      <CursorFollower variant="mcp" />
+      <CursorFollower variant="mcp" label="MCP" />
 
       {/* ══ Boot gate + hero terminal ══ */}
       <section className="mcp-hero">

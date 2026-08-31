@@ -44,6 +44,7 @@ import PageTitleCustomizer, { TITLE_GRADIENTS } from "./editor/PageTitleCustomiz
 import { PageIcon } from "./PageIcon";
 
 import InPageFind from "./InPageFind";
+import { CursorOverlay } from "../features/collab/CursorOverlay";
 import useMultiBlockSelect from "../hooks/useMultiBlockSelect";
 import {
   AlignLeft, Heading1, Heading2, Heading3, Heading4, List, ListChecks, ChevronLeft, ChevronRight, ChevronDown, CheckSquare,
@@ -816,6 +817,9 @@ export default function Editor({
         }`}
       style={page.pageBg ? { background: page.pageBg } : undefined}
     >
+      {/* Live cursors from other collaborators */}
+      <CursorOverlay pageId={page.id} />
+
       {/* Cover Banner — full width of editor container or constrained by coverSize without viewport overflow */}
       {Boolean(page.cover) && (
         <div
@@ -1565,7 +1569,7 @@ export default function Editor({
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-left hover:bg-[var(--hover)] transition cursor-pointer"
                 >
                   <Move size={13} className="text-[var(--muted)] shrink-0" />
-                  <span className="truncate">{p.icon || "📄"} {p.title || "Untitled"}</span>
+                  <span className="truncate flex items-center gap-1"><PageIcon icon={p.icon} size={13} fallback="📄" /> {p.title || "Untitled"}</span>
                 </button>
               ))}
             </div>

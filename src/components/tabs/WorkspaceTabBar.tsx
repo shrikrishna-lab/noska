@@ -57,7 +57,8 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
     reorderTabs,
     duplicateTab,
     splitPage,
-    activePaneId
+    activePaneId,
+    setPaneActiveTab
   } = useTabs();
 
   const [
@@ -152,12 +153,12 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
           ? (idx <= 0 ? tabs.length - 1 : idx - 1)
           : (idx < 0 || idx >= tabs.length - 1 ? 0 : idx + 1);
         const target = tabs[next];
-        if (target) openTab(target.type, target.targetId, { makeActive: true });
+        if (target) setPaneActiveTab(activePaneId, target.id);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [tabs, activeTabId, closeTab, openTab]);
+  }, [tabs, activeTabId, closeTab, setPaneActiveTab, activePaneId]);
 
   // Dismiss overflow dropdown on outside click / Escape
   useEffect(() => {
@@ -284,13 +285,13 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
 
   return (
     <div
-      className="group/tabbar relative flex h-[34px] w-full select-none items-stretch border-b border-[var(--border)] bg-[var(--surface-2)] px-1.5 overflow-hidden z-20 text-[12px]"
+      className="group/tabbar relative flex h-[44px] w-full select-none items-end border-b border-[var(--border)] bg-[var(--surface-2)] px-3 pt-3.5 overflow-hidden z-20 text-[12px] transition-colors"
       onWheel={handleWheel}
     >
       {/* Scrollable Tabs Container */}
       <div
         ref={containerRef}
-        className="flex flex-row flex-nowrap flex-1 items-end gap-1 overflow-x-auto no-scrollbar pt-1 min-w-0"
+        className="flex flex-row flex-nowrap flex-1 items-end gap-1.5 overflow-x-auto no-scrollbar min-w-0"
         style={{ scrollBehavior: "smooth" }}
       >
         <Reorder.Group
@@ -308,25 +309,35 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
                 key={tab.id}
                 value={tab}
                 dragListener={!tab.pinned}
+                dragElastic={0.12}
+                whileDrag={{
+                  scale: 1.03,
+                  zIndex: 50,
+                  opacity: 0.95,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+                  cursor: "grabbing"
+                }}
+                whileHover={{ y: 0 }}
+                transition={{ type: "spring", stiffness: 450, damping: 30 }}
                 onContextMenu={(e) => handleContextMenu(e, tab)}
                 onAuxClick={(e) => handleAuxClick(e, tab.id)}
                 onMouseEnter={(e) => schedulePreview(e, tab)}
                 onMouseLeave={cancelPreview}
                 title={meta.breadcrumb || meta.title}
-                className={`group/tab relative flex flex-row flex-nowrap shrink-0 h-[30px] items-center gap-1.5 rounded-t-[8px] px-2.5 transition-all cursor-pointer select-none outline-none ${
+                className={`group/tab relative flex flex-row flex-nowrap shrink-0 h-[29px] items-center gap-2 rounded-t-md px-3 transition-all cursor-grab active:cursor-grabbing select-none outline-none ${
                   isActive
-                    ? "bg-[var(--bg)] text-[var(--text)] font-medium border-t border-x border-[var(--border)] shadow-[0_-2px_6px_rgba(0,0,0,0.05)] z-10"
+                    ? "bg-[var(--bg)] text-[var(--text)] font-semibold border-t border-x border-[var(--border)] shadow-[0_-2px_6px_rgba(0,0,0,0.04)] z-10"
                     : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] border-t border-x border-transparent"
-                } ${tab.pinned && meta.title !== "Untitled" ? "max-w-[42px] justify-center px-2" : "max-w-[190px] min-w-[110px]"}`}
+                } ${tab.pinned && meta.title !== "Untitled" ? "max-w-[42px] justify-center px-2" : "max-w-[200px] min-w-[115px]"}`}
                 onClick={() => {
                   if (!isActive) {
-                    openTab(tab.type, tab.targetId, { makeActive: true });
+                    setPaneActiveTab(activePaneId, tab.id);
                   }
                 }}
               >
                 {/* Active tab bottom cover to merge seamlessly with topbar */}
                 {isActive && (
-                  <div className="absolute -bottom-[1px] left-0 right-0 h-[1.5px] bg-[var(--bg)] z-20" />
+                  <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] bg-[var(--bg)] z-20" />
                 )}
 
                 {/* Tab Icon */}
@@ -340,7 +351,7 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
 
                 {/* Tab Title (hidden if pinned) */}
                 {(!tab.pinned || meta.title === "Untitled") && (
-                  <span className="truncate flex-1 text-[12px] leading-tight pr-0.5">
+                  <span className="truncate flex-1 text-[12px] leading-tight font-medium pr-0.5">
                     {meta.title}
                   </span>
                 )}
@@ -348,14 +359,14 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
                 {/* Pinned Icon indicator */}
                 {tab.pinned && <span className="sr-only">{meta.title}</span>}
 
-                {/* Tab Actions (Split & Close buttons on Hover or Active - matching Image 2) */}
+                {/* Tab Actions (Split & Close buttons on Hover or Active) */}
                 {!tab.pinned && (
                   <div className="flex items-center gap-0.5 ml-auto shrink-0 opacity-0 group-hover/tab:opacity-100 transition-opacity duration-150">
                     {tab.type === "page" && (
                       <button
                         onClick={(e) => handleSplitIconClick(e, tab)}
                         title="Split view (open page beside)"
-                        className="grid h-4 w-4 place-items-center rounded-xs transition cursor-pointer text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+                        className="grid h-4 w-4 place-items-center rounded-sm transition cursor-pointer text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 hover:text-slate-800 dark:hover:text-white"
                       >
                         <Columns size={10} strokeWidth={2.2} />
                       </button>
@@ -366,7 +377,7 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
                         closeTab(tab.id);
                       }}
                       title="Close tab"
-                      className="grid h-4 w-4 place-items-center rounded-xs text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+                      className="grid h-4 w-4 place-items-center rounded-sm text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 hover:text-slate-800 dark:hover:text-white transition cursor-pointer"
                     >
                       <X size={11} strokeWidth={2.2} />
                     </button>
@@ -381,7 +392,7 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
         <button
           onClick={() => setNewTabModalOpen(true)}
           title="Open new tab (Ctrl+T)"
-          className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors duration-150 shrink-0 mb-0.5 cursor-pointer"
+          className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition duration-150 shrink-0 mb-0.5 cursor-pointer"
         >
           <Plus size={14} strokeWidth={2.2} />
         </button>
@@ -392,15 +403,15 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
             ref={overflowRef}
             onClick={(e) => { e.stopPropagation(); setOverflowOpen((v) => !v); }}
             title="All tabs (search)"
-            className="relative flex h-[28px] w-[28px] items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors duration-150 shrink-0 mb-0.5 cursor-pointer"
+            className="relative flex h-[26px] w-[26px] items-center justify-center rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition duration-150 shrink-0 mb-0.5 cursor-pointer"
           >
-            <ChevronDown size={14} strokeWidth={2.2} />
+            <ChevronDown size={13} strokeWidth={2.2} />
           </button>
         )}
       </div>
 
-      {/* Right Side Collaboration Presence & Open Actions (matching Image 1 & 2) */}
-      <div className="flex items-center gap-1.5 ml-auto pl-2 shrink-0 my-auto z-20">
+      {/* Right Side Collaboration Presence & Open Actions */}
+      <div className="flex items-center gap-2 ml-auto pl-3 shrink-0 pb-0.5 z-20">
         {activePageId && (
           <CollabPresenceBar
             users={users}
@@ -500,7 +511,7 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
                 <button
                   key={t.id}
                   onClick={() => {
-                    openTab(t.type, t.targetId, { makeActive: true });
+                    setPaneActiveTab(activePaneId, t.id);
                     setOverflowOpen(false);
                     setOverflowSearch("");
                   }}
