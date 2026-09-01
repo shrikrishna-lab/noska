@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { useTeams } from "../../lib/TeamContext"
 import { fetchTeamInvites } from "../../lib/teams"
 import type { TeamInvite } from "../../lib/teams"
+import { X, Mail, Users, Settings as SettingsIcon, Trash2, ShieldCheck, UserPlus } from "lucide-react"
 
 interface Props {
   teamId: string
@@ -18,9 +19,10 @@ export default function TeamSettingsModal({ teamId, onClose }: Props) {
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member")
   const [teamInvites, setTeamInvites] = useState<TeamInvite[]>([])
-  const [tab, setTab] = useState<"members" | "settings" | "invites">("members")
+  const [tab, setTab] = useState<"members" | "invites" | "settings">("members")
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   useEffect(() => {
     if (team) {
@@ -35,27 +37,38 @@ export default function TeamSettingsModal({ teamId, onClose }: Props) {
   const handleSave = async () => {
     if (!name.trim()) return
     setSaving(true)
+    setStatusMsg(null)
     try {
       await updateTeam(teamId, { name: name.trim(), description: description || null, icon } as any)
       await refreshTeams()
-    } catch (e) {
+      setStatusMsg({ type: "success", text: "Teamspace settings saved successfully!" })
+    } catch (e: any) {
       console.warn("Failed to update team:", e)
+      setStatusMsg({ type: "error", text: e.message || "Failed to update team settings" })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setStatusMsg(null), 3500)
     }
-    setSaving(false)
   }
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return
     setSending(true)
+    setStatusMsg(null)
     try {
       await inviteMember(teamId, inviteEmail.trim(), inviteRole)
+      const invited = inviteEmail.trim()
       setInviteEmail("")
       const invites = await fetchTeamInvites(teamId)
       setTeamInvites(invites)
-    } catch (e) {
+      setStatusMsg({ type: "success", text: `Invitation sent to ${invited}!` })
+    } catch (e: any) {
       console.warn("Failed to invite:", e)
+      setStatusMsg({ type: "error", text: e.message || "Failed to send invitation" })
+    } finally {
+      setSending(false)
+      setTimeout(() => setStatusMsg(null), 4000)
     }
-    setSending(false)
   }
 
   const handleRemove = async (userId: string) => {
@@ -75,188 +88,266 @@ export default function TeamSettingsModal({ teamId, onClose }: Props) {
 
   if (!team) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-        <div className="rounded-xl bg-[var(--bg-primary)] p-6 shadow-xl border border-[var(--border)]" onClick={(e) => e.stopPropagation()}>
-          <p className="text-[var(--text)]">Team not found</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4" onClick={onClose}>
+        <div className="rounded-3xl bg-[var(--surface)] p-6 shadow-2xl border border-[var(--border)]" onClick={(e) => e.stopPropagation()}>
+          <p className="text-sm font-semibold text-[var(--text)]">Teamspace not found</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4" onClick={onClose}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-lg rounded-xl bg-[var(--bg-primary)] shadow-xl border border-[var(--border)] overflow-hidden"
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ type: "spring", stiffness: 450, damping: 30 }}
+        className="w-full max-w-lg rounded-3xl bg-[var(--surface)] dark:bg-[#161a23] shadow-2xl border border-[var(--border)] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-xl">
-            {team.icon || "👥"}
+        {/* Apple Modal Header */}
+        <div className="flex items-center justify-between border-b border-[var(--border)]/70 px-6 py-4 bg-[var(--surface-2)]/30">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--surface-2)] border border-[var(--border)] text-2xl shadow-xs shrink-0">
+              {team.icon || "👥"}
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-base text-[var(--text)] tracking-tight truncate">{team.name}</div>
+              <div className="text-xs text-[var(--muted)]">{members.length} {members.length === 1 ? "member" : "members"} · Teamspace</div>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-semibold text-[var(--text)] truncate">{team.name}</div>
-            <div className="text-xs text-[var(--muted)]">{members.length} members</div>
-          </div>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[var(--hover)] text-[var(--muted)] text-lg leading-none">
-            ✕
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-full bg-[var(--surface-2)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+            title="Close"
+          >
+            <X size={15} />
           </button>
         </div>
 
-        <div className="flex border-b border-[var(--border)]">
-          {(["members", "invites", "settings"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 text-sm font-medium text-center capitalize transition ${
-                tab === t
-                  ? "text-[var(--accent)] border-b-2 border-[var(--accent)]"
-                  : "text-[var(--muted)] hover:text-[var(--text)]"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
+        {/* Apple Segmented Control Tabs */}
+        <div className="px-6 pt-4 pb-2">
+          <div className="flex p-1 bg-black/[0.03] dark:bg-white/[0.04] rounded-2xl border border-black/[0.04] dark:border-white/[0.04] gap-1">
+            {(["members", "invites", "settings"] as const).map((t) => {
+              const active = tab === t
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`relative flex-1 py-2 text-xs font-semibold select-none cursor-pointer capitalize transition-colors duration-150 z-10 flex items-center justify-center gap-1.5 ${
+                    active
+                      ? "text-[var(--text)] font-bold"
+                      : "text-[var(--secondary)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {active && (
+                    <motion.div
+                      layoutId="teamModalTab"
+                      className="absolute inset-0 rounded-xl bg-[var(--surface)] dark:bg-[#202531] shadow-[0_1px_4px_rgba(0,0,0,0.08)] border border-[var(--border)]/80 -z-10"
+                      transition={{ type: "spring", stiffness: 480, damping: 32 }}
+                    />
+                  )}
+                  {t === "members" && <Users size={12} />}
+                  {t === "invites" && <Mail size={12} />}
+                  {t === "settings" && <SettingsIcon size={12} />}
+                  <span>{t}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
-        <div className="max-h-96 overflow-y-auto p-5">
-          {tab === "members" && (
-            <div className="space-y-2">
-              {members.map((member) => (
-                <div key={member.user_id} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-[var(--hover)] transition group">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--surface-2)] border border-[var(--border)] text-sm shrink-0">
-                    {member.user_avatar || "👤"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-[var(--text)] truncate">
-                      {member.user_name || member.user_email || member.user_id.slice(0, 8)}
+        {/* Modal Body */}
+        <div className="max-h-[380px] overflow-y-auto px-6 py-4 space-y-3">
+          {/* Status notification banner */}
+          <AnimatePresence>
+            {statusMsg && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, y: -4 }}
+                animate={{ opacity: 1, height: "auto", y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -4 }}
+                className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                  statusMsg.type === "success"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                    : "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
+                }`}
+              >
+                <span>{statusMsg.type === "success" ? "✓" : "⚠️"}</span>
+                <span>{statusMsg.text}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence mode="wait">
+            {tab === "members" && (
+              <motion.div
+                key="members"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="space-y-2"
+              >
+                {members.map((member) => (
+                  <div key={member.user_id} className="flex items-center gap-3 rounded-2xl p-2.5 bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)] border border-[var(--border)]/60 transition group">
+                    <div className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--surface)] border border-[var(--border)] text-sm shrink-0 shadow-2xs">
+                      {member.user_avatar || "👤"}
                     </div>
-                    <div className="text-[10px] text-[var(--muted)]">{member.user_email}</div>
-                  </div>
-                  <div className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    member.role === "owner" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300" :
-                    member.role === "admin" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" :
-                    "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                  }`}>
-                    {member.role}
-                  </div>
-                  {canManage && member.user_id !== currentUserId && (
-                    <button
-                      onClick={() => handleRemove(member.user_id)}
-                      className="hidden group-hover:flex h-6 w-6 items-center justify-center rounded hover:bg-red-100 text-red-500 text-xs"
-                      title="Remove member"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
-              {members.length === 0 && (
-                <p className="text-sm text-[var(--muted)] text-center py-8">No members yet</p>
-              )}
-            </div>
-          )}
-
-          {tab === "invites" && (
-            <div className="space-y-4">
-              {canManage && (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                      placeholder="Email address..."
-                      type="email"
-                      className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-                    />
-                    <select
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as "admin" | "member")}
-                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-2 text-sm text-[var(--text)] outline-none"
-                    >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <button
-                      onClick={handleInvite}
-                      disabled={sending || !inviteEmail.trim()}
-                      className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50"
-                    >
-                      {sending ? "..." : "Invite"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                {teamInvites.filter((i) => i.status === "pending").map((invite) => (
-                  <div key={invite.id} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm">
-                    <span className="text-[var(--muted)]">✉️</span>
-                    <span className="flex-1 text-[var(--text)]">{invite.invitee_email}</span>
-                    <span className="rounded bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
-                      {invite.role}
-                    </span>
-                    <span className="text-[10px] text-[var(--muted)]">Pending</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs sm:text-sm font-semibold text-[var(--text)] truncate">
+                        {member.user_name || member.user_email || member.user_id.slice(0, 8)}
+                      </div>
+                      <div className="text-[11px] text-[var(--muted)] truncate">{member.user_email}</div>
+                    </div>
+                    <div className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
+                      member.role === "owner" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25" :
+                      member.role === "admin" ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25" :
+                      "bg-black/5 dark:bg-white/10 text-[var(--secondary)] border-[var(--border)]"
+                    }`}>
+                      {member.role}
+                    </div>
+                    {canManage && member.user_id !== currentUserId && (
+                      <button
+                        onClick={() => handleRemove(member.user_id)}
+                        className="opacity-0 group-hover:opacity-100 grid h-7 w-7 place-items-center rounded-lg hover:bg-red-500/10 text-red-500 transition cursor-pointer"
+                        title="Remove member"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
                 ))}
-                {teamInvites.filter((i) => i.status === "pending").length === 0 && (
-                  <p className="text-sm text-[var(--muted)] text-center py-4">No pending invites</p>
+                {members.length === 0 && (
+                  <p className="text-xs text-[var(--muted)] text-center py-8">No members in this teamspace yet.</p>
                 )}
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
 
-          {tab === "settings" && (
-            <div className="space-y-4">
-              {canManage ? (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-[var(--muted)] mb-1">Icon</label>
-                    <select
-                      value={icon}
-                      onChange={(e) => setIcon(e.target.value)}
-                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-lg outline-none"
-                    >
-                      {TEAM_ICONS.map((ic) => (
-                        <option key={ic} value={ic}>{ic}</option>
-                      ))}
-                    </select>
+            {tab === "invites" && (
+              <motion.div
+                key="invites"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="space-y-4"
+              >
+                {canManage && (
+                  <div className="p-3 rounded-2xl bg-[var(--surface-2)]/50 border border-[var(--border)]/70 space-y-2">
+                    <label className="text-xs font-semibold text-[var(--text)] flex items-center gap-1.5">
+                      <UserPlus size={13} className="text-[var(--accent)]" />
+                      <span>Invite Collaborator</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                        placeholder="collaborator@example.com..."
+                        type="email"
+                        className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs sm:text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]"
+                      />
+                      <select
+                        value={inviteRole}
+                        onChange={(e) => setInviteRole(e.target.value as "admin" | "member")}
+                        className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-xs font-semibold text-[var(--text)] outline-none cursor-pointer"
+                      >
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <button
+                        onClick={handleInvite}
+                        disabled={sending || !inviteEmail.trim()}
+                        className="rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-deep)] transition active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
+                      >
+                        {sending ? "..." : "Send"}
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[var(--muted)] mb-1">Name</label>
-                    <input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[var(--muted)] mb-1">Description</label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={3}
-                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] outline-none resize-none"
-                    />
-                  </div>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !name.trim()}
-                    className="w-full rounded-lg bg-[var(--accent)] py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50"
-                  >
-                    {saving ? "Saving..." : "Save changes"}
-                  </button>
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-sm text-[var(--muted)]">Only team owners and admins can edit team settings.</p>
+                )}
+
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-[var(--secondary)]">Pending Invitations</div>
+                  {teamInvites.filter((i) => i.status === "pending").map((invite) => (
+                    <div key={invite.id} className="flex items-center gap-3 rounded-xl p-2.5 bg-[var(--surface-2)]/30 border border-[var(--border)] text-xs">
+                      <Mail size={13} className="text-[var(--muted)]" />
+                      <span className="flex-1 font-medium text-[var(--text)] truncate">{invite.invitee_email}</span>
+                      <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 px-2 py-0.5 text-[10px] font-semibold">
+                        {invite.role}
+                      </span>
+                      <span className="text-[10px] text-[var(--muted)] font-medium">Pending</span>
+                    </div>
+                  ))}
+                  {teamInvites.filter((i) => i.status === "pending").length === 0 && (
+                    <div className="text-xs text-[var(--muted)] text-center py-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-2)]/20">
+                      No pending invites
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+              </motion.div>
+            )}
+
+            {tab === "settings" && (
+              <motion.div
+                key="settings"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="space-y-4"
+              >
+                {canManage ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Team Icon</label>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={icon}
+                          onChange={(e) => setIcon(e.target.value)}
+                          className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2 text-xl outline-none cursor-pointer"
+                        >
+                          {TEAM_ICONS.map((ic) => (
+                            <option key={ic} value={ic}>{ic}</option>
+                          ))}
+                        </select>
+                        <span className="text-xs text-[var(--muted)]">Choose an emoji avatar for this teamspace</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Team Name</label>
+                      <input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3.5 py-2 text-xs sm:text-sm text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Description</label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={3}
+                        className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3.5 py-2 text-xs sm:text-sm text-[var(--text)] outline-none resize-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || !name.trim()}
+                      className="w-full rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-deep)] py-2.5 text-xs sm:text-sm font-semibold text-white transition active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
+                    >
+                      {saving ? "Saving..." : "Save changes"}
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center py-8 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-2)]/30">
+                    <ShieldCheck size={24} className="mx-auto text-[var(--muted)] mb-2" />
+                    <p className="text-xs text-[var(--muted)]">Only team owners and admins can edit teamspace settings.</p>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarDays,
   Calendar,
@@ -52,6 +52,10 @@ import {
   Tag,
   Mail,
   Users,
+  Building2,
+  Folder,
+  Globe,
+  Layers,
   type LucideIcon
 } from "lucide-react";
 import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
@@ -69,6 +73,7 @@ import { TeamInvitation } from "./ui/team-invitation";
 import { EventManager, type Event } from "./ui/event-manager";
 import { MeetingScheduler } from "./ui/meeting-scheduler";
 import { useTeams } from "../lib/TeamContext";
+import { useCompany } from "../contexts/CompanyContext";
 import MonthCalendar from "./MonthCalendar";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
 import { computeAnalytics } from "../features/study/LearningAnalytics";
@@ -76,6 +81,9 @@ import { curateWorkspace } from "../utils/curator";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block, LineageEntry } from "../../types/blocks";
 import type { Tables } from "../../types/supabase";
+import { CompanyHome } from "./company/CompanyHome";
+import { CompanySettings } from "./company/CompanySettings";
+import { CompanyWorkspace } from "./company/CompanyWorkspace";
 
 // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
 // (deliberately, to avoid a circular type dependency — see that file's
@@ -285,6 +293,8 @@ export function WorkspaceView({
   if (view === "inbox") return <InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
   if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
   if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} />;
+  if (view === "companyHome") return <CompanyWorkspace onBack={() => onView?.("home")} />;
+  if (view === "companySettings") return <CompanyWorkspace onBack={() => onView?.("home")} />;
 
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -749,11 +759,15 @@ export function WorkspaceView({
         )}
 
         {(view === "library" || view === "teamspace") && (
-          <Panel title="Workspace library">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {pages.map((page) => <PageCard key={page.id} page={page} onSelect={onSelect} />)}
-            </div>
-          </Panel>
+          <CategorizedWorkspaceLibrary
+            pages={pages}
+            sharedPages={sharedPages}
+            workspaceName={workspaceName}
+            onSelect={onSelect}
+            onNew={onNew}
+            initialTab={view === "teamspace" ? "teams" : "all"}
+            showTeamspacesTable={false}
+          />
         )}
 
         {view === "shared" && (
@@ -817,6 +831,800 @@ function RouteShell({ title, subtitle, children, actions }: RouteShellProps) {
   );
 }
 
+export interface PageScopeInfo {
+  scope: "company" | "team" | "workspace" | "shared";
+  label: string;
+  badgeLabel: string;
+  icon: LucideIcon;
+  badgeClass: string;
+  teamName?: string;
+  companyName?: string;
+}
+
+export function getPageScopeInfo(
+  page: Page,
+  sharedPages: Page[] = [],
+  teams: Array<{ id: string; name?: string }> = [],
+  currentCompany?: { id: string; name?: string } | null
+): PageScopeInfo {
+  if (sharedPages.some((sp) => sp.id === page.id) || (page as any).isShared) {
+    return {
+      scope: "shared",
+      label: "Shared with you",
+      badgeLabel: "Shared",
+      icon: Globe,
+      badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+    };
+  }
+  if (
+    (page as any).visibility === "company" ||
+    (page as any).organization_id ||
+    (page as any).company_id ||
+    page.tags?.some((t: any) => String(t).toLowerCase() === "company" || String(t).toLowerCase() === "org")
+  ) {
+    return {
+      scope: "company",
+      label: currentCompany?.name ? `${currentCompany.name}` : "Company",
+      badgeLabel: currentCompany?.name || "Company",
+      icon: Building2,
+      badgeClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+      companyName: currentCompany?.name
+    };
+  }
+  const teamId = (page as any).team_id || (page as any).teamId;
+  if ((page as any).visibility === "team" || teamId || page.tags?.some((t: any) => String(t).toLowerCase() === "team")) {
+    const matchedTeam = teams.find((t) => t.id === teamId);
+    return {
+      scope: "team",
+      label: matchedTeam?.name ? `${matchedTeam.name}` : "Teamspace",
+      badgeLabel: matchedTeam?.name || "Team",
+      icon: Users,
+      badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+      teamName: matchedTeam?.name
+    };
+  }
+  return {
+    scope: "workspace",
+    label: "Personal Workspace",
+    badgeLabel: "Workspace",
+    icon: Home,
+    badgeClass: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20"
+  };
+}
+
+export interface CategorizedWorkspaceLibraryProps {
+  pages: Page[];
+  sharedPages?: Page[];
+  workspaceName?: string;
+  onSelect: (pageId: string) => void;
+  onNew: (template: string) => void;
+  initialTab?: string;
+  showTeamspacesTable?: boolean;
+}
+
+export function CategorizedWorkspaceLibrary({
+  pages,
+  sharedPages = [],
+  workspaceName = "Workspace",
+  onSelect,
+  onNew,
+  initialTab = "all",
+  showTeamspacesTable = true
+}: CategorizedWorkspaceLibraryProps) {
+  const [activeScope, setActiveScope] = useState<string>(initialTab);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const { teams, currentTeam, setCurrentTeam, createTeam } = useTeams();
+  let companyCtx: ReturnType<typeof useCompany> | null = null;
+  try {
+    companyCtx = useCompany();
+  } catch (e) {
+    companyCtx = null;
+  }
+  const currentCompany = companyCtx?.currentCompany;
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setIsSearchOpen(true);
+        setTimeout(() => searchInputRef.current?.focus(), 50);
+      } else if (e.key === "Escape" && isSearchOpen) {
+        if (searchQuery) {
+          setSearchQuery("");
+        } else {
+          setIsSearchOpen(false);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSearchOpen, searchQuery]);
+
+  const pagesWithScope = React.useMemo(() => {
+    return pages.map((page) => ({
+      page,
+      scopeInfo: getPageScopeInfo(page, sharedPages, teams, currentCompany)
+    }));
+  }, [pages, sharedPages, teams, currentCompany]);
+
+  const companyPages = React.useMemo(
+    () => pagesWithScope.filter((p) => p.scopeInfo.scope === "company").map((p) => p.page),
+    [pagesWithScope]
+  );
+  const teamPages = React.useMemo(
+    () => pagesWithScope.filter((p) => p.scopeInfo.scope === "team").map((p) => p.page),
+    [pagesWithScope]
+  );
+  const workspacePages = React.useMemo(
+    () => pagesWithScope.filter((p) => p.scopeInfo.scope === "workspace").map((p) => p.page),
+    [pagesWithScope]
+  );
+  const favoritePages = React.useMemo(
+    () => pages.filter((p) => p.favorite && !p.trashed),
+    [pages]
+  );
+  const recentPages = React.useMemo(
+    () => [...pages].sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()).slice(0, 12),
+    [pages]
+  );
+  const meetingPages = React.useMemo(
+    () => pages.filter((p) => p.title?.toLowerCase().includes("meeting") || p.icon === "🗓️" || p.icon === "🎙️" || p.icon === "🎤"),
+    [pages]
+  );
+
+  const allTeamspaces = teams.length > 0 ? teams : [
+    { id: "default", name: `${workspaceName} HQ`, description: "Default workspace for private and shared pages", icon: "⌂", member_count: 1, role: "owner" }
+  ];
+
+  const filterByQuery = (list: Page[]) => {
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter((p) => p.title?.toLowerCase().includes(q) || plainText(p).toLowerCase().includes(q));
+  };
+
+  const scopeTabs = [
+    { id: "all", label: "All", count: pages.length + sharedPages.length, icon: Layers },
+    { id: "workspace", label: "Workspace", count: workspacePages.length, icon: Home },
+    { id: "teams", label: "Teams", count: teamPages.length, icon: Users },
+    { id: "company", label: "Company", count: companyPages.length, icon: Building2 },
+    { id: "shared", label: "Shared", count: sharedPages.length, icon: Globe },
+  ];
+
+  const filterTabs = [
+    { id: "favorites", label: "Favorites", count: favoritePages.length, icon: Star },
+    { id: "recents", label: "Recents", count: recentPages.length, icon: Clock },
+    { id: "meetings", label: "Meeting Notes", count: meetingPages.length, icon: CalendarDays },
+  ];
+
+  const filteredTeamPages = React.useMemo(() => {
+    let list = teamPages;
+    if (selectedTeamId) {
+      list = list.filter((p) => (p as any).team_id === selectedTeamId || (p as any).teamId === selectedTeamId);
+    }
+    return filterByQuery(list);
+  }, [teamPages, selectedTeamId, searchQuery]);
+
+  return (
+    <div className="space-y-4">
+      {/* Apple-grade Unified Toolbar */}
+      <div className="flex items-center justify-between gap-3 p-1.5 rounded-2xl bg-[var(--surface-2)]/50 dark:bg-[#121620]/75 backdrop-blur-2xl border border-[var(--border)]/70 shadow-xs w-full overflow-x-auto scrollbar-none">
+        {/* Left: Primary Scope Segmented Control */}
+        <div className="flex items-center gap-1 p-1 bg-black/[0.03] dark:bg-white/[0.04] rounded-xl border border-black/[0.04] dark:border-white/[0.04] shrink-0">
+          {scopeTabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeScope === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveScope(tab.id);
+                  if (tab.id !== "teams") setSelectedTeamId(null);
+                }}
+                className={`relative flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold select-none cursor-pointer whitespace-nowrap transition-colors duration-150 z-10 ${
+                  active
+                    ? "text-[var(--text)] font-bold"
+                    : "text-[var(--secondary)] hover:text-[var(--text)]"
+                }`}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="appleScopeIndicator"
+                    className="absolute inset-0 rounded-lg bg-[var(--surface)] shadow-[0_1px_4px_rgba(0,0,0,0.08),0_1px_1px_rgba(0,0,0,0.04)] border border-[var(--border)]/80 -z-10"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <Icon size={13} className={active ? "text-[var(--accent)]" : "text-[var(--muted)]"} />
+                <span>{tab.label}</span>
+                <span
+                  className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[var(--accent)]/12 text-[var(--accent)]"
+                      : "bg-black/5 dark:bg-white/10 text-[var(--muted)]"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right Side: Quick Filters Segment */}
+        <div className="flex items-center gap-1 p-1 bg-black/[0.02] dark:bg-white/[0.03] rounded-xl border border-black/[0.04] dark:border-white/[0.04] ml-auto shrink-0 overflow-x-auto scrollbar-none">
+          {filterTabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeScope === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveScope(tab.id);
+                  setSelectedTeamId(null);
+                }}
+                className={`relative flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold select-none cursor-pointer whitespace-nowrap transition-colors duration-150 z-10 ${
+                  active
+                    ? "text-[var(--text)] font-bold"
+                    : "text-[var(--secondary)] hover:text-[var(--text)]"
+                }`}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="appleFilterIndicator"
+                    className="absolute inset-0 rounded-lg bg-[var(--surface)] shadow-[0_1px_4px_rgba(0,0,0,0.08)] border border-[var(--border)]/80 -z-10"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <Icon
+                  size={12}
+                  className={
+                    tab.id === "favorites"
+                      ? "text-amber-500 fill-amber-500"
+                      : active
+                      ? "text-[var(--accent)]"
+                      : "text-[var(--muted)]"
+                  }
+                />
+                <span>{tab.label}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${
+                    active ? "bg-[var(--accent)]/12 text-[var(--accent)]" : "bg-black/5 dark:bg-white/10 text-[var(--muted)]"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Expandable Apple Spotlight Search Capsule */}
+      <AnimatePresence>
+        {(isSearchOpen || searchQuery) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -6 }}
+            animate={{ opacity: 1, height: "auto", y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -6 }}
+            transition={{ type: "spring", stiffness: 480, damping: 34 }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--border)]/80 bg-[var(--surface)]/95 backdrop-blur-2xl px-4 py-2 shadow-sm focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)]/20 transition-all duration-200">
+              <Search size={15} className="text-[var(--accent)] shrink-0" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search documents by title, contents, or tags..."
+                className="bg-transparent text-xs sm:text-sm text-[var(--text)] placeholder-[var(--muted)] outline-none w-full font-normal"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    searchInputRef.current?.focus();
+                  }}
+                  className="grid h-5 w-5 place-items-center rounded-full bg-[var(--hover)] text-xs text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+                  title="Clear text"
+                >
+                  ✕
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setIsSearchOpen(false);
+                }}
+                className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)]/80 px-2 py-0.5 text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition cursor-pointer"
+                title="Close (Esc)"
+              >
+                Esc
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Scope Content with Apple Fluid Spring Transition */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeScope + (selectedTeamId || "")}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          className="space-y-6"
+        >
+          {/* Scope View: ALL SCOPES */}
+          {activeScope === "all" && (
+            <div className="space-y-8">
+              {/* Company Documents Section */}
+              <div className="relative overflow-hidden rounded-3xl border border-[var(--border)]/80 bg-gradient-to-b from-[var(--surface)] to-[var(--surface)]/80 p-6 shadow-sm backdrop-blur-xl">
+                <div className="pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl" />
+                <div className="flex items-center justify-between gap-4 pb-4 border-b border-[var(--border)]/60 relative z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-xs">
+                      <Building2 size={19} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold tracking-tight text-[var(--text)]">{currentCompany?.name || "Company"} Knowledge Base</h3>
+                        <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                          {companyPages.length} {companyPages.length === 1 ? "doc" : "docs"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--muted)] mt-0.5">Company-wide documentation, handbooks, guidelines, and roadmaps.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onNew("blank")}
+                    className="shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--accent)] transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Plus size={13} />
+                    <span>New company page</span>
+                  </button>
+                </div>
+
+                {filterByQuery(companyPages).length > 0 ? (
+                  <div className="mt-5 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
+                    {filterByQuery(companyPages).map((p) => (
+                      <PageCard key={p.id} page={p} onSelect={onSelect} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-2)]/30 p-6 text-center relative z-10">
+                    <p className="text-xs text-[var(--muted)]">No company-scoped documents yet. Create one to share policies with your whole company.</p>
+                    <button
+                      onClick={() => onNew("blank")}
+                      className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Plus size={12} /> Create company doc
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Teams Documents Section */}
+              <div className="relative overflow-hidden rounded-3xl border border-[var(--border)]/80 bg-gradient-to-b from-[var(--surface)] to-[var(--surface)]/80 p-6 shadow-sm backdrop-blur-xl">
+                <div className="pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
+                <div className="flex items-center justify-between gap-4 pb-4 border-b border-[var(--border)]/60 relative z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-xs">
+                      <Users size={19} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold tracking-tight text-[var(--text)]">Teamspaces & Team Projects</h3>
+                        <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                          {teamPages.length} {teamPages.length === 1 ? "page" : "pages"} across {teams.length || 1} {teams.length === 1 ? "team" : "teams"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--muted)] mt-0.5">Collaborative team workspaces, sprint documents, and project trackers.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const name = await window.noskaPrompt?.("Enter new teamspace name:", "", "Teamspace Name");
+                      if (name && name.trim()) {
+                        try {
+                          await createTeam(name.trim(), "Custom teamspace for project collaboration", "🏢");
+                        } catch (e) {
+                          console.warn("Failed to create teamspace", e);
+                        }
+                      }
+                    }}
+                    className="shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--accent)] transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Plus size={13} />
+                    <span>New teamspace</span>
+                  </button>
+                </div>
+
+                {/* Teamspaces summary rows if any */}
+                {teams.length > 0 && showTeamspacesTable && (
+                  <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]/60 overflow-hidden relative z-10 shadow-xs">
+                    <div className="grid grid-cols-[1.2fr_1.4fr_0.6fr_0.4fr] border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold text-[var(--secondary)] uppercase tracking-wider bg-[var(--surface-2)]">
+                      <div className="flex items-center gap-1.5"><Table2 size={13} />Teamspace</div>
+                      <div className="flex items-center gap-1.5"><ListChecks size={13} />Description</div>
+                      <div className="flex items-center gap-1.5"><Home size={13} />Role</div>
+                      <div className="flex items-center gap-1.5"><Users size={13} />Members</div>
+                    </div>
+                    {allTeamspaces.slice(0, 3).map((t: any, idx: number) => (
+                      <button
+                        key={t.id || idx}
+                        onClick={() => {
+                          if (t.id && t.id !== "default") {
+                            setCurrentTeam(t);
+                            setSelectedTeamId(t.id);
+                            setActiveScope("teams");
+                          }
+                        }}
+                        className="grid w-full grid-cols-[1.2fr_1.4fr_0.6fr_0.4fr] border-b border-[var(--border)] last:border-0 px-4 py-2.5 text-left text-xs hover:bg-[var(--hover)] transition cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2 font-semibold text-[var(--text)]">
+                          <ChevronRight size={13} className="text-[var(--muted)] group-hover:text-[var(--text)] transition" />
+                          <span className="grid h-5 w-5 place-items-center rounded bg-[var(--surface)] border border-[var(--border)] text-[11px]">{t.icon || "⌂"}</span>
+                          <span className="truncate">{t.name}</span>
+                        </div>
+                        <div className="text-[var(--muted)] truncate text-xs flex items-center">{t.description || "Project collaboration space"}</div>
+                        <div className="flex items-center gap-1 text-[var(--text)] text-xs"><span className="text-[var(--accent)] font-bold">●</span>{t.role || "Owner"}</div>
+                        <div className="text-[var(--text)] text-xs flex items-center font-medium">{t.member_count ?? 1}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {filterByQuery(teamPages).length > 0 ? (
+                  <div className="mt-5 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
+                    {filterByQuery(teamPages).map((p) => (
+                      <PageCard key={p.id} page={p} onSelect={onSelect} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-2)]/30 p-6 text-center relative z-10">
+                    <p className="text-xs text-[var(--muted)]">No team pages created yet. Start a page in a teamspace to collaborate with members.</p>
+                    <button
+                      onClick={() => onNew("blank")}
+                      className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Plus size={12} /> Create team page
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Personal Workspace Section */}
+              <div className="relative overflow-hidden rounded-3xl border border-[var(--border)]/80 bg-gradient-to-b from-[var(--surface)] to-[var(--surface)]/80 p-6 shadow-sm backdrop-blur-xl">
+                <div className="pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
+                <div className="flex items-center justify-between gap-4 pb-4 border-b border-[var(--border)]/60 relative z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shadow-xs">
+                      <Home size={19} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold tracking-tight text-[var(--text)]">{workspaceName} (Personal Workspace)</h3>
+                        <span className="rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                          {workspacePages.length} {workspacePages.length === 1 ? "page" : "pages"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--muted)] mt-0.5">Private notes, quick drafts, study cards, and scratchpads.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onNew("blank")}
+                    className="shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--accent)] transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Plus size={13} />
+                    <span>New private page</span>
+                  </button>
+                </div>
+
+                {filterByQuery(workspacePages).length > 0 ? (
+                  <div className="mt-5 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
+                    {filterByQuery(workspacePages).map((p) => (
+                      <PageCard key={p.id} page={p} onSelect={onSelect} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-2)]/30 p-6 text-center relative z-10">
+                    <p className="text-xs text-[var(--muted)]">No private workspace pages yet.</p>
+                    <button
+                      onClick={() => onNew("blank")}
+                      className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Plus size={12} /> Create note
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Shared with You Section */}
+              {sharedPages.length > 0 && (
+                <div className="relative overflow-hidden rounded-3xl border border-[var(--border)]/80 bg-gradient-to-b from-[var(--surface)] to-[var(--surface)]/80 p-6 shadow-sm backdrop-blur-xl">
+                  <div className="pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
+                  <div className="flex items-center justify-between gap-4 pb-4 border-b border-[var(--border)]/60 relative z-10">
+                    <div className="flex items-center gap-3">
+                      <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-xs">
+                        <Globe size={19} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold tracking-tight text-[var(--text)]">Shared with You</h3>
+                          <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                            {sharedPages.length} {sharedPages.length === 1 ? "page" : "pages"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[var(--muted)] mt-0.5">Documents shared with your account from collaborators.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
+                    {filterByQuery(sharedPages).map((p) => (
+                      <PageCard key={p.id} page={p} onSelect={onSelect} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Scope View: WORKSPACE */}
+          {activeScope === "workspace" && (
+            <div className="space-y-6">
+              <div className="relative overflow-hidden rounded-3xl border border-[var(--border)]/80 bg-gradient-to-b from-[var(--surface)] to-[var(--surface)]/80 p-6 shadow-sm backdrop-blur-xl">
+                <div className="pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
+                <div className="flex items-center justify-between gap-4 relative z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shadow-xs">
+                      <Home size={22} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold tracking-tight text-[var(--text)]">{workspaceName} (Personal Workspace)</h2>
+                      <p className="text-xs text-[var(--secondary)] mt-0.5">
+                        Your personal vault for private notes, study flashcards, and individual project drafts.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onNew("blank")}
+                    className="rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-deep)] px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-all active:scale-95 cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <Plus size={14} />
+                    <span>New Page</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                {filterByQuery(workspacePages).map((page) => (
+                  <PageCard key={page.id} page={page} onSelect={onSelect} />
+                ))}
+                {filterByQuery(workspacePages).length === 0 && (
+                  <div className="col-span-full py-12 text-center text-sm text-[var(--muted)] rounded-3xl border border-dashed border-[var(--border)] p-6 bg-[var(--surface-2)]/30">
+                    No personal workspace pages found matching your search.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Scope View: TEAMS */}
+          {activeScope === "teams" && (
+            <div className="space-y-6">
+              {/* Teamspaces Table */}
+              {showTeamspacesTable && (
+                <div className="rounded-3xl border border-[var(--border)]/80 bg-[var(--surface)] overflow-hidden shadow-xs">
+                  <div className="grid grid-cols-[1.2fr_1.4fr_0.6fr_0.4fr] border-b border-[var(--border)] px-4 py-3 text-xs font-semibold text-[var(--secondary)] uppercase tracking-wider bg-[var(--surface-2)]">
+                    <div className="flex items-center gap-2"><Table2 size={14} />Teamspace</div>
+                    <div className="flex items-center gap-2"><ListChecks size={14} />Description</div>
+                    <div className="flex items-center gap-2"><Home size={14} />Role / Access</div>
+                    <div className="flex items-center gap-2"><Users size={14} />Members</div>
+                  </div>
+                  {allTeamspaces.map((t: any, idx: number) => (
+                    <button
+                      key={t.id || idx}
+                      onClick={() => {
+                        if (t.id && t.id !== "default") {
+                          setCurrentTeam(t);
+                          setSelectedTeamId(selectedTeamId === t.id ? null : t.id);
+                        }
+                      }}
+                      className={`grid w-full grid-cols-[1.2fr_1.4fr_0.6fr_0.4fr] border-b border-[var(--border)] last:border-0 px-4 py-3.5 text-left text-sm hover:bg-[var(--hover)] transition cursor-pointer group ${
+                        selectedTeamId === t.id ? "bg-[var(--active)]" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 font-semibold text-[var(--text)]">
+                        <ChevronRight size={14} className="text-[var(--muted)] group-hover:text-[var(--text)] transition" />
+                        <span className="grid h-6 w-6 place-items-center rounded bg-[var(--surface-2)] border border-[var(--border)] text-xs">{t.icon || "⌂"}</span>
+                        <span className="truncate">{t.name}</span>
+                      </div>
+                      <div className="text-[var(--muted)] truncate text-xs flex items-center">{t.description || "Project collaboration space"}</div>
+                      <div className="flex items-center gap-1.5 text-[var(--text)] text-xs"><span className="text-[var(--accent)] font-bold">●</span>{t.role || "Owner"}</div>
+                      <div className="text-[var(--text)] text-xs flex items-center font-medium">{t.member_count ?? 1}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Team Filter Pills if multiple teams */}
+              {teams.length > 0 && (
+                <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-[var(--surface-2)]/60 border border-[var(--border)]/60 shadow-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-[var(--secondary)] pl-2">Filter by team:</span>
+                    <button
+                      onClick={() => setSelectedTeamId(null)}
+                      className={`px-3 py-1 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                        selectedTeamId === null
+                          ? "bg-[var(--accent)] text-white shadow-xs"
+                          : "bg-[var(--surface)] text-[var(--secondary)] border border-[var(--border)] hover:bg-[var(--surface-2)]"
+                      }`}
+                    >
+                      All Teams ({teamPages.length})
+                    </button>
+                    {teams.map((team) => {
+                      const count = teamPages.filter((p) => (p as any).team_id === team.id || (p as any).teamId === team.id).length;
+                      return (
+                        <button
+                          key={team.id}
+                          onClick={() => setSelectedTeamId(team.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            selectedTeamId === team.id
+                              ? "bg-[var(--accent)] text-white shadow-xs"
+                              : "bg-[var(--surface)] text-[var(--secondary)] border border-[var(--border)] hover:bg-[var(--surface-2)]"
+                          }`}
+                        >
+                          <span>{team.icon || "👥"}</span>
+                          <span>{team.name}</span>
+                          <span className="rounded-full bg-black/10 dark:bg-white/15 px-1 py-0.2 text-[10px] font-bold">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Search icon button on the far right side */}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      const nextState = !isSearchOpen;
+                      setIsSearchOpen(nextState);
+                      if (nextState) {
+                        setTimeout(() => searchInputRef.current?.focus(), 60);
+                      }
+                    }}
+                    className={`grid h-8 w-8 place-items-center rounded-xl border transition cursor-pointer shadow-xs ml-auto shrink-0 ${
+                      isSearchOpen || searchQuery
+                        ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                        : "bg-black/[0.03] dark:bg-white/[0.04] hover:bg-[var(--hover)] border-black/[0.04] dark:border-white/[0.04] text-[var(--secondary)] hover:text-[var(--text)]"
+                    }`}
+                    title="Search notes (⌘F)"
+                  >
+                    <Search size={14} />
+                  </motion.button>
+                </div>
+              )}
+
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredTeamPages.map((page) => (
+                  <PageCard key={page.id} page={page} onSelect={onSelect} />
+                ))}
+                {filteredTeamPages.length === 0 && (
+                  <div className="col-span-full py-12 text-center text-sm text-[var(--muted)] rounded-3xl border border-dashed border-[var(--border)] p-6 bg-[var(--surface-2)]/30">
+                    No team documents found for this selection. Create a page to collaborate with your team.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Scope View: COMPANY */}
+          {activeScope === "company" && (
+            <div className="space-y-6">
+              <div className="relative overflow-hidden rounded-3xl border border-[var(--border)]/80 bg-gradient-to-b from-[var(--surface)] to-[var(--surface)]/80 p-6 shadow-sm backdrop-blur-xl">
+                <div className="pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl" />
+                <div className="flex items-center justify-between gap-4 relative z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-xs">
+                      <Building2 size={22} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold tracking-tight text-[var(--text)]">{currentCompany?.name || "Company"} Organization</h2>
+                      <p className="text-xs text-[var(--secondary)] mt-0.5">
+                        Centralized knowledge base, onboarding wikis, security policies, and official company roadmaps.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onNew("blank")}
+                    className="rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-deep)] px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-all active:scale-95 cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <Plus size={14} />
+                    <span>New Company Page</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                {filterByQuery(companyPages).map((page) => (
+                  <PageCard key={page.id} page={page} onSelect={onSelect} />
+                ))}
+                {filterByQuery(companyPages).length === 0 && (
+                  <div className="col-span-full py-12 text-center text-sm text-[var(--muted)] rounded-3xl border border-dashed border-[var(--border)] p-6 bg-[var(--surface-2)]/30">
+                    No company-wide documents found. Start documenting company policies and roadmaps.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Scope View: SHARED */}
+          {activeScope === "shared" && (
+            <div className="space-y-6">
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                {filterByQuery(sharedPages).map((page) => (
+                  <PageCard key={page.id} page={page} onSelect={onSelect} />
+                ))}
+                {filterByQuery(sharedPages).length === 0 && (
+                  <div className="col-span-full py-12 text-center text-sm text-[var(--muted)] rounded-3xl border border-dashed border-[var(--border)] p-6 bg-[var(--surface-2)]/30">
+                    No pages have been shared with you yet. Invitations you accept from your Inbox will appear here.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Scope View: FAVORITES */}
+          {activeScope === "favorites" && (
+            <div className="space-y-6">
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                {filterByQuery(favoritePages).map((page) => (
+                  <PageCard key={page.id} page={page} onSelect={onSelect} />
+                ))}
+                {filterByQuery(favoritePages).length === 0 && (
+                  <div className="col-span-full py-12 text-center text-sm text-[var(--muted)] rounded-3xl border border-dashed border-[var(--border)] p-6 bg-[var(--surface-2)]/30">
+                    No favorite pages yet. Click the star icon on any document to add it to your favorites.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Scope View: RECENTS */}
+          {activeScope === "recents" && (
+            <div className="space-y-6">
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                {filterByQuery(recentPages).map((page) => (
+                  <PageCard key={page.id} page={page} onSelect={onSelect} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Scope View: MEETINGS */}
+          {activeScope === "meetings" && (
+            <div className="space-y-6">
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                {filterByQuery(meetingPages).map((page) => (
+                  <PageCard key={page.id} page={page} onSelect={onSelect} />
+                ))}
+                {filterByQuery(meetingPages).length === 0 && (
+                  <div className="col-span-full py-12 text-center text-sm text-[var(--muted)] rounded-3xl border border-dashed border-[var(--border)] p-6 bg-[var(--surface-2)]/30">
+                    No meeting notes found. Use the AI Meeting Note creator to record agendas, standups, and syncs.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
 interface LibraryRouteProps {
   pages: Page[];
   /** Real pages shared TO the current user — shown when the "Shared" tab
@@ -829,98 +1637,40 @@ interface LibraryRouteProps {
 }
 
 function LibraryRoute({ pages, sharedPages = [], workspaceName, onSelect, onNew }: LibraryRouteProps) {
-  const [activeTab, setActiveTab] = useState("Teamspaces");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const { teams, currentTeam, setCurrentTeam, createTeam } = useTeams();
-
-  const sourcePages = activeTab === "Shared" ? sharedPages : pages;
-
-  const filteredPages = sourcePages.filter(p => {
-    if (activeTab === "Favorites" && !p.favorite) return false;
-    if (activeTab === "AI Meeting Notes" && !p.title?.toLowerCase().includes("meeting") && p.icon !== "🗓️" && p.icon !== "🎙️") return false;
-    if (activeTab === "Private" && (p.favorite || p.trashed)) return false;
-    if (searchQuery.trim()) {
-      return p.title?.toLowerCase().includes(searchQuery.toLowerCase()) || plainText(p).toLowerCase().includes(searchQuery.toLowerCase());
-    }
-    return true;
-  });
-
-  const displayPages = activeTab === "Recents"
-    ? [...filteredPages].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 9)
-    : filteredPages;
-
-  const allTeamspaces = teams.length > 0 ? teams : [
-    { id: "default", name: `${workspaceName} HQ`, description: "Default workspace for private and shared pages", icon: "⌂", member_count: 1, role: "owner" }
-  ];
+  const { createTeam } = useTeams();
 
   return (
     <RouteShell
       title="Library"
-      actions={<button onClick={async () => {
-        const name = await window.noskaPrompt?.("Enter new teamspace name:", "", "Teamspace Name");
-        if (name && name.trim()) {
-          try { await createTeam(name.trim(), "Custom teamspace for project collaboration", "🏢"); }
-          catch (e) { console.warn("Failed to create teamspace", e); }
-        }
-      }} className="rounded-md bg-[var(--accent)] hover:bg-[var(--accent-deep)] px-4 py-2 text-sm font-semibold text-white transition cursor-pointer">New teamspace</button>}
+      subtitle="Explore and organize pages across Personal Workspace, Teams, and Company"
+      actions={
+        <button
+          onClick={async () => {
+            const name = await window.noskaPrompt?.("Enter new teamspace name:", "", "Teamspace Name");
+            if (name && name.trim()) {
+              try {
+                await createTeam(name.trim(), "Custom teamspace for project collaboration", "🏢");
+              } catch (e) {
+                console.warn("Failed to create teamspace", e);
+              }
+            }
+          }}
+          className="rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-deep)] px-3.5 py-2 text-xs sm:text-sm font-semibold text-white transition cursor-pointer shadow-xs flex items-center gap-1.5"
+        >
+          <Plus size={14} />
+          <span>New teamspace</span>
+        </button>
+      }
     >
-      <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {["Teamspaces", "Recents", "Favorites", "Shared", "Private", "AI Meeting Notes"].map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold cursor-pointer transition ${activeTab === tab ? "bg-[var(--active)] text-[var(--text)] shadow-xs" : "text-[var(--secondary)] hover:bg-[var(--surface)]"}`}>
-              {tab === "Favorites" ? <Star size={16} className="fill-[var(--warning)] text-[var(--warning)]" /> : <Table2 size={16} />}
-              {tab}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 text-[var(--secondary)]">
-          {searchOpen ? (
-            <div className="flex items-center gap-1 border border-[var(--border-strong)] rounded-lg bg-[var(--surface)] px-2.5 py-1.5 shadow-xs">
-              <input autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search library..."
-                className="bg-transparent text-xs text-[var(--text)] outline-none w-40" />
-              <button onClick={() => { setSearchQuery(""); setSearchOpen(false); }} className="text-xs text-[var(--muted)] hover:text-[var(--text)] cursor-pointer">✕</button>
-            </div>
-          ) : (
-            <button onClick={() => setSearchOpen(true)} title="Search library" className="p-2 hover:bg-[var(--hover)] rounded-lg transition cursor-pointer"><Search size={19} /></button>
-          )}
-        </div>
-      </div>
-
-      {activeTab === "Teamspaces" && !searchQuery && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden mb-6 shadow-xs">
-          <div className="grid grid-cols-[1.2fr_1.4fr_0.6fr_0.4fr] border-b border-[var(--border)] px-4 py-3 text-xs font-semibold text-[var(--secondary)] uppercase tracking-wider bg-[var(--surface-2)]">
-            <div className="flex items-center gap-2"><Table2 size={14} />Name</div>
-            <div className="flex items-center gap-2"><ListChecks size={14} />Description</div>
-            <div className="flex items-center gap-2"><Home size={14} />Role / Access</div>
-            <div className="flex items-center gap-2"><MessageSquare size={14} />Members</div>
-          </div>
-          {allTeamspaces.map((t: any, idx: number) => (
-            <button key={t.id || idx}
-              onClick={() => { if (t.id && t.id !== "default") setCurrentTeam(t); onNew("blank"); }}
-              className="grid w-full grid-cols-[1.2fr_1.4fr_0.6fr_0.4fr] border-b border-[var(--border)] last:border-0 px-4 py-3.5 text-left text-sm hover:bg-[var(--hover)] transition cursor-pointer group">
-              <div className="flex items-center gap-3 font-semibold text-[var(--text)]">
-                <ChevronRight size={14} className="text-[var(--muted)] group-hover:text-[var(--text)] transition" />
-                <span className="grid h-6 w-6 place-items-center rounded bg-[var(--surface-2)] border border-[var(--border)] text-xs">{t.icon || "⌂"}</span>
-                <span className="truncate">{t.name}</span>
-              </div>
-              <div className="text-[var(--muted)] truncate text-xs flex items-center">{t.description || "Project collaboration space"}</div>
-              <div className="flex items-center gap-1.5 text-[var(--text)] text-xs"><span className="text-[var(--accent)] font-bold">●</span>{t.role || "Owner"}</div>
-              <div className="text-[var(--text)] text-xs flex items-center font-medium">{t.member_count ?? 1}</div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {displayPages.map((page) => <PageCard key={page.id} page={page} onSelect={onSelect} />)}
-        {displayPages.length === 0 && (
-          <div className="col-span-full py-12 text-center text-sm text-[var(--muted)]">
-            {activeTab === "Shared" ? "No pages have been shared with you yet." : "No pages found in this section."}
-          </div>
-        )}
-      </div>
+      <CategorizedWorkspaceLibrary
+        pages={pages}
+        sharedPages={sharedPages}
+        workspaceName={workspaceName}
+        onSelect={onSelect}
+        onNew={onNew}
+        initialTab="all"
+        showTeamspacesTable={true}
+      />
     </RouteShell>
   );
 }
@@ -2036,26 +2786,62 @@ function Metric({ label, value }: MetricProps) {
 interface PageCardProps {
   page: Page;
   onSelect: (pageId: string) => void;
+  scopeInfo?: PageScopeInfo;
+  showScopeBadge?: boolean;
 }
 
 function CalendarGrid({ pages, onSelect }: { pages: Page[]; onSelect: (pageId: string) => void }) {
   return <MonthCalendar pages={pages} onSelect={onSelect} />;
 }
 
-function PageCard({ page, onSelect }: PageCardProps) {
+function PageCard({ page, onSelect, scopeInfo, showScopeBadge = true }: PageCardProps) {
+  const { teams } = useTeams();
+  let companyCtx: ReturnType<typeof useCompany> | null = null;
+  try {
+    companyCtx = useCompany();
+  } catch (e) {
+    companyCtx = null;
+  }
+  const effectiveScope = scopeInfo || getPageScopeInfo(page, [], teams, companyCtx?.currentCompany);
+
   return (
     <motion.button
-      whileHover={{ scale: 1.015, y: -1 }}
+      whileHover={{ scale: 1.015, y: -3 }}
       whileTap={{ scale: 0.985 }}
-      transition={{ type: "spring", stiffness: 450, damping: 25 }}
+      transition={{ type: "spring", stiffness: 420, damping: 28 }}
       onClick={() => onSelect(page.id)}
-      className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-left hover:border-[var(--accent)] w-full block transition-colors duration-150"
+      className="group relative rounded-2xl border border-[var(--border)]/75 bg-gradient-to-b from-[var(--surface)] to-[var(--surface)]/85 p-4 text-left shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_-6px_rgba(0,0,0,0.1)] hover:border-[var(--accent)]/60 hover:bg-[var(--surface-2)]/50 backdrop-blur-md w-full block transition-all duration-200 cursor-pointer overflow-hidden"
     >
-      <div className="flex items-center gap-2">
-        <PageIcon icon={page.icon} size={15} fallback="📄" />
-        <span className="truncate text-sm font-medium text-[var(--text)]">{page.title || "Untitled"}</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--surface-2)] border border-[var(--border)]/60 text-xs shadow-2xs">
+            <PageIcon icon={page.icon} size={15} fallback="📄" />
+          </div>
+          <span className="truncate text-xs sm:text-sm font-bold tracking-tight text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">
+            {page.title || "Untitled"}
+          </span>
+          {page.isEncrypted && <Lock size={12} className="text-[var(--danger)] shrink-0" />}
+          {page.favorite && <Star size={12} className="fill-amber-400 text-amber-500 shrink-0" />}
+        </div>
+        {showScopeBadge && effectiveScope && (
+          <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-md shadow-2xs ${effectiveScope.badgeClass}`}>
+            <effectiveScope.icon size={10} />
+            <span className="truncate max-w-[85px]">{effectiveScope.badgeLabel}</span>
+          </span>
+        )}
       </div>
-      <div className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--secondary)]">{plainText(page).slice(0, 120) || "Empty page"}</div>
+
+      <div className="mt-2.5 line-clamp-2 text-xs leading-5 text-[var(--secondary)] min-h-[38px]">
+        {plainText(page).slice(0, 140) || <span className="italic text-[var(--muted)]/80">Empty page</span>}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between border-t border-[var(--border)]/50 pt-2 text-[10px] text-[var(--muted)] font-medium">
+        <span className="flex items-center gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--muted)]/40 group-hover:bg-[var(--accent)] transition-colors" />
+          {page.blocks?.length || 0} {page.blocks?.length === 1 ? "block" : "blocks"}
+        </span>
+        <span>{timeAgo(page.updatedAt)}</span>
+      </div>
     </motion.button>
   );
 }
