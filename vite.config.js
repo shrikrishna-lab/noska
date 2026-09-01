@@ -125,6 +125,9 @@ export default defineConfig({
     }),
     sourcemap: process.env.SENTRY_AUTH_TOKEN ? true : false,
     chunkSizeWarningLimit: 1000,
+    rolldownOptions: {
+      external: ["@xenova/transformers"],
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {
