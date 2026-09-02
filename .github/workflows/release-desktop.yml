@@ -117,6 +117,10 @@ jobs:
     needs: build-desktop
     runs-on: ubuntu-latest
     if: ${{ always() && needs.build-desktop.result == 'success' }}
+    # Draft releases are only visible to tokens with write access — the
+    # default read-only token cannot see the staging draft.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
