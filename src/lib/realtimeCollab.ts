@@ -34,11 +34,11 @@ interface CollabEventMap {
   "presence:leave": { pageId: string; userId: string };
   "cursor:remove": { pageId: string; userId: string };
   "cursor:move": { pageId: string; userId: string; x: number; y: number; targetBlockId?: string | null; [key: string]: unknown };
-  "selection:change": { pageId: string; userId: string; [key: string]: unknown };
+  "selection:change": { pageId: string; userId: string; blockId?: string; start?: number; end?: number; [key: string]: unknown };
   "block:edit": { pageId: string; userId: string; blockId: string; [key: string]: unknown };
   "block:edit-stop": { pageId: string; userId: string; blockId: string; [key: string]: unknown };
   "canvas:node-move": { pageId: string; userId: string; nodeId: string; x: number; y: number; [key: string]: unknown };
-  "canvas:transform": { pageId: string; userId: string; zoom: number; panX: number; panY: number; [key: string]: unknown };
+  "canvas:transform": { pageId: string; userId: string; z: number; x: number; y: number; [key: string]: unknown };
   "typing": { pageId: string; userId: string; [key: string]: unknown };
 }
 
@@ -58,13 +58,14 @@ class RealtimeCollab {
   private userName: string | null = null;
   private userAvatar: string | null = null;
   private userColor: string | null = null;
-  // Untyped by design: listeners are registered per event name via a
-  // generic `on(event, cb)`, so a single Map can't statically tie each
-  // key to its own CollabEventMap[E] listener type without an unsound
-  // cast at every call site. Type safety is enforced at the public
-  // on()/_emit() boundary instead (see below).
   private listeners = new Map<string, Set<(data: unknown) => void>>();
   private _joinedWorkspace = false;
+
+  // Throttle state for高频 events (cursor, typing)
+  private _lastCursorSend = 0;
+  private _lastTypingSend = 0;
+  private static readonly CURSOR_THROTTLE_MS = 50; // 20fps max
+  private static readonly TYPING_THROTTLE_MS = 1000; // 1 per second
 
   private static _getColor(id: string): string {
     const colors = [
@@ -165,14 +166,13 @@ class RealtimeCollab {
     pres.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         try {
-          const payload: PresenceTrackPayload = {
+          // Minimal presence payload - only essential fields
+          const payload = {
             userId: this.userId as string,
-            userName: this.userName as string,
-            userAvatar: this.userAvatar as string,
-            userColor: this.userColor as string,
+            name: this.userName as string, // Shortened
+            color: this.userColor as string, // Shortened
             pageId,
             status: "viewing",
-            onlineAt: Date.now(),
           };
           await pres.track(payload);
         } catch (e) {
@@ -248,20 +248,22 @@ class RealtimeCollab {
   }
 
   sendCursor(pageId: string, x: number, y: number, targetBlockId: string | null = null): void {
+    // Throttle cursor updates to reduce egress (20fps max)
+    const now = Date.now();
+    if (now - this._lastCursorSend < RealtimeCollab.CURSOR_THROTTLE_MS) return;
+    this._lastCursorSend = now;
+
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
+    // Minimal payload - only essential fields
     ch.send({
       type: "broadcast",
       event: "cursor",
       payload: {
         userId: this.userId,
-        userName: this.userName,
-        userAvatar: this.userAvatar,
-        userColor: this.userColor,
         x,
         y,
-        targetBlockId,
-        timestamp: Date.now(),
+        targetBlockId, // Keep full name for compatibility
       },
     }).catch((e) => {
       console.warn("realtimeCollab: sendCursor failed", e);
@@ -271,18 +273,15 @@ class RealtimeCollab {
   sendSelection(pageId: string, range?: SelectionRange | null): void {
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
+    // Minimal payload - only essential fields
     ch.send({
       type: "broadcast",
       event: "selection",
       payload: {
         userId: this.userId,
-        userName: this.userName,
-        userColor: this.userColor,
         blockId: range?.blockId,
-        startOffset: range?.startOffset,
-        endOffset: range?.endOffset,
-        text: range?.text,
-        timestamp: Date.now(),
+        start: range?.startOffset, // Shortened
+        end: range?.endOffset, // Shortened
       },
     }).catch((e) => {
       console.warn("realtimeCollab: sendSelection failed", e);
@@ -292,10 +291,11 @@ class RealtimeCollab {
   sendBlockEdit(pageId: string, blockId: string): void {
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
+    // Minimal payload
     ch.send({
       type: "broadcast",
       event: "block:edit",
-      payload: { userId: this.userId, userName: this.userName, userColor: this.userColor, blockId, timestamp: Date.now() },
+      payload: { userId: this.userId, blockId },
     }).catch((e) => {
       console.warn("realtimeCollab: sendBlockEdit failed", e);
     });
@@ -304,10 +304,11 @@ class RealtimeCollab {
   sendBlockEditStop(pageId: string, blockId: string): void {
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
+    // Minimal payload
     ch.send({
       type: "broadcast",
       event: "block:edit-stop",
-      payload: { userId: this.userId, blockId, timestamp: Date.now() },
+      payload: { userId: this.userId, blockId },
     }).catch((e) => {
       console.warn("realtimeCollab: sendBlockEditStop failed", e);
     });
@@ -316,10 +317,11 @@ class RealtimeCollab {
   sendCanvasNodeMove(pageId: string, nodeId: string, x: number, y: number): void {
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
+    // Minimal payload
     ch.send({
       type: "broadcast",
       event: "canvas:node-move",
-      payload: { userId: this.userId, userName: this.userName, userColor: this.userColor, nodeId, x, y, timestamp: Date.now() },
+      payload: { userId: this.userId, nodeId, x, y },
     }).catch((e) => {
       console.warn("realtimeCollab: sendCanvasNodeMove failed", e);
     });
@@ -328,22 +330,29 @@ class RealtimeCollab {
   sendCanvasTransform(pageId: string, zoom: number, panX: number, panY: number): void {
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
+    // Minimal payload
     ch.send({
       type: "broadcast",
       event: "canvas:transform",
-      payload: { userId: this.userId, zoom, panX, panY, timestamp: Date.now() },
+      payload: { userId: this.userId, z: zoom, x: panX, y: panY }, // Shortened
     }).catch((e) => {
       console.warn("realtimeCollab: sendCanvasTransform failed", e);
     });
   }
 
   sendTyping(pageId: string): void {
+    // Throttle typing indicators to 1 per second
+    const now = Date.now();
+    if (now - this._lastTypingSend < RealtimeCollab.TYPING_THROTTLE_MS) return;
+    this._lastTypingSend = now;
+
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
+    // Minimal payload
     ch.send({
       type: "broadcast",
       event: "typing",
-      payload: { userId: this.userId, userName: this.userName, pageId, timestamp: Date.now() },
+      payload: { userId: this.userId, p: pageId }, // Shortened field names
     }).catch((e) => {
       console.warn("realtimeCollab: sendTyping failed", e);
     });

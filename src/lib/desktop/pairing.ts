@@ -29,7 +29,7 @@ export interface DesktopIdentity {
 }
 
 /** Normalizes a raw {id,email} from the edge function into the full shape. */
-function toIdentity(raw: DesktopIdentity): DesktopIdentity {
+export function toIdentity(raw: DesktopIdentity): DesktopIdentity {
   const email = raw.email ?? null;
   const namePart = email ? email.split("@")[0] : null;
   return {
@@ -66,6 +66,8 @@ export interface StoredSession {
   access_token: string;
   sid: string;
   expires_at: number; // epoch ms
+  /** Required to refresh sessions created via the browser handoff flow. */
+  refresh_secret?: string;
   identity: DesktopIdentity;
 }
 
@@ -247,9 +249,11 @@ export async function refreshDesktopSession(): Promise<string | null> {
     const r = await callFn<{ status: string; session?: StoredSession }>({
       action: "refresh",
       sid: s.sid,
+      ...(s.refresh_secret ? { refresh_secret: s.refresh_secret } : {}),
     });
     if (r.status === "complete" && r.session) {
-      saveSession(r.session);
+      // The server doesn't rotate the secret; keep presenting the same one.
+      saveSession({ ...r.session, identity: r.session.identity ?? s.identity, refresh_secret: s.refresh_secret });
       return r.session.access_token;
     }
     if (r.status === "unknown_code") clearSession();

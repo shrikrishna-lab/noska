@@ -64,6 +64,7 @@ import CreatorDashboard from "../features/creator/CreatorDashboard";
 import AgentWorkspace from "../features/agents/AgentWorkspace";
 import AutomationWorkspace from "../features/automations/AutomationWorkspace";
 import CommandCenter from "./ai/CommandCenter";
+import DailyWorkspace from "../features/daily/DailyWorkspace";
 import { PageIcon } from "./PageIcon";
 import { IconButton, Modal, ModalHeader, PearlButton } from "./ui";
 import { GlassKpiCard } from "./ui/GlassKpiCard";
@@ -184,7 +185,60 @@ interface WorkspaceViewProps {
   };
 }
 
-export function WorkspaceView({
+export function WorkspaceView(props: WorkspaceViewProps) {
+  const {
+    view,
+    pages,
+    currentUserId,
+    sharedPages = [],
+    pendingInvites = [],
+    onAcceptInvite,
+    onDeclineInvite,
+    workspaceName,
+    aiChats = [],
+    onSelect,
+    onNew,
+    onAI,
+    onOpenChat,
+    onToast,
+    apiKey,
+    aiProvider,
+    nvidiaKey,
+    onDuplicate,
+    onView,
+    toolContext,
+  } = props;
+
+  const userName = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || "Workspace Creator";
+
+  if (view === "daily" || view === "journal") return <DailyWorkspace onToast={onToast || (() => {})} currentUserId={currentUserId} currentUsername={userName} />;
+  if (view === "marketplace") return <MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} />;
+  if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} onDuplicate={onDuplicate || (() => {})} />;
+  if (view === "agents") return <AgentWorkspace pages={pages} currentUserId={currentUserId} onToast={onToast} toolContext={toolContext} />;
+  if (view === "automations") return <AutomationWorkspace onToast={onToast} />;
+  if (view === "commandCenter") return <CommandCenter onToast={onToast} onNavigate={(v) => onView?.(v)} />;
+  if (view === "library") return <LibraryRoute pages={pages} sharedPages={sharedPages} workspaceName={workspaceName} onSelect={onSelect} onNew={onNew} />;
+  if (view === "tasks") {
+    const tasks: TaskItem[] = pages.flatMap((page) =>
+      page.blocks
+        .filter((block) => block.type === "todo")
+        .map((block) => ({ ...block, pageTitle: page.title, pageIcon: page.icon, pageId: page.id }))
+    );
+    return <TasksRoute tasks={tasks} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
+  }
+  if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
+  if (view === "meetings") return <MeetingsRoute onNew={onNew} onToast={onToast} />;
+  if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
+  if (view === "inbox") return <InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
+  if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
+  if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} />;
+  if (view === "companyHome") return <CompanyWorkspace onBack={() => onView?.("home")} />;
+  if (view === "companySettings") return <CompanyWorkspace onBack={() => onView?.("home")} />;
+
+  return <HomeDashboardRoute {...props} />;
+}
+
+function HomeDashboardRoute({
   view,
   pages,
   currentUserId,
@@ -280,22 +334,6 @@ export function WorkspaceView({
     return connections.slice(0, 2);
   }, [pages]);
 
-  if (view === "marketplace") return <MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} />;
-  if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} onDuplicate={onDuplicate || (() => {})} />;
-  if (view === "agents") return <AgentWorkspace pages={pages} currentUserId={currentUserId} onToast={onToast} toolContext={toolContext} />;
-  if (view === "automations") return <AutomationWorkspace onToast={onToast} />;
-  if (view === "commandCenter") return <CommandCenter onToast={onToast} onNavigate={(v) => onView?.(v)} />;
-  if (view === "library") return <LibraryRoute pages={pages} sharedPages={sharedPages} workspaceName={workspaceName} onSelect={onSelect} onNew={onNew} />;
-  if (view === "tasks") return <TasksRoute tasks={tasks} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
-  if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
-  if (view === "meetings") return <MeetingsRoute onNew={onNew} onToast={onToast} />;
-  if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
-  if (view === "inbox") return <InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
-  if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
-  if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} />;
-  if (view === "companyHome") return <CompanyWorkspace onBack={() => onView?.("home")} />;
-  if (view === "companySettings") return <CompanyWorkspace onBack={() => onView?.("home")} />;
-
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -304,7 +342,6 @@ export function WorkspaceView({
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const userName = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || "Workspace Creator";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActive, setFilterActive] = useState(false);
@@ -366,6 +403,41 @@ export function WorkspaceView({
           filterActive={filterActive}
           onNewAction={() => onNew("blank")}
         />
+
+        {/* Daily Journal Quick Banner */}
+        <div
+          onClick={() => onView?.("daily")}
+          className="group relative p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-blue-500/10 border border-amber-500/20 hover:border-amber-500/40 shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-4 select-none backdrop-blur-md"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-2xl shadow-inner group-hover:scale-105 transition-transform">
+              📖
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Today's Daily Journal & Flow
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10.5px] font-bold flex items-center gap-1">
+                  <span className="animate-pulse">🔥</span> Active
+                </span>
+              </div>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                Capture today's reflection, complete tasks, track streaks, and view shared team check-ins.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onView?.("daily");
+            }}
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shrink-0 transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>Open Journal</span>
+            <ArrowUpRight size={14} />
+          </button>
+        </div>
 
         {/* 4 Soft Pastel Gradient Glass KPI Metric Cards (Matching reference mockup) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

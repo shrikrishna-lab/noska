@@ -87,7 +87,7 @@ function RenderNode({ node, totalPanes, onResize, paneProps }: RenderNodeProps) 
         const sizePct = sizes[index] ?? 50;
 
         return (
-          <React.Fragment key={child.id || index}>
+          <React.Fragment key={child.id || `node-${index}`}>
             <div
               className="flex min-w-0 min-h-0 overflow-hidden"
               style={{

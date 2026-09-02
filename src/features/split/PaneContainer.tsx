@@ -159,7 +159,7 @@ export default function PaneContainer({
         >
           {/* Tabs within this Pane */}
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto no-scrollbar py-0.5">
-            {pane.tabs.map((tab) => {
+            {pane.tabs.map((tab, idx) => {
               const isTabActive = tab.id === pane.activeTabId;
               let title = "Untitled";
               let icon = "📄";
@@ -176,7 +176,7 @@ export default function PaneContainer({
 
               return (
                 <div
-                  key={tab.id}
+                  key={tab.id || `tab-${idx}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     setPaneActiveTab(paneId, tab.id);

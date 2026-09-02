@@ -17,6 +17,8 @@ import {
   Monitor,
   Settings,
   UserRound,
+  Building2,
+  BookOpen,
   type LucideIcon
 } from "lucide-react";
 import {
@@ -38,7 +40,8 @@ import {
   AnimatedSend,
   AnimatedUpload,
   AnimatedDownload,
-  AnimatedMeetingScheduler
+  AnimatedMeetingScheduler,
+  AnimatedJournal
 } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss } from "./ui";
 import { timeAgo, plainText, emojis } from "../utils/helpers";
@@ -49,6 +52,8 @@ import { PageIcon } from "./PageIcon";
 
 import type { Page } from "../lib/supabaseService";
 import TeamSwitcher from "./teams/TeamSwitcher";
+import { CompanySwitcher } from "./company/CompanySwitcher";
+import { useCompany } from "../contexts/CompanyContext";
 
 // IconButton (src/components/ui/index.tsx) types its `icon` prop as
 // lucide-react's `LucideIcon`, but several calls below pass this
@@ -169,6 +174,7 @@ const Sidebar = memo(function Sidebar({
   currentUserEmail,
   currentUserAvatar
 }: SidebarProps) {
+  const { currentCompany } = useCompany()
   const recents = useMemo(() => [...pages]
     .filter((p) => !p.hiddenFromRecents && !p.trashed)
     .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
@@ -410,10 +416,27 @@ const Sidebar = memo(function Sidebar({
           {/* 1. Core Workspace Links */}
           <NoskaSection title="Workspace" defaultExpanded={true}>
             <NoskaNavItem icon={AnimatedFolder} label="Home" active={appView === "home"} onClick={(e) => onView("home", selectOptionsFromEvent(e))} />
+            <NoskaNavItem icon={AnimatedJournal} label="Daily Journal" active={appView === "daily" || appView === "journal"} onClick={(e) => onView("daily", selectOptionsFromEvent(e))} />
             <NoskaNavItem icon={AnimatedAI} label="AI Workspace" active={false} onClick={onAIFull} />
             <NoskaNavItem icon={AnimatedHistory} label="Calendar" active={appView === "calendar"} onClick={(e) => onView("calendar", selectOptionsFromEvent(e))} />
             <NoskaNavItem icon={AnimatedMeetingScheduler} label="Meeting Scheduler" active={appView === "meetings"} onClick={(e) => onView("meetings", selectOptionsFromEvent(e))} />
             <NoskaNavItem icon={AnimatedBell} label="Inbox" active={appView === "inbox"} onClick={(e) => onView("inbox", selectOptionsFromEvent(e))} badge={pendingInvitesCount} />
+          </NoskaSection>
+
+          {/* 1b. Company */}
+          <NoskaSection title="Company" defaultExpanded={true}>
+            <div className="px-2 py-1">
+              <CompanySwitcher onView={onView} />
+            </div>
+            {currentCompany && (
+              <NoskaNavItem
+                icon={Building2}
+                label="Company Home"
+                active={appView === "companyHome"}
+                onClick={(e) => onView("companyHome", selectOptionsFromEvent(e))}
+                compact
+              />
+            )}
           </NoskaSection>
 
           {/* 2. Starred Favorites */}

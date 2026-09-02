@@ -1,7 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense, useSyncExternalStore } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { isDesktop } from "./lib/desktop/platform";
-import { getDesktopIdentity, subscribePairing, pairingVersion } from "./lib/desktop/pairing";
+import { VOICE_SETTINGS_EVENT } from "./lib/desktop/DesktopBridge";
+import { globalVoiceController } from "./lib/voice/voice-controller";
+import { parseVoiceAgentCommand, scorePageName } from "./lib/voice/agent-commands";
+import { blankAgent, saveAgent } from "./features/agents/agentStore";
+import { blankAutomation, saveAutomation } from "./features/automations/automationStore";
+import { refreshDefinitions } from "./intelligence/triggerService";
+import { collectLocalDiagnostics, queueLocalBugReport } from "./lib/diagnostics/localDiagnostics";
+import { getDesktopIdentity, subscribePairing, pairingVersion, desktopSignOut } from "./lib/desktop/pairing";
+import { clearBrowserAuthState } from "./lib/desktop/browserAuth";
 import { handleShortcutEvent } from "./lib/shortcuts";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { UIProvider, useUI } from "./contexts/UIContext";
@@ -22,6 +30,7 @@ import OnboardingPage from "./onboarding/pages/OnboardingPage";
 import { starterPageForTemplate } from "./onboarding/services/onboardingService";
 import CommandPalette from "./components/CommandPalette";
 import { TeamProvider } from "./lib/TeamContext";
+import { CompanyProvider } from "./contexts/CompanyContext";
 import { SettingsModal, TrashModal, ShareModal, HelpModal, CustomDialog } from "./components/Modals";
 import ProfileModal from "./components/ProfileModal";
 import FocusZoom from "./features/focus/FocusZoom";
@@ -48,7 +57,8 @@ const CanvasView = lazy(() => import("./features/canvas/CanvasView"));
 const GraphView = lazy(() => import("./features/graph/GraphView"));
 const ExportPanel = lazy(() => import("./features/export/ExportPanel"));
 const WebClipper = lazy(() => import("./features/clipper/WebClipper"));
-const VoiceCapture = lazy(() => import("./features/voice/VoiceCapture"));
+const NoskaVoiceHub = lazy(() => import("./features/voice/NoskaVoiceHub"));
+const VoiceAgentPrompt = lazy(() => import("./features/voice/VoiceAgentPrompt"));
 const SpacedRepetition = lazy(() => import("./features/spaced/SpacedRepetition"));
 const NoteLineage = lazy(() => import("./features/lineage/NoteLineage"));
 const CoThinking = lazy(() => import("./features/collab/CoThinking"));
@@ -58,7 +68,7 @@ const ApiConsole = lazy(() => import("./features/api/ApiConsole"));
 import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
 import { supabase, setClerkSessionToken } from "./lib/supabase";
 import LoginGate from "./components/auth/LoginGate";
-import PairingScreen from "./components/auth/PairingScreen";
+import DesktopAuthScreen from "./components/auth/DesktopAuthScreen";
 import { WaitlistGate } from "./components/auth/WaitlistGate";
 import { useLaunchSettings } from "./hooks/useLaunchSettings";
 import { TEST_MODE } from "./lib/envGuard";
@@ -148,6 +158,8 @@ function AppContent() {
   const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [voiceSettingsRequested, setVoiceSettingsRequested] = useState(false);
+  const [voiceAgentPrompt, setVoiceAgentPrompt] = useState<{ providerId: string; providerName: string } | null>(null);
 
   const [
     { pages, sharedPages, activeId, workspaceName, pendingInvites, collapsedPages,
@@ -295,6 +307,11 @@ function AppContent() {
   }, [ghostWriterEnabled]);
 
   const hydrated = useRef(false);
+  // A deep-link page is an initial navigation request, not a permanent
+  // selection lock. This ref prevents the route-sync effect from reapplying
+  // the URL page every time pages change (for example when a recent/favorite
+  // page is edited or a new page is created).
+  const appliedRoutePageRef = useRef<string | null>(null);
 
   // Real bug, fixed: this used to match `activeId` against ANY page
   // regardless of trashed status, so trashing the active page (with no
@@ -1069,6 +1086,13 @@ function AppContent() {
     try {
       await clerk.signOut();
     } catch {}
+    // Desktop: drop the paired browser-handoff session + any pending
+    // sign-in transaction, otherwise the app boots straight back into
+    // the (now stale) identity instead of the login screen.
+    if (isDesktop()) {
+      desktopSignOut();
+      clearBrowserAuthState();
+    }
     // Clear all user-data localStorage keys
     const keysToClear = [
       "noska_user_id", "noska_workspace_joined", "noska_sidebar_data",
@@ -1275,6 +1299,12 @@ function AppContent() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  useEffect(() => {
+    const openVoiceSettings = () => { setVoiceSettingsRequested(true); setVoiceOpen(true); };
+    window.addEventListener(VOICE_SETTINGS_EVENT, openVoiceSettings);
+    return () => window.removeEventListener(VOICE_SETTINGS_EVENT, openVoiceSettings);
+  }, [setVoiceOpen]);
+
   // Centralized shortcut handler (fires for all customizable shortcuts)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => handleShortcutEvent(e);
@@ -1442,6 +1472,14 @@ function AppContent() {
       openTab("page", pageId, { inNewTab: true, makeActive: true });
       return;
     }
+    // Make regular sidebar/favorites/recents navigation update the active tab
+    // in the same event as the workspace selection. Relying only on
+    // TabProvider's follow-up sync effect left one render showing the previous
+    // page, which was especially visible when switching immediately after
+    // creating a new page.
+    if (!options.altKey && !options.sidePeek) {
+      openTab("page", pageId, { inNewTab: false, makeActive: true });
+    }
     setAppView("page");
     if (options.altKey || options.sidePeek) {
       setStackedPageIds((prev) => prev.includes(pageId) ? prev : [...prev, pageId]);
@@ -1476,10 +1514,20 @@ function AppContent() {
   }, [setAppView, setActiveId, setStackedPageIds]);
 
   useEffect(() => {
-    if (routeParams.pageId && pages.length > 0 && pages.some((p) => p.id === routeParams.pageId)) {
-      setActiveId(routeParams.pageId);
+    const routePageId = routeParams.pageId || null;
+    if (!routePageId) {
+      appliedRoutePageRef.current = null;
+      return;
+    }
+    if (
+      appliedRoutePageRef.current !== routePageId &&
+      pages.length > 0 &&
+      pages.some((p) => p.id === routePageId)
+    ) {
+      appliedRoutePageRef.current = routePageId;
+      setActiveId(routePageId);
       setAppView("page");
-      setStackedPageIds((prev) => (prev.includes(routeParams.pageId!) ? prev : [routeParams.pageId!]));
+      setStackedPageIds((prev) => (prev.includes(routePageId) ? prev : [routePageId]));
     }
   }, [routeParams.pageId, pages, setActiveId, setAppView, setStackedPageIds]);
 
@@ -1737,6 +1785,7 @@ function AppContent() {
 
   interface AddPageOptions {
     modal?: boolean;
+    title?: string;
   }
 
   const addPage = (template: string = "blank", parentId: string | null = null, options: AddPageOptions = {}) => {
@@ -1757,7 +1806,7 @@ function AppContent() {
     };
     const next: Page = ensurePageEntity({
       id: uid(),
-      title: templateTitles[template] || "Untitled",
+      title: options.title?.trim() || templateTitles[template] || "Untitled",
       icon: templateIcons[template] || "📝",
       cover: null,
       parentId,
@@ -1798,6 +1847,117 @@ function AppContent() {
     }
     return next.id;
   };
+
+  const runVoiceAgentCommand = useCallback((spoken: string) => {
+    const command = parseVoiceAgentCommand(spoken);
+    if (command.kind === "open-page") {
+      const page = pages
+        .filter((candidate) => !candidate.trashed)
+        .map((candidate) => ({ page: candidate, score: scorePageName(command.query, candidate.title) }))
+        .filter(({ score }) => score >= 50)
+        .sort((a, b) => b.score - a.score)[0]?.page;
+      if (!page) { showToast(`I couldn't find a page named “${command.query}”.`); return; }
+      handlePageSelect(page.id);
+      showToast(`Opened “${page.title}”`);
+      return;
+    }
+    if (command.kind === "write") {
+      const page = pages.find((candidate) => candidate.id === activeId && !candidate.trashed);
+      if (!page) { showToast("Open a page first, then say “write …”."); return; }
+      const block = blockFor("text", command.text);
+      commitPages(pages.map((candidate) => candidate.id === page.id
+        ? { ...candidate, blocks: [...(candidate.blocks || []), block], updatedAt: now() }
+        : candidate));
+      showToast(`Added text to “${page.title}”`);
+      return;
+    }
+    if (command.kind === "create-page") {
+      addPage("blank", null, { title: command.title });
+      showToast(`Created “${command.title}”`);
+      return;
+    }
+    if (command.kind === "search-pages") {
+      setQuery(command.query);
+      setPaletteOpen(true);
+      showToast(`Searching pages for “${command.query}”`);
+      return;
+    }
+    if (command.kind === "configure-provider") {
+      setSettingsInitialTab("Noska AI");
+      setSettingsOpen(true);
+      setVoiceAgentPrompt({ providerId: command.providerId, providerName: command.providerName });
+      return;
+    }
+    if (command.kind === "open-settings") {
+      setSettingsOpen(true);
+      return;
+    }
+    if (command.kind === "open-ai") {
+      setAiOpen(true);
+      return;
+    }
+    if (command.kind === "open-agents" || command.kind === "open-automations") {
+      const view = command.kind === "open-agents" ? "agents" : "automations";
+      setAppView(view);
+      openTab("view", view, { inNewTab: true, makeActive: true });
+      return;
+    }
+    if (command.kind === "create-agent") {
+      void (async () => {
+        try {
+          await saveAgent(blankAgent({
+            name: command.name,
+            description: command.instructions,
+            instructions: command.instructions,
+            status: "active",
+          }));
+          await refreshDefinitions();
+          showToast(`Agent “${command.name}” is ready`);
+          setAppView("agents");
+          openTab("view", "agents", { inNewTab: true, makeActive: true });
+        } catch {
+          showToast("I couldn't create that agent. Check your connection and try again.");
+        }
+      })();
+      return;
+    }
+    if (command.kind === "create-automation") {
+      void (async () => {
+        try {
+          await saveAutomation(blankAutomation({
+            name: command.name,
+            description: command.instructions,
+            status: "active",
+            steps: [{ id: uid(), label: "Run workflow", kind: "ai_step", instruction: command.instructions }],
+          }));
+          await refreshDefinitions();
+          showToast(`Automation “${command.name}” is ready`);
+          setAppView("automations");
+          openTab("view", "automations", { inNewTab: true, makeActive: true });
+        } catch {
+          showToast("I couldn't create that automation. Check your connection and try again.");
+        }
+      })();
+      return;
+    }
+    if (command.kind === "diagnose") {
+      const report = collectLocalDiagnostics();
+      const largest = report.storage.filter((entry) => !entry.protected).slice(0, 1)[0];
+      showToast(`Local health: ${report.ai.recentRequests} AI requests, ${report.ai.errors} errors${largest ? ` · largest cache: ${largest.key}` : ""}`);
+      return;
+    }
+    if (command.kind === "report-bug") {
+      queueLocalBugReport(command.description);
+      showToast("Bug report queued locally. It contains no keys, tokens, or page content.");
+      return;
+    }
+    // Keep unknown speech visible to the user instead of handing it to a
+    // potentially destructive automation. The AI panel can then help plan it.
+    setAiOpen(true);
+    showToast("I can open, write, create, and search pages. More actions will ask before changing data.");
+  }, [activeId, addPage, commitPages, handlePageSelect, openTab, pages, setAiOpen, setAppView, setPaletteOpen, setQuery, setSettingsInitialTab, setSettingsOpen, showToast]);
+
+  useEffect(() => globalVoiceController.onAgentCommand(runVoiceAgentCommand), [runVoiceAgentCommand]);
 
   const buildBlankPage = (parentId: string | null = null): Page => ensurePageEntity({
     id: uid(),
@@ -2432,6 +2592,7 @@ function AppContent() {
   };
 
   return (
+    <CompanyProvider>
     <TeamProvider>
     <AnimatePresence mode="wait">
       {appFlowState === "loading" && !TEST_MODE && !isSignedIn && !isDesktop() && (
@@ -2448,7 +2609,7 @@ function AppContent() {
       {appFlowState === "auth" && (
         <LoginGate>
           {isDesktop() ? (
-            !desktopIdentity ? <PairingScreen key="pairing" /> : null
+            !desktopIdentity ? <DesktopAuthScreen key="desktop-auth" /> : null
           ) : (
             <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
           )}
@@ -2813,6 +2974,7 @@ function AppContent() {
               // the reason this instance would show empty search results
               // even if it were made visible.
               <CommandPalette
+                key="app-command-palette"
                 // Deliberately `undefined`, not `paletteOpen` — see the
                 // long comment above. This keeps this instance invisible
                 // (matching current real behavior) while still
@@ -2840,6 +3002,7 @@ onLineage={() => setLineageOpen(true)}
             )}
             {settingsOpen && (
               <SettingsModal
+                key="app-settings"
                 initialTab={settingsInitialTab}
                 workspaceName={workspaceName}
                 setWorkspaceName={setWorkspaceName}
@@ -2873,7 +3036,9 @@ onLineage={() => setLineageOpen(true)}
                 onUsernameChanged={setCurrentUsername}
               />
             )}
+            {profileOpen && (
             <ProfileModal
+              key="app-profile"
               open={profileOpen}
               onClose={() => setProfileOpen(false)}
               currentUserId={currentUserId}
@@ -2890,9 +3055,11 @@ onLineage={() => setLineageOpen(true)}
               }}
               onToast={showToast}
             />
-            {trashOpen && <TrashModal pages={trashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} />}
+            )}
+            {trashOpen && <TrashModal key="app-trash" pages={trashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} />}
             {shareOpen && (
               <ShareModal
+                key="app-share"
                 page={activePage}
                 onClose={() => setShareOpen(false)}
                 onToast={showToast}
@@ -2901,7 +3068,7 @@ onLineage={() => setLineageOpen(true)}
                 workspaceSlug={slugifyWorkspaceName(workspaceName)}
               />
             )}
-            {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+            {helpOpen && <HelpModal key="app-help" onClose={() => setHelpOpen(false)} />}
             
             {/* Phase 3-5 Feature Modals */}
             <Suspense fallback={null}>
@@ -2925,13 +3092,20 @@ onLineage={() => setLineageOpen(true)}
                 />
               )}
               {voiceOpen && (
-                <VoiceCapture
-                  onAppendBlocks={(blocks) => updateBlocks([...activePage.blocks, ...blocks])}
-                  onClose={() => setVoiceOpen(false)}
-                  apiKey={apiKey}
-                  aiProvider={aiProvider}
-                  nvidiaKey={nvidiaKey}
-                  onToast={showToast}
+                <NoskaVoiceHub initialShowSettings={voiceSettingsRequested} onClose={() => { setVoiceOpen(false); setVoiceSettingsRequested(false); }} />
+              )}
+              {voiceAgentPrompt && (
+                <VoiceAgentPrompt
+                  providerName={voiceAgentPrompt.providerName}
+                  onClose={() => setVoiceAgentPrompt(null)}
+                  onOpenSettings={() => { setSettingsInitialTab("Noska AI"); setSettingsOpen(true); setVoiceAgentPrompt(null); }}
+                  onSave={(key) => {
+                    aiManager.setProviderConfig(voiceAgentPrompt.providerId, { apiKey: key, enabled: true });
+                    aiManager.setActiveProvider(voiceAgentPrompt.providerId);
+                    setAiProvider(voiceAgentPrompt.providerId);
+                    setVoiceAgentPrompt(null);
+                    showToast(`${voiceAgentPrompt.providerName} is ready`);
+                  }}
                 />
               )}
               {reviewOpen && (
@@ -2979,6 +3153,7 @@ onLineage={() => setLineageOpen(true)}
             </Suspense>
             {dialogState.open && (
               <CustomDialog
+                key="app-dialog"
                 open={dialogState.open}
                 type={dialogState.type}
                 title={dialogState.title}
@@ -3050,6 +3225,7 @@ onLineage={() => setLineageOpen(true)}
       )}
     </AnimatePresence>
     </TeamProvider>
+    </CompanyProvider>
   );
 }
 

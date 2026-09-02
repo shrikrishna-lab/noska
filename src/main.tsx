@@ -43,6 +43,7 @@ const ApiKeysLanding = lazy(() => import("./pages/marketing/ApiKeysLanding"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
 const DesktopConnectPage = lazy(() => import("./pages/DesktopConnect"));
+const DesktopAuthPage = lazy(() => import("./pages/DesktopAuthPage"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-white">
@@ -117,6 +118,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/api-keys" element={<MarketingShell><ApiKeysLanding /></MarketingShell>} />
           <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
+          <Route path="/desktop-auth" element={<DesktopAuthPage />} />
           <Route path="/connect-desktop" element={<Suspense fallback={<RouteFallback />}><DesktopConnectPage /></Suspense>} />
           <Route path="/control" element={<ControlCenter />} />
           <Route path="/login" element={<LoginRoute />} />

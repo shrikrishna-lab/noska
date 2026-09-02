@@ -20,6 +20,18 @@ declare class SpeechRecognition extends EventTarget {
   abort(): void;
 }
 
+/**
+ * SpeechRecognition is a browser-provided constructor. The ambient class
+ * above is type-only, so using `new SpeechRecognition()` directly would
+ * throw at runtime in the bundled app. Always resolve the vendor-prefixed
+ * constructor from window.
+ */
+function getSpeechRecognitionConstructor(): (new () => SpeechRecognition) | null {
+  if (typeof window === "undefined") return null;
+  return (window.SpeechRecognition || window.webkitSpeechRecognition || null) as
+    (new () => SpeechRecognition) | null;
+}
+
 /* ─── text → structured blocks ─── */
 function textToBlocks(text: string) {
   return text
@@ -102,6 +114,7 @@ export default function VoiceCapture({
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const isListeningRef = useRef(false);
+  const isStartingRef = useRef(false);
 
   // Initialize WebGL Halftone / Bayer-Dithered soundwave sphere
   const initialiseWebGL = useCallback(() => {
@@ -324,7 +337,7 @@ export default function VoiceCapture({
   }, [initialiseWebGL]);
 
   const startRecording = useCallback(async () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = getSpeechRecognitionConstructor();
     if (!SpeechRecognition) {
       setSupported(false);
       return;
@@ -431,6 +444,10 @@ export default function VoiceCapture({
   }, [onClose, stopRecording]);
 
   const handleToggle = useCallback(async () => {
+    // A second click while getUserMedia is pending cannot safely cancel the
+    // browser permission prompt; ignore it instead of racing the start path.
+    if (isStartingRef.current) return;
+
     if (isRecording) {
       // Stop recording
       isListeningRef.current = false;
@@ -456,10 +473,14 @@ export default function VoiceCapture({
       return;
     }
 
-    // Start recording in normal dictation mode
-    isListeningRef.current = true;
-    setIsRecording(true);
-    setElapsed(0);
+    // Start recording in normal dictation mode. Do not publish recording
+    // state until both the microphone and recognition session are ready.
+    const SpeechRecognition = getSpeechRecognitionConstructor();
+    if (!SpeechRecognition) {
+      setSupported(false);
+      return;
+    }
+    isStartingRef.current = true;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -526,13 +547,28 @@ export default function VoiceCapture({
         }
       };
 
-      recognition.start();
       recognitionRef.current = recognition;
+      isListeningRef.current = true;
+      recognition.start();
+      isStartingRef.current = false;
+      setIsRecording(true);
+      setElapsed(0);
 
       timerRef.current = setInterval(() => {
         setElapsed((e) => e + 1);
       }, 1000);
     } catch (err) {
+      isStartingRef.current = false;
+      isListeningRef.current = false;
+      recognitionRef.current = null;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      if (audioCtxRef.current) {
+        void audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+      }
       onToast?.("Microphone access denied or unavailable");
       setIsRecording(false);
     }

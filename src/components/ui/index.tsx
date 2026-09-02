@@ -66,22 +66,63 @@ interface ToastProps {
 
 export function Toast({ message, onDone }: ToastProps) {
   useEffect(() => {
-    const t = setTimeout(onDone, 2200);
+    const t = setTimeout(onDone, 2400);
     return () => clearTimeout(t);
   }, [onDone]);
 
   if (!message) return null;
 
+  // Determine palette from message content based on user's reference image
+  const isDanger = /delete|remove|cancel|error|failed|rejected/i.test(message);
+  const isWarning = /warn|caution|pending|attention/i.test(message);
+  const isInfo = /schedule|toggle|info|deploy|sync|load/i.test(message);
+  const isSuccess = /success|accept|complete|done|created|saved|joined/i.test(message);
+
+  let bg = "#CFD6C4"; // Default: Sage Mist
+  let textColor = "#1E2721";
+  let shadowGlow = "rgba(160, 175, 150, 0.4)";
+  let dotColor = "#3B5244";
+
+  if (isDanger) {
+    bg = "#F3C3B2"; // Soft Coral Blossom
+    textColor = "#2D1813";
+    shadowGlow = "rgba(195, 105, 90, 0.45)";
+    dotColor = "#8E3D2F";
+  } else if (isWarning) {
+    bg = "#FDE8D3"; // Vanilla Cream Peach
+    textColor = "#362419";
+    shadowGlow = "rgba(215, 150, 110, 0.45)";
+    dotColor = "#8C5832";
+  } else if (isInfo) {
+    bg = "#99CDD8"; // Glacier Sky Blue
+    textColor = "#122A30";
+    shadowGlow = "rgba(100, 175, 195, 0.45)";
+    dotColor = "#276270";
+  } else if (isSuccess) {
+    bg = "#DAEBE3"; // Mint Mist
+    textColor = "#162E25";
+    shadowGlow = "rgba(120, 175, 150, 0.4)";
+    dotColor = "#2B6350";
+  }
+
   return createPortal(
     <motion.div
-      initial={{ opacity: 0, y: 15, scale: 0.95 }}
+      initial={{ opacity: 0, y: 20, scale: 0.92 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 8, scale: 0.97 }}
-      transition={{ type: "spring", stiffness: 280, damping: 24 }}
-      style={{ x: "-50%" }}
-      className="fixed bottom-6 left-1/2 z-[120] rounded-lg bg-[var(--surface)] px-4 py-2 text-sm text-[var(--text)] shadow-[var(--shadow)] ring-1 ring-[var(--border)] select-none"
+      exit={{ opacity: 0, y: 12, scale: 0.94 }}
+      transition={{ type: "spring", stiffness: 480, damping: 28 }}
+      style={{
+        x: "-50%",
+        background: `linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.25) 40%, rgba(0, 0, 0, 0.04) 100%), ${bg}`,
+        boxShadow: `0 18px 45px -8px ${shadowGlow}, 0 6px 18px rgba(0, 0, 0, 0.08), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.85), inset 0 -1.5px 2px rgba(0, 0, 0, 0.08)`,
+        border: "1px solid rgba(255, 255, 255, 0.75)",
+        color: textColor,
+      }}
+      className="fixed bottom-7 left-1/2 z-[120] rounded-full px-5 py-2.5 text-[12.5px] font-bold shadow-2xl backdrop-blur-2xl select-none flex items-center gap-2.5 tracking-tight pointer-events-auto"
+      role="alert"
     >
-      {message}
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+      <span>{message}</span>
     </motion.div>,
     document.body
   );

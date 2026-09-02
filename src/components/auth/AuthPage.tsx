@@ -73,7 +73,7 @@ const { signIn, errors, fetchStatus } = useSignIn();
     if (finalizeError) throw finalizeError;
   };
 
-  const handleProviderClick = async (provider: "github" | "google" | "microsoft") => {
+  const handleProviderClick = async (provider: "github" | "google" | "microsoft" | "apple") => {
     // Desktop: OAuth requires navigating out to the provider and back, which
     // the webview cannot complete (Clerk rejects the callback origin). Keep
     // users in-app with email sign-in instead of dumping them on a Clerk
@@ -103,7 +103,10 @@ const { signIn, errors, fetchStatus } = useSignIn();
     // the now-signed-in user into their workspace.
     markOAuthIntent();
 try {
-      const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
+      const strategy =
+        provider === "github" ? "oauth_github" :
+        provider === "google" ? "oauth_google" :
+        provider === "apple" ? "oauth_apple" : "oauth_microsoft";
       // Stay on the current origin: www.noska.me serves the full app, and
       // app.noska.me is not a live production host (dead DNS) — rewriting
       // there sent every completed OAuth into a connection error.

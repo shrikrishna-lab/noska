@@ -18,6 +18,7 @@ import { plainText } from "../../utils/helpers";
 import type { Page } from "../../lib/supabaseService";
 import type { Block } from "../../../types/blocks";
 import { PageIcon } from "../../components/PageIcon";
+import DocumentOutlineRuler from "../../components/editor/DocumentOutlineRuler";
 
 
 interface ReadingTheme {
@@ -620,8 +621,10 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
         {/* Main Text Content Area */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden flex justify-center py-10 px-6 scrollbar-thin"
+          className="flex-1 overflow-y-auto overflow-x-hidden flex justify-center py-10 px-6 scrollbar-thin relative"
         >
+          {/* Section Minimap Timeline Ruler & Hover Card */}
+          <DocumentOutlineRuler blocks={page?.blocks || []} containerRef={containerRef} />
           {/* Highlight tooltip menu button */}
           {selection && (
             <div

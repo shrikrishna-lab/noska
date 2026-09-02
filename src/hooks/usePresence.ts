@@ -20,13 +20,13 @@ export function usePresence(pageId: string | null | undefined) {
     const unsubs = [
       realtimeCollab.on("presence:sync", ({ pageId: pid, users: u }) => {
         if (pid === pageRef.current) {
-          setUsers(u.filter((us) => us.userId !== realtimeCollab.getUser().userId));
+          setUsers(u.filter((us) => us.userId !== realtimeCollab.getUser().userId && (us.userId || us.id)));
         }
       }),
       realtimeCollab.on("presence:join", ({ pageId: pid, user }) => {
-        if (pid === pageRef.current && user.userId !== realtimeCollab.getUser().userId) {
+        if (pid === pageRef.current && user.userId !== realtimeCollab.getUser().userId && (user.userId || user.id)) {
           setUsers((prev) => {
-            if (prev.some((u) => u.id === user.id)) return prev;
+            if (prev.some((u) => u.id === user.id || u.userId === user.userId)) return prev;
             return [...prev, user];
           });
         }

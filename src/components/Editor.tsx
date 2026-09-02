@@ -42,6 +42,7 @@ import ImagePicker from "./editor/ImagePicker";
 import PageIconBlock from "./editor/PageIconBlock";
 import PageTitleCustomizer, { TITLE_GRADIENTS } from "./editor/PageTitleCustomizer";
 import { PageIcon } from "./PageIcon";
+import DocumentOutlineRuler from "./editor/DocumentOutlineRuler";
 
 import InPageFind from "./InPageFind";
 import { CursorOverlay } from "../features/collab/CursorOverlay";
@@ -820,6 +821,9 @@ export default function Editor({
       {/* Live cursors from other collaborators */}
       <CursorOverlay pageId={page.id} />
 
+      {/* Floating Outline / Section Minimap Ruler with preview popup */}
+      <DocumentOutlineRuler blocks={page?.blocks || []} containerRef={editorContainerRef} />
+
       {/* Cover Banner — full width of editor container or constrained by coverSize without viewport overflow */}
       {Boolean(page.cover) && (
         <div
@@ -1124,6 +1128,7 @@ export default function Editor({
               )}
               <button
                 className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {

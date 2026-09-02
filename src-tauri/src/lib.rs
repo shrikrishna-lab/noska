@@ -5,10 +5,13 @@
 //! React + TypeScript frontend under `src/`.
 
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
     Emitter, Manager,
 };
+mod local_transcription;
+mod text_injector;
+mod voice_dictionary;
 #[cfg(desktop)]
 use tauri_plugin_deep_link::DeepLinkExt;
 
@@ -18,6 +21,8 @@ const TRAY_ACTION_EVENT: &str = "tray://action";
 /// Event emitted to the webview when a `noska://` deep link is opened.
 /// Payload: array of URL strings.
 const DEEP_LINK_EVENT: &str = "deep-link://open-url";
+/// Requests the Voice preferences surface from the native app menu.
+const VOICE_SETTINGS_EVENT: &str = "voice://open-settings";
 
 fn focus_main_window(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
@@ -36,6 +41,27 @@ fn emit_deep_links(app: &tauri::AppHandle, urls: Vec<String>) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.emit(DEEP_LINK_EVENT, urls);
     }
+}
+
+#[cfg(desktop)]
+fn setup_app_menu(app: &tauri::App) -> tauri::Result<()> {
+    let settings = MenuItem::with_id(app, "voice-settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
+    let quit = MenuItem::with_id(app, "quit-app", "Quit Noska", true, Some("CmdOrCtrl+Q"))?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let app_menu = Submenu::with_items(app, "Noska", true, &[&settings, &separator, &quit])?;
+    let menu = Menu::with_items(app, &[&app_menu])?;
+    app.set_menu(menu)?;
+    app.on_menu_event(|handle, event| match event.id().as_ref() {
+        "quit-app" => handle.exit(0),
+        "voice-settings" => {
+            focus_main_window(handle);
+            if let Some(window) = handle.get_webview_window("main") {
+                let _ = window.emit(VOICE_SETTINGS_EVENT, ());
+            }
+        }
+        _ => {}
+    });
+    Ok(())
 }
 
 #[cfg(desktop)]
@@ -75,6 +101,11 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
 #[cfg(desktop)]
 fn setup_deep_links(app: &tauri::App) {
     let deep_link = app.deep_link();
+
+    // Register the noska:// scheme at runtime. macOS has no installer hook,
+    // so without this the browser cannot hand back to the app (auth flow);
+    // on Windows/Linux it also self-heals dev builds and registry drift.
+    let _ = deep_link.register_all();
 
     // Deep links received while this process was the launching process
     // (cold start via `noska://...` on Windows/Linux argv or macOS open event).
@@ -140,9 +171,20 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![
+            local_transcription::capability_check,
+            local_transcription::local_model_status,
+            local_transcription::install_local_model,
+            local_transcription::start_local_transcription,
+            local_transcription::stop_local_transcription,
+            text_injector::inject_text,
+            voice_dictionary::load_voice_dictionary,
+            voice_dictionary::save_voice_dictionary,
+        ])
         .setup(|app| {
             #[cfg(desktop)]
             {
+                setup_app_menu(app)?;
                 setup_tray(app)?;
                 setup_deep_links(app);
 

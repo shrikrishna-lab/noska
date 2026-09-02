@@ -81,7 +81,7 @@ export function CompanyTrash({ onRestore }: CompanyTrashProps) {
           currentMember.user_id,
           "restore",
           item.table_name,
-          item.id
+          { entity_id: item.id, entity_name: item.title }
         )
       }
 
@@ -104,7 +104,7 @@ export function CompanyTrash({ onRestore }: CompanyTrashProps) {
           currentMember.user_id,
           "permanent_delete",
           item.table_name,
-          item.id
+          { entity_id: item.id, entity_name: item.title }
         )
       }
 
@@ -125,7 +125,7 @@ export function CompanyTrash({ onRestore }: CompanyTrashProps) {
           currentMember.user_id,
           "empty_trash",
           "trash",
-          `${items.length} items`
+          { count: items.length }
         )
       }
       setItems([])

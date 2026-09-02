@@ -1,7 +1,7 @@
 // Gate for the /login route.
 // - Desktop with a paired session: straight through to the app.
-// - Desktop without one: the pairing screen (browser-based sign-in) — the
-//   Clerk login form can't run on the custom app origin.
+// - Desktop without one: the browser-first auth screen (providers open the
+//   system browser; the app is handed back via noska://auth/callback).
 // - Web: cached Clerk session skips the form; otherwise render the login UI.
 import type { ReactNode } from "react";
 import { useAuth } from "@clerk/react";
@@ -9,7 +9,7 @@ import { Navigate } from "react-router-dom";
 import { isDesktop } from "../lib/desktop/platform";
 import { getDesktopIdentity } from "../lib/desktop/pairing";
 import App from "../App.jsx";
-import PairingScreen from "./auth/PairingScreen";
+import DesktopAuthScreen from "./auth/DesktopAuthScreen";
 import { RouteFallbackSpinner } from "./MarketingShell";
 
 export default function LoginRoute({ children }: { children?: ReactNode }) {
@@ -17,7 +17,7 @@ export default function LoginRoute({ children }: { children?: ReactNode }) {
 
   if (isDesktop()) {
     if (getDesktopIdentity()) return children ?? <App />;
-    return <PairingScreen />;
+    return <DesktopAuthScreen />;
   }
   if (!isLoaded) {
     return <RouteFallbackSpinner />;

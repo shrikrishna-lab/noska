@@ -37,7 +37,9 @@ export const VIEW_META: Record<string, { icon: string; title: string }> = {
   meetings: { icon: "📹", title: "Meetings" },
   meetingNote: { icon: "🎙️", title: "AI Meeting Capture" },
   shared: { icon: "👥", title: "Shared" },
-  teamspace: { icon: "🏢", title: "Teamspace" }
+  teamspace: { icon: "🏢", title: "Teamspace" },
+  companyHome: { icon: "🏢", title: "Company" },
+  companySettings: { icon: "⚙️", title: "Company Settings" }
 };
 
 interface TabContextValue {
@@ -96,6 +98,12 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   const stateRef = useRef(engineState);
   stateRef.current = engineState;
 
+  // When navigation originates from a tab, update the workspace selection in
+  // the same event batch. The sync effect below must not then treat that
+  // already-applied selection as an external navigation and create/replace a
+  // second tab on the following render.
+  const navigationTargetRef = useRef<string | null>(null);
+
   // Persist state to localStorage
   useEffect(() => {
     try {
@@ -108,6 +116,14 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     const targetType: "page" | "view" = appView === "page" ? "page" : "view";
     const targetId = appView === "page" ? activeId : appView;
     if (!targetId) return;
+
+    // If a tab action already applied this exact workspace target in the same
+    // event batch, the tab state is authoritative — skip the external sync.
+    if (navigationTargetRef.current === targetId) {
+      navigationTargetRef.current = null;
+      return;
+    }
+    navigationTargetRef.current = null;
 
     setEngineState((prev) => {
       const activePane = prev.panes[prev.activePaneId] || Object.values(prev.panes)[0];
@@ -131,6 +147,23 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
             }
           }
         };
+      }
+
+      // 1b. Check ALL panes for the target — if it's already open somewhere else,
+      //     switch to that pane rather than creating a duplicate tab
+      for (const [pId, p] of Object.entries(prev.panes)) {
+        if (pId === activePane.id) continue;
+        const found = p.tabs.find((t) => t.type === targetType && t.targetId === targetId);
+        if (found) {
+          return {
+            ...prev,
+            activePaneId: pId,
+            panes: {
+              ...prev.panes,
+              [pId]: { ...p, activeTabId: found.id }
+            }
+          };
+        }
       }
 
       // 2. If active tab was an initial placeholder, replace it
@@ -280,6 +313,15 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     ) => {
       const { inNewTab = false, makeActive = true } = options || {};
 
+      // Keep the global workspace state, sidebar highlight, stacked columns,
+      // and tab content aligned immediately. Previously this was intentionally
+      // omitted and the sync effect repaired it later, which produced a
+      // visible old-page/new-page flicker during rapid navigation.
+      if (makeActive) {
+        navigationTargetRef.current = targetId;
+        onNavigatePane(type, targetId);
+      }
+
       setEngineState((prev) => {
         const pane = prev.panes[paneId];
         if (!pane) return prev;
@@ -318,10 +360,6 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
           }
         };
 
-        if (makeActive && prev.activePaneId === paneId) {
-          onNavigatePane(type, targetId);
-        }
-
         return {
           ...prev,
           panes: nextPanes,
@@ -334,15 +372,19 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
 
   const setPaneActiveTab = useCallback(
     (paneId: string, tabId: string) => {
+      const selectedPane = stateRef.current.panes[paneId];
+      const selectedTab = selectedPane?.tabs.find((t) => t.id === tabId);
+      if (!selectedPane || !selectedTab) return;
+      if (stateRef.current.activePaneId === paneId) {
+        navigationTargetRef.current = selectedTab.targetId;
+        onNavigatePane(selectedTab.type, selectedTab.targetId);
+      }
+
       setEngineState((prev) => {
         const pane = prev.panes[paneId];
         if (!pane) return prev;
         const tab = pane.tabs.find((t) => t.id === tabId);
         if (!tab) return prev;
-
-        if (prev.activePaneId === paneId) {
-          onNavigatePane(tab.type, tab.targetId);
-        }
 
         return {
           ...prev,

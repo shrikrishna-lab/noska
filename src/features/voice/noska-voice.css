@@ -1,0 +1,47 @@
+/* Noska Voice design system — sober 1980s field recorder hardware. */
+.noska-voice {
+  --nv-ink: #171716;
+  --nv-graphite: #252522;
+  --nv-panel: #343431;
+  --nv-aluminum: #b7b3a8;
+  --nv-cream: #ebe6d8;
+  --nv-muted: #938f85;
+  --nv-line: #5c5850;
+  --nv-record: #bd302b;
+  --nv-signal: #a9bf61;
+  --nv-amber: #d5a34b;
+  --nv-font-ui: Inter, "Helvetica Neue", Arial, sans-serif;
+  --nv-font-meter: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+  --nv-space-1: 4px;
+  --nv-space-2: 8px;
+  --nv-space-3: 12px;
+  --nv-space-4: 16px;
+  --nv-space-5: 24px;
+  --nv-space-6: 32px;
+  --nv-radius-control: 4px;
+  --nv-radius-panel: 8px;
+  --nv-border: 1px solid var(--nv-line);
+  --nv-seam: inset 0 1px 0 rgb(255 255 255 / 12%), inset 0 -1px 0 rgb(0 0 0 / 45%);
+  --nv-raised: 0 2px 0 #111, inset 0 1px 0 rgb(255 255 255 / 14%);
+  --nv-pressed: inset 0 2px 4px rgb(0 0 0 / 55%);
+  --nv-motion-fast: 120ms;
+  --nv-ease: cubic-bezier(.2, .8, .2, 1);
+  font-family: var(--nv-font-ui);
+}
+
+.noska-voice * { box-sizing: border-box; }
+.nv-shell { background: var(--nv-graphite); border: var(--nv-border); box-shadow: 0 22px 60px rgb(0 0 0 / 52%), var(--nv-seam); color: var(--nv-cream); }
+.nv-panel { background: var(--nv-panel); border: var(--nv-border); box-shadow: var(--nv-seam); border-radius: var(--nv-radius-panel); }
+.nv-label { color: var(--nv-muted); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.nv-button { appearance: none; border: 1px solid #777269; border-radius: var(--nv-radius-control); background: linear-gradient(#57534d, #3b3935); box-shadow: var(--nv-raised); color: var(--nv-cream); cursor: pointer; font-size: 11px; font-weight: 800; letter-spacing: .1em; padding: 9px 12px; text-transform: uppercase; transition: transform var(--nv-motion-fast) var(--nv-ease), box-shadow var(--nv-motion-fast) var(--nv-ease); }
+.nv-button:active { box-shadow: var(--nv-pressed); transform: translateY(1px); }
+.nv-button--record { background: linear-gradient(#d2433c, #902522); border-color: #e06b61; color: #fff7eb; }
+.nv-button--quiet { background: transparent; box-shadow: none; color: var(--nv-muted); }
+.nv-input { background: #20201e; border: var(--nv-border); border-radius: var(--nv-radius-control); color: var(--nv-cream); outline: none; padding: 10px 12px; width: 100%; }
+.nv-input:focus { border-color: var(--nv-aluminum); }
+.nv-meter { background: #191a17; border: 2px solid #131310; border-radius: 3px; box-shadow: inset 0 0 0 1px #777167, inset 0 12px 20px rgb(0 0 0 / 35%); min-height: 116px; padding: 12px; position: relative; }
+.nv-meter::after { background: linear-gradient(90deg, transparent 49.8%, rgb(255 255 255 / 15%) 50%, transparent 50.2%); content: ""; inset: 12px; pointer-events: none; position: absolute; }
+.nv-needle { background: var(--nv-signal); box-shadow: 0 0 4px rgb(169 191 97 / 50%); height: 2px; left: 50%; position: absolute; top: 78%; transform: rotate(var(--nv-needle-angle, -40deg)); transform-origin: left center; transition: transform 70ms linear; width: 42%; z-index: 1; }
+.nv-history-item { border-bottom: 1px solid rgb(183 179 168 / 18%); padding: 14px 0; }
+.nv-history-item:last-child { border-bottom: 0; }
+.nv-correction { color: var(--nv-signal); font-family: var(--nv-font-meter); font-size: 10px; }

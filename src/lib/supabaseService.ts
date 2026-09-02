@@ -187,12 +187,44 @@ export interface Page {
  * every field the way `Page` does. */
 export type PageInput = Partial<Page> & { id: string };
 
+// Optimized: Select only columns actually used by the app to reduce egress.
+// Large JSON fields (blocks, lineage) are the main egress consumers.
+const PAGE_COLUMNS = "id, title, icon, cover, parent_id, favorite, trashed, tags, hidden_from_recents, offline, is_encrypted, encrypted_blocks, iv, salt, is_locked, blocks, lineage, updated_at, created_at, user_id";
+
 export async function fetchPages(userId?: string | null): Promise<Page[]> {
-  let query = supabase.from("pages").select("*");
+  let query = supabase.from("pages").select(PAGE_COLUMNS);
   if (userId) query = query.eq("user_id", userId);
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;
   return (data || []).map(mapPageFromDb);
+}
+
+// Paginated version - loads pages in batches to reduce egress
+const PAGE_BATCH_SIZE = 20;
+
+export async function fetchPagesPaginated(
+  userId?: string | null,
+  page: number = 0
+): Promise<{ pages: Page[]; hasMore: boolean }> {
+  const from = page * PAGE_BATCH_SIZE;
+  const to = from + PAGE_BATCH_SIZE - 1;
+
+  let query = supabase.from("pages").select(PAGE_COLUMNS, { count: "exact" });
+  if (userId) query = query.eq("user_id", userId);
+  
+  const { data, error, count } = await query
+    .order("updated_at", { ascending: false })
+    .range(from, to);
+  
+  if (error) throw error;
+  
+  const totalCount = count ?? 0;
+  const hasMore = from + PAGE_BATCH_SIZE < totalCount;
+  
+  return {
+    pages: (data || []).map(mapPageFromDb),
+    hasMore,
+  };
 }
 
 export async function savePage(page: PageInput, userId: string): Promise<void> {
@@ -245,14 +277,32 @@ export async function deletePage(id: string): Promise<void> {
 // generated schema (types/supabase.ts) — flagging this explicitly since
 // it means these rows are not user-scoped the way `pages` is.
 
+// Cached workspace settings - these rarely change, so cache for 10 minutes
+let settingsCache: Record<string, unknown> | null = null;
+let settingsCacheTime = 0;
+const SETTINGS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 export async function fetchSettings(): Promise<Record<string, unknown>> {
-  const { data, error } = await supabase.from("workspace_settings").select("*");
+  const now = Date.now();
+  if (settingsCache && now - settingsCacheTime < SETTINGS_CACHE_TTL) {
+    return settingsCache;
+  }
+
+  const { data, error } = await supabase.from("workspace_settings").select("key, value");
   if (error) throw error;
   const map: Record<string, unknown> = {};
   for (const row of data || []) {
     map[row.key] = row.value;
   }
+  settingsCache = map;
+  settingsCacheTime = now;
   return map;
+}
+
+// Force refresh settings cache (call after saveSetting)
+export function invalidateSettingsCache(): void {
+  settingsCache = null;
+  settingsCacheTime = 0;
 }
 
 export async function saveSetting(key: string, value: unknown): Promise<void> {
@@ -260,6 +310,7 @@ export async function saveSetting(key: string, value: unknown): Promise<void> {
     .from("workspace_settings")
     .upsert({ key, value } as TablesInsert<"workspace_settings">, { onConflict: "key" });
   if (error) throw error;
+  invalidateSettingsCache();
 }
 
 // ============ AI CHATS ============
@@ -282,24 +333,67 @@ export interface AIChat {
 
 export type AIChatInput = Partial<AIChat> & { id: string; title?: string };
 
+// Optimized: Select only columns needed to reduce egress from messages (large JSON)
+const AI_CHAT_COLUMNS = "id, name, pinned, archived, chat_type, page_id, page_title, created_at, updated_at";
+
 export async function fetchAIChats(userId?: string | null): Promise<AIChat[]> {
-  let query = supabase.from("ai_chats").select("*");
+  let query = supabase.from("ai_chats").select(AI_CHAT_COLUMNS);
   if (userId) query = query.eq("user_id", userId);
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;
   return (data || []).map((c) => ({
     id: c.id,
     name: c.name || "New chat",
-    messages: (c.messages as unknown[]) || [],
+    messages: [], // Load messages on-demand only
     pinned: c.pinned || false,
     archived: c.archived || false,
     chatType: (c.chat_type as ChatType) || "private",
     pageId: c.page_id || null,
     pageTitle: c.page_title || null,
-    collaborators: (c.collaborators as unknown[]) || [],
+    collaborators: [], // Load on-demand only
     createdAt: c.created_at,
     updatedAt: c.updated_at,
   }));
+}
+
+// Paginated version - loads chats in batches to reduce egress
+const AI_CHAT_BATCH_SIZE = 10;
+
+export async function fetchAIChatsPaginated(
+  userId?: string | null,
+  page: number = 0
+): Promise<{ chats: AIChat[]; hasMore: boolean }> {
+  const from = page * AI_CHAT_BATCH_SIZE;
+  const to = from + AI_CHAT_BATCH_SIZE - 1;
+
+  let query = supabase.from("ai_chats").select(AI_CHAT_COLUMNS, { count: "exact" });
+  if (userId) query = query.eq("user_id", userId);
+  
+  const { data, error, count } = await query
+    .order("updated_at", { ascending: false })
+    .range(from, to);
+  
+  if (error) throw error;
+  
+  const totalCount = count ?? 0;
+  const hasMore = from + AI_CHAT_BATCH_SIZE < totalCount;
+  
+  return {
+    chats: (data || []).map((c) => ({
+      id: c.id,
+      name: c.name || "New chat",
+      messages: [],
+      pinned: c.pinned || false,
+      archived: c.archived || false,
+      chatType: (c.chat_type as ChatType) || "private",
+      pageId: c.page_id || null,
+      pageTitle: c.page_title || null,
+      collaborators: [],
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+    })),
+    hasMore,
+  };
 }
 
 export async function saveAIChat(chat: AIChatInput, userId: string): Promise<void> {
@@ -349,6 +443,20 @@ export async function deleteAIChat(id: string, userId: string): Promise<void> {
   requireOwner(userId);
   const { error } = await supabase.from("ai_chats").delete().eq("id", id).eq("user_id", userId);
   if (error) throw error;
+}
+
+// Load only messages for a specific chat (on-demand to save egress)
+export async function loadAIChatMessages(chatId: string): Promise<{ messages: unknown[]; collaborators: unknown[] }> {
+  const { data, error } = await supabase
+    .from("ai_chats")
+    .select("messages, collaborators")
+    .eq("id", chatId)
+    .single();
+  if (error) throw error;
+  return {
+    messages: (data?.messages as unknown[]) || [],
+    collaborators: (data?.collaborators as unknown[]) || [],
+  };
 }
 
 // ============ USER AI USAGE STATS ============

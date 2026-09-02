@@ -300,13 +300,13 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
           onReorder={reorderTabs}
           className="flex flex-row flex-nowrap items-end gap-1 shrink-0"
         >
-          {tabs.map((tab) => {
+          {tabs.map((tab, idx) => {
             const isActive = tab.id === activeTabId;
             const meta = resolveTabMeta(tab);
 
             return (
               <Reorder.Item
-                key={tab.id}
+                key={tab.id || `tab-${idx}`}
                 value={tab}
                 dragListener={!tab.pinned}
                 dragElastic={0.12}

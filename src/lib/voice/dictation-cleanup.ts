@@ -53,6 +53,8 @@ export interface DictationCleanupRequest {
   toneSetting?: ToneSetting;
   customDictionary?: string[];
   language?: string;
+  sourceLanguage?: string;     // source language code for translation mode (e.g. "hi-IN")
+  targetLanguage?: string;     // target language code for translation mode (e.g. "en-US")
   cursorContext?: string;     // text immediately before cursor for continuity
   dictationMode?: DictationMode;
   isStreaming?: boolean;      // true for interim results
@@ -207,7 +209,9 @@ function buildDictationSystemPrompt(
   language: string,
   cursorContext?: string,
   isStreaming?: boolean,
-  previousCleaned?: string
+  previousCleaned?: string,
+  sourceLanguage?: string,
+  targetLanguage?: string
 ): string {
   const dictSection = customDictionary.length > 0
     ? `\n- custom_dictionary: [${customDictionary.map(t => `"${t}"`).join(", ")}]`
@@ -231,7 +235,7 @@ INPUT CONTEXT (provided each call):
 - target_app: "${targetApp}"
 - tone_setting: "${toneSetting}"${dictSection}
 - language: "${language}"${cursorSection}${streamingSection}${previousSection}
-
+${sourceLanguage && targetLanguage ? `- translation_mode: enabled\n- source_language: "${sourceLanguage}"\n- target_language: "${targetLanguage}"\n` : ""}
 WHAT TO DO:
 1. Remove filler words (um, uh, like, you know) unless they're clearly meaningful to the sentence.
 2. Fix self-interruptions and false starts — if the speaker restarts a sentence or corrects themselves mid-thought, output only the corrected final version.
@@ -245,7 +249,7 @@ WHAT TO DO:
 6. Apply custom_dictionary terms exactly as spelled/cased when transcript contains a phonetic near-match.
 7. Never invent facts, links, or content the user didn't say. Never summarize — output the full cleaned equivalent of what was said, not a shorter version, unless the user explicitly asked to be brief.
 8. If raw_transcript is ambiguous or you're unsure of a proper noun with no dictionary match, keep the most literal phonetic-plausible interpretation rather than guessing at intent.
-${isStreaming ? "9. For streaming: return the complete cleaned text so far. Maintain consistency with previous_cleaned. Only append/modify the trailing incomplete portion." : ""}
+${sourceLanguage && targetLanguage ? `9. TRANSLATION MODE: The user is speaking in ${sourceLanguage} and wants the output in ${targetLanguage}. Translate the transcript accurately into ${targetLanguage}. Preserve the original meaning, tone, and all details. Do NOT add explanations or notes — just return the translated text.\n` : ""}${isStreaming ? `${sourceLanguage && targetLanguage ? "10" : "9"}. For streaming: return the complete cleaned text so far. Maintain consistency with previous_cleaned. Only append/modify the trailing incomplete portion.` : ""}
 
 OUTPUT: Return only the cleaned text. No preamble, no quotes around it, no explanation of changes made.`;
 }
@@ -523,7 +527,9 @@ export async function cleanDictation(
     language,
     cursorContext,
     isStreaming,
-    previousCleaned
+    previousCleaned,
+    request.sourceLanguage,
+    request.targetLanguage
   );
 
   // Build user prompt

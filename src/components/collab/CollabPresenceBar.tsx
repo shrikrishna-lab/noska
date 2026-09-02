@@ -78,9 +78,9 @@ export default function CollabPresenceBar({
         {/* User Avatars or Icon */}
         <div className="flex items-center -space-x-1 shrink-0">
           {allUsers.length > 0 ? (
-            allUsers.slice(0, 3).map((u) => (
+            allUsers.slice(0, 3).map((u, i) => (
               <span
-                key={u.userId || u.id}
+                key={u.userId || u.id || `user-${i}`}
                 className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] border border-white/40 shadow-xs relative"
                 style={{ backgroundColor: (u.userColor || '#0066FF') + '33', borderColor: u.userColor || '#0066FF' }}
               >
@@ -165,8 +165,8 @@ export default function CollabPresenceBar({
                   Active in Document
                 </div>
                 <div className="space-y-1 max-h-32 overflow-y-auto px-1">
-                  {allUsers.map((u) => (
-                    <div key={u.userId || u.id} className="flex items-center gap-2 px-1.5 py-1 rounded-lg text-[11px] text-white/80">
+                  {allUsers.map((u, i) => (
+                    <div key={u.userId || u.id || `user-${i}`} className="flex items-center gap-2 px-1.5 py-1 rounded-lg text-[11px] text-white/80">
                       <span
                         className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] border"
                         style={{ backgroundColor: (u.userColor || '#0066FF') + '33', borderColor: u.userColor || '#0066FF' }}

@@ -492,3 +492,16 @@ export function AnimatedMeetingScheduler({ size = 16, color = "currentColor", cl
     </IconWrapper>
   );
 }
+
+// 40. AnimatedJournal / Daily Page Icon
+export function AnimatedJournal({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
+  return (
+    <IconWrapper hoverAnim={{ scale: 1.1, y: -1 }} pressAnim={{ scale: 0.92 }} className={className} {...props}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+      </svg>
+    </IconWrapper>
+  );
+}
+

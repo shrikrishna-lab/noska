@@ -12,9 +12,12 @@ import {
   parseDeepLink,
   setPendingDeepLink,
 } from "./deepLink";
+import { handleAuthCallbackUrl } from "./browserAuth";
 
 const TRAY_SOURCE_EVENT = "tray://action";
 const DEEP_LINK_SOURCE_EVENT = "deep-link://open-url";
+const VOICE_SETTINGS_SOURCE_EVENT = "voice://open-settings";
+export const VOICE_SETTINGS_EVENT = "voice://open-settings";
 
 export type TrayAction = "open" | "new-page" | "new-task" | "open-ai";
 
@@ -36,6 +39,10 @@ function handleTrayAction(action: string, navigate: (path: string) => void) {
 }
 
 function handleDeepLink(raw: string, navigate: (path: string) => void) {
+  // Auth handoff links (noska://auth/callback|cancel) are resolved by the
+  // browser-auth module, never routed; they carry a one-time transaction
+  // artifact, not tokens.
+  if (handleAuthCallbackUrl(raw)) return;
   const parsed = parseDeepLink(raw);
   if (!parsed) return;
   if (parsed.entity === "workspace") {
@@ -64,6 +71,9 @@ export default function DesktopBridge() {
         for (const raw of event.payload ?? []) {
           handleDeepLink(raw, navigate);
         }
+      }),
+      listen(VOICE_SETTINGS_SOURCE_EVENT, () => {
+        window.dispatchEvent(new CustomEvent(VOICE_SETTINGS_EVENT));
       }),
     ]).then((results) => {
       if (disposed) {

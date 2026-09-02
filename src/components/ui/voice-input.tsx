@@ -1,11 +1,14 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Mic, Globe, ChevronUp, ChevronDown, Sparkles, ArrowRight, Check, X } from "lucide-react";
+import { Mic, Globe, ChevronUp, ChevronDown, Sparkles, ArrowRight, Check, X, AlertCircle, RefreshCw, Clock, Settings, ChevronRight, Clipboard, ClipboardPaste, Plus, ListChecks } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { cn } from "../../lib/utils";
 import { useVoiceController, globalVoiceController } from "../../lib/voice/voice-controller";
+import { getWebVoiceReadiness } from "../../lib/voice/speech-recognition";
+import { isDesktop } from "../../lib/desktop/platform";
+import { AUTO_LANGUAGE, HINGLISH_LANGUAGE } from "../../lib/voice/language";
 import {
   useVoiceSettings,
   BarColor,
@@ -26,13 +29,15 @@ export interface VoiceInputProps {
 }
 
 export const SUPPORTED_LANGUAGES = [
-  { code: "auto", name: "Auto-Detect", flag: "⚡", short: "Auto" },
-  { code: "en-US", name: "English (US)", flag: "🇺🇸", short: "EN" },
+  { code: AUTO_LANGUAGE, name: "Auto-detect", flag: "⚡", short: "Auto" },
+  { code: "en-US", name: "English", flag: "🇺🇸", short: "EN" },
+  { code: HINGLISH_LANGUAGE, name: "Hinglish", flag: "🇮🇳", short: "Hinglish" },
+  { code: "mr-IN", name: "Marathi (मराठी)", flag: "🇮🇳", short: "Marathi" },
+  { code: "hi-IN", name: "Hindi (हिंदी)", flag: "🇮🇳", short: "Hindi" },
   { code: "en-GB", name: "English (UK)", flag: "🇬🇧", short: "UK" },
   { code: "es-ES", name: "Spanish", flag: "🇪🇸", short: "ES" },
   { code: "fr-FR", name: "French", flag: "🇫🇷", short: "FR" },
   { code: "de-DE", name: "German", flag: "🇩🇪", short: "DE" },
-  { code: "hi-IN", name: "Hindi", flag: "🇮🇳", short: "HI" },
   { code: "ja-JP", name: "Japanese", flag: "🇯🇵", short: "JA" },
   { code: "zh-CN", name: "Chinese", flag: "🇨🇳", short: "ZH" },
   { code: "pt-BR", name: "Portuguese", flag: "🇧🇷", short: "PT" },
@@ -465,7 +470,218 @@ export function StreamingWordText({
 }
 
 /**
- * Apple Dynamic Island Style Language Switcher & Live Translation Popover
+ * Apple macOS-Grade Voice Context Menu (Inspired by Reference Screenshot 1)
+ */
+function VoiceContextMenu({
+  isOpen,
+  onClose,
+  onOpenSettings,
+  onPasteTranscript,
+  onMuteHour,
+  lastTranscript,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onOpenSettings?: () => void;
+  onPasteTranscript?: () => void;
+  onMuteHour?: () => void;
+  lastTranscript?: string;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [showMicSubmenu, setShowMicSubmenu] = useState(false);
+  const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicId, setSelectedMicId] = useState<string>("auto");
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      // Query microphones dynamically
+      if (navigator.mediaDevices?.enumerateDevices) {
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+          const audioInputs = devices.filter((d) => d.kind === "audioinput");
+          setMicrophones(audioInputs);
+        }).catch(() => {});
+      }
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const activeMicLabel = selectedMicId === "auto"
+    ? (microphones[0]?.label ? `Auto-detect (${microphones[0].label.split("(")[0].trim() || "Headset"})` : "Auto-detect (Headset)")
+    : (microphones.find((m) => m.deviceId === selectedMicId)?.label || "Selected Mic");
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        ref={menuRef}
+        initial={{ opacity: 0, y: 10, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 6, scale: 0.96 }}
+        transition={{ type: "spring", stiffness: 520, damping: 30 }}
+        style={{
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", system-ui, -apple-system-headline, sans-serif',
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale",
+          textRendering: "optimizeLegibility",
+          background: "linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 248, 251, 0.94) 100%)",
+          boxShadow: "0 22px 55px -10px rgba(0, 0, 0, 0.26), inset 0 1px 0.5px rgba(255, 255, 255, 0.85), inset 0 -0.5px 0.5px rgba(0, 0, 0, 0.06)",
+        }}
+        className="dark:!bg-[#151722]/95 fixed bottom-14 left-1/2 -translate-x-1/2 z-[10002] w-64 rounded-[18px] p-1.5 text-zinc-800 dark:text-zinc-100 border border-black/[0.09] dark:border-white/[0.14] backdrop-blur-2xl select-none"
+      >
+        {/* Item 1: Hide for 1 hour */}
+        <button
+          onClick={() => {
+            onMuteHour?.();
+            onClose();
+          }}
+          className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center gap-2.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
+        >
+          <Clock size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90 shrink-0" />
+          <span className="leading-snug">Hide for 1 hour</span>
+        </button>
+
+        {/* Item 2: Settings */}
+        <button
+          onClick={() => {
+            onOpenSettings?.();
+            onClose();
+          }}
+          className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center gap-2.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
+        >
+          <Settings size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90 shrink-0" />
+          <span className="leading-snug">Settings</span>
+        </button>
+
+        {/* Item 3: Microphone with Flyout Submenu */}
+        <div
+          className="relative"
+          onMouseEnter={() => setShowMicSubmenu(true)}
+          onMouseLeave={() => setShowMicSubmenu(false)}
+        >
+          <button
+            onClick={() => setShowMicSubmenu((v) => !v)}
+            className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center justify-between hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
+          >
+            <div className="flex items-center gap-2.5">
+              <Mic size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90 shrink-0" />
+              <span className="leading-snug">Microphone</span>
+            </div>
+            <ChevronRight size={13} strokeWidth={2} className="text-zinc-400/80 dark:text-zinc-500" />
+          </button>
+
+          {/* Cascading Submenu (Matching Reference Screenshot 1) */}
+          <AnimatePresence>
+            {showMicSubmenu && (
+              <motion.div
+                initial={{ opacity: 0, x: 8, scale: 0.96 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 6, scale: 0.96 }}
+                transition={{ type: "spring", stiffness: 520, damping: 30 }}
+                style={{
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", system-ui, -apple-system-headline, sans-serif',
+                  WebkitFontSmoothing: "antialiased",
+                  MozOsxFontSmoothing: "grayscale",
+                  textRendering: "optimizeLegibility",
+                  background: "linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 248, 251, 0.94) 100%)",
+                  boxShadow: "0 22px 55px -10px rgba(0, 0, 0, 0.26), inset 0 1px 0.5px rgba(255, 255, 255, 0.85), inset 0 -0.5px 0.5px rgba(0, 0, 0, 0.06)",
+                }}
+                className="dark:!bg-[#151722]/95 absolute bottom-0 left-full ml-1.5 w-72 rounded-[18px] p-1.5 text-zinc-800 dark:text-zinc-100 border border-black/[0.09] dark:border-white/[0.14] backdrop-blur-2xl z-50 select-none"
+              >
+                <div className="max-h-56 overflow-y-auto pr-0.5 space-y-0.5 custom-scrollbar">
+                  {/* Auto-Detect Device */}
+                  <button
+                    onClick={() => {
+                      setSelectedMicId("auto");
+                      setShowMicSubmenu(false);
+                      onClose();
+                    }}
+                    className="w-full px-3 py-1.5 rounded-[12px] text-left text-[12.5px] font-[450] tracking-[-0.008em] flex items-center justify-between hover:bg-black/[0.06] dark:hover:bg-white/[0.12] transition-colors duration-100 cursor-pointer"
+                  >
+                    <span className="truncate leading-snug">{activeMicLabel}</span>
+                    {selectedMicId === "auto" && (
+                      <Check size={14} strokeWidth={2.2} className="text-zinc-950 dark:text-white shrink-0 ml-2" />
+                    )}
+                  </button>
+
+                  {/* Physical Devices */}
+                  {microphones.map((mic, idx) => {
+                    const isSelected = selectedMicId === mic.deviceId;
+                    const label = mic.label || `Microphone ${idx + 1}`;
+                    return (
+                      <button
+                        key={mic.deviceId || idx}
+                        onClick={() => {
+                          setSelectedMicId(mic.deviceId);
+                          setShowMicSubmenu(false);
+                          onClose();
+                        }}
+                        className="w-full px-3 py-1.5 rounded-[12px] text-left text-[12.5px] font-[450] tracking-[-0.008em] flex items-center justify-between hover:bg-black/[0.06] dark:hover:bg-white/[0.12] transition-colors duration-100 cursor-pointer"
+                      >
+                        <span className="truncate leading-snug">{label}</span>
+                        {isSelected && (
+                          <Check size={14} strokeWidth={2.2} className="text-zinc-950 dark:text-white shrink-0 ml-2" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Submenu Footer Divider & Status (Matching Screenshot 1) */}
+                <div className="pt-2 mt-1 border-t border-black/[0.08] dark:border-white/[0.1] px-3 pb-1">
+                  <div className="text-[10px] font-semibold tracking-[0.06em] text-zinc-400 dark:text-zinc-500 uppercase leading-none">
+                    Mic in use:
+                  </div>
+                  <div className="text-[11.5px] font-[450] tracking-[-0.008em] text-zinc-700 dark:text-zinc-300 truncate mt-1">
+                    {activeMicLabel}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Hairline Divider */}
+        <div className="h-[0.5px] bg-black/[0.08] dark:bg-white/[0.1] my-1 mx-1" />
+
+        {/* Item 4: Transcript history */}
+        <button
+          onClick={() => {
+            if (lastTranscript) {
+              navigator.clipboard?.writeText(lastTranscript).catch(() => {});
+            }
+            onClose();
+          }}
+          className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center gap-2.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
+        >
+          <Clipboard size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90 shrink-0" />
+          <span className="leading-snug">Transcript history</span>
+        </button>
+
+        {/* Item 5: Paste last transcript */}
+        <button
+          onClick={() => {
+            onPasteTranscript?.();
+            onClose();
+          }}
+          className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center gap-2.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
+        >
+          <ClipboardPaste size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90 shrink-0" />
+          <span className="leading-snug">Paste last transcript</span>
+        </button>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/**
+ * Apple Clean Minimal Language Selector (Inspired by Reference Screenshot 2)
  */
 function LanguageSwitcherPopover({
   isOpen,
@@ -475,10 +691,10 @@ function LanguageSwitcherPopover({
   onClose: () => void;
 }) {
   const { settings, update } = useVoiceSettings();
-  const [activeTab, setActiveTab] = useState<"direct" | "translation">(
-    settings.languageMode || "direct"
+  const [isTranslationActive, setIsTranslationActive] = useState(
+    settings.languageMode === "translation"
   );
-
+  const [showAllLanguages, setShowAllLanguages] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -493,200 +709,92 @@ function LanguageSwitcherPopover({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen, onClose]);
 
-  const selectedSource = settings.sourceLanguage || "auto";
-  const selectedTarget = settings.targetLanguage || "en-US";
-  const selectedDirect = settings.language || "en-US";
+  if (!isOpen) return null;
+
+  const currentLang = settings.language || "en-US";
+
+  // Primary languages (Matching Reference Screenshot 2)
+  const primaryLanguages = SUPPORTED_LANGUAGES.slice(0, showAllLanguages ? SUPPORTED_LANGUAGES.length : 6);
 
   return (
     <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          ref={popoverRef}
-          initial={{ opacity: 0, y: 14, scale: 0.94, filter: "blur(10px)" }}
-          animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-          exit={{ opacity: 0, y: 10, scale: 0.94, filter: "blur(8px)" }}
-          transition={{ type: "spring", stiffness: 600, damping: 28, mass: 0.8 }}
-          className="absolute bottom-11 left-1/2 -translate-x-1/2 z-[10000] w-[335px] rounded-[26px] bg-[#0c0d12]/95 border border-white/[0.18] shadow-[0_24px_70px_rgba(0,0,0,0.95),inset_0_1px_1.5px_rgba(255,255,255,0.4)] backdrop-blur-3xl p-4 text-white select-none pointer-events-auto overflow-hidden font-sans"
+      <motion.div
+        ref={popoverRef}
+        initial={{ opacity: 0, y: 10, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 6, scale: 0.96 }}
+        transition={{ type: "spring", stiffness: 520, damping: 30 }}
+        style={{
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", system-ui, -apple-system-headline, sans-serif',
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale",
+          textRendering: "optimizeLegibility",
+          background: "linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 248, 251, 0.94) 100%)",
+          boxShadow: "0 22px 55px -10px rgba(0, 0, 0, 0.26), inset 0 1px 0.5px rgba(255, 255, 255, 0.85), inset 0 -0.5px 0.5px rgba(0, 0, 0, 0.06)",
+        }}
+        className="dark:!bg-[#151722]/95 fixed bottom-14 left-1/2 -translate-x-1/2 z-[10001] w-64 rounded-[18px] p-1.5 text-zinc-800 dark:text-zinc-100 border border-black/[0.09] dark:border-white/[0.14] backdrop-blur-2xl select-none"
+      >
+        {/* Language Options List */}
+        <div className="space-y-0.5 max-h-64 overflow-y-auto pr-0.5 custom-scrollbar">
+          {primaryLanguages.map((lang) => {
+            const isSelected = currentLang === lang.code;
+            return (
+              <button
+                key={lang.code}
+                onClick={() => {
+                  update({ language: lang.code, languageMode: isTranslationActive ? "translation" : "direct" });
+                  onClose();
+                }}
+                className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13.5px] font-[450] tracking-[-0.012em] flex items-center justify-between hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100 group"
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <span className="text-[13px] shrink-0 opacity-80">{lang.flag}</span>
+                  <span className={`truncate leading-snug ${isSelected ? "font-[520] text-zinc-950 dark:text-white" : "font-[450]"}`}>
+                    {lang.name}
+                  </span>
+                </div>
+                {isSelected && (
+                  <Check size={14} strokeWidth={2.2} className="text-zinc-950 dark:text-white shrink-0 ml-2" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Hairline Divider (Matching Screenshot 2) */}
+        <div className="h-[0.5px] bg-black/[0.08] dark:bg-white/[0.1] my-1 mx-1" />
+
+        {/* Action 1: Live Translation Toggle (Matching Screenshot 2 "Enable all") */}
+        <button
+          onClick={() => {
+            const nextMode = isTranslationActive ? "direct" : "translation";
+            setIsTranslationActive(!isTranslationActive);
+            update({ languageMode: nextMode });
+          }}
+          className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center justify-between hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
         >
-          {/* Subtle Specular Top Reflection Rim */}
-          <div className="pointer-events-none absolute inset-x-4 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/45 to-transparent" />
-
-          {/* Header & Mode Switcher */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
-            <div className="flex items-center gap-2">
-              <Globe size={13} className="text-sky-400" />
-              <span className="text-[12.5px] font-semibold tracking-tight text-white/95">Voice Language</span>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-5 h-5 rounded-full bg-white/[0.08] hover:bg-white/[0.18] flex items-center justify-center text-white/60 hover:text-white transition cursor-pointer"
-            >
-              <X size={10} />
-            </button>
+          <div className="flex items-center gap-2.5">
+            <ListChecks size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90" />
+            <span className="leading-snug">Live translation</span>
           </div>
+          <span className={`text-[9.5px] font-semibold tracking-wide px-1.5 py-0.5 rounded-full ${
+            isTranslationActive
+              ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+              : "bg-black/[0.05] dark:bg-white/[0.08] text-zinc-500 dark:text-zinc-400"
+          }`}>
+            {isTranslationActive ? "ON" : "OFF"}
+          </span>
+        </button>
 
-          {/* Apple Segmented Pill Switcher */}
-          <div className="flex items-center p-0.5 rounded-full bg-white/[0.08] border border-white/[0.08] mt-3 mb-3.5 relative">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("direct");
-                update({ languageMode: "direct" });
-              }}
-              className={cn(
-                "flex-1 py-1.5 rounded-full text-[11px] font-medium text-center transition-all cursor-pointer relative z-10",
-                activeTab === "direct" ? "text-white font-semibold" : "text-white/60 hover:text-white"
-              )}
-            >
-              {activeTab === "direct" && (
-                <motion.div
-                  layoutId="active-lang-tab"
-                  className="absolute inset-0 rounded-full bg-white/20 shadow-sm border border-white/25 -z-10"
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                />
-              )}
-              Direct Dictation
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("translation");
-                update({ languageMode: "translation" });
-              }}
-              className={cn(
-                "flex-1 py-1.5 rounded-full text-[11px] font-medium text-center transition-all cursor-pointer relative z-10",
-                activeTab === "translation" ? "text-white font-semibold" : "text-white/60 hover:text-white"
-              )}
-            >
-              {activeTab === "translation" && (
-                <motion.div
-                  layoutId="active-lang-tab"
-                  className="absolute inset-0 rounded-full bg-white/20 shadow-sm border border-white/25 -z-10"
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                />
-              )}
-              Live Translation
-            </button>
-          </div>
-
-          {/* Mode 1: Direct Dictation */}
-          {activeTab === "direct" ? (
-            <div className="space-y-2">
-              <p className="text-[10.5px] text-white/55 leading-tight px-0.5">
-                Auto-detect speech or dictate directly in your preferred language:
-              </p>
-
-              <div className="grid grid-cols-2 gap-1.5 max-h-[190px] overflow-y-auto pr-0.5 custom-scrollbar">
-                {SUPPORTED_LANGUAGES.map((lang) => {
-                  const isSelected = selectedDirect === lang.code;
-                  return (
-                    <button
-                      key={lang.code}
-                      type="button"
-                      onClick={() => {
-                        update({ language: lang.code, languageMode: "direct" });
-                      }}
-                      className={cn(
-                        "flex items-center justify-between px-2.5 py-1.5 rounded-xl border text-[11px] transition active:scale-95 cursor-pointer text-left",
-                        isSelected
-                          ? "bg-sky-500/20 border-sky-400 text-sky-100 shadow-[0_0_10px_rgba(56,189,248,0.25)] font-semibold"
-                          : "bg-white/[0.04] border-white/[0.08] text-white/80 hover:bg-white/[0.08] hover:text-white"
-                      )}
-                    >
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[12px]">{lang.flag}</span>
-                        <span className="text-[11px] font-medium text-white/90 truncate">{lang.name}</span>
-                      </span>
-                      {isSelected && <Check size={11} className="text-sky-400 shrink-0 ml-1" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            /* Mode 2: Live Translation (Speaking Language -> Text Output Language) */
-            <div className="space-y-3">
-              <p className="text-[10.5px] text-white/55 leading-tight px-0.5">
-                Speak in any language — Noska transcribes into your target language:
-              </p>
-
-              {/* Source -> Target Display Box */}
-              <div className="flex items-center justify-between gap-1 p-2 rounded-2xl bg-white/[0.05] border border-white/[0.1]">
-                {/* Speaking Lang */}
-                <div className="flex-1 text-center">
-                  <div className="text-[9px] uppercase tracking-wider text-white/50 font-bold mb-0.5">Speaking</div>
-                  <div className="text-[11px] font-bold text-amber-300 truncate">
-                    {SUPPORTED_LANGUAGES.find((l) => l.code === selectedSource)?.name || "Auto-Detect"}
-                  </div>
-                </div>
-
-                <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                  <ArrowRight size={10} className="text-white/80" />
-                </div>
-
-                {/* Output Text Lang */}
-                <div className="flex-1 text-center">
-                  <div className="text-[9px] uppercase tracking-wider text-white/50 font-bold mb-0.5">Output Text</div>
-                  <div className="text-[11px] font-bold text-emerald-300 truncate">
-                    {SUPPORTED_LANGUAGES.find((l) => l.code === selectedTarget)?.name || "English (US)"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Speaking Lang Selector */}
-              <div>
-                <span className="text-[10.5px] font-semibold text-white/70 block mb-1">1. Speaking Language:</span>
-                <div className="flex gap-1 overflow-x-auto pb-1 custom-scrollbar">
-                  {SUPPORTED_LANGUAGES.slice(0, 8).map((lang) => {
-                    const isSelected = selectedSource === lang.code;
-                    return (
-                      <button
-                        key={lang.code}
-                        type="button"
-                        onClick={() => update({ sourceLanguage: lang.code, languageMode: "translation" })}
-                        className={cn(
-                          "px-2 py-1 rounded-lg border text-[10px] font-semibold shrink-0 transition active:scale-95 cursor-pointer",
-                          isSelected
-                            ? "bg-amber-500/25 border-amber-400/60 text-amber-200 shadow-xs"
-                            : "bg-white/5 border-white/10 text-white/70 hover:text-white"
-                        )}
-                      >
-                        {lang.flag} {lang.short}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Output Text Lang Selector */}
-              <div>
-                <span className="text-[10.5px] font-semibold text-white/70 block mb-1">2. Transcribed Text:</span>
-                <div className="flex gap-1 overflow-x-auto pb-1 custom-scrollbar">
-                  {SUPPORTED_LANGUAGES.filter((l) => l.code !== "auto").slice(0, 7).map((lang) => {
-                    const isSelected = selectedTarget === lang.code;
-                    return (
-                      <button
-                        key={lang.code}
-                        type="button"
-                        onClick={() => update({ targetLanguage: lang.code, languageMode: "translation" })}
-                        className={cn(
-                          "px-2 py-1 rounded-lg border text-[10px] font-semibold shrink-0 transition active:scale-95 cursor-pointer",
-                          isSelected
-                            ? "bg-emerald-500/25 border-emerald-400/60 text-emerald-200 shadow-xs"
-                            : "bg-white/5 border-white/10 text-white/70 hover:text-white"
-                        )}
-                      >
-                        {lang.flag} {lang.short}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-        </motion.div>
-      )}
+        {/* Action 2: Add more / Expand languages (Matching Screenshot 2 "+ Add more") */}
+        <button
+          onClick={() => setShowAllLanguages((v) => !v)}
+          className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center gap-2.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
+        >
+          <Plus size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90" />
+          <span className="leading-snug">{showAllLanguages ? "Show fewer" : "Add more"}</span>
+        </button>
+      </motion.div>
     </AnimatePresence>
   );
 }
@@ -709,42 +817,54 @@ function LanguageIslandButton({
     <motion.button
       type="button"
       layoutId="apple-dynamic-island-lang-btn"
-      initial={{ opacity: 0, scale: 0.65, x: 12, filter: "blur(6px)" }}
+      initial={{ opacity: 0, scale: 0.7, x: 12, filter: "blur(6px)" }}
       animate={{ opacity: 1, scale: 1, x: 0, filter: "blur(0px)" }}
-      exit={{ opacity: 0, scale: 0.65, x: 8, filter: "blur(6px)" }}
+      exit={{ opacity: 0, scale: 0.7, x: 8, filter: "blur(6px)" }}
       whileHover={{ scale: 1.08, y: -0.5 }}
       whileTap={{ scale: 0.92, y: 0.5 }}
       transition={{
         type: "spring",
-        stiffness: 450,
-        damping: 24,
+        stiffness: 480,
+        damping: 26,
         mass: 0.8,
       }}
       onClick={onClick}
-      className={cn(
-        "relative h-7.5 px-2 rounded-full flex items-center justify-center gap-1.5 border cursor-pointer transition-colors shadow-2xl backdrop-blur-3xl shrink-0 select-none overflow-hidden group",
-        isLangOpen
-          ? "bg-[#18181f] border-sky-400 text-sky-200 shadow-[0_0_15px_rgba(56,189,248,0.5)] ring-1 ring-sky-400/40"
+      style={{
+        background: isLangOpen
+          ? "radial-gradient(120% 120% at 50% 0%, rgba(56, 189, 248, 0.35) 0%, rgba(14, 165, 233, 0.15) 60%, rgba(0, 0, 0, 0.6) 100%), #0D131C"
           : isTranslationMode
-            ? "bg-[#09090b]/98 border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)]"
-            : "bg-[#09090b]/98 border-white/20 text-white/90 hover:text-white shadow-[0_6px_24px_rgba(0,0,0,0.85)]"
-      )}
+          ? "radial-gradient(120% 120% at 50% 0%, rgba(245, 158, 11, 0.35) 0%, rgba(217, 119, 6, 0.15) 60%, rgba(0, 0, 0, 0.6) 100%), #17130D"
+          : "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.5) 100%), #10121A",
+        border: isLangOpen
+          ? "1px solid rgba(56, 189, 248, 0.6)"
+          : isTranslationMode
+          ? "1px solid rgba(245, 158, 11, 0.55)"
+          : "1px solid rgba(255, 255, 255, 0.18)",
+        boxShadow: isLangOpen
+          ? "0 16px 36px rgba(56, 189, 248, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4)"
+          : isTranslationMode
+          ? "0 16px 36px rgba(245, 158, 11, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4)"
+          : "0 16px 36px rgba(0, 0, 0, 0.6), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.3)",
+        backdropFilter: "blur(36px) saturate(190%)",
+        WebkitBackdropFilter: "blur(36px) saturate(190%)",
+      }}
+      className="relative h-9 px-3 rounded-full flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xl shrink-0 select-none overflow-hidden group"
       title={`Language & Translation: ${langLabel} (Click to change)`}
     >
       {/* Specular Liquid Top Sheen */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white/25 via-white/5 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white/30 via-white/5 to-transparent" />
 
       {/* Upward Chevron */}
       <ChevronUp
-        size={9.5}
+        size={10.5}
         className={cn(
           "stroke-[2.5] transition-colors relative z-10",
-          isLangOpen ? "text-sky-400" : isTranslationMode ? "text-amber-400" : "text-white/70"
+          isLangOpen ? "text-sky-300" : isTranslationMode ? "text-amber-300" : "text-white/80"
         )}
       />
 
       {/* Glass Divider */}
-      <div className="w-[1px] h-2 bg-white/20 relative z-10" />
+      <div className="w-[1px] h-2.5 bg-white/25 relative z-10" />
 
       {/* Globe Icon with Liquid Rotation */}
       <motion.div
@@ -753,14 +873,194 @@ function LanguageIslandButton({
         className="flex items-center relative z-10"
       >
         <Globe
-          size={10.5}
+          size={12}
           className={cn(
             "transition-colors",
-            isTranslationMode ? "text-amber-400" : isLangOpen ? "text-sky-400" : "text-white/85"
+            isTranslationMode ? "text-amber-300" : isLangOpen ? "text-sky-300" : "text-white/90"
           )}
         />
       </motion.div>
     </motion.button>
+  );
+}
+
+/**
+ * Apple Stadium Alert Capsule with 5-second auto-close and visual countdown
+ */
+interface VoiceAlertCapsuleProps {
+  voiceError: string;
+  isPermissionError: boolean;
+  browserGuidance: string | null;
+  onRecover: () => void;
+  onDismiss: () => void;
+}
+
+function VoiceAlertCapsule({
+  voiceError,
+  isPermissionError,
+  browserGuidance,
+  onRecover,
+  onDismiss,
+}: VoiceAlertCapsuleProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(5);
+
+  useEffect(() => {
+    if (isHovered) return;
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          onDismiss();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isHovered, onDismiss]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16, scale: 0.92 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 12, scale: 0.92 }}
+      transition={{
+        type: "spring",
+        stiffness: 480,
+        damping: 28,
+        mass: 0.8,
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", system-ui, -apple-system-headline, sans-serif',
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+        textRendering: "optimizeLegibility",
+        background: isPermissionError
+          ? "linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.25) 40%, rgba(0, 0, 0, 0.04) 100%), #FDE8D3"
+          : "linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.25) 40%, rgba(0, 0, 0, 0.04) 100%), #F3C3B2",
+        boxShadow: isPermissionError
+          ? "0 20px 48px -8px rgba(215, 150, 110, 0.45), 0 8px 20px rgba(0, 0, 0, 0.1), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.85), inset 0 -1.5px 2px rgba(0, 0, 0, 0.08)"
+          : "0 20px 48px -8px rgba(195, 105, 90, 0.48), 0 8px 20px rgba(0, 0, 0, 0.1), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.85), inset 0 -1.5px 2px rgba(0, 0, 0, 0.08)",
+        border: "1px solid rgba(255, 255, 255, 0.75)",
+        backdropFilter: "blur(32px) saturate(190%)",
+        WebkitBackdropFilter: "blur(32px) saturate(190%)",
+      }}
+      className="overflow-hidden absolute bottom-12 left-1/2 z-[10001] -translate-x-1/2 rounded-full py-2.5 px-4 text-[#2D1B16] flex items-center gap-3.5 max-w-[calc(100vw-24px)] select-none pointer-events-auto shadow-2xl"
+      role="alert"
+    >
+      {/* Ambient Glowing Status Badge */}
+      <div
+        className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+          isPermissionError
+            ? "bg-amber-700/15 text-amber-900 border border-amber-700/25"
+            : "bg-rose-700/15 text-rose-900 border border-rose-700/25"
+        } shadow-inner`}
+      >
+        <AlertCircle size={15} strokeWidth={2.3} />
+        <div
+          className={`absolute inset-0 rounded-full ${
+            isPermissionError ? "bg-amber-600/20" : "bg-rose-600/20"
+          } animate-ping opacity-50`}
+        />
+      </div>
+
+      {/* Title & Info Description Text with Countdown Display */}
+      <div className="min-w-0 pr-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[12.5px] font-[600] text-[#2A1713] tracking-[-0.015em] leading-tight">
+            {isPermissionError
+              ? "Microphone Access Needed"
+              : browserGuidance
+              ? "Browser Dictation Unavailable"
+              : "Voice Typing Paused"}
+          </span>
+          {/* Subtle Countdown Indicator Pill */}
+          <span className="text-[9.5px] font-[600] tracking-tight px-1.5 py-0.5 rounded-full bg-black/8 text-[#2A1713]/80 tabular-nums">
+            {secondsLeft}s
+          </span>
+        </div>
+        <p className="text-[11px] text-[#5A3A32] font-[450] tracking-[-0.006em] leading-tight mt-0.5 whitespace-nowrap">
+          {browserGuidance ||
+            (voiceError.includes("aborted")
+              ? "Tap retry to resume speaking"
+              : voiceError)}
+        </p>
+      </div>
+
+      {/* Sleek Apple Glass Icon Actions */}
+      <div className="flex items-center gap-1.5 shrink-0 pl-2.5 border-l border-black/10">
+        {/* Retry Icon Button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onRecover();
+          }}
+          title={isPermissionError ? "Allow microphone & retry" : "Try again"}
+          className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/8 hover:bg-black/15 active:scale-95 text-[#2A1713] border border-black/10 transition-all duration-200 cursor-pointer shadow-xs hover:scale-105"
+        >
+          <RefreshCw size={13} strokeWidth={2.5} />
+        </button>
+
+        {/* Dismiss Icon Button with Animated Circular Countdown Ring */}
+        <div className="relative flex h-8 w-8 items-center justify-center">
+          <svg className="w-8 h-8 -rotate-90 pointer-events-none absolute inset-0" viewBox="0 0 32 32">
+            <circle
+              cx="16"
+              cy="16"
+              r="13"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              opacity="0.12"
+              className="text-[#2A1713]"
+            />
+            <motion.circle
+              cx="16"
+              cy="16"
+              r="13"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              fill="none"
+              strokeDasharray="81.68"
+              initial={{ strokeDashoffset: 0 }}
+              animate={{ strokeDashoffset: 81.68 }}
+              transition={{ duration: 5, ease: "linear" }}
+              strokeLinecap="round"
+              className="text-[#2A1713]/60"
+            />
+          </svg>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onDismiss();
+            }}
+            title="Dismiss"
+            className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/5 hover:bg-black/12 active:scale-95 text-[#5A3A32] hover:text-[#2A1713] border border-black/8 transition-all duration-200 cursor-pointer hover:scale-105"
+          >
+            <X size={12} strokeWidth={2.2} />
+          </button>
+        </div>
+      </div>
+
+      {/* Smooth 5-Second Hairline Progress Bar Along the Bottom */}
+      <div className="absolute bottom-0 inset-x-5 h-[1.5px] overflow-hidden rounded-full bg-black/[0.08]">
+        <motion.div
+          initial={{ scaleX: 1 }}
+          animate={{ scaleX: 0 }}
+          transition={{ duration: 5, ease: "linear" }}
+          style={{ originX: 0 }}
+          className="h-full w-full bg-[#2A1713]/40 rounded-full"
+        />
+      </div>
+    </motion.div>
   );
 }
 
@@ -772,7 +1072,18 @@ export function VoiceInput({
   variant = "pill",
   alwaysPill = true,
 }: VoiceInputProps) {
-  const { isListening, toggle, stop } = useVoiceController({ onStart, onStop, onTranscript, onError });
+  const {
+    isListening,
+    toggle,
+    start,
+    stop,
+    error,
+    connectionState,
+    requestMicPermissionAgain,
+    clearError,
+    setAgentMode: setAgentModeCtrl,
+    getAgentMode,
+  } = useVoiceController({ onStart, onStop, onTranscript, onError }) as any;
   const { settings } = useVoiceSettings();
 
   const [mins, setMins] = useState("00");
@@ -780,6 +1091,15 @@ export function VoiceInput({
   const [agentMode, setAgentMode] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [isLangOpen, setIsLangOpen] = useState(false);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [isErrorDismissed, setIsErrorDismissed] = useState(false);
+
+  // When a new error occurs or mic state changes, allow the alert to show
+  useEffect(() => {
+    if (error || connectionState === "needs_attention") {
+      setIsErrorDismissed(false);
+    }
+  }, [error, connectionState]);
 
   useEffect(() => {
     const unsub = globalVoiceController.onTranscript((txt) => {
@@ -825,10 +1145,76 @@ export function VoiceInput({
     ? `${sourceLangObj?.short || "Auto"} → ${targetLangObj?.short || "EN"}`
     : currentLangObj?.short || "EN";
 
+  const rawVoiceError = error?.message || (connectionState === "needs_attention"
+    ? "Voice typing needs your attention."
+    : "");
+  const voiceError = !isErrorDismissed ? rawVoiceError : "";
+
+  const isPermissionError = /permission|microphone|not-allowed|denied/i.test(voiceError);
+  const browserReadiness = !isDesktop() ? getWebVoiceReadiness() : null;
+  const browserGuidance = browserReadiness && !browserReadiness.ready ? browserReadiness.message : null;
+
+  const handleDismissError = () => {
+    setIsErrorDismissed(true);
+    clearError?.();
+    globalVoiceController.clearError();
+  };
+
+  const recoverVoice = async () => {
+    setIsErrorDismissed(true);
+    clearError?.();
+    globalVoiceController.clearError();
+    if (isPermissionError && requestMicPermissionAgain) {
+      const granted = await requestMicPermissionAgain();
+      if (granted) {
+        start();
+        return;
+      }
+    }
+    start();
+  };
+
   return (
-    <div className={cn("fixed z-[9999] pointer-events-auto select-none", posClasses)}>
+    <div
+      data-voice-pill
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setIsContextMenuOpen(true);
+      }}
+      className={cn("fixed z-[9999] pointer-events-auto select-none", posClasses)}
+    >
       {/* Apple Dynamic Island Language & Translation Popover Modal */}
       <LanguageSwitcherPopover isOpen={isLangOpen} onClose={() => setIsLangOpen(false)} />
+
+      {/* Apple macOS-Grade Voice Context Menu (Right Click or Options) */}
+      <VoiceContextMenu
+        isOpen={isContextMenuOpen}
+        onClose={() => setIsContextMenuOpen(false)}
+        lastTranscript={lastTranscript}
+        onOpenSettings={() => {
+          window.dispatchEvent(new CustomEvent("noska:open-settings", { detail: { tab: "voice" } }));
+        }}
+        onPasteTranscript={() => {
+          if (lastTranscript) {
+            import("../../lib/voice/active-input").then(({ streamTextIntoActiveInput }) => {
+              streamTextIntoActiveInput(lastTranscript);
+            }).catch(() => {});
+          }
+        }}
+      />
+
+      <AnimatePresence>
+        {voiceError && !isListening && (
+          <VoiceAlertCapsule
+            key={voiceError}
+            voiceError={voiceError}
+            isPermissionError={isPermissionError}
+            browserGuidance={browserGuidance}
+            onRecover={recoverVoice}
+            onDismiss={handleDismissError}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence mode="wait">
         {isListening && (
@@ -870,16 +1256,18 @@ export function VoiceInput({
               whileTap={{ scale: 0.98 }}
               transition={{
                 type: "spring",
-                stiffness: 450,
-                damping: 24,
+                stiffness: 480,
+                damping: 26,
                 mass: 0.8,
               }}
-              className={cn(
-                "relative flex items-center gap-2.5 h-7.5 px-2.5 rounded-full border transition-all duration-300 overflow-hidden shadow-2xl backdrop-blur-3xl",
-                themeConfig.bg,
-                themeConfig.border,
-                themeConfig.glow
-              )}
+              style={{
+                background: "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.55) 100%), #10121A",
+                border: "1px solid rgba(255, 255, 255, 0.18)",
+                boxShadow: "0 20px 48px -8px rgba(0, 0, 0, 0.75), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35)",
+                backdropFilter: "blur(36px) saturate(190%)",
+                WebkitBackdropFilter: "blur(36px) saturate(190%)",
+              }}
+              className="relative flex items-center gap-3 h-9 px-3.5 rounded-full transition-all duration-300 overflow-hidden shadow-2xl shrink-0 select-none"
             >
               {/* Specular Liquid Gloss Top Sheen */}
               <div className="pointer-events-none absolute inset-x-0 top-0 h-[48%] rounded-full bg-gradient-to-b from-white/30 via-white/10 to-transparent" />
@@ -898,21 +1286,20 @@ export function VoiceInput({
                 className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-r from-sky-500/10 via-emerald-500/15 to-purple-500/10"
               />
 
-              {/* Left Stop Squircle with Apple Specular Glow */}
+              {/* Left Stop Squircle */}
               <motion.button
                 type="button"
+                tabIndex={-1}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={stop}
                 whileHover={{ scale: 1.18, rotate: [0, -4, 4, 0] }}
                 whileTap={{ scale: 0.85 }}
                 transition={{ type: "spring", stiffness: 600, damping: 22 }}
-                className={cn(
-                  "w-3.5 h-3.5 rounded-[3.5px] flex-shrink-0 cursor-pointer transition-colors relative flex items-center justify-center z-10 shadow-sm",
-                  squircleClass
-                )}
+                className="w-4 h-4 rounded-[4.5px] flex-shrink-0 cursor-pointer transition-colors relative flex items-center justify-center z-10 shadow-sm bg-white hover:bg-white shadow-[0_0_12px_rgba(255,255,255,0.9),0_0_20px_rgba(255,255,255,0.4)]"
                 aria-label="Stop voice typing"
                 title="Click to stop recording"
               >
-                <span className="w-1.5 h-1.5 rounded-[1px] bg-black/60" />
+                <span className="w-1.5 h-1.5 rounded-[1px] bg-black/75" />
               </motion.button>
 
               {/* Smooth Real-Time Waveform / Dynamic Dots Visualizer */}
@@ -925,7 +1312,7 @@ export function VoiceInput({
               </div>
 
               {/* Digital Timer */}
-              <div className="relative z-10">
+              <div className="relative z-10 font-mono text-[12px] font-semibold text-white tracking-wider">
                 <TimerDisplay mins={mins} secs={secs} timerTheme={settings.timerTheme} />
               </div>
 
@@ -940,37 +1327,47 @@ export function VoiceInput({
             {/* 3. Standalone Right Circular Dynamic Island Agent Button */}
             <motion.button
               type="button"
+              tabIndex={-1}
+              onMouseDown={(e) => e.preventDefault()}
               layoutId="apple-dynamic-island-agent-btn"
-              initial={{ opacity: 0, scale: 0.65, x: -12, filter: "blur(6px)" }}
+              initial={{ opacity: 0, scale: 0.7, x: -12, filter: "blur(6px)" }}
               animate={{ opacity: 1, scale: 1, x: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, scale: 0.65, x: -8, filter: "blur(6px)" }}
+              exit={{ opacity: 0, scale: 0.7, x: -8, filter: "blur(6px)" }}
               whileHover={{ scale: 1.12, y: -0.5 }}
               whileTap={{ scale: 0.9, y: 0.5 }}
               transition={{
                 type: "spring",
-                stiffness: 450,
-                damping: 24,
+                stiffness: 480,
+                damping: 26,
                 mass: 0.8,
               }}
               onClick={(e) => {
                 e.stopPropagation();
-                setAgentMode(!agentMode);
+                const next = !agentMode;
+                setAgentMode(next);
+                setAgentModeCtrl(next);
               }}
-              className={cn(
-                "relative w-7.5 h-7.5 rounded-full flex items-center justify-center border cursor-pointer transition-colors shadow-2xl backdrop-blur-3xl shrink-0 overflow-hidden group",
-                agentMode
-                  ? "bg-[#09090b]/98 border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.45)] ring-1 ring-emerald-400/40"
-                  : "bg-[#09090b]/98 border-white/20 shadow-[0_6px_24px_rgba(0,0,0,0.85)]"
-              )}
+              style={{
+                background: agentMode
+                  ? "radial-gradient(120% 120% at 50% 0%, rgba(16, 185, 129, 0.35) 0%, rgba(5, 150, 105, 0.15) 60%, rgba(0, 0, 0, 0.6) 100%), #0D1612"
+                  : "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.5) 100%), #10121A",
+                border: agentMode ? "1px solid rgba(16, 185, 129, 0.55)" : "1px solid rgba(255, 255, 255, 0.18)",
+                boxShadow: agentMode
+                  ? "0 16px 36px rgba(16, 185, 129, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4)"
+                  : "0 16px 36px rgba(0, 0, 0, 0.6), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.3)",
+                backdropFilter: "blur(36px) saturate(190%)",
+                WebkitBackdropFilter: "blur(36px) saturate(190%)",
+              }}
+              className="relative w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-colors shadow-2xl shrink-0 overflow-hidden group select-none"
               title={agentMode ? "Agent Mode: ON (Click to toggle)" : "Agent Mode: OFF (Click to toggle)"}
             >
               {/* Specular Liquid Top Sheen */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white/25 via-white/5 to-transparent" />
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white/30 via-white/5 to-transparent" />
 
-              <div className="relative z-10">
+              <div className="relative z-10 flex items-center justify-center">
                 <ActivityRing
                   isListening={isListening}
-                  color={agentMode ? "#10b981" : "#f59e0b"}
+                  color={agentMode ? "#10b981" : "#ffffff"}
                   agentMode={agentMode}
                 />
               </div>

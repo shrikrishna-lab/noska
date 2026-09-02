@@ -173,12 +173,14 @@ const TIMER_THEMES: { id: TimerTheme; label: string }[] = [
 ];
 
 const LANGUAGES = [
+  { code: "auto", name: "Auto (Browser Language)" },
   { code: "en-US", name: "English (United States)" },
   { code: "en-GB", name: "English (United Kingdom)" },
+  { code: "hinglish", name: "Hinglish (English + Hindi, Latin Script)" },
   { code: "es-ES", name: "Spanish (Español)" },
   { code: "fr-FR", name: "French (Français)" },
   { code: "de-DE", name: "German (Deutsch)" },
-  { code: "hi-IN", name: "Hindi · Hinglish (हिन्दी)" },
+  { code: "hi-IN", name: "Hindi (हिन्दी script)" },
   { code: "ja-JP", name: "Japanese (日本語)" },
   { code: "zh-CN", name: "Chinese (Mandarin)" },
 ];

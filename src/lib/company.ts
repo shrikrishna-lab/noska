@@ -421,6 +421,7 @@ export interface OrgPage {
   visibility: string
   team_id: string | null
   organization_id: string | null
+  parent_page_id: string | null
   user_id: string
   updated_at: string
   created_at: string

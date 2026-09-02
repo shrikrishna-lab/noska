@@ -5,6 +5,7 @@ import { X, Keyboard } from "lucide-react"
 const SHORTCUTS = [
   { category: "Navigation", items: [
     { keys: ["⌘", "K"], description: "Open command palette" },
+    { keys: ["⌘", "P"], description: "Quick switcher" },
     { keys: ["⌘", "N"], description: "Create new page" },
     { keys: ["⌘", "⌫"], description: "Go back" },
     { keys: ["⌘", "⇧", "P"], description: "Go to pages" },
@@ -17,12 +18,18 @@ const SHORTCUTS = [
     { keys: ["⌘", "D"], description: "Duplicate page" },
     { keys: ["⌘", "⇧", "A"], description: "Archive page" },
     { keys: ["⌘", "⇧", "L"], description: "Lock/unlock page" },
+    { keys: ["⌘", "⇧", "S"], description: "Share page" },
+    { keys: ["⌘", "⇧", "E"], description: "Import / Export" },
+    { keys: ["⌘", "⇧", "H"], description: "Version history" },
+    { keys: ["⌘", "⇧", "R"], description: "Page analytics" },
   ]},
   { category: "Lists", items: [
     { keys: ["↑", "↓"], description: "Navigate items" },
     { keys: ["Enter"], description: "Open selected" },
     { keys: ["Esc"], description: "Close / Deselect" },
     { keys: ["/"], description: "Focus search" },
+    { keys: ["Space"], description: "Toggle select" },
+    { keys: ["⌘", "A"], description: "Select all" },
   ]},
   { category: "General", items: [
     { keys: ["⌘", "S"], description: "Save changes" },

@@ -6,7 +6,7 @@ import {
   BarChart3, Eye, Lock, Globe, UserPlus, X, FolderKanban, Database,
   Home, Briefcase, Activity, ChevronRight, Star, MoreHorizontal,
   Crown, ShieldCheck, UserMinus, Send, RotateCcw, Calendar,
-  Hash, LayoutGrid, List, ArrowUpRight, Sparkles, Command
+  Hash, LayoutGrid, List, ArrowUpRight, Sparkles, Command, CheckSquare, Key, Webhook, FileWarning
 } from "lucide-react"
 import { supabase } from "../../lib/supabase"
 import { useCompany } from "../../contexts/CompanyContext"
@@ -36,6 +36,14 @@ import { CompanyTrash } from "./CompanyTrash"
 import { TeamSettings } from "./TeamSettings"
 import { CompanyShortcutsPanel } from "./CompanyShortcutsPanel"
 import { CompanyActivityFeed } from "./CompanyActivityFeed"
+import { QuickSwitcher } from "./QuickSwitcher"
+import { UsageAnalytics } from "./UsageAnalytics"
+import { SecuritySettings } from "./SecuritySettings"
+import { APIKeyManager } from "./APIKeyManager"
+import { WebhookManager } from "./WebhookManager"
+import { ComplianceLog } from "./ComplianceAndUtility"
+import { DataExport } from "./ComplianceAndUtility"
+import { TeamDashboard } from "./TeamDashboard"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,8 +51,8 @@ type CompanyView =
   | "dashboard" | "myWork" | "updates"
   | "pages" | "projects" | "databases"
   | "teamHome" | "teams"
-  | "members"
-  | "invitations" | "audit" | "settings"
+  | "members" | "tasks"
+  | "invitations" | "audit" | "settings" | "analytics" | "security" | "compliance"
 
 interface CompanyWorkspaceProps {
   onBack: () => void
@@ -174,6 +182,11 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
   const [loadingPages, setLoadingPages] = useState(true)
   const [orgProjects, setOrgProjects] = useState<OrgProject[]>([])
   const [loadingProjects, setLoadingProjects] = useState(true)
+
+  // Combined refresh function
+  const refreshData = useCallback(async () => {
+    await Promise.all([refreshMembers(), refreshTeams(), refreshInvitations()])
+  }, [refreshMembers, refreshTeams, refreshInvitations])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [companySwitcherOpen, setCompanySwitcherOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
@@ -185,6 +198,7 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
   const [teamSettingsOpen, setTeamSettingsOpen] = useState(false)
   const [trashOpen, setTrashOpen] = useState(false)
   const [breadcrumb, setBreadcrumb] = useState<{ label: string; icon?: React.ReactNode; onClick?: () => void }[]>([])
+  const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false)
   const { starredPageIds, togglePageStar, isPageStarred } = useFavorites()
 
   const isAdmin = isCompanyAdmin(currentMember, currentCompany!)
@@ -240,6 +254,10 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
       if (e.key === "?" && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
         e.preventDefault()
         setShortcutsOpen(prev => !prev)
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "p") {
+        e.preventDefault()
+        setQuickSwitcherOpen(prev => !prev)
       }
     }
     document.addEventListener("keydown", handleKeyDown)
@@ -302,6 +320,13 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
       <CompanyShortcutsPanel
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
+      />
+
+      {/* ─── Quick Switcher ─── */}
+      <QuickSwitcher
+        open={quickSwitcherOpen}
+        onClose={() => setQuickSwitcherOpen(false)}
+        onNavigate={(type, id) => { onBack() }}
       />
 
       {/* ─── Team Settings ─── */}
@@ -413,6 +438,7 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
             <SidebarNavItem icon={FileText} label="Pages" active={view === "pages"} onClick={() => setView("pages")} badge={orgPages.length || undefined} />
             <SidebarNavItem icon={FolderKanban} label="Projects" active={view === "projects"} onClick={() => setView("projects")} badge={orgProjects.length || undefined} />
             <SidebarNavItem icon={Database} label="Databases" active={view === "databases"} onClick={() => setView("databases")} />
+            <SidebarNavItem icon={CheckSquare} label="Tasks" active={view === "tasks"} onClick={() => setView("tasks")} />
           </SidebarSection>
 
           {/* TEAMS */}
@@ -460,6 +486,9 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
             <SidebarSection title="Admin">
               <SidebarNavItem icon={Mail} label="Invitations" active={view === "invitations"} onClick={() => setView("invitations")} badge={pendingInvites.length || undefined} />
               <SidebarNavItem icon={Clock} label="Audit Log" active={view === "audit"} onClick={() => setView("audit")} />
+              <SidebarNavItem icon={BarChart3} label="Analytics" active={view === "analytics"} onClick={() => setView("analytics")} />
+              <SidebarNavItem icon={Shield} label="Security" active={view === "security"} onClick={() => setView("security")} />
+              <SidebarNavItem icon={FileWarning} label="Compliance" active={view === "compliance"} onClick={() => setView("compliance")} />
               <SidebarNavItem icon={Settings} label="Settings" active={view === "settings"} onClick={() => setView("settings")} />
             </SidebarSection>
           )}
@@ -631,12 +660,13 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
             <DatabasesView key="databases" company={currentCompany} pages={orgPages} />
           )}
           {view === "teamHome" && selectedTeamId && (
-            <TeamHomeView
+            <TeamDashboard
               key={`team-${selectedTeamId}`}
               teamId={selectedTeamId}
               company={currentCompany}
               member={currentMember}
               onBack={() => setView("dashboard")}
+              onSettings={openTeamSettings}
             />
           )}
           {view === "teams" && (
@@ -681,6 +711,18 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
               onBack={() => setView("dashboard")}
               isOwner={isOwner}
             />
+          )}
+          {view === "tasks" && (
+            <TasksView key="tasks" company={currentCompany} member={currentMember} />
+          )}
+          {view === "analytics" && (
+            <AnalyticsView key="analytics" company={currentCompany} />
+          )}
+          {view === "security" && (
+            <SecurityView key="security" company={currentCompany} />
+          )}
+          {view === "compliance" && (
+            <ComplianceView key="compliance" company={currentCompany} />
           )}
         </AnimatePresence>
       </div>
@@ -2086,7 +2128,7 @@ function SettingsView({ company, member, onBack, isOwner }: {
   const [saving, setSaving] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [deleteText, setDeleteText] = useState("")
-  const [activeTab, setActiveTab] = useState<"general" | "danger">("general")
+  const [activeTab, setActiveTab] = useState<"general" | "security" | "webhooks" | "apiKeys" | "data" | "danger">("general")
 
   const handleSave = async () => {
     setSaving(true)
@@ -2111,6 +2153,10 @@ function SettingsView({ company, member, onBack, isOwner }: {
       <div className="flex gap-1 mb-6 border-b border-[var(--border)] pb-px">
         {[
           { id: "general" as const, label: "General" },
+          { id: "security" as const, label: "Security" },
+          { id: "webhooks" as const, label: "Webhooks" },
+          { id: "apiKeys" as const, label: "API Keys" },
+          { id: "data" as const, label: "Data" },
           { id: "danger" as const, label: "Danger Zone" },
         ].map((tab) => (
           <button
@@ -2148,6 +2194,30 @@ function SettingsView({ company, member, onBack, isOwner }: {
         </div>
       )}
 
+      {activeTab === "security" && (
+        <div className="space-y-6">
+          <SecuritySettings />
+        </div>
+      )}
+
+      {activeTab === "webhooks" && (
+        <div className="space-y-6">
+          <WebhookManager />
+        </div>
+      )}
+
+      {activeTab === "apiKeys" && (
+        <div className="space-y-6">
+          <APIKeyManager />
+        </div>
+      )}
+
+      {activeTab === "data" && (
+        <div className="space-y-6">
+          <DataExport />
+        </div>
+      )}
+
       {activeTab === "danger" && isOwner && (
         <div className="p-5 rounded-xl border border-red-500/20 space-y-3">
           <h3 className="text-[14px] font-semibold text-red-500">Danger Zone</h3>
@@ -2179,6 +2249,138 @@ function SettingsView({ company, member, onBack, isOwner }: {
           <p className="text-[13px] text-[var(--muted)]">Only the company owner can access danger zone settings.</p>
         </div>
       )}
+    </motion.div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TASKS VIEW
+// ═════════════════════════════════════════════════════════════════════════════
+
+function TasksView({ company, member }: {
+  company: NonNullable<ReturnType<typeof useCompany>["currentCompany"]>
+  member: OrganizationMember | null
+}) {
+  const [tasks, setTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<"all" | "assigned" | "created">("assigned")
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        let q = (supabase as any).from("tasks").select("*").eq("organization_id", company.id)
+        if (filter === "assigned") q = q.eq("assignee_id", member?.user_id)
+        if (filter === "created") q = q.eq("created_by", member?.user_id)
+        const { data } = await q.order("created_at", { ascending: false }).limit(50)
+        setTasks(data || [])
+      } catch { setTasks([]) }
+      finally { setLoading(false) }
+    }
+    fetch()
+  }, [company.id, member?.user_id, filter])
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-[20px] font-bold text-[var(--text)]">Tasks</h2>
+        <div className="flex gap-1 bg-[var(--surface-2)] rounded-xl p-0.5">
+          {(["all", "assigned", "created"] as const).map(f => (
+            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold transition cursor-pointer ${filter === f ? "bg-[var(--surface)] text-[var(--text)] shadow-xs" : "text-[var(--muted)]"}`}>
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin text-[var(--muted)]" /></div>
+      ) : tasks.length === 0 ? (
+        <div className="text-center py-12">
+          <CheckSquare size={32} className="text-[var(--muted)] mx-auto mb-3" />
+          <p className="text-[14px] font-semibold text-[var(--text)] mb-1">No tasks</p>
+          <p className="text-[12px] text-[var(--muted)]">Tasks from your pages will appear here</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {tasks.map(t => (
+            <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-2)] transition">
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${t.status === "done" ? "bg-green-500 border-green-500" : "border-[var(--border)]"}`}>
+                {t.status === "done" && <Check size={10} className="text-white" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[12px] font-medium ${t.status === "done" ? "line-through text-[var(--muted)]" : "text-[var(--text)]"}`}>{t.title}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {t.priority && <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${t.priority === "urgent" ? "text-red-500 bg-red-500/10" : t.priority === "high" ? "text-orange-500 bg-orange-500/10" : "text-[var(--muted)] bg-[var(--surface-2)]"}`}>{t.priority}</span>}
+                  {t.due_date && <span className="text-[9px] text-[var(--muted)]">Due {new Date(t.due_date).toLocaleDateString()}</span>}
+                </div>
+              </div>
+              <div className={`px-2 py-0.5 rounded text-[9px] font-semibold ${t.status === "done" ? "text-green-500 bg-green-500/10" : t.status === "in_progress" ? "text-blue-500 bg-blue-500/10" : "text-[var(--muted)] bg-[var(--surface-2)]"}`}>
+                {t.status?.replace("_", " ") || "To Do"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ANALYTICS VIEW
+// ═════════════════════════════════════════════════════════════════════════════
+
+function AnalyticsView({ company }: {
+  company: NonNullable<ReturnType<typeof useCompany>["currentCompany"]>
+}) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6">
+      <h2 className="text-[20px] font-bold text-[var(--text)] mb-6">Analytics</h2>
+      <UsageAnalytics />
+    </motion.div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECURITY VIEW
+// ═════════════════════════════════════════════════════════════════════════════
+
+function SecurityView({ company }: {
+  company: NonNullable<ReturnType<typeof useCompany>["currentCompany"]>
+}) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6">
+      <h2 className="text-[20px] font-bold text-[var(--text)] mb-6">Security</h2>
+      <div className="max-w-[700px] space-y-6">
+        <SecuritySettings />
+        <div className="border-t border-[var(--border)] pt-6">
+          <h3 className="text-[14px] font-bold text-[var(--text)] mb-4">API Keys</h3>
+          <APIKeyManager />
+        </div>
+        <div className="border-t border-[var(--border)] pt-6">
+          <h3 className="text-[14px] font-bold text-[var(--text)] mb-4">Webhooks</h3>
+          <WebhookManager />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// COMPLIANCE VIEW
+// ═════════════════════════════════════════════════════════════════════════════
+
+function ComplianceView({ company }: {
+  company: NonNullable<ReturnType<typeof useCompany>["currentCompany"]>
+}) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6">
+      <h2 className="text-[20px] font-bold text-[var(--text)] mb-6">Compliance & Data</h2>
+      <div className="max-w-[900px] space-y-6">
+        <ComplianceLog />
+        <div className="border-t border-[var(--border)] pt-6">
+          <DataExport />
+        </div>
+      </div>
     </motion.div>
   )
 }

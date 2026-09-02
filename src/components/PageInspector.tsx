@@ -673,8 +673,8 @@ function CollaborationTab({ pageId, page }) {
           {presence.length === 0 && (
             <EmptyState icon={Users} message="No collaborators online" />
           )}
-          {presence.map(user => (
-            <div key={user.id} className="flex items-center gap-2 p-1.5 rounded text-[11px]">
+          {presence.map((user, i) => (
+            <div key={user.id || `user-${i}`} className="flex items-center gap-2 p-1.5 rounded text-[11px]">
               <div className="w-5 h-5 rounded-full bg-[var(--accent-soft)] flex items-center justify-center text-[9px] font-bold text-[var(--accent)]">
                 {(user.userName || '?')[0]}
               </div>

@@ -5,6 +5,12 @@ export default function AuthProviders({ onProviderClick, loadingProvider, disabl
   return (
     <div className="flex flex-col gap-3 w-full">
       <ProviderButton
+        provider="apple"
+        isLoading={loadingProvider === "apple"}
+        onClick={() => onProviderClick("apple")}
+        disabled={disabled || (loadingProvider && loadingProvider !== "apple")}
+      />
+      <ProviderButton
         provider="github"
         isLoading={loadingProvider === "github"}
         onClick={() => onProviderClick("github")}

@@ -223,6 +223,51 @@
   --clr-bg-lavender: #6a1b9a; --clr-bg-peach: #e65100; --clr-bg-charcoal: #455a64;
 }
 
+/* ─── Apple Liquid Glass & Capsule System ─── */
+.apple-liquid-glass {
+  background: radial-gradient(120% 120% at 50% 10%, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.04) 60%, rgba(0, 0, 0, 0.25) 100%), var(--surface-1);
+  backdrop-filter: blur(40px) saturate(190%);
+  -webkit-backdrop-filter: blur(40px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    0 24px 60px -12px rgba(0, 0, 0, 0.65),
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.light .apple-liquid-glass {
+  background: radial-gradient(120% 120% at 50% 10%, rgba(255, 255, 255, 0.95) 0%, rgba(245, 247, 250, 0.88) 60%, rgba(235, 240, 245, 0.82) 100%);
+  backdrop-filter: blur(40px) saturate(190%);
+  -webkit-backdrop-filter: blur(40px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 
+    0 20px 45px -10px rgba(0, 0, 0, 0.12),
+    0 1px 3px 0 rgba(0, 0, 0, 0.05),
+    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+.apple-glass-pill {
+  border-radius: 9999px;
+  background: radial-gradient(100% 100% at 50% 0%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 70%, transparent 100%), var(--surface-1);
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 16px 40px -8px rgba(0, 0, 0, 0.5),
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.light .apple-glass-pill {
+  background: radial-gradient(100% 100% at 50% 0%, rgba(255, 255, 255, 0.98) 0%, rgba(245, 247, 252, 0.92) 70%, rgba(235, 242, 250, 0.88) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 12px 30px -6px rgba(0, 0, 0, 0.08),
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.03);
+}
+
 html,
 body,
 #root {

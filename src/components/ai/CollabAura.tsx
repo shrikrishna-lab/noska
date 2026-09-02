@@ -81,9 +81,9 @@ export default function CollabAura({ users = [], maxDisplay = 3 }) {
   return (
     <div className="flex items-center -space-x-1.5">
       <AnimatePresence mode="popLayout">
-        {displayUsers.map((user) => (
+        {displayUsers.map((user, i) => (
           <motion.div
-            key={user.userId || user.id}
+            key={user.userId || user.id || `user-${i}`}
             layout
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}

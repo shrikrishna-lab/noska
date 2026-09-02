@@ -53,7 +53,7 @@ export function TeamSettings({ team, open, onClose, onUpdated, onDeleted }: Team
         color,
       })
       if (currentMember) {
-        await writeAuditLog(currentCompany!.id, currentMember.user_id, "update", "company_teams", team.id)
+        await writeAuditLog(currentCompany!.id, currentMember.user_id, "update", "company_teams", { entity_id: team.id, entity_name: name.trim() })
       }
       onUpdated?.()
       onClose()
@@ -67,7 +67,7 @@ export function TeamSettings({ team, open, onClose, onUpdated, onDeleted }: Team
     try {
       await deleteCompanyTeam(team.id)
       if (currentMember) {
-        await writeAuditLog(currentCompany!.id, currentMember.user_id, "delete", "company_teams", team.id)
+        await writeAuditLog(currentCompany!.id, currentMember.user_id, "delete", "company_teams", { entity_id: team.id, entity_name: team.name })
       }
       onDeleted?.()
       onClose()
