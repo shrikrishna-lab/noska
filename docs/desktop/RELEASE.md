@@ -19,10 +19,12 @@
 4. The job uploads everything to a **draft** GitHub release named
    `Noska Desktop v<version>` and generates the updater manifest
    (`latest.json`) with signatures.
-5. Verify installers from the draft, then **publish** the release. Published
-   releases are what running apps check via:
+5. The `publish-public` job mirrors the signed artifacts + `latest.json` to
+   the **public distribution repo** (`shrikrishna-lab/noska-desktop-releases`)
+   and rewrites the manifest's download URLs to point there. Running apps
+   check updates via:
    ```
-   https://github.com/shrikrishna-lab/noska/releases/latest/download/latest.json
+   https://github.com/shrikrishna-lab/noska-desktop-releases/releases/latest/download/latest.json
    ```
 
 ## Update flow in the app

@@ -123,9 +123,39 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p dist
-          gh release download "${{ steps.ver.outputs.tag }}" \
-            --repo shrikrishna-lab/noska \
-            --dir dist --clobber --pattern "*"
+          TAG="${{ steps.ver.outputs.tag }}"
+          # Resolve the staging release by ID: the `releases/tags/{tag}`
+          # endpoint 404s for DRAFT releases, and `gh release download <tag>`
+          # uses it (current gh). The staging release is a draft by design.
+          RELEASE_ID=$(gh api "repos/shrikrishna-lab/noska/releases?per_page=100" \
+            --jq '.[] | select(.tag_name=="'"$TAG"'") | .id' | head -1)
+          if [ -z "$RELEASE_ID" ]; then
+            echo "staging release $TAG not found" >&2
+            exit 1
+          fi
+          gh api "repos/shrikrishna-lab/noska/releases/$RELEASE_ID/assets?per_page=100" \
+            --jq '.[] | "\(.id)\t\(.name)"' | while IFS=$'\t' read -r aid name; do
+              echo "downloading $name"
+              gh api "repos/shrikrishna-lab/noska/releases/assets/$aid" \
+                -H "Accept: application/octet-stream" > "dist/$name"
+          done
+          ls -la dist
+
+      - name: Point latest.json at the PUBLIC repository
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'dist/latest.json';
+            const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+            for (const k of Object.keys(j.platforms)) {
+              j.platforms[k].url = j.platforms[k].url.replace(
+                'shrikrishna-lab/noska/',
+                'shrikrishna-lab/noska-desktop-releases/'
+              );
+            }
+            fs.writeFileSync(p, JSON.stringify(j, null, 2));
+            console.log('urls rewritten');
+          "
 
       - name: Publish to the public release repository
         env:
