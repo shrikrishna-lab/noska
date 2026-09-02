@@ -331,23 +331,38 @@ async function handleExchange(code: string) {
   }
 }
 
-async function handleRefresh(sid: string, refreshSecret: string | null) {
-  if (!sid) return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
-
-  // Sessions created via the browser handoff carry a refresh_secret issued
-  // at consume time — a bare sid is not enough to mint tokens for them.
-  const txnRes = await rest(
-    `/rest/v1/desktop_auth_transactions?sid=eq.${encodeURIComponent(sid)}&refresh_secret=not.is.null&status=eq.consumed&order=created_at.desc&limit=1&select=refresh_secret`
-  );
-  if (txnRes.ok) {
-    const rows = (await txnRes.json()) as Array<{ refresh_secret: string }>;
-    if (rows[0]) {
-      if (!refreshSecret || refreshSecret !== rows[0].refresh_secret) {
-        return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+async function handleRefresh(sid: string, refreshSecret: string | null, pairingCode: string) {
+  // 1) New browser-handoff sessions: sid + the one-time refresh_secret.
+  if (sid) {
+    const txnRes = await rest(
+      `/rest/v1/desktop_auth_transactions?sid=eq.${encodeURIComponent(sid)}&refresh_secret=not.is.null&status=eq.consumed&order=created_at.desc&limit=1&select=refresh_secret`
+    );
+    if (txnRes.ok) {
+      const rows = (await txnRes.json()) as Array<{ refresh_secret: string }>;
+      if (rows[0]) {
+        if (!refreshSecret || refreshSecret !== rows[0].refresh_secret) {
+          return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+        }
+        return await mintAndReturn(sid);
       }
     }
+    return await mintAndReturn(sid);
   }
 
+  // 2) Transitional ≤1.0.6 clients refresh with their pairing code —
+  //    resolve it to a session id (same contract as the deployed v7).
+  if (pairingCode) {
+    if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(pairingCode)) {
+      return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+    }
+    const row = await pairFind(pairingCode);
+    if (row?.sid) return await mintAndReturn(row.sid);
+  }
+
+  return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+}
+
+async function mintAndReturn(sid: string) {
   try {
     const { access_token, expires_in } = await clerkSessionToken(sid);
     return json({
@@ -457,6 +472,14 @@ Deno.serve(async (req: Request) => {
       case "cancel":
         await txnCancel(String(body.transaction_id ?? ""));
         return json({ status: "cancelled" });
+      case "init":
+        // ≤1.0.6 clients (re-)register their pairing code every poll cycle.
+        // Claim works without registration on this version, so accept and
+        // acknowledge to keep the old poll loop quiet.
+        if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(String(body.code ?? ""))) {
+          return json({ error: "bad_code" }, 400);
+        }
+        return json({ status: "waiting" });
       case "claim": {
         const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "").trim();
         if (!jwt) return json({ error: "unauthorized", message: "Sign in first" }, 401);
@@ -465,7 +488,11 @@ Deno.serve(async (req: Request) => {
       case "exchange":
         return await handleExchange(String(body.code ?? ""));
       case "refresh":
-        return await handleRefresh(String(body.sid ?? ""), body.refresh_secret ? String(body.refresh_secret) : null);
+        return await handleRefresh(
+          String(body.sid ?? ""),
+          body.refresh_secret ? String(body.refresh_secret) : null,
+          String(body.code ?? "")
+        );
       default:
         return json({ error: "bad_action" }, 400);
     }
