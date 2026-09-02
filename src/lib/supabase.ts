@@ -1,16 +1,19 @@
 ﻿import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../types/supabase";
 
-// Credentials MUST come from environment variables (set in .env locally and in
-// the Vercel project settings for production). No hardcoded project fallback â€”
-// that would bake a specific project ref into the shipped bundle.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Credentials MUST come from environment variables (set in .env locally, in
+// Vercel for web, and in the release workflow for desktop builds). Missing
+// values must never hard-crash module evaluation — that bricks the desktop
+// app on the preloader (v1.0.7 incident) — so fall back to a placeholder and
+// fail loudly at request time instead.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://env-missing.placeholder.supabase.co";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "env-missing";
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
   console.error(
-    "[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. " +
-    "Set them in your .env (local) and Vercel project settings (production)."
+    "[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in this build. " +
+    "Requests will fail — check the build environment (.env locally, Vercel for web, " +
+    "release workflow env for desktop)."
   );
 }
 
