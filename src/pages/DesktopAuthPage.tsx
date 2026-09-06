@@ -55,7 +55,7 @@ async function callFnWithRetry(body: Record<string, unknown>, jwt: string, attem
 type OAuthProvider = "google" | "apple" | "github";
 
 export default function DesktopAuthPage() {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { isLoaded, isSignedIn, getToken, sessionId } = useAuth();
   const { user } = useUser();
   const clerk = useClerk();
   const [params] = useSearchParams();
@@ -102,9 +102,17 @@ export default function DesktopAuthPage() {
     (async () => {
       setPhase("attaching");
       try {
-        const jwt = await getToken();
+        // The "supabase" JWT template is the only token Supabase's GoTrue
+        // verifier accepts on this Clerk instance (default session tokens are
+        // RS256-signed and rejected). The template carries no sid claim, so
+        // the session id travels in the body and is verified server-side
+        // against the Clerk Backend API.
+        const jwt = await getToken({ template: "supabase" });
         if (!jwt) throw new Error("Not signed in");
-        const json = await callFnWithRetry({ action: "attach", transaction_id: tx }, jwt);
+        const json = await callFnWithRetry(
+          { action: "attach", transaction_id: tx, sid: sessionId ?? undefined },
+          jwt
+        );
         if (json.status !== "attached") {
           throw new Error((json.message as string) || "This sign-in request is no longer valid.");
         }
@@ -115,7 +123,7 @@ export default function DesktopAuthPage() {
         attached.current = false; // allow retry (e.g. transient network)
       }
     })();
-  }, [isLoaded, isSignedIn, validTx, tx, getToken]);
+  }, [isLoaded, isSignedIn, validTx, tx, sessionId, getToken]);
 
   /* ── automatic desktop handoff (fallback button below) ────────────────── */
 

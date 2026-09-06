@@ -115,6 +115,17 @@ async function clerkUserById(sub: string): Promise<{ email: string | null; name:
   return { email: primary?.email_address ?? null, name };
 }
 
+/** Clerk Backend API session lookup — verifies a client-supplied session id. */
+async function clerkSessionActive(sid: string, sub: string): Promise<boolean> {
+  if (!CLERK_SECRET_KEY) throw httpError(500, "server_config", "CLERK_SECRET_KEY not configured");
+  const res = await fetch(`${CLERK_API}/sessions/${encodeURIComponent(sid)}`, {
+    headers: { Authorization: `Bearer ${CLERK_SECRET_KEY}` },
+  });
+  if (!res.ok) return false;
+  const s = await res.json();
+  return s?.status === "active" && s?.user_id === sub;
+}
+
 /** Mints a fresh Clerk session token (60s TTL) for the session. */
 async function clerkSessionToken(sid: string): Promise<{ access_token: string; expires_in: number }> {
   if (!CLERK_SECRET_KEY) throw httpError(500, "server_config", "CLERK_SECRET_KEY not configured");
@@ -292,14 +303,24 @@ async function pairMarkUsed(code: string) {
 
 /* ── actions ───────────────────────────────────────────────────────────── */
 
-async function handleClaim(code: string, clerkJwt: string) {
+async function handleClaim(code: string, clerkJwt: string, sidFromBody: string | null) {
   if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ status: "unknown_code" }, 400);
 
   await gotrueVerify(clerkJwt);
   const payload = decodeJwtPayload(clerkJwt);
   const sub = typeof payload?.sub === "string" ? payload.sub : null;
-  const sid = typeof payload?.sid === "string" ? payload.sid : null;
-  if (!sub || !sid) return json({ error: "unauthorized", message: "Malformed token" }, 401);
+  if (!sub) return json({ error: "unauthorized", message: "Malformed token" }, 401);
+
+  let sid = sidFromBody ?? null;
+  if (sid) {
+    if (!/^[a-zA-Z0-9_]{8,64}$/.test(sid)) return json({ error: "unauthorized", message: "Malformed session" }, 401);
+    if (!(await clerkSessionActive(sid, sub))) {
+      return json({ error: "unauthorized", message: "Clerk session is not active for this user" }, 401);
+    }
+  } else {
+    sid = typeof payload?.sid === "string" ? payload.sid : null;
+    if (!sid) return json({ error: "unauthorized", message: "No active Clerk session" }, 401);
+  }
 
   const clerk = await clerkUserById(sub);
   if (!clerk) return json({ error: "unauthorized", message: "Clerk user not found" }, 401);
@@ -397,14 +418,28 @@ async function handleStart(codeChallenge: string) {
   return json({ status: "started", transaction_id: row.transaction_id, expires_at: row.expires_at });
 }
 
-async function handleAttach(transactionId: string, clerkJwt: string) {
+async function handleAttach(transactionId: string, clerkJwt: string, sidFromBody: string | null) {
   if (!/^[a-f0-9]{32}$/.test(transactionId)) return json({ status: "unknown_transaction" }, 400);
 
+  // The Authorization token is the "supabase" JWT template — GoTrue-verifiable
+  // (ES256 signing key) but it carries no sid claim, so the session id comes
+  // from the body and is verified against the Clerk Backend API.
   await gotrueVerify(clerkJwt);
   const payload = decodeJwtPayload(clerkJwt);
   const sub = typeof payload?.sub === "string" ? payload.sub : null;
-  const sid = typeof payload?.sid === "string" ? payload.sid : null;
-  if (!sub || !sid) return json({ error: "unauthorized", message: "Malformed token" }, 401);
+  if (!sub) return json({ error: "unauthorized", message: "Malformed token" }, 401);
+
+  let sid = sidFromBody ?? null;
+  if (sid) {
+    if (!/^[a-zA-Z0-9_]{8,64}$/.test(sid)) return json({ error: "unauthorized", message: "Malformed session" }, 401);
+    if (!(await clerkSessionActive(sid, sub))) {
+      return json({ error: "unauthorized", message: "Clerk session is not active for this user" }, 401);
+    }
+  } else {
+    // Legacy clients send the default session token, which embeds the sid.
+    sid = typeof payload?.sid === "string" ? payload.sid : null;
+    if (!sid) return json({ error: "unauthorized", message: "No active Clerk session" }, 401);
+  }
 
   const clerk = await clerkUserById(sub);
   if (!clerk) return json({ error: "unauthorized", message: "Clerk user not found" }, 401);
@@ -468,7 +503,11 @@ Deno.serve(async (req: Request) => {
       case "attach": {
         const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "").trim();
         if (!jwt) return json({ error: "unauthorized", message: "Sign in first" }, 401);
-        return await handleAttach(String(body.transaction_id ?? ""), jwt);
+        return await handleAttach(
+          String(body.transaction_id ?? ""),
+          jwt,
+          body.sid ? String(body.sid) : null
+        );
       }
       case "consume":
         return await handleConsume(String(body.transaction_id ?? ""), String(body.code_verifier ?? ""));
@@ -486,7 +525,11 @@ Deno.serve(async (req: Request) => {
       case "claim": {
         const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "").trim();
         if (!jwt) return json({ error: "unauthorized", message: "Sign in first" }, 401);
-        return await handleClaim(String(body.code ?? ""), jwt);
+        return await handleClaim(
+          String(body.code ?? ""),
+          jwt,
+          body.sid ? String(body.sid) : null
+        );
       }
       case "exchange":
         return await handleExchange(String(body.code ?? ""));

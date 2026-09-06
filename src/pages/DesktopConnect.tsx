@@ -19,7 +19,7 @@ export function isValidPairCode(c: string): boolean {
   return /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(c);
 }
 
-export async function claimPairCode(code: string, jwt: string): Promise<void> {
+export async function claimPairCode(code: string, jwt: string, sid?: string | null): Promise<void> {
   const res = await fetch(FN_URL, {
     method: "POST",
     headers: {
@@ -27,7 +27,7 @@ export async function claimPairCode(code: string, jwt: string): Promise<void> {
       Authorization: `Bearer ${jwt}`,
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "",
     },
-    body: JSON.stringify({ action: "claim", code }),
+    body: JSON.stringify({ action: "claim", code, sid: sid ?? undefined }),
   });
   const json = await res.json().catch(() => ({}));
       if (!res.ok || json.status === "unknown_code") {
@@ -45,7 +45,7 @@ export async function claimPairCode(code: string, jwt: string): Promise<void> {
  * already been routed into their workspace after logging in.
  */
 export function PairClaimWatcher() {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { isLoaded, isSignedIn, getToken, sessionId } = useAuth();
   const tried = useRef(false);
 
   useEffect(() => {
@@ -55,22 +55,22 @@ export function PairClaimWatcher() {
     tried.current = true;
     (async () => {
       try {
-        const jwt = await getToken();
+        const jwt = await getToken({ template: "supabase" });
         if (!jwt) throw new Error("no token");
-        await claimPairCode(code, jwt);
+        await claimPairCode(code, jwt, sessionId);
         window.dispatchEvent(new CustomEvent("noska:pair-claimed", { detail: code }));
         sessionStorage.removeItem(PENDING_KEY);
       } catch {
         tried.current = false; // allow retry on next auth change
       }
     })();
-  }, [isLoaded, isSignedIn, getToken]);
+  }, [isLoaded, isSignedIn, getToken, sessionId]);
 
   return null;
 }
 
 export default function DesktopConnectPage() {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { isLoaded, isSignedIn, getToken, sessionId } = useAuth();
   const [params] = useSearchParams();
   const urlCode = (params.get("code") || "").toUpperCase();
   const [code, setCode] = useState(isValidPairCode(urlCode) ? urlCode : "");
@@ -91,9 +91,9 @@ export default function DesktopConnectPage() {
     setState("working");
     (async () => {
       try {
-        const jwt = await getToken();
+        const jwt = await getToken({ template: "supabase" });
         if (!jwt) throw new Error("Not signed in");
-        await claimPairCode(urlCode, jwt);
+        await claimPairCode(urlCode, jwt, sessionId);
         sessionStorage.removeItem(PENDING_KEY);
         setState("done");
       } catch (err) {
@@ -113,9 +113,9 @@ export default function DesktopConnectPage() {
     }
     setState("working");
     try {
-      const jwt = await getToken();
+      const jwt = await getToken({ template: "supabase" });
       if (!jwt) throw new Error("Not signed in");
-      await claimPairCode(clean, jwt);
+      await claimPairCode(clean, jwt, sessionId);
       sessionStorage.removeItem(PENDING_KEY);
       setState("done");
     } catch (err) {
