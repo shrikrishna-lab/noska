@@ -20,6 +20,7 @@
 | `SENTRY_ORG` | Optional | Build (Vite) | Sentry organization slug |
 | `SENTRY_PROJECT` | Optional | Build (Vite) | Sentry project slug |
 | `VITE_APP_VERSION` | Optional | Main SPA | Semver string used as Sentry release tag |
+| `PUBLIC_SITE_URL` | Optional | `approve-waitlist`, `send-email` (send_invite) | Public app origin used to build invite links; defaults to `https://www.noska.me` |
 | `TRIGGER_API_KEY` | **Yes** | Trigger.dev | API key from Trigger.dev Dashboard |
 | `TRIGGER_API_URL` | Optional | Trigger.dev | Custom Trigger.dev API URL; defaults to `https://api.trigger.dev` |
 | `VITE_ADMIN_DEMO` | Optional | Admin SPA | Set to `true` for local dev with mock data (skips Supabase auth) |

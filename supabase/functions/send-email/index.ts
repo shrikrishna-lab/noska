@@ -356,12 +356,47 @@ async function handleSendBroadcast(payload: BroadcastPayload, settings: { apiKey
 }
 
 async function handleSendInvite(payload: { waitlist_id: string; name: string; email: string }, settings: { apiKey: string; fromEmail: string }): Promise<Response> {
+  const { data: entry, error: entryErr } = await supabase
+    .from("waitlist_entries")
+    .select("id, name, email, invite_code")
+    .eq("id", payload.waitlist_id)
+    .single();
+
+  if (entryErr || !entry) {
+    return new Response(JSON.stringify({ error: "Waitlist entry not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  let inviteCode: string = entry.invite_code ?? "";
+  if (!inviteCode) {
+    // Generate server-side so the emailed code always matches the stored one.
+    const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    const bytes = crypto.getRandomValues(new Uint8Array(8));
+    inviteCode = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+    const { error: codeErr } = await supabase
+      .from("waitlist_entries")
+      .update({ invite_code: inviteCode })
+      .eq("id", payload.waitlist_id);
+    if (codeErr) {
+      return new Response(JSON.stringify({ error: "Failed to assign invite code" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  // www host is canonical — the apex (noska.me) only 308-redirects to it.
+  const appUrl = Deno.env.get("PUBLIC_SITE_URL") ?? "https://www.noska.me";
+  const inviteUrl = `${appUrl}/invite/${inviteCode}`;
   const html = `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
     <h2 style="margin-top: 0;">You're invited to Noska!</h2>
-    <p>Hey ${payload.name},</p>
+    <p>Hey ${entry.name},</p>
     <p>You've been invited to join Noska — the intelligent workspace for teams.</p>
-    <p>Click the button below to create your account and get started:</p>
-    <a href="https://noska.me/launch?ref=invite" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invite</a>
+    <p style="margin: 24px 0;"><strong>Your invite code:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 14px;">${inviteCode}</code></p>
+    <p style="margin: 0 0 24px; color: #6b7280; font-size: 13px;">Or enter this code at ${appUrl}/code</p>
+    <a href="${inviteUrl}" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invite</a>
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
     <p style="color: #6b7280; font-size: 12px;">If you didn't sign up, you can ignore this email.</p>
   </div>`;
@@ -374,7 +409,7 @@ async function handleSendInvite(payload: { waitlist_id: string; name: string; em
     },
     body: JSON.stringify({
       from: settings.fromEmail,
-      to: payload.email,
+      to: entry.email,
       subject: "You're invited to Noska!",
       html,
     }),
@@ -385,7 +420,13 @@ async function handleSendInvite(payload: { waitlist_id: string; name: string; em
   if (res.ok) {
     await supabase
       .from("waitlist_entries")
-      .update({ invite_sent: true, status: "invited" })
+      .update({ invite_sent: true, status: "invited", email_status: "sent", email_sent_at: new Date().toISOString() })
+      .eq("id", payload.waitlist_id);
+  } else {
+    console.error("[send-email:send_invite] Resend error:", res.status, JSON.stringify(data).slice(0, 500));
+    await supabase
+      .from("waitlist_entries")
+      .update({ email_status: "failed" })
       .eq("id", payload.waitlist_id);
   }
 

@@ -1,4 +1,16 @@
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase, getAdminToken } from "./supabase";
+
+// Edge functions return Resend/domain errors as JSON bodies on non-2xx
+// responses, which supabase-js wraps in FunctionsHttpError.context.
+function extractEdgeError(error: unknown): string {
+  if (error instanceof FunctionsHttpError) {
+    const ctx = error.context as { message?: string; error?: string } | undefined;
+    if (ctx?.message) return ctx.message;
+    if (ctx?.error) return ctx.error;
+  }
+  return error instanceof Error ? error.message : String(error ?? 'Unknown error');
+}
 
 function invokeEmail(body: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }> {
   const token = getAdminToken();
@@ -17,7 +29,7 @@ export async function sendEmail(options: {
   text?: string;
 }): Promise<{ id?: string; error?: string }> {
   const { data, error } = await invokeEmail({ action: "send_single", ...options });
-  if (error) return { error: error.message };
+  if (error) return { error: extractEdgeError(error) };
   return (data ?? { error: "No response" }) as { id?: string; error?: string };
 }
 
@@ -29,7 +41,7 @@ export async function sendCampaign(options: {
   html: string;
 }): Promise<{ sent?: number; failed?: number; error?: string }> {
   const { data, error } = await invokeEmail({ action: "send_campaign", ...options });
-  if (error) return { error: error.message };
+  if (error) return { error: extractEdgeError(error) };
   return (data ?? { error: "No response" }) as { sent?: number; failed?: number; error?: string };
 }
 
@@ -42,7 +54,7 @@ export async function sendBroadcast(options: {
   target_users?: Array<{ email: string; name?: string }> | null;
 }): Promise<{ sent?: number; failed?: number; error?: string }> {
   const { data, error } = await invokeEmail({ action: "send_broadcast", ...options });
-  if (error) return { error: error.message };
+  if (error) return { error: extractEdgeError(error) };
   return (data ?? { error: "No response" }) as { sent?: number; failed?: number; error?: string };
 }
 
@@ -52,7 +64,7 @@ export async function sendWaitlistInvite(options: {
   email: string;
 }): Promise<{ id?: string; error?: string }> {
   const { data, error } = await invokeEmail({ action: "send_invite", ...options });
-  if (error) return { error: error.message };
+  if (error) return { error: extractEdgeError(error) };
   return (data ?? { error: "No response" }) as { id?: string; error?: string };
 }
 
@@ -77,7 +89,7 @@ export async function queueCampaign(options: {
   }));
 
   const { error } = await supabase.from("email_queue").insert(rows);
-  if (error) return { error: error.message };
+  if (error) return { error: extractEdgeError(error) };
 
   await supabase
     .from("email_campaigns")

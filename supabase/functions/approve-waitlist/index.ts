@@ -6,7 +6,10 @@ const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 function generateCode(): string {
-  return Math.random().toString(36).substring(2, 10).toUpperCase()
+  // Unambiguous alphabet (no 0/O/1/I) so codes read correctly from emails.
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+  const bytes = crypto.getRandomValues(new Uint8Array(8))
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("")
 }
 
 async function clerkApi(path: string, method: string, body?: unknown): Promise<Response | null> {
@@ -85,7 +88,9 @@ Deno.serve(async (req: Request) => {
 
     const inviteCode = generateCode()
     const now = new Date().toISOString()
-    const appUrl = Deno.env.get("PUBLIC_SITE_URL") ?? "https://noska.me"
+    // www host is canonical — the apex (noska.me) only 308-redirects to it.
+    const appUrl = Deno.env.get("PUBLIC_SITE_URL") ?? "https://www.noska.me"
+    const inviteUrl = `${appUrl}/invite/${inviteCode}`
     const redirectUrl = `${appUrl}/sso-callback`
 
     let clerkInvitationId: string | null = null
@@ -113,7 +118,7 @@ Deno.serve(async (req: Request) => {
         invite_code: inviteCode,
         approved_at: now,
         approved_by: approvedBy,
-        email_status: "queued",
+        email_status: "pending",
         email_queued_at: now,
         ...(clerkInvitationId ? { clerk_entry_id: clerkInvitationId } : {}),
       })
@@ -131,44 +136,89 @@ Deno.serve(async (req: Request) => {
       }, { onConflict: "email" })
 
     const config = await getResendConfig()
-    if (config.apiKey) {
+    let emailSent = false
+    let emailError: string | null = null
+
+    if (!config.apiKey) {
+      emailError = "No email provider configured — set RESEND_API_KEY as a function secret or add resend_api_key in Admin → Settings → Email. The invite link below can be shared manually."
+      console.error("[approve-waitlist] email skipped:", emailError)
+    } else {
       const html = `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
         <h2 style="margin-top: 0;">You're in! Welcome to Noska 🎉</h2>
         <p>Hey ${entry.name},</p>
         <p>Great news — you've been approved from the waitlist! You can now create your account and start using Noska.</p>
         <p style="margin: 24px 0;"><strong>Your invite code:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 14px;">${inviteCode}</code></p>
-        <a href="${clerkInvitationUrl ?? `${appUrl}/invite/${inviteCode}`}" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invitation</a>
+        <p style="margin: 0 0 24px; color: #6b7280; font-size: 13px;">Or enter this code at ${appUrl}/code</p>
+        <a href="${clerkInvitationUrl ?? inviteUrl}" style="display: inline-block; padding: 12px 24px; background-color: #7c3aed; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">Accept Invitation</a>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
         <p style="color: #6b7280; font-size: 12px;">If you didn't sign up for Noska, you can ignore this email.</p>
       </div>`
 
-      const emailRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${config.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: config.fromEmail,
-          to: entry.email,
-          subject: "You're approved for Noska! 🎉",
-          html,
-          click_tracking: true,
-          open_tracking: true,
-        }),
-      })
+      try {
+        const emailRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${config.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: config.fromEmail,
+            to: entry.email,
+            subject: "You're approved for Noska! 🎉",
+            html,
+            click_tracking: true,
+            open_tracking: true,
+          }),
+        })
 
-      if (emailRes.ok) {
-        await supabase
-          .from("waitlist_entries")
-          .update({ email_status: "sent", email_sent_at: new Date().toISOString() })
-          .eq("id", waitlistId)
+        if (emailRes.ok) {
+          emailSent = true
+        } else {
+          const errBody = await emailRes.text().catch(() => "")
+          console.error("[approve-waitlist] Resend error:", emailRes.status, errBody)
+          let reason = `Resend returned ${emailRes.status}`
+          try {
+            const parsed = JSON.parse(errBody) as { message?: string; name?: string }
+            if (parsed?.message) reason = parsed.message
+          } catch { /* keep status-line reason */ }
+          if (config.fromEmail.endsWith("@resend.dev") && emailRes.status === 403) {
+            reason += " — resend.dev senders can only email your own account address. Verify a domain in Resend and set from_email in Admin → Settings → Email."
+          }
+          emailError = reason
+        }
+      } catch (err) {
+        emailError = err instanceof Error ? err.message : "Unknown error contacting Resend"
+        console.error("[approve-waitlist] Resend request threw:", err)
       }
+    }
+
+    // Reflect the real delivery attempt on the row so the admin table stops
+    // showing a permanent "Queued" for mail that never went out.
+    const finalEmailStatus = emailSent ? "sent" : config.apiKey ? "failed" : "pending"
+    await supabase
+      .from("waitlist_entries")
+      .update({
+        email_status: finalEmailStatus,
+        ...(emailSent ? { email_sent_at: new Date().toISOString() } : {}),
+      })
+      .eq("id", waitlistId)
+
+    // Best-effort: persist the failure reason when the email_error column
+    // exists (see migration 20260907000001). Never blocks approval.
+    if (emailError) {
+      const { error: emailErrWriteError } = await supabase
+        .from("waitlist_entries")
+        .update({ email_error: emailError })
+        .eq("id", waitlistId)
+      if (emailErrWriteError) console.warn("[approve-waitlist] email_error column not present; reason only returned to admin UI")
     }
 
     return respond({
       success: true,
       invite_code: inviteCode,
+      invite_url: inviteUrl,
+      email_sent: emailSent,
+      email_error: emailError,
       clerk_invitation_id: clerkInvitationId,
       clerk_invitation_url: clerkInvitationUrl,
     })

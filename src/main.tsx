@@ -42,6 +42,7 @@ const McpLanding = lazy(() => import("./pages/marketing/McpLanding"));
 const ApiKeysLanding = lazy(() => import("./pages/marketing/ApiKeysLanding"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
+const EnterCodePage = lazy(() => import("./pages/invite/EnterCodePage").then(m => ({ default: m.EnterCodePage })));
 const DesktopConnectPage = lazy(() => import("./pages/DesktopConnect"));
 const DesktopAuthPage = lazy(() => import("./pages/DesktopAuthPage"));
 
@@ -117,6 +118,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/mcp" element={<MarketingShell><McpLanding /></MarketingShell>} />
           <Route path="/api-keys" element={<MarketingShell><ApiKeysLanding /></MarketingShell>} />
           <Route path="/invite/:code" element={<InvitePage />} />
+          <Route path="/code" element={<EnterCodePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           <Route path="/desktop-auth" element={<DesktopAuthPage />} />
           <Route path="/connect-desktop" element={<Suspense fallback={<RouteFallback />}><DesktopConnectPage /></Suspense>} />

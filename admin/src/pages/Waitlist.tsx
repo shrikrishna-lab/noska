@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useWaitlist, useWaitlistCount, useSendWaitlistInvite, useDeleteWaitlistEntry, useRejectWaitlistEntry, useRealtimeInvalidate, type DbWaitlistEntry } from "@/lib/queries";
+import { useWaitlist, useWaitlistCount, useDeleteWaitlistEntry, useRejectWaitlistEntry, useRealtimeInvalidate, type DbWaitlistEntry } from "@/lib/queries";
 import { sendWaitlistInvite } from "@/lib/email";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -81,7 +81,7 @@ function InviteTimeline({ entry }: { entry: DbWaitlistEntry }) {
 }
 
 function InvitePreviewModal({ entry, onClose }: { entry: DbWaitlistEntry; onClose: () => void }) {
-  const inviteLink = entry.invite_code ? `https://noska.me/invite/${entry.invite_code}` : null;
+  const inviteLink = entry.invite_code ? `https://www.noska.me/invite/${entry.invite_code}` : null;
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async (text: string) => {
@@ -106,20 +106,26 @@ function InvitePreviewModal({ entry, onClose }: { entry: DbWaitlistEntry; onClos
                 <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 480, margin: "0 auto" }}>
                   <h2 style={{ marginTop: 0 }}>You're in! Welcome to Noska 🎉</h2>
                   <p>Hey {entry.name},</p>
-                  <p>Great news — you've been approved! Click below to create your account.</p>
-                  <div style={{ margin: "24px 0", textAlign: "center" }}>
-                    <a href={inviteLink ?? "#"} style={{ display: "inline-block", padding: "12px 24px", backgroundColor: "#7c3aed", color: "white", textDecoration: "none", borderRadius: 8 }}>
-                      Create Account
-                    </a>
-                  </div>
+                  <p>Great news — you've been approved from the waitlist! You can now create your account and start using Noska.</p>
                   {entry.invite_code && (
-                    <p style={{ color: "#6b7280", fontSize: 12 }}>
-                      Your invite code: <strong>{entry.invite_code}</strong>
+                    <p style={{ margin: "24px 0" }}>
+                      <strong>Your invite code:</strong>{" "}
+                      <code style={{ background: "#f3f4f6", padding: "4px 8px", borderRadius: 4, fontSize: 14 }}>{entry.invite_code}</code>
                     </p>
                   )}
+                  {entry.invite_code && (
+                    <p style={{ margin: "0 0 24px", color: "#6b7280", fontSize: 13 }}>
+                      Or enter this code at https://www.noska.me/code
+                    </p>
+                  )}
+                  <div style={{ margin: "24px 0", textAlign: "center" }}>
+                    <a href={inviteLink ?? "#"} style={{ display: "inline-block", padding: "12px 24px", backgroundColor: "#7c3aed", color: "white", textDecoration: "none", borderRadius: 8 }}>
+                      Accept Invitation
+                    </a>
+                  </div>
                   <hr style={{ border: "none", borderTop: "1px solid #e5e7eb", margin: "24px 0" }} />
                   <p style={{ color: "#6b7280", fontSize: 12 }}>
-                    This invite expires in 7 days. If you didn't request this, ignore this email.
+                    If you didn't sign up for Noska, you can ignore this email.
                   </p>
                 </div>
               </div>
@@ -209,7 +215,6 @@ export function Waitlist() {
   const canDelete = hasRole(user, "admin");
   const { data: entries, isLoading, refetch, isRefetching } = useWaitlist();
   const { data: count } = useWaitlistCount();
-  const sendInvite = useSendWaitlistInvite();
   const deleteEntry = useDeleteWaitlistEntry();
   const rejectEntry = useRejectWaitlistEntry();
   useRealtimeInvalidate(["admin", "waitlist"], "waitlist_entries");
@@ -258,7 +263,7 @@ export function Waitlist() {
     else setSelectedIds(new Set(filtered.map((e) => e.id)));
   };
 
-  const handleApprove = async (row: DbWaitlistEntry) => {
+  const handleApprove = async (row: DbWaitlistEntry, opts?: { openPreviewOnEmailFailure?: boolean }) => {
     const token = getAdminToken();
     if (!token) { toast.error("No session"); return false; }
     const { data, error } = await supabase!.functions.invoke("approve-waitlist", {
@@ -268,8 +273,8 @@ export function Waitlist() {
     if (error || !data?.success) {
       // Keep approval functional if the optional email Edge Function is not
       // deployed or temporarily unavailable: the secured admin RPC still
-      // records the invite state and code, and the admin can resend email
-      // once the email integration is healthy.
+      // records the invite state and code, and the admin can share the invite
+      // link manually from the Preview modal once the service recovers.
       const inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
       const fallback = await supabase!.rpc("admin_update", {
         p_session_token: token,
@@ -277,36 +282,32 @@ export function Waitlist() {
         p_id: row.id,
         p_data: {
           status: "invited",
-          invite_sent: true,
           invite_code: inviteCode,
           approved_at: new Date().toISOString(),
+          email_status: "pending",
         },
         p_min_role: "support",
       });
       if (fallback.error) { toast.error(fallback.error.message || error?.message || "Failed to approve"); return false; }
-      qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
-        old?.map((e) => e.id === row.id ? { ...e, status: "invited", approved_at: new Date().toISOString(), invite_sent: true } : e)
-      );
       qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
-      toast.success(`${row.name} approved; invite email pending`);
+      if (opts?.openPreviewOnEmailFailure !== false) setPreviewEntry({ ...row, status: "invited", invite_code: inviteCode });
+      toast.error(`${row.name} approved, but the invite service is unavailable — NO email was sent. Share the invite link from the preview.`);
       return true;
     }
     // Edge function succeeded — may have created a Clerk invitation
-    const hasClerkInvitation = !!data.clerk_invitation_id;
-    qc.setQueryData<DbWaitlistEntry[]>(["admin", "waitlist"], (old) =>
-      old?.map((e) => e.id === row.id ? {
-        ...e,
-        status: "invited",
-        approved_at: new Date().toISOString(),
-        invite_sent: true,
-        ...(data.clerk_invitation_id ? { clerk_entry_id: data.clerk_invitation_id } : {}),
-      } : e)
-    );
     qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
-    if (hasClerkInvitation) {
-      toast.success(`${row.name} approved — Clerk invitation sent + email delivered`);
+    if (data.email_sent === true) {
+      toast.success(data.clerk_invitation_id
+        ? `${row.name} approved — Clerk invitation sent + email delivered`
+        : `${row.name} approved & invited via email`);
     } else {
-      toast.success(`${row.name} approved & invited via email`);
+      // Approval itself worked; the email did not go out. Surface the real
+      // reason from the edge function and hand the admin the link to share.
+      if (opts?.openPreviewOnEmailFailure !== false) setPreviewEntry({ ...row, status: "invited", invite_code: data.invite_code });
+      toast.error(
+        `${row.name} approved, but the email failed: ${data.email_error ?? "unknown reason"} — share the invite link from the preview.`,
+        { duration: 8000 },
+      );
     }
     return true;
   };
@@ -318,7 +319,7 @@ export function Waitlist() {
     let success = 0;
     for (const id of ids) {
       const entry = entries?.find((e) => e.id === id);
-      if (entry && (await handleApprove(entry))) success++;
+      if (entry && (await handleApprove(entry, { openPreviewOnEmailFailure: false }))) success++;
     }
     const msg = success === ids.length
       ? `Approved ${ids.length} entries`
@@ -431,9 +432,12 @@ export function Waitlist() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => {
                 setSending(row.id);
                 try {
+                  // Re-emails the entry's stored invite code (server-side).
+                  // Never regenerate the code client-side here — that would
+                  // invalidate the code in any invite already in the inbox.
                   const res = await sendWaitlistInvite({ waitlist_id: row.id, name: row.name, email: row.email });
-                  if (res.error) { toast.error(res.error); return; }
-                  await sendInvite.mutateAsync(row.id);
+                  if (res.error) { toast.error(`Email failed: ${res.error}`); return; }
+                  qc.invalidateQueries({ queryKey: ["admin", "waitlist"] });
                   toast.success(`Invite ${expired ? "re-sent" : "sent"} to ${row.name}`);
                 } catch { toast.error("Failed to send invite"); }
                 setSending(null);
