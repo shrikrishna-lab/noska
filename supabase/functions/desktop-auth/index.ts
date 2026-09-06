@@ -36,8 +36,11 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  // baggage + sentry-trace: the Sentry SDK instruments window.fetch on
+  // noska.me and attaches these to cross-origin calls; without allowing
+  // them, the CORS preflight rejects EVERY browser request.
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, baggage, sentry-trace, traceparent",
 };
 
 const URL_BASE = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
