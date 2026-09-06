@@ -22,6 +22,36 @@ const TX_PATTERN = /^[a-f0-9]{32}$/;
 
 type Phase = "authenticating" | "attaching" | "complete" | "error";
 
+// Network-level failures (DNS blips, offline moments) surface as opaque
+// "Failed to fetch"; retry briefly, then translate to a human message.
+const NETWORK_ERROR = "Couldn't reach the sign-in service. Check your internet connection and try again.";
+
+async function callFnWithRetry(body: Record<string, unknown>, jwt: string, attempts = 3): Promise<Record<string, unknown>> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const res = await fetch(FN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "",
+        },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw Object.assign(new Error(json.message || json.error || "Could not complete the sign-in."), { status: res.status, json });
+      return json;
+    } catch (e) {
+      lastError = e;
+      if ((e as { status?: number }).status) throw e; // real server answer
+      await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+    }
+  }
+  console.warn("desktop-auth attach: network retries exhausted", lastError);
+  throw new Error(NETWORK_ERROR);
+}
+
 type OAuthProvider = "google" | "apple" | "github";
 
 export default function DesktopAuthPage() {
@@ -74,18 +104,9 @@ export default function DesktopAuthPage() {
       try {
         const jwt = await getToken();
         if (!jwt) throw new Error("Not signed in");
-        const res = await fetch(FN_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${jwt}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "",
-          },
-          body: JSON.stringify({ action: "attach", transaction_id: tx }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || json.status !== "attached") {
-          throw new Error(json.message || json.error || "This sign-in request is no longer valid.");
+        const json = await callFnWithRetry({ action: "attach", transaction_id: tx }, jwt);
+        if (json.status !== "attached") {
+          throw new Error((json.message as string) || "This sign-in request is no longer valid.");
         }
         setPhase("complete");
       } catch (e) {

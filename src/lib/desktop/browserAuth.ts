@@ -66,15 +66,28 @@ function anonKey(): string {
   return import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
 }
 
-async function callFn<T>(body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(functionsBase(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: anonKey() },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { message?: string; error?: string }).message || (json as { error?: string }).error || `Sign-in service error (${res.status})`);
-  return json as T;
+async function callFn<T>(body: Record<string, unknown>, attempts = 3): Promise<T> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const res = await fetch(functionsBase(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: anonKey() },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as { message?: string; error?: string }).message || (json as { error?: string }).error || `Sign-in service error (${res.status})`);
+      return json as T;
+    } catch (e) {
+      lastError = e;
+      // Server responses (4xx/5xx) are real answers — don't retry them.
+      if (!(e instanceof TypeError)) throw e;
+      // Network blip (DNS, TLS, offline): back off briefly and retry.
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+    }
+  }
+  console.warn("desktop-auth: network retries exhausted", lastError);
+  throw new Error("Couldn't reach the sign-in service. Check your internet connection and try again.");
 }
 
 /* ── tiny external store for React ─────────────────────────────────────── */
