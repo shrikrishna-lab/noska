@@ -31,7 +31,10 @@ export default function DesktopAuthPage() {
   const [params] = useSearchParams();
 
   const tx = params.get("tx") ?? "";
-  const csrf = params.get("s") ?? "";
+  // Desktop builds built before v1.0.9 send the CSRF token as `state`; newer
+  // builds use `s` (Clerk appends its own `state` param on OAuth returns, so
+  // `s` avoids the collision). Accept both, prefer `s`.
+  const csrf = params.get("s") ?? params.get("state") ?? "";
   const initialProvider = params.get("provider");
   const oauthReturn = !!params.get("code");
 

@@ -239,7 +239,9 @@ async function pollLoop(pending: PendingTx, id: number): Promise<void> {
 /* ── public API ────────────────────────────────────────────────────────── */
 
 export function authPageUrl(provider: BrowserAuthProvider, transactionId: string, stateToken: string): string {
-  const params = new URLSearchParams({ tx: transactionId, provider, state: stateToken });
+  // `s`, not `state`: the web page's OAuth return appends Clerk's own
+  // `state` param, which would collide with ours.
+  const params = new URLSearchParams({ tx: transactionId, provider, s: stateToken });
   return `${WEB_ORIGIN}/desktop-auth?${params.toString()}`;
 }
 
