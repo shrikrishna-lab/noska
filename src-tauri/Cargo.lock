@@ -2739,7 +2739,7 @@ dependencies = [
 
 [[package]]
 name = "noska"
-version = "1.0.10"
+version = "1.0.11"
 dependencies = [
  "arboard",
  "cpal",
