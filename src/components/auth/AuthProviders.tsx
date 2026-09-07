@@ -4,12 +4,8 @@ import ProviderButton from "./ProviderButton";
 export default function AuthProviders({ onProviderClick, loadingProvider, disabled }) {
   return (
     <div className="flex flex-col gap-3 w-full">
-      <ProviderButton
-        provider="apple"
-        isLoading={loadingProvider === "apple"}
-        onClick={() => onProviderClick("apple")}
-        disabled={disabled || (loadingProvider && loadingProvider !== "apple")}
-      />
+      {/* apple intentionally omitted — oauth_apple is not enabled on the
+          Clerk instance, so the button was a guaranteed dead end. */}
       <ProviderButton
         provider="github"
         isLoading={loadingProvider === "github"}

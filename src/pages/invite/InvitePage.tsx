@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabaseAnon } from "../../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSignIn, useClerk } from "@clerk/react";
+import { useSignIn, useSignUp, useClerk } from "@clerk/react";
 import AuthBackground from "../../components/auth/AuthBackground";
 import AuthProviders from "../../components/auth/AuthProviders";
 import AuthError from "../../components/auth/AuthError";
@@ -12,6 +12,7 @@ export function InvitePage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const { signIn } = useSignIn();
+  const { signUp } = useSignUp();
   const clerk = useClerk();
   const [state, setState] = useState<"loading" | "valid" | "expired" | "used" | "invalid">("loading");
   const [invitee, setInvitee] = useState<{ name: string; email: string } | null>(null);
@@ -38,7 +39,7 @@ export function InvitePage() {
     setError(null);
     setLoadingProvider(provider);
     setIsConnecting(true);
-    if (!signIn) {
+    if (!signIn && !signUp) {
       setError("Authentication not ready. Please try again.");
       setLoadingProvider(null);
       setIsConnecting(false);
@@ -46,16 +47,31 @@ export function InvitePage() {
     }
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
-      // `signIn.sso()` is for ENTERPRISE SSO connections and fails outright on
-      // instances without one — invited users could never accept their invite.
-      // Primary path (stable across Clerk versions): start the OAuth sign-in,
-      // then go straight to the provider, keeping the custom Noska invite UI.
       // Stay on the current origin: www.noska.me serves the full app, and
       // app.noska.me is not a live production host (dead DNS).
       const appOrigin = window.location.origin;
       const redirectUrl = `${appOrigin}/sso-callback`;
+
+      // Invitees are brand-new users, so drive Clerk's SIGN-UP flow: an OAuth
+      // SIGN-IN attempt alone never creates the Clerk account, which left
+      // invited users stranded after the provider consent screen. Existing
+      // accounts transfer to sign-in (or hit the sign-in fallback below).
       try {
-        await signIn.create({ strategy, redirectUrl } as never);
+        const signUpWithRedirect = (signUp as unknown as {
+          authenticateWithRedirect?: (params: Record<string, string>) => Promise<void>;
+        });
+        if (typeof signUpWithRedirect.authenticateWithRedirect === "function") {
+          await signUpWithRedirect.authenticateWithRedirect({ strategy, redirectUrl, redirectUrlComplete: redirectUrl });
+          return;
+        }
+      } catch (signUpErr) {
+        console.warn("OAuth sign-up did not start; falling back to sign-in", signUpErr);
+      }
+
+      // Existing-account fallback: start the OAuth sign-in, then go straight
+      // to the provider, keeping the custom Noska invite UI.
+      try {
+        await signIn!.create({ strategy, redirectUrl } as never);
         const external = (signIn as unknown as {
           firstFactorVerification?: { externalVerificationRedirectURL?: URL | string | null };
         }).firstFactorVerification?.externalVerificationRedirectURL;
