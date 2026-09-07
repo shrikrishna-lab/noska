@@ -160,7 +160,7 @@ async function supabaseSessionForClerkUser(clerkSub: string): Promise<{
   const verifyRes = await fetch(`${URL_BASE}/auth/v1/verify`, {
     method: "POST",
     headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "magiclink", token_hash: link.properties?.hashed_token }),
+    body: JSON.stringify({ type: "magiclink", token_hash: link.properties?.hashed_token ?? link.hashed_token }),
   });
   if (!verifyRes.ok) throw httpError(500, "verify_failed", "Could not complete session exchange");
   const session = await verifyRes.json();
@@ -414,7 +414,7 @@ async function handleRefresh(sid: string, refreshSecret: string | null, pairingC
     const verifyRes = await fetch(`${URL_BASE}/auth/v1/verify`, {
       method: "POST",
       headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "magiclink", token_hash: link.properties?.hashed_token }),
+      body: JSON.stringify({ type: "magiclink", token_hash: link.properties?.hashed_token ?? link.hashed_token }),
     });
     if (!verifyRes.ok) throw httpError(500, "verify_failed", "Could not refresh session");
     const session = await verifyRes.json();
