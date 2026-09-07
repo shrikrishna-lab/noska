@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { supabaseAnon } from "../../lib/supabase";
+import { getDesktopIdentity } from "../../lib/desktop/pairing";
+import { isDesktop } from "../../lib/desktop/platform";
 import { TEST_MODE } from "../../lib/envGuard";
 import { motion } from "framer-motion";
 import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert, RefreshCw } from "lucide-react";
@@ -8,7 +10,11 @@ import { Sparkles, LogOut, Clock, Mail, Calendar, ShieldAlert, RefreshCw } from 
 type GateStatus = "checking" | "approved" | "waiting" | "not_on_waitlist" | "expired" | "banned" | "suspended" | "error";
 
 export function WaitlistGate({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
-  const { user: clerkUser } = useUser();
+  // Desktop sessions come from the QuickLink flow (Supabase identity), not
+  // Clerk's browser session — use the desktop identity when present.
+  const { user: webClerkUser } = useUser();
+  const desktopIdentity = isDesktop() ? getDesktopIdentity() : null;
+  const clerkUser = desktopIdentity ?? webClerkUser;
   const clerk = useClerk();
   const [status, setStatus] = useState<GateStatus>("checking");
   const [entryData, setEntryData] = useState<{
