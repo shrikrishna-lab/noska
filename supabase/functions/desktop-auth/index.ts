@@ -126,17 +126,55 @@ async function clerkSessionActive(sid: string, sub: string): Promise<boolean> {
   return s?.status === "active" && s?.user_id === sub;
 }
 
-/** Mints a fresh Clerk session token (60s TTL) for the session. */
-async function clerkSessionToken(sid: string): Promise<{ access_token: string; expires_in: number }> {
-  if (!CLERK_SECRET_KEY) throw httpError(500, "server_config", "CLERK_SECRET_KEY not configured");
-  const res = await fetch(`${CLERK_API}/sessions/${encodeURIComponent(sid)}/tokens`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${CLERK_SECRET_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+/**
+ * Issues a REAL Supabase auth session for the mapped Supabase user.
+ * Clerk is only the login method — Supabase issues the session, so
+ * refresh, RLS (auth.uid() = Supabase UUID) and all client flows are
+ * first-class. Clerk's own tokens are never sent to Supabase.
+ */
+async function supabaseSessionForClerkUser(clerkSub: string): Promise<{
+  access_token: string; refresh_token: string; expires_at: number; supabase_uid: string; email: string | null;
+}> {
+  // 1. Resolve the Supabase user via the Clerk user's external_id mapping.
+  const clerk = await clerkUserById(clerkSub);
+  if (!clerk) throw httpError(401, "unauthorized", "Clerk user not found");
+  const extRes = await fetch(`${CLERK_API}/users/${encodeURIComponent(clerkSub)}`, {
+    headers: { Authorization: `Bearer ${CLERK_SECRET_KEY}` },
   });
-  if (!res.ok) throw httpError(401, "session_invalid", "Sign in again on the web");
-  const j = await res.json();
-  return { access_token: j.jwt as string, expires_in: 50 };
+  if (!extRes.ok) throw httpError(401, "unauthorized", "Clerk user not found");
+  const extUser = await extRes.json();
+  const supabaseUid = extUser?.external_id as string | undefined;
+  if (!supabaseUid || !/^[0-9a-f-]{36}$/i.test(supabaseUid)) {
+    throw httpError(403, "no_mapping", "This account has no linked Supabase identity. Contact support.");
+  }
+
+  // 2. Start a magic-link flow for that user and verify it — yields a real session.
+  const linkRes = await rest("/auth/v1/admin/generate_link", {
+    method: "POST",
+    body: JSON.stringify({ type: "magiclink", email: clerk.email }),
+  });
+  if (!linkRes.ok) throw httpError(500, "link_failed", "Could not start session exchange");
+  const link = await linkRes.json();
+  if (link?.user?.id !== supabaseUid) throw httpError(500, "mapping_mismatch", "Identity mapping mismatch");
+
+  const verifyRes = await fetch(`${URL_BASE}/auth/v1/verify`, {
+    method: "POST",
+    headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "magiclink", token_hash: link.properties?.hashed_token }),
+  });
+  if (!verifyRes.ok) throw httpError(500, "verify_failed", "Could not complete session exchange");
+  const session = await verifyRes.json();
+  if (!session?.access_token || !session?.refresh_token) {
+    throw httpError(500, "session_failed", "Could not complete session exchange");
+  }
+  const expiresIn = typeof session.expires_in === "number" ? session.expires_in : 3600;
+  return {
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: Date.now() + expiresIn * 1000,
+    supabase_uid: session.user?.id ?? supabaseUid,
+    email: session.user?.email ?? clerk.email,
+  };
 }
 
 /* ── browser handoff transactions ──────────────────────────────────────── */
@@ -356,45 +394,37 @@ async function handleExchange(code: string) {
 }
 
 async function handleRefresh(sid: string, refreshSecret: string | null, pairingCode: string) {
-  // 1) New browser-handoff sessions: sid + the one-time refresh_secret.
-  if (sid) {
-    const txnRes = await rest(
-      `/rest/v1/desktop_auth_transactions?sid=eq.${encodeURIComponent(sid)}&refresh_secret=not.is.null&status=eq.consumed&order=created_at.desc&limit=1&select=refresh_secret`
-    );
-    if (txnRes.ok) {
-      const rows = (await txnRes.json()) as Array<{ refresh_secret: string }>;
-      if (rows[0]) {
-        if (!refreshSecret || refreshSecret !== rows[0].refresh_secret) {
-          return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
-        }
-        return await mintAndReturn(sid);
-      }
-    }
-    return await mintAndReturn(sid);
+  if (!sid) return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+  if (!/^[0-9a-f-]{36}$/i.test(sid)) {
+    // Legacy Clerk-sid sessions are gone — re-auth required.
+    return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
   }
-
-  // 2) Transitional ≤1.0.6 clients refresh with their pairing code —
-  //    resolve it to a session id (same contract as the deployed v7).
-  if (pairingCode) {
-    if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(pairingCode)) {
-      return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
-    }
-    const row = await pairFind(pairingCode);
-    if (row?.sid) return await mintAndReturn(row.sid);
-  }
-
-  return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
-}
-
-async function mintAndReturn(sid: string) {
+  // sid is now the Supabase user id (post-QuickLink sessions).
+  const uid = sid;
+  const userRes = await rest("/auth/v1/admin/users/" + uid, { method: "GET" });
+  if (!userRes.ok) return json({ error: "invalid_refresh", message: "Sign in again" }, 401);
+  const u = await userRes.json();
   try {
-    const { access_token, expires_in } = await clerkSessionToken(sid);
+    const linkRes = await rest("/auth/v1/admin/generate_link", {
+      method: "POST",
+      body: JSON.stringify({ type: "magiclink", email: u.email }),
+    });
+    if (!linkRes.ok) throw httpError(500, "link_failed", "Could not refresh session");
+    const link = await linkRes.json();
+    const verifyRes = await fetch(`${URL_BASE}/auth/v1/verify`, {
+      method: "POST",
+      headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "magiclink", token_hash: link.properties?.hashed_token }),
+    });
+    if (!verifyRes.ok) throw httpError(500, "verify_failed", "Could not refresh session");
+    const session = await verifyRes.json();
     return json({
       status: "complete",
       session: {
-        access_token,
-        sid,
-        expires_at: Date.now() + expires_in * 1000,
+        access_token: session.access_token,
+        sid: uid,
+        expires_at: Date.now() + (typeof session.expires_in === "number" ? session.expires_in : 3600) * 1000,
+        refresh_token: session.refresh_token,
       },
     });
   } catch (e) {
@@ -465,18 +495,18 @@ async function handleConsume(transactionId: string, verifier: string) {
   }
 
   if (!row.sid) return json({ status: "pending" });
+  if (!row.clerk_sub) return json({ status: "pending" });
   try {
-    const { access_token, expires_in } = await clerkSessionToken(row.sid);
-    const refreshSecret = randomHex(32);
-    await txnConsume(transactionId, refreshSecret);
+    const sess = await supabaseSessionForClerkUser(row.clerk_sub);
+    await txnConsume(transactionId);
     return json({
       status: "complete",
       session: {
-        access_token,
-        sid: row.sid,
-        expires_at: Date.now() + expires_in * 1000,
-        refresh_secret: refreshSecret,
-        identity: { id: row.clerk_sub, email: row.email },
+        access_token: sess.access_token,
+        sid: sess.supabase_uid,
+        expires_at: sess.expires_at,
+        refresh_token: sess.refresh_token,
+        identity: { id: sess.supabase_uid, email: sess.email },
       },
     });
   } catch (e) {
