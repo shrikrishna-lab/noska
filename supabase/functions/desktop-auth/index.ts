@@ -155,7 +155,8 @@ async function supabaseSessionForClerkUser(clerkSub: string): Promise<{
   });
   if (!linkRes.ok) throw httpError(500, "link_failed", "Could not start session exchange");
   const link = await linkRes.json();
-  if (link?.user?.id !== supabaseUid) throw httpError(500, "mapping_mismatch", "Identity mapping mismatch");
+  const linkUserId = link?.user?.id ?? link?.id;
+  if (linkUserId !== supabaseUid) throw httpError(500, "mapping_mismatch", `Identity mapping mismatch (${linkUserId} vs ${supabaseUid})`);
 
   const verifyRes = await fetch(`${URL_BASE}/auth/v1/verify`, {
     method: "POST",
@@ -451,10 +452,8 @@ async function handleStart(codeChallenge: string) {
 async function handleAttach(transactionId: string, clerkJwt: string, sidFromBody: string | null) {
   if (!/^[a-f0-9]{32}$/.test(transactionId)) return json({ status: "unknown_transaction" }, 400);
 
-  // The Authorization token is the "supabase" JWT template — GoTrue-verifiable
-  // (ES256 signing key) but it carries no sid claim, so the session id comes
-  // from the body and is verified against the Clerk Backend API.
-  await gotrueVerify(clerkJwt);
+  // Identity is verified against the Clerk Backend API (active session +
+  // matching user), NOT via GoTrue — Clerk tokens are never sent to Supabase.
   const payload = decodeJwtPayload(clerkJwt);
   const sub = typeof payload?.sub === "string" ? payload.sub : null;
   if (!sub) return json({ error: "unauthorized", message: "Malformed token" }, 401);
@@ -466,9 +465,11 @@ async function handleAttach(transactionId: string, clerkJwt: string, sidFromBody
       return json({ error: "unauthorized", message: "Clerk session is not active for this user" }, 401);
     }
   } else {
-    // Legacy clients send the default session token, which embeds the sid.
     sid = typeof payload?.sid === "string" ? payload.sid : null;
     if (!sid) return json({ error: "unauthorized", message: "No active Clerk session" }, 401);
+    if (!(await clerkSessionActive(sid, sub))) {
+      return json({ error: "unauthorized", message: "Clerk session is not active for this user" }, 401);
+    }
   }
 
   const clerk = await clerkUserById(sub);
