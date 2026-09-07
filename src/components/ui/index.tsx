@@ -363,4 +363,6 @@ export { default as VoiceDictator } from "./voice-dictator";
 export { VoiceInput, VoiceFloatingIndicator, VoicePill, RealtimeEqualizer, StreamingWordText } from "./voice-input";
 export { default as VoiceCustomizationSettings } from "../settings/VoiceCustomizationSettings";
 export * from "../../lib/voice/voice-settings";
+export { Banner04 } from "./banner-04";
+
 
