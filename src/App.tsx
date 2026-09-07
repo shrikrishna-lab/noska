@@ -271,7 +271,9 @@ function AppContent() {
 
   // Launch settings — used to decide whether the waitlist gate should apply.
   const { settings: launchSettings, loading: launchSettingsLoading } = useLaunchSettings();
-  const waitlistActive = !launchSettingsLoading
+  // Desktop shows only the core surfaces (login/onboarding/workspace) —
+  // waitlist and launch-mode gates are web-only marketing funnels.
+  const waitlistActive = !isDesktop && !launchSettingsLoading
     && (launchSettings.launch_mode === "waitlist" || launchSettings.login_mode === "waitlist");
 
   useEffect(() => {

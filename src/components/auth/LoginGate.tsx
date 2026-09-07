@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLaunchSettings } from "../../hooks/useLaunchSettings";
+import { isDesktop } from "../../lib/desktop/platform";
 import RingLoader from "./RingLoader";
 
 export default function LoginGate({ children }: { children: React.ReactNode }) {
@@ -8,7 +9,7 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || isDesktop()) return;
     // "waitlist" login mode keeps the sign-in screen reachable — the
     // WaitlistGate (mounted in App) handles approval/blocking after auth.
     if (settings.login_mode === "launch") {
