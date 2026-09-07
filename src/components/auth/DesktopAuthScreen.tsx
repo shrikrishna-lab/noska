@@ -1,15 +1,14 @@
-// Desktop sign-in screen — the browser-first flow.
+// Desktop sign-in screen — QuickLink ("Continue with Web").
 //
-// Idle shows the provider chooser; starting a provider opens the system
-// browser and flips to the "Continue in browser" waiting state. The legacy
-// pairing-code screen stays reachable as a fallback for machines where the
-// noska:// handoff doesn't work (unregistered scheme, locked-down browser).
+// One button: opens the system browser at the existing Noska Web login
+// (Google / Apple / GitHub / Microsoft). After the user signs in there,
+// the browser hands back via noska://auth/callback and the app exchanges
+// the one-time transaction for a real Supabase session. The legacy
+// pairing-code flow was removed.
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import ProviderButton from "./ProviderButton";
-import PairingScreen from "./PairingScreen";
 import {
   browserAuthVersion,
   cancelBrowserAuth,
@@ -19,8 +18,6 @@ import {
   reopenBrowser,
   startBrowserAuth,
   subscribeBrowserAuth,
-  type BrowserAuthProvider,
-  type BrowserAuthStatus,
 } from "../../lib/desktop/browserAuth";
 
 const TERMS_URL = "https://www.noska.me/terms";
@@ -38,34 +35,17 @@ function Spinner({ className = "" }: { className?: string }) {
 export default function DesktopAuthScreen() {
   const navigate = useNavigate();
   useSyncExternalStore(subscribeBrowserAuth, browserAuthVersion);
-  const [showPairingFallback, setShowPairingFallback] = useState(false);
-  const { status, provider, authUrl, error, pollError } = getBrowserAuthState();
+  const { status, authUrl, error, pollError } = getBrowserAuthState();
 
-  // When the handoff completes, the paired identity appears and the app
-  // bootstrap routes into the workspace/onboarding. Brief success beat so
-  // the transition reads as one continuous flow — never back to login.
+  // On success the paired identity appears and the app bootstrap routes
+  // into the workspace/onboarding. Brief success beat so the transition
+  // reads as one continuous flow — never back to the login screen.
   useEffect(() => {
     if (status !== "success") return;
     const t = setTimeout(() => navigate("/dashboard", { replace: true }), 900);
     return () => clearTimeout(t);
   }, [status, navigate]);
 
-  if (showPairingFallback) {
-    return (
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setShowPairingFallback(false)}
-          className="fixed top-5 left-5 z-50 rounded-lg border border-slate-300 bg-white text-slate-600 text-xs font-semibold px-4 py-2.5 hover:border-slate-400 hover:text-slate-800 transition shadow-sm"
-        >
-          ← Back
-        </button>
-        <PairingScreen />
-      </div>
-    );
-  }
-
-  /* ── success ─────────────────────────────────────────────────────────── */
   if (status === "success") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-6 select-none">
@@ -81,7 +61,6 @@ export default function DesktopAuthScreen() {
     );
   }
 
-  /* ── waiting for the browser ─────────────────────────────────────────── */
   if (status === "starting" || status === "waiting" || status === "exchanging") {
     const message =
       status === "starting"
@@ -97,7 +76,6 @@ export default function DesktopAuthScreen() {
           <p className="text-sm text-slate-500 mt-3 max-w-xs mx-auto">
             Your browser has been opened to securely sign in to Noska.
           </p>
-
           <div className="flex items-center justify-center mt-10 mb-2">
             <motion.span
               className="block h-9 w-9 rounded-full border-2 border-slate-200 border-t-slate-700"
@@ -109,14 +87,13 @@ export default function DesktopAuthScreen() {
           <p className="text-sm text-slate-600 h-5" aria-live="polite">
             {pollError ?? message}
           </p>
-
           <div className="flex items-center justify-center gap-3 mt-8">
             {status === "waiting" && (
               <button
                 type="button"
                 onClick={() => void reopenBrowser()}
-                className="rounded-lg bg-slate-800 text-white text-xs font-semibold px-5 py-3 hover:bg-slate-700 transition disabled:opacity-40"
                 disabled={!authUrl}
+                className="rounded-lg bg-slate-800 text-white text-xs font-semibold px-5 py-3 hover:bg-slate-700 transition disabled:opacity-40"
               >
                 Reopen browser
               </button>
@@ -129,7 +106,6 @@ export default function DesktopAuthScreen() {
               Cancel
             </button>
           </div>
-
           <p className="text-xs text-slate-400 mt-10">
             Finish signing in in your browser — Noska will open automatically.
           </p>
@@ -138,7 +114,6 @@ export default function DesktopAuthScreen() {
     );
   }
 
-  /* ── resumable transaction found at startup ──────────────────────────── */
   if (status === "resumable") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-6 select-none">
@@ -172,7 +147,6 @@ export default function DesktopAuthScreen() {
     );
   }
 
-  /* ── recoverable failures ────────────────────────────────────────────── */
   if (status === "expired" || status === "failed" || status === "error") {
     const title =
       status === "expired"
@@ -200,23 +174,13 @@ export default function DesktopAuthScreen() {
             >
               {status === "expired" ? "Sign In Again" : "Try Again"}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowPairingFallback(true)}
-              className="rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold px-4 py-3 hover:border-slate-400 hover:text-slate-800 transition"
-            >
-              Use a pairing code
-            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  /* ── idle: provider chooser ──────────────────────────────────────────── */
-  const st = status as BrowserAuthStatus;
-  const onProvider = (p: BrowserAuthProvider) => void startBrowserAuth(p);
-
+  // Idle — QuickLink single entry point.
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-6 select-none overflow-hidden">
       <motion.div
@@ -236,42 +200,16 @@ export default function DesktopAuthScreen() {
 
         <h1 className="text-2xl font-bold text-slate-900 text-center">Welcome to Noska</h1>
         <p className="text-sm text-slate-500 mt-2 text-center">
-          Your workspace, intelligently connected.
+          Sign in to continue to your workspace.
         </p>
-
-        <div className="w-full flex flex-col gap-3 mt-9">
-          <ProviderButton
-            provider="google"
-            isLoading={provider === "google" && st === "starting"}
-            onClick={() => onProvider("google")}
-            disabled={st === "starting"}
-          />
-          <ProviderButton
-            provider="apple"
-            isLoading={provider === "apple" && st === "starting"}
-            onClick={() => onProvider("apple")}
-            disabled={st === "starting"}
-          />
-          <ProviderButton
-            provider="github"
-            isLoading={provider === "github" && st === "starting"}
-            onClick={() => onProvider("github")}
-            disabled={st === "starting"}
-          />
-        </div>
-
-        <div className="relative flex items-center justify-center my-6 w-full">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
-          <span className="relative px-3 bg-[#f8fafc] text-[10px] font-mono tracking-widest text-slate-400 uppercase">or</span>
-        </div>
 
         <button
           type="button"
-          onClick={() => onProvider("email")}
-          disabled={st === "starting"}
-          className="w-full h-11 rounded-[8px] border border-slate-200/80 bg-white text-slate-800 font-semibold text-xs hover:border-slate-300 hover:bg-slate-50 transition-all duration-150 disabled:opacity-40 shadow-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/40"
+          onClick={() => void startBrowserAuth("web")}
+          disabled={(status as string) === "starting"}
+          className="w-full h-11 mt-9 rounded-[8px] bg-slate-800 text-white font-semibold text-xs hover:bg-slate-700 transition-all duration-150 disabled:opacity-40 shadow-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/40"
         >
-          Continue with email
+          {(status as string) === "starting" ? "Opening browser…" : "Continue with Web"}
         </button>
 
         <AnimatePresence>
@@ -305,14 +243,6 @@ export default function DesktopAuthScreen() {
             Privacy
           </a>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setShowPairingFallback(true)}
-          className="mt-8 text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition"
-        >
-          Use a pairing code instead
-        </button>
       </motion.div>
     </div>
   );

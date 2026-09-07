@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronDown, Menu, X, ArrowRight, Sparkles, FileText, Database, CheckSquare, Users, Building, Laptop, HelpCircle, BookOpen, Clock, MonitorDown, KeyRound, Terminal, Puzzle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@clerk/react';
 import { useCTAButtons, useLaunchSettings } from '../../../hooks/useLaunchSettings';
 import './Navbar.css';
 
@@ -23,6 +24,7 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const location = useLocation();
+  const { isSignedIn } = useAuth();
   const { getButton } = useCTAButtons();
   const { settings } = useLaunchSettings();
 
@@ -290,25 +292,38 @@ export default function Navbar() {
 
             {/* Right Side: CTA Actions */}
             <div className="liquid-glass-nav-right">
-              {navDemoBtn.visible && navDemoBtn.enabled && (
-                <Link to={navDemoBtn.destination} className="liquid-nav-link-secondary hide-mobile">
-                  {navDemoBtn.button_text}
-                </Link>
-              )}
-
-              {navLoginBtn.visible && navLoginBtn.enabled && settings.show_login && (
-                <Link to={navLoginBtn.destination} className="liquid-nav-link-secondary hide-mobile">
-                  {navLoginBtn.button_text}
-                </Link>
-              )}
-
-              {navCtaBtn.visible && navCtaBtn.enabled && settings.show_signup && (
+              {isSignedIn ? (
+                /* Signed-in visitor browsing the marketing site: one clear
+                   path back into the product, no login/signup funnel. */
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                  <Link to={navCtaBtn.destination} className="liquid-glass-nav-cta-btn hide-mobile">
-                    <span>{navCtaBtn.button_text}</span>
+                  <Link to="/dashboard" className="liquid-glass-nav-cta-btn hide-mobile">
+                    <span>Open app</span>
                     <ArrowRight size={13} className="shrink-0" />
                   </Link>
                 </motion.div>
+              ) : (
+                <>
+                  {navDemoBtn.visible && navDemoBtn.enabled && (
+                    <Link to={navDemoBtn.destination} className="liquid-nav-link-secondary hide-mobile">
+                      {navDemoBtn.button_text}
+                    </Link>
+                  )}
+
+                  {navLoginBtn.visible && navLoginBtn.enabled && settings.show_login && (
+                    <Link to={navLoginBtn.destination} className="liquid-nav-link-secondary hide-mobile">
+                      {navLoginBtn.button_text}
+                    </Link>
+                  )}
+
+                  {navCtaBtn.visible && navCtaBtn.enabled && settings.show_signup && (
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                      <Link to={navCtaBtn.destination} className="liquid-glass-nav-cta-btn hide-mobile">
+                        <span>{navCtaBtn.button_text}</span>
+                        <ArrowRight size={13} className="shrink-0" />
+                      </Link>
+                    </motion.div>
+                  )}
+                </>
               )}
 
               {/* Mobile Hamburger Toggle */}
@@ -360,15 +375,23 @@ export default function Navbar() {
                 </div>
 
                 <div className="liquid-mobile-actions">
-                  {mobileLoginBtn.visible && mobileLoginBtn.enabled && settings.show_login && (
-                    <Link to={mobileLoginBtn.destination} className="liquid-mobile-btn-secondary">
-                      {mobileLoginBtn.button_text}
+                  {isSignedIn ? (
+                    <Link to="/dashboard" className="liquid-mobile-btn-primary">
+                      Open app
                     </Link>
-                  )}
-                  {mobileCtaBtn.visible && mobileCtaBtn.enabled && settings.show_signup && (
-                    <Link to={mobileCtaBtn.destination} className="liquid-mobile-btn-primary">
-                      {mobileCtaBtn.button_text}
-                    </Link>
+                  ) : (
+                    <>
+                      {mobileLoginBtn.visible && mobileLoginBtn.enabled && settings.show_login && (
+                        <Link to={mobileLoginBtn.destination} className="liquid-mobile-btn-secondary">
+                          {mobileLoginBtn.button_text}
+                        </Link>
+                      )}
+                      {mobileCtaBtn.visible && mobileCtaBtn.enabled && settings.show_signup && (
+                        <Link to={mobileCtaBtn.destination} className="liquid-mobile-btn-primary">
+                          {mobileCtaBtn.button_text}
+                        </Link>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

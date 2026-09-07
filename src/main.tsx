@@ -12,7 +12,6 @@ import DesktopBridge from "./lib/desktop/DesktopBridge";
 import { isDesktop } from "./lib/desktop/platform";
 import MarketingShell from "./components/MarketingShell";
 import LoginRoute from "./components/LoginRoute";
-import { PairClaimWatcher } from "./pages/DesktopConnect";
 import DesktopShell from "./components/desktop/DesktopShell";
 import UpdatePrompt from "./components/desktop/UpdatePrompt";
 import App from "./App.jsx";
@@ -43,7 +42,6 @@ const ApiKeysLanding = lazy(() => import("./pages/marketing/ApiKeysLanding"));
 const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScreen").then(m => ({ default: m.AuthCallbackScreen })));
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
 const EnterCodePage = lazy(() => import("./pages/invite/EnterCodePage").then(m => ({ default: m.EnterCodePage })));
-const DesktopConnectPage = lazy(() => import("./pages/DesktopConnect"));
 const DesktopAuthPage = lazy(() => import("./pages/DesktopAuthPage"));
 
 const RouteFallback = () => (
@@ -90,7 +88,6 @@ createRoot(document.getElementById("root")!).render(
         {!isDesktop() && <SpeedInsights />}
         {!isDesktop() && <Analytics />}
         <DesktopBridge />
-        <PairClaimWatcher />
         <UpdatePrompt />
         <Suspense fallback={<RouteFallback />}>
         <Routes>
@@ -121,7 +118,6 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/code" element={<EnterCodePage />} />
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           <Route path="/desktop-auth" element={<DesktopAuthPage />} />
-          <Route path="/connect-desktop" element={<Suspense fallback={<RouteFallback />}><DesktopConnectPage /></Suspense>} />
           <Route path="/control" element={<ControlCenter />} />
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/dashboard" element={<App />} />

@@ -65,20 +65,12 @@ describe("MarketingShell", () => {
     expect(screen.getByText("landing-body")).toBeTruthy();
   });
 
-  it("web + signed in on '/': redirects straight to workspace", () => {
+  it("web + signed in on '/': landing page stays accessible (no workspace bounce)", () => {
     authState.isSignedIn = true;
-    const { container } = render(
-      <MemoryRouter initialEntries={["/"]}>
-        <Routes>
-          <Route path="/" element={<MarketingShell><h2>landing-body</h2></MarketingShell>} />
-          <Route path="/dashboard" element={<div data-testid="dash"><Probe /></div>} />
-        </Routes>
-      </MemoryRouter>
-    );
-    // Navigate replaced the landing route with the workspace route.
-    expect(container.querySelector("[data-testid='dash']")).toBeTruthy();
-    expect(screen.queryByText("landing-body")).toBeNull();
-    expect((screen.getByTestId("probe-path") as HTMLElement).textContent).toBe("/dashboard");
+    renderAt("/");
+    expect(screen.getByTestId("marketing-layout")).toBeTruthy();
+    expect(screen.getByText("landing-body")).toBeTruthy();
+    expect(screen.queryByTestId("probe-path")).toBeNull();
   });
 
   it("web + signed in on inner marketing pages: content stays accessible", () => {

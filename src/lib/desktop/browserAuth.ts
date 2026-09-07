@@ -22,7 +22,7 @@ import { openExternal } from "./links";
 import { codeChallenge, createCodeVerifier, createStateToken } from "./pkce";
 import { saveSession, toIdentity, type StoredSession } from "./pairing";
 
-export type BrowserAuthProvider = "google" | "apple" | "github" | "email";
+export type BrowserAuthProvider = "google" | "apple" | "github" | "email" | "web";
 
 export type BrowserAuthStatus =
   | "idle" // provider chooser
