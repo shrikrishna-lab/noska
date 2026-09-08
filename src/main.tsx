@@ -1,4 +1,4 @@
-﻿import { ClerkProvider } from "@clerk/react";
+import { ClerkProvider } from "@clerk/react";
 import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -88,7 +88,6 @@ createRoot(document.getElementById("root")!).render(
         {!isDesktop() && <SpeedInsights />}
         {!isDesktop() && <Analytics />}
         <DesktopBridge />
-        <UpdatePrompt />
         <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<MarketingShell><MarketingHome /></MarketingShell>} />
@@ -128,6 +127,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/:workspaceSlug/:pageId" element={<App />} />
         </Routes>
         </Suspense>
+        <UpdatePrompt />
         </Sentry.ErrorBoundary>
       </ClerkProvider>
       </PostHogProvider>

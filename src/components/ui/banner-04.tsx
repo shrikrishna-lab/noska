@@ -2,10 +2,9 @@
 
 import * as React from 'react'
 import { useState, useEffect } from 'react'
-import { ArrowUpCircle, X, CheckCircle2, RotateCw, Sparkles } from 'lucide-react'
+import { ArrowUpCircle, CheckCircle2, RotateCw, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
   getRealVersionInfo,
@@ -33,14 +32,14 @@ export function Banner04({
   onLater,
   initialOpen = true,
   className,
-  showCloseButton = true,
+  showCloseButton = false,
 }: Banner04Props) {
   const [open, setOpen] = useState(initialOpen)
   const [isUpdating, setIsUpdating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [isCompleted, setIsCompleted] = useState(false)
 
-  // Real version and description state (no fake or pre-existing dummy values)
+  // Real version and description state
   const [version, setVersion] = useState<string>(propVersion || LATEST_CHANGELOG_VERSION)
   const [title, setTitle] = useState<string>(propTitle || 'Update available')
   const [description, setDescription] = useState<string>(
@@ -48,7 +47,14 @@ export function Banner04({
   )
   const [installFn, setInstallFn] = useState<(() => Promise<void>) | null>(null)
 
-  // Detect real application version & description dynamically
+  // Sync props when they change
+  useEffect(() => {
+    if (propVersion) setVersion(propVersion)
+    if (propTitle) setTitle(propTitle)
+    if (propDescription) setDescription(propDescription)
+  }, [propVersion, propTitle, propDescription])
+
+  // Detect real application version & description dynamically if not passed
   useEffect(() => {
     let alive = true
     if (!propVersion || !propDescription) {
@@ -81,7 +87,7 @@ export function Banner04({
       return
     }
 
-    // Apple-style interactive download & restart simulation
+    // Interactive progress & simulation
     setIsUpdating(true)
     setProgress(15)
     const interval = setInterval(() => {
@@ -107,129 +113,151 @@ export function Banner04({
   }
 
   return (
-    <div className="relative flex w-full justify-center">
+    <div className="relative flex w-full justify-end">
       <AnimatePresence initial={false}>
         {!open ? (
           <motion.div
             key="reopen-trigger"
-            initial={{ opacity: 0, scale: 0.92, y: -6 }}
+            initial={{ opacity: 0, scale: 0.94, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: -6 }}
+            exit={{ opacity: 0, scale: 0.94, y: 8 }}
             transition={{ type: 'spring', stiffness: 450, damping: 28 }}
           >
             <button
               type="button"
+              aria-label="Show banner again"
               onClick={() => setOpen(true)}
-              className="group relative inline-flex items-center gap-2.5 rounded-full border border-border/80 bg-card/80 px-4 py-2 text-xs font-medium text-muted-foreground shadow-[0_4px_16px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all duration-200 hover:border-primary/40 hover:bg-card hover:text-foreground hover:shadow-[0_6px_20px_rgba(0,102,255,0.12)] active:scale-[0.98]"
+              className="group relative inline-flex items-center gap-2 rounded-full border border-neutral-200/90 bg-white/95 px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-[0_4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl transition-all duration-200 hover:border-neutral-300 hover:bg-white hover:text-neutral-950 active:scale-95 dark:border-neutral-800 dark:bg-neutral-900/95 dark:text-neutral-300 dark:hover:border-neutral-700 dark:hover:text-white"
             >
               <span className="relative flex size-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75" />
                 <span className="relative inline-flex size-2 rounded-full bg-blue-500" />
               </span>
               <span>Show banner again</span>
-              <ArrowUpCircle className="size-3.5 text-blue-500 transition-transform duration-200 group-hover:-translate-y-0.5" />
+              <ArrowUpCircle className="size-3.5 text-neutral-500 transition-transform duration-200 group-hover:-translate-y-0.5 dark:text-neutral-400" />
             </button>
           </motion.div>
         ) : (
           <motion.div
             key="banner-card"
             layout
-            initial={{ opacity: 0, y: -16, scale: 0.96 }}
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -14, scale: 0.95 }}
+            exit={{ opacity: 0, y: 12, scale: 0.96 }}
             transition={{
               type: 'spring',
               stiffness: 420,
-              damping: 30,
-              mass: 0.8,
+              damping: 28,
+              mass: 0.75,
             }}
             className={cn(
-              'group relative flex w-full flex-col gap-3.5 overflow-hidden rounded-2xl border border-border/60 bg-card/75 p-4 shadow-[0_12px_36px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-4',
+              'group relative flex items-center justify-between gap-3 sm:gap-4 overflow-hidden rounded-2xl border border-neutral-200/90 bg-white/95 px-3.5 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.08),0_2px_8px_rgb(0,0,0,0.04)] backdrop-blur-xl dark:border-neutral-800/90 dark:bg-[#16181F]/95 dark:shadow-[0_12px_40px_rgb(0,0,0,0.45)]',
+              'max-w-[460px] w-full select-none',
               className
             )}
           >
-            {/* Apple Specular Highlight Line */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            {/* Top specular highlight line */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-black/[0.04] to-transparent dark:via-white/[0.07]" />
 
-            {/* Ambient Background Glow on Update */}
-            <div className="pointer-events-none absolute -left-12 -top-12 size-36 rounded-full bg-blue-500/10 blur-2xl" />
-
-            {/* Icon Avatar */}
-            <div className="relative flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-b from-blue-500/20 via-blue-500/10 to-indigo-500/15 ring-1 ring-blue-500/25 shadow-[0_0_16px_rgba(59,130,246,0.2)]">
+            {/* Left circular icon badge */}
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-900 transition-transform duration-200 group-hover:scale-105 dark:bg-neutral-800 dark:text-neutral-100">
               {isCompleted ? (
-                <CheckCircle2 className="size-5 text-emerald-400" />
+                <CheckCircle2 className="size-4 text-emerald-500" />
               ) : isUpdating ? (
-                <RotateCw className="size-5 animate-spin text-blue-400" />
+                <RotateCw className="size-3.5 animate-spin text-neutral-800 dark:text-neutral-200" />
               ) : (
-                <ArrowUpCircle className="size-5 text-blue-500 transition-transform duration-300 group-hover:scale-110" />
+                <ArrowUpCircle className="size-4.5 stroke-[1.8]" />
               )}
             </div>
 
-            {/* Content Details */}
-            <div className="flex flex-1 flex-col gap-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold tracking-tight text-foreground">
-                  {title}
+            {/* Content Details: Title & Subtitle */}
+            <div className="flex flex-1 flex-col min-w-0 pr-1">
+              {isUpdating ? (
+                <span className="text-xs sm:text-[13px] font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 truncate leading-snug">
+                  {isCompleted ? 'Update ready' : 'Updating...'}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-blue-500 dark:text-blue-400">
-                  <Sparkles className="size-2.5 opacity-80" />
-                  {version}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground sm:text-sm leading-relaxed line-clamp-2">
-                {isUpdating
-                  ? isCompleted
-                    ? 'Update installed successfully! Restarting...'
-                    : `Downloading update packages... (${progress}%)`
-                  : description}
-              </p>
-
-              {/* Smooth Progress Bar for Apple Software Update experience */}
-              {isUpdating && (
-                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted/60">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                  />
+              ) : (
+                <div className="flex items-center gap-1.5 min-w-0 text-xs sm:text-[13px] font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 leading-snug truncate">
+                  <span className="truncate">{title}</span>
+                  {version && (
+                    <>
+                      <span className="text-neutral-400 dark:text-neutral-500 font-normal select-none">
+                        —
+                      </span>
+                      <span className="shrink-0">
+                        {version.startsWith('v') ? version : `v${version}`}
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
+
+              <p className="text-[11px] sm:text-xs text-neutral-500 dark:text-neutral-400 font-normal leading-tight line-clamp-2 mt-0.5">
+                {isUpdating
+                  ? isCompleted
+                    ? 'Restarting the app to install...'
+                    : progress > 0
+                    ? `Downloading update packages (${progress}%)...`
+                    : 'Preparing update...'
+                  : description}
+              </p>
             </div>
 
-            {/* Actions */}
-            <div className="flex shrink-0 items-center gap-2 pt-1 sm:pt-0">
+            {/* Actions: Later & Update now */}
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               {!isUpdating && (
                 <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <button
+                    type="button"
                     onClick={handleLater}
-                    className="h-8 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground active:scale-95"
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-900 active:scale-95 dark:text-neutral-400 dark:hover:text-white cursor-pointer"
                   >
                     Later
-                  </Button>
-                  <Button
-                    size="sm"
+                  </button>
+
+                  <motion.button
+                    type="button"
                     onClick={handleUpdate}
-                    className="relative h-8 gap-1.5 overflow-hidden rounded-lg bg-gradient-to-b from-blue-500 to-blue-600 px-3.5 text-xs font-medium text-white shadow-[0_2px_10px_rgba(59,130,246,0.35),inset_0_1px_0_rgba(255,255,255,0.25)] transition-all duration-200 hover:from-blue-400 hover:to-blue-500 hover:shadow-[0_4px_14px_rgba(59,130,246,0.5)] active:scale-95"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.96 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="relative inline-flex items-center justify-center rounded-lg bg-neutral-950 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-95 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-100 cursor-pointer"
                   >
                     Update now
-                  </Button>
+                  </motion.button>
                 </>
+              )}
+
+              {isUpdating && (
+                <div className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+                  <RotateCw className="size-3 animate-spin" />
+                  <span>{isCompleted ? 'Done' : `${progress}%`}</span>
+                </div>
               )}
 
               {showCloseButton && !isUpdating && (
                 <button
                   type="button"
                   onClick={handleLater}
-                  className="rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted/60 hover:text-foreground active:scale-90"
-                  aria-label="Close banner"
+                  className="rounded-lg p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 cursor-pointer"
+                  aria-label="Close"
                 >
-                  <X className="size-4" />
+                  <X className="size-3.5" />
                 </button>
               )}
             </div>
+
+            {/* Sleek bottom progress bar during update */}
+            {isUpdating && (
+              <div className="absolute inset-x-0 bottom-0 h-[2px] bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+                <motion.div
+                  className="h-full bg-neutral-900 dark:bg-white"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+                />
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

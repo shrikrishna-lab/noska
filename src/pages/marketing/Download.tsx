@@ -7,11 +7,12 @@ import { ArrowUpRight, Check, Menu, Zap } from 'lucide-react';
 import SEOHead from '../../components/SEOHead';
 import { FaqAccordion } from './components/FaqAccordion';
 import { WindowsIcon, AppleIcon, LinuxIcon } from './components/PlatformIcons';
+import packageJson from '../../../package.json';
 import './Download.css';
 
 type OsKey = 'windows' | 'macos' | 'linux';
 
-const FALLBACK_VERSION = '1.0.0';
+const CURRENT_VERSION = packageJson.version || '1.0.11';
 const RELEASES_URL = 'https://github.com/shrikrishna-lab/noska-desktop-releases/releases';
 const LATEST_MANIFEST = 'https://github.com/shrikrishna-lab/noska-desktop-releases/releases/latest/download/latest.json';
 const GH_RELEASE_API = 'https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases/latest';
@@ -22,79 +23,120 @@ interface ReleaseAsset {
   browser_download_url: string;
 }
 
-/** Fetches real installer assets (name, bytes, URL) from the latest GitHub release. */
-function useReleaseAssets(onVersion?: (v: string) => void): ReleaseAsset[] | null {
-  const [assets, setAssets] = useState<ReleaseAsset[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    fetch(GH_RELEASE_API, { headers: { accept: 'application/vnd.github+json' } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!alive) return;
-        if (Array.isArray(d?.assets)) setAssets(d.assets as ReleaseAsset[]);
-        const v = d?.tag_name ? String(d.tag_name).replace(/^desktop-v|^v/, '') : null;
-        if (v && typeof onVersion === 'function') onVersion(v);
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
-  return assets;
+function fmtSize(bytes?: number | null): string | null {
+  if (!bytes || bytes <= 0) return null;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getDirectReleaseUrl(filename: string, v: string): string {
+  return `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/download/desktop-v${v}/${filename}`;
 }
 
 function pickAsset(
   assets: ReleaseAsset[] | null,
   match: (name: string) => boolean,
 ): ReleaseAsset | null {
-  if (!assets) return null;
+  if (!assets || assets.length === 0) return null;
   return assets.find((a) => match(a.name.toLowerCase())) ?? null;
 }
 
-function fmtSize(bytes?: number | null): string | null {
-  if (!bytes || bytes <= 0) return null;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+/** Fetches real installer assets (name, bytes, URL) from GitHub release and latest.json */
+function useReleaseAssets(onVersion?: (v: string) => void): {
+  assets: ReleaseAsset[] | null;
+  version: string;
+  manifestUrls: Record<string, string>;
+} {
+  const [assets, setAssets] = useState<ReleaseAsset[] | null>(null);
+  const [version, setVersion] = useState<string>(CURRENT_VERSION);
+  const [manifestUrls, setManifestUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let alive = true;
+
+    // 1. Direct GitHub latest.json manifest check (zero rate-limits, instant live version & URLs)
+    fetch(LATEST_MANIFEST, {
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive || !data) return;
+        if (data.version && typeof data.version === 'string') {
+          const v = data.version.replace(/^desktop-v|^v/, '').trim();
+          setVersion(v);
+          onVersion?.(v);
+        }
+        if (data.platforms && typeof data.platforms === 'object') {
+          const urls: Record<string, string> = {};
+          Object.entries(data.platforms).forEach(([key, val]: [string, any]) => {
+            if (val?.url) urls[key] = val.url;
+          });
+          setManifestUrls(urls);
+        }
+      })
+      .catch(() => {});
+
+    // 2. GitHub REST API for full asset list with byte sizes
+    fetch(GH_RELEASE_API, {
+      headers: { accept: 'application/vnd.github+json' },
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!alive || !d) return;
+        if (Array.isArray(d.assets)) {
+          setAssets(d.assets as ReleaseAsset[]);
+        }
+        const v = d.tag_name ? String(d.tag_name).replace(/^desktop-v|^v/, '').trim() : null;
+        if (v) {
+          setVersion(v);
+          onVersion?.(v);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      alive = false;
+    };
+  }, [onVersion]);
+
+  return { assets, version, manifestUrls };
 }
 
 const EASE: [number, number, number, number] = [0.05, 0.72, 0.43, 0.98];
 
 const OS_META: Record<OsKey, {
   name: string;
-  file: string;
-  size: string;
   requirement: string;
-  alts: string[];
 }> = {
   windows: {
-    name: 'Windows', file: 'Noska-Setup.exe', size: '~35 MB',
-    requirement: 'Windows 10 or later · 64-bit',
-    alts: ['MSI installer', 'Portable .zip'],
+    name: 'Windows',
+    requirement: 'Windows 10, 11 · 64-bit',
   },
   macos: {
-    name: 'macOS', file: 'Noska.dmg', size: '~30 MB',
+    name: 'macOS',
     requirement: 'macOS 10.15 Catalina or later',
-    alts: ['Intel build', 'Update archive'],
   },
   linux: {
-    name: 'Linux', file: 'Noska.AppImage', size: '~33 MB',
-    requirement: 'Ubuntu 20.04+ · Fedora 36+ · Arch',
-    alts: ['.deb package', '.rpm package'],
+    name: 'Linux',
+    requirement: 'Ubuntu 20.04+ · Debian · Fedora · Arch',
   },
 };
 
 const WINDOWS_FORMATS = [
-  { key: 'exe', label: 'Setup .exe', hint: 'Windows 10, 11 (64-bit) — recommended', file: 'Noska-Setup.exe', size: '~120 MB' },
-  { key: 'msi', label: 'MSI', hint: 'Enterprise & IT MSI installer', file: 'Noska-Setup.msi', size: '~125 MB' },
-  { key: 'zip', label: 'Portable', hint: 'Portable archive — no installation', file: 'Noska-win-x64.zip', size: '~115 MB' },
+  { key: 'exe', label: 'Setup .exe', hint: 'Windows 10, 11 (64-bit) — recommended', defaultFile: 'Noska_{v}_x64-setup.exe', fallbackSize: '11.0 MB' },
+  { key: 'msi', label: 'MSI', hint: 'Enterprise & IT MSI installer', defaultFile: 'Noska_{v}_x64_en-US.msi', fallbackSize: '11.9 MB' },
 ] as const;
 
 const MAC_ARCHES = [
-  { key: 'silicon', label: 'Apple Silicon', hint: 'M1 · M2 · M3 · M4' },
-  { key: 'intel', label: 'Intel', hint: 'Intel-based Macs' },
+  { key: 'universal', label: 'Universal DMG', hint: 'Apple Silicon (M1·M2·M3·M4) & Intel Macs' },
+  { key: 'archive', label: 'Update Archive', hint: 'Direct portable app archive (.tar.gz)' },
 ] as const;
 
 const LINUX_FORMATS = [
-  { key: 'appimage', label: 'AppImage', hint: 'Runs anywhere — no install', file: 'Noska.AppImage' },
-  { key: 'deb', label: '.deb', hint: 'Ubuntu · Debian · Mint', file: 'noska.deb' },
-  { key: 'rpm', label: '.rpm', hint: 'Fedora · RHEL · openSUSE', file: 'noska.rpm' },
+  { key: 'appimage', label: 'AppImage', hint: 'Runs anywhere — no install', defaultFile: 'Noska_{v}_amd64.AppImage', fallbackSize: '84.2 MB' },
+  { key: 'deb', label: '.deb', hint: 'Ubuntu · Debian · Mint', defaultFile: 'Noska_{v}_amd64.deb', fallbackSize: '12.5 MB' },
+  { key: 'rpm', label: '.rpm', hint: 'Fedora · RHEL · openSUSE', defaultFile: 'Noska-{v}-1.x86_64.rpm', fallbackSize: '12.5 MB' },
 ] as const;
 
 const MARQUEE_WORDS = [
@@ -120,7 +162,7 @@ const FAQS = [
   { q: 'Is the desktop app free?', a: 'Yes — free to download and use on all three platforms, including the Free plan. Paid plans only add team features and higher limits.' },
   { q: 'Does it work exactly like Noska Web?', a: 'It is the same Noska: same editor, same pages, same account. The desktop shell adds offline support, deep links, global shortcuts and native menus on top.' },
   { q: 'How do updates work?', a: 'Noska checks in the background and installs updates automatically. Every update is cryptographically signed — a bad signature never installs.' },
-  { q: 'Which macOS build should I get?', a: 'Mac from 2020 or later (any M-series chip) → Apple Silicon. Older Intel Macs → Intel build. Check via Apple menu → About This Mac.' },
+  { q: 'Which macOS build should I get?', a: 'The macOS download is a Universal build that runs natively on both Apple Silicon (M1/M2/M3/M4) and Intel Macs.' },
   { q: 'What Linux formats are available?', a: 'AppImage runs anywhere without installing. The .deb suits Ubuntu, Debian and Mint; the .rpm suits Fedora, RHEL and openSUSE.' },
 ];
 
@@ -178,26 +220,87 @@ export default function Download() {
   const detected = useMemo(detectOs, []);
   const [heroOs, setHeroOs] = useState<OsKey>(detected);
   const [winFormat, setWinFormat] = useState<(typeof WINDOWS_FORMATS)[number]['key']>('exe');
-  const [macArch, setMacArch] = useState<(typeof MAC_ARCHES)[number]['key']>('silicon');
+  const [macArch, setMacArch] = useState<(typeof MAC_ARCHES)[number]['key']>('universal');
   const [linuxFormat, setLinuxFormat] = useState<(typeof LINUX_FORMATS)[number]['key']>('appimage');
-  const [version, setVersion] = useState(FALLBACK_VERSION);
-  const setVersionCb = useCallback((v: string) => setVersion(v), []);
-  const assets = useReleaseAssets(setVersionCb);
-  const [pendingNote, setPendingNote] = useState<OsKey | null>(null);
+  const [liveVersion, setLiveVersion] = useState<string>(CURRENT_VERSION);
 
-  // Real installer assets from the latest GitHub release (fall back to
-  // placeholders while the first release is not published yet).
-  const winExeAsset = pickAsset(assets, (n) => n.endsWith('x64-setup.exe'));
-  const winMsiAsset = pickAsset(assets, (n) => n.endsWith('.msi'));
-  const macArmAsset = pickAsset(assets, (n) => n.endsWith('aarch64.dmg'));
-  const macIntelAsset = pickAsset(assets, (n) => n.endsWith('x64.dmg') && !n.includes('aarch64'));
-  const appImageAsset = pickAsset(assets, (n) => n.endsWith('.appimage'));
-  const debAsset = pickAsset(assets, (n) => n.endsWith('_amd64.deb'));
-  const rpmAsset = pickAsset(assets, (n) => n.endsWith('_x86_64.rpm'));
+  const handleVersion = useCallback((v: string) => setLiveVersion(v), []);
+  const { assets, version, manifestUrls } = useReleaseAssets(handleVersion);
+  const v = liveVersion || version || CURRENT_VERSION;
 
-  const macAsset = macArch === 'silicon' ? macArmAsset : macIntelAsset;
-  const linuxAsset =
-    linuxFormat === 'deb' ? debAsset : linuxFormat === 'rpm' ? rpmAsset : appImageAsset;
+  // Real installer assets from GitHub Releases (with fallback generation to ensure downloads ALWAYS work)
+  const winExeAsset = pickAsset(assets, (n) => n.endsWith('.exe') && !n.endsWith('.sig'));
+  const winMsiAsset = pickAsset(assets, (n) => n.endsWith('.msi') && !n.endsWith('.sig'));
+  const macDmgAsset = pickAsset(assets, (n) => n.endsWith('.dmg') && !n.endsWith('.sig'));
+  const macTarAsset = pickAsset(assets, (n) => (n.endsWith('.tar.gz') || n.endsWith('.app.tar.gz')) && !n.endsWith('.sig'));
+  const appImageAsset = pickAsset(assets, (n) => n.endsWith('.appimage') && !n.endsWith('.sig'));
+  const debAsset = pickAsset(assets, (n) => n.endsWith('.deb') && !n.endsWith('.sig'));
+  const rpmAsset = pickAsset(assets, (n) => n.endsWith('.rpm') && !n.endsWith('.sig'));
+
+  // Windows selected format details
+  const winPick = WINDOWS_FORMATS.find((f) => f.key === winFormat) ?? WINDOWS_FORMATS[0];
+  const winPickAsset = winFormat === 'msi' ? winMsiAsset : winExeAsset;
+  const winFileName = winPickAsset?.name ?? (winFormat === 'msi' ? `Noska_${v}_x64_en-US.msi` : `Noska_${v}_x64-setup.exe`);
+  const winFileSize = fmtSize(winPickAsset?.size) ?? (winFormat === 'msi' ? '11.9 MB' : '11.0 MB');
+  const winDownloadUrl =
+    winPickAsset?.browser_download_url ??
+    (winFormat === 'msi'
+      ? manifestUrls['windows-x86_64-msi'] ?? getDirectReleaseUrl(`Noska_${v}_x64_en-US.msi`, v)
+      : manifestUrls['windows-x86_64-nsis'] ?? getDirectReleaseUrl(`Noska_${v}_x64-setup.exe`, v));
+
+  // macOS selected format details
+  const macPickAsset = macArch === 'archive' ? macTarAsset : macDmgAsset;
+  const macFileName = macPickAsset?.name ?? (macArch === 'archive' ? `Noska_universal.app.tar.gz` : `Noska_${v}_universal.dmg`);
+  const macFileSize = fmtSize(macPickAsset?.size) ?? (macArch === 'archive' ? '23.9 MB' : '24.1 MB');
+  const macDownloadUrl =
+    macPickAsset?.browser_download_url ??
+    (macArch === 'archive'
+      ? manifestUrls['darwin-aarch64'] ?? getDirectReleaseUrl(`Noska_universal.app.tar.gz`, v)
+      : getDirectReleaseUrl(`Noska_${v}_universal.dmg`, v));
+
+  // Linux selected format details
+  const linuxPick = LINUX_FORMATS.find((f) => f.key === linuxFormat) ?? LINUX_FORMATS[0];
+  const linuxPickAsset = linuxFormat === 'deb' ? debAsset : linuxFormat === 'rpm' ? rpmAsset : appImageAsset;
+  const linuxFileName =
+    linuxPickAsset?.name ??
+    (linuxFormat === 'deb'
+      ? `Noska_${v}_amd64.deb`
+      : linuxFormat === 'rpm'
+      ? `Noska-${v}-1.x86_64.rpm`
+      : `Noska_${v}_amd64.AppImage`);
+  const linuxFileSize =
+    fmtSize(linuxPickAsset?.size) ??
+    (linuxFormat === 'deb' ? '12.5 MB' : linuxFormat === 'rpm' ? '12.5 MB' : '84.2 MB');
+  const linuxDownloadUrl =
+    linuxPickAsset?.browser_download_url ??
+    (linuxFormat === 'deb'
+      ? manifestUrls['linux-x86_64-deb'] ?? getDirectReleaseUrl(`Noska_${v}_amd64.deb`, v)
+      : linuxFormat === 'rpm'
+      ? manifestUrls['linux-x86_64-rpm'] ?? getDirectReleaseUrl(`Noska-${v}-1.x86_64.rpm`, v)
+      : manifestUrls['linux-x86_64-appimage'] ?? getDirectReleaseUrl(`Noska_${v}_amd64.AppImage`, v));
+
+  // Hero selected OS download info
+  const heroDownloadInfo = useMemo(() => {
+    if (heroOs === 'windows') {
+      return {
+        fileName: winFileName,
+        fileSize: winFileSize,
+        url: winDownloadUrl,
+      };
+    }
+    if (heroOs === 'macos') {
+      return {
+        fileName: macFileName,
+        fileSize: macFileSize,
+        url: macDownloadUrl,
+      };
+    }
+    return {
+      fileName: linuxFileName,
+      fileSize: linuxFileSize,
+      url: linuxDownloadUrl,
+    };
+  }, [heroOs, winFileName, winFileSize, winDownloadUrl, macFileName, macFileSize, macDownloadUrl, linuxFileName, linuxFileSize, linuxDownloadUrl]);
 
   const sceneRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: sceneRef, offset: ['start start', 'end start'] });
@@ -215,17 +318,6 @@ export default function Download() {
   const paperTiltY = useTransform(sx, [-1, 1], [-2, 2]);
 
   useEffect(() => {
-    let alive = true;
-    fetch(LATEST_MANIFEST, { headers: { accept: 'application/json' } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (alive && data?.version && typeof data.version === 'string') setVersion(data.version);
-      })
-      .catch(() => { });
-    return () => { alive = false; };
-  }, []);
-
-  useEffect(() => {
     const onMove = (e: MouseEvent) => {
       mx.set((e.clientX / window.innerWidth) * 2 - 1);
       my.set((e.clientY / window.innerHeight) * 2 - 1);
@@ -234,20 +326,7 @@ export default function Download() {
     return () => window.removeEventListener('mousemove', onMove);
   }, [mx, my]);
 
-  useEffect(() => {
-    if (!pendingNote) return;
-    const t = setTimeout(() => setPendingNote(null), 2600);
-    return () => clearTimeout(t);
-  }, [pendingNote]);
-
   const heroDl = OS_META[heroOs];
-  const winPick = WINDOWS_FORMATS.find((f) => f.key === winFormat) ?? WINDOWS_FORMATS[0];
-  const linuxPick = LINUX_FORMATS.find((f) => f.key === linuxFormat) ?? LINUX_FORMATS[0];
-
-  const placeholderClick = (os: OsKey) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    setPendingNote(os);
-  };
 
   return (
     <div className="dlp">
@@ -300,7 +379,7 @@ export default function Download() {
 
           <div className="dlp-hero-paper">
             <p className="dlp-mono-label">
-              <span className="dlp-pulse" /> Noska Desktop · v{version}
+              <span className="dlp-pulse" /> Noska Desktop · v{v}
             </p>
             <h1 className="dlp-display">
               One workspace.
@@ -334,7 +413,9 @@ export default function Download() {
             <AnimatePresence mode="wait">
               <motion.a
                 key={heroOs}
-                href="#get"
+                href={heroDownloadInfo.url}
+                target="_blank"
+                rel="noreferrer"
                 initial={{ opacity: 0, y: 10, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -342,11 +423,9 @@ export default function Download() {
                 className="dlp-pill-btn big hero-cta"
               >
                 <OsSticker os={heroOs} size={16} />
-                {heroDl.name === 'Linux' ? `Download ${linuxPick.file}` : `Download ${heroDl.file}`}
+                Download {heroDownloadInfo.fileName}
                 <span className="dlp-cta-size">
-                  {fmtSize(
-                    (heroOs === 'windows' ? winExeAsset : heroOs === 'macos' ? macAsset : linuxAsset)?.size,
-                  ) ?? heroDl.size}
+                  {heroDownloadInfo.fileSize}
                 </span>
               </motion.a>
             </AnimatePresence>
@@ -420,13 +499,14 @@ export default function Download() {
           transition={{ duration: 0.9, ease: EASE }}
           className="dlp-get-head"
         >
-          <p className="dlp-mono-label center">Pick your poison</p>
+          <p className="dlp-mono-label center">Pick your machine</p>
           <h2 className="dlp-h2">
             Download for <em className="dlp-script green">your machine</em>
           </h2>
         </motion.div>
 
         <div className="dlp-cards">
+          {/* Windows Card */}
           <GlowCard className={`dlp-card ${detected === 'windows' ? 'is-yours' : ''}`}>
             {detected === 'windows' && <span className="dlp-yours">your device</span>}
             <header>
@@ -453,42 +533,33 @@ export default function Download() {
             <p className="dlp-seg-hint">{winPick.hint}</p>
 
             <a
-              href={winFormat === 'msi' ? (winMsiAsset?.browser_download_url ?? '#') : (winExeAsset?.browser_download_url ?? '#')}
+              href={winDownloadUrl}
+              target="_blank"
+              rel="noreferrer"
               className="dlp-pill-btn"
-              onClick={winExeAsset || winMsiAsset ? undefined : placeholderClick('windows')}
             >
               <OsSticker os="windows" size={16} />
-              Download {winPick.file}
-              {fmtSize((winFormat === 'msi' ? winMsiAsset : winExeAsset)?.size) && (
-                <span className="dlp-cta-size">{fmtSize((winFormat === 'msi' ? winMsiAsset : winExeAsset)?.size)}</span>
-              )}
+              Download {winFileName}
+              <span className="dlp-cta-size">{winFileSize}</span>
             </a>
-            <AnimatePresence>
-              {pendingNote === 'windows' && (
-                <motion.p
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="dlp-pending-note"
-                >
-                  Direct links land with v{version} — <a href={RELEASES_URL} target="_blank" rel="noreferrer">GitHub Releases</a> meanwhile.
-                </motion.p>
-              )}
-            </AnimatePresence>
+
             <ul className="dlp-meta">
-              <li><span>Version</span><strong>v{version}</strong></li>
-              <li><span>Size</span><strong>{fmtSize((winFormat === 'msi' ? winMsiAsset : winExeAsset)?.size) ?? winPick.size}</strong></li>
+              <li><span>Version</span><strong>v{v}</strong></li>
+              <li><span>Size</span><strong>{winFileSize}</strong></li>
+              <li><span>File</span><strong className="truncate max-w-[170px]" title={winFileName}>{winFileName}</strong></li>
               <li><span>Arch</span><strong>x64</strong></li>
             </ul>
+
             <div className="dlp-alts">
               {WINDOWS_FORMATS.filter((f) => f.key !== winFormat).map((f) => (
                 <a key={f.key} href="#" onClick={(e) => { e.preventDefault(); setWinFormat(f.key); }}>
-                  {f.label} {f.key === 'zip' ? '.zip' : 'installer'}
+                  {f.label}
                 </a>
               ))}
             </div>
           </GlowCard>
 
+          {/* macOS Card */}
           <GlowCard className={`dlp-card ${detected === 'macos' ? 'is-yours' : ''}`}>
             {detected === 'macos' && <span className="dlp-yours">your device</span>}
             <header>
@@ -499,7 +570,7 @@ export default function Download() {
               </div>
             </header>
 
-            <div className="dlp-seg" role="tablist" aria-label="Mac chip">
+            <div className="dlp-seg" role="tablist" aria-label="Mac format">
               {MAC_ARCHES.map((a) => (
                 <button
                   key={a.key}
@@ -515,33 +586,25 @@ export default function Download() {
             <p className="dlp-seg-hint">{MAC_ARCHES.find((a) => a.key === macArch)?.hint}</p>
 
             <a
-              href={macAsset?.browser_download_url ?? '#'}
+              href={macDownloadUrl}
+              target="_blank"
+              rel="noreferrer"
               className="dlp-pill-btn dark"
-              onClick={macAsset ? undefined : placeholderClick('macos')}
             >
               <OsSticker os="macos" size={16} />
-              Download {OS_META.macos.file}
-              {fmtSize(macAsset?.size) && <span className="dlp-cta-size">{fmtSize(macAsset?.size)}</span>}
+              Download {macFileName}
+              <span className="dlp-cta-size">{macFileSize}</span>
             </a>
-            <AnimatePresence>
-              {pendingNote === 'macos' && (
-                <motion.p
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="dlp-pending-note"
-                >
-                  Direct links land with v{version} — <a href={RELEASES_URL} target="_blank" rel="noreferrer">GitHub Releases</a> meanwhile.
-                </motion.p>
-              )}
-            </AnimatePresence>
+
             <ul className="dlp-meta">
-              <li><span>Version</span><strong>v{version}</strong></li>
-              <li><span>Size</span><strong>{fmtSize(macAsset?.size) ?? OS_META.macos.size}</strong></li>
-              <li><span>Chip</span><strong>{macArch === 'silicon' ? 'Apple Silicon' : 'Intel x64'}</strong></li>
+              <li><span>Version</span><strong>v{v}</strong></li>
+              <li><span>Size</span><strong>{macFileSize}</strong></li>
+              <li><span>File</span><strong className="truncate max-w-[170px]" title={macFileName}>{macFileName}</strong></li>
+              <li><span>Chip</span><strong>Universal (Apple Silicon & Intel)</strong></li>
             </ul>
           </GlowCard>
 
+          {/* Linux Card */}
           <GlowCard className={`dlp-card ${detected === 'linux' ? 'is-yours' : ''}`}>
             {detected === 'linux' && <span className="dlp-yours">your device</span>}
             <header>
@@ -568,31 +631,23 @@ export default function Download() {
             <p className="dlp-seg-hint">{linuxPick.hint}</p>
 
             <a
-              href={linuxAsset?.browser_download_url ?? '#'}
+              href={linuxDownloadUrl}
+              target="_blank"
+              rel="noreferrer"
               className="dlp-pill-btn"
-              onClick={linuxAsset ? undefined : placeholderClick('linux')}
             >
               <OsSticker os="linux" size={16} />
-              Download {linuxPick.file}
-              {fmtSize(linuxAsset?.size) && <span className="dlp-cta-size">{fmtSize(linuxAsset?.size)}</span>}
+              Download {linuxFileName}
+              <span className="dlp-cta-size">{linuxFileSize}</span>
             </a>
-            <AnimatePresence>
-              {pendingNote === 'linux' && (
-                <motion.p
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="dlp-pending-note"
-                >
-                  Direct links land with v{version} — <a href={RELEASES_URL} target="_blank" rel="noreferrer">GitHub Releases</a> meanwhile.
-                </motion.p>
-              )}
-            </AnimatePresence>
+
             <ul className="dlp-meta">
-              <li><span>Version</span><strong>v{version}</strong></li>
-              <li><span>Size</span><strong>{fmtSize(linuxAsset?.size) ?? OS_META.linux.size}</strong></li>
+              <li><span>Version</span><strong>v{v}</strong></li>
+              <li><span>Size</span><strong>{linuxFileSize}</strong></li>
+              <li><span>File</span><strong className="truncate max-w-[170px]" title={linuxFileName}>{linuxFileName}</strong></li>
               <li><span>Arch</span><strong>x86_64</strong></li>
             </ul>
+
             <div className="dlp-alts">
               <a href={RELEASES_URL} target="_blank" rel="noreferrer">
                 SHA-256 checksums <ArrowUpRight size={11} />

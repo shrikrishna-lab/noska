@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @config "../tailwind.config.js";
 
 @theme {
@@ -21,6 +22,14 @@
   --color-popover-foreground: var(--popover-foreground-color);
   --color-card: var(--card-color);
   --color-card-foreground: var(--card-foreground-color);
+
+  --color-tetris-1: var(--tetris-1);
+  --color-tetris-2: var(--tetris-2);
+  --color-tetris-3: var(--tetris-3);
+  --color-tetris-4: var(--tetris-4);
+  --color-tetris-5: var(--tetris-5);
+  --color-tetris-6: var(--tetris-6);
+  --color-tetris-7: var(--tetris-7);
 }
 
 :root {
@@ -48,6 +57,15 @@
   --border-color: rgba(255, 255, 255, 0.09);
   --input-color: #262A33;
   --ring-color: #0066FF;
+
+  /* ─── Tetris Loader Variables ─── */
+  --tetris-1: oklch(0.609 0.111 221.7);
+  --tetris-2: oklch(0.666 0.157 58.3);
+  --tetris-3: oklch(0.541 0.247 293);
+  --tetris-4: oklch(0.627 0.17 149.2);
+  --tetris-5: oklch(0.577 0.215 27.3);
+  --tetris-6: oklch(0.546 0.215 262.9);
+  --tetris-7: oklch(0.646 0.194 41.1);
 
   /* ─── Dark Theme ─── */
   --bg: #0F1117;
@@ -116,6 +134,16 @@
   --transition-fast: 100ms cubic-bezier(0.16, 1, 0.3, 1);
   --transition-normal: 180ms cubic-bezier(0.16, 1, 0.3, 1);
   --transition-slow: 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark {
+  --tetris-1: oklch(0.797 0.134 211.5);
+  --tetris-2: oklch(0.861 0.173 91.9);
+  --tetris-3: oklch(0.709 0.159 293.5);
+  --tetris-4: oklch(0.8 0.182 151.7);
+  --tetris-5: oklch(0.711 0.166 22.2);
+  --tetris-6: oklch(0.714 0.143 254.6);
+  --tetris-7: oklch(0.758 0.159 55.9);
 }
 
 .light {

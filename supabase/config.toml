@@ -3,3 +3,8 @@
 # action-specific authentication checks rather than Supabase's JWT gateway.
 [functions.desktop-auth]
 verify_jwt = false
+
+# connector-gateway mixes a public OAuth callback (identity comes from the
+# encrypted state param) with JWT-authenticated routes checked in-function.
+[functions.connector-gateway]
+verify_jwt = false

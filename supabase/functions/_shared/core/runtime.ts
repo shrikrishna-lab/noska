@@ -183,14 +183,25 @@ export async function audit(input: {
 const SECRET_ENCRYPTION_KEY =
   Deno.env.get("WEBHOOK_ENCRYPTION_KEY") ?? Deno.env.get("AGENT_ENCRYPTION_KEY") ?? "";
 
-async function deriveSecretKey(): Promise<CryptoKey> {
-  if (!SECRET_ENCRYPTION_KEY) throw errors.internal("WEBHOOK_ENCRYPTION_KEY is not configured");
-  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SECRET_ENCRYPTION_KEY));
+/** Key material for a secret: an optional dedicated env var first
+ * (e.g. CONNECTOR_ENCRYPTION_KEY for third-party OAuth tokens), then the
+ * shared default — so key classes can be rotated independently. */
+function secretKeyValue(dedicatedEnv?: string): string {
+  if (dedicatedEnv) {
+    const dedicated = Deno.env.get(dedicatedEnv);
+    if (dedicated) return dedicated;
+  }
+  return SECRET_ENCRYPTION_KEY;
+}
+
+async function deriveSecretKey(keyValue: string): Promise<CryptoKey> {
+  if (!keyValue) throw errors.internal("Encryption key is not configured");
+  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(keyValue));
   return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
-export async function encryptSecret(plaintext: string): Promise<string> {
-  const key = await deriveSecretKey();
+export async function encryptSecret(plaintext: string, dedicatedEnv?: string): Promise<string> {
+  const key = await deriveSecretKey(secretKeyValue(dedicatedEnv));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext));
   const bytes = new Uint8Array(iv.length + ct.byteLength);
@@ -198,11 +209,11 @@ export async function encryptSecret(plaintext: string): Promise<string> {
   return btoa(String.fromCharCode(...bytes));
 }
 
-export async function decryptSecret(blob: string): Promise<string> {
-  const key = await deriveSecretKey();
+export async function decryptSecret(blob: string, dedicatedEnv?: string): Promise<string> {
+  const key = await deriveSecretKey(secretKeyValue(dedicatedEnv));
   const bytes = Uint8Array.from(atob(blob), (c) => c.charCodeAt(0));
   const pt = await crypto.subtle.decrypt({ name: "AES-GCM", key }, key, bytes.slice(12))
-    .catch(() => { throw errors.internal("Stored secret could not be decrypted — check WEBHOOK_ENCRYPTION_KEY"); });
+    .catch(() => { throw errors.internal(`Stored secret could not be decrypted — check ${dedicatedEnv ?? "WEBHOOK_ENCRYPTION_KEY"}`); });
   return new TextDecoder().decode(pt);
 }
 

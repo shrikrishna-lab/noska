@@ -51,7 +51,11 @@
     },
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "sidebar": "icons/nsis-sidebar.png",
+        "header": "icons/nsis-header.png",
+        "displayLanguageSelector": false
       }
     },
     "linux": {

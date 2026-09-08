@@ -24,6 +24,7 @@ import Editor from "./components/Editor";
 import { WorkspaceView, NewPageOverlay } from "./components/WorkspaceViews";
 import LoadingScreen from "./components/auth/LoadingScreen";
 import RingLoader from "./components/auth/RingLoader";
+import DesktopSetupAnimation from "./components/desktop/DesktopSetupAnimation";
 import AuthPage from "./components/auth/AuthPage";
 import ClaimUsernameModal from "./components/auth/ClaimUsernameModal";
 import OnboardingPage from "./onboarding/pages/OnboardingPage";
@@ -160,6 +161,21 @@ function AppContent() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [voiceSettingsRequested, setVoiceSettingsRequested] = useState(false);
   const [voiceAgentPrompt, setVoiceAgentPrompt] = useState<{ providerId: string; providerName: string } | null>(null);
+  const [showDesktopSetup, setShowDesktopSetup] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("setup") === "1") return true;
+    if (isDesktop()) {
+      return !localStorage.getItem("noska_setup_completed");
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleTriggerSetup = () => setShowDesktopSetup(true);
+    window.addEventListener("noska:trigger-setup", handleTriggerSetup);
+    return () => window.removeEventListener("noska:trigger-setup", handleTriggerSetup);
+  }, []);
 
   const [
     { pages, sharedPages, activeId, workspaceName, pendingInvites, collapsedPages,
@@ -2597,6 +2613,9 @@ function AppContent() {
     <CompanyProvider>
     <TeamProvider>
     <AnimatePresence mode="wait">
+      {showDesktopSetup && (
+        <DesktopSetupAnimation key="desktop-setup" onComplete={() => setShowDesktopSetup(false)} />
+      )}
       {appFlowState === "loading" && !TEST_MODE && !isSignedIn && !isDesktop() && (
         <LoadingScreen key="loader" onComplete={() => { if (!ticketPending) setAppFlowState("auth"); }} />
       )}
