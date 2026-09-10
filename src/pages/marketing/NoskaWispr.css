@@ -9,14 +9,14 @@
   --wispr-cream: #faf9f0;
   --wispr-card-bg: rgba(255, 255, 255, 0.96);
   --wispr-dark: #111111;
-  --wispr-lavender: #eedbf5;
-  --wispr-lavender-hover: #e5cbef;
-  --wispr-green-deep: #09281c;
-  --wispr-green-surface: #0e3626;
+  --wispr-lavender: #f3e8ff;
+  --wispr-lavender-hover: #e9d5ff;
+  --wispr-green-deep: #16241b;
+  --wispr-green-surface: #1e3325;
   --wispr-coral: #f48574;
   --wispr-coral-soft: #fdeee9;
   --wispr-sage: #5b8266;
-  --wispr-sage-soft: #ebf3ed;
+  --wispr-sage-soft: #edf5ef;
   --wispr-border-subtle: rgba(0, 0, 0, 0.06);
 }
 
@@ -35,6 +35,8 @@
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  will-change: scroll-position;
 }
 
 /* Elegant Editorial Serif Typography for Headline ("just speak.") */
@@ -181,15 +183,15 @@
 
 /* 4x Faster Speed Section Styles */
 .wispr-speed-container {
-  background: var(--wispr-green-deep);
-  color: #ffffeb;
+  background: var(--wispr-cream);
+  color: var(--wispr-dark);
   border-radius: 40px;
   position: relative;
   overflow: hidden;
 }
 
 .wispr-type-filler {
-  color: rgba(255, 255, 235, 0.4);
+  color: rgba(17, 17, 17, 0.4);
   text-decoration: line-through;
   text-decoration-color: #f48574;
 }
@@ -200,7 +202,7 @@
 }
 
 .wispr-type-correction {
-  color: rgba(255, 255, 235, 0.45);
+  color: rgba(17, 17, 17, 0.45);
   text-decoration: line-through;
 }
 
@@ -263,3 +265,180 @@
 .wispr-page-root::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.28);
 }
+
+/* ==========================================================================
+   Roundelpro Planetary Orbital Revolving Showcase (Framer Roundelpro Parity)
+   ========================================================================== */
+@keyframes roundel-orbit-cw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes roundel-orbit-ccw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+@keyframes roundel-orbit-cw-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes roundel-orbit-ccw-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+.roundel-orbit-ring {
+  animation: roundel-orbit-cw 55s linear infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.roundel-orbit-ring-outer {
+  animation: roundel-orbit-cw 75s linear infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.roundel-card-counter {
+  animation: roundel-orbit-ccw 55s linear infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.roundel-card-counter-outer {
+  animation: roundel-orbit-ccw 75s linear infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.roundel-showcase-container:hover .roundel-orbit-ring,
+.roundel-showcase-container:hover .roundel-orbit-ring-outer,
+.roundel-showcase-container:hover .roundel-card-counter,
+.roundel-showcase-container:hover .roundel-card-counter-outer {
+  animation-play-state: paused;
+}
+
+/* ==========================================================================
+   Service Card UI & Step Flow Styles (Framer Service Card & StepsFlow Parity)
+   ========================================================================== */
+.service-card-glow {
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.07), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.service-card-glow:hover {
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.service-pin-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+@keyframes pulse-glow-soft {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.animate-pulse-glow-soft {
+  animation: pulse-glow-soft 4s ease-in-out infinite;
+}
+
+/* Luxury Card Hover Lift & Border Shimmer */
+.luxury-service-card {
+  position: relative;
+  background: linear-gradient(180deg, #ffffff 0%, #faf9f6 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.luxury-service-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(91, 130, 102, 0.3);
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(91, 130, 102, 0.15);
+}
+
+.luxury-card-inner {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02), 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+/* Audio Scrubber Needle Animation */
+@keyframes scrubber-scan {
+  0% { left: 5%; }
+  50% { left: 95%; }
+  100% { left: 5%; }
+}
+
+.animate-scrubber-scan {
+  animation: scrubber-scan 4s ease-in-out infinite;
+}
+
+/* Ultra Luxury Card Enhancements */
+.luxury-card-glow-emerald:hover {
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.12), 0 0 0 1px rgba(16, 185, 129, 0.2);
+}
+
+.luxury-card-glow-purple:hover {
+  border-color: rgba(168, 85, 247, 0.35);
+  box-shadow: 0 25px 50px -12px rgba(168, 85, 247, 0.12), 0 0 0 1px rgba(168, 85, 247, 0.2);
+}
+
+.luxury-card-glow-teal:hover {
+  border-color: rgba(20, 184, 166, 0.35);
+  box-shadow: 0 25px 50px -12px rgba(20, 184, 166, 0.12), 0 0 0 1px rgba(20, 184, 166, 0.2);
+}
+
+.luxury-card-glow-blue:hover {
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.12), 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+.luxury-card-glow-amber:hover {
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 25px 50px -12px rgba(245, 158, 11, 0.12), 0 0 0 1px rgba(245, 158, 11, 0.2);
+}
+
+.luxury-card-glow-rose:hover {
+  border-color: rgba(244, 63, 94, 0.35);
+  box-shadow: 0 25px 50px -12px rgba(244, 63, 94, 0.12), 0 0 0 1px rgba(244, 63, 94, 0.2);
+}
+
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-radar-sweep {
+  animation: radar-sweep 8s linear infinite;
+  transform-origin: center center;
+}
+
+@keyframes beam-pulse {
+  0%, 100% { opacity: 0.3; transform: scaleX(0.95); }
+  50% { opacity: 1; transform: scaleX(1.05); }
+}
+
+.animate-beam-pulse {
+  animation: beam-pulse 2s ease-in-out infinite;
+}
+
+/* Subtle dot canvas pattern */
+.bg-grid-dots-subtle {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+

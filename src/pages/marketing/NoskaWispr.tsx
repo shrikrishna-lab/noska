@@ -37,9 +37,118 @@ import {
   Download,
   Bot,
   Languages,
-  Terminal
+  Terminal,
+  Command,
+  Cpu,
+  Keyboard,
+  Activity,
+  Radio,
+  Workflow,
+  Briefcase,
+  MessageSquare,
+  Crown,
+  Bell,
+  Moon,
+  Search,
+  FolderPlus,
+  Layout
 } from 'lucide-react';
 import './NoskaWispr.css';
+import HowItWorks from '@/components/ui/how-it-works';
+import NoskaMeadowFooter from './components/NoskaMeadowFooter';
+
+// Self-contained animated badge text to prevent top-level full-page re-renders
+function CleanupBadgeText() {
+  const cleanupBadges = ['Removed Umm', 'Fixed Grammar', 'Auto Punctuation', '4x Velocity'];
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % 4);
+    }, 2800);
+    return () => clearInterval(timer);
+  }, []);
+
+  return <>{cleanupBadges[index]}</>;
+}
+
+// Framer AnimatedSVGUnderlink Parity Component (Hand-drawn dynamic animated SVG strokes)
+const UNDERLINE_SVG_VARIANTS = [
+  "M5 20.9999C26.7762 16.2245 49.5532 11.5572 71.7979 14.6666C84.9553 16.5057 97.0392 21.8432 109.987 24.3888C116.413 25.6523 123.012 25.5143 129.042 22.6388C135.981 19.3303 142.586 15.1422 150.092 13.3333C156.799 11.7168 161.702 14.6225 167.887 16.8333C181.562 21.7212 194.975 22.6234 209.252 21.3888C224.678 20.0548 239.912 17.991 255.42 18.3055C272.027 18.6422 288.409 18.867 305 17.9999",
+  "M5 24.2592C26.233 20.2879 47.7083 16.9968 69.135 13.8421C98.0469 9.5853 128.407 4.02322 158.059 5.14674C172.583 5.69708 187.686 8.66104 201.598 11.9696C207.232 13.3093 215.437 14.9471 220.137 18.3619C224.401 21.4596 220.737 25.6575 217.184 27.6168C208.309 32.5097 197.199 34.281 186.698 34.8486C183.159 35.0399 147.197 36.2657 155.105 26.5837C158.11 22.9053 162.993 20.6229 167.764 18.7924C178.386 14.7164 190.115 12.1115 201.624 10.3984C218.367 7.90626 235.528 7.06127 252.521 7.49276C258.455 7.64343 264.389 7.92791 270.295 8.41825C280.321 9.25056 296 10.8932 305 13.0242",
+  "M5 29.5014C9.61174 24.4515 12.9521 17.9873 20.9532 17.5292C23.7742 17.3676 27.0987 17.7897 29.6575 19.0014C33.2644 20.7093 35.6481 24.0004 39.4178 25.5014C48.3911 29.0744 55.7503 25.7731 63.3048 21.0292C67.9902 18.0869 73.7668 16.1366 79.3721 17.8903C85.1682 19.7036 88.2173 26.2464 94.4121 27.2514C102.584 28.5771 107.023 25.5064 113.276 20.6125C119.927 15.4067 128.83 12.3333 137.249 15.0014C141.418 16.3225 143.116 18.7528 146.581 21.0014C149.621 22.9736 152.78 23.6197 156.284 24.2514C165.142 25.8479 172.315 17.5185 179.144 13.5014C184.459 10.3746 191.785 8.74853 195.868 14.5292C199.252 19.3205 205.597 22.9057 211.621 22.5014C215.553 22.2374 220.183 17.8356 222.979 15.5569C225.4 13.5845 227.457 11.1105 230.742 10.5292C232.718 10.1794 234.784 12.9691 236.164 14.0014C238.543 15.7801 240.717 18.4775 243.356 19.8903C249.488 23.1729 255.706 21.2551 261.079 18.0014C266.571 14.6754 270.439 11.5202 277.146 13.6125C280.725 14.7289 283.221 17.209 286.393 19.0014C292.321 22.3517 298.255 22.5014 305 22.5014",
+  "M17.0039 32.6826C32.2307 32.8412 47.4552 32.8277 62.676 32.8118C67.3044 32.807 96.546 33.0555 104.728 32.0775C113.615 31.0152 104.516 28.3028 102.022 27.2826C89.9573 22.3465 77.3751 19.0254 65.0451 15.0552C57.8987 12.7542 37.2813 8.49399 44.2314 6.10216C50.9667 3.78422 64.2873 5.81914 70.4249 5.96641C105.866 6.81677 141.306 7.58809 176.75 8.59886C217.874 9.77162 258.906 11.0553 300 14.4892",
+  "M4.99805 20.9998C65.6267 17.4649 126.268 13.845 187.208 12.8887C226.483 12.2723 265.751 13.2796 304.998 13.9998",
+  "M5 29.8857C52.3147 26.9322 99.4329 21.6611 146.503 17.1765C151.753 16.6763 157.115 15.9505 162.415 15.6551C163.28 15.6069 165.074 15.4123 164.383 16.4275C161.704 20.3627 157.134 23.7551 153.95 27.4983C153.209 28.3702 148.194 33.4751 150.669 34.6605C153.638 36.0819 163.621 32.6063 165.039 32.2029C178.55 28.3608 191.49 23.5968 204.869 19.5404C231.903 11.3436 259.347 5.83254 288.793 5.12258C294.094 4.99476 299.722 4.82265 305 5.45025"
+];
+
+function AnimatedSVGUnderline({
+  text,
+  textColor = "inherit",
+  underlineColor = "#5b8266",
+  strokeWidth = 3.5,
+  gap = 2,
+  autoAnimate = true
+}: {
+  text: string;
+  textColor?: string;
+  underlineColor?: string;
+  strokeWidth?: number;
+  gap?: number;
+  autoAnimate?: boolean;
+}) {
+  const [isHovered, setIsHovered] = useState(autoAnimate);
+  const [svgIndex, setSvgIndex] = useState(0);
+
+  const handleHoverStart = () => {
+    setSvgIndex((prev) => (prev + 1) % UNDERLINE_SVG_VARIANTS.length);
+    setIsHovered(true);
+  };
+
+  const handleHoverEnd = () => {
+    if (!autoAnimate) setIsHovered(false);
+  };
+
+  return (
+    <span
+      className="inline-flex flex-col items-center relative cursor-pointer select-none"
+      onMouseEnter={handleHoverStart}
+      onMouseLeave={handleHoverEnd}
+      style={{ color: textColor }}
+    >
+      <span>{text}</span>
+      <span
+        className="w-full relative overflow-visible"
+        style={{ color: underlineColor, height: '14px', marginTop: `${gap}px` }}
+      >
+        <AnimatePresence>
+          {isHovered && (
+            <motion.svg
+              key={svgIndex}
+              viewBox="0 0 310 40"
+              preserveAspectRatio="none"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-full h-full absolute top-0 left-0 pointer-events-none overflow-visible"
+            >
+              <motion.path
+                d={UNDERLINE_SVG_VARIANTS[svgIndex]}
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+                fill="none"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 1 }}
+                exit={{ pathLength: 0, opacity: 0 }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              />
+            </motion.svg>
+          )}
+        </AnimatePresence>
+      </span>
+    </span>
+  );
+}
 
 export default function NoskaWispr() {
   const navigate = useNavigate();
@@ -62,16 +171,6 @@ export default function NoskaWispr() {
   const [advantageIndex, setAdvantageIndex] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [activeNav, setActiveNav] = useState<'home' | 'dictation'>('dictation');
-  const [pillTimer, setPillTimer] = useState(2);
-  const cleanupBadges = ['Removed Umm', 'Fixed Grammar', 'Auto Punctuation', '4x Velocity'];
-  const [activeBadgeIndex, setActiveBadgeIndex] = useState(0);
-
-  useEffect(() => {
-    const badgeTimer = setInterval(() => {
-      setActiveBadgeIndex((prev) => (prev + 1) % 4);
-    }, 2800);
-    return () => clearInterval(badgeTimer);
-  }, []);
 
   // Authentic Speech-to-Text Personalization States
   const [activeTone, setActiveTone] = useState<'formal' | 'casual' | 'executive' | 'technical'>('formal');
@@ -79,6 +178,9 @@ export default function NoskaWispr() {
   const [newWordInput, setNewWordInput] = useState('');
   const [activeSnippetIndex, setActiveSnippetIndex] = useState(0);
   const [isRewindActive, setIsRewindActive] = useState(false);
+
+  // Step Carousel Tab in Why Flow section ('agent' | 'translate' | 'tone' | 'rewind')
+  const [bentoTab, setBentoTab] = useState<'agent' | 'translate' | 'tone' | 'rewind'>('agent');
 
   // Translate Mode State (Hinglish, Spanish, Japanese, German)
   const [activeTranslateLang, setActiveTranslateLang] = useState<'hinglish' | 'spanish' | 'japanese' | 'german'>('hinglish');
@@ -101,12 +203,171 @@ export default function NoskaWispr() {
     }, 550);
   };
 
-  useEffect(() => {
-    const t = setInterval(() => setPillTimer((s) => (s + 1) % 60), 1000);
-    return () => clearInterval(t);
-  }, []);
-
   const recognitionRef = useRef<any>(null);
+
+  // StepsFlow State (Real-World Noska Flow Usage Steps)
+  const [activeStepFlow, setActiveStepFlow] = useState<number>(0);
+
+  const realStepsFlow = [
+    {
+      num: '01',
+      title: 'Global Shortcut Summon',
+      hotkey: 'Ctrl+Shift+Space',
+      macHotkey: '⌥ + Space',
+      badge: 'Zero Focus Loss',
+      tagline: 'Summon floating pill anywhere in 0.05s',
+      desc: 'Hit the universal shortcut from any app—VS Code, Slack, Notion, Chrome, Linear, Figma, or Terminal. Noska’s floating voice HUD instantly glides into view directly over your active workspace without stealing focus.',
+      details: [
+        'Floats atop any active native desktop window',
+        'Cursor stays in place inside your text editor or app',
+        'Works offline via lightweight background daemon'
+      ],
+      interactiveType: 'hud_summon',
+      appContext: 'VS Code & Slack Desktop'
+    },
+    {
+      num: '02',
+      title: 'Speak Naturally at 220 WPM',
+      hotkey: '4x Typing Speed',
+      macHotkey: 'Raw Voice Flow',
+      badge: 'Unfiltered Thoughts',
+      tagline: 'Talk stream-of-consciousness, code, or mixed languages',
+      desc: 'Don’t slow down to structure thoughts. Speak naturally at 220 WPM. Say messy sentences, technical acronyms, mixed Hindi/English (Hinglish), or direct agent commands like "create a Linear issue for auth timeout".',
+      details: [
+        'Captures continuous speech at 220+ words per minute',
+        'Handles background cafe noise & whispered speech',
+        'Multi-lingual & multi-dialect auto-detection'
+      ],
+      interactiveType: 'voice_stream',
+      appContext: 'Natural Speech Stream'
+    },
+    {
+      num: '03',
+      title: 'On-Device Whisper & Tone Intelligence',
+      hotkey: '⚡ 0.18s Local Latency',
+      macHotkey: '100% Private',
+      badge: 'Local AI Processing',
+      tagline: 'Instant filler removal, grammar formatting & tone matching',
+      desc: 'Local Whisper v3 and on-device neural parser instantly strip vocal fillers ("um", "uh", "you know"), calibrate tone for the active app, capitalize jargon correctly, and structure markdown bullets in milliseconds.',
+      details: [
+        'Vocal filler purging with zero semantic loss',
+        'App-aware tone adaptation (Casual Slack vs Formal Email)',
+        '100% On-device privacy with zero cloud audio upload'
+      ],
+      interactiveType: 'ai_cleaning',
+      appContext: 'Whisper v3 Neural Engine'
+    },
+    {
+      num: '04',
+      title: 'Direct Cursor Injection & MCP Action',
+      hotkey: 'Zero Copy-Paste',
+      macHotkey: 'Autonomous Execution',
+      badge: 'Instant Result',
+      tagline: 'Direct typing at cursor or background tool execution',
+      desc: 'Your polished words type instantly right where your cursor blinks in your editor or document. For agent commands, Noska executes MCP tools across GitHub, Linear, Supabase, and Slack autonomously in the background.',
+      details: [
+        'Native OS Accessibility API direct cursor paste',
+        'MCP Model Context Protocol background tool trigger',
+        'Hands-free voice rewind ("scratch that") correction'
+      ],
+      interactiveType: 'cursor_injection',
+      appContext: 'Active Target Application'
+    }
+  ];
+
+  // Roundelpro Ecosystem Orbit Data
+  const [activeOrbitApp, setActiveOrbitApp] = useState<string>('vscode');
+
+  const roundelApps = [
+    {
+      id: 'vscode',
+      name: 'VS Code & Cursor',
+      role: 'Code & Terminal Edits',
+      spoken: '“Refactor this auth hook to use Supabase session cache and handle 401”',
+      result: 'export const useAuth = () => useSession({ retryOn401: true });',
+      color: 'from-blue-500/20 to-indigo-500/20',
+      badge: 'Development',
+      angle: 0,
+      ring: 'outer'
+    },
+    {
+      id: 'slack',
+      name: 'Slack & Discord',
+      role: 'Async Team Comms',
+      spoken: '“Hey team PR 142 is merged to staging deploying in 5 minutes”',
+      result: 'Hey team, PR #142 is merged to staging. Deploying in ~5 minutes! 🚀',
+      color: 'from-[#5b8266]/20 to-[#edf5ef]',
+      badge: 'Team Chat',
+      angle: 45,
+      ring: 'inner'
+    },
+    {
+      id: 'linear',
+      name: 'Linear & Jira',
+      role: 'Autonomous Issue Creation',
+      spoken: '“Create high priority bug for mobile navbar overflow assign to Sarah”',
+      result: '✓ Created LIN-892: Mobile navbar overflow [High Priority] -> Sarah',
+      color: 'from-amber-500/20 to-orange-500/20',
+      badge: 'Project Mgmt',
+      angle: 90,
+      ring: 'outer'
+    },
+    {
+      id: 'claude',
+      name: 'Claude & ChatGPT',
+      role: 'Voice Prompting & Reasoning',
+      spoken: '“Analyze this error stack and suggest an idempotent retry strategy”',
+      result: 'Prompt injected: Synthesizing exponential backoff with jitter...',
+      color: 'from-[#f48574]/20 to-[#fdeee9]',
+      badge: 'AI Assistants',
+      angle: 135,
+      ring: 'inner'
+    },
+    {
+      id: 'notion',
+      name: 'Notion & Docs',
+      role: 'Structured Documentation',
+      spoken: '“Meeting notes with Aditya on Q3 voice latency benchmarks and release plan”',
+      result: '### Q3 Voice Latency Benchmarks\n• Aditya & team targets < 180ms\n• Release date: Oct 12',
+      color: 'from-neutral-500/20 to-stone-500/20',
+      badge: 'Docs & Wikis',
+      angle: 180,
+      ring: 'outer'
+    },
+    {
+      id: 'supabase',
+      name: 'Supabase & SQL',
+      role: 'Natural Voice Queries',
+      spoken: '“Select count of voice events where duration is greater than 30 seconds”',
+      result: 'SELECT COUNT(*) FROM voice_events WHERE duration_seconds > 30;',
+      color: 'from-[#5b8266]/20 to-[#c1dfd4]/30',
+      badge: 'Database',
+      angle: 225,
+      ring: 'inner'
+    },
+    {
+      id: 'github',
+      name: 'GitHub & Git CLI',
+      role: 'Voice Commit & PRs',
+      spoken: '“Git commit message add voice rewind engine with multi-buffer rollback”',
+      result: 'git commit -m "feat(voice): add voice rewind engine with multi-buffer rollback"',
+      color: 'from-slate-600/20 to-neutral-700/20',
+      badge: 'Version Control',
+      angle: 270,
+      ring: 'outer'
+    },
+    {
+      id: 'gmail',
+      name: 'Gmail & Superhuman',
+      role: 'Executive Communication',
+      spoken: '“Send pilot partnership update to Marc at Sequoia with latest metrics”',
+      result: 'Subject: Noska Flow Pilot Update — Latest Metrics & Roadmap',
+      color: 'from-rose-500/20 to-red-500/20',
+      badge: 'Email Client',
+      angle: 315,
+      ring: 'inner'
+    }
+  ];
 
   // 1. Initialize Lenis buttery-smooth inertial momentum scroll on the container
   useEffect(() => {
@@ -117,11 +378,11 @@ export default function NoskaWispr() {
     const lenis = new Lenis({
       wrapper: container,
       content: content,
-      duration: 1.4, // Luxurious, silky glide
+      duration: 1.05, // Instantaneous, silky responsive glide
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      wheelMultiplier: 0.85, // Silky granular response
-      touchMultiplier: 1.6,
+      wheelMultiplier: 1.0, // Natural 1:1 scroll speed
+      touchMultiplier: 1.5,
       infinite: false,
     });
     lenisRef.current = lenis;
@@ -133,14 +394,16 @@ export default function NoskaWispr() {
     }
     rafId = requestAnimationFrame(raf);
 
-    // Scroll state tracking via Lenis + native container scroll backup
+    // Scroll state tracking via Lenis + native container scroll backup with state bailout
     const handleScroll = () => {
       if (container) {
-        setIsScrolled(container.scrollTop > 25);
+        const scrolled = container.scrollTop > 25;
+        setIsScrolled((prev) => (prev !== scrolled ? scrolled : prev));
       }
     };
     lenis.on('scroll', (e: any) => {
-      setIsScrolled(e.scroll > 25);
+      const scrolled = e.scroll > 25;
+      setIsScrolled((prev) => (prev !== scrolled ? scrolled : prev));
     });
     container.addEventListener('scroll', handleScroll, { passive: true });
 
@@ -167,7 +430,7 @@ export default function NoskaWispr() {
     const elem = document.getElementById(id);
     if (!elem) return;
     if (lenisRef.current) {
-      lenisRef.current.scrollTo(elem, { offset: -30, duration: 1.35 });
+      lenisRef.current.scrollTo(elem, { offset: -30, duration: 1.15 });
     } else if (containerRef.current) {
       const elemRect = elem.getBoundingClientRect();
       const containerRect = containerRef.current.getBoundingClientRect();
@@ -185,11 +448,11 @@ export default function NoskaWispr() {
     offset: ["start start", "end start"]
   });
 
-  // Spring physics for buttery-smooth momentum without lag or jitter
+  // Spring physics: responsive, low-inertia, lag-free momentum
   const smoothHeroProgress = useSpring(heroScrollProgress, {
-    stiffness: 85,
-    damping: 26,
-    mass: 0.5,
+    stiffness: 220,
+    damping: 32,
+    mass: 0.1,
     restDelta: 0.0001
   });
 
@@ -232,6 +495,41 @@ export default function NoskaWispr() {
   const cloudFrontY = useTransform(smoothHeroProgress, [0, 0.85], [0, 55]);
   const cloudFrontScale = useTransform(smoothHeroProgress, [0, 0.85], [1, 1.04]);
   const cloudFrontOpacity = useTransform(smoothHeroProgress, [0, 0.7, 0.95], [1, 0.98, 0.85]);
+
+  // Section 9 ("Built around how you speak") — Framer Horiscroll Pinned Track
+  const howYouWorkRef = useRef<HTMLElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [maxTrackScroll, setMaxTrackScroll] = useState(2300);
+
+  useEffect(() => {
+    const measureTrack = () => {
+      if (trackRef.current) {
+        const scrollW = trackRef.current.scrollWidth;
+        const viewW = window.innerWidth;
+        const targetScroll = Math.max(0, scrollW - viewW + 120);
+        setMaxTrackScroll(targetScroll);
+      }
+    };
+    measureTrack();
+    window.addEventListener('resize', measureTrack);
+    const t1 = setTimeout(measureTrack, 250);
+    const t2 = setTimeout(measureTrack, 1000);
+    return () => {
+      window.removeEventListener('resize', measureTrack);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
+
+  const { scrollYProgress: cardsScrollProgress } = useScroll({
+    container: containerRef,
+    target: howYouWorkRef,
+    offset: ["start start", "end end"]
+  });
+
+  // Calculate dynamic pixel travel across all 6 cards so Card 06 is 100% visible on any zoom & screen width
+  const horiTrackX = useTransform(cardsScrollProgress, [0, 0.82, 1], [0, -maxTrackScroll, -maxTrackScroll]);
+  const horiProgressBar = useTransform(cardsScrollProgress, [0, 0.82, 1], ["0%", "100%", "100%"]);
 
   // 4. Speech Recognition & Voice Simulator
   useEffect(() => {
@@ -440,28 +738,79 @@ export default function NoskaWispr() {
 
   const agentCommands = [
     {
-      title: "Create Linear Issue",
-      voiceInput: "“Create a Linear issue: Fix auth token refresh race condition, high priority, assign to me”",
-      intent: "linear.create_issue",
-      toolCall: 'linear.create_issue({ title: "Fix auth token refresh race condition", priority: "urgent", assignee: "@me" })',
-      result: "✓ Issue LIN-842 created & assigned to you on Linear",
-      category: "Issue Tracker"
+      title: "Open Notifications",
+      voiceInput: "“Open notifications and mark all as read”",
+      intent: "noska.ui.openPanel",
+      toolCall: 'noska.ui.openPanel("notifications", { markRead: true })',
+      result: "✓ Notifications drawer opened • 3 unread cleared",
+      category: "In-App UI"
     },
     {
-      title: "Post Slack Announcement",
-      voiceInput: "“Draft Slack update in #product: Q3 Whisper engine is live with 0.18s latency!”",
-      intent: "slack.post_message",
-      toolCall: 'slack.post_message({ channel: "#product", message: "🚀 Q3 Whisper engine is live with 0.18s latency!" })',
-      result: "✓ Broadcasted to #product channel (142 members)",
-      category: "Team Comms"
+      title: "Switch Dark Mode",
+      voiceInput: "“Switch interface theme to Obsidian Dark mode”",
+      intent: "noska.theme.set",
+      toolCall: 'noska.theme.set("obsidian-dark")',
+      result: "✓ Workspace theme updated to Obsidian Dark",
+      category: "Appearance"
     },
     {
-      title: "Schedule Google Calendar",
-      voiceInput: "“Schedule 30-minute debrief with Marcus on Calendar for tomorrow at 3 PM”",
-      intent: "gcal.create_event",
-      toolCall: 'gcal.create_event({ title: "Debrief with Marcus", start: "Tomorrow 3:00 PM", duration: "30m" })',
-      result: "✓ Calendar invite dispatched to marcus@acme.co",
-      category: "Calendar"
+      title: "Search Notes",
+      voiceInput: "“Search notes for Q4 Product Roadmap & open canvas”",
+      intent: "noska.search.open",
+      toolCall: 'noska.search.open({ query: "Q4 Roadmap", type: "canvas" })',
+      result: "✓ Located & opened 'Q4 Product Roadmap' in 40ms",
+      category: "Navigation"
+    },
+    {
+      title: "Create Canvas",
+      voiceInput: "“Create a new infinite canvas titled Sprint Retrospective”",
+      intent: "noska.canvas.create",
+      toolCall: 'noska.canvas.create({ title: "Sprint Retrospective", template: "retro" })',
+      result: "✓ Created canvas 'Sprint Retrospective' with retro template",
+      category: "Workspace"
+    },
+    {
+      title: "Export to PDF",
+      voiceInput: "“Export the current active canvas as a high-res PDF”",
+      intent: "noska.canvas.export",
+      toolCall: 'noska.canvas.export({ format: "pdf", dpi: 300 })',
+      result: "✓ Rendered vector PDF & saved to Downloads folder",
+      category: "Export & Share"
+    },
+    {
+      title: "Split Screen View",
+      voiceInput: "“Split screen to view API documentation side by side”",
+      intent: "noska.layout.split",
+      toolCall: 'noska.layout.split({ pane: "right", target: "/docs/api" })',
+      result: "✓ Split pane activated with live API reference",
+      category: "Layout"
+    }
+  ];
+
+  const snippetPresets = [
+    {
+      title: "Calendar Link",
+      trigger: "“my calendar link”",
+      expansion: "https://cal.com/noska/voice-sync",
+      tag: "Scheduling"
+    },
+    {
+      title: "Executive Sign-Off",
+      trigger: "“standard sign off”",
+      expansion: "Best regards,\nAlex Chen\nCo-Founder & Head of Product • Noska Flow",
+      tag: "Email Signature"
+    },
+    {
+      title: "GitHub Repo",
+      trigger: "“github repo”",
+      expansion: "https://github.com/noska-lab/noska-flow-core",
+      tag: "Developer Link"
+    },
+    {
+      title: "Standup Update",
+      trigger: "“daily standup update”",
+      expansion: "Yesterday: Shipped on-device Whisper v3 pipeline.\nToday: Benchmarking MCP background runner.\nBlockers: None.",
+      tag: "Workflows"
     }
   ];
 
@@ -543,11 +892,11 @@ export default function NoskaWispr() {
       {/* Scrollable Shell */}
       <div ref={contentRef} className="w-full">
 
-        {/* Soft Background Sky Ambiance */}
-        <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
-          <div className="absolute -top-36 -left-36 w-[620px] h-[620px] rounded-full bg-[#dbe8dd]/70 blur-3xl" />
-          <div className="absolute top-10 right-0 w-[680px] h-[680px] rounded-full bg-[#fde9e3]/75 blur-3xl" />
-          <div className="absolute bottom-20 left-1/3 w-[720px] h-[720px] rounded-full bg-[#edf6ee]/55 blur-3xl" />
+        {/* Soft Background Sky Ambiance (Hardware Accelerated) */}
+        <div className="pointer-events-none fixed inset-0 overflow-hidden z-0 will-change-transform transform-gpu">
+          <div className="absolute -top-36 -left-36 w-[620px] h-[620px] rounded-full bg-[#dbe8dd]/60 blur-2xl transform-gpu will-change-transform" />
+          <div className="absolute top-10 right-0 w-[680px] h-[680px] rounded-full bg-[#fde9e3]/65 blur-2xl transform-gpu will-change-transform" />
+          <div className="absolute bottom-20 left-1/3 w-[720px] h-[720px] rounded-full bg-[#edf6ee]/50 blur-2xl transform-gpu will-change-transform" />
         </div>
 
         {/* ==========================================================================
@@ -667,7 +1016,7 @@ export default function NoskaWispr() {
               <span className="wispr-serif-italic text-neutral-800 font-normal">just speak.</span>
             </h1>
             <p className="text-[15.5px] sm:text-[18px] text-neutral-600 max-w-lg mx-auto mt-3.5 sm:mt-4 font-normal leading-relaxed">
-              The voice-to-text AI that turns speech into clear, polished writing in every app.
+              The voice-to-text AI that turns speech into clear, polished writing in Noska all over.
             </p>
           </motion.div>
 
@@ -890,7 +1239,7 @@ export default function NoskaWispr() {
                   fontWeight="600"
                   letterSpacing="0.01em"
                 >
-                  {cleanupBadges[activeBadgeIndex]}
+                  <CleanupBadgeText />
                 </text>
               </g>
 
@@ -900,12 +1249,12 @@ export default function NoskaWispr() {
           {/* BILLOWING CELESTIAL CLOUD HORIZON with Dynamic Scroll Parting */}
           <div className="relative w-full -mt-8 sm:-mt-12 pointer-events-none select-none z-10">
 
-            {/* Master Responsive Cloudscape Vector with Scroll Parallax */}
+            {/* Master Responsive Cloudscape Vector with Scroll Parallax (Hardware-Accelerated Zero-Lag Render) */}
             <svg
               viewBox="0 0 1440 540"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
-              className="w-full h-auto min-h-[340px] sm:min-h-[440px] block overflow-visible"
+              className="w-full h-auto min-h-[340px] sm:min-h-[440px] block overflow-visible will-change-transform"
             >
               <defs>
                 {/* Celestial Sunrise Radiant Radial Glow */}
@@ -971,23 +1320,9 @@ export default function NoskaWispr() {
                   <stop offset="60%" stopColor="#ffffff" stopOpacity="0.98" />
                   <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
                 </linearGradient>
-
-                {/* Drop Shadows for Dimensional Cloud Billows */}
-                <filter id="wispr-pink-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="-8" stdDeviation="16" floodColor="#f48574" floodOpacity="0.22" />
-                </filter>
-                <filter id="wispr-sage-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="-8" stdDeviation="16" floodColor="#5b8266" floodOpacity="0.18" />
-                </filter>
-                <filter id="wispr-cloud-soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="-10" stdDeviation="18" floodColor="#1e2029" floodOpacity="0.04" />
-                </filter>
-                <filter id="wispr-beam-blur" x="-30%" y="-30%" width="160%" height="160%">
-                  <feGaussianBlur stdDeviation="22" />
-                </filter>
               </defs>
 
-              {/* 1. Center Back: Glowing Sunrise Arch & Shimmering Light Plume with Parallax */}
+              {/* 1. Center Back: Glowing Sunrise Arch & Radiant Light Plume */}
               <motion.g style={{ y: domeY, scale: domeScale, opacity: beamOpacity, transformOrigin: '720px 220px' }}>
                 <ellipse cx="720" cy="220" rx="380" ry="220" fill="url(#wispr-sunrise-glow)" />
                 {/* Diffused light halo */}
@@ -995,20 +1330,18 @@ export default function NoskaWispr() {
                   style={{ scaleX: beamScaleX, transformOrigin: '720px 220px' }}
                   points="650,280 790,280 830,10 610,10"
                   fill="url(#wispr-light-beam)"
-                  opacity="0.55"
-                  filter="url(#wispr-beam-blur)"
+                  opacity="0.6"
                 />
-                {/* Sharp radiant central plume (Wispr enlightenment ray) */}
+                {/* Radiant central plume */}
                 <motion.polygon
                   style={{ scaleX: beamScaleX, transformOrigin: '720px 220px' }}
                   points="685,280 755,280 780,20 660,20"
                   fill="url(#wispr-light-beam)"
                   opacity="0.95"
-                  className="wispr-cloud-beam-shimmer"
                 />
               </motion.g>
 
-              {/* 2. Left Flank: Voluptuous Soft Blush Pink Clouds with Scroll Parting */}
+              {/* 2. Left Flank: Voluptuous Soft Blush Pink Clouds with Parallax Glide */}
               <motion.g
                 style={{
                   x: cloudLeftX,
@@ -1017,25 +1350,29 @@ export default function NoskaWispr() {
                   rotate: cloudLeftRotate,
                   transformOrigin: '240px 240px'
                 }}
-                filter="url(#wispr-pink-shadow)"
               >
-                <g className="wispr-cloud-drift-left">
-                  {/* Deep layer */}
-                  <circle cx="120" cy="240" r="145" fill="url(#wispr-pink-grad-1)" opacity="0.9" />
-                  <circle cx="260" cy="200" r="135" fill="url(#wispr-pink-grad-1)" opacity="0.9" />
-                  <circle cx="390" cy="230" r="120" fill="url(#wispr-pink-grad-1)" opacity="0.85" />
-                  {/* Fore layer */}
-                  <circle cx="50" cy="270" r="130" fill="url(#wispr-pink-grad-2)" />
-                  <circle cx="190" cy="230" r="140" fill="url(#wispr-pink-grad-2)" />
-                  <circle cx="330" cy="255" r="130" fill="url(#wispr-pink-grad-2)" />
-                  <circle cx="460" cy="300" r="105" fill="url(#wispr-pink-grad-2)" opacity="0.9" />
-                  {/* Specular curved highlights */}
-                  <path d="M 110 125 Q 190 115 250 140" stroke="url(#wispr-pink-highlight)" strokeWidth="3" fill="none" strokeLinecap="round" />
-                  <path d="M 250 160 Q 320 150 375 180" stroke="url(#wispr-pink-highlight)" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-                </g>
+                {/* Ambient Soft Shadow Layer */}
+                <circle cx="120" cy="246" r="145" fill="#f48574" opacity="0.12" />
+                <circle cx="260" cy="206" r="135" fill="#f48574" opacity="0.12" />
+                <circle cx="390" cy="236" r="120" fill="#f48574" opacity="0.1" />
+
+                {/* Deep layer */}
+                <circle cx="120" cy="240" r="145" fill="url(#wispr-pink-grad-1)" opacity="0.92" />
+                <circle cx="260" cy="200" r="135" fill="url(#wispr-pink-grad-1)" opacity="0.92" />
+                <circle cx="390" cy="230" r="120" fill="url(#wispr-pink-grad-1)" opacity="0.88" />
+
+                {/* Fore layer */}
+                <circle cx="50" cy="270" r="130" fill="url(#wispr-pink-grad-2)" />
+                <circle cx="190" cy="230" r="140" fill="url(#wispr-pink-grad-2)" />
+                <circle cx="330" cy="255" r="130" fill="url(#wispr-pink-grad-2)" />
+                <circle cx="460" cy="300" r="105" fill="url(#wispr-pink-grad-2)" opacity="0.92" />
+
+                {/* Specular curved highlights */}
+                <path d="M 110 125 Q 190 115 250 140" stroke="url(#wispr-pink-highlight)" strokeWidth="3" fill="none" strokeLinecap="round" />
+                <path d="M 250 160 Q 320 150 375 180" stroke="url(#wispr-pink-highlight)" strokeWidth="2.5" fill="none" strokeLinecap="round" />
               </motion.g>
 
-              {/* 3. Right Flank: Voluptuous Soft Sage Mint Clouds with Scroll Parting */}
+              {/* 3. Right Flank: Voluptuous Soft Sage Mint Clouds with Parallax Glide */}
               <motion.g
                 style={{
                   x: cloudRightX,
@@ -1044,34 +1381,42 @@ export default function NoskaWispr() {
                   rotate: cloudRightRotate,
                   transformOrigin: '1200px 240px'
                 }}
-                filter="url(#wispr-sage-shadow)"
               >
-                <g className="wispr-cloud-drift-right">
-                  {/* Deep layer */}
-                  <circle cx="1320" cy="240" r="145" fill="url(#wispr-sage-grad-1)" opacity="0.9" />
-                  <circle cx="1180" cy="200" r="135" fill="url(#wispr-sage-grad-1)" opacity="0.9" />
-                  <circle cx="1050" cy="230" r="120" fill="url(#wispr-sage-grad-1)" opacity="0.85" />
-                  {/* Fore layer */}
-                  <circle cx="1390" cy="270" r="130" fill="url(#wispr-sage-grad-2)" />
-                  <circle cx="1250" cy="230" r="140" fill="url(#wispr-sage-grad-2)" />
-                  <circle cx="1110" cy="255" r="130" fill="url(#wispr-sage-grad-2)" />
-                  <circle cx="980" cy="300" r="105" fill="url(#wispr-sage-grad-2)" opacity="0.9" />
-                  {/* Specular curved highlights */}
-                  <path d="M 1330 125 Q 1250 115 1190 140" stroke="url(#wispr-sage-highlight)" strokeWidth="3" fill="none" strokeLinecap="round" />
-                  <path d="M 1190 160 Q 1120 150 1065 180" stroke="url(#wispr-sage-highlight)" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-                </g>
+                {/* Ambient Soft Shadow Layer */}
+                <circle cx="1320" cy="246" r="145" fill="#5b8266" opacity="0.1" />
+                <circle cx="1180" cy="206" r="135" fill="#5b8266" opacity="0.1" />
+                <circle cx="1050" cy="236" r="120" fill="#5b8266" opacity="0.08" />
+
+                {/* Deep layer */}
+                <circle cx="1320" cy="240" r="145" fill="url(#wispr-sage-grad-1)" opacity="0.92" />
+                <circle cx="1180" cy="200" r="135" fill="url(#wispr-sage-grad-1)" opacity="0.92" />
+                <circle cx="1050" cy="230" r="120" fill="url(#wispr-sage-grad-1)" opacity="0.88" />
+
+                {/* Fore layer */}
+                <circle cx="1390" cy="270" r="130" fill="url(#wispr-sage-grad-2)" />
+                <circle cx="1250" cy="230" r="140" fill="url(#wispr-sage-grad-2)" />
+                <circle cx="1110" cy="255" r="130" fill="url(#wispr-sage-grad-2)" />
+                <circle cx="980" cy="300" r="105" fill="url(#wispr-sage-grad-2)" opacity="0.92" />
+
+                {/* Specular curved highlights */}
+                <path d="M 1330 125 Q 1250 115 1190 140" stroke="url(#wispr-sage-highlight)" strokeWidth="3" fill="none" strokeLinecap="round" />
+                <path d="M 1190 160 Q 1120 150 1065 180" stroke="url(#wispr-sage-highlight)" strokeWidth="2.5" fill="none" strokeLinecap="round" />
               </motion.g>
 
               {/* 4. Mid-Ground: Warm Ivory Pillows for 3D Layered Depth */}
-              <motion.g style={{ y: cloudMidY, transformOrigin: '720px 320px' }} filter="url(#wispr-cloud-soft-shadow)">
+              <motion.g style={{ y: cloudMidY, transformOrigin: '720px 320px' }}>
                 {/* Mid-Left Ivory Cluster */}
                 <motion.g style={{ x: cloudMidLeftX }}>
+                  <circle cx="280" cy="326" r="135" fill="#000000" opacity="0.03" />
+                  <circle cx="480" cy="316" r="125" fill="#000000" opacity="0.03" />
                   <circle cx="280" cy="320" r="135" fill="url(#wispr-ivory-grad)" />
                   <circle cx="480" cy="310" r="125" fill="url(#wispr-ivory-grad)" />
                   <circle cx="640" cy="340" r="110" fill="url(#wispr-ivory-grad)" />
                 </motion.g>
                 {/* Mid-Right Ivory Cluster */}
                 <motion.g style={{ x: cloudMidRightX }}>
+                  <circle cx="960" cy="316" r="125" fill="#000000" opacity="0.03" />
+                  <circle cx="1160" cy="326" r="135" fill="#000000" opacity="0.03" />
                   <circle cx="800" cy="340" r="110" fill="url(#wispr-ivory-grad)" />
                   <circle cx="960" cy="310" r="125" fill="url(#wispr-ivory-grad)" />
                   <circle cx="1160" cy="320" r="135" fill="url(#wispr-ivory-grad)" />
@@ -1086,10 +1431,11 @@ export default function NoskaWispr() {
                   opacity: cloudFrontOpacity,
                   transformOrigin: '720px 420px'
                 }}
-                filter="url(#wispr-cloud-soft-shadow)"
               >
                 {/* Left Parting Cumulus Cluster */}
                 <motion.g style={{ x: cloudFrontLeftX }}>
+                  <circle cx="150" cy="358" r="160" fill="#000000" opacity="0.035" />
+                  <circle cx="320" cy="343" r="150" fill="#000000" opacity="0.035" />
                   <circle cx="-10" cy="380" r="175" fill="url(#wispr-cumulus-grad)" />
                   <circle cx="150" cy="350" r="160" fill="url(#wispr-cumulus-grad)" />
                   <circle cx="320" cy="335" r="150" fill="url(#wispr-cumulus-grad)" />
@@ -1106,6 +1452,8 @@ export default function NoskaWispr() {
 
                 {/* Right Parting Cumulus Cluster */}
                 <motion.g style={{ x: cloudFrontRightX }}>
+                  <circle cx="1120" cy="343" r="150" fill="#000000" opacity="0.035" />
+                  <circle cx="1290" cy="358" r="160" fill="#000000" opacity="0.035" />
                   <circle cx="950" cy="345" r="140" fill="url(#wispr-cumulus-grad)" />
                   <circle cx="1120" cy="335" r="150" fill="url(#wispr-cumulus-grad)" />
                   <circle cx="1290" cy="350" r="160" fill="url(#wispr-cumulus-grad)" />
@@ -1157,23 +1505,24 @@ export default function NoskaWispr() {
         {/* ==========================================================================
                 4. "4x FASTER THAN TYPING" SPEED SUITE (Exact Wispr Flow Anatomy)
                ========================================================================== */}
-        <section id="benchmarks" className="relative px-4 sm:px-8 md:px-12 py-16 bg-white">
-          <div className="wispr-speed-container bg-[#092b1f] text-[#ffffeb] rounded-[36px] sm:rounded-[48px] p-6 sm:p-12 md:p-16 relative overflow-hidden shadow-2xl">
+        <section id="benchmarks" className="relative px-4 sm:px-8 md:px-12 py-16 bg-[#faf9f0]">
+          <div className="wispr-speed-container bg-[#faf8fd] text-neutral-900 rounded-[36px] sm:rounded-[48px] p-6 sm:p-12 md:p-16 relative overflow-hidden border-2 border-black shadow-[4px_5px_0px_#000000]">
 
-            {/* Subtle emerald glow inside container */}
-            <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[#1b5e46]/35 blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-[#e28a7a]/15 blur-3xl pointer-events-none" />
+            {/* Soft pastel ambient blurs inside container (matching Image 2 palette) */}
+            <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#fbb4ae]/20 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-[#c1dfd4]/35 blur-3xl pointer-events-none" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] rounded-full bg-[#f3e8ff]/50 blur-3xl pointer-events-none" />
 
             {/* Section Header */}
             <div className="max-w-3xl mx-auto text-center relative z-10 mb-12 sm:mb-16">
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#134332] border border-white/10 text-[11.5px] font-semibold text-[#8de2be] uppercase tracking-wider mb-4">
-                <Zap size={12} />
+              <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#f3e8ff] border-2 border-black text-[12px] font-bold text-neutral-900 uppercase tracking-wider mb-4 shadow-[2px_2px_0px_#000000]">
+                <Zap size={12} className="text-[#3d6148]" />
                 <span>Velocity Benchmark</span>
               </div>
-              <h2 className="text-[38px] sm:text-[58px] font-normal tracking-tight text-[#ffffeb] leading-[1.08]">
-                4x faster <em className="italic font-serif font-light text-[#fdd2c8]">than typing</em>
+              <h2 className="text-[38px] sm:text-[58px] font-extrabold tracking-tight text-neutral-900 leading-[1.08]">
+                4x faster <em className="italic font-serif font-light text-[#5b8266]">than typing</em>
               </h2>
-              <p className="text-[14.5px] sm:text-[16.5px] text-[#ffffeb]/75 max-w-xl mx-auto mt-4 font-normal leading-relaxed">
+              <p className="text-[14.5px] sm:text-[16.5px] text-neutral-600 max-w-xl mx-auto mt-4 font-normal leading-relaxed">
                 Voice that finally works is here. Flow lets you create, code, message, and write at the speed of thought, 4x faster than your keyboard.
               </p>
             </div>
@@ -1182,16 +1531,16 @@ export default function NoskaWispr() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-5xl mx-auto relative z-10 mb-12">
 
               {/* Keyboard 45 WPM Card */}
-              <div className="rounded-[28px] bg-[#0d3627] border border-white/10 p-6 sm:p-8 flex flex-col justify-between min-h-[190px]">
-                <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                  <span className="text-[13px] font-semibold uppercase tracking-wider text-[#ffffeb]/60">Keyboard</span>
-                  <span className="text-[20px] font-mono font-bold text-[#ffffeb]/80">45 wpm</span>
+              <div className="rounded-[28px] bg-white border-2 border-black/15 shadow-[2px_2px_0px_#000000]/10 p-6 sm:p-8 flex flex-col justify-between min-h-[190px]">
+                <div className="flex items-center justify-between pb-3 border-b border-black/10">
+                  <span className="text-[13px] font-bold uppercase tracking-wider text-neutral-500">Keyboard</span>
+                  <span className="text-[20px] font-mono font-bold text-neutral-700">45 wpm</span>
                 </div>
 
                 <div className="my-4 overflow-hidden relative h-10 flex items-center">
                   <svg width="100%" height="32" viewBox="0 0 600 32" className="overflow-visible">
                     <path id="curve-keyboard" d="M0 16 H1200" fill="transparent" />
-                    <text className="text-[13.5px] font-medium fill-[#ffffeb]/40">
+                    <text className="text-[13.5px] font-medium fill-neutral-400">
                       <textPath xlinkHref="#curve-keyboard">
                         I'm getting started with the project. How would you like to set up the file? Typing one sluggish keystroke at a time...
                       </textPath>
@@ -1200,30 +1549,30 @@ export default function NoskaWispr() {
                   </svg>
                 </div>
 
-                <div className="text-[12px] text-[#ffffeb]/50">
+                <div className="text-[12px] text-neutral-500 font-medium">
                   Standard keyboard typing speed with typing fatigue
                 </div>
               </div>
 
               {/* Wispr Flow 220 WPM Card */}
-              <div className="rounded-[28px] bg-gradient-to-br from-[#124835] to-[#0c3929] border border-[#f48574]/40 p-6 sm:p-8 flex flex-col justify-between min-h-[190px] shadow-lg relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#f48574]/15 rounded-full blur-2xl pointer-events-none" />
+              <div className="rounded-[28px] bg-[#f3e8ff] border-2 border-black shadow-[3.5px_4px_0px_#000000] p-6 sm:p-8 flex flex-col justify-between min-h-[190px] relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#c1dfd4]/40 rounded-full blur-2xl pointer-events-none" />
 
-                <div className="flex items-center justify-between pb-3 border-b border-white/10 relative z-10">
+                <div className="flex items-center justify-between pb-3 border-b border-black/15 relative z-10">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#f48574] animate-pulse" />
-                    <span className="text-[13px] font-semibold uppercase tracking-wider text-white">Flow</span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#5b8266] animate-pulse border border-black/20" />
+                    <span className="text-[13px] font-extrabold uppercase tracking-wider text-neutral-900">Flow</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[20px] font-mono font-bold text-[#fdd2c8]">220 wpm</span>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f48574]/20 text-[#fdd2c8] border border-[#f48574]/30">4.9x speed</span>
+                    <span className="text-[20px] font-mono font-black text-neutral-900">220 wpm</span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white border-2 border-black text-neutral-900 shadow-[1.5px_1.5px_0px_#000000]">4.9x speed</span>
                   </div>
                 </div>
 
                 <div className="my-4 overflow-hidden relative h-12 flex items-center">
                   <svg width="100%" height="48" viewBox="0 0 700 48" className="overflow-visible">
-                    <path id="curve-flow-fast" d="M 0 32 Q 175 0 350 32 T 700 32 T 1050 32" fill="transparent" stroke="rgba(244, 133, 116, 0.2)" strokeWidth="1.5" />
-                    <text className="text-[14px] font-semibold fill-[#ffffeb]">
+                    <path id="curve-flow-fast" d="M 0 32 Q 175 0 350 32 T 700 32 T 1050 32" fill="transparent" stroke="rgba(91, 130, 102, 0.35)" strokeWidth="1.5" />
+                    <text className="text-[14px] font-bold fill-neutral-900">
                       <textPath xlinkHref="#curve-flow-fast">
                         Instant speech dictation at the speed of thought. Zero punctuation delays, automatic cleanup, full velocity!
                       </textPath>
@@ -1232,13 +1581,13 @@ export default function NoskaWispr() {
                   </svg>
                 </div>
 
-                <div className="flex items-center justify-between text-[12px] text-[#ffffeb]/70 relative z-10">
+                <div className="flex items-center justify-between text-[12px] text-neutral-800 font-semibold relative z-10">
                   <span>Conversational speaking velocity</span>
                   <div className="flex items-center gap-1">
-                    <span className="wispr-eq-bar" />
-                    <span className="wispr-eq-bar" />
-                    <span className="wispr-eq-bar" />
-                    <span className="wispr-eq-bar" />
+                    <span className="wispr-eq-bar bg-[#5b8266]" />
+                    <span className="wispr-eq-bar bg-[#5b8266]" />
+                    <span className="wispr-eq-bar bg-[#5b8266]" />
+                    <span className="wispr-eq-bar bg-[#5b8266]" />
                   </div>
                 </div>
               </div>
@@ -1252,32 +1601,32 @@ export default function NoskaWispr() {
               <div className="flex items-center justify-center gap-2.5 sm:gap-3 mb-8">
                 <button
                   onClick={() => setActiveApp('slack')}
-                  className={`px-5 py-2.5 rounded-full text-[13px] font-medium flex items-center gap-2 transition-all cursor-pointer ${activeApp === 'slack'
-                    ? 'bg-[#ffffeb] text-neutral-900 shadow-lg font-semibold scale-105'
-                    : 'bg-[#124231] text-[#ffffeb]/75 hover:text-white border border-white/10 hover:bg-[#16503b]'
+                  className={`px-5 py-2.5 rounded-full text-[13px] flex items-center gap-2 transition-all cursor-pointer ${activeApp === 'slack'
+                    ? 'bg-[#f3e8ff] text-neutral-900 border-2 border-black shadow-[2.5px_3px_0px_#000000] font-bold scale-105'
+                    : 'bg-white text-neutral-700 hover:text-neutral-950 border border-black/15 hover:border-black/30 hover:bg-neutral-50 font-medium shadow-xs'
                     }`}
                 >
-                  <MessageCircle size={15} className={activeApp === 'slack' ? 'text-[#36C5F0]' : ''} />
+                  <MessageCircle size={15} className={activeApp === 'slack' ? 'text-[#36C5F0]' : 'text-neutral-500'} />
                   <span>Slack</span>
                 </button>
                 <button
                   onClick={() => setActiveApp('claude')}
-                  className={`px-5 py-2.5 rounded-full text-[13px] font-medium flex items-center gap-2 transition-all cursor-pointer ${activeApp === 'claude'
-                    ? 'bg-[#ffffeb] text-neutral-900 shadow-lg font-semibold scale-105'
-                    : 'bg-[#124231] text-[#ffffeb]/75 hover:text-white border border-white/10 hover:bg-[#16503b]'
+                  className={`px-5 py-2.5 rounded-full text-[13px] flex items-center gap-2 transition-all cursor-pointer ${activeApp === 'claude'
+                    ? 'bg-[#f3e8ff] text-neutral-900 border-2 border-black shadow-[2.5px_3px_0px_#000000] font-bold scale-105'
+                    : 'bg-white text-neutral-700 hover:text-neutral-950 border border-black/15 hover:border-black/30 hover:bg-neutral-50 font-medium shadow-xs'
                     }`}
                 >
-                  <Sparkles size={15} className={activeApp === 'claude' ? 'text-[#D97706]' : ''} />
+                  <Sparkles size={15} className={activeApp === 'claude' ? 'text-[#D97706]' : 'text-neutral-500'} />
                   <span>Claude</span>
                 </button>
                 <button
                   onClick={() => setActiveApp('gmail')}
-                  className={`px-5 py-2.5 rounded-full text-[13px] font-medium flex items-center gap-2 transition-all cursor-pointer ${activeApp === 'gmail'
-                    ? 'bg-[#ffffeb] text-neutral-900 shadow-lg font-semibold scale-105'
-                    : 'bg-[#124231] text-[#ffffeb]/75 hover:text-white border border-white/10 hover:bg-[#16503b]'
+                  className={`px-5 py-2.5 rounded-full text-[13px] flex items-center gap-2 transition-all cursor-pointer ${activeApp === 'gmail'
+                    ? 'bg-[#f3e8ff] text-neutral-900 border-2 border-black shadow-[2.5px_3px_0px_#000000] font-bold scale-105'
+                    : 'bg-white text-neutral-700 hover:text-neutral-950 border border-black/15 hover:border-black/30 hover:bg-neutral-50 font-medium shadow-xs'
                     }`}
                 >
-                  <Monitor size={15} className={activeApp === 'gmail' ? 'text-[#EA4335]' : ''} />
+                  <Monitor size={15} className={activeApp === 'gmail' ? 'text-[#EA4335]' : 'text-neutral-500'} />
                   <span>Gmail</span>
                 </button>
               </div>
@@ -1291,31 +1640,31 @@ export default function NoskaWispr() {
                   initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.25 }}
-                  className="rounded-[24px] bg-[#0c3325] border border-white/12 p-6 flex flex-col justify-between shadow-2xl backdrop-blur-md"
+                  className="rounded-[24px] bg-[#fff5f3] border-2 border-black/15 shadow-[2px_2px_0px_#000000]/10 p-6 flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-black/10">
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        <span className="text-[11.5px] font-semibold uppercase tracking-wider text-[#f48574]">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#f48574] animate-pulse" />
+                        <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#d9483b]">
                           What You Said (Raw Audio)
                         </span>
                       </div>
-                      <span className="text-[11px] font-mono text-[#ffffeb]/70 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-full">
+                      <span className="text-[11px] font-mono font-bold text-neutral-700 bg-white border border-black/15 px-2.5 py-0.5 rounded-full shadow-xs">
                         {appTransformations[activeApp].fillersRemoved} vocal fillers removed
                       </span>
                     </div>
-                    <div className="text-[14px] leading-relaxed text-[#ffffeb]/90 font-mono py-1">
+                    <div className="text-[14px] leading-relaxed text-neutral-800 font-mono py-1">
                       {appTransformations[activeApp].rawAudio}
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-[#ffffeb]/65">
+                  <div className="mt-4 pt-3 border-t border-black/10 flex items-center justify-between text-[11px] text-neutral-600">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-[#f48574]" />
                       <span>{appTransformations[activeApp].legend}</span>
                     </div>
-                    <span className="font-mono text-[#ffffeb]/40 text-[10px]">
+                    <span className="font-mono text-neutral-400 text-[10px]">
                       MIC IN • 16kHz
                     </span>
                   </div>
@@ -1327,17 +1676,17 @@ export default function NoskaWispr() {
                   initial={{ opacity: 0, x: 6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.25 }}
-                  className="rounded-[24px] bg-white text-neutral-900 p-6 flex flex-col justify-between shadow-2xl border border-black/[0.04]"
+                  className="rounded-[24px] bg-white text-neutral-900 p-6 flex flex-col justify-between shadow-[3.5px_4px_0px_#000000] border-2 border-black"
                 >
                   <div>
                     <div className="flex items-center justify-between pb-3 mb-3 border-b border-neutral-100">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                        <span className="text-[11.5px] font-bold uppercase tracking-wider text-neutral-800">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#5b8266]" />
+                        <span className="text-[11.5px] font-bold uppercase tracking-wider text-neutral-900">
                           {appTransformations[activeApp].target}
                         </span>
                       </div>
-                      <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200/60">
+                      <span className="text-[11px] font-mono text-[#3d6148] bg-[#edf5ef] px-2.5 py-0.5 rounded-full font-bold border-2 border-black shadow-[1.5px_1.5px_0px_#000000]">
                         Polished in {appTransformations[activeApp].latency}
                       </span>
                     </div>
@@ -1360,8 +1709,8 @@ export default function NoskaWispr() {
                       )}
                       {appTransformations[activeApp].toolbarType === 'claude' && (
                         <>
-                          <span className="text-[11px] font-mono bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded border border-black/5 font-medium">Markdown Mode</span>
-                          <span className="text-[11px] font-mono text-neutral-400">42 tokens</span>
+                          <span className="text-[11px] font-mono bg-[#f3e8ff] text-neutral-900 px-2 py-0.5 rounded border border-black/20 font-bold">Markdown Mode</span>
+                          <span className="text-[11px] font-mono text-neutral-500">42 tokens</span>
                         </>
                       )}
                       {appTransformations[activeApp].toolbarType === 'gmail' && (
@@ -1369,15 +1718,15 @@ export default function NoskaWispr() {
                           <button className="p-1 hover:text-neutral-700 transition cursor-pointer text-[12px] font-bold">B</button>
                           <button className="p-1 hover:text-neutral-700 transition cursor-pointer text-[12px] italic font-serif">I</button>
                           <button className="p-1 hover:text-neutral-700 transition cursor-pointer text-[12px]">📎</button>
-                          <span className="text-[11px] text-neutral-400 font-medium">To: Marcus Chen</span>
+                          <span className="text-[11px] text-neutral-500 font-medium">To: Marcus Chen</span>
                         </>
                       )}
                     </div>
                     <button
                       onClick={() => handleCopyText(appTransformations[activeApp].polished)}
-                      className="px-3.5 py-1.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-white text-[12px] font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
+                      className="px-4 py-1.5 rounded-full bg-[#f3e8ff] hover:bg-[#e9d5ff] text-neutral-900 border-2 border-black text-[12px] font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-[2px_2px_0px_#000000]"
                     >
-                      {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                      {copied ? <Check size={12} className="text-[#5b8266]" /> : <Copy size={12} />}
                       <span>{copied ? "Copied" : "Copy"}</span>
                     </button>
                   </div>
@@ -1395,8 +1744,8 @@ export default function NoskaWispr() {
                ========================================================================== */}
         <section id="live-studio" className="relative px-6 sm:px-12 py-20 bg-[#fbfbf9] border-t border-black/[0.04]">
           <div className="max-w-4xl mx-auto text-center mb-10">
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white border border-black/[0.08] text-[12px] font-semibold text-neutral-800 tracking-wide mb-3 shadow-xs">
-              <Sparkles size={13} className="text-emerald-600" />
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#f3e8ff] border-2 border-black text-[12px] font-bold text-neutral-900 tracking-wide mb-3 shadow-[2px_2px_0px_#000000]">
+              <Sparkles size={13} className="text-[#3d6148]" />
               <span>Noska Speech-to-Text Interactive Studio</span>
             </div>
             <h2 className="text-[36px] sm:text-[48px] font-extrabold tracking-tight text-neutral-900 leading-tight">
@@ -1412,9 +1761,9 @@ export default function NoskaWispr() {
                 <button
                   key={preset.title}
                   onClick={() => setActivePromptIndex(idx)}
-                  className={`px-4 py-1.5 rounded-full text-[12.5px] font-medium transition-all cursor-pointer ${activePromptIndex === idx
-                    ? 'bg-neutral-900 text-white shadow-md font-semibold scale-105'
-                    : 'bg-white hover:bg-neutral-100 text-neutral-600 border border-black/[0.06]'
+                  className={`px-4 py-1.5 rounded-full text-[12.5px] transition-all cursor-pointer ${activePromptIndex === idx
+                    ? 'bg-[#f3e8ff] text-neutral-950 border-2 border-black shadow-[2px_2px_0px_#000000] font-bold scale-105'
+                    : 'bg-white hover:bg-neutral-50 text-neutral-700 border border-black/10 font-medium'
                     }`}
                 >
                   {preset.title}
@@ -1423,25 +1772,25 @@ export default function NoskaWispr() {
             </div>
 
             {/* Mode Switcher */}
-            <div className="inline-flex items-center gap-1 bg-white p-1 rounded-full border border-black/[0.07] shadow-xs mt-4">
+            <div className="inline-flex items-center gap-1.5 bg-white p-1 rounded-full border-2 border-black/15 shadow-xs mt-4">
               <button
                 onClick={() => setStudioMode('raw')}
-                className={`px-4 py-1.5 rounded-full text-[12.5px] font-medium transition cursor-pointer ${studioMode === 'raw' ? 'bg-neutral-900 text-white shadow-xs font-semibold' : 'text-neutral-600 hover:text-neutral-900'
+                className={`px-4 py-1.5 rounded-full text-[12.5px] transition cursor-pointer ${studioMode === 'raw' ? 'bg-[#f3e8ff] text-neutral-950 border-2 border-black shadow-[1.5px_1.5px_0px_#000000] font-bold' : 'text-neutral-600 hover:text-neutral-900 font-medium'
                   }`}
               >
                 Raw Spoken Audio
               </button>
               <button
                 onClick={() => setStudioMode('polished')}
-                className={`px-4 py-1.5 rounded-full text-[12.5px] font-medium transition cursor-pointer flex items-center gap-1.5 ${studioMode === 'polished' ? 'bg-gradient-to-r from-[#0e3827] to-[#1a5b40] text-white shadow-xs font-semibold' : 'text-neutral-600 hover:text-neutral-900'
+                className={`px-4 py-1.5 rounded-full text-[12.5px] transition cursor-pointer flex items-center gap-1.5 ${studioMode === 'polished' ? 'bg-[#f3e8ff] text-neutral-950 border-2 border-black shadow-[1.5px_1.5px_0px_#000000] font-bold' : 'text-neutral-600 hover:text-neutral-900 font-medium'
                   }`}
               >
-                <Sparkles size={11} className="text-emerald-300" />
+                <Sparkles size={11} className="text-[#9333ea]" />
                 <span>Noska Voice Polished</span>
               </button>
               <button
                 onClick={() => setStudioMode('code')}
-                className={`px-4 py-1.5 rounded-full text-[12.5px] font-medium transition cursor-pointer ${studioMode === 'code' ? 'bg-neutral-900 text-white shadow-xs font-semibold' : 'text-neutral-600 hover:text-neutral-900'
+                className={`px-4 py-1.5 rounded-full text-[12.5px] transition cursor-pointer ${studioMode === 'code' ? 'bg-[#f3e8ff] text-neutral-950 border-2 border-black shadow-[1.5px_1.5px_0px_#000000] font-bold' : 'text-neutral-600 hover:text-neutral-900 font-medium'
                   }`}
               >
                 Code / Markdown
@@ -1454,12 +1803,12 @@ export default function NoskaWispr() {
             <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="max-w-3xl mx-auto bg-neutral-900 text-white rounded-3xl p-6 sm:p-8 border border-neutral-800 shadow-2xl text-left"
+              className="max-w-3xl mx-auto bg-white text-neutral-900 rounded-3xl p-6 sm:p-8 border-2 border-black shadow-[4px_4px_0px_#000000] text-left"
             >
-              <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-black/10">
                 <div className="flex items-center gap-2.5">
                   <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-[12.5px] font-bold uppercase tracking-wider text-red-400">
+                  <span className="text-[12.5px] font-bold uppercase tracking-wider text-red-600">
                     Live Microphone Active
                   </span>
                 </div>
@@ -1471,18 +1820,18 @@ export default function NoskaWispr() {
                         key={i}
                         animate={{ height: ['4px', `${h * 0.18}px`, '4px'] }}
                         transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.1 }}
-                        className="w-[3px] bg-emerald-400 rounded-full"
+                        className="w-[3px] bg-[#9333ea] rounded-full"
                       />
                     ))}
                   </div>
-                  <span className="text-[12px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  <span className="text-[12px] font-mono text-[#1e3325] font-bold bg-[#f3e8ff] px-2.5 py-0.5 rounded-full border-2 border-black shadow-[1.5px_1.5px_0px_#000000]">
                     {liveWpm} WPM
                   </span>
                 </div>
               </div>
 
               {/* Live Streaming Speech Transcript */}
-              <div className="min-h-[110px] p-4 rounded-2xl bg-black/40 border border-white/10 font-mono text-[14px] leading-relaxed text-[#ffffeb]">
+              <div className="min-h-[110px] p-4 rounded-2xl bg-[#faf8fd] border-2 border-black/15 font-mono text-[14px] leading-relaxed text-neutral-900">
                 {transcriptionText || (
                   <span className="text-neutral-500 italic">
                     Listening to your microphone... speak naturally now (e.g. "so um basically we need to ship the update by Friday")
@@ -1490,8 +1839,8 @@ export default function NoskaWispr() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-white/10 flex-wrap gap-3">
-                <span className="text-[11.5px] text-neutral-400">
+              <div className="flex items-center justify-between mt-5 pt-3 border-t border-black/10 flex-wrap gap-3">
+                <span className="text-[11.5px] text-neutral-600 font-medium">
                   Real-time audio processing via Web Speech & Local Whisper engine
                 </span>
                 <div className="flex items-center gap-2">
@@ -1506,14 +1855,14 @@ export default function NoskaWispr() {
                         setTranscriptionText(`### Noska Speech-to-Text Result\n• ${cleaned.charAt(0).toUpperCase() + cleaned.slice(1)}.`);
                       }
                     }}
-                    className="px-4 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold transition cursor-pointer flex items-center gap-1.5"
+                    className="px-4 py-1.5 rounded-full bg-[#f3e8ff] hover:bg-[#e9d5ff] text-neutral-950 border-2 border-black text-[12px] font-bold transition cursor-pointer flex items-center gap-1.5 shadow-[2px_2px_0px_#000000]"
                   >
-                    <Sparkles size={12} />
+                    <Sparkles size={12} className="text-[#9333ea]" />
                     <span>Polish with AI</span>
                   </button>
                   <button
                     onClick={() => setIsRecording(false)}
-                    className="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-[12px] font-medium transition cursor-pointer"
+                    className="px-4 py-1.5 rounded-full bg-white hover:bg-neutral-100 text-neutral-800 border-2 border-black/20 text-[12px] font-semibold transition cursor-pointer"
                   >
                     Stop Recording
                   </button>
@@ -1530,7 +1879,7 @@ export default function NoskaWispr() {
             >
               <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-neutral-100">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${studioMode === 'polished' ? 'bg-emerald-500' : studioMode === 'code' ? 'bg-blue-500' : 'bg-amber-500'
+                  <span className={`w-2.5 h-2.5 rounded-full ${studioMode === 'polished' ? 'bg-[#9333ea]' : studioMode === 'code' ? 'bg-blue-500' : 'bg-amber-500'
                     }`} />
                   <span className="text-[12px] font-bold uppercase tracking-wider text-neutral-800">
                     {studioMode === 'polished'
@@ -1542,7 +1891,7 @@ export default function NoskaWispr() {
                 </div>
 
                 <div className="flex items-center gap-2.5">
-                  <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md font-semibold border border-emerald-200/60">
+                  <span className="text-[11px] font-mono text-[#3d6148] bg-[#edf5ef] px-2.5 py-0.5 rounded-md font-semibold border border-[#5b8266]/20">
                     ⚡ 0.18s • On-Device Whisper
                   </span>
                   <button
@@ -1550,7 +1899,7 @@ export default function NoskaWispr() {
                     className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900 transition cursor-pointer flex items-center gap-1.5 text-[12px] font-medium"
                     title="Copy to clipboard"
                   >
-                    {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                    {copied ? <Check size={14} className="text-[#9333ea]" /> : <Copy size={14} />}
                     <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
                   </button>
                 </div>
@@ -1562,7 +1911,7 @@ export default function NoskaWispr() {
 
               <div className="flex items-center justify-between mt-4 pt-3 text-[12px] text-neutral-500 flex-wrap gap-2">
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                  <CheckCircle2 size={13} className="text-[#9333ea] shrink-0" />
                   {studioMode === 'polished'
                     ? 'Punctuation, bullet points & grammar formatted automatically'
                     : studioMode === 'code'
@@ -1571,7 +1920,7 @@ export default function NoskaWispr() {
                 </span>
                 <button
                   onClick={() => setIsRecording(true)}
-                  className="text-neutral-900 font-semibold hover:text-emerald-700 flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="text-neutral-900 font-semibold hover:text-[#7c3aed] flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   <Mic size={13} className="text-red-500" />
                   <span>Test your live microphone</span>
@@ -1583,283 +1932,1004 @@ export default function NoskaWispr() {
         </section>
 
         {/* ==========================================================================
-                6. "WHY US?" BENTO GRID SHOWCASE
+                6. "WHY FLOW?" INTERACTIVE BENTO GRID SHOWCASE
+                Features: Autonomous Agent Mode, Real-Time Voice Translate, Adaptive Tone & Voice Rewind
                ========================================================================== */}
-        <section id="why-us" className="relative px-6 sm:px-12 py-20 bg-gradient-to-b from-white via-[#fafbfa] to-white border-t border-black/[0.03]">
+        <section id="why-us" className="relative px-4 sm:px-8 md:px-12 py-20 bg-gradient-to-b from-white via-[#faf8fd] to-white border-t border-black/[0.03]">
 
-          <div className="absolute top-1/3 right-4 w-72 h-44 opacity-45 pointer-events-none wispr-ambient-cloud-3">
-            <svg className="w-full h-full text-[#eef5ef]" viewBox="0 0 300 180" fill="currentColor">
-              <path d="M 30 160 Q 10 110 50 80 Q 90 40 150 50 Q 210 20 260 70 Q 300 100 280 150 Z" />
-            </svg>
-          </div>
+          <div className="max-w-7xl mx-auto">
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start relative z-10">
-
-            {/* Left 8 Columns: Multi-card Bento cluster */}
-            <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-12 gap-5">
-
-              {/* Card 1: Concentric Radar with Avatars & Language Models */}
-              <motion.div
-                initial={{ opacity: 0, y: 35 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.15 }}
-                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                whileHover={{ y: -4 }}
-                className="sm:col-span-6 bg-white rounded-[28px] p-6 border border-black/[0.06] shadow-sm relative overflow-hidden h-[250px] flex flex-col justify-between"
-              >
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="absolute w-[120px] h-[120px] rounded-full border border-black/[0.08]" />
-                  <div className="absolute w-[200px] h-[200px] rounded-full border border-black/[0.06]" />
-                  <div className="absolute w-[280px] h-[280px] rounded-full border border-black/[0.04]" />
-                  <div className="wispr-radar-sweep-line" />
+            {/* Section Header */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#f3e8ff] border-2 border-black text-[12px] font-bold text-neutral-900 shadow-[2px_2px_0px_#000000] mb-3.5 hover:shadow-[3px_3px_0px_#000000] transition-shadow cursor-default">
+                  <Sparkles size={13} className="text-[#3d6148]" />
+                  <span>Next-Gen Voice Intelligence</span>
                 </div>
-
-                <div className="relative z-10">
-                  <div className="text-[32px] font-semibold tracking-tight text-neutral-900 leading-none">100+</div>
-                  <div className="text-[12px] text-neutral-500 font-medium mt-1">Language Models & Accents</div>
-                </div>
-
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute top-6 right-12 w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-md">
-                    <img src="/images/wispr/avatar1.jpg" alt="Voice Node" className="w-full h-full object-cover" />
-                  </div>
-                  <div className="absolute top-20 right-28 w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-md">
-                    <img src="/images/wispr/avatar2.jpg" alt="Voice Node" className="w-full h-full object-cover" />
-                  </div>
-                  <div className="absolute bottom-16 right-10 w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-md">
-                    <img src="/images/wispr/avatar3.jpg" alt="Voice Node" className="w-full h-full object-cover" />
-                  </div>
-                  <div className="absolute bottom-8 left-20 w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-md">
-                    <img src="/images/wispr/user.jpg" alt="Voice Node" className="w-full h-full object-cover" />
-                  </div>
-                </div>
-
-                <div className="relative z-10">
-                  <div className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-600 transition cursor-pointer">
-                    <Plus size={14} />
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Card 2: Creative User & Invisible Layer */}
-              <motion.div
-                initial={{ opacity: 0, y: 35 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.15 }}
-                transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                whileHover={{ y: -4 }}
-                className="sm:col-span-6 bg-[#ebf2ec] rounded-[28px] overflow-hidden border border-black/[0.04] shadow-sm relative h-[250px] group"
-              >
-                <img
-                  src="/images/wispr/user.jpg"
-                  alt="Creative User"
-                  className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
-                />
-                <div className="absolute bottom-4 left-4 right-4 py-2 px-3 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-between text-white text-[12px] font-medium">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Invisible Global Layer</span>
-                  </div>
-                  <kbd className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded font-mono text-white/90">Ctrl+Shift+Space</kbd>
-                </div>
-              </motion.div>
-
-              {/* Card 3: Sage Green Accuracy Metric */}
-              <motion.div
-                initial={{ opacity: 0, y: 35 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.15 }}
-                transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                whileHover={{ y: -4 }}
-                className="sm:col-span-4 bg-gradient-to-br from-[#dce9de] to-[#c7dccb] rounded-[28px] p-5 border border-black/[0.04] shadow-sm flex flex-col justify-between h-[210px] relative overflow-hidden"
-              >
-                <svg className="absolute -bottom-4 -right-4 w-40 h-40 text-[#b9d2be] opacity-50 pointer-events-none" viewBox="0 0 100 100" fill="currentColor">
-                  <path d="M 0 50 Q 25 10 50 50 T 100 50 L 100 100 L 0 100 Z" />
-                </svg>
-                <div>
-                  <div className="text-[34px] font-semibold text-neutral-900 tracking-tight leading-none">99.8%</div>
-                  <div className="text-[12px] text-neutral-700 font-medium mt-1 leading-snug">
-                    Filler Words<br />Auto-Purged
-                  </div>
-                </div>
-                <div className="w-7 h-7 rounded-full bg-white/60 flex items-center justify-center text-neutral-800">
-                  <TrendingUp size={13} />
-                </div>
-              </motion.div>
-
-              {/* Card 4: Peach 3D Wave Glass Card */}
-              <motion.div
-                initial={{ opacity: 0, y: 35 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.15 }}
-                transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                whileHover={{ y: -4 }}
-                className="sm:col-span-8 rounded-[28px] p-5 border border-black/[0.05] shadow-sm relative overflow-hidden h-[210px] flex flex-col justify-between text-white group"
-                style={{
-                  backgroundImage: `url(/images/wispr/peach-mesh.jpg)`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center'
-                }}
-              >
-                <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
-
-                <div className="relative z-10 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-white/90 uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md">
-                    {advantages[advantageIndex].tag}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setAdvantageIndex(0)}
-                      className={`w-7 h-7 rounded-full flex items-center justify-center transition cursor-pointer ${advantageIndex === 0 ? 'bg-white text-neutral-900' : 'bg-white/30 text-white hover:bg-white/50'}`}
-                    >
-                      <Volume2 size={12} />
-                    </button>
-                    <button
-                      onClick={() => setAdvantageIndex(1)}
-                      className={`w-7 h-7 rounded-full flex items-center justify-center transition cursor-pointer ${advantageIndex === 1 ? 'bg-white text-neutral-900' : 'bg-white/30 text-white hover:bg-white/50'}`}
-                    >
-                      <Scan size={12} />
-                    </button>
-                    <button
-                      onClick={() => setAdvantageIndex(2)}
-                      className={`w-7 h-7 rounded-full flex items-center justify-center transition cursor-pointer ${advantageIndex === 2 ? 'bg-white text-neutral-900' : 'bg-white/30 text-white hover:bg-white/50'}`}
-                    >
-                      <Lightbulb size={12} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="relative z-10">
-                  <h3 className="text-[17px] font-semibold text-white tracking-tight leading-snug">
-                    {advantages[advantageIndex].title}
-                  </h3>
-                  <p className="text-[12px] text-white/85 font-normal mt-0.5 line-clamp-2">
-                    {advantages[advantageIndex].subtitle}
-                  </p>
-
-                  <div className="flex items-center gap-1 mt-3">
-                    {[0, 1, 2].map((i) => (
-                      <div
-                        key={i}
-                        onClick={() => setAdvantageIndex(i)}
-                        className={`h-1.5 rounded-full transition-all duration-200 cursor-pointer ${advantageIndex === i ? 'w-5 bg-white' : 'w-1.5 bg-white/50'
-                          }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Card 5: Platform Features & iPhone Mockup */}
-              <motion.div
-                initial={{ opacity: 0, y: 35 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.15 }}
-                transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                whileHover={{ y: -4 }}
-                className="sm:col-span-12 bg-[#eaf1ec] rounded-[28px] p-6 border border-black/[0.04] shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center text-neutral-700 shadow-sm">
-                      <Settings size={12} />
-                    </div>
-                    <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center text-neutral-700 shadow-sm">
-                      <TrendingUp size={12} />
-                    </div>
-                  </div>
-                  <div className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider mb-1">
-                    Universal App Compatibility
-                  </div>
-                  <h3 className="text-[22px] font-semibold text-neutral-900 tracking-tight leading-snug">
-                    Types In Every<br />Native Desktop App
-                  </h3>
-                  <p className="text-[13px] text-neutral-600 font-normal mt-2 max-w-sm">
-                    Types directly wherever your cursor blinks: Slack, Claude, Cursor, VS Code, Notion, Gmail, and terminal.
-                  </p>
-                </div>
-
-                {/* Realistic iPhone Mockup Frame */}
-                <div className="w-[200px] h-[210px] bg-neutral-950 rounded-t-[32px] p-2 pt-3 shadow-2xl border-4 border-neutral-900 overflow-hidden relative select-none">
-                  <div className="mx-auto w-16 h-3 bg-black rounded-full mb-3 flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-neutral-800" />
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-3 h-full shadow-inner">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-bold text-neutral-900">Hi, Mike</span>
-                      <Mic size={10} className="text-[#e28a7a]" />
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-[#fde9e3] border border-[#f9c7bc]">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-semibold text-[#c75e4c]">01:24 Voice Memo</span>
-                        <button
-                          onClick={() => setIsPlayingAudio(prev => !prev)}
-                          className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-neutral-800 shadow-xs cursor-pointer"
-                        >
-                          {isPlayingAudio ? <Pause size={9} /> : <Play size={9} />}
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-0.5 h-4">
-                        {[40, 75, 50, 90, 60, 30, 85, 45, 95, 70, 40].map((val, idx) => (
-                          <div
-                            key={idx}
-                            style={{ height: isPlayingAudio ? `${val}%` : '20%' }}
-                            className="w-1 bg-[#e28a7a] rounded-full transition-all duration-200"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-            </div>
-
-            {/* Right 4 Columns: Grand Headline, 220 WPM Pill & Rotating Stamp */}
-            <div className="lg:col-span-4 flex flex-col justify-between h-full gap-8 pl-0 lg:pl-4">
-
-              <div>
-                <h2 className="text-[48px] sm:text-[60px] font-normal tracking-tight text-neutral-900 leading-[1.02]">
+                <h2 className="text-[38px] sm:text-[54px] font-extrabold tracking-tight text-neutral-900 leading-[1.05]">
                   Why Flow?
                 </h2>
-                <p className="text-[14px] text-neutral-600 leading-relaxed mt-4">
-                  Flow combines state-of-the-art speech intelligence with zero-latency desktop integration to help modern builders, writers, and teams execute 4x faster.
+                <p className="text-[15px] sm:text-[16.5px] text-neutral-600 mt-3 font-normal leading-relaxed">
+                  Flow merges autonomous voice-to-action agent workflows, real-time multilingual translation, adaptive tone calibration, and zero-latency desktop injection.
                 </p>
               </div>
 
-              <div className="flex items-center gap-4 flex-wrap">
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="flex-1 min-w-[170px] rounded-full p-4 px-6 bg-gradient-to-r from-[#f79d8e] to-[#f48574] text-white shadow-sm flex items-center justify-between"
-                >
-                  <div>
-                    <div className="text-[26px] font-semibold leading-none">220 WPM</div>
-                    <div className="text-[11.5px] font-medium text-white/90 mt-0.5">4x Faster Than Typing</div>
-                  </div>
-                  <ArrowRight size={16} className="text-white/80" />
-                </motion.div>
+              {/* Framer Steps Component Header Navigation */}
+              <div className="relative flex items-center justify-between gap-3">
+                {/* Horizontal Baseline Axis Connector Line */}
+                <div className="absolute top-1/2 left-4 right-4 h-[1px] bg-purple-200 -translate-y-1/2 z-0 hidden sm:block pointer-events-none" />
 
-                <div
-                  onClick={() => scrollToSection('live-studio')}
-                  className="relative w-20 h-20 rounded-full flex items-center justify-center cursor-pointer select-none group"
+                {/* Numbered Step Buttons (01, 02, 03, 04) */}
+                <div className="relative z-10 flex items-center gap-2 sm:gap-3 flex-wrap">
+                  {[
+                    { id: 'agent', num: '01', title: 'Agent Mode', icon: Bot },
+                    { id: 'translate', num: '02', title: 'Translate', icon: Globe },
+                    { id: 'tone', num: '03', title: 'Tone Engine', icon: SlidersHorizontal },
+                    { id: 'rewind', num: '04', title: 'Voice Rewind', icon: RotateCcw }
+                  ].map((step) => {
+                    const StepIcon = step.icon;
+                    const isActive = bentoTab === step.id;
+                    return (
+                      <button
+                        key={step.id}
+                        onClick={() => {
+                          setBentoTab(step.id as any);
+                          if (step.id === 'agent') handleRunAgentCommand(activeAgentCommand);
+                        }}
+                        className={`group relative h-[45px] px-4 sm:px-5 rounded-[18px] text-[13px] font-medium transition-all duration-300 cursor-pointer flex items-center gap-2.5 select-none ${
+                          isActive
+                            ? 'bg-[#f3e8ff] text-neutral-950 border-2 border-black shadow-[2px_2px_0px_#000000] font-bold'
+                            : 'bg-white hover:bg-neutral-50 text-neutral-800 border border-black/[0.08] hover:border-black/20 shadow-xs'
+                        }`}
+                      >
+                        {/* Step Number */}
+                        <span
+                          className={`font-mono text-[12.5px] font-semibold ${
+                            isActive ? 'text-[#3d6148]' : 'text-neutral-500 group-hover:text-neutral-900'
+                          }`}
+                        >
+                          {step.num}
+                        </span>
+
+                        <span className={`w-1 h-3 rounded-full ${isActive ? 'bg-[#5b8266]/40' : 'bg-black/10'}`} />
+
+                        {/* Step Icon & Title */}
+                        <div className="flex items-center gap-1.5">
+                          <StepIcon
+                            size={14}
+                            className={isActive ? 'text-[#3d6148]' : 'text-neutral-600'}
+                          />
+                          <span className={`font-semibold text-[13px] ${isActive ? 'text-neutral-950' : 'text-neutral-800'}`}>
+                            {step.title}
+                          </span>
+                        </div>
+                        {isActive && (
+                          <motion.span
+                            layoutId="activeStepDot"
+                            className="w-2 h-2 rounded-full bg-[#5b8266] animate-pulse ml-0.5"
+                            transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic Animated Bento Grid Content (Framer Steps Format) */}
+            <AnimatePresence mode="wait">
+              {bentoTab === 'agent' ? (
+                /* ==========================================================================
+                   STEP 01: IN-APP NOSKA VOICE CONTROL AGENT
+                   ========================================================================== */
+                <motion.div
+                  key="step-agent"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch"
                 >
-                  <svg className="absolute inset-0 w-full h-full wispr-rotating-stamp" viewBox="0 0 100 100">
-                    <path
-                      id="circlePath"
-                      d="M 50, 50 m -37, 0 a 37,37 0 1,1 74,0 a 37,37 0 1,1 -74,0"
-                      fill="transparent"
-                    />
-                    <text className="text-[9.5px] font-bold uppercase tracking-[0.22em] fill-neutral-600">
-                      <textPath xlinkHref="#circlePath">
-                        • Try Voice Studio •
-                      </textPath>
-                    </text>
-                  </svg>
-                  <div className="w-9 h-9 rounded-full bg-[#f4f5f2] group-hover:bg-neutral-900 group-hover:text-white text-neutral-800 flex items-center justify-center shadow-xs transition duration-200">
-                    <Mic size={12} className="text-[#e28a7a]" />
+                  {/* CARD 1 (Col 1-7): Interactive In-App Voice Controller */}
+                  <div className="md:col-span-7 bg-white text-neutral-900 rounded-[32px] p-6 sm:p-7 border-2 border-black shadow-[3px_3px_0px_#000000] flex flex-col justify-between relative overflow-hidden">
+                    <div>
+                      <div className="flex items-center justify-between mb-3.5 relative z-10">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border-2 border-black shadow-[1.5px_1.5px_0px_#000]">
+                            <Bot size={16} className="text-[#3d6148]" />
+                          </div>
+                          <div>
+                            <div className="text-[16px] font-bold text-neutral-900 flex items-center gap-2">
+                              Noska In-App Voice Agent
+                              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-[#f3e8ff] text-neutral-900 border border-black font-bold">Step 01</span>
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-mono text-neutral-900 bg-[#f3e8ff] px-2.5 py-1 rounded-full border border-black flex items-center gap-1.5 font-bold shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#5b8266] animate-pulse" />
+                          Voice Armed
+                        </span>
+                      </div>
+
+                      <p className="text-[12.5px] text-neutral-600 mb-4 leading-relaxed font-normal">
+                        Control the entire Noska App using only your voice. Speak commands naturally to open notifications, switch themes, search notes, create canvases, and trigger actions.
+                      </p>
+
+                      {/* Tool Selector Buttons */}
+                      <div className="flex items-center gap-1.5 mb-3.5 flex-wrap">
+                        {agentCommands.map((cmd, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleRunAgentCommand(idx)}
+                            className={`px-3 py-1.5 rounded-xl text-[11.5px] transition cursor-pointer flex items-center gap-1.5 ${
+                              activeAgentCommand === idx
+                                ? 'bg-neutral-900 text-white border-2 border-black font-bold shadow-[1.5px_1.5px_0px_#000]'
+                                : 'bg-neutral-50 hover:bg-neutral-100 text-neutral-700 border border-black/10 font-medium'
+                            }`}
+                          >
+                            <span>{cmd.title}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Terminal Console */}
+                      <div className="bg-[#faf8fd] rounded-2xl p-4 sm:p-5 border-2 border-black/10 space-y-3 font-mono text-[12px] shadow-inner text-neutral-900">
+                        <div className="flex items-center justify-between text-[10.5px] text-neutral-500">
+                          <span className="flex items-center gap-1.5 font-semibold">
+                            <Mic size={11} className="text-[#3d6148]" />
+                            SPOKEN IN-APP COMMAND
+                          </span>
+                          <span className="text-[#3d6148] font-bold">{agentCommands[activeAgentCommand].category}</span>
+                        </div>
+
+                        <div className="text-neutral-900 text-[13px] font-sans font-bold">
+                          {agentCommands[activeAgentCommand].voiceInput}
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-[#edf5ef] border border-[#5b8266]/20 text-[#1e3325] overflow-x-auto font-semibold">
+                          <code>&gt; {agentCommands[activeAgentCommand].toolCall}</code>
+                        </div>
+
+                        {/* Step State */}
+                        <div className="flex items-center justify-between pt-1 border-t border-black/5">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${agentRunning ? 'bg-amber-500 animate-ping' : 'bg-[#5b8266]'}`} />
+                            <span className="text-[12px] text-neutral-800 font-medium">
+                              {agentRunning
+                                ? agentStep === 0
+                                ? "Parsing spoken in-app intent..."
+                                : "Executing native Noska UI action..."
+                                : agentCommands[activeAgentCommand].result}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleRunAgentCommand(activeAgentCommand)}
+                            className="px-4 py-1.5 rounded-full bg-[#f3e8ff] hover:bg-[#e9d5ff] text-neutral-900 border-2 border-black shadow-[2px_2px_0px_#000000] text-[11px] font-bold transition cursor-pointer active:scale-95"
+                          >
+                            {agentRunning ? "Executing..." : "Simulate Voice"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3.5 border-t border-black/10 flex items-center justify-between text-[11.5px] text-neutral-500">
+                      <span>Native In-App Dispatcher</span>
+                      <span className="text-[#3d6148] font-bold flex items-center gap-1">
+                        <Zap size={11} /> 0.04s Execution Speed
+                      </span>
+                    </div>
                   </div>
+
+                  {/* CARD 2 (Col 8-12): In-App Voice Action Architecture */}
+                  <div className="md:col-span-5 bg-[#faf8fd] rounded-[32px] p-6 sm:p-7 border-2 border-black shadow-[3px_3px_0px_#000000] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border-2 border-black shadow-[1.5px_1.5px_0px_#000]">
+                            <Layers size={16} className="text-[#3d6148]" />
+                          </div>
+                          <span className="text-[16px] font-bold text-neutral-900">In-App Voice Architecture</span>
+                        </div>
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#f3e8ff] text-neutral-900 border border-black font-mono">
+                          Native
+                        </span>
+                      </div>
+
+                      <p className="text-[12.5px] text-neutral-600 mb-4 leading-relaxed font-normal">
+                        How Noska translates natural spoken requests into direct in-app UI and state modifications:
+                      </p>
+
+                      {/* Architecture Steps */}
+                      <div className="space-y-2.5">
+                        <div className="p-3 rounded-2xl bg-white border border-black/[0.08] flex items-center gap-3 shadow-xs">
+                          <div className="w-6 h-6 rounded-full bg-[#edf5ef] text-[#3d6148] font-mono text-[11px] font-bold flex items-center justify-center shrink-0 border border-[#5b8266]/30">1</div>
+                          <div>
+                            <div className="text-[12px] font-bold text-neutral-900">Spoken Voice Trigger</div>
+                            <div className="text-[11px] text-neutral-500">"Open notifications", "Search notes"</div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-white border border-black/[0.08] flex items-center gap-3 shadow-xs">
+                          <div className="w-6 h-6 rounded-full bg-[#edf5ef] text-[#3d6148] font-mono text-[11px] font-bold flex items-center justify-center shrink-0 border border-[#5b8266]/30">2</div>
+                          <div>
+                            <div className="text-[12px] font-bold text-neutral-900">On-Device Semantic Parser</div>
+                            <div className="text-[11px] text-neutral-500">Extracts target panel, filter, or query</div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-white border border-black/[0.08] flex items-center gap-3 shadow-xs">
+                          <div className="w-6 h-6 rounded-full bg-[#edf5ef] text-[#3d6148] font-mono text-[11px] font-bold flex items-center justify-center shrink-0 border border-[#5b8266]/30">3</div>
+                          <div>
+                            <div className="text-[12px] font-bold text-neutral-900">Direct UI State Dispatcher</div>
+                            <div className="text-[11px] text-neutral-500">Triggers modal, drawer, or canvas view</div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-white border border-black/[0.08] flex items-center gap-3 shadow-xs">
+                          <div className="w-6 h-6 rounded-full bg-[#edf5ef] text-[#3d6148] font-mono text-[11px] font-bold flex items-center justify-center shrink-0 border border-[#5b8266]/30">4</div>
+                          <div>
+                            <div className="text-[12px] font-bold text-neutral-900">Instant Execution Feedback</div>
+                            <div className="text-[11px] text-neutral-500">Immediate screen update with 0ms latency</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-black/[0.06] flex items-center justify-between text-[11.5px] text-neutral-500">
+                      <span>Zero Cloud Latency</span>
+                      <span className="text-[#3d6148] font-bold">✓ 100% Local Execution</span>
+                    </div>
+                  </div>
+
+                  {/* CARD 3 (Col 1-4): Hands-Free App Navigation */}
+                  <div className="md:col-span-4 bg-[#faf8fd] rounded-[32px] p-6 border-2 border-black shadow-[2px_2px_0px_#000000] flex flex-col justify-between hover:translate-y-[-1px] transition-all">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-7 h-7 rounded-lg bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border border-black">
+                          <Layout size={14} className="text-[#3d6148]" />
+                        </div>
+                        <span className="text-[15px] font-bold text-neutral-900">Hands-Free Navigation</span>
+                      </div>
+                      <p className="text-[12px] text-neutral-600 mb-3.5 leading-relaxed font-normal">
+                        Jump between canvases, open split screen views, or summon the search bar with simple voice prompts.
+                      </p>
+                      <div className="bg-white p-3.5 rounded-2xl border border-black/[0.08] text-[11.5px] space-y-1.5 font-mono shadow-xs">
+                        <div className="text-neutral-500">“Split screen with API docs”</div>
+                        <div className="text-[#3d6148] font-bold">1. `noska.layout.split("right")`</div>
+                        <div className="text-neutral-700 font-bold">2. `noska.docs.load("/api")`</div>
+                      </div>
+                    </div>
+                    <div className="mt-3.5 pt-2.5 border-t border-black/[0.06] text-[11px] text-neutral-500 flex items-center justify-between">
+                      <span>Instant UI Layout Switch</span>
+                      <span className="text-neutral-900 font-bold">0 Mouse Clicks</span>
+                    </div>
+                  </div>
+
+                  {/* CARD 4 (Col 5-8): Voice Safety & Confirmation */}
+                  <div className="md:col-span-4 bg-[#faf8fd] rounded-[32px] p-6 border-2 border-black shadow-[2px_2px_0px_#000000] flex flex-col justify-between hover:translate-y-[-1px] transition-all">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-7 h-7 rounded-lg bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border border-black">
+                          <Shield size={14} className="text-[#3d6148]" />
+                        </div>
+                        <span className="text-[15px] font-bold text-neutral-900">Safety & Confirmation</span>
+                      </div>
+                      <p className="text-[12px] text-neutral-600 mb-3.5 leading-relaxed font-normal">
+                        Critical actions like deleting canvases or archiving workspaces require explicit voice confirmation.
+                      </p>
+                      <div className="bg-white p-3 rounded-2xl border border-black/[0.08] flex items-center justify-between shadow-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#5b8266]" />
+                          <span className="text-[12px] font-bold text-neutral-900">Confirmation Guard</span>
+                        </div>
+                        <span className="text-[11px] font-mono text-neutral-900 bg-[#f3e8ff] px-2 py-0.5 rounded-md font-bold border border-black">Active</span>
+                      </div>
+                    </div>
+                    <div className="mt-3.5 pt-2.5 border-t border-black/[0.06] text-[11px] text-neutral-500 flex items-center justify-between">
+                      <span>100% On-Device Privacy</span>
+                      <span className="text-[#3d6148] font-bold">✓ Zero Cloud Leak</span>
+                    </div>
+                  </div>
+
+                  {/* CARD 5 (Col 9-12): Canvas Voice Actions */}
+                  <div className="md:col-span-4 bg-[#faf8fd] rounded-[32px] p-6 border-2 border-black shadow-[2px_2px_0px_#000000] flex flex-col justify-between hover:translate-y-[-1px] transition-all">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-7 h-7 rounded-lg bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border border-black">
+                          <FolderPlus size={14} className="text-[#3d6148]" />
+                        </div>
+                        <span className="text-[15px] font-bold text-neutral-900">Instant Canvas Actions</span>
+                      </div>
+                      <p className="text-[12px] text-neutral-600 mb-3.5 leading-relaxed font-normal">
+                        Create new infinite boards, add sticky notes, or export high-resolution assets directly via speech.
+                      </p>
+                      <div className="bg-white p-3 rounded-2xl border border-black/[0.08] font-mono text-[11.5px] text-[#1e3325] shadow-xs font-semibold">
+                        <code>noska.canvas.export(&#123; format: "pdf" &#125;)</code>
+                      </div>
+                    </div>
+                    <div className="mt-3.5 pt-2.5 border-t border-black/[0.06] text-[11px] text-neutral-500 flex items-center justify-between">
+                      <span>Workflow Speed</span>
+                      <span className="text-[#3d6148] font-bold">4x Faster</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : bentoTab === 'translate' ? (
+                /* ==========================================================================
+                   STEP 02: DEDICATED REAL-TIME VOICE TRANSLATION SUITE
+                   ========================================================================== */
+                <motion.div
+                  key="step-translate"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch"
+                >
+                  {/* Translate Card 1: Live Dialect Stream */}
+                  <div className="md:col-span-7 bg-[#faf8fd] rounded-[32px] p-6 sm:p-7 border-2 border-black shadow-[3px_3px_0px_#000000] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border-2 border-black shadow-[1.5px_1.5px_0px_#000]">
+                            <Globe size={16} className="text-[#3d6148]" />
+                          </div>
+                          <span className="text-[16px] font-bold text-neutral-900">Real-Time Dialect Translation</span>
+                        </div>
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#f3e8ff] text-neutral-900 font-mono border border-black">
+                          Step 02 • 100+ Dialects
+                        </span>
+                      </div>
+
+                      <p className="text-[12.5px] text-neutral-600 mb-3.5 leading-relaxed font-normal">
+                        Speak naturally in Hinglish, Spanish, or Japanese. Noska translates and formats fluent, polished English in real time.
+                      </p>
+
+                      <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                        {(['hinglish', 'spanish', 'japanese', 'german'] as const).map((langKey) => (
+                          <button
+                            key={langKey}
+                            onClick={() => setActiveTranslateLang(langKey)}
+                            className={`px-3 py-1.5 rounded-xl text-[11.5px] transition cursor-pointer flex items-center gap-1.5 ${
+                              activeTranslateLang === langKey
+                                ? 'bg-[#f3e8ff] text-neutral-950 border-2 border-black font-bold shadow-[1.5px_1.5px_0px_#000]'
+                                : 'bg-white hover:bg-neutral-50 text-neutral-700 border border-black/10'
+                            }`}
+                          >
+                            <span>{translatePresets[langKey].flag}</span>
+                            <span>{translatePresets[langKey].lang}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="bg-white rounded-2xl p-4 border border-black/[0.08] space-y-2 text-[12px] shadow-xs">
+                        <div className="text-neutral-500 font-mono text-[11px] flex items-center justify-between">
+                          <span>SPOKEN ({translatePresets[activeTranslateLang].detected})</span>
+                          <span className="text-[#3d6148] font-bold">Detected</span>
+                        </div>
+                        <p className="text-neutral-700 italic font-mono text-[12px]">
+                          {translatePresets[activeTranslateLang].spoken}
+                        </p>
+                        <div className="pt-2 border-t border-black/5">
+                          <div className="text-[#3d6148] font-mono text-[11px] font-bold mb-0.5 flex items-center justify-between">
+                            <span>TRANSLATED PROSE</span>
+                            <span className="text-neutral-400 font-normal">{translatePresets[activeTranslateLang].latency}</span>
+                          </div>
+                          <p className="text-neutral-900 font-medium text-[13px]">
+                            {translatePresets[activeTranslateLang].translated}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-black/[0.06] text-[11.5px] text-neutral-500 flex items-center justify-between">
+                      <span>Zero latency translation pipeline</span>
+                      <span className="text-[#3d6148] font-bold">✓ Sub-200ms latency</span>
+                    </div>
+                  </div>
+
+                  {/* Translate Card 2: Dialect Coverage */}
+                  <div className="md:col-span-5 bg-white text-neutral-900 rounded-[32px] p-6 sm:p-7 border-2 border-black shadow-[3px_3px_0px_#000000] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Languages size={16} className="text-[#3d6148]" />
+                        <span className="text-[16px] font-bold text-neutral-900">Supported Dialects</span>
+                      </div>
+                      <p className="text-[12.5px] text-neutral-600 mb-4 leading-relaxed font-normal">
+                        Pre-trained phonetic models support code-switching, colloquial idioms, and regional inflections.
+                      </p>
+
+                      <div className="space-y-2">
+                        <div className="p-2.5 rounded-xl bg-[#faf8fd] border border-black/10 text-[11.5px] flex items-center justify-between font-medium">
+                          <span>🇮🇳 Hindi & Hinglish</span>
+                          <span className="text-[#3d6148] font-mono font-bold">0.19s</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#faf8fd] border border-black/10 text-[11.5px] flex items-center justify-between font-medium">
+                          <span>🇪🇸 Spanish & Castilian</span>
+                          <span className="text-[#3d6148] font-mono font-bold">0.17s</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#faf8fd] border border-black/10 text-[11.5px] flex items-center justify-between font-medium">
+                          <span>🇯🇵 Japanese & Nihongo</span>
+                          <span className="text-[#3d6148] font-mono font-bold">0.22s</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#faf8fd] border border-black/10 text-[11.5px] flex items-center justify-between font-medium">
+                          <span>🇩🇪 German & Austrian</span>
+                          <span className="text-[#3d6148] font-mono font-bold">0.18s</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-black/10 text-[11px] text-neutral-600 flex items-center justify-between">
+                      <span>Full Multilingual Support</span>
+                      <span className="text-neutral-900 font-bold">100+ Accents</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : bentoTab === 'tone' ? (
+                /* ==========================================================================
+                   STEP 03: DEDICATED TONE MATCHING SUITE
+                   ========================================================================== */
+                <motion.div
+                  key="step-tone"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch"
+                >
+                  {/* Tone Card 1 */}
+                  <div className="md:col-span-7 bg-[#faf8fd] rounded-[32px] p-6 sm:p-7 border-2 border-black shadow-[3px_3px_0px_#000000] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border-2 border-black shadow-[1.5px_1.5px_0px_#000]">
+                            <SlidersHorizontal size={16} className="text-[#3d6148]" />
+                          </div>
+                          <span className="text-[16px] font-bold text-neutral-900">Adaptive Tone Calibration</span>
+                        </div>
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#f3e8ff] text-neutral-900 font-mono border border-black">
+                          Step 03 • App-Specific
+                        </span>
+                      </div>
+
+                      <p className="text-[12.5px] text-neutral-600 mb-3.5 leading-relaxed font-normal">
+                        Speak once. Noska formats formality, structure, and diction to match your recipient whether in Slack, Gmail, or Notion.
+                      </p>
+
+                      {/* Improved Tone Selector Buttons with Lucide Icons */}
+                      <div className="grid grid-cols-4 gap-1 mb-3 bg-white p-1 rounded-xl border border-black/10 w-full">
+                        {[
+                          { id: 'formal', label: 'Formal', icon: Briefcase },
+                          { id: 'casual', label: 'Casual', icon: MessageSquare },
+                          { id: 'executive', label: 'Executive', icon: Crown },
+                          { id: 'technical', label: 'Technical', icon: Terminal }
+                        ].map((t) => {
+                          const Icon = t.icon;
+                          const isActive = activeTone === t.id;
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => setActiveTone(t.id as any)}
+                              className={`w-full py-2 px-1 rounded-lg text-[11px] sm:text-[12px] font-semibold transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 text-center relative select-none ${
+                                isActive
+                                  ? 'bg-neutral-900 text-white shadow-[1.5px_1.5px_0px_#000000] border border-black font-bold'
+                                  : 'bg-transparent hover:bg-neutral-100 text-neutral-600 hover:text-neutral-950 font-medium'
+                              }`}
+                            >
+                              <Icon size={13} className={`shrink-0 ${isActive ? 'text-white' : 'text-neutral-500'}`} />
+                              <span className="truncate">{t.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <motion.div
+                        key={activeTone}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="bg-white rounded-2xl p-4 border border-black/[0.08] min-h-[90px] flex items-center shadow-xs"
+                      >
+                        <p className="text-[13px] text-neutral-900 leading-relaxed font-medium">
+                          {tonePresets[activeTone]}
+                        </p>
+                      </motion.div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-black/[0.06] text-[11.5px] text-neutral-500 flex items-center justify-between">
+                      <span>Matches Slack, Gmail & Notion style</span>
+                      <span className="text-[#3d6148] font-bold">✓ Auto-calibrated</span>
+                    </div>
+                  </div>
+
+                  {/* Tone Card 2: Personal Dictionary */}
+                  <div className="md:col-span-5 bg-white text-neutral-900 rounded-[32px] p-6 sm:p-7 border-2 border-black shadow-[3px_3px_0px_#000000] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <BookOpen size={16} className="text-[#3d6148]" />
+                        <span className="text-[16px] font-bold text-neutral-900">Personal Vocabulary Engine</span>
+                      </div>
+                      <p className="text-[12.5px] text-neutral-600 mb-4 leading-relaxed font-normal">
+                        Never misspells teammate names, internal code repositories, or uncommon industry terminology.
+                      </p>
+
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {customWords.map((w, idx) => (
+                          <span key={idx} className="px-2.5 py-1 rounded-lg bg-[#f3e8ff] border border-black/20 text-[11.5px] font-mono text-neutral-900 font-bold shadow-2xs">
+                            {w}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-black/10 text-[11px] text-neutral-600 flex items-center justify-between">
+                      <span>Instant Phonetic Binding</span>
+                      <span className="text-neutral-900 font-bold">100% Accuracy</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
+                /* ==========================================================================
+                   STEP 04: DEDICATED VOICE REWIND & SELF-CORRECTION SUITE
+                   ========================================================================== */
+                <motion.div
+                  key="step-rewind"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch"
+                >
+                  {/* Rewind Card 1: Interactive Rewind Simulator */}
+                  <div className="md:col-span-7 bg-[#faf8fd] rounded-[32px] p-6 sm:p-7 border-2 border-black shadow-[3px_3px_0px_#000000] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border-2 border-black shadow-[1.5px_1.5px_0px_#000]">
+                            <RotateCcw size={16} className="text-[#3d6148]" />
+                          </div>
+                          <span className="text-[16px] font-bold text-neutral-900">Voice Rewind</span>
+                        </div>
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#f3e8ff] text-neutral-900 font-mono border border-black">
+                          Step 04 • "Scratch That"
+                        </span>
+                      </div>
+
+                      <p className="text-[12.5px] text-neutral-600 mb-3.5 leading-relaxed font-normal">
+                        Change your mind mid-sentence? Say <em>"scratch that"</em> and Noska automatically deletes & rewrites the phrase in-place.
+                      </p>
+
+                      <div className="bg-white rounded-2xl p-4 border border-black/[0.08] min-h-[95px] flex flex-col justify-between shadow-xs">
+                        <div className="text-[13px] text-neutral-800 leading-relaxed">
+                          {isRewindActive ? (
+                            <div>
+                              <span className="text-neutral-400 line-through decoration-red-400">Release on Friday afternoon</span>{' '}
+                              <span className="text-[#1e3325] font-bold bg-[#f3e8ff] border border-black/20 px-1.5 py-0.5 rounded">make it Tuesday morning at 10 AM.</span>
+                            </div>
+                          ) : (
+                            <div>Let's schedule the release on Friday afternoon...</div>
+                          )}
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between">
+                          <button
+                            onClick={() => setIsRewindActive(prev => !prev)}
+                            className="px-4 py-1.5 rounded-full text-[11.5px] font-bold bg-[#f3e8ff] text-neutral-900 border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-[3px_3px_0px_#000] transition cursor-pointer active:scale-95"
+                          >
+                            {isRewindActive ? "Reset Simulation" : "Simulate 'Scratch That'"}
+                          </button>
+                          <span className="text-[11px] text-[#3d6148] font-mono font-bold">
+                            {isRewindActive ? "✓ Deleted & replaced in-place" : "Waiting for voice trigger"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-black/[0.06] text-[11.5px] text-neutral-500 flex items-center justify-between">
+                      <span>Hands-free voice self-correction</span>
+                      <span className="text-neutral-900 font-bold">Zero backspaces</span>
+                    </div>
+                  </div>
+
+                  {/* Rewind Card 2: Universal Desktop Layer */}
+                  <div className="md:col-span-5 bg-white text-neutral-900 rounded-[32px] p-6 border-2 border-black shadow-[3px_3px_0px_#000000] flex flex-col justify-between relative overflow-hidden">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-[#f3e8ff] text-neutral-900 flex items-center justify-center border border-black">
+                            <Monitor size={14} className="text-[#3d6148]" />
+                          </div>
+                          <span className="text-[14.5px] font-bold text-neutral-900">Universal Desktop Layer</span>
+                        </div>
+                        <kbd className="text-[10px] bg-[#f3e8ff] px-2 py-0.5 rounded font-mono text-neutral-900 border border-black font-bold">
+                          Ctrl+Shift+Space
+                        </kbd>
+                      </div>
+
+                      <p className="text-[12px] text-neutral-600 mb-3 leading-relaxed font-normal">
+                        Types wherever your cursor blinks across macOS & Windows.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-1.5 text-[11px] font-medium text-neutral-800">
+                        <div className="bg-[#faf8fd] p-2 rounded-lg flex items-center gap-1.5 border border-black/10">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#5b8266]" />
+                          Slack & Discord
+                        </div>
+                        <div className="bg-[#faf8fd] p-2 rounded-lg flex items-center gap-1.5 border border-black/10">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#5b8266]" />
+                          Cursor & VS Code
+                        </div>
+                        <div className="bg-[#faf8fd] p-2 rounded-lg flex items-center gap-1.5 border border-black/10">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#5b8266]" />
+                          Notion & Docs
+                        </div>
+                        <div className="bg-[#faf8fd] p-2 rounded-lg flex items-center gap-1.5 border border-black/10">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#5b8266]" />
+                          Gmail & Chrome
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3.5 pt-2.5 border-t border-black/10 text-[11px] text-neutral-500 flex items-center justify-between">
+                      <span>Native OS Accessibility API</span>
+                      <span className="text-neutral-900 font-bold">100% Native</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+          </div>
+        </section>
+
+        {/* ==========================================================================
+                7. "HOW IT WORKS" — REAL-WORLD NOSKA FLOW STEPS (Pastel Lilac & Lavender Pin Flow)
+               ========================================================================== */}
+        <section id="how-it-works" className="relative bg-[#faf8fd] text-neutral-900 pt-24 pb-12 border-t border-black/[0.04] overflow-hidden">
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 relative z-10">
+            {/* Section Header with Pastel Lilac Pill Badge */}
+            <div className="text-center max-w-3xl mx-auto mb-6 sm:mb-10">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#f3e8ff] border-2 border-black text-[12px] font-bold text-neutral-900 shadow-[2px_2px_0px_#000000] mb-3.5 hover:shadow-[3px_3px_0px_#000000] transition-shadow cursor-default">
+                <Workflow size={13} className="text-neutral-900" />
+                <span>Real-World Desktop Workflow</span>
+              </div>
+              <h2 className="text-[38px] sm:text-[54px] font-extrabold tracking-tight text-neutral-900 leading-[1.08] font-sans">
+                How to use Flow in <em className="italic font-serif font-light text-[#5b8266]">real life.</em>
+              </h2>
+              <p className="text-[15px] sm:text-[16.5px] text-neutral-600 mt-3.5 font-normal leading-relaxed">
+                From raw vocal stream to zero-latency cursor typing and background MCP tool executions across your daily toolstack.
+              </p>
+            </div>
+
+            {/* Interactive Pastel Pinned-Card Scrolling Canvas */}
+            <HowItWorks
+              features={[
+                {
+                  title: "Global Shortcut Summon",
+                  description: "Hit Ctrl+Shift+Space anywhere. Noska's floating voice HUD glides into view directly over your active workspace without stealing focus.",
+                  colorTheme: "purple",
+                },
+                {
+                  title: "Speak Naturally at 220 WPM",
+                  description: "Speak raw stream-of-consciousness thoughts, code snippets, or Hinglish at 220+ WPM with zero typing overhead.",
+                  colorTheme: "blue",
+                },
+                {
+                  title: "On-Device Whisper Intelligence",
+                  description: "Local Whisper v3 and on-device neural engine instantly strip vocal fillers ('um', 'uh') and calibrate tone in 0.18s.",
+                  colorTheme: "orange",
+                },
+                {
+                  title: "Direct Cursor Injection & MCP",
+                  description: "Your polished words type right where your cursor blinks, while MCP tools trigger actions in Linear, GitHub, and Slack.",
+                  colorTheme: "purple",
+                },
+                {
+                  title: "100% Private On-Device Execution",
+                  description: "Zero audio packets leave your machine. Experience pure local inference with sub-second execution speed.",
+                  colorTheme: "blue",
+                },
+              ]}
+              className="bg-transparent py-4 md:py-8"
+            />
+          </div>
+        </section>
+
+        {/* ==========================================================================
+                8. FRAMER FEATURE SECTION ("WORKFLOWS THAT STAY IN MOTION")
+                Exact Parity with framer.com/m/feature-section-fiqG0T.js@St9XDFnEWd046Gm5Ktoh
+                Integrated with AnimatedSVGUnderlink
+               ========================================================================== */}
+        <section id="feature-section" className="relative px-4 sm:px-8 md:px-12 py-24 bg-[#faf9f5] border-t border-black/[0.04]">
+          <div className="max-w-[1200px] mx-auto flex flex-col items-center">
+
+            {/* Header: [FEATURES] Badge with left & right gradient lines */}
+            <div className="flex flex-col items-center text-center mb-16 max-w-3xl mx-auto">
+              <div className="flex items-center justify-center gap-2.5 sm:gap-3 mb-4">
+                {/* Left Line SVG with Pin */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 266 7" className="w-[100px] sm:w-[220px] md:w-[266px] h-[7px]">
+                  <g>
+                    <g transform="translate(259 0)">
+                      <circle cx="3.5" cy="3.5" r="3" fill="#ffffff" stroke="#acacac" strokeWidth="1" />
+                    </g>
+                    <defs>
+                      <linearGradient id="fs-line-left" x1="0" x2="1" y1="0.5" y2="0.5">
+                        <stop offset="0" stopColor="rgba(255, 255, 255, 0)" stopOpacity="0" />
+                        <stop offset="1" stopColor="#acacac" stopOpacity="1" />
+                      </linearGradient>
+                    </defs>
+                    <rect x="0" y="2.5" width="259" height="2" fill="url(#fs-line-left)" />
+                  </g>
+                </svg>
+
+                {/* Central Monospace FEATURES Badge */}
+                <div className="bg-white rounded-[6px] px-2.5 py-1 shadow-[0px_1px_2px_rgba(0,0,0,0.18)] border border-black/[0.04]">
+                  <span className="font-mono text-[11px] font-semibold text-neutral-600 tracking-wider uppercase">
+                    FEATURES
+                  </span>
+                </div>
+
+                {/* Right Line SVG with Pin */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 266 7" className="w-[100px] sm:w-[220px] md:w-[266px] h-[7px]">
+                  <g>
+                    <g transform="translate(0 0)">
+                      <circle cx="3.5" cy="3.5" r="3" fill="#ffffff" stroke="#acacac" strokeWidth="1" />
+                    </g>
+                    <defs>
+                      <linearGradient id="fs-line-right" x1="0" x2="1" y1="0.5" y2="0.5">
+                        <stop offset="0" stopColor="#acacac" stopOpacity="1" />
+                        <stop offset="1" stopColor="rgba(255, 255, 255, 0)" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <rect x="7" y="2.5" width="259" height="2" fill="url(#fs-line-right)" />
+                  </g>
+                </svg>
+              </div>
+
+              {/* Title with AnimatedSVGUnderlink */}
+              <h2 className="text-[34px] sm:text-[52px] font-[500] tracking-tight text-neutral-900 leading-[1.1] font-sans">
+                Workflows That Stay{' '}
+                <AnimatedSVGUnderline text="in Motion" underlineColor="#5b8266" />
+              </h2>
+
+              <p className="text-[15px] sm:text-[17px] text-neutral-500 font-[500] mt-3 font-sans max-w-xl">
+                From creation to collaboration to delivery — without breaking context.
+              </p>
+            </div>
+
+            {/* 3-Card Grid (Speech to Text, Translate, Agent Mode) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+
+              {/* CARD 1: SPEECH TO TEXT */}
+              <div className="group bg-white rounded-[24px] p-6 border border-black/[0.08] shadow-[0px_2px_8px_rgba(0,0,0,0.04)] flex flex-col justify-between hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
+                <div>
+                  <div className="text-[13px] font-[500] text-neutral-400 mb-3 font-sans flex items-center justify-between">
+                    <span>Speech to Text</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      0.2s Latency
+                    </span>
+                  </div>
+
+                  {/* Illustrator Preview: Voice to Text Engine & Connected Apps */}
+                  <div className="h-[220px] rounded-[18px] bg-[#faf9f0]/70 border border-black/[0.05] p-3.5 relative overflow-hidden flex flex-col items-center justify-center mb-6">
+                    {/* Orbiting Satellite Dashed Ring */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+                        className="w-[180px] h-[180px] rounded-full border border-dashed border-neutral-300/80"
+                      />
+                    </div>
+
+                    {/* Central Flow Voice Hub with Waveform */}
+                    <motion.div
+                      whileHover={{ scale: 1.08 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                      className="relative z-20 w-14 h-14 rounded-2xl bg-white text-neutral-900 flex flex-col items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.08)] border-2 border-black cursor-pointer mb-2"
+                    >
+                      <Mic size={18} className="text-[#16241b]" />
+                      <span className="text-[8.5px] font-mono font-bold tracking-widest text-[#2d4d36] mt-0.5">FLOW</span>
+                    </motion.div>
+
+                    {/* 4 Connected Satellite App Chips */}
+                    <div className="grid grid-cols-4 gap-1.5 w-full relative z-10 mt-1">
+                      {[
+                        { name: 'VS Code', tag: 'IDE', bg: 'bg-[#f0f7ff]', text: 'text-[#0369a1]', border: 'border-[#bae6fd]' },
+                        { name: 'Slack', tag: 'Chat', bg: 'bg-[#edf5ef]', text: 'text-[#2d4d36]', border: 'border-[#5b8266]/30' },
+                        { name: 'Linear', tag: 'Issues', bg: 'bg-[#fff7ed]', text: 'text-[#c2410c]', border: 'border-[#fed7aa]' },
+                        { name: 'Notion', tag: 'Docs', bg: 'bg-[#fefce8]', text: 'text-[#854d0e]', border: 'border-[#fef08a]' }
+                      ].map((item, idx) => (
+                        <motion.div
+                          key={item.name}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.1 * idx, duration: 0.3 }}
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          className={`p-1.5 rounded-xl border text-center ${item.bg} ${item.border} shadow-[0_1px_2px_rgba(0,0,0,0.04)] cursor-pointer transition-transform`}
+                        >
+                          <div className={`text-[10.5px] font-bold leading-tight ${item.text}`}>{item.name}</div>
+                          <div className={`text-[8px] font-mono opacity-75 ${item.text}`}>{item.tag}</div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 1 Text Content */}
+                <div className="text-center pt-1">
+                  <h3 className="text-[20px] font-[500] text-neutral-900 font-sans tracking-tight">
+                    Speech to Text Engine
+                  </h3>
+
+                  {/* Subtle Divider */}
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 158 2" className="w-[158px] h-[2px] mx-auto my-2.5">
+                    <defs>
+                      <linearGradient id="card1-div" x1="0" x2="1" y1="0.5" y2="0.5">
+                        <stop offset="0" stopColor="rgba(255, 255, 255, 0)" />
+                        <stop offset="0.5" stopColor="#d8d8d8" />
+                        <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
+                      </linearGradient>
+                    </defs>
+                    <rect x="0" y="0" width="158" height="2" fill="url(#card1-div)" />
+                  </svg>
+
+                  <p className="text-[13px] font-[400] text-neutral-500 font-sans leading-relaxed">
+                    Speak at 200+ WPM with automatic punctuation, filler word removal, and direct paste into any app.
+                  </p>
+                </div>
+              </div>
+
+              {/* CARD 2: TRANSLATE */}
+              <div className="group bg-white rounded-[24px] p-6 border border-black/[0.08] shadow-[0px_2px_8px_rgba(0,0,0,0.04)] flex flex-col justify-between hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
+                <div>
+                  <div className="text-[13px] font-[500] text-neutral-400 mb-3 font-sans flex items-center justify-between">
+                    <span>Translate</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                      100+ Languages
+                    </span>
+                  </div>
+
+                  {/* Illustrator Preview: Live Cross-Language Voice Translation */}
+                  <div className="h-[220px] rounded-[18px] bg-[#edf5ef] border border-[#5b8266]/30 p-3.5 relative overflow-hidden flex flex-col justify-between mb-6 shadow-inner">
+                    {/* Header Pill */}
+                    <div className="flex items-center justify-between text-[11px] font-mono text-neutral-700 bg-white/90 px-3 py-1 rounded-lg backdrop-blur-xs border border-black/5 shadow-2xs">
+                      <span className="flex items-center gap-1.5">
+                        <Globe size={13} className="text-[#3d6148]" />
+                        <span>Live Translation</span>
+                      </span>
+                      <span className="text-[#3d6148] font-bold text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300">
+                        HI ➔ EN
+                      </span>
+                    </div>
+
+                    {/* Translation Speech Bubbles */}
+                    <div className="space-y-2 relative z-10">
+                      {/* Native Speech Input Bubble */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.35, delay: 0.1 }}
+                        className="bg-white rounded-xl p-2.5 shadow-[0_2px_6px_rgba(0,0,0,0.04)] border border-black/10 max-w-[92%]"
+                      >
+                        <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono mb-0.5">
+                          <span className="font-bold text-neutral-800">🗣️ Voice Input (Hindi)</span>
+                          <span>10:42 AM</span>
+                        </div>
+                        <p className="text-[11.5px] text-neutral-700 leading-snug font-sans">
+                          "यह नया फीचर बहुत तेज़ी से काम करता है"
+                        </p>
+                      </motion.div>
+
+                      {/* Clean English Output Bubble */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.35, delay: 0.25 }}
+                        className="bg-white text-neutral-900 rounded-xl p-2.5 shadow-[0_2px_6px_rgba(0,0,0,0.04)] ml-auto max-w-[92%] border border-[#5b8266]/30"
+                      >
+                        <div className="flex items-center justify-between text-[10px] text-[#3d6148] font-mono mb-0.5">
+                          <span className="font-bold">✨ Clean English Output</span>
+                          <span>10:42 AM</span>
+                        </div>
+                        <p className="text-[11.5px] text-neutral-800 leading-snug font-sans">
+                          "This new feature works blazingly fast."
+                        </p>
+                      </motion.div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2 Text Content */}
+                <div className="text-center pt-1">
+                  <h3 className="text-[20px] font-[500] text-neutral-900 font-sans tracking-tight">
+                    Live Voice Translation
+                  </h3>
+
+                  {/* Subtle Divider */}
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 158 2" className="w-[158px] h-[2px] mx-auto my-2.5">
+                    <defs>
+                      <linearGradient id="card2-div" x1="0" x2="1" y1="0.5" y2="0.5">
+                        <stop offset="0" stopColor="rgba(255, 255, 255, 0)" />
+                        <stop offset="0.5" stopColor="#d8d8d8" />
+                        <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
+                      </linearGradient>
+                    </defs>
+                    <rect x="0" y="0" width="158" height="2" fill="url(#card2-div)" />
+                  </svg>
+
+                  <p className="text-[13px] font-[400] text-neutral-500 font-sans leading-relaxed">
+                    Speak naturally in your native language and output polished, fluent English or global translations on the fly.
+                  </p>
+                </div>
+              </div>
+
+              {/* CARD 3: AGENT MODE */}
+              <div className="group bg-white rounded-[24px] p-6 border border-black/[0.08] shadow-[0px_2px_8px_rgba(0,0,0,0.04)] flex flex-col justify-between hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
+                <div>
+                  <div className="text-[13px] font-[500] text-neutral-400 mb-3 font-sans flex items-center justify-between">
+                    <span>Agent Mode</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      In-App Control
+                    </span>
+                  </div>
+
+                  {/* Illustrator Preview: In-App Voice Agent Execution */}
+                  <div className="h-[220px] rounded-[18px] bg-[#faf9f0]/70 border border-black/[0.05] p-3.5 text-neutral-900 relative overflow-hidden flex flex-col justify-between mb-6">
+                    <div>
+                      {/* Top Header */}
+                      <div className="flex items-center justify-between text-[11px] font-mono text-neutral-500 mb-2.5">
+                        <span className="flex items-center gap-1.5 font-medium text-neutral-700">
+                          <Bot size={13} className="text-purple-600" />
+                          <span>Voice Agent Runner</span>
+                        </span>
+                        <span className="text-neutral-400 font-mono text-[10px]">0.18s</span>
+                      </div>
+
+                      {/* Action Command Box */}
+                      <div className="p-3 rounded-xl bg-neutral-700 dark:bg-neutral-800 text-white space-y-1 font-mono shadow-sm">
+                        <div className="text-[9px] text-neutral-300 uppercase tracking-wider font-semibold">
+                          🗣️ Voice Prompt: "Open notifications"
+                        </div>
+                        <div className="text-[11px] text-emerald-300 flex items-center">
+                          <span>&gt; execute_in_app("notifications.open")</span>
+                          <span className="w-1.5 h-3.5 bg-emerald-400 ml-1 animate-pulse" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Done Status Pill */}
+                    <div className="p-2.5 rounded-xl bg-[#edf5ef] border border-[#5b8266]/30 flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 size={14} className="text-[#3d6148]" />
+                        <span className="text-[11px] font-mono font-medium text-[#2d4d36]">Notifications Opened in Noska</span>
+                      </div>
+                      <span className="text-[9.5px] font-mono font-bold bg-[#5b8266]/20 text-[#2d4d36] px-1.5 py-0.5 rounded">
+                        DONE
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 3 Text Content */}
+                <div className="text-center pt-1">
+                  <h3 className="text-[20px] font-[500] text-neutral-900 font-sans tracking-tight">
+                    In-App Voice Agent
+                  </h3>
+
+                  {/* Subtle Divider */}
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 158 2" className="w-[158px] h-[2px] mx-auto my-2.5">
+                    <defs>
+                      <linearGradient id="card3-div" x1="0" x2="1" y1="0.5" y2="0.5">
+                        <stop offset="0" stopColor="rgba(255, 255, 255, 0)" />
+                        <stop offset="0.5" stopColor="#d8d8d8" />
+                        <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
+                      </linearGradient>
+                    </defs>
+                    <rect x="0" y="0" width="158" height="2" fill="url(#card3-div)" />
+                  </svg>
+
+                  <p className="text-[13px] font-[400] text-neutral-500 font-sans leading-relaxed">
+                    Control Noska App completely hands-free — trigger in-app navigation, toggle modes, create canvases, and run agent actions.
+                  </p>
                 </div>
               </div>
 
@@ -1869,441 +2939,622 @@ export default function NoskaWispr() {
         </section>
 
         {/* ==========================================================================
-                7. "BUILT AROUND HOW YOU WORK" (Tone, Vocabulary, Snippets & Rewind)
+                9. "BUILT AROUND HOW YOU SPEAK" — LUXURY FRAMER HORISCROLL PINNED SUITE
+                Exact Parity with framer.com/m/Horiscroll-FREmZl.js@kdW0E6c4vSHouxoooSlD
+                Pins viewport & scrolls 6 luxury cards horizontally with zero flicker & 60fps GPU acceleration
                ========================================================================== */}
-        <section id="how-you-work" className="relative px-6 sm:px-12 py-24 bg-white border-t border-black/[0.04]">
+        <section
+          ref={howYouWorkRef}
+          id="how-you-work"
+          className="relative bg-[#faf9f6] border-t border-black/[0.04] h-[380vh]"
+        >
+          {/* Sticky Viewport Stage: Pinned inside viewport while user scrolls vertically */}
+          <div className="sticky top-0 h-screen w-full flex flex-col justify-between py-6 sm:py-10 px-4 sm:px-8 md:px-12 overflow-hidden">
+            
+            {/* Ambient Background Glows */}
+            <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#5b8266]/8 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#5b8266]/8 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Section Header */}
-          <div className="max-w-4xl mx-auto text-center mb-16">
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#edf5ef] border border-[#5b8266]/20 text-[12px] font-semibold text-[#3d6148] uppercase tracking-wider mb-4 shadow-xs">
-              <Sparkles size={13} className="text-[#3d6148]" />
-              <span>Proprietary Noska Voice Suite</span>
-            </div>
-            <h2 className="text-[38px] sm:text-[56px] font-extrabold tracking-tight text-neutral-900 leading-[1.05]">
-              Built around <em>how you speak,</em><br />
-              <span className="text-neutral-500 font-light italic">not how keyboards think.</span>
-            </h2>
-            <p className="text-[15px] sm:text-[17px] text-neutral-600 max-w-2xl mx-auto mt-4 leading-relaxed font-normal">
-              From real-time translation and autonomous voice agent actions to adaptive tone matching and hands-free Voice Rewind — Noska puts the entire frontier of voice computing at your command.
-            </p>
-          </div>
-
-          {/* 6 Interactive Real-Feature Showcase Bento Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-6xl mx-auto">
-
-            {/* CARD 1: Interactive Tone Adaptation */}
-            <div className="bg-[#faf9f6] rounded-[32px] p-7 sm:p-9 border border-black/[0.06] shadow-sm flex flex-col justify-between hover:border-black/15 transition-all">
+            {/* Top Pinned Stage Header & Horiscroll Progress HUD */}
+            <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row sm:items-end justify-between gap-4 relative z-10">
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-[#5b8266]/10 text-[#5b8266] flex items-center justify-center">
-                      <SlidersHorizontal size={16} />
-                    </div>
-                    <span className="text-[15px] font-bold text-neutral-900">Adaptive Tone Matching</span>
-                  </div>
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-neutral-200/60 text-neutral-700">
-                    App-Specific
-                  </span>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#f3e8ff] border-2 border-black text-[11px] font-bold text-neutral-900 uppercase tracking-wider mb-2.5 shadow-[2px_2px_0px_#000000]">
+                  <Sparkles size={12} className="text-[#3d6148] animate-pulse" />
+                  <span>Proprietary Noska Voice Suite</span>
                 </div>
-
-                <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed">
-                  Speak the same raw thought once. Noska formats it with the exact right tone whether you're writing a client proposal, replying to an executive, or messaging a teammate.
-                </p>
-
-                {/* Tone Selector Buttons */}
-                <div className="flex items-center gap-1.5 mb-4 bg-white p-1 rounded-2xl border border-black/[0.06] shadow-xs">
-                  {(['formal', 'casual', 'executive', 'technical'] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setActiveTone(t)}
-                      className={`flex-1 py-1.5 sm:py-2 rounded-xl text-[11.5px] sm:text-[12px] font-medium transition cursor-pointer capitalize ${activeTone === t
-                        ? 'bg-neutral-900 text-white font-semibold shadow-xs'
-                        : 'text-neutral-600 hover:text-neutral-950'
-                        }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Dynamic Transformed Message Box */}
-                <motion.div
-                  key={activeTone}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="bg-white rounded-2xl p-4 sm:p-5 border border-black/[0.05] shadow-xs min-h-[95px] flex items-center"
-                >
-                  <p className="text-[13.5px] leading-relaxed text-neutral-800 font-sans font-normal">
-                    {tonePresets[activeTone]}
-                  </p>
-                </motion.div>
+                <h2 className="text-[28px] sm:text-[38px] md:text-[44px] font-extrabold tracking-tight text-neutral-900 leading-[1.08] font-sans">
+                  Built around{' '}
+                  <AnimatedSVGUnderline text="how you speak," underlineColor="#5b8266" />
+                  <span className="text-neutral-500 font-light italic font-serif ml-2 sm:ml-3">not keyboards.</span>
+                </h2>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-black/[0.06] flex items-center justify-between text-[11.5px] text-neutral-500">
-                <span>Matches Slack, Gmail & Notion standards</span>
-                <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                  <CheckCircle2 size={12} /> Auto-cased & calibrated
-                </span>
+              {/* Real-Time Horiscroll Progress HUD */}
+              <div className="flex items-center gap-4 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-black/[0.06] shadow-xs shrink-0">
+                <div className="flex flex-col gap-1 min-w-[150px]">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-neutral-500">
+                    <span className="font-bold text-neutral-700">HORISCROLL</span>
+                    <span className="text-[#3d6148] font-bold">6 DIMENSIONS</span>
+                  </div>
+                  {/* Progress Meter Bar */}
+                  <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                    <motion.div 
+                      style={{ width: horiProgressBar }}
+                      className="h-full bg-gradient-to-r from-[#5b8266] via-[#7ca087] to-[#5b8266] rounded-full"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* CARD 2: Voice Rewind (Hands-Free Self-Correction) */}
-            <div className="bg-[#faf9f6] rounded-[32px] p-7 sm:p-9 border border-black/[0.06] shadow-sm flex flex-col justify-between hover:border-black/15 transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
-                      <RotateCcw size={16} />
-                    </div>
-                    <span className="text-[15px] font-bold text-neutral-900">Voice Rewind</span>
-                  </div>
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 font-mono">
-                    "Scratch That"
-                  </span>
-                </div>
+            {/* Horiscroll Horizontal Sliding Train (Zero Flicker, GPU Accelerated) */}
+            <div className="w-full relative z-10 my-auto overflow-visible py-2">
+              <motion.div 
+                ref={trackRef}
+                style={{ x: horiTrackX }}
+                className="flex flex-row flex-nowrap gap-6 sm:gap-8 will-change-transform pr-24 sm:pr-44 pb-4"
+              >
 
-                <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed">
-                  Change your mind mid-sentence? Say <em>"scratch that"</em> or <em>"wait, I meant..."</em> and Noska automatically deletes and rewrites the prior phrase in-place.
-                </p>
-
-                {/* Interactive Rewind Simulation Box */}
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-black/[0.05] shadow-xs min-h-[110px] flex flex-col justify-between">
-                  <div className="text-[13.5px] leading-relaxed text-neutral-800">
-                    {isRewindActive ? (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.25 }}
-                      >
-                        <span className="text-neutral-400 line-through decoration-red-400 decoration-2">Let's schedule the release for Friday afternoon</span>{' '}
-                        <span className="text-purple-700 font-semibold bg-purple-50 px-1.5 py-0.5 rounded">actually, make it Tuesday morning at 10 AM.</span>
-                      </motion.div>
-                    ) : (
-                      <div>
-                        Let's schedule the release for Friday afternoon...
+                {/* CARD 01: Adaptive Tone Calibration */}
+                <div className="w-[360px] sm:w-[440px] md:w-[480px] shrink-0 bg-white rounded-[32px] p-6 sm:p-8 flex flex-col justify-between group border-2 border-black shadow-[4px_4px_0px_#000000] hover:shadow-[6px_6px_0px_#000000] hover:-translate-y-1 transition-all duration-300">
+                  <div>
+                    {/* Top Pinned Service Badge */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#edf5ef] text-[#2d4d36] border-2 border-black font-bold shadow-[2px_2px_0px_#000000]">
+                        <SlidersHorizontal size={13} className="text-[#3d6148]" />
+                        <span className="text-[12px] font-bold text-neutral-900">Adaptive Tone</span>
                       </div>
-                    )}
+                      <div className="w-7 h-7 rounded-full bg-white border-2 border-black text-[11px] font-mono font-bold flex items-center justify-center shadow-[1.5px_1.5px_0px_#000000] text-neutral-800">
+                        01
+                      </div>
+                    </div>
+
+                    <h3 className="text-[20px] font-extrabold text-neutral-900 mb-2 font-sans tracking-tight">
+                      Context-Aware Tone Calibration
+                    </h3>
+
+                    <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed font-normal">
+                      Speak the same raw thought once. Noska formats it with the exact right tone whether you're writing a client proposal, replying to an executive, or messaging a teammate.
+                    </p>
+
+                    {/* Inner Recessed Interactive Container */}
+                    <div className="rounded-2xl p-4 space-y-3.5 bg-[#faf8fd] border-2 border-black/15 shadow-inner">
+                      {/* Top Tone Equalizer Bar Header */}
+                      <div className="flex items-center justify-between pb-2 border-b border-black/[0.08]">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-[#5b8266] animate-pulse" />
+                          <span className="text-[10.5px] font-mono font-bold text-neutral-600 uppercase tracking-wider">
+                            Frequency Spectrum
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {[10, 22, 14, 28, 18, 24, 12, 26, 16, 20].map((h, i) => (
+                            <motion.span
+                              key={i}
+                              animate={{ 
+                                height: activeTone === 'formal' 
+                                  ? ['4px', `${h * 0.75}px`, '4px']
+                                  : activeTone === 'casual'
+                                  ? ['4px', `${(h % 15 + 6)}px`, '4px']
+                                  : activeTone === 'executive'
+                                  ? ['6px', `${h * 0.6}px`, '6px']
+                                  : ['4px', `${h}px`, '4px']
+                              }}
+                              transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.06 }}
+                              className="w-[2.5px] bg-[#5b8266] rounded-full"
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Tone Selector Buttons */}
+                      <div className="grid grid-cols-4 gap-1 bg-white p-1 rounded-xl border border-black/10 w-full">
+                        {[
+                          { id: 'formal', label: 'Formal', icon: Briefcase },
+                          { id: 'casual', label: 'Casual', icon: MessageSquare },
+                          { id: 'executive', label: 'Executive', icon: Crown },
+                          { id: 'technical', label: 'Technical', icon: Terminal }
+                        ].map((t) => {
+                          const Icon = t.icon;
+                          const isActive = activeTone === t.id;
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => setActiveTone(t.id as any)}
+                              className={`w-full py-1.5 px-1 rounded-lg text-[10.5px] sm:text-[11px] transition-all duration-150 cursor-pointer flex items-center justify-center gap-1 text-center relative select-none font-semibold ${
+                                isActive
+                                  ? 'bg-neutral-900 text-white font-bold border border-black shadow-[1px_1px_0px_#000000]'
+                                  : 'bg-transparent hover:bg-neutral-100 text-neutral-600 hover:text-neutral-950 font-medium'
+                              }`}
+                            >
+                              <Icon size={12} className={`shrink-0 ${isActive ? 'text-white' : 'text-neutral-500'}`} />
+                              <span className="truncate">{t.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Transformed Output Preview Box */}
+                      <motion.div
+                        key={activeTone}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="min-h-[85px] p-3.5 rounded-xl bg-white border-2 border-black/10 text-[12.5px] text-neutral-800 leading-relaxed font-sans shadow-xs relative flex flex-col justify-between"
+                      >
+                        <div className="font-sans leading-relaxed text-neutral-900 font-medium">
+                          {tonePresets[activeTone]}
+                        </div>
+                        <div className="flex items-center justify-between pt-2 mt-2 border-t border-black/5 text-[10.5px] font-mono">
+                          <span className="flex items-center gap-1 font-bold text-[#2d4d36] bg-[#edf5ef] px-2 py-0.5 rounded-full border border-[#5b8266]/20">
+                            <CheckCircle2 size={11} className="text-[#5b8266]" /> 99.8% Context Fit
+                          </span>
+                          <span className="text-neutral-500 font-medium">Latency: 0.12s</span>
+                        </div>
+                      </motion.div>
+                    </div>
                   </div>
 
-                  <div className="mt-3.5 flex items-center justify-between flex-wrap gap-2">
-                    <button
-                      onClick={() => setIsRewindActive(prev => !prev)}
-                      className={`px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition cursor-pointer flex items-center gap-1.5 active:scale-95 ${isRewindActive
-                        ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                        : 'bg-neutral-900 text-white hover:bg-neutral-800 shadow-xs'
-                        }`}
-                    >
-                      <RotateCcw size={12} className={isRewindActive ? 'animate-spin' : ''} />
-                      <span>{isRewindActive ? "Reset Simulation" : "Simulate 'Scratch That'"}</span>
-                    </button>
-                    <span className="text-[11px] font-mono text-neutral-400">
-                      {isRewindActive ? "✓ Phrase deleted & replaced" : "Waiting for correction trigger"}
+                  <div className="mt-5 pt-3.5 border-t border-black/10 flex items-center justify-between text-[11.5px] text-neutral-500 font-medium">
+                    <span>Matches Slack, Gmail & Notion</span>
+                    <span className="text-[#2d4d36] font-bold flex items-center gap-1">
+                      <CheckCircle2 size={12} className="text-[#5b8266]" /> Auto-Calibrated
                     </span>
                   </div>
                 </div>
-              </div>
 
-              <div className="mt-6 pt-4 border-t border-black/[0.06] flex items-center justify-between text-[11.5px] text-neutral-500">
-                <span>Powered by Noska `rewind-engine.ts`</span>
-                <span className="text-neutral-900 font-semibold">Zero mouse/backspace touches</span>
-              </div>
-            </div>
-
-            {/* CARD 3: Real-Time Multi-Language Voice Translate (NEW) */}
-            <div className="bg-[#faf9f6] rounded-[32px] p-7 sm:p-9 border border-black/[0.06] shadow-sm flex flex-col justify-between hover:border-black/15 transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-700 flex items-center justify-center">
-                      <Globe size={16} />
-                    </div>
-                    <span className="text-[15px] font-bold text-neutral-900">Real-Time Voice Translate</span>
-                  </div>
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-                    100+ Languages
-                  </span>
-                </div>
-
-                <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed">
-                  Speak in your native language or conversational Hinglish. Noska auto-detects dialect nuances and translates speech into polished English in real time.
-                </p>
-
-                {/* Language Switcher Pills */}
-                <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-                  {(['hinglish', 'spanish', 'japanese', 'german'] as const).map((langKey) => (
-                    <button
-                      key={langKey}
-                      onClick={() => setActiveTranslateLang(langKey)}
-                      className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition cursor-pointer flex items-center gap-1.5 ${activeTranslateLang === langKey
-                        ? 'bg-neutral-900 text-white font-semibold shadow-xs'
-                        : 'bg-white hover:bg-neutral-100 text-neutral-700 border border-black/[0.06]'
-                        }`}
-                    >
-                      <span>{translatePresets[langKey].flag}</span>
-                      <span>{translatePresets[langKey].lang}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Real-Time Translation Stream Box */}
-                <motion.div
-                  key={activeTranslateLang}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="bg-white rounded-2xl p-4 sm:p-5 border border-black/[0.05] shadow-xs space-y-3"
-                >
-                  <div className="border-b border-neutral-100 pb-2.5">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10.5px] font-mono uppercase tracking-wider text-neutral-400">
-                        Input: {translatePresets[activeTranslateLang].detected}
-                      </span>
-                      <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-600">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Listening
-                      </span>
-                    </div>
-                    <p className="text-[13px] text-neutral-600 font-mono italic">
-                      {translatePresets[activeTranslateLang].spoken}
-                    </p>
-                  </div>
-
+                {/* CARD 02: Voice Rewind ("Scratch That") */}
+                <div className="w-[360px] sm:w-[440px] md:w-[480px] shrink-0 bg-white rounded-[32px] p-6 sm:p-8 flex flex-col justify-between group border-2 border-black shadow-[4px_4px_0px_#000000] hover:shadow-[6px_6px_0px_#000000] hover:-translate-y-1 transition-all duration-300">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10.5px] font-mono uppercase tracking-wider text-emerald-700 font-semibold">
-                        Output: {translatePresets[activeTranslateLang].targetLang}
-                      </span>
-                      <span className="text-[10.5px] font-mono text-neutral-400">
-                        {translatePresets[activeTranslateLang].latency}
-                      </span>
+                    {/* Top Pinned Service Badge */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#fdeee9] text-[#9c382b] border-2 border-black font-bold shadow-[2px_2px_0px_#000000]">
+                        <RotateCcw size={13} className="text-[#9c382b]" />
+                        <span className="text-[12px] font-bold text-neutral-900">Voice Rewind</span>
+                      </div>
+                      <div className="w-7 h-7 rounded-full bg-white border-2 border-black text-[11px] font-mono font-bold flex items-center justify-center shadow-[1.5px_1.5px_0px_#000000] text-neutral-800">
+                        02
+                      </div>
                     </div>
-                    <p className="text-[13.5px] text-neutral-900 font-sans font-medium leading-relaxed">
-                      {translatePresets[activeTranslateLang].translated}
+
+                    <h3 className="text-[20px] font-extrabold text-neutral-900 mb-2 font-sans tracking-tight">
+                      Hands-Free Self-Correction
+                    </h3>
+
+                    <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed font-normal">
+                      Change your mind mid-sentence? Say <em>"scratch that"</em> or <em>"wait, I meant..."</em> and Noska automatically deletes and rewrites the prior phrase in-place.
                     </p>
-                  </div>
-                </motion.div>
-              </div>
 
-              <div className="mt-6 pt-4 border-t border-black/[0.06] flex items-center justify-between text-[11.5px] text-neutral-500">
-                <span>100% On-Device Whisper v3</span>
-                <span className="text-emerald-700 font-semibold">Zero cloud audio transmission</span>
-              </div>
-            </div>
+                    {/* Inner Recessed Interactive Container */}
+                    <div className="rounded-2xl p-4 space-y-3.5 bg-[#faf8fd] border-2 border-black/15 shadow-inner">
+                      {/* Scrubber Tape Timeline Visualizer */}
+                      <div className="flex items-center justify-between pb-2 border-b border-black/[0.08]">
+                        <div className="flex items-center gap-2">
+                          <RotateCcw size={12} className="text-[#9c382b] animate-spin" />
+                          <span className="text-[10.5px] font-mono font-bold text-neutral-600 uppercase tracking-wider">
+                            Audio Buffer Tape
+                          </span>
+                        </div>
+                        <span className="text-[10.5px] font-mono text-[#2d4d36] font-bold px-2 py-0.5 rounded-full bg-[#edf5ef] border border-[#5b8266]/20">
+                          {isRewindActive ? "REWOUND 00:02.1" : "LIVE BUFFER 00:04.8"}
+                        </span>
+                      </div>
 
-            {/* CARD 4: Autonomous Voice Agent Mode (NEW) */}
-            <div className="bg-[#faf9f6] rounded-[32px] p-7 sm:p-9 border border-black/[0.06] shadow-sm flex flex-col justify-between hover:border-black/15 transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
-                      <Bot size={16} />
+                      {/* Scrubber Track Visual */}
+                      <div className="relative h-2.5 bg-neutral-200 rounded-full overflow-hidden border border-black/10">
+                        <motion.div 
+                          animate={{ width: isRewindActive ? '40%' : '100%' }}
+                          transition={{ duration: 0.4 }}
+                          className={`h-full rounded-full ${isRewindActive ? 'bg-gradient-to-r from-[#5b8266] to-[#7ca087]' : 'bg-[#5b8266] animate-pulse'}`} 
+                        />
+                      </div>
+
+                      {/* Spoken phrase box with dynamic strikethrough animation */}
+                      <div className="text-[12.5px] leading-relaxed text-neutral-800 min-h-[58px] p-3.5 rounded-xl bg-white border-2 border-black/10 flex items-center shadow-xs">
+                        {isRewindActive ? (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.25 }}
+                          >
+                            <span className="text-neutral-400 line-through decoration-red-500 decoration-2 font-mono text-[11.5px]">
+                              Let's schedule release for Friday afternoon
+                            </span>{' '}
+                            <span className="text-[#1e3325] font-bold bg-[#edf5ef] px-1.5 py-0.5 rounded border border-[#5b8266]/30 inline-block mt-0.5">
+                              make it Tuesday morning at 10 AM.
+                            </span>
+                          </motion.div>
+                        ) : (
+                          <div className="font-mono text-[12px] text-neutral-700">
+                            “Let's schedule release for Friday afternoon...”
+                            <span className="inline-block w-1.5 h-3.5 bg-[#5b8266] ml-1 animate-pulse" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-0.5 flex-wrap gap-2">
+                        <button
+                          onClick={() => setIsRewindActive(prev => !prev)}
+                          className="px-4 py-2 rounded-xl text-[11.5px] font-bold bg-neutral-900 hover:bg-neutral-800 text-white border-2 border-black shadow-[2px_2px_0px_#000000] transition cursor-pointer active:scale-95 flex items-center gap-1.5"
+                        >
+                          <RotateCcw size={11} className={isRewindActive ? 'animate-spin' : ''} />
+                          <span>{isRewindActive ? "Reset Stream" : "Simulate 'Scratch That'"}</span>
+                        </button>
+                        <span className="text-[11px] font-mono text-[#2d4d36] font-bold">
+                          {isRewindActive ? "✓ Replaced in 180ms" : "Voice armed"}
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-[15px] font-bold text-neutral-900">Autonomous Voice Agent Mode</span>
                   </div>
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-mono">
-                    Voice-to-Action
-                  </span>
+
+                  <div className="mt-5 pt-3.5 border-t border-black/10 flex items-center justify-between text-[11.5px] text-neutral-500 font-medium">
+                    <span>Powered by `rewind-engine.ts`</span>
+                    <span className="text-neutral-900 font-bold">Zero backspace touches</span>
+                  </div>
                 </div>
 
-                <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed">
-                  Speak real-world workflows into existence. Noska Agent parses intents, binds desktop tools, creates issues, drafts communications, and triggers actions.
-                </p>
-
-                {/* Agent Command Selector */}
-                <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-                  {agentCommands.map((cmd, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleRunAgentCommand(idx)}
-                      className={`px-3 py-1.5 rounded-full text-[11.5px] sm:text-[12px] font-medium transition cursor-pointer flex items-center gap-1.5 ${activeAgentCommand === idx
-                        ? 'bg-neutral-900 text-white font-semibold shadow-xs'
-                        : 'bg-white hover:bg-neutral-100 text-neutral-700 border border-black/[0.06]'
-                        }`}
-                    >
-                      <Terminal size={11} className={activeAgentCommand === idx ? 'text-emerald-400' : 'text-neutral-400'} />
-                      <span>{cmd.title}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Agent Execution Console Terminal */}
-                <div className="bg-[#15171e] text-white rounded-2xl p-4 sm:p-5 border border-neutral-800 shadow-lg space-y-3 font-mono text-[12.5px]">
+                {/* CARD 03: Real-Time Multilingual Translation */}
+                <div className="w-[360px] sm:w-[440px] md:w-[480px] shrink-0 bg-white rounded-[32px] p-6 sm:p-8 flex flex-col justify-between group border-2 border-black shadow-[4px_4px_0px_#000000] hover:shadow-[6px_6px_0px_#000000] hover:-translate-y-1 transition-all duration-300">
                   <div>
-                    <div className="flex items-center justify-between text-[10.5px] text-neutral-400 mb-1">
-                      <span>VOICE INTENT</span>
-                      <span className="text-emerald-400 font-semibold">{agentCommands[activeAgentCommand].category}</span>
+                    {/* Top Pinned Service Badge */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#edf5ef] text-[#2d4d36] border-2 border-black font-bold shadow-[2px_2px_0px_#000000]">
+                        <Globe size={13} className="text-[#3d6148]" />
+                        <span className="text-[12px] font-bold text-neutral-900">Voice Translate</span>
+                      </div>
+                      <div className="w-7 h-7 rounded-full bg-white border-2 border-black text-[11px] font-mono font-bold flex items-center justify-center shadow-[1.5px_1.5px_0px_#000000] text-neutral-800">
+                        03
+                      </div>
                     </div>
-                    <p className="text-neutral-200 text-[12px] leading-relaxed">
-                      {agentCommands[activeAgentCommand].voiceInput}
+
+                    <h3 className="text-[20px] font-extrabold text-neutral-900 mb-2 font-sans tracking-tight">
+                      100+ Dialect Speech Translation
+                    </h3>
+
+                    <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed font-normal">
+                      Speak in your native dialect or natural Hinglish. Noska auto-detects conversational nuances and translates speech into polished English in real time.
                     </p>
-                  </div>
 
-                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-[11.5px] text-emerald-300 overflow-x-auto">
-                    <code>&gt; {agentCommands[activeAgentCommand].toolCall}</code>
-                  </div>
+                    {/* Inner Recessed Interactive Container */}
+                    <div className="rounded-2xl p-4 space-y-3.5 bg-[#faf8fd] border-2 border-black/15 shadow-inner">
+                      {/* Language Selector Pills */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {[
+                          { id: 'hinglish', code: 'IN', label: 'Hindi / Hinglish' },
+                          { id: 'spanish', code: 'ES', label: 'Spanish' },
+                          { id: 'japanese', code: 'JP', label: 'Japanese' },
+                          { id: 'german', code: 'DE', label: 'German' }
+                        ].map((l) => (
+                          <button
+                            key={l.id}
+                            onClick={() => setActiveTranslateLang(l.id as any)}
+                            className={`px-3 py-1.5 rounded-xl text-[11px] transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+                              activeTranslateLang === l.id
+                                ? 'bg-neutral-900 text-white font-bold border-2 border-black shadow-[1.5px_1.5px_0px_#000000]'
+                                : 'bg-white hover:bg-neutral-50 text-neutral-700 border border-black/10 font-medium'
+                            }`}
+                          >
+                            <span className="font-mono text-[9.5px] opacity-70 uppercase">{l.code}</span>
+                            <span>{l.label}</span>
+                          </button>
+                        ))}
+                      </div>
 
-                  {/* Multi-Step Execution State */}
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${agentRunning ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'}`} />
-                      <span className="text-[11.5px] text-neutral-300 font-medium">
-                        {agentRunning
-                          ? agentStep === 0
-                            ? "Parsing intent..."
-                            : "Calling MCP tool..."
-                          : agentCommands[activeAgentCommand].result}
-                      </span>
+                      {/* Dual Channel Translation Stream */}
+                      <div className="p-3.5 rounded-xl bg-white border-2 border-black/10 space-y-2.5 shadow-xs">
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-neutral-500 mb-1">
+                            <span className="font-bold text-neutral-700">Spoken ({translatePresets[activeTranslateLang].detected})</span>
+                            <span className="text-[#3d6148] font-bold flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#5b8266] animate-pulse" />
+                              Audio Input
+                            </span>
+                          </div>
+                          <p className="text-[12px] text-neutral-700 font-mono italic leading-relaxed">
+                            {translatePresets[activeTranslateLang].spoken}
+                          </p>
+                        </div>
+
+                        <div className="pt-2 border-t border-black/5">
+                          <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#2d4d36] font-bold mb-1">
+                            <span>Output ({translatePresets[activeTranslateLang].targetLang})</span>
+                            <span className="text-[#2d4d36] font-bold px-2 py-0.5 rounded-full bg-[#edf5ef] border border-[#5b8266]/30">
+                              {translatePresets[activeTranslateLang].latency}
+                            </span>
+                          </div>
+                          <p className="text-[12.5px] text-neutral-950 font-bold font-sans leading-snug">
+                            {translatePresets[activeTranslateLang].translated}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => handleRunAgentCommand(activeAgentCommand)}
-                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold transition cursor-pointer"
-                    >
-                      {agentRunning ? "Running..." : "Re-run"}
-                    </button>
+                  </div>
+
+                  <div className="mt-5 pt-3.5 border-t border-black/10 flex items-center justify-between text-[11.5px] text-neutral-500 font-medium">
+                    <span>100% On-Device Whisper v3</span>
+                    <span className="text-[#2d4d36] font-bold">Zero cloud audio leak</span>
                   </div>
                 </div>
-              </div>
 
-              <div className="mt-6 pt-4 border-t border-black/[0.06] flex items-center justify-between text-[11.5px] text-neutral-500">
-                <span>Integrated with MCP, Linear, Slack & GitHub</span>
-                <span className="text-neutral-900 font-semibold">1-Click Voice Execution</span>
-              </div>
-            </div>
-
-            {/* CARD 5: Custom Dictionary & Unique Jargon */}
-            <div className="bg-[#faf9f6] rounded-[32px] p-7 sm:p-9 border border-black/[0.06] shadow-sm flex flex-col justify-between hover:border-black/15 transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                      <BookOpen size={16} />
+                {/* CARD 04: In-App Voice Control Agent */}
+                <div className="w-[360px] sm:w-[440px] md:w-[480px] shrink-0 bg-white rounded-[32px] p-6 sm:p-8 flex flex-col justify-between group border-2 border-black shadow-[4px_4px_0px_#000000] hover:shadow-[6px_6px_0px_#000000] hover:-translate-y-1 transition-all duration-300">
+                  <div>
+                    {/* Top Pinned Service Badge */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#f3e8ff] text-neutral-900 border-2 border-black font-bold shadow-[2px_2px_0px_#000000]">
+                        <Bot size={13} className="text-[#3d6148]" />
+                        <span className="text-[12px] font-bold text-neutral-900">In-App Agent</span>
+                      </div>
+                      <div className="w-7 h-7 rounded-full bg-white border-2 border-black text-[11px] font-mono font-bold flex items-center justify-center shadow-[1.5px_1.5px_0px_#000000] text-neutral-800">
+                        04
+                      </div>
                     </div>
-                    <span className="text-[15px] font-bold text-neutral-900">Personal Vocabulary</span>
+
+                    <h3 className="text-[20px] font-extrabold text-neutral-900 mb-2 font-sans tracking-tight">
+                      In-App Voice Control Agent
+                    </h3>
+
+                    <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed font-normal">
+                      Control the entire Noska App hands-free. Speak naturally to open notifications, switch themes, search notes, toggle split views, or manage boards.
+                    </p>
+
+                    {/* Inner Recessed Interactive Container (In-App Terminal) */}
+                    <div className="bg-[#0e1117] text-white rounded-2xl p-4.5 border-2 border-black shadow-xl space-y-3 font-mono text-[11.5px] relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-[#5b8266]/10 rounded-full blur-2xl pointer-events-none" />
+
+                      {/* macOS Terminal Dots & Action Selector */}
+                      <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-1.5 relative z-10">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-[#5b8266]" />
+                          <span className="ml-1 text-[10px] text-neutral-400 font-mono">noska-in-app-agent</span>
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {agentCommands.slice(0, 3).map((cmd, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => handleRunAgentCommand(idx)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
+                                activeAgentCommand === idx
+                                  ? 'bg-[#5b8266] text-white font-bold'
+                                  : 'bg-white/10 hover:bg-white/20 text-neutral-300'
+                              }`}
+                            >
+                              {cmd.title}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="text-[11.5px] text-neutral-200 relative z-10 leading-snug">
+                        <span className="text-[#a8cca8] font-bold">&gt; Voice Input:</span> {agentCommands[activeAgentCommand].voiceInput}
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-black/60 border border-[#5b8266]/30 text-[10.5px] text-[#c1dcce] relative z-10">
+                        <span className="text-neutral-500">// In-App Dispatch:</span><br />
+                        <code>{agentCommands[activeAgentCommand].toolCall}</code>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[#a8cca8] text-[11px] pt-0.5 relative z-10">
+                        <span className="flex items-center gap-1.5 truncate mr-2">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${agentRunning ? 'bg-amber-400 animate-ping' : 'bg-[#5b8266]'}`} />
+                          <span className="truncate">{agentRunning ? "Executing in Noska App..." : agentCommands[activeAgentCommand].result}</span>
+                        </span>
+                        <button
+                          onClick={() => handleRunAgentCommand(activeAgentCommand)}
+                          className="px-3 py-1 rounded-lg bg-[#f3e8ff] hover:bg-[#e9d5ff] text-neutral-900 border-2 border-black text-[10.5px] cursor-pointer font-bold shadow-[1.5px_1.5px_0px_#000000] active:scale-95 transition shrink-0"
+                        >
+                          {agentRunning ? "..." : "Simulate"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-mono">
-                    100% Accuracy
-                  </span>
+
+                  <div className="mt-5 pt-3.5 border-t border-black/10 flex items-center justify-between text-[11.5px] text-neutral-500 font-medium">
+                    <span>100% In-App Voice Control</span>
+                    <span className="text-neutral-900 font-bold">Zero-Click UI Speed</span>
+                  </div>
                 </div>
 
-                <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed">
-                  Add teammates' names, client brands, internal codenames, and complex technical terms. Noska prioritizes your custom dictionary so uncommon words are never misspelled.
-                </p>
+                {/* CARD 05: Personal Vocabulary */}
+                <div className="w-[360px] sm:w-[440px] md:w-[480px] shrink-0 bg-white rounded-[32px] p-6 sm:p-8 flex flex-col justify-between group border-2 border-black shadow-[4px_4px_0px_#000000] hover:shadow-[6px_6px_0px_#000000] hover:-translate-y-1 transition-all duration-300">
+                  <div>
+                    {/* Top Pinned Service Badge */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#fef3c7] text-[#78350f] border-2 border-black font-bold shadow-[2px_2px_0px_#000000]">
+                        <BookOpen size={13} className="text-[#78350f]" />
+                        <span className="text-[12px] font-bold text-neutral-900">Custom Jargon</span>
+                      </div>
+                      <div className="w-7 h-7 rounded-full bg-white border-2 border-black text-[11px] font-mono font-bold flex items-center justify-center shadow-[1.5px_1.5px_0px_#000000] text-neutral-800">
+                        05
+                      </div>
+                    </div>
 
-                {/* Interactive Word Chips */}
-                <div className="flex items-center gap-2 flex-wrap mb-4">
-                  {customWords.map((word) => (
-                    <div
-                      key={word}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-black/[0.08] text-[12.5px] font-medium text-neutral-800 shadow-xs"
-                    >
-                      <span>{word}</span>
-                      <button
-                        onClick={() => setCustomWords(words => words.filter(w => w !== word))}
-                        className="text-neutral-400 hover:text-neutral-700 cursor-pointer ml-0.5 font-bold"
-                        title="Remove word"
+                    <h3 className="text-[20px] font-extrabold text-neutral-900 mb-2 font-sans tracking-tight">
+                      Personal Dictionary Sync
+                    </h3>
+
+                    <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed font-normal">
+                      Add teammates' names, client brands, internal codenames, and complex technical terms. Noska prioritizes your custom dictionary so uncommon words are never misspelled.
+                    </p>
+
+                    {/* Inner Recessed Interactive Container */}
+                    <div className="rounded-2xl p-4 space-y-3.5 bg-[#faf8fd] border-2 border-black/15 shadow-inner">
+                      {/* Floating Tag Chips */}
+                      <div className="flex items-center gap-1.5 flex-wrap min-h-[40px]">
+                        {customWords.map((word) => (
+                          <motion.div
+                            key={word}
+                            layout
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.8, opacity: 0 }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border-2 border-black text-[11.5px] font-bold text-neutral-900 shadow-[1.5px_1.5px_0px_#000000]"
+                          >
+                            <span>{word}</span>
+                            <button
+                              onClick={() => setCustomWords(words => words.filter(w => w !== word))}
+                              className="text-neutral-400 hover:text-red-500 cursor-pointer text-[13px] font-bold ml-0.5"
+                              title="Remove word"
+                            >
+                              ×
+                            </button>
+                          </motion.div>
+                        ))}
+                      </div>
+
+                      {/* Add Custom Word Input */}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newWordInput}
+                          onChange={(e) => setNewWordInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newWordInput.trim()) {
+                              if (!customWords.includes(newWordInput.trim())) {
+                                setCustomWords(words => [...words, newWordInput.trim()]);
+                              }
+                              setNewWordInput('');
+                            }
+                          }}
+                          placeholder="Add custom jargon (e.g. AcmeCorp)..."
+                          className="flex-1 px-3.5 py-2 rounded-xl bg-white border-2 border-black/20 text-[12px] font-medium focus:outline-none focus:border-black"
+                        />
+                        <button
+                          onClick={() => {
+                            if (newWordInput.trim() && !customWords.includes(newWordInput.trim())) {
+                              setCustomWords(words => [...words, newWordInput.trim()]);
+                              setNewWordInput('');
+                            }
+                          }}
+                          className="px-4 py-2 rounded-xl bg-[#fef3c7] hover:bg-[#fde68a] text-[#78350f] border-2 border-black text-[12px] font-bold transition cursor-pointer active:scale-95 shadow-[1.5px_1.5px_0px_#000000]"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-3.5 border-t border-black/10 flex items-center justify-between text-[11.5px] text-neutral-500 font-medium">
+                    <span>Synchronized locally in `dictionary.ts`</span>
+                    <span className="text-[#78350f] font-bold">Zero Phonetic Errors</span>
+                  </div>
+                </div>
+
+                {/* CARD 06: Smart Voice Snippets */}
+                <div className="w-[360px] sm:w-[440px] md:w-[480px] shrink-0 bg-white rounded-[32px] p-6 sm:p-8 flex flex-col justify-between group border-2 border-black shadow-[4px_4px_0px_#000000] hover:shadow-[6px_6px_0px_#000000] hover:-translate-y-1 transition-all duration-300">
+                  <div>
+                    {/* Top Pinned Service Badge */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#fdeee9] text-[#9c382b] border-2 border-black font-bold shadow-[2px_2px_0px_#000000]">
+                        <Zap size={13} className="text-[#9c382b]" />
+                        <span className="text-[12px] font-bold text-neutral-900">Voice Snippets</span>
+                      </div>
+                      <div className="w-7 h-7 rounded-full bg-white border-2 border-black text-[11px] font-mono font-bold flex items-center justify-center shadow-[1.5px_1.5px_0px_#000000] text-neutral-800">
+                        06
+                      </div>
+                    </div>
+
+                    <h3 className="text-[20px] font-extrabold text-neutral-900 mb-2 font-sans tracking-tight">
+                      Instant Semantic Expansion
+                    </h3>
+
+                    <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed font-normal">
+                      Never dictate long links, bios, or repetitive signatures. Speak a short voice trigger and Noska expands it into complete formatted text instantly.
+                    </p>
+
+                    {/* Inner Recessed Interactive Container */}
+                    <div className="rounded-2xl p-4 space-y-3.5 bg-[#faf8fd] border-2 border-black/15 shadow-inner">
+                      {/* Trigger Selector Pills */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {snippetPresets.map((item, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => setActiveSnippetIndex(idx)}
+                            className={`px-3 py-1.5 rounded-xl text-[11px] transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+                              activeSnippetIndex === idx
+                                ? 'bg-neutral-900 text-white font-bold border-2 border-black shadow-[1.5px_1.5px_0px_#000000]'
+                                : 'bg-white hover:bg-neutral-50 text-neutral-700 border border-black/10 font-medium'
+                            }`}
+                          >
+                            <span>⚡ {item.title}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Trigger vs Expansion Preview Box */}
+                      <motion.div
+                        key={activeSnippetIndex}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="p-3.5 rounded-xl bg-white border-2 border-black/10 space-y-2 shadow-xs"
                       >
-                        ×
-                      </button>
+                        <div className="flex items-center justify-between text-[10.5px] font-mono text-neutral-500">
+                          <span>Trigger: <strong className="text-neutral-900 font-bold">{snippetPresets[activeSnippetIndex].trigger}</strong></span>
+                          <span className="text-[#9c382b] font-bold bg-[#fdeee9] px-2 py-0.5 rounded-full border border-[#f48574]/20">{snippetPresets[activeSnippetIndex].tag}</span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-[#faf8fd] border border-black/10 font-mono text-[11.5px] text-neutral-800 whitespace-pre-line leading-relaxed shadow-inner font-medium">
+                          {snippetPresets[activeSnippetIndex].expansion}
+                        </div>
+                      </motion.div>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="mt-5 pt-3.5 border-t border-black/10 flex items-center justify-between text-[11.5px] text-neutral-500 font-medium">
+                    <span>Expands in 0.04s</span>
+                    <span className="text-[#9c382b] font-bold flex items-center gap-1">
+                      <Sparkles size={12} className="text-[#f48574]" /> Global Keyboard Hook
+                    </span>
+                  </div>
                 </div>
 
-                {/* Add Word Input Field */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newWordInput}
-                    onChange={(e) => setNewWordInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newWordInput.trim()) {
-                        if (!customWords.includes(newWordInput.trim())) {
-                          setCustomWords(words => [...words, newWordInput.trim()]);
-                        }
-                        setNewWordInput('');
-                      }
-                    }}
-                    placeholder="Type a name or jargon (e.g. AcmeCorp)..."
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-white border border-black/[0.08] text-[12.5px] focus:outline-none focus:ring-1 focus:ring-neutral-900"
-                  />
-                  <button
-                    onClick={() => {
-                      if (newWordInput.trim() && !customWords.includes(newWordInput.trim())) {
-                        setCustomWords(words => [...words, newWordInput.trim()]);
-                        setNewWordInput('');
-                      }
-                    }}
-                    className="px-4 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-[12px] font-semibold transition cursor-pointer active:scale-95 shadow-xs"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-black/[0.06] flex items-center justify-between text-[11.5px] text-neutral-500">
-                <span>Synchronized locally in `dictionary.ts`</span>
-                <span className="text-emerald-700 font-semibold">Zero phonetic errors</span>
-              </div>
+              </motion.div>
             </div>
 
-            {/* CARD 6: Smart Voice Snippets & Semantic Triggers */}
-            <div className="bg-[#faf9f6] rounded-[32px] p-7 sm:p-9 border border-black/[0.06] shadow-sm flex flex-col justify-between hover:border-black/15 transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-[#e28a7a]/15 text-[#c75e4c] flex items-center justify-center">
-                      <Zap size={16} />
-                    </div>
-                    <span className="text-[15px] font-bold text-neutral-900">Smart Voice Snippets</span>
-                  </div>
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#fde9e3] text-[#c75e4c]">
-                    Semantic Triggers
-                  </span>
-                </div>
-
-                <p className="text-[13px] text-neutral-600 mb-5 leading-relaxed">
-                  Never dictate long links, bios, or repetitive signatures. Speak a short voice trigger and Noska expands it into complete formatted text instantly.
-                </p>
-
-                {/* Snippet Triggers Selection */}
-                <div className="flex items-center gap-2 mb-4 flex-wrap">
-                  {[
-                    { trigger: "“my calendar link”", title: "Calendar Booking" },
-                    { trigger: "“standard sign off”", title: "Email Signature" },
-                    { trigger: "“github repo”", title: "Noska Repo" },
-                  ].map((item, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setActiveSnippetIndex(idx)}
-                      className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium transition cursor-pointer ${activeSnippetIndex === idx
-                        ? 'bg-neutral-900 text-white font-semibold shadow-xs'
-                        : 'bg-white hover:bg-neutral-100 text-neutral-600 border border-black/[0.06]'
-                        }`}
-                    >
-                      {item.trigger}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Expanded Preview Box */}
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-black/[0.05] shadow-xs min-h-[95px] flex flex-col justify-center">
-                  <span className="text-[10.5px] font-mono text-neutral-400 uppercase tracking-wider mb-1">Expanded Result</span>
-                  <div className="text-[13px] leading-relaxed text-neutral-800 font-mono">
-                    {activeSnippetIndex === 0 && "Feel free to book time on my calendar here: https://cal.com/noska/30min"}
-                    {activeSnippetIndex === 1 && "Best regards,\nNoska Engineering Team"}
-                    {activeSnippetIndex === 2 && "https://github.com/shrikrishna-lab/noska"}
-                  </div>
-                </div>
+            {/* Bottom Runway Indicator & Jump Buttons */}
+            <div className="max-w-7xl mx-auto w-full flex items-center justify-between pt-4 border-t border-black/10 relative z-10 text-[11px] font-mono text-neutral-500">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#5b8266] animate-pulse" />
+                <span className="font-bold text-neutral-800">Live Pinned Runway</span>
+                <span className="text-neutral-400 hidden sm:inline">• 6 Architectural Dimensions</span>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-black/[0.06] flex items-center justify-between text-[11.5px] text-neutral-500">
-                <span>Supports dynamic variables (`time`, `clipboard`)</span>
-                <span className="text-neutral-900 font-semibold">Instant expansion</span>
+              {/* Jump Navigation Pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { label: "01 Tone", idx: 0 },
+                  { label: "02 Rewind", idx: 1 },
+                  { label: "03 Translate", idx: 2 },
+                  { label: "04 Agent", idx: 3 },
+                  { label: "05 Jargon", idx: 4 },
+                  { label: "06 Snippet", idx: 5 }
+                ].map((pill) => (
+                  <button
+                    key={pill.idx}
+                    onClick={() => {
+                      if (!howYouWorkRef.current) return;
+                      const sectionTop = howYouWorkRef.current.offsetTop;
+                      const sectionHeight = howYouWorkRef.current.offsetHeight - window.innerHeight;
+                      const targetScroll = sectionTop + (pill.idx / 5) * sectionHeight;
+                      if (lenisRef.current) {
+                        lenisRef.current.scrollTo(targetScroll, { duration: 0.9 });
+                      } else if (containerRef.current) {
+                        containerRef.current.scrollTo({ top: targetScroll, behavior: 'smooth' });
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-neutral-50 border-2 border-black/15 text-[11px] font-bold text-neutral-800 cursor-pointer transition shadow-2xs hover:border-black active:scale-95"
+                  >
+                    {pill.label}
+                  </button>
+                ))}
               </div>
             </div>
 
           </div>
         </section>
+
 
         {/* ==========================================================================
                 8. "GOOD QUESTIONS." INTERACTIVE FAQ ACCORDION (Wispr Flow Parity)
@@ -2404,13 +3655,13 @@ export default function NoskaWispr() {
         {/* ==========================================================================
                 9. "START FLOWING" PRE-CTA SECTION
                ========================================================================== */}
-        <section className="relative px-6 sm:px-12 py-24 bg-white text-center border-t border-black/[0.04]">
+        <section className="relative px-6 sm:px-12 pt-24 pb-14 bg-white text-center border-t border-black/[0.04] border-b-0">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-[44px] sm:text-[64px] font-normal tracking-tight text-neutral-900 leading-none">
               Start flowing
             </h2>
             <p className="text-[16px] sm:text-[18px] text-neutral-600 font-normal mt-4">
-              Effortless voice dictation in every application.
+              Effortless voice dictation in Noska all over.
             </p>
 
             {/* Primary Button Group */}
@@ -2439,121 +3690,9 @@ export default function NoskaWispr() {
         </section>
 
         {/* ==========================================================================
-                10. COMPREHENSIVE WISPR FLOW FOOTER
+                10. 3D ANIMATED MEADOW SUNSET FOOTER (Interactive Ecosystem)
                ========================================================================== */}
-        <footer className="px-6 sm:px-12 pt-16 pb-12 bg-[#fafaf8] border-t border-black/[0.05]">
-          <div className="max-w-6xl mx-auto">
-
-            {/* Product Cards Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
-
-              {/* Card 1: Dictation */}
-              <div className="bg-white rounded-3xl p-6 sm:p-7 border border-black/[0.06] shadow-xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[15px] font-bold text-neutral-900">Wispr Flow Dictation</span>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600">Core</span>
-                  </div>
-                  <p className="text-[13px] text-neutral-600 leading-relaxed mb-4">
-                    The voice-to-text AI that turns speech into clear, polished writing in every app on your computer.
-                  </p>
-                </div>
-                <button
-                  onClick={() => navigate('/dashboard')}
-                  className="text-[13px] font-semibold text-neutral-900 hover:text-neutral-600 transition flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Download free</span>
-                  <ArrowRight size={13} />
-                </button>
-              </div>
-
-              {/* Card 2: Desktop Integration */}
-              <div className="bg-white rounded-3xl p-6 sm:p-7 border border-black/[0.06] shadow-xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[15px] font-bold text-neutral-900">Universal App Integration</span>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Native</span>
-                  </div>
-                  <p className="text-[13px] text-neutral-600 leading-relaxed mb-4">
-                    Types directly wherever your cursor blinks: Slack, Claude, Cursor, Notion, Gmail, and terminal with zero setup.
-                  </p>
-                </div>
-                <button
-                  onClick={() => scrollToSection('live-studio')}
-                  className="text-[13px] font-semibold text-neutral-900 hover:text-neutral-600 transition flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Test live microphone</span>
-                  <ArrowRight size={13} />
-                </button>
-              </div>
-
-            </div>
-
-            {/* Footer Navigation Columns */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 pb-12 border-b border-black/[0.06] text-[13px]">
-              <div>
-                <h4 className="font-semibold text-neutral-900 mb-3 uppercase tracking-wider text-[11px]">Get started</h4>
-                <ul className="space-y-2 text-neutral-600">
-                  <li><button onClick={() => navigate('/')} className="hover:text-neutral-900 transition cursor-pointer">Home</button></li>
-                  <li><button onClick={() => navigate('/privacy')} className="hover:text-neutral-900 transition cursor-pointer">Privacy & Security</button></li>
-                  <li><button onClick={() => scrollToSection('live-studio')} className="hover:text-neutral-900 transition cursor-pointer">Web demo</button></li>
-                  <li><button onClick={() => scrollToSection('benchmarks')} className="hover:text-neutral-900 transition cursor-pointer">Why Flow vs Built-in</button></li>
-                  <li><button onClick={() => navigate('/docs')} className="hover:text-neutral-900 transition cursor-pointer">Microphone guide</button></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-neutral-900 mb-3 uppercase tracking-wider text-[11px]">Professionals</h4>
-                <ul className="space-y-2 text-neutral-600">
-                  <li><span className="cursor-default">Leaders</span></li>
-                  <li><span className="cursor-default">Developers</span></li>
-                  <li><span className="cursor-default">Creators</span></li>
-                  <li><span className="cursor-default">Customer Support</span></li>
-                  <li><span className="cursor-default">Lawyers</span></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-neutral-900 mb-3 uppercase tracking-wider text-[11px]">Company</h4>
-                <ul className="space-y-2 text-neutral-600">
-                  <li><button onClick={() => navigate('/about')} className="hover:text-neutral-900 transition cursor-pointer">About Noska</button></li>
-                  <li><button onClick={() => navigate('/careers')} className="hover:text-neutral-900 transition cursor-pointer">Careers</button></li>
-                  <li><button onClick={() => navigate('/about')} className="hover:text-neutral-900 transition cursor-pointer">Contact</button></li>
-                  <li><button onClick={() => navigate('/privacy')} className="hover:text-neutral-900 transition cursor-pointer">Security</button></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-neutral-900 mb-3 uppercase tracking-wider text-[11px]">Download</h4>
-                <ul className="space-y-2 text-neutral-600">
-                  <li><button onClick={() => navigate('/dashboard')} className="hover:text-neutral-900 transition cursor-pointer font-medium text-neutral-900">Download for Windows</button></li>
-                  <li><span className="text-neutral-400">macOS (Apple Silicon & Intel)</span></li>
-                  <li><span className="text-neutral-400">iOS App Store</span></li>
-                  <li><span className="text-neutral-400">Android Google Play</span></li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Bottom Legal Copyright Bar */}
-            <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[12px] text-neutral-400">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-neutral-700">Noska Wispr Dictation</span>
-                <span>© 2026 Noska Inc. All rights reserved.</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <button onClick={() => navigate('/privacy')} className="hover:text-neutral-700 transition cursor-pointer">Privacy Policy</button>
-                <span>•</span>
-                <button onClick={() => navigate('/terms')} className="hover:text-neutral-700 transition cursor-pointer">Terms of Service</button>
-                <span>•</span>
-                <button onClick={() => navigate('/dashboard')} className="font-semibold text-neutral-800 hover:underline flex items-center gap-0.5 cursor-pointer">
-                  <span>Open Workspace</span>
-                  <ChevronRight size={11} />
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </footer>
+        <NoskaMeadowFooter />
 
       </div>
     </div>

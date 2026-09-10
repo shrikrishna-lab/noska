@@ -364,5 +364,8 @@ export { VoiceInput, VoiceFloatingIndicator, VoicePill, RealtimeEqualizer, Strea
 export { default as VoiceCustomizationSettings } from "../settings/VoiceCustomizationSettings";
 export * from "../../lib/voice/voice-settings";
 export { Banner04 } from "./banner-04";
+export { default as HowItWorks } from "./how-it-works";
+export type { HowItWorksProps, Step, StepPosition } from "./how-it-works";
+
 
 

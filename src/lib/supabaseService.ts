@@ -916,16 +916,32 @@ export async function upsertUserProfile(profile: UserProfileInput): Promise<Tabl
     email: profile.email || null,
     avatar_url: profile.avatarUrl || null,
     bio: profile.bio || null,
-    onboarding_complete: profile.onboardingComplete ?? false,
-    use_case: profile.useCase || null,
-    workspace_name: profile.workspaceName || "My Workspace",
+    // `onboarding_complete` / `use_case` / `workspace_name` are only included
+    // when the caller explicitly knows them (same omit-when-unknown rule as
+    // `username` above). A per-login upsert that can't confirm the existing
+    // row must never downgrade `onboarding_complete: true` back to `false`
+    // (or reset a renamed workspace to "My Workspace") — omitting the keys
+    // leaves the stored values untouched on conflict, and DB column defaults
+    // (false / null / 'My Workspace') apply to brand-new rows.
     // `preferences` is a plain settings bag (Record<string, unknown>) on
     // the app side but the generated `Json` type is a stricter recursive
     // union — every value actually stored here is a plain
     // string/number/boolean, so this narrow cast is safe rather than
-    // widening the whole payload's type.
-    preferences: (profile.preferences || {}) as TablesInsert<"user_profiles">["preferences"],
+    // widening the whole payload's type. Omitted when unknown so logins
+    // don't reset stored preferences to {} (DB default covers new rows).
   };
+  if (profile.preferences !== undefined) {
+    payload.preferences = profile.preferences as TablesInsert<"user_profiles">["preferences"];
+  }
+  if (profile.onboardingComplete !== undefined) {
+    payload.onboarding_complete = profile.onboardingComplete;
+  }
+  if (profile.useCase !== undefined) {
+    payload.use_case = profile.useCase;
+  }
+  if (profile.workspaceName !== undefined) {
+    payload.workspace_name = profile.workspaceName;
+  }
   // Only include `username` in the upsert when the caller explicitly
   // passed it — omitting the key here (rather than defaulting to
   // `null`/undefined) means a plain re-login upsert never clobbers a

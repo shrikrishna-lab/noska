@@ -189,7 +189,7 @@
     0 12px 36px -6px rgba(18, 18, 26, 0.09),
     0 2px 8px rgba(0, 0, 0, 0.03);
   z-index: 1050;
-  min-width: 380px;
+  min-width: 420px;
 }
 
 .marketing .liquid-dropdown-grid {
@@ -231,6 +231,7 @@
 }
 
 .marketing .liquid-dropdown-icon-box.purple { background: rgba(136, 116, 168, 0.12); color: #8874a8; }
+.marketing .liquid-dropdown-icon-box.emerald { background: rgba(16, 185, 129, 0.12); color: #10b981; }
 .marketing .liquid-dropdown-icon-box.blue { background: rgba(91, 127, 166, 0.12); color: #5b7fa6; }
 .marketing .liquid-dropdown-icon-box.red { background: rgba(193, 105, 79, 0.12); color: #c1694f; }
 .marketing .liquid-dropdown-icon-box.yellow { background: rgba(193, 121, 60, 0.12); color: #c1793c; }

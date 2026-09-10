@@ -119,7 +119,10 @@ if (timeoutRef.current) {
             userName: uname,
             email,
             avatarUrl,
-            onboardingComplete: existingProfile?.onboarding_complete ?? false,
+            // Preserve existing flags — upsertUserProfile omits unknown keys,
+            // so a failed profile fetch can never downgrade a completed
+            // onboarding back to false (which re-shows the create page).
+            onboardingComplete: existingProfile?.onboarding_complete ?? undefined,
             useCase: existingProfile?.use_case,
             workspaceName: existingProfile?.workspace_name,
           });

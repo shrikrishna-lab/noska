@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabaseAnon } from "../../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSignIn, useSignUp, useClerk } from "@clerk/react";
+import { markOAuthIntent } from "../../lib/oauthIntent";
 import AuthBackground from "../../components/auth/AuthBackground";
 import AuthProviders from "../../components/auth/AuthProviders";
 import AuthError from "../../components/auth/AuthError";
@@ -45,6 +46,11 @@ export function InvitePage() {
       setIsConnecting(false);
       return;
     }
+    // Remember that we left for OAuth. If the Account Portal loses the
+    // pending sign-in and dumps the user on its Home URL (the marketing
+    // site) instead of /sso-callback, MarketingLayout uses this to bring
+    // the now-signed-in user into onboarding/workspace.
+    markOAuthIntent();
     try {
       const strategy = provider === "github" ? "oauth_github" : provider === "google" ? "oauth_google" : "oauth_microsoft";
       // Stay on the current origin: www.noska.me serves the full app, and

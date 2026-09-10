@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Menu, X, ArrowRight, Sparkles, FileText, Database, CheckSquare, Users, Building, Laptop, HelpCircle, BookOpen, Clock, MonitorDown, KeyRound, Terminal, Puzzle } from 'lucide-react';
+import { ChevronDown, Menu, X, ArrowRight, Sparkles, FileText, Database, CheckSquare, Users, Building, Laptop, HelpCircle, BookOpen, Clock, MonitorDown, KeyRound, Terminal, Puzzle, Mic, LayoutGrid } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@clerk/react';
 import { useCTAButtons, useLaunchSettings } from '../../../hooks/useLaunchSettings';
@@ -81,6 +81,15 @@ export default function Navbar() {
                               <p className="liquid-dropdown-desc">Context-aware assistant & generation</p>
                             </div>
                           </Link>
+                          <Link to="/flow" className="liquid-dropdown-item">
+                            <div className="liquid-dropdown-icon-box emerald">
+                              <Mic size={16} />
+                            </div>
+                            <div className="liquid-dropdown-info">
+                              <p className="liquid-dropdown-title">Noska Flow</p>
+                              <p className="liquid-dropdown-desc">Speech-to-text & fluid voice dictation</p>
+                            </div>
+                          </Link>
                           <Link to="/product" className="liquid-dropdown-item">
                             <div className="liquid-dropdown-icon-box blue">
                               <FileText size={16} />
@@ -106,6 +115,15 @@ export default function Navbar() {
                             <div className="liquid-dropdown-info">
                               <p className="liquid-dropdown-title">Projects</p>
                               <p className="liquid-dropdown-desc">Connected tasks & team roadmaps</p>
+                            </div>
+                          </Link>
+                          <Link to="/product" className="liquid-dropdown-item">
+                            <div className="liquid-dropdown-icon-box sage">
+                              <LayoutGrid size={16} />
+                            </div>
+                            <div className="liquid-dropdown-info">
+                              <p className="liquid-dropdown-title">Canvas & Wikis</p>
+                              <p className="liquid-dropdown-desc">Visual whiteboard & thought graph</p>
                             </div>
                           </Link>
                         </div>
@@ -346,6 +364,7 @@ export default function Navbar() {
                 <div className="liquid-mobile-group">
                   <p className="liquid-mobile-group-header">Product</p>
                   <Link to="/product" className="liquid-mobile-item">Noska AI</Link>
+                  <Link to="/flow" className="liquid-mobile-item">Noska Flow</Link>
                   <Link to="/product" className="liquid-mobile-item">Docs & Notes</Link>
                   <Link to="/product" className="liquid-mobile-item">Databases</Link>
                   <Link to="/product" className="liquid-mobile-item">Projects</Link>

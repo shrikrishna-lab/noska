@@ -1,0 +1,354 @@
+/* ==========================================================================
+   Noska Meadow Footer (3D Animated Glass & Grass Ecosystem)
+   Inspired by award-winning footer.design Air Inc masterpiece
+   ========================================================================== */
+
+.noska-meadow-footer-container {
+  position: relative;
+  width: 100%;
+  height: 640px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: background 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  /* Ensure zero top border or sharp dividing line */
+  border-top: none;
+  margin-top: -1px;
+}
+
+@media (min-width: 1024px) {
+  .noska-meadow-footer-container {
+    height: 720px;
+  }
+}
+
+/* Seamless Top Atmospheric Transition Blend */
+.noska-meadow-top-feather {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 160px;
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.9) 25%, rgba(255, 255, 255, 0.45) 60%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+  z-index: 12;
+  transition: opacity 0.5s ease;
+}
+
+.theme-aurora .noska-meadow-top-feather,
+.theme-night .noska-meadow-top-feather {
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.8) 20%, rgba(15, 23, 42, 0.2) 60%, rgba(15, 23, 42, 0) 100%);
+}
+
+/* 1. Procedural 3D Canvas Layer */
+.noska-meadow-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* 2. Normal Clean & Modern Typography */
+.noska-meadow-centerpiece {
+  position: absolute;
+  top: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 960px;
+  padding: 0 24px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  animation: noskaFloatNormal 6s ease-in-out infinite alternate;
+}
+
+@keyframes noskaFloatNormal {
+  0% {
+    transform: translateX(-50%) translateY(0px);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-6px);
+  }
+  100% {
+    transform: translateX(-50%) translateY(-12px);
+  }
+}
+
+.noska-normal-brand-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.noska-normal-brand-title {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+  font-size: clamp(48px, 9vw, 104px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  color: #ffffff;
+  text-shadow:
+    0 0 12px rgba(255, 255, 255, 0.95),
+    0 0 28px rgba(255, 255, 255, 0.85),
+    0 0 60px rgba(255, 255, 255, 0.6),
+    0 0 100px rgba(255, 255, 255, 0.35),
+    0 4px 28px rgba(0, 0, 0, 0.22);
+  animation: noskaGlowPulse 4s ease-in-out infinite alternate;
+  transition: all 0.5s ease;
+}
+
+@keyframes noskaGlowPulse {
+  0% {
+    text-shadow:
+      0 0 10px rgba(255, 255, 255, 0.9),
+      0 0 24px rgba(255, 255, 255, 0.75),
+      0 0 50px rgba(255, 255, 255, 0.5),
+      0 4px 24px rgba(0, 0, 0, 0.2);
+  }
+  100% {
+    text-shadow:
+      0 0 16px rgba(255, 255, 255, 1),
+      0 0 36px rgba(255, 255, 255, 0.95),
+      0 0 80px rgba(255, 255, 255, 0.75),
+      0 0 120px rgba(255, 255, 255, 0.45),
+      0 4px 32px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.noska-title-brand {
+  color: #ffffff;
+  display: inline-block;
+}
+
+.noska-title-flow {
+  color: #ffffff;
+  display: inline-block;
+  margin-left: 4px;
+}
+
+.theme-aurora .noska-normal-brand-title {
+  text-shadow:
+    0 0 14px rgba(255, 255, 255, 1),
+    0 0 30px rgba(110, 231, 183, 0.9),
+    0 0 70px rgba(52, 211, 153, 0.65),
+    0 0 110px rgba(16, 185, 129, 0.4),
+    0 4px 30px rgba(0, 0, 0, 0.4);
+}
+
+.theme-day .noska-normal-brand-title {
+  color: #ffffff;
+  text-shadow:
+    0 0 12px rgba(255, 255, 255, 1),
+    0 0 28px rgba(255, 255, 255, 0.9),
+    0 0 60px rgba(255, 255, 255, 0.7),
+    0 4px 24px rgba(15, 23, 42, 0.35);
+}
+
+.noska-normal-brand-subtitle {
+  margin: 12px 0 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+  font-size: clamp(13px, 1.8vw, 17px);
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.015em;
+  text-shadow:
+    0 0 12px rgba(255, 255, 255, 0.85),
+    0 0 25px rgba(255, 255, 255, 0.5),
+    0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.theme-day .noska-normal-brand-subtitle {
+  color: #ffffff;
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.9),
+    0 2px 8px rgba(15, 23, 42, 0.4);
+}
+
+/* 3. Floating Time-of-Day Switcher Dock (Right Side) */
+.noska-meadow-time-dock {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+.noska-time-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.theme-day .noska-time-btn {
+  color: rgba(15, 23, 42, 0.6);
+}
+
+.noska-time-btn:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #0f172a;
+  transform: scale(1.1);
+}
+
+.noska-time-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), inset 0 1px 1px rgba(255, 255, 255, 1);
+  transform: scale(1.08);
+}
+
+/* 4. Bottom Navigation Bar */
+.noska-meadow-bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 28px 20px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.25) 100%);
+}
+
+@media (min-width: 768px) {
+  .noska-meadow-bottom-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 36px 18px;
+  }
+}
+
+.noska-meadow-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (min-width: 1024px) {
+  .noska-meadow-nav-left {
+    gap: 22px;
+  }
+}
+
+.noska-meadow-nav-link {
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: inherit;
+  opacity: 0.82;
+  cursor: pointer;
+  padding: 4px 2px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+.noska-meadow-nav-link:hover {
+  opacity: 1;
+  transform: translateY(-1.5px);
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+}
+
+.noska-meadow-nav-link.highlight {
+  font-weight: 700;
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.noska-meadow-nav-right {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.noska-meadow-socials {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.noska-social-icon-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: inherit;
+  opacity: 0.85;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.noska-social-icon-link:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(1.12);
+}
+
+.noska-meadow-copyright {
+  font-size: 12px;
+  opacity: 0.65;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 640px) {
+  .noska-meadow-time-dock {
+    right: 12px;
+    top: 35%;
+  }
+
+  .noska-meadow-centerpiece {
+    top: 14%;
+  }
+
+  .noska-meadow-nav-left {
+    gap: 12px;
+  }
+
+  .noska-meadow-nav-link {
+    font-size: 12px;
+  }
+}

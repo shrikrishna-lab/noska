@@ -131,6 +131,7 @@ export default function Footer() {
                   <p className="liquid-glass-col-header">Product</p>
                   <ul className="liquid-glass-link-list">
                     <li><Link to="/product" className="liquid-link-item">Noska AI</Link></li>
+                    <li><Link to="/flow" className="liquid-link-item">Noska Flow</Link></li>
                     <li><Link to="/product" className="liquid-link-item">Docs & Notes</Link></li>
                     <li><Link to="/product" className="liquid-link-item">Databases</Link></li>
                     <li><Link to="/resources" className="liquid-link-item">Templates</Link></li>

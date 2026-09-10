@@ -124,6 +124,8 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/info-card-demo" element={<InfoCardDemo />} />
           <Route path="/wispr" element={<NoskaWispr />} />
           <Route path="/noska-wispr" element={<NoskaWispr />} />
+          <Route path="/flow" element={<NoskaWispr />} />
+          <Route path="/noska-flow" element={<NoskaWispr />} />
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/dashboard" element={<App />} />
           <Route path="/onboarding" element={<App />} />

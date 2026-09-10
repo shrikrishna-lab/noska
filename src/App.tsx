@@ -921,10 +921,11 @@ function AppContent() {
         userName: uname,
         email: userData.email,
         avatarUrl: userData.avatarUrl,
-        // Preserve an existing onboarding_complete flag — upsertUserProfile
-        // otherwise defaults it to false, which would silently re-onboard
-        // returning users on every login.
-        onboardingComplete: existingProfile?.onboarding_complete ?? false,
+        // Preserve existing flags — pass them through only when the fetch
+        // confirmed them. If the fetch failed (existingProfile === null),
+        // upsertUserProfile omits these keys so a true onboarding_complete
+        // or custom workspace_name is never downgraded to false/default.
+        onboardingComplete: existingProfile?.onboarding_complete ?? undefined,
         useCase: existingProfile?.use_case,
         workspaceName: existingProfile?.workspace_name,
         // Seed location from IP on first login so the admin panel can do
