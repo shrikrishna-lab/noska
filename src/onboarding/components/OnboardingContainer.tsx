@@ -1,4 +1,5 @@
 import React, { Suspense, lazy } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { C } from "../theme";
 import { OnboardingProvider, useOnboardingContext, type OnboardingProviderProps } from "../context/OnboardingContext";
@@ -62,16 +63,22 @@ function OnboardingInner({ overlay = false }: OnboardingInnerProps) {
         </div>
 
         {/* Step content */}
-        <div className="flex-1 flex items-center justify-center p-8">
+        <div className="flex-1 flex items-center justify-center p-8 overflow-hidden">
           <div className="w-full max-w-[460px]">
-            <div
-              key={step}
-              style={{ animation: `${direction === 1 ? "slideInRight" : "slideInLeft"} 0.25s ease both` }}
-            >
-              <Suspense fallback={<div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: C.purple, borderTopColor: "transparent" }} />}>
-                <StepComponent />
-              </Suspense>
-            </div>
+            <AnimatePresence mode="wait" custom={direction}>
+              <motion.div
+                key={step}
+                custom={direction}
+                initial={{ opacity: 0, x: direction > 0 ? 28 : -28, filter: "blur(4px)" }}
+                animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, x: direction < 0 ? 28 : -28, filter: "blur(4px)" }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <Suspense fallback={<div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: C.purple, borderTopColor: "transparent" }} />}>
+                  <StepComponent />
+                </Suspense>
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 

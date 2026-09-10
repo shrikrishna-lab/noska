@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, memo, useMemo } from "react";
 import type { ReactNode, ComponentType } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { SPRING_PRESETS, StaggerContainer, StaggerItem } from "../features/motion/MotionSystem";
 import {
@@ -19,6 +20,7 @@ import {
   UserRound,
   Building2,
   BookOpen,
+  Sparkles,
   type LucideIcon
 } from "lucide-react";
 import {
@@ -54,6 +56,7 @@ import type { Page } from "../lib/supabaseService";
 import TeamSwitcher from "./teams/TeamSwitcher";
 import { CompanySwitcher } from "./company/CompanySwitcher";
 import { useCompany } from "../contexts/CompanyContext";
+import { UserSidebarInfoCard } from "./ui/UserSidebarInfoCard";
 
 // IconButton (src/components/ui/index.tsx) types its `icon` prop as
 // lucide-react's `LucideIcon`, but several calls below pass this
@@ -174,6 +177,7 @@ const Sidebar = memo(function Sidebar({
   currentUserEmail,
   currentUserAvatar
 }: SidebarProps) {
+  const navigate = useNavigate();
   const { currentCompany } = useCompany()
   const recents = useMemo(() => [...pages]
     .filter((p) => !p.hiddenFromRecents && !p.trashed)
@@ -564,35 +568,40 @@ const Sidebar = memo(function Sidebar({
             <span className="flex-1 text-white font-medium truncate">New Creation</span>
             <kbd className="text-[8.5px] text-white font-mono bg-black/20 dark:bg-white/20 px-1.5 py-0.5 rounded leading-none shrink-0 border border-white/20 tracking-wider uppercase select-none">Ctrl+P</kbd>
           </button>
-        </div>
-      </div>
 
-      {/* User Avatar & Name - Bottom of Sidebar */}
-      <div className="shrink-0 border-t border-[var(--border)] px-2 py-2">
-        <button
-          ref={userRef}
-          onClick={() => {
-            if (userRef.current) {
-              const r = userRef.current.getBoundingClientRect();
-              setSwitcherCoords({ bottom: window.innerHeight - r.top + 6, left: r.left });
-            }
-            setSwitcherOpen(o => !o);
-          }}
-          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--hover)] transition text-left"
-        >
-          <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs text-[var(--text)] shrink-0 overflow-hidden">
-            {isAvatarUrl ? (
-              <img src={displayAvatar} alt="Avatar" className="h-full w-full object-cover" />
-            ) : (
-              <span>{displayAvatar || "👤"}</span>
-            )}
+          {/* Active Announcements & Feature Highlights (Info Card) */}
+          <div className="mt-3">
+            <UserSidebarInfoCard />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-semibold text-[var(--text)] truncate leading-none">{displayName}</div>
-            <div className="text-[9px] text-[var(--muted)] truncate mt-0.5">{displayEmail}</div>
-          </div>
-          <ChevronDown size={12} className="text-[var(--muted)] shrink-0" />
-        </button>
+        </div>
+
+        {/* User Avatar & Name - Bottom of Sidebar */}
+        <div className="shrink-0 border-t border-[var(--border)] px-2 py-2">
+          <button
+            ref={userRef}
+            onClick={() => {
+              if (userRef.current) {
+                const r = userRef.current.getBoundingClientRect();
+                setSwitcherCoords({ bottom: window.innerHeight - r.top + 6, left: r.left });
+              }
+              setSwitcherOpen(o => !o);
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--hover)] transition text-left"
+          >
+            <div className="h-7 w-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-xs text-[var(--text)] shrink-0 overflow-hidden">
+              {isAvatarUrl ? (
+                <img src={displayAvatar} alt="Avatar" className="h-full w-full object-cover" />
+              ) : (
+                <span>{displayAvatar || "👤"}</span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-semibold text-[var(--text)] truncate leading-none">{displayName}</div>
+              <div className="text-[9px] text-[var(--muted)] truncate mt-0.5">{displayEmail}</div>
+            </div>
+            <ChevronDown size={12} className="text-[var(--muted)] shrink-0" />
+          </button>
+        </div>
       </div>
     </motion.aside>
   );
@@ -696,44 +705,54 @@ interface NoskaNavItemProps {
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   ariaLabel?: string;
   compact?: boolean;
-  /** Small numeric pill shown at the end of the row — used by Inbox for
-   * a real pending-invite count instead of a static/no-op indicator. */
-  badge?: number;
+  /** Small numeric pill or text badge shown at the end of the row */
+  badge?: number | string;
 }
 
 function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ariaLabel, compact, badge }: NoskaNavItemProps) {
   return (
-    <button
+    <motion.button
+      type="button"
       aria-label={ariaLabel}
       onClick={onClick}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.98 }}
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onClick?.(e); } }}
       onMouseUp={(e) => (e.currentTarget as HTMLButtonElement).blur()}
-      className={`flex ${compact ? "min-h-[22px] text-[11px] py-0.5" : "min-h-[26px] text-[12px] py-1"} w-full items-center gap-2 rounded-lg px-2.5 text-left outline-none relative transition-all duration-150 cursor-pointer ${
+      className={`flex ${compact ? "min-h-[22px] text-[11px] py-0.5" : "min-h-[26px] text-[12px] py-1"} w-full items-center gap-2 rounded-lg px-2.5 text-left outline-none relative transition-colors duration-150 cursor-pointer select-none ${
         active
           ? "text-[var(--text)] font-semibold"
           : muted
-          ? "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-          : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+          ? "text-[var(--muted)] hover:text-[var(--text)]"
+          : "text-[var(--text-secondary)] hover:text-[var(--text)]"
       }`}
     >
       {active && (
         <motion.div
           layoutId="nav-active-bg"
-          transition={{ type: "spring", stiffness: 380, damping: 30 }}
-          className="absolute inset-0 bg-[var(--active)] border border-[var(--border)] shadow-sm rounded-lg z-0"
+          transition={{ type: "spring", stiffness: 440, damping: 32 }}
+          className="absolute inset-0 bg-[var(--active)] border border-[var(--border)] shadow-xs rounded-lg z-0"
         />
       )}
-      <Icon size={compact ? 11 : 13} className={`shrink-0 z-10 transition-colors ${active ? "text-[var(--noska-blue)]" : "text-[var(--text-secondary)]"}`} />
+      <Icon size={compact ? 11 : 13} className={`shrink-0 z-10 transition-colors duration-200 ${active ? "text-[var(--noska-blue)]" : "text-[var(--text-secondary)]"}`} />
       <span className="min-w-0 flex-1 z-10 relative">
         <span className={`block truncate ${active ? "font-semibold" : "font-normal"}`}>{label}</span>
         {subtitle && <span className="block truncate text-[9px] text-[var(--muted)] leading-none mt-0.5">{subtitle}</span>}
       </span>
-      {!!badge && badge > 0 && (
-        <span className="z-10 shrink-0 grid h-4 min-w-[16px] place-items-center rounded-full bg-[var(--accent)] px-1 text-[9px] font-bold text-white">
-          {badge > 9 ? "9+" : badge}
-        </span>
+      {badge !== undefined && badge !== null && (
+        typeof badge === "number" ? (
+          badge > 0 && (
+            <span className="z-10 shrink-0 grid h-4 min-w-[16px] place-items-center rounded-full bg-[var(--accent)] px-1 text-[9px] font-bold text-white">
+              {badge > 9 ? "9+" : badge}
+            </span>
+          )
+        ) : (
+          <span className="z-10 shrink-0 grid h-4 min-w-[16px] place-items-center rounded-full bg-[var(--accent)] px-1.5 text-[8.5px] font-bold text-white tracking-wide uppercase">
+            {badge}
+          </span>
+        )
       )}
-    </button>
+    </motion.button>
   );
 }
 

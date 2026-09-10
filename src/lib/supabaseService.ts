@@ -1584,7 +1584,7 @@ export async function saveAgentRunLog(log: AgentRunLogInput): Promise<Tables<"ag
 
 // ============ MAPPERS ============
 
-function mapPageFromDb(db: Tables<"pages">): Page {
+export function mapPageFromDb(db: Tables<"pages">): Page {
   let userTags: unknown[] = [];
   let meta: Record<string, any> = {};
 

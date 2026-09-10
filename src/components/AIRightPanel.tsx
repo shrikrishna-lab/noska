@@ -38,6 +38,7 @@ import { refreshDefinitions } from "../intelligence/triggerService";
 import { capture } from "../lib/posthog";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
+import DocumentOutlineRuler, { type OutlineSection } from "./editor/DocumentOutlineRuler";
 
 const SPRING = { type: "spring", stiffness: 400, damping: 28 } as const;
 const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 } as const;
@@ -230,6 +231,25 @@ export default function AIRightPanel({
   const [targetLang, setTargetLang] = useState("Spanish");
   const [tokenEstimate, setTokenEstimate] = useState(0);
   const [attachments, setAttachments] = useState<unknown[]>([]);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  const chatOutlineSections = useMemo<OutlineSection[]>(() => {
+    if (!messages || messages.length < 2) return [];
+    return messages.map((m) => {
+      const isUser = m.role === "user";
+      const clean = (m.content || m.text || "").toString().trim();
+      const firstLine = clean.split("\n")[0]?.trim() || (isUser ? "You" : "Noska AI");
+      const width = Math.min(26, Math.max(10, Math.round((clean.length / 90) * 16) + 10));
+      return {
+        id: m.id,
+        title: isUser ? `You: ${firstLine.slice(0, 36)}` : `Noska AI: ${firstLine.slice(0, 36)}`,
+        snippet: clean.slice(0, 160),
+        type: isUser ? "user" : "assistant",
+        depth: isUser ? 0 : 1,
+        width
+      };
+    });
+  }, [messages]);
   const pageId = page?.id;
   const relations = useMemo(() => {
     if (!pageId) return { backlinks: [], outgoing: [] };
@@ -751,7 +771,17 @@ export default function AIRightPanel({
             </div>
 
             {/* ===== SCROLLABLE CHAT FEED ===== */}
-            <div className="flex-1 overflow-y-auto min-h-0 p-3.5 scrollbar-thin space-y-3 select-text">
+            <div
+              ref={chatScrollRef}
+              className="flex-1 overflow-y-auto min-h-0 p-3.5 scrollbar-thin space-y-3 select-text relative"
+            >
+              {chatOutlineSections.length >= 2 && (
+                <DocumentOutlineRuler
+                  sections={chatOutlineSections}
+                  containerRef={chatScrollRef}
+                  side="right"
+                />
+              )}
               {/* Clean Empty State */}
               {!hasMessages && !loading && (
                 <div className="flex flex-col items-center justify-center py-12 text-center select-none">
@@ -1146,6 +1176,7 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         className="mr-auto max-w-[90%]"
+        data-message-id={message.id}
       >
         {finished ? (
           <details className="group/run rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2.5 py-2">
@@ -1188,6 +1219,7 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28, delay: index === total - 1 ? 0.03 : 0 }}
       className={`group relative ${isUser ? 'ml-auto' : 'mr-auto'} max-w-[90%]`}
+      data-message-id={message.id}
     >
       <div className={`rounded-xl px-3 py-2 text-[11.5px] leading-relaxed ${
         isUser

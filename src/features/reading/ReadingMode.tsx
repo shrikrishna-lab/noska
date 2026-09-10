@@ -280,20 +280,20 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
   const renderBlock = (block: Block) => {
     switch (block.type) {
       case "h1":
-        return <h1 key={block.id} className="mt-8 mb-4 text-3xl font-bold font-serif leading-tight text-[var(--reading-text)]">{block.text || "Untitled Section"}</h1>;
+        return <h1 key={block.id} id={block.id} data-block-id={block.id} className="mt-8 mb-4 text-3xl font-bold font-serif leading-tight text-[var(--reading-text)]">{block.text || "Untitled Section"}</h1>;
       case "h2":
-        return <h2 key={block.id} className="mt-7 mb-3 text-2xl font-semibold font-serif leading-snug text-[var(--reading-text)] border-b border-[var(--reading-border)] pb-1">{block.text}</h2>;
+        return <h2 key={block.id} id={block.id} data-block-id={block.id} className="mt-7 mb-3 text-2xl font-semibold font-serif leading-snug text-[var(--reading-text)] border-b border-[var(--reading-border)] pb-1">{block.text}</h2>;
       case "h3":
-        return <h3 key={block.id} className="mt-6 mb-2 text-xl font-medium font-serif leading-snug text-[var(--reading-text)]">{block.text}</h3>;
+        return <h3 key={block.id} id={block.id} data-block-id={block.id} className="mt-6 mb-2 text-xl font-medium font-serif leading-snug text-[var(--reading-text)]">{block.text}</h3>;
       case "quote":
         return (
-          <blockquote key={block.id} className="my-4 border-l-4 border-[var(--reading-accent)] pl-4 italic text-[var(--reading-text)] opacity-90">
+          <blockquote key={block.id} id={block.id} data-block-id={block.id} className="my-4 border-l-4 border-[var(--reading-accent)] pl-4 italic text-[var(--reading-text)] opacity-90">
             {block.text}
           </blockquote>
         );
       case "code":
         return (
-          <pre key={block.id} className="my-4 overflow-x-auto rounded bg-black/10 dark:bg-white/5 p-4 font-mono text-sm border border-[var(--reading-border)] text-[var(--reading-text)]">
+          <pre key={block.id} id={block.id} data-block-id={block.id} className="my-4 overflow-x-auto rounded bg-black/10 dark:bg-white/5 p-4 font-mono text-sm border border-[var(--reading-border)] text-[var(--reading-text)]">
             <code>{block.text}</code>
           </pre>
         );
@@ -304,7 +304,7 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
         // built elsewhere (helpers.js's blockFor('callout', ...)).
         const meta = block.meta as { icon?: string } | undefined;
         return (
-          <div key={block.id} className="my-4 flex gap-3 rounded-lg border border-[var(--reading-border)] bg-black/5 dark:bg-white/5 p-4 text-[var(--reading-text)]">
+          <div key={block.id} id={block.id} data-block-id={block.id} className="my-4 flex gap-3 rounded-lg border border-[var(--reading-border)] bg-black/5 dark:bg-white/5 p-4 text-[var(--reading-text)]">
             {meta?.icon && <PageIcon icon={meta.icon} size={20} fallback="💡" />}
             <div className="flex-1">{block.text}</div>
           </div>
@@ -312,19 +312,19 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
       }
       case "bullet":
         return (
-          <li key={block.id} className="ml-5 list-disc my-1 text-[var(--reading-text)] leading-relaxed">
+          <li key={block.id} id={block.id} data-block-id={block.id} className="ml-5 list-disc my-1 text-[var(--reading-text)] leading-relaxed">
             {block.text}
           </li>
         );
       case "numbered":
         return (
-          <li key={block.id} className="ml-5 list-decimal my-1 text-[var(--reading-text)] leading-relaxed">
+          <li key={block.id} id={block.id} data-block-id={block.id} className="ml-5 list-decimal my-1 text-[var(--reading-text)] leading-relaxed">
             {block.text}
           </li>
         );
       case "todo":
         return (
-          <div key={block.id} className="flex items-center gap-2.5 my-1.5 text-[var(--reading-text)]">
+          <div key={block.id} id={block.id} data-block-id={block.id} className="flex items-center gap-2.5 my-1.5 text-[var(--reading-text)]">
             <input
               type="checkbox"
               // `checked` isn't a named field on BaseBlock, only reachable
@@ -338,11 +338,11 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
           </div>
         );
       case "divider":
-        return <hr key={block.id} className="my-6 border-t border-[var(--reading-border)]" />;
+        return <hr key={block.id} id={block.id} data-block-id={block.id} className="my-6 border-t border-[var(--reading-border)]" />;
       case "text":
       default:
         return (
-          <p key={block.id} className="my-3.5 leading-relaxed text-[var(--reading-text)] text-justify">
+          <p key={block.id} id={block.id} data-block-id={block.id} className="my-3.5 leading-relaxed text-[var(--reading-text)] text-justify">
             {block.text || "\u00A0"}
           </p>
         );
@@ -624,7 +624,7 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
           className="flex-1 overflow-y-auto overflow-x-hidden flex justify-center py-10 px-6 scrollbar-thin relative"
         >
           {/* Section Minimap Timeline Ruler & Hover Card */}
-          <DocumentOutlineRuler blocks={page?.blocks || []} containerRef={containerRef} />
+          <DocumentOutlineRuler blocks={page?.blocks || []} pageTitle={page?.title} containerRef={containerRef} />
           {/* Highlight tooltip menu button */}
           {selection && (
             <div
@@ -680,7 +680,7 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
               />
             )}
 
-            <header className="mb-8 border-b border-[var(--reading-border)] pb-5 select-none">
+            <header id="page-title" data-block-id="page-title" className="mb-8 border-b border-[var(--reading-border)] pb-5 select-none">
               <div className="flex items-center gap-2.5 mb-3">
                 <PageIcon icon={page.icon} size={36} fallback={<span className="text-4xl">📄</span>} />
                 <h1 className="text-3xl font-extrabold tracking-tight text-[var(--reading-text)]">

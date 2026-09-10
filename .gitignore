@@ -54,6 +54,24 @@ scripts/noska-*.mjs
 admin/src/lib/more_hooks.txt
 console-after-typing.txt
 /*.png
+sess*.json
+minted*.json
+jt*.json
+s-dev.json
+s1.json
+t-jwt.json
+te.json
+tj.json
+u.json
+cu.json
+extid.json
+instance-config.json
+jwt-templates.json
+bk-jwks.json
+apps.json
+key-for-clipboard.txt
+migration.sql
+supabase/.temp/
 
 # ── Tauri desktop shell ──────────────────────────────────────────────────────
 # Rust build artifacts (huge, machine-specific)

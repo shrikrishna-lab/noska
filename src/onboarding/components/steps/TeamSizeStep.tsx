@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "framer-motion";
 import { ChevronRight, Users } from "lucide-react";
 import { C } from "../../theme";
 import { useOnboarding } from "../../hooks/useOnboarding";
@@ -41,22 +42,25 @@ export default function TeamSizeStep() {
           Team size
         </label>
         <div className="grid grid-cols-3 gap-1.5">
-          {TEAM_SIZES.map((s, i) => {
+          {TEAM_SIZES.map((s) => {
             const on = form.teamSize === s.id;
             return (
-              <button
+              <motion.button
                 key={s.id}
+                type="button"
                 onClick={() => setFormField("teamSize", s.id)}
-                className="flex flex-col items-center gap-1.5 px-3 py-3 text-sm rounded-xl text-left transition-all duration-200"
+                whileHover={{ y: -2, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 450, damping: 28 }}
+                className="flex flex-col items-center gap-1.5 px-3 py-3 text-sm rounded-xl text-left transition-colors duration-150 cursor-pointer shadow-xs select-none"
                 style={{
                   background: on ? C.beige : "#fff",
                   border: on ? `1.5px solid ${C.beigeDark}` : `1.5px solid ${C.border}`,
-                  animation: `fadeSlideIn 0.25s ease ${i * 40}ms both`,
                 }}
               >
                 <span className="text-xl">{s.icon}</span>
                 <span style={{ color: on ? "#5a3e20" : C.text, fontWeight: on ? 600 : 400 }}>{s.label}</span>
-              </button>
+              </motion.button>
             );
           })}
         </div>
@@ -67,23 +71,26 @@ export default function TeamSizeStep() {
           What are your main goals? <span className="normal-case font-normal">Select all that apply</span>
         </label>
         <div className="grid grid-cols-2 gap-1.5">
-          {GOALS.map((g, i) => {
+          {GOALS.map((g) => {
             const on = (form.goals || []).includes(g.id);
             return (
-              <button
+              <motion.button
                 key={g.id}
+                type="button"
                 onClick={() => toggleGoal(g.id)}
-                className="px-3.5 py-2.5 text-sm rounded-xl text-left transition-all duration-200 hover:shadow-sm"
+                whileHover={{ y: -1, scale: 1.015 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 450, damping: 28 }}
+                className="px-3.5 py-2.5 text-sm rounded-xl text-left transition-colors duration-150 cursor-pointer shadow-xs select-none"
                 style={{
                   background: on ? C.beige : "#fff",
                   border: on ? `1.5px solid ${C.beigeDark}` : `1.5px solid ${C.border}`,
                   color: on ? "#5a3e20" : C.text,
                   fontWeight: on ? 600 : 400,
-                  animation: `fadeSlideIn 0.25s ease ${i * 40 + 200}ms both`,
                 }}
               >
                 {g.label}
-              </button>
+              </motion.button>
             );
           })}
         </div>

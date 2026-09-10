@@ -4,7 +4,7 @@ import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles,
 import { TextArea } from "../ui";
 import RichTextEditor from "./RichTextEditor";
 import { BlockRegistry } from "../../registry/BlockRegistry";
-import { emojis, renderInlineMarkdown } from "../../utils/helpers";
+import { emojis, renderInlineMarkdown, uid } from "../../utils/helpers";
 import { markdownToRichText, richTextToPlainText } from "../../utils/richText";
 import EmbedBlock from "./EmbedBlock";
 import ImageBlock from "./ImageBlock";
@@ -636,7 +636,7 @@ export default function renderBlockEditor(
             if (!isTemplate || isLocked || !page?.blocks) return;
             const clones = block.templateBlocks.map(t => ({
               ...JSON.parse(JSON.stringify(t)),
-              id: crypto.randomUUID()
+              id: uid()
             }));
             const idx = page.blocks.findIndex(b => b.id === block.id);
             if (idx < 0) return;

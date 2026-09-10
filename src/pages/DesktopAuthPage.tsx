@@ -72,11 +72,6 @@ export default function DesktopAuthPage() {
 
   const [phase, setPhase] = useState<Phase>("authenticating");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [emailMode, setEmailMode] = useState(initialProvider === "email");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mfaCode, setMfaCode] = useState("");
-  const [needsMfa, setNeedsMfa] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const oauthHandled = useRef(false);
@@ -195,38 +190,6 @@ export default function DesktopAuthPage() {
     }
   };
 
-  const submitPassword = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setErrorMessage(null);
-    setBusy(true);
-    capture("signup_started");
-    try {
-      const si = client.signIn;
-      if (needsMfa) {
-        // Mirror AuthPage's MFA handling: try the authenticator first, then
-        // an emailed code, then a backup code.
-        const result =
-          (await si.mfa.verifyTOTP({ code: mfaCode }).catch(() => null)) ??
-          (await si.mfa.verifyEmailCode({ code: mfaCode }).catch(() => null)) ??
-          (await si.mfa.verifyBackupCode({ code: mfaCode }).catch(() => null));
-        if (result?.error) throw result.error;
-      } else {
-        const { error: passwordError } = await si.password({ identifier: email, password });
-        if (passwordError) throw passwordError;
-      }
-      if (si.status === "needs_second_factor" || si.status === "needs_client_trust") {
-        setNeedsMfa(true);
-        setBusy(false);
-        return;
-      }
-      // si.status === "complete" → isSignedIn flips and the attach effect
-      // above finishes the flow.
-    } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Failed to sign in. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   /* ── render ───────────────────────────────────────────────────────────── */
 
@@ -312,96 +275,26 @@ export default function DesktopAuthPage() {
         Finish signing in here — the app will open automatically.
       </p>
 
-      {!emailMode && (
-        <div className="w-full flex flex-col gap-3 mt-7">
-          <ProviderButton
-            provider="google"
-            isLoading={busy && initialProvider === "google"}
-            onClick={() => void startOAuth("google")}
-            disabled={busy}
-          />
-          <ProviderButton
-            provider="apple"
-            isLoading={busy && initialProvider === "apple"}
-            onClick={() => void startOAuth("apple")}
-            disabled={busy}
-          />
-          <ProviderButton
-            provider="github"
-            isLoading={busy && initialProvider === "github"}
-            onClick={() => void startOAuth("github")}
-            disabled={busy}
-          />
-          <div className="relative flex items-center justify-center my-2">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
-            <span className="relative px-3 bg-[#f8fafc] text-[10px] font-mono tracking-widest text-slate-400 uppercase">or</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setEmailMode(true)}
-            disabled={busy}
-            className="w-full h-11 rounded-[8px] border border-slate-200/80 bg-white text-slate-800 font-semibold text-xs hover:border-slate-300 hover:bg-slate-50 transition disabled:opacity-40 shadow-sm"
-          >
-            Continue with email
-          </button>
-        </div>
-      )}
-
-      {emailMode && (
-        <form onSubmit={submitPassword} className="w-full flex flex-col gap-3 mt-7">
-          {needsMfa ? (
-            <>
-              <p className="text-xs text-slate-500 text-center">Enter your verification code to continue.</p>
-              <input
-                type="text"
-                value={mfaCode}
-                onChange={(e) => setMfaCode(e.target.value)}
-                placeholder="Verification code"
-                autoComplete="one-time-code"
-                required
-                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
-              />
-            </>
-          ) : (
-            <>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
-                autoComplete="email"
-                required
-                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                autoComplete="current-password"
-                required
-                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
-              />
-            </>
-          )}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full h-11 rounded-[8px] bg-slate-800 text-white text-xs font-semibold transition hover:bg-slate-700 disabled:opacity-40"
-          >
-            {busy ? "Signing in…" : needsMfa ? "Verify and continue" : "Continue"}
-          </button>
-          {!needsMfa && (
-            <button
-              type="button"
-              onClick={() => setEmailMode(false)}
-              className="text-xs text-slate-400 hover:text-slate-600 transition"
-            >
-              Use a social account instead
-            </button>
-          )}
-        </form>
-      )}
+      <div className="w-full flex flex-col gap-3 mt-7">
+        <ProviderButton
+          provider="google"
+          isLoading={busy && initialProvider === "google"}
+          onClick={() => void startOAuth("google")}
+          disabled={busy}
+        />
+        <ProviderButton
+          provider="apple"
+          isLoading={busy && initialProvider === "apple"}
+          onClick={() => void startOAuth("apple")}
+          disabled={busy}
+        />
+        <ProviderButton
+          provider="github"
+          isLoading={busy && initialProvider === "github"}
+          onClick={() => void startOAuth("github")}
+          disabled={busy}
+        />
+      </div>
 
       {errorMessage && <p className="text-xs text-red-500 text-center mt-4" role="alert">{errorMessage}</p>}
 

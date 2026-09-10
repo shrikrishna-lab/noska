@@ -457,60 +457,70 @@ export default function VoiceCustomizationSettings() {
             </button>
           </div>
 
-          {editingField === "theme" && (
-            <div className="mt-3 pt-3 border-t border-[#e8e4db] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {THEMES.map((th) => {
-                const isSelected = settings.pillTheme === th.id;
-                return (
-                  <button
-                    key={th.id}
-                    onClick={() => update({ pillTheme: th.id })}
-                    className={cn(
-                      "p-3 rounded-2xl text-left transition-all cursor-pointer border relative overflow-hidden flex flex-col justify-between gap-3 shadow-xs",
-                      isSelected
-                        ? "bg-[#1c1b18] text-white border-black ring-2 ring-black/10 shadow-md"
-                        : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-black/[0.04]"
-                    )}
-                  >
-                    {/* Header: Title + Selected Check */}
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="text-xs font-bold tracking-tight">{th.label}</div>
-                        <div className={cn("text-[10.5px] mt-0.5", isSelected ? "text-white/70" : "text-[#706c64]")}>
-                          {th.desc}
-                        </div>
-                      </div>
-                      {isSelected && (
-                        <span className="w-5 h-5 rounded-full bg-white text-black flex items-center justify-center shrink-0 ml-1 shadow-sm">
-                          <Check size={11} className="stroke-[3]" />
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Mini Visual Capsule Swatch */}
-                    <div className="w-full pt-2 border-t border-black/[0.06] flex items-center justify-center">
-                      <div
+          <AnimatePresence>
+            {editingField === "theme" && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-[#e8e4db] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {THEMES.map((th) => {
+                    const isSelected = settings.pillTheme === th.id;
+                    return (
+                      <button
+                        key={th.id}
+                        onClick={() => update({ pillTheme: th.id })}
                         className={cn(
-                          "h-6 px-3 rounded-full flex items-center justify-between gap-2 border text-[10px] select-none shadow-sm transition-all",
-                          th.bg,
-                          th.border,
-                          th.glow
+                          "p-3 rounded-2xl text-left transition-all cursor-pointer border relative overflow-hidden flex flex-col justify-between gap-3 shadow-xs",
+                          isSelected
+                            ? "bg-[#1c1b18] text-white border-black ring-2 ring-black/10 shadow-md"
+                            : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-black/[0.04]"
                         )}
                       >
-                        <span className="w-2.5 h-2.5 rounded-[2px] bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-                        <div className="flex gap-0.5 items-center">
-                          {[...Array(6)].map((_, i) => (
-                            <span key={i} className="w-1 h-1 rounded-full bg-white/80" />
-                          ))}
+                        {/* Header: Title + Selected Check */}
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-xs font-bold tracking-tight">{th.label}</div>
+                            <div className={cn("text-[10.5px] mt-0.5", isSelected ? "text-white/70" : "text-[#706c64]")}>
+                              {th.desc}
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <span className="w-5 h-5 rounded-full bg-white text-black flex items-center justify-center shrink-0 ml-1 shadow-sm">
+                              <Check size={11} className="stroke-[3]" />
+                            </span>
+                          )}
                         </div>
-                        <span className="font-mono text-[9px] font-bold text-white/90">00:03</span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+
+                        {/* Mini Visual Capsule Swatch */}
+                        <div className="w-full pt-2 border-t border-black/[0.06] flex items-center justify-center">
+                          <div
+                            className={cn(
+                              "h-6 px-3 rounded-full flex items-center justify-between gap-2 border text-[10px] select-none shadow-sm transition-all",
+                              th.bg,
+                              th.border,
+                              th.glow
+                            )}
+                          >
+                            <span className="w-2.5 h-2.5 rounded-[2px] bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+                            <div className="flex gap-0.5 items-center">
+                              {[...Array(6)].map((_, i) => (
+                                <span key={i} className="w-1 h-1 rounded-full bg-white/80" />
+                              ))}
+                            </div>
+                            <span className="font-mono text-[9px] font-bold text-white/90">00:03</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* 2. Waveform Visualizer Style with Animated Previews */}
@@ -530,75 +540,85 @@ export default function VoiceCustomizationSettings() {
             </button>
           </div>
 
-          {editingField === "equalizer" && (
-            <div className="mt-3 pt-3 border-t border-[#e8e4db] space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {WAVEFORM_STYLES.map((ws) => {
-                  const isSelected = settings.waveformStyle === ws.id;
-                  return (
-                    <button
-                      key={ws.id}
-                      onClick={() => update({ waveformStyle: ws.id })}
-                      className={cn(
-                        "p-3 rounded-2xl text-left transition-all cursor-pointer border flex flex-col justify-between gap-2.5",
-                        isSelected
-                          ? "bg-[#1c1b18] text-white border-black shadow-md"
-                          : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-black/[0.04]"
-                      )}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="text-xs font-bold">{ws.label}</div>
-                          <div className={cn("text-[10.5px] mt-0.5", isSelected ? "text-white/70" : "text-[#706c64]")}>
-                            {ws.desc}
+          <AnimatePresence>
+            {editingField === "equalizer" && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-[#e8e4db] space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {WAVEFORM_STYLES.map((ws) => {
+                      const isSelected = settings.waveformStyle === ws.id;
+                      return (
+                        <button
+                          key={ws.id}
+                          onClick={() => update({ waveformStyle: ws.id })}
+                          className={cn(
+                            "p-3 rounded-2xl text-left transition-all cursor-pointer border flex flex-col justify-between gap-2.5",
+                            isSelected
+                              ? "bg-[#1c1b18] text-white border-black shadow-md"
+                              : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-black/[0.04]"
+                          )}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="text-xs font-bold">{ws.label}</div>
+                              <div className={cn("text-[10.5px] mt-0.5", isSelected ? "text-white/70" : "text-[#706c64]")}>
+                                {ws.desc}
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <span className="w-4 h-4 rounded-full bg-white text-black flex items-center justify-center shrink-0 ml-1">
+                                <Check size={10} className="stroke-[3]" />
+                              </span>
+                            )}
                           </div>
-                        </div>
-                        {isSelected && (
-                          <span className="w-4 h-4 rounded-full bg-white text-black flex items-center justify-center shrink-0 ml-1">
-                            <Check size={10} className="stroke-[3]" />
-                          </span>
-                        )}
-                      </div>
 
-                      {/* Mini Equalizer Live Demo */}
-                      <div className="h-6 px-3 py-1 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center">
-                        <RealtimeEqualizer
-                          isListening={true}
-                          barColor={settings.barColor}
-                          styleOverride={ws.id}
-                        />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                          {/* Mini Equalizer Live Demo */}
+                          <div className="h-6 px-3 py-1 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center">
+                            <RealtimeEqualizer
+                              isListening={true}
+                              barColor={settings.barColor}
+                              styleOverride={ws.id}
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {/* Color Palette with Swatches */}
-              <div className="pt-2">
-                <div className="text-[11px] font-bold text-[#706c64] uppercase mb-2">Color Palette</div>
-                <div className="flex flex-wrap gap-2">
-                  {BAR_COLORS.map((bc) => {
-                    const isSelected = settings.barColor === bc.id;
-                    return (
-                      <button
-                        key={bc.id}
-                        onClick={() => update({ barColor: bc.id })}
-                        className={cn(
-                          "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer border",
-                          isSelected
-                            ? "bg-[#1c1b18] text-white border-black shadow-sm"
-                            : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-transparent"
-                        )}
-                      >
-                        <span className={cn("w-3 h-3 rounded-full shadow-xs shrink-0", bc.bgClass)} />
-                        <span>{bc.label}</span>
-                      </button>
-                    );
-                  })}
+                  {/* Color Palette with Swatches */}
+                  <div className="pt-2">
+                    <div className="text-[11px] font-bold text-[#706c64] uppercase mb-2">Color Palette</div>
+                    <div className="flex flex-wrap gap-2">
+                      {BAR_COLORS.map((bc) => {
+                        const isSelected = settings.barColor === bc.id;
+                        return (
+                          <button
+                            key={bc.id}
+                            onClick={() => update({ barColor: bc.id })}
+                            className={cn(
+                              "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer border",
+                              isSelected
+                                ? "bg-[#1c1b18] text-white border-black shadow-sm"
+                                : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-transparent"
+                            )}
+                          >
+                            <span className={cn("w-3 h-3 rounded-full shadow-xs shrink-0", bc.bgClass)} />
+                            <span>{bc.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* 3. Action Squircle Glow Style with Visual Buttons */}
@@ -618,48 +638,58 @@ export default function VoiceCustomizationSettings() {
             </button>
           </div>
 
-          {editingField === "squircle" && (
-            <div className="mt-3 pt-3 border-t border-[#e8e4db] grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {SQUIRCLE_STYLES.map((sq) => {
-                const isSelected = settings.squircleStyle === sq.id;
-                return (
-                  <button
-                    key={sq.id}
-                    onClick={() => update({ squircleStyle: sq.id })}
-                    className={cn(
-                      "p-3 rounded-2xl text-left text-xs font-semibold transition-all cursor-pointer border flex flex-col items-center justify-center gap-2",
-                      isSelected
-                        ? "bg-[#1c1b18] text-white border-black shadow-md"
-                        : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-black/[0.04]"
-                    )}
-                  >
-                    {/* Visual Squircle Preview Button */}
-                    <div className="h-8 w-14 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center">
-                      <div
+          <AnimatePresence>
+            {editingField === "squircle" && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-[#e8e4db] grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {SQUIRCLE_STYLES.map((sq) => {
+                    const isSelected = settings.squircleStyle === sq.id;
+                    return (
+                      <button
+                        key={sq.id}
+                        onClick={() => update({ squircleStyle: sq.id })}
                         className={cn(
-                          "w-4 h-4 rounded-[4px] flex items-center justify-center transition-transform",
-                          sq.id === "ruby_studio"
-                            ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.85)]"
-                            : sq.id === "emerald_active"
-                            ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.85)]"
-                            : sq.id === "siri_gradient"
-                            ? "bg-gradient-to-tr from-pink-500 via-purple-400 to-cyan-300 shadow-[0_0_10px_rgba(168,85,247,0.7)]"
-                            : sq.id === "cyber_neon"
-                            ? "bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.9)]"
-                            : sq.id === "titanium_frosted"
-                            ? "bg-zinc-200 border border-white/60 shadow-[0_0_6px_rgba(255,255,255,0.4)]"
-                            : "bg-white shadow-[0_0_10px_rgba(255,255,255,0.9),0_0_20px_rgba(255,255,255,0.4)]"
+                          "p-3 rounded-2xl text-left text-xs font-semibold transition-all cursor-pointer border flex flex-col items-center justify-center gap-2",
+                          isSelected
+                            ? "bg-[#1c1b18] text-white border-black shadow-md"
+                            : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-black/[0.04]"
                         )}
                       >
-                        <span className="w-1.5 h-1.5 rounded-[1px] bg-black/60" />
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-bold text-center">{sq.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                        {/* Visual Squircle Preview Button */}
+                        <div className="h-8 w-14 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center">
+                          <div
+                            className={cn(
+                              "w-4 h-4 rounded-[4px] flex items-center justify-center transition-transform",
+                              sq.id === "ruby_studio"
+                                ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.85)]"
+                                : sq.id === "emerald_active"
+                                ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.85)]"
+                                : sq.id === "siri_gradient"
+                                ? "bg-gradient-to-tr from-pink-500 via-purple-400 to-cyan-300 shadow-[0_0_10px_rgba(168,85,247,0.7)]"
+                                : sq.id === "cyber_neon"
+                                ? "bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.9)]"
+                                : sq.id === "titanium_frosted"
+                                ? "bg-zinc-200 border border-white/60 shadow-[0_0_6px_rgba(255,255,255,0.4)]"
+                                : "bg-white shadow-[0_0_10px_rgba(255,255,255,0.9),0_0_20px_rgba(255,255,255,0.4)]"
+                            )}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-[1px] bg-black/60" />
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-bold text-center">{sq.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* 4. Timer Format Row with Digital Timer Previews */}
@@ -679,59 +709,69 @@ export default function VoiceCustomizationSettings() {
             </button>
           </div>
 
-          {editingField === "timer" && (
-            <div className="mt-3 pt-3 border-t border-[#e8e4db] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {TIMER_THEMES.map((tt) => {
-                const isSelected = settings.timerTheme === tt.id;
-                return (
-                  <button
-                    key={tt.id}
-                    onClick={() => update({ timerTheme: tt.id })}
-                    className={cn(
-                      "p-3 rounded-2xl text-left transition-all cursor-pointer border flex items-center justify-between gap-3",
-                      isSelected
-                        ? "bg-[#1c1b18] text-white border-black shadow-md"
-                        : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-black/[0.04]"
-                    )}
-                  >
-                    <div>
-                      <div className="text-xs font-bold">{tt.label}</div>
-                      <div className={cn("text-[10px] mt-0.5", isSelected ? "text-white/70" : "text-[#706c64]")}>
-                        Live timer typography format
-                      </div>
-                    </div>
+          <AnimatePresence>
+            {editingField === "timer" && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-[#e8e4db] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {TIMER_THEMES.map((tt) => {
+                    const isSelected = settings.timerTheme === tt.id;
+                    return (
+                      <button
+                        key={tt.id}
+                        onClick={() => update({ timerTheme: tt.id })}
+                        className={cn(
+                          "p-3 rounded-2xl text-left transition-all cursor-pointer border flex items-center justify-between gap-3",
+                          isSelected
+                            ? "bg-[#1c1b18] text-white border-black shadow-md"
+                            : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3] border-black/[0.04]"
+                        )}
+                      >
+                        <div>
+                          <div className="text-xs font-bold">{tt.label}</div>
+                          <div className={cn("text-[10px] mt-0.5", isSelected ? "text-white/70" : "text-[#706c64]")}>
+                            Live timer typography format
+                          </div>
+                        </div>
 
-                    {/* Mini Digital Timer Badge */}
-                    <div className="px-2.5 py-1 rounded-lg bg-black/60 border border-white/10 font-mono text-[11px] font-bold shrink-0">
-                      {tt.id === "cyan_gold" && (
-                        <>
-                          <span className="text-sky-300">00</span>
-                          <span className="text-white/30 px-[1px]">:</span>
-                          <span className="text-amber-300">03</span>
-                        </>
-                      )}
-                      {tt.id === "monochrome" && <span className="text-white">00:03</span>}
-                      {tt.id === "sunset" && (
-                        <>
-                          <span className="text-rose-400">00</span>
-                          <span className="text-white/30 px-[1px]">:</span>
-                          <span className="text-orange-300">03</span>
-                        </>
-                      )}
-                      {tt.id === "neon_green" && (
-                        <>
-                          <span className="text-emerald-400">00</span>
-                          <span className="text-white/30 px-[1px]">:</span>
-                          <span className="text-emerald-300">03</span>
-                        </>
-                      )}
-                      {(tt.id === "dual_tone" || !tt.id) && <span className="text-white">00:03</span>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                        {/* Mini Digital Timer Badge */}
+                        <div className="px-2.5 py-1 rounded-lg bg-black/60 border border-white/10 font-mono text-[11px] font-bold shrink-0">
+                          {tt.id === "cyan_gold" && (
+                            <>
+                              <span className="text-sky-300">00</span>
+                              <span className="text-white/30 px-[1px]">:</span>
+                              <span className="text-amber-300">03</span>
+                            </>
+                          )}
+                          {tt.id === "monochrome" && <span className="text-white">00:03</span>}
+                          {tt.id === "sunset" && (
+                            <>
+                              <span className="text-rose-400">00</span>
+                              <span className="text-white/30 px-[1px]">:</span>
+                              <span className="text-orange-300">03</span>
+                            </>
+                          )}
+                          {tt.id === "neon_green" && (
+                            <>
+                              <span className="text-emerald-400">00</span>
+                              <span className="text-white/30 px-[1px]">:</span>
+                              <span className="text-emerald-300">03</span>
+                            </>
+                          )}
+                          {(tt.id === "dual_tone" || !tt.id) && <span className="text-white">00:03</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* 6. Shortcuts Row */}
@@ -751,23 +791,33 @@ export default function VoiceCustomizationSettings() {
             </button>
           </div>
 
-          {editingField === "shortcut" && (
-            <div className="mt-3 pt-3 border-t border-[#e8e4db] flex flex-wrap gap-2">
-              {SHORTCUT_OPTIONS.map((sc) => (
-                <button
-                  key={sc}
-                  onClick={() => update({ shortcut: sc })}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    settings.shortcut === sc
-                      ? "bg-[#1c1b18] text-white"
-                      : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3]"
-                  }`}
-                >
-                  {sc}
-                </button>
-              ))}
-            </div>
-          )}
+          <AnimatePresence>
+            {editingField === "shortcut" && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-[#e8e4db] flex flex-wrap gap-2">
+                  {SHORTCUT_OPTIONS.map((sc) => (
+                    <button
+                      key={sc}
+                      onClick={() => update({ shortcut: sc })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        settings.shortcut === sc
+                          ? "bg-[#1c1b18] text-white"
+                          : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3]"
+                      }`}
+                    >
+                      {sc}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* 7. Dictation Languages */}

@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "framer-motion";
 import { Check, ChevronRight } from "lucide-react";
 import { C } from "../../theme";
 import { ROLES, USE_CASES } from "../../data";
@@ -8,7 +9,7 @@ import { PrimaryBtn, SecondaryBtn } from "../Buttons";
 export default function RoleStep() {
   const { form, setFormField, next, back } = useOnboarding();
 
-  const toggleUseCase = (id) => {
+  const toggleUseCase = (id: string) => {
     const current = form.useCase || [];
     setFormField("useCase", current.includes(id) ? current.filter((u) => u !== id) : [...current, id]);
   };
@@ -23,23 +24,26 @@ export default function RoleStep() {
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Your role</label>
           <div className="grid grid-cols-2 gap-1.5">
-            {ROLES.map((r, i) => {
+            {ROLES.map((r) => {
               const on = form.role === r.id;
               return (
-                <button
+                <motion.button
                   key={r.id}
+                  type="button"
                   onClick={() => setFormField("role", r.id)}
-                  className="px-3.5 py-2.5 text-sm rounded-xl text-left transition-all duration-200 hover:shadow-sm"
+                  whileHover={{ y: -1, scale: 1.015 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 28 }}
+                  className="px-3.5 py-2.5 text-sm rounded-xl text-left transition-colors duration-150 cursor-pointer select-none shadow-xs"
                   style={{
                     background: on ? C.beige : "#fff",
                     border: on ? `1.5px solid ${C.beigeDark}` : `1.5px solid ${C.border}`,
                     color: on ? "#5a3e20" : C.muted,
                     fontWeight: on ? 600 : 400,
-                    animation: `fadeSlideIn 0.25s ease ${i * 30}ms both`,
                   }}
                 >
                   {r.label}
-                </button>
+                </motion.button>
               );
             })}
           </div>
@@ -49,17 +53,20 @@ export default function RoleStep() {
             What will you use Noska for? <span className="normal-case font-normal">Select all that apply</span>
           </label>
           <div className="flex flex-col gap-1">
-            {USE_CASES.map((uc, i) => {
+            {USE_CASES.map((uc) => {
               const on = (form.useCase || []).includes(uc.id);
               return (
-                <button
+                <motion.button
                   key={uc.id}
+                  type="button"
                   onClick={() => toggleUseCase(uc.id)}
-                  className="flex items-center gap-3 px-3.5 py-2.5 text-sm rounded-xl border transition-all duration-150"
+                  whileHover={{ x: 2 }}
+                  whileTap={{ scale: 0.985 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 28 }}
+                  className="flex items-center gap-3 px-3.5 py-2.5 text-sm rounded-xl border transition-colors duration-150 cursor-pointer select-none"
                   style={{
                     border: on ? `1.5px solid ${C.beigeDark}` : "1.5px solid transparent",
                     background: on ? "rgba(227,207,179,0.25)" : "transparent",
-                    animation: `fadeSlideIn 0.25s ease ${i * 30 + 200}ms both`,
                   }}
                 >
                   <div
@@ -74,7 +81,7 @@ export default function RoleStep() {
                   </div>
                   <span className="text-base leading-none">{uc.icon}</span>
                   <span style={{ color: on ? "#5a3e20" : C.muted, fontWeight: on ? 500 : 400 }}>{uc.label}</span>
-                </button>
+                </motion.button>
               );
             })}
           </div>

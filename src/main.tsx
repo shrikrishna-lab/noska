@@ -43,6 +43,8 @@ const AuthCallbackScreen = lazy(() => import("./components/auth/AuthCallbackScre
 const InvitePage = lazy(() => import("./pages/invite/InvitePage").then(m => ({ default: m.InvitePage })));
 const EnterCodePage = lazy(() => import("./pages/invite/EnterCodePage").then(m => ({ default: m.EnterCodePage })));
 const DesktopAuthPage = lazy(() => import("./pages/DesktopAuthPage"));
+const InfoCardDemo = lazy(() => import("./components/ui/info-card-demo"));
+const NoskaWispr = lazy(() => import("./pages/marketing/NoskaWispr"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-white">
@@ -118,6 +120,10 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/sso-callback" element={<AuthCallbackScreen />} />
           <Route path="/desktop-auth" element={<DesktopAuthPage />} />
           <Route path="/control" element={<ControlCenter />} />
+          <Route path="/demo" element={<InfoCardDemo />} />
+          <Route path="/info-card-demo" element={<InfoCardDemo />} />
+          <Route path="/wispr" element={<NoskaWispr />} />
+          <Route path="/noska-wispr" element={<NoskaWispr />} />
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/dashboard" element={<App />} />
           <Route path="/onboarding" element={<App />} />

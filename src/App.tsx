@@ -90,7 +90,8 @@ import {
   migrateLegacyIds,
   slugifyWorkspaceName
 } from "./utils/helpers";
-import { storageApi, initStorageSyncBaseline } from "./utils/storage";
+import { storageApi, initStorageSyncBaseline, flushStorageSyncVerified, discardPendingSyncWrites } from "./utils/storage";
+import { subscribeToPages } from "./lib/pagesRealtime";
 import {
   normalizePages,
   getPageSubtreeIds,
@@ -130,6 +131,38 @@ function purgeExpiredTrash(sourcePages: Page[], referenceTime: number = Date.now
   });
 
   return purgeIds.size ? sourcePages.filter((page) => !purgeIds.has(page.id)) : sourcePages;
+}
+
+/**
+ * DB-first page restore, step 2: merge localStorage into rows already fetched
+ * from Supabase. Callers MUST await fetchPages() before invoking this so the
+ * DB read is never raced by the local read. Merge rule: for a page present in
+ * both, the newer updatedAt wins (covers offline edits not yet flushed);
+ * local-only pages (created offline / flush unverified at logout) are
+ * appended so they re-sync under the signed-in user.
+ */
+async function mergeLocalStoragePages(remotePages: Page[]): Promise<Page[]> {
+  const store = storageApi();
+  try {
+    const localPagesRaw = await store.get("pages");
+    if (!localPagesRaw?.value) return remotePages;
+    const localPages: Page[] = JSON.parse(localPagesRaw.value);
+    if (!Array.isArray(localPages)) return remotePages;
+    const localMap = new Map(localPages.filter(p => p?.id).map(p => [p.id, p]));
+    const merged = remotePages.map(p => {
+      const local = localMap.get(p.id);
+      return local && new Date(local.updatedAt || 0) > new Date(p.updatedAt || 0) ? local : p;
+    });
+    for (const [id, local] of localMap) {
+      if (!merged.some(p => p.id === id)) {
+        merged.push(local);
+      }
+    }
+    return merged;
+  } catch (e) {
+    console.warn("App: localStorage merge failed", e);
+    return remotePages;
+  }
 }
 
 function App() {
@@ -242,6 +275,18 @@ function AppContent() {
   const { session } = useSession();
   const clerk = useClerk();
 
+  // Boot watchdog: Clerk's production publishable key only accepts
+  // https://*.noska.me origins (server-side 400 otherwise). On localhost
+  // or plain-http origins the Clerk client never finishes loading, and
+  // without this the app would sit on the spinner below forever with the
+  // failure visible only in the devtools console — surface it in-app.
+  const [clerkStallSecs, setClerkStallSecs] = useState(0);
+  useEffect(() => {
+    if (clerkLoadedRaw || isDesktop() || !loading) return;
+    const t = setInterval(() => setClerkStallSecs((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [clerkLoadedRaw, loading]);
+
   // Direct-access magic link: the admin panel generates a URL like
   // `/<route>?ticket=<sign_in_token>` (see admin-api users.ts sign_in_token).
   // Consume the ticket client-side so the link works regardless of the
@@ -325,6 +370,16 @@ function AppContent() {
   }, [ghostWriterEnabled]);
 
   const hydrated = useRef(false);
+  // Set when logout could NOT verify its page flush reached Supabase: the
+  // "pages" localStorage key is then deliberately preserved for recovery on
+  // the next login, and the autosave effect must not overwrite it with the
+  // post-logout empty state. Cleared once a login restore re-establishes state.
+  const preserveLocalPages = useRef(false);
+  // Latest committed pages state — handleLogout force-writes this to storage
+  // before flushing so edits made inside the autosave debounce window
+  // (< 500ms before logout) still reach the dirty queue.
+  const pagesSnapshotRef = useRef<Page[]>([]);
+  pagesSnapshotRef.current = pages;
   // A deep-link page is an initial navigation request, not a permanent
   // selection lock. This ref prevents the route-sync effect from reapplying
   // the URL page every time pages change (for example when a recent/favorite
@@ -617,26 +672,11 @@ function AppContent() {
         console.warn("Supabase load failed", e);
       }
 
-      // 3. Always load localStorage pages as fallback/override (covers unsaved changes)
-      try {
-        const localPagesRaw = await store.get("pages");
-        if (!mounted) return;
-        if (localPagesRaw?.value) {
-          const localPages: Page[] = JSON.parse(localPagesRaw.value);
-          const localMap = new Map(localPages.map(p => [p.id, p]));
-          // Merge: for any page found in both localStorage and Supabase, prefer the newer one
-          loadedPages = loadedPages.map(p => {
-            const local = localMap.get(p.id);
-            return local && new Date(local.updatedAt || 0) > new Date(p.updatedAt || 0) ? local : p;
-          });
-          // Add pages from localStorage that don't exist in Supabase
-          for (const local of localPages) {
-            if (!loadedPages.some(p => p.id === local.id)) {
-              loadedPages.push(local);
-            }
-          }
-        }
-      } catch (e) { console.warn("App: localStorage merge failed", e); }
+      // 3. Merge localStorage AFTER the awaited Supabase read above — DB-first:
+      // remote rows are the base, local edits/pages layer on top (covers
+      // offline changes and writes not yet flushed at last logout).
+      loadedPages = await mergeLocalStoragePages(loadedPages);
+      if (!mounted) return;
 
       // 4. Final normalization
       if (!userId) {
@@ -776,6 +816,12 @@ function AppContent() {
           setNeedsUsernameClaim(!profile.username);
           // Returning user: set their data
           const normalized = normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })));
+          // Register the DB/local merged state as the sync baseline so the
+          // dirty-tracker doesn't re-upsert everything we just fetched.
+          initStorageSyncBaseline(normalized, loadedChats);
+          // The merged state now includes any pages preserved by an
+          // unverified-sync logout — recovery complete, resume autosave.
+          preserveLocalPages.current = false;
           setPages(normalized);
           setAiChats(loadedChats);
           if (normalized.length > 0) {
@@ -897,9 +943,17 @@ function AppContent() {
       setNeedsUsernameClaim(!existingProfile.username);
       // Returning user signing in mid-session (the initial mount bootstrap
       // already ran before this sign-in completed) — load their data now.
+      // DB-first: fetchPages above is awaited BEFORE any localStorage read,
+      // so the workspace reflects server state and localStorage only
+      // contributes offline edits / unflushed pages from the prior session.
       try {
         const remotePages = await fetchPages(userData.userId);
-        const normalized = normalizePages(remotePages.map(p => ({ ...p, content: p.content || [] })));
+        const merged = await mergeLocalStoragePages(remotePages);
+        const normalized = normalizePages(merged.map(p => ({ ...p, content: p.content || [] })));
+        initStorageSyncBaseline(normalized, []);
+        // Merged state includes any pages preserved by an unverified-sync
+        // logout — recovery complete, resume autosave.
+        preserveLocalPages.current = false;
         setPages(normalized);
         // AI chats are stored 100% locally on device / browser cache
         try {
@@ -967,6 +1021,39 @@ function AppContent() {
       avatarUrl: clerkUser.imageUrl,
     });
   }, [clerkLoaded, isSignedIn, clerkUser, appFlowState, handleAuthSuccess]);
+
+  // Supabase Realtime for the `pages` table: keeps an established session
+  // current with writes committed by other devices/instances of the same
+  // user (multi-device sync, and re-login refetches handled by the
+  // DB-first restore paths above). Torn down automatically when
+  // currentUserId clears on logout.
+  useEffect(() => {
+    if (!currentUserId) return;
+    return subscribeToPages(currentUserId, {
+      onPageUpsert: (page) => {
+        initStorageSyncBaseline([page]);
+        setPages((prev) => {
+          const idx = prev.findIndex((p) => p.id === page.id);
+          if (idx >= 0) {
+            // Echo guard: skip our own writes back-rolling onto us and stale
+            // remote rows — only a strictly newer remote version is applied.
+            if (new Date(page.updatedAt || 0) <= new Date(prev[idx].updatedAt || 0)) return prev;
+            const next = [...prev];
+            next[idx] = page;
+            return next;
+          }
+          // Don't inject brand-new pages before the bootstrap has hydrated
+          // (the bootstrap fetch covers that) or while onboarding is deciding
+          // starter pages.
+          if (!hydrated.current || appFlowState === "onboarding") return prev;
+          return [...prev, page];
+        });
+      },
+      onPageDelete: (pageId) => {
+        setPages((prev) => (prev.some((p) => p.id === pageId) ? prev.filter((p) => p.id !== pageId) : prev));
+      },
+    });
+  }, [currentUserId, appFlowState]);
 
   // Build starter pages (local state, no DB dependency). The onboarding
   // flow lets the user pick one starter template — build that page, falling
@@ -1097,9 +1184,40 @@ function AppContent() {
     setOnboardingOpen(true);
   }, []);
 
-  // Logout handler — clears cache, resets state, redirects to auth
+  // Logout handler — flushes pending page writes, verifies the DB sync
+  // completed, clears cache/state, redirects to auth
   const handleLogout = useCallback(async () => {
     capture("logout");
+    // Flush queued pages/chats writes and VERIFY they reached Supabase before
+    // anything kills the auth context: signing out (clerk.signOut /
+    // desktopSignOut) invalidates the Supabase access token, so any upsert
+    // attempted afterwards fails RLS and the edits are lost.
+    const flushUserId = currentUserId || (() => { try { return localStorage.getItem("noska_user_id"); } catch { return null; } })();
+    let syncVerified = true;
+    if (flushUserId) {
+      // Close the autosave debounce race: commit the latest page state into
+      // storage (which enqueues dirty pages) before the verified flush.
+      // Encrypted pages are skipped so the stored form stays ciphertext.
+      try {
+        const store = storageApi();
+        const existingRaw = await store.get("pages");
+        const existing: Page[] = existingRaw?.value ? JSON.parse(existingRaw.value) : [];
+        const byId = new Map(existing.filter(p => p?.id).map(p => [p.id, p]));
+        for (const p of pagesSnapshotRef.current) {
+          if (!p?.id || p.isEncrypted) continue;
+          byId.set(p.id, p);
+        }
+        await store.set("pages", JSON.stringify(Array.from(byId.values())));
+      } catch (e) {
+        console.warn("[logout] final pages snapshot write failed:", e);
+      }
+      try {
+        syncVerified = await flushStorageSyncVerified();
+      } catch (e) {
+        console.warn("[logout] flush verification threw:", e);
+        syncVerified = false;
+      }
+    }
     resetIdentity();
     try {
       await clerk.signOut();
@@ -1111,15 +1229,27 @@ function AppContent() {
       desktopSignOut();
       clearBrowserAuthState();
     }
+    // If the flush couldn't be verified (offline/failed upserts), drop the
+    // in-memory dirty queues so writes never leak into another account's
+    // session, and KEEP the page keys in localStorage — the next login's
+    // DB-first restore merges them back and re-syncs.
+    if (!syncVerified) {
+      discardPendingSyncWrites();
+      preserveLocalPages.current = true;
+      console.warn("[logout] pending page writes not verified in DB — local pages preserved for recovery on next login");
+    }
     // Clear all user-data localStorage keys
     const keysToClear = [
       "noska_user_id", "noska_workspace_joined", "noska_sidebar_data",
       "noska_share_invites", "noska_ai_profile", "noska_ghost_writer_enabled",
       "noska_api_key", "noska_ai_config", "noska_memory", "noska_user_profile",
       "noska_inbox_reminders", "noska-graph-positions",
-      "pages", "aiChats", "activeId", "workspaceName", "sidebarOpen",
+      // Page keys are only cleared when every write was verified in the DB;
+      // see the syncVerified guard above.
+      ...(syncVerified ? ["pages", "activeId", "stackedPageIds"] : []),
+      "aiChats", "workspaceName", "sidebarOpen",
       "apiKey", "themeFx", "aiProvider", "nvidiaKey", "appView",
-      "activeChatId", "stackedPageIds"
+      "activeChatId"
     ];
     keysToClear.forEach(k => { try {
       // Clear both exact match and any namespaced variants
@@ -1152,7 +1282,7 @@ function AppContent() {
     realtimeCollab.leaveWorkspace();
     setAppFlowState("auth");
     setToast("Logged out. See you next time.");
-  }, [clerk]);
+  }, [clerk, currentUserId]);
 
   useEffect(() => {
     if (!hydrated.current) return;
@@ -1192,7 +1322,11 @@ function AppContent() {
         try { return JSON.stringify(val); } catch (e) { console.warn("Safe stringify failed:", (e as Error).message); return fallback; }
       };
       await Promise.all([
-        store.set("pages", safeStringify(serializedPages)),
+        // After an unverified-sync logout, "pages" holds the recovery copy of
+        // the user's data — don't clobber it with this post-logout empty state.
+        ...(preserveLocalPages.current
+          ? []
+          : [store.set("pages", safeStringify(serializedPages))]),
         store.set("activeId", safeStringify(activeId, '""')),
         store.set("workspaceName", safeStringify(workspaceName, '""')),
         store.set("theme", safeStringify(theme, '"dark"')),
@@ -2534,6 +2668,13 @@ function AppContent() {
         <div className="flex flex-col items-center gap-3">
           <RingLoader size={32} />
           <span className="text-sm">Loading Noska...</span>
+          {clerkStallSecs >= 25 && !clerkLoadedRaw && !isDesktop() && (
+            <span className="max-w-xs text-center text-xs leading-relaxed opacity-80">
+              Still loading — the sign-in service isn't responding. Local dev
+              must run via https://app.noska.me:5173: the production sign-in
+              key rejects localhost and plain-http origins.
+            </span>
+          )}
         </div>
       </div>
     );
@@ -2761,13 +2902,13 @@ function AppContent() {
               onRemoveEncryption={handleRemoveEncryption}
             />
             <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 <motion.div
                   key={appView === "page" ? `workspace-editor-${pageMode}` : appView}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.1 }}
+                  initial={{ opacity: 0, y: 8, filter: "blur(3px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: -6, filter: "blur(3px)" }}
+                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                   className="flex-1 flex flex-col min-h-0 overflow-hidden"
                 >
                   {appView === "page" ? (

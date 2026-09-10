@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "framer-motion";
 import { Check, ChevronRight } from "lucide-react";
 import { C } from "../../theme";
 import { TEMPLATES } from "../../data";
@@ -15,18 +16,20 @@ export default function OnboardingTemplateStep() {
         <p className="text-sm leading-relaxed" style={{ color: C.muted }}>Choose a starting point for your first page.</p>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        {TEMPLATES.map((tpl, i) => {
+        {TEMPLATES.map((tpl) => {
           const on = form.template === tpl.id;
           return (
-            <button
+            <motion.button
               key={tpl.id}
+              type="button"
               onClick={() => setFormField("template", tpl.id)}
-              className="flex flex-col gap-2.5 p-4 rounded-xl text-left transition-all duration-200 hover:shadow-md"
+              whileHover={{ y: -2, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 450, damping: 28 }}
+              className="flex flex-col gap-2.5 p-4 rounded-xl text-left transition-colors duration-150 cursor-pointer shadow-xs select-none"
               style={{
-                background: on ? "rgba(227,207,179,0.2)" : "#fff",
+                background: on ? "rgba(227,207,179,0.25)" : "#fff",
                 border: on ? `1.5px solid ${C.beigeDark}` : `1.5px solid ${C.border}`,
-                transform: on ? "scale(1.02)" : "scale(1)",
-                animation: `fadeSlideIn 0.25s ease ${i * 40}ms both`,
               }}
             >
               <div className="flex items-start justify-between">
@@ -51,7 +54,7 @@ export default function OnboardingTemplateStep() {
                 <span className="text-sm font-semibold" style={{ color: on ? "#5a3e20" : C.text }}>{tpl.label}</span>
                 <span className="text-xs leading-relaxed" style={{ color: C.muted }}>{tpl.desc}</span>
               </div>
-            </button>
+            </motion.button>
           );
         })}
       </div>

@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import { uid } from '../../utils/blockModel';
 import type { Block } from '../../../types/blocks';
 
 interface PendingMutation {
@@ -85,7 +86,7 @@ class OfflineManager {
   enqueue(mutation: Omit<PendingMutation, 'id' | 'timestamp' | 'retryCount'>): void {
     const entry: PendingMutation = {
       ...mutation,
-      id: crypto.randomUUID(),
+      id: uid(),
       timestamp: Date.now(),
       retryCount: 0,
     };

@@ -9,6 +9,7 @@ import AuthLoading from "./AuthLoading";
 import { capture } from "../../lib/posthog";
 import { markOAuthIntent } from "../../lib/oauthIntent";
 import { isDesktop } from "../../lib/desktop/platform";
+import { startBrowserAuth } from "../../lib/desktop/browserAuth";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0, scale: 0.96, y: 16 },
@@ -38,48 +39,17 @@ interface AuthPageProps {
 }
 
 export default function AuthPage(_props: AuthPageProps) {
-const { signIn, errors, fetchStatus } = useSignIn();
+  const { signIn, errors } = useSignIn();
   const { isSignedIn } = useAuth();
   const clerk = useClerk();
   const navigate = useNavigate();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mfaCode, setMfaCode] = useState("");
-  const [authStep, setAuthStep] = useState<"credentials" | "mfa">("credentials");
-  const [mfaMethod, setMfaMethod] = useState<"totp" | "backup_code" | "email_code" | "phone_code">("totp");
   const [error, setError] = useState<string | null>(null);
 
-  const finishSignIn = async () => {
-    const { error: finalizeError } = await signIn.finalize({
-      navigate: async ({ decorateUrl }) => {
-        let target = "/dashboard";
-        if (import.meta.env.DEV) {
-          const saved = sessionStorage.getItem("noska_dev_deep_link");
-          if (saved) {
-            target = saved;
-            sessionStorage.removeItem("noska_dev_deep_link");
-          }
-        }
-        const url = decorateUrl(target);
-        if (url.startsWith("http")) {
-          window.location.href = url;
-        } else {
-          navigate(url, { replace: true });
-        }
-      },
-    });
-    if (finalizeError) throw finalizeError;
-  };
-
   const handleProviderClick = async (provider: "github" | "google" | "microsoft" | "apple") => {
-    // Desktop: OAuth requires navigating out to the provider and back, which
-    // the webview cannot complete (Clerk rejects the callback origin). Keep
-    // users in-app with email sign-in instead of dumping them on a Clerk
-    // error page.
     if (isDesktop()) {
-      setError("Social sign-in isn't available in the Noska desktop app yet — please use 'Sign in with Email'.");
+      void startBrowserAuth(provider === "google" || provider === "apple" || provider === "github" ? provider : "web");
       return;
     }
     setError(null);
@@ -102,7 +72,7 @@ const { signIn, errors, fetchStatus } = useSignIn();
     // site) instead of /sso-callback, MarketingLayout uses this to bring
     // the now-signed-in user into their workspace.
     markOAuthIntent();
-try {
+    try {
       const strategy =
         provider === "github" ? "oauth_github" :
         provider === "google" ? "oauth_google" :
@@ -151,63 +121,6 @@ try {
     }
   };
 
-  const handlePasswordSignIn = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    setIsConnecting(true);
-    try {
-      const { error: passwordError } = await signIn.password({ identifier: email, password });
-      if (passwordError) throw passwordError;
-      if (signIn.status === "needs_second_factor" || signIn.status === "needs_client_trust") {
-        setAuthStep("mfa");
-        return;
-      }
-      if (signIn.status === "complete") await finishSignIn();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to sign in. Please try again.");
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const handleMfaSignIn = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    setIsConnecting(true);
-    try {
-      const result = mfaMethod === "totp"
-        ? await signIn.mfa.verifyTOTP({ code: mfaCode })
-        : mfaMethod === "backup_code"
-          ? await signIn.mfa.verifyBackupCode({ code: mfaCode })
-          : mfaMethod === "email_code"
-            ? await signIn.mfa.verifyEmailCode({ code: mfaCode })
-            : await signIn.mfa.verifyPhoneCode({ code: mfaCode });
-      if (result.error) throw result.error;
-      if (signIn.status === "complete") await finishSignIn();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "MFA verification failed. Please try again.");
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const selectMfaMethod = async (method: "totp" | "backup_code" | "email_code" | "phone_code") => {
-    setMfaMethod(method);
-    setError(null);
-    try {
-      if (method === "email_code") {
-        const { error: sendError } = await signIn.mfa.sendEmailCode();
-        if (sendError) throw sendError;
-      }
-      if (method === "phone_code") {
-        const { error: sendError } = await signIn.mfa.sendPhoneCode();
-        if (sendError) throw sendError;
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Could not send the verification code.");
-    }
-  };
-
   return (
     <div className="fixed inset-0 w-full h-full flex items-center justify-center bg-[#f8fafc] z-40 overflow-hidden font-sans select-none">
       {/* Background Pixel Hero Reveal Overlay */}
@@ -231,76 +144,14 @@ try {
             />
           </div>
 
-          {/* Social Logins — web only; desktop uses email sign-in */}
-          {!isDesktop() && (
-            <div className="w-full flex flex-col gap-3">
-              <AuthProviders
-                onProviderClick={handleProviderClick}
-                loadingProvider={loadingProvider}
-                disabled={isConnecting}
-              />
-            </div>
-          )}
-
-          {!isDesktop() && (
-            <div className="relative flex items-center justify-center my-6 select-none">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
-              <span className="relative px-3 bg-[#f8fafc] text-[10px] font-mono tracking-widest text-slate-400 uppercase">or</span>
-            </div>
-          )}
-
-          {authStep === "credentials" ? (
-            <form onSubmit={handlePasswordSignIn} className="w-full flex flex-col gap-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="Email"
-                autoComplete="email"
-                required
-                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Password"
-                autoComplete="current-password"
-                required
-                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
-              />
-              <button
-                type="submit"
-                disabled={isConnecting || fetchStatus === "fetching"}
-                className="w-full h-11 rounded-[8px] bg-slate-800 text-white text-xs font-semibold transition hover:bg-slate-700 disabled:opacity-40"
-              >
-                {isConnecting ? "Signing in..." : "Sign in with Email"}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleMfaSignIn} className="w-full flex flex-col gap-3">
-              <p className="text-xs text-slate-500 text-center">Enter your verification code to continue.</p>
-              <div className="grid grid-cols-2 gap-2">
-                {(["totp", "backup_code", "email_code", "phone_code"] as const).map((method) => (
-                  <button key={method} type="button" onClick={() => selectMfaMethod(method)} className={`h-9 rounded-md text-xs ${mfaMethod === method ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>
-                    {method === "totp" ? "Authenticator" : method === "backup_code" ? "Backup code" : method === "email_code" ? "Email code" : "Phone code"}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                value={mfaCode}
-                onChange={(event) => setMfaCode(event.target.value)}
-                placeholder="Verification code"
-                autoComplete="one-time-code"
-                required
-                className="w-full h-11 px-3 rounded-[8px] border border-slate-200 bg-white text-sm text-slate-800 outline-none focus:border-slate-400"
-              />
-              <button type="submit" disabled={isConnecting} className="w-full h-11 rounded-[8px] bg-slate-800 text-white text-xs font-semibold transition hover:bg-slate-700 disabled:opacity-40">
-                {isConnecting ? "Verifying..." : "Verify and continue"}
-              </button>
-            </form>
-          )}
+          {/* Social Logins */}
+          <div className="w-full flex flex-col gap-3">
+            <AuthProviders
+              onProviderClick={handleProviderClick}
+              loadingProvider={loadingProvider}
+              disabled={isConnecting}
+            />
+          </div>
 
           {/* Error notifications */}
           <AnimatePresence mode="wait">

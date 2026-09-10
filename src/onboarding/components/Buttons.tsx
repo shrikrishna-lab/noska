@@ -1,4 +1,5 @@
 import React, { type MouseEventHandler, type ReactNode } from "react";
+import { motion } from "framer-motion";
 import { C } from "../theme";
 
 interface PrimaryBtnProps {
@@ -10,10 +11,14 @@ interface PrimaryBtnProps {
 
 export function PrimaryBtn({ onClick, disabled, children, fullWidth }: PrimaryBtnProps) {
   return (
-    <button
+    <motion.button
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`${fullWidth ? "w-full" : ""} group relative flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl overflow-hidden transition-all duration-200 hover:shadow-lg active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed`}
+      whileHover={disabled ? undefined : { scale: 1.02 }}
+      whileTap={disabled ? undefined : { scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 450, damping: 28 }}
+      className={`${fullWidth ? "w-full" : ""} group relative flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl overflow-hidden transition-shadow duration-200 hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
       style={{ background: `linear-gradient(135deg, ${C.purple} 0%, #4f46e5 100%)`, color: "#fff" }}
     >
       <div
@@ -21,7 +26,7 @@ export function PrimaryBtn({ onClick, disabled, children, fullWidth }: PrimaryBt
         style={{ background: "linear-gradient(135deg,#6d28d9,#4338ca)" }}
       />
       <span className="relative flex items-center gap-2">{children}</span>
-    </button>
+    </motion.button>
   );
 }
 
@@ -32,12 +37,16 @@ interface SecondaryBtnProps {
 
 export function SecondaryBtn({ onClick, children }: SecondaryBtnProps) {
   return (
-    <button
+    <motion.button
+      type="button"
       onClick={onClick}
-      className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-150 hover:bg-black/5"
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 450, damping: 28 }}
+      className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors duration-150 hover:bg-black/5 cursor-pointer"
       style={{ color: C.muted }}
     >
       {children}
-    </button>
+    </motion.button>
   );
 }

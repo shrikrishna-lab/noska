@@ -1,20 +1,25 @@
 import React from "react";
+import { motion } from "framer-motion";
 import { C } from "../theme";
 
-export default function StepDots({ current, total }) {
+interface StepDotsProps {
+  current: number;
+  total: number;
+}
+
+export default function StepDots({ current, total }: StepDotsProps) {
   return (
     <div className="flex items-center gap-1.5">
       {Array.from({ length: total }).map((_, i) => (
-        <div
+        <motion.div
           key={i}
-          className="transition-all duration-500"
-          style={{
-            width: i === current ? "22px" : "6px",
-            height: "6px",
-            borderRadius: "3px",
-            background: i <= current ? C.purple : "#d0cfe8",
-            opacity: i < current ? 0.4 : 1,
+          animate={{
+            width: i === current ? 22 : 6,
+            backgroundColor: i <= current ? C.purple : "#d0cfe8",
+            opacity: i < current ? 0.45 : 1,
           }}
+          transition={{ type: "spring", stiffness: 420, damping: 30 }}
+          className="h-1.5 rounded-full"
         />
       ))}
     </div>

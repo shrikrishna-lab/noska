@@ -48,6 +48,7 @@ const Roadmap = lazy(() => import("@/pages/Roadmap").then((m) => ({ default: m.R
 const ChangelogEntries = lazy(() => import("@/pages/ChangelogEntries").then((m) => ({ default: m.ChangelogEntries })));
 const BlogPosts = lazy(() => import("@/pages/BlogPosts").then((m) => ({ default: m.BlogPosts })));
 const LegalPages = lazy(() => import("@/pages/LegalPages").then((m) => ({ default: m.LegalPages })));
+const InfoCards = lazy(() => import("@/pages/InfoCards").then((m) => ({ default: m.InfoCardsPage })));
 const Broadcasts = lazy(() => import("@/pages/Broadcasts").then((m) => ({ default: m.Broadcasts })));
 const Integrations = lazy(() => import("@/pages/Integrations").then((m) => ({ default: m.Integrations })));
 const ApiKeys = lazy(() => import("@/pages/ApiKeys").then((m) => ({ default: m.ApiKeys })));
@@ -167,6 +168,7 @@ export default function App() {
                       <Route path="landing-page" element={<Suspense fallback={<PageLoading />}><LandingPage /></Suspense>} />
                       <Route path="cta-buttons" element={<Suspense fallback={<PageLoading />}><CTAManager /></Suspense>} />
                       <Route path="announcement-bar" element={<Suspense fallback={<PageLoading />}><AnnouncementBarPage /></Suspense>} />
+                      <Route path="info-cards" element={<Suspense fallback={<PageLoading />}><InfoCards /></Suspense>} />
                       <Route path="waitlist-analytics" element={<Suspense fallback={<PageLoading />}><WaitlistAnalyticsPage /></Suspense>} />
                       <Route path="waitlist-settings" element={<Suspense fallback={<PageLoading />}><WaitlistSettingsPage /></Suspense>} />
                       <Route path="demo-requests" element={<Suspense fallback={<PageLoading />}><DemoRequests /></Suspense>} />

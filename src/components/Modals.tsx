@@ -36,12 +36,14 @@ import {
   Cloud,
   RotateCw,
   Keyboard,
+  CreditCard,
   type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
 import CustomProviders from "./settings/CustomProviders";
 import VoiceCustomizationSettings from "./settings/VoiceCustomizationSettings";
 import ShortcutsSettings from "./ShortcutsSettings";
+import { BillingPromotionalTab } from "./settings/BillingPromotionalTab";
 import { PageIcon } from "./PageIcon";
 import ApiKeysManager from "../features/api/ApiKeysManager";
 import { aiManager } from "../ai/AIManager";
@@ -242,6 +244,27 @@ export function SettingsModal({
 
   const [saveStatus, setSaveStatus] = useState("");
 
+  // Automatically dismiss toast notifications after 3 seconds
+  React.useEffect(() => {
+    if (!saveStatus) return;
+    const timer = setTimeout(() => {
+      setSaveStatus("");
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [saveStatus]);
+
+  // Listen to global noska:toast custom events dispatched from cards
+  React.useEffect(() => {
+    const handleToastEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      if (customEvent.detail) {
+        setSaveStatus(customEvent.detail);
+      }
+    };
+    window.addEventListener("noska:toast", handleToastEvent);
+    return () => window.removeEventListener("noska:toast", handleToastEvent);
+  }, []);
+
   // ── Profile card preview + inline edit (My Profile tab) ─────────────
   const [profileMode, setProfileMode] = useState<"card" | "edit">("card");
   const [pUserName, setPUserName] = useState("");
@@ -432,7 +455,7 @@ export function SettingsModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 10 }}
         transition={SPRING_PRESETS.soft}
-        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[#e8e4db] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)]`}
+        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" || tab === "Billing" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[#e8e4db] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Left Wispr Flow Clean Sidebar */}
@@ -472,6 +495,20 @@ export function SettingsModal({
                 <SettingsNavItem icon={Palette} label="Customization" active={tab === "Customization"} onClick={() => setTab("Customization")} />
               </div>
             </div>
+
+            <div>
+              <div className="mb-2 text-[11px] font-bold tracking-wider text-[#8c887f] uppercase px-3">
+                Plans & Rewards
+              </div>
+              <div className="space-y-0.5">
+                <SettingsNavItem
+                  icon={CreditCard}
+                  label="Billing & Promotional"
+                  active={tab === "Billing"}
+                  onClick={() => setTab("Billing")}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="pt-3 border-t border-[#e8e4db] flex items-center justify-between text-[11px] font-semibold text-[#8c887f] px-2">
@@ -488,11 +525,44 @@ export function SettingsModal({
             <X size={16} />
           </button>
           
-          {saveStatus && (
-            <div className="absolute top-5 left-10 bg-[#1c1b18] text-white text-xs px-3.5 py-1.5 rounded-xl shadow-lg font-medium">
-              {saveStatus}
-            </div>
-          )}
+          {/* Floating Toast Notification at bottom-center with auto-dismiss and close (x) button */}
+          <AnimatePresence>
+            {saveStatus && (
+              <motion.div
+                initial={{ opacity: 0, y: 14, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 14, scale: 0.94 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                onClick={() => setSaveStatus("")}
+                className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1c1b18] text-white text-xs px-4 py-2 rounded-full shadow-2xl font-semibold flex items-center gap-2 border border-white/10 cursor-pointer select-none whitespace-nowrap active:scale-95 group"
+                title="Click to dismiss"
+              >
+                <span>{saveStatus}</span>
+                <span className="w-4 h-4 rounded-full flex items-center justify-center text-white/50 group-hover:text-white hover:bg-white/10 text-[10px] ml-1 transition">
+                  ✕
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 10, filter: "blur(3px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -8, filter: "blur(3px)" }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="min-h-full"
+            >
+              {tab === "Billing" && (
+                <BillingPromotionalTab
+                  currentUsername={currentUsername}
+                  onToast={(msg) => {
+                    setSaveStatus(msg);
+                    setTimeout(() => setSaveStatus(""), 3200);
+                  }}
+                />
+              )}
 
           {tab === "Account" && (
             <div className="max-w-2xl space-y-6 text-[#1c1b18] pb-16 font-sans">
@@ -999,15 +1069,30 @@ export function SettingsModal({
                         {theme === "system" ? "Follows system preferences" : theme === "light" ? "Light theme" : "Dark theme"}
                       </div>
                     </div>
-                    <select
-                      value={theme}
-                      onChange={(e) => setTheme(e.target.value)}
-                      className="px-3.5 py-1.5 rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] text-[#1c1b18] text-xs font-semibold outline-none cursor-pointer border-none"
-                    >
-                      <option value="system">System</option>
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                    </select>
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-[#ede8df]">
+                      {(["system", "light", "dark"] as const).map((t) => {
+                        const isSelected = theme === t;
+                        return (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setTheme(t)}
+                            className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors duration-150 cursor-pointer select-none ${
+                              isSelected ? "text-[#1c1b18]" : "text-[#706c64] hover:text-[#1c1b18]"
+                            }`}
+                          >
+                            {isSelected && (
+                              <motion.div
+                                layoutId="themeAppearanceActivePill"
+                                className="absolute inset-0 rounded-lg bg-white shadow-xs"
+                                transition={{ type: "spring", stiffness: 440, damping: 32 }}
+                              />
+                            )}
+                            <span className="relative z-10">{t}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -1023,39 +1108,61 @@ export function SettingsModal({
                   <div className="space-y-2 pt-2 border-t border-[#e8e4db]">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-[#706c64]">Effect Style</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {["circle", "rectangle", "polygon", "circle-blur"].map((variant) => (
-                          <button
-                            key={variant}
-                            onClick={() => updateFx({ variant, start: variant === "rectangle" ? "bottom-up" : variant === "polygon" ? "top-left" : "center" })}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                              themeFx.variant === variant
-                                ? "bg-[#1c1b18] text-white"
-                                : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3]"
-                            }`}
-                          >
-                            {variant}
-                          </button>
-                        ))}
+                      <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-[#ede8df]">
+                        {["circle", "rectangle", "polygon", "circle-blur"].map((variant) => {
+                          const isSelected = themeFx.variant === variant;
+                          return (
+                            <button
+                              key={variant}
+                              type="button"
+                              onClick={() => updateFx({ variant, start: variant === "rectangle" ? "bottom-up" : variant === "polygon" ? "top-left" : "center" })}
+                              className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 cursor-pointer select-none ${
+                                isSelected
+                                  ? "text-white"
+                                  : "text-[#4a4742] hover:text-[#1c1b18]"
+                              }`}
+                            >
+                              {isSelected && (
+                                <motion.div
+                                  layoutId="themeVariantActivePill"
+                                  className="absolute inset-0 rounded-lg bg-[#1c1b18] shadow-xs"
+                                  transition={{ type: "spring", stiffness: 440, damping: 32 }}
+                                />
+                              )}
+                              <span className="relative z-10">{variant}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
                       <span className="text-xs font-semibold text-[#706c64]">Motion Blur</span>
-                      <div className="flex gap-1.5">
-                        {["off", "on"].map((v) => (
-                          <button
-                            key={v}
-                            onClick={() => updateFx({ blur: v === "on" })}
-                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                              (themeFx.blur ? "on" : "off") === v
-                                ? "bg-[#1c1b18] text-white"
-                                : "bg-[#ede8df] text-[#4a4742] hover:bg-[#e4ded3]"
-                            }`}
-                          >
-                            {v}
-                          </button>
-                        ))}
+                      <div className="flex gap-1 p-1 rounded-xl bg-[#ede8df]">
+                        {["off", "on"].map((v) => {
+                          const isSelected = (themeFx.blur ? "on" : "off") === v;
+                          return (
+                            <button
+                              key={v}
+                              type="button"
+                              onClick={() => updateFx({ blur: v === "on" })}
+                              className={`relative px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 cursor-pointer select-none ${
+                                isSelected
+                                  ? "text-white"
+                                  : "text-[#4a4742] hover:text-[#1c1b18]"
+                              }`}
+                            >
+                              {isSelected && (
+                                <motion.div
+                                  layoutId="motionBlurActivePill"
+                                  className="absolute inset-0 rounded-lg bg-[#1c1b18] shadow-xs"
+                                  transition={{ type: "spring", stiffness: 440, damping: 32 }}
+                                />
+                              )}
+                              <span className="relative z-10">{v}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -1198,9 +1305,11 @@ export function SettingsModal({
               setGhostWriterEnabled={setGhostWriterEnabled}
             />
           )}
-          {tab === "Voice & Dictation" && (
-            <VoiceCustomizationSettings />
-          )}
+              {tab === "Voice & Dictation" && (
+                <VoiceCustomizationSettings />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </motion.div>
     </motion.div>
@@ -1216,17 +1325,28 @@ interface SettingsNavItemProps {
 
 function SettingsNavItem({ icon: Icon, label, active, onClick }: SettingsNavItemProps) {
   return (
-    <button
+    <motion.button
+      type="button"
       onClick={onClick}
-      className={`mb-1 flex h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-xs font-semibold transition cursor-pointer ${
+      whileTap={{ scale: 0.98 }}
+      className={`relative mb-1 flex h-9 w-full items-center rounded-xl px-3 text-left text-xs font-semibold cursor-pointer select-none transition-colors duration-150 ${
         active
-          ? "bg-[#ede8df] text-[#1c1b18] shadow-xs"
-          : "text-[#706c64] hover:bg-[#ede8df]/60 hover:text-[#1c1b18]"
+          ? "text-[#1c1b18]"
+          : "text-[#706c64] hover:text-[#1c1b18]"
       }`}
     >
-      <Icon size={16} className={active ? "text-[#1c1b18]" : "text-[#706c64]"} />
-      <span className="truncate">{label}</span>
-    </button>
+      {active && (
+        <motion.div
+          layoutId="settingsSidebarActivePill"
+          className="absolute inset-0 rounded-xl bg-[#ede8df] shadow-xs"
+          transition={{ type: "spring", stiffness: 440, damping: 32 }}
+        />
+      )}
+      <span className="relative z-10 flex items-center gap-2.5 truncate">
+        <Icon size={16} className={`transition-colors duration-200 shrink-0 ${active ? "text-[#1c1b18]" : "text-[#706c64]"}`} />
+        <span className="truncate">{label}</span>
+      </span>
+    </motion.button>
   );
 }
 

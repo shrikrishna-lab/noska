@@ -4,6 +4,7 @@ import { C } from "../../theme";
 import { useOnboarding } from "../../hooks/useOnboarding";
 import { PrimaryBtn, SecondaryBtn } from "../Buttons";
 import { supabase } from "../../../lib/supabase";
+import { uid } from "../../../utils/helpers";
 
 export default function InviteStep() {
   const { form, setFormField, next, back } = useOnboarding();
@@ -15,7 +16,7 @@ export default function InviteStep() {
   // and is available during onboarding finalization.
   const inviteCode = useRef<string | null>(null);
   if (!inviteCode.current) {
-    inviteCode.current = (form.inviteCode || crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase());
+    inviteCode.current = (form.inviteCode || uid().replace(/-/g, "").slice(0, 12).toUpperCase());
     if (!form.inviteCode) {
       queueMicrotask(() => setFormField("inviteCode", inviteCode.current!));
     }
@@ -46,7 +47,7 @@ export default function InviteStep() {
   const add = () => {
     const t = email.trim();
     if (!t || !t.includes("@") || teammates.some((m) => m.email === t)) return;
-    setFormField("teammates", [...teammates, { id: crypto.randomUUID(), email: t }]);
+    setFormField("teammates", [...teammates, { id: uid(), email: t }]);
     setEmail("");
   };
 

@@ -165,6 +165,42 @@ export async function flushStorageSync() {
   await Promise.allSettled(promises);
 }
 
+/** True when a pages/chats write batch is queued, in flight, or awaiting a retry. */
+export function hasPendingSyncWrites(): boolean {
+  return dirtyPagesMap.size > 0 || dirtyChatsMap.size > 0 || isSavingPages || isSavingChats;
+}
+
+/**
+ * Drop the in-memory dirty queues without writing them (retry timers are
+ * cancelled too). Only for logout when the flush could NOT be verified — the
+ * pages remain in localStorage, so the next login's DB-first restore merges
+ * them back and re-syncs. Prevents an unflushed page from one account leaking
+ * into a later session's sync under a different user_id.
+ */
+export function discardPendingSyncWrites() {
+  if (pageSyncTimer) { clearTimeout(pageSyncTimer); pageSyncTimer = null; }
+  if (chatSyncTimer) { clearTimeout(chatSyncTimer); chatSyncTimer = null; }
+  dirtyPagesMap.clear();
+  dirtyChatsMap.clear();
+}
+
+/**
+ * Flush pending writes and WAIT until the dirty queues are actually empty —
+ * unlike flushStorageSync, which resolves even when the upsert failed and was
+ * handed to the retry backoff. Used by logout, where the flush must be
+ * verified complete before local state is destroyed. Returns true only when
+ * every queued write reached Supabase within `timeoutMs`.
+ */
+export async function flushStorageSyncVerified(timeoutMs = 10000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    await flushStorageSync();
+    if (!hasPendingSyncWrites()) return true;
+    await new Promise((r) => setTimeout(r, 300));
+  } while (Date.now() < deadline);
+  return !hasPendingSyncWrites();
+}
+
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => {
     void flushStorageSync();

@@ -1,0 +1,265 @@
+/* ==========================================================================
+   Wispr Flow by Noska — Official Production Design System
+   Exact Parity with wisprflow.ai
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..700;1,400..700&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --wispr-cream: #faf9f0;
+  --wispr-card-bg: rgba(255, 255, 255, 0.96);
+  --wispr-dark: #111111;
+  --wispr-lavender: #eedbf5;
+  --wispr-lavender-hover: #e5cbef;
+  --wispr-green-deep: #09281c;
+  --wispr-green-surface: #0e3626;
+  --wispr-coral: #f48574;
+  --wispr-coral-soft: #fdeee9;
+  --wispr-sage: #5b8266;
+  --wispr-sage-soft: #ebf3ed;
+  --wispr-border-subtle: rgba(0, 0, 0, 0.06);
+}
+
+/* Page Root Wrapper: Bounded height container to enable smooth scrolling inside overflow:hidden body */
+.wispr-page-root {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+  background-color: var(--wispr-cream);
+  color: var(--wispr-dark);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Elegant Editorial Serif Typography for Headline ("just speak.") */
+.wispr-serif-italic {
+  font-family: 'EB Garamond', 'Newsreader', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.wispr-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Signature Wispr Flow 2D Offset Box-Shadow Lavender Button */
+.wispr-btn-windows {
+  background-color: var(--wispr-lavender);
+  color: #111111;
+  font-weight: 600;
+  border: 1.5px solid #111111;
+  box-shadow: 2.5px 3px 0px #111111;
+  border-radius: 9999px;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wispr-btn-windows:hover {
+  background-color: var(--wispr-lavender-hover);
+  transform: translate(-1px, -1px);
+  box-shadow: 3.5px 4px 0px #111111;
+}
+
+.wispr-btn-windows:active {
+  transform: translate(2px, 2.5px);
+  box-shadow: 0.5px 0.5px 0px #111111;
+}
+
+/* Secondary Button with Subtle Outline */
+.wispr-btn-secondary {
+  background-color: #ffffff;
+  color: #111111;
+  font-weight: 500;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border-radius: 9999px;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wispr-btn-secondary:hover {
+  background-color: #f7f7f5;
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+/* Frosted Glass Floating Navbar */
+.wispr-glass-nav {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Ultra-Frosted Bento Glass Card */
+.wispr-glass-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+/* Infinite Client Logo Marquee Ticker */
+@keyframes wispr-logo-ticker {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.wispr-logo-ticker {
+  display: flex;
+  width: 200%;
+  animation: wispr-logo-ticker 35s linear infinite;
+}
+
+.wispr-logo-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* Radar Sweep Animation for 100+ Languages Card */
+@keyframes wispr-radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.wispr-radar-sweep-line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 140px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(91, 130, 102, 0.8), transparent);
+  transform-origin: left center;
+  animation: wispr-radar-sweep 7s linear infinite;
+  pointer-events: none;
+}
+
+/* Rotating Circular Stamp */
+@keyframes wispr-spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.wispr-rotating-stamp {
+  animation: wispr-spin-slow 16s linear infinite;
+  transform-origin: center center;
+}
+
+.wispr-rotating-stamp:hover {
+  animation-duration: 5s;
+}
+
+/* Audio Waveform Equalizer Bars */
+@keyframes wispr-wave-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.wispr-eq-bar {
+  display: inline-block;
+  width: 3.5px;
+  background: #e28a7a;
+  border-radius: 9999px;
+  animation: wispr-wave-bar 1.2s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+.wispr-eq-bar:nth-child(1) { animation-delay: 0.1s; height: 8px; }
+.wispr-eq-bar:nth-child(2) { animation-delay: 0.3s; height: 22px; }
+.wispr-eq-bar:nth-child(3) { animation-delay: 0.2s; height: 14px; }
+.wispr-eq-bar:nth-child(4) { animation-delay: 0.4s; height: 26px; }
+.wispr-eq-bar:nth-child(5) { animation-delay: 0.15s; height: 12px; }
+.wispr-eq-bar:nth-child(6) { animation-delay: 0.35s; height: 20px; }
+
+/* 4x Faster Speed Section Styles */
+.wispr-speed-container {
+  background: var(--wispr-green-deep);
+  color: #ffffeb;
+  border-radius: 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.wispr-type-filler {
+  color: rgba(255, 255, 235, 0.4);
+  text-decoration: line-through;
+  text-decoration-color: #f48574;
+}
+
+.wispr-type-repetition {
+  color: #f48574;
+  text-decoration: line-through;
+}
+
+.wispr-type-correction {
+  color: rgba(255, 255, 235, 0.45);
+  text-decoration: line-through;
+}
+
+/* Ambient Cloud Pillows Animation */
+@keyframes wispr-cloud-drift-left {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(14px, -12px); }
+}
+
+@keyframes wispr-cloud-drift-right {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-14px, -10px); }
+}
+
+@keyframes wispr-cloud-breathe {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.03) translateY(-8px); }
+}
+
+@keyframes wispr-beam-shimmer {
+  0%, 100% { opacity: 0.85; filter: drop-shadow(0 0 25px rgba(255, 255, 255, 0.9)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 35px rgba(255, 255, 255, 1)); }
+}
+
+.wispr-cloud-drift-left {
+  animation: wispr-cloud-drift-left 18s ease-in-out infinite;
+}
+
+.wispr-cloud-drift-right {
+  animation: wispr-cloud-drift-right 22s ease-in-out infinite;
+}
+
+.wispr-cloud-beam-shimmer {
+  animation: wispr-beam-shimmer 6s ease-in-out infinite;
+}
+
+.wispr-ambient-cloud-1 {
+  animation: wispr-cloud-drift-left 26s ease-in-out infinite;
+}
+
+.wispr-ambient-cloud-2 {
+  animation: wispr-cloud-drift-right 30s ease-in-out infinite;
+}
+
+.wispr-ambient-cloud-3 {
+  animation: wispr-cloud-breathe 22s ease-in-out infinite;
+}
+
+/* Custom Scrollbar for Smooth Ivory Theme */
+.wispr-page-root::-webkit-scrollbar {
+  width: 6px;
+}
+.wispr-page-root::-webkit-scrollbar-track {
+  background: transparent;
+}
+.wispr-page-root::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 10px;
+}
+.wispr-page-root::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}

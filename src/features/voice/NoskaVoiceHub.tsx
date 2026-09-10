@@ -4,6 +4,7 @@ import { globalVoiceController, useVoiceController } from "../../lib/voice/voice
 import { TauriWhisperEngine, type LocalModelStatus } from "../../lib/voice/tauri-whisper-engine";
 import { getVoiceSettings, setVoiceSettings } from "../../lib/voice/voice-settings";
 import { dictionaryEntryWarning, loadVoiceDictionary, saveVoiceDictionary, type DictionaryEntry, type VoiceDictionary } from "../../lib/voice/dictionary";
+import { uid } from "../../utils/helpers";
 import "./noska-voice.css";
 
 type HistoryItem = { id: string; text: string; createdAt: string; correction?: string };
@@ -50,7 +51,7 @@ export default function NoskaVoiceHub({ onClose, initialShowSettings = false }: 
         const settled = latestTranscript.current;
         const previous = readHistory();
         if (previous[0]?.text === settled) return;
-        const next = [{ id: crypto.randomUUID(), text: settled, createdAt: new Date().toISOString(), correction: latestCorrection.current }, ...previous].slice(0, 200);
+        const next = [{ id: uid(), text: settled, createdAt: new Date().toISOString(), correction: latestCorrection.current }, ...previous].slice(0, 200);
         localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
         setHistory(next);
       }, 750);
@@ -71,8 +72,8 @@ export default function NoskaVoiceHub({ onClose, initialShowSettings = false }: 
     const next = { version: 1 as const, entries };
     setDictionary(next); await saveVoiceDictionary(next);
   };
-  const addTerm = () => { if (!term.trim()) return; void saveDictionary([...dictionary.entries, { id: crypto.randomUUID(), type: "term", value: term.trim(), createdAt: new Date().toISOString() }]); setTerm(""); };
-  const addCorrection = () => { if (!heard.trim() || !write.trim()) return; void saveDictionary([...dictionary.entries, { id: crypto.randomUUID(), type: "correction", heard: heard.trim(), write: write.trim(), createdAt: new Date().toISOString() }]); setHeard(""); setWrite(""); };
+  const addTerm = () => { if (!term.trim()) return; void saveDictionary([...dictionary.entries, { id: uid(), type: "term", value: term.trim(), createdAt: new Date().toISOString() }]); setTerm(""); };
+  const addCorrection = () => { if (!heard.trim() || !write.trim()) return; void saveDictionary([...dictionary.entries, { id: uid(), type: "correction", heard: heard.trim(), write: write.trim(), createdAt: new Date().toISOString() }]); setHeard(""); setWrite(""); };
   const updateEntry = () => {
     if (!editing) return;
     if (editing.type === "term" && !term.trim()) return;

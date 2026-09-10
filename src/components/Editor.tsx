@@ -56,7 +56,7 @@ import {
 } from "lucide-react";
 import { AnimatedSparkle } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss, TextArea } from "./ui";
-import { emojis, covers, blockFor, getPagePermission, renderInlineMarkdown, softDelete, getDescendants, turnInto } from "../utils/helpers";
+import { emojis, covers, blockFor, getPagePermission, renderInlineMarkdown, softDelete, getDescendants, turnInto, uid } from "../utils/helpers";
 import { richTextToPlainText, plainTextToRichText } from "../utils/richText";
 import { globalVoiceController } from "../lib/voice/voice-controller";
 
@@ -267,7 +267,7 @@ function duplicateBlockTree(blocks: EditorBlock[], blockId: string): EditorBlock
   };
   collect(blockId);
 
-  const idMap = new Map<string, string>(idsToClone.map((id) => [id, crypto.randomUUID()]));
+  const idMap = new Map<string, string>(idsToClone.map((id) => [id, uid()]));
   const clones: EditorBlock[] = idsToClone.map((id) => {
     const original = blocks.find((block) => block.id === id)!;
     const clonedParentId = id === blockId ? original.parentId : idMap.get(original.parentId || "") || original.parentId;
@@ -749,7 +749,7 @@ export default function Editor({
         const auditKey = `audit_${page.id}`;
         const stored = JSON.parse(localStorage.getItem(auditKey) || "[]");
         stored.push({
-          id: crypto.randomUUID(),
+          id: uid(),
           timestamp: new Date().toISOString(),
           title: page.title,
           blocks: JSON.parse(JSON.stringify(page.blocks)),
@@ -822,7 +822,7 @@ export default function Editor({
       <CursorOverlay pageId={page.id} />
 
       {/* Floating Outline / Section Minimap Ruler with preview popup */}
-      <DocumentOutlineRuler blocks={page?.blocks || []} containerRef={editorContainerRef} />
+      <DocumentOutlineRuler blocks={page?.blocks || []} pageTitle={page?.title} containerRef={editorContainerRef} />
 
       {/* Cover Banner — full width of editor container or constrained by coverSize without viewport overflow */}
       {Boolean(page.cover) && (
@@ -1199,7 +1199,7 @@ export default function Editor({
                       className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer transition"
                       aria-label="Add block above title"
                       onClick={() => {
-                        const nextId = crypto.randomUUID();
+                        const nextId = uid();
                         const blocks = page.blocks || [];
                         onBlocks([{ id: nextId, type: "text", text: "" }, ...blocks]);
                         setOpenSlashForBlockId(nextId);
@@ -1390,7 +1390,7 @@ export default function Editor({
                 const clones = [];
                 for (const block of nextBlocks) {
                   if (selectedBlockIds.has(block.id)) {
-                    clones.push(JSON.parse(JSON.stringify({ ...block, id: crypto.randomUUID() })));
+                    clones.push(JSON.parse(JSON.stringify({ ...block, id: uid() })));
                   }
                 }
                 const lastIdx = nextBlocks.findIndex((b) => selectedBlockIds.has(b.id));
@@ -2106,7 +2106,7 @@ const Block = memo(function Block({
     }
     if (e.key === "Enter" && !e.shiftKey && block.type !== "code") {
       e.preventDefault();
-      const newBlockId = crypto.randomUUID();
+      const newBlockId = uid();
       onAdd("text", "", newBlockId);
       setTimeout(
         () => {
@@ -2187,7 +2187,7 @@ const Block = memo(function Block({
     // Ctrl+Shift+Enter to add block above
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "Enter") {
       e.preventDefault();
-      const newBlockId = crypto.randomUUID();
+      const newBlockId = uid();
       onAddAbove("text", "", newBlockId);
       setTimeout(
         () => {
@@ -2378,7 +2378,7 @@ const Block = memo(function Block({
                   className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer"
                   aria-label="Add block"
                   onClick={(e) => {
-                    const nextId = crypto.randomUUID();
+                    const nextId = uid();
                     onSetOpenSlashBlockId?.(nextId);
                     if (e.altKey) {
                       onAddAbove?.("text", "", nextId);
@@ -2700,17 +2700,17 @@ const Block = memo(function Block({
                 case "delete": onDelete(); break;
                 case "duplicate": onDuplicate(); break;
                 case "template": {
-                  const blockCopy = { ...blockFor(block.type, block.text || ""), id: crypto.randomUUID() };
+                  const blockCopy = { ...blockFor(block.type, block.text || ""), id: uid() };
                   onPatch({ type: "button", text: "Template", templateBlocks: [blockCopy] });
                   break;
                 }
                 case "copy-synced": {
                   if (!page?.blocks) break;
-                  const syncedGroupId = block.syncedGroupId || crypto.randomUUID();
+                  const syncedGroupId = block.syncedGroupId || uid();
                   onPatch({ syncedGroupId });
                   const syncedCopy = {
                     ...blockFor("text", block.text || ""),
-                    id: crypto.randomUUID(),
+                    id: uid(),
                     syncedGroupId,
                     type: "synced-block"
                   };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { FileText, Download, Loader2, Check, AlertTriangle, Clock } from "lucide-react"
 import { supabase } from "../../lib/supabase"
+import { uid } from "../../utils/blockModel"
 import { useCompany } from "../../contexts/CompanyContext"
 
 interface ComplianceEntry {
@@ -202,7 +203,7 @@ export function CommandHistory() {
   const [history, setHistory] = useState<CommandHistoryEntry[]>([])
 
   const addEntry = (command: string, result: string) => {
-    setHistory(prev => [{ id: crypto.randomUUID(), command, result, timestamp: new Date() }, ...prev].slice(0, 50))
+    setHistory(prev => [{ id: uid(), command, result, timestamp: new Date() }, ...prev].slice(0, 50))
   }
 
   const clear = () => setHistory([])

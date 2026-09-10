@@ -50,6 +50,7 @@ import {
   Clock,
   Palette,
   History,
+  Sparkles,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { AdminCapability } from "@/lib/rbac";
@@ -74,6 +75,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/landing-page", label: "Landing Page", icon: PanelTop, group: "marketing", capability: "marketing" },
   { to: "/cta-buttons", label: "CTA Buttons", icon: MousePointerClick, group: "marketing", capability: "marketing" },
   { to: "/announcement-bar", label: "Announcement Bar", icon: Megaphone, group: "marketing", capability: "marketing" },
+  { to: "/info-cards", label: "Info Cards", icon: Sparkles, group: "marketing", capability: "marketing" },
   { to: "/waitlist-settings", label: "Waitlist Settings", icon: UsersRound, group: "marketing", capability: "marketing" },
   { to: "/seo-settings", label: "SEO", icon: Search, group: "marketing", capability: "marketing" },
   { to: "/social-links", label: "Social Links", icon: Link2, group: "marketing", capability: "marketing" },

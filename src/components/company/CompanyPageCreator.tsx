@@ -5,6 +5,7 @@ import {
   Sparkles, BookOpen, Clipboard, Layout, Newspaper, Briefcase
 } from "lucide-react"
 import { supabase } from "../../lib/supabase"
+import { uid } from "../../utils/blockModel"
 import { useCompany } from "../../contexts/CompanyContext"
 import { setPageVisibility, type OrgTeam } from "../../lib/company"
 
@@ -31,15 +32,15 @@ const TEMPLATES = [
     description: "Structured meeting template",
     color: "text-blue-500 bg-blue-500/10",
     blocks: [
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Meeting Notes" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "**Date:** " + new Date().toLocaleDateString() }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "**Attendees:** " }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Agenda" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Action Items" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Notes" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Meeting Notes" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "**Date:** " + new Date().toLocaleDateString() }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "**Attendees:** " }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Agenda" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Action Items" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Notes" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
     ],
   },
   {
@@ -49,15 +50,15 @@ const TEMPLATES = [
     description: "Project overview template",
     color: "text-orange-500 bg-orange-500/10",
     blocks: [
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Project Brief" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Overview" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "Describe the project goal and scope." }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Objectives" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Timeline" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "**Start:** — **End:** —" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Stakeholders" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Project Brief" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Overview" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "Describe the project goal and scope." }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Objectives" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Timeline" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "**Start:** — **End:** —" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Stakeholders" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
     ],
   },
   {
@@ -67,14 +68,14 @@ const TEMPLATES = [
     description: "Knowledge base page",
     color: "text-purple-500 bg-purple-500/10",
     blocks: [
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Team Wiki" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "Central knowledge base for the team." }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Getting Started" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Resources" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "FAQ" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Team Wiki" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "Central knowledge base for the team." }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Getting Started" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Resources" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "FAQ" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "text", properties: { text: "" }, createdTime: Date.now(), lastEditedTime: Date.now() },
     ],
   },
   {
@@ -84,10 +85,10 @@ const TEMPLATES = [
     description: "Task checklist",
     color: "text-green-500 bg-green-500/10",
     blocks: [
-      { id: crypto.randomUUID(), type: "heading", properties: { text: "Checklist" }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
-      { id: crypto.randomUUID(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "heading", properties: { text: "Checklist" }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
+      { id: uid(), type: "todo", properties: { text: "", checked: false }, createdTime: Date.now(), lastEditedTime: Date.now() },
     ],
   },
 ]
@@ -113,7 +114,7 @@ export function CompanyPageCreator({ open, onClose, onPageCreated, teams }: Comp
     try {
       const userId = localStorage.getItem("noska_user_id") || ""
       const template = TEMPLATES.find(t => t.id === selectedTemplate)
-      const pageId = crypto.randomUUID()
+      const pageId = uid()
 
       const { error } = await supabase.from("pages" as any).insert({
         id: pageId,
