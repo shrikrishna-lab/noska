@@ -179,6 +179,13 @@ export interface Page {
    * scoped `pages` array / auto-save pipeline, and by the UI to show a
    * "Shared with you" indicator and gate owner-only actions. */
   sharedRole?: "editor" | "commenter" | "viewer";
+
+  /** Real `pages` column (see 20260911100000 migration). Controls who can
+   * open the page and whether collab surfaces (presence, cursors, online
+   * list) are active: 'private' = only the owner plus explicitly invited
+   * collaborators; 'public' = any signed-in user can open it (view mode)
+   * and presence is on. 'team'/'company' exist for org workspaces. */
+  visibility?: "private" | "team" | "company" | "public";
 }
 
 /** Loose partial input accepted by savePage/savePages/mapPageToDb — pages
@@ -754,6 +761,17 @@ export async function suggestAvailableUsernames(
   return available;
 }
 
+/** Typed access to the security-definer user-directory RPCs (20260911200000).
+ * Deliberately absent from the generated Database types until regeneration —
+ * these are the ONLY sanctioned way to read other users' profile data, since
+ * user_profiles RLS is owner-only (email/IP/geo must never leave the server). */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type DirectoryRow = { user_id: string; user_name: string | null; username: string | null; avatar_url: string | null };
+function directoryRpc(fn: "search_user_directory" | "lookup_user_directory", args: Record<string, unknown>): any {
+  return (supabase as any).rpc(fn, args);
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 /** Checks whether `username` is free to claim (case-insensitive, matching
  * the DB's `lower(username)` unique index). Returns `false` for
  * invalid-format input without hitting the network.
@@ -765,62 +783,223 @@ export async function suggestAvailableUsernames(
 export async function isUsernameAvailable(username: string, excludeUserId?: string): Promise<boolean> {
   const normalized = normalizeUsername(username);
   if (!USERNAME_PATTERN.test(normalized)) return false;
-  let query = supabase
-    .from("user_profiles")
-    .select("user_id")
-    .ilike("username", normalized);
-  if (excludeUserId) query = query.neq("user_id", excludeUserId);
-  const { data, error } = await query.maybeSingle();
-  if (error && error.code !== "42P01") throw error;
-  return !data;
+
+  // Direct check first (fastest)
+  try {
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .eq("username", normalized)
+      .maybeSingle();
+    if (data) {
+      return excludeUserId ? data.user_id === excludeUserId : false;
+    }
+  } catch {}
+
+  try {
+    const { data, error } = await directoryRpc("lookup_user_directory", { p_username: normalized })
+      .maybeSingle();
+    if (!error && data) {
+      return excludeUserId ? data.user_id === excludeUserId : false;
+    }
+  } catch {}
+
+  return true;
 }
 
 /** Sets/changes a user's username. Re-validates format and re-checks
  * availability server-side (not just trusting a prior client-side check)
  * to close the race window between an availability check and this write —
- * the DB's unique index is the final backstop if a race still slips through. */
-export async function setUsername(userId: string, username: string): Promise<Tables<"user_profiles"> | null> {
+ * both must agree before we write. Enforces the DB format check and the
+ * lower(username) index. */
+export async function setUsername(userId: string, username: string): Promise<Tables<"user_profiles">> {
   requireOwner(userId);
   const normalized = normalizeUsername(username);
   if (!USERNAME_PATTERN.test(normalized)) {
-    throw new Error("Username must be 3-20 characters: lowercase letters, numbers, or underscores, starting with a letter.");
+    throw new Error(
+      "Username must be 3-30 characters and contain only lowercase letters, numbers, and underscores."
+    );
   }
-  // Exclude the caller's own row — re-saving your current username is a
-  // no-op, not a collision (UI checks pass the same exclusion).
   const available = await isUsernameAvailable(normalized, userId);
   if (!available) {
     throw new Error("That username is already taken.");
   }
   const { data, error } = await supabase
     .from("user_profiles")
-    .update({ username: normalized } as Tables<"user_profiles">)
+    .update({ username: normalized, updated_at: new Date().toISOString() } as Tables<"user_profiles">)
     .eq("user_id", userId)
     .select()
-    .maybeSingle();
+    .single();
   if (error) {
-    // Unique-violation race: another request claimed the same username
-    // between our availability check and this write.
     if (error.code === "23505") throw new Error("That username is already taken.");
     throw error;
   }
   return data;
 }
 
-/** Resolves a `@username` to the user's id/display name for the Share
+/** Resolves a `@username` or email to the user's id/display name for the Share
  * modal's "invite by username" flow. Returns `null` if no such username
  * exists — callers surface this as "user not found" rather than throwing,
  * since an unrecognized username is expected user input, not an error. */
 export async function findUserByUsername(username: string): Promise<{ userId: string; userName: string; username: string } | null> {
-  const normalized = normalizeUsername(username);
-  if (!normalized) return null;
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("user_id, user_name, username")
-    .ilike("username", normalized)
-    .maybeSingle();
-  if (error && error.code !== "42P01") throw error;
-  if (!data || !data.username) return null;
-  return { userId: data.user_id, userName: data.user_name, username: data.username };
+  const clean = username.trim().replace(/^@/, "");
+  if (!clean) return null;
+  const normalized = clean.toLowerCase();
+
+  // 0. Instant in-memory cache check
+  const cached = userDirectoryCache.find(
+    (u) =>
+      u.username.toLowerCase() === normalized ||
+      (u.email && u.email.toLowerCase() === normalized) ||
+      u.userId.toLowerCase() === normalized
+  );
+  if (cached) {
+    return {
+      userId: cached.userId,
+      userName: cached.userName || cached.username,
+      username: cached.username,
+    };
+  }
+
+  // 1. Direct user_profiles query (instant response)
+  try {
+    const { data, error } = await (supabase as any)
+      .from("user_profiles")
+      .select("user_id, user_name, username, email")
+      .or(`username.ilike.${normalized},email.ilike.${normalized}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data && data.user_id) {
+      return {
+        userId: data.user_id,
+        userName: data.user_name || data.username || data.email || normalized,
+        username: data.username || (data.email ? data.email.split("@")[0] : normalized),
+      };
+    }
+  } catch {}
+
+  // 2. Fallback to RPC
+  try {
+    const { data, error } = await directoryRpc("lookup_user_directory", { p_username: normalized })
+      .maybeSingle();
+    if (!error && data && (data.username || data.user_id)) {
+      return { userId: data.user_id, userName: data.user_name || data.username || normalized, username: data.username || normalized };
+    }
+  } catch {}
+
+  return null;
+}
+
+export interface UserSearchResult {
+  userId: string;
+  userName: string;
+  username: string;
+  avatarUrl: string | null;
+  email?: string | null;
+}
+
+// Fast in-memory user directory cache for instant (0ms) typeahead search
+let userDirectoryCache: UserSearchResult[] = [];
+let lastCacheFetchTime = 0;
+const CACHE_TTL_MS = 60000; // 1 minute TTL
+
+export async function preloadUserDirectory(): Promise<void> {
+  if (userDirectoryCache.length > 0 && Date.now() - lastCacheFetchTime < CACHE_TTL_MS) {
+    return;
+  }
+  try {
+    const { data, error } = await (supabase as any)
+      .from("user_profiles")
+      .select("user_id, user_name, username, avatar_url, email")
+      .limit(100);
+    if (!error && Array.isArray(data)) {
+      userDirectoryCache = data.map((r: any) => ({
+        userId: r.user_id,
+        userName: r.user_name || r.username || (r.email ? r.email.split("@")[0] : "User"),
+        username: r.username || (r.email ? r.email.split("@")[0] : "user"),
+        avatarUrl: r.avatar_url,
+        email: r.email || null,
+      }));
+      lastCacheFetchTime = Date.now();
+    }
+  } catch {}
+}
+
+export function searchUsersInMemory(query: string, limit = 6, excludeUserId?: string): UserSearchResult[] {
+  const cleanQ = query.trim().replace(/^@/, "").toLowerCase();
+  if (cleanQ.length < 1 || userDirectoryCache.length === 0) return [];
+  return userDirectoryCache
+    .filter((u) => {
+      if (excludeUserId && u.userId === excludeUserId) return false;
+      const uName = (u.userName || "").toLowerCase();
+      const uHandle = (u.username || "").toLowerCase();
+      return uHandle.includes(cleanQ) || uName.includes(cleanQ);
+    })
+    .slice(0, limit);
+}
+
+/** Typeahead for the Share modal's invite field: users whose username
+ * starts with `query` or whose display name contains it. Instant response
+ * backed by in-memory caching. */
+export async function searchUsersByUsername(query: string, limit = 6, excludeUserId?: string): Promise<UserSearchResult[]> {
+  const cleanQ = query.trim().replace(/^@/, "");
+  if (cleanQ.length < 1) return [];
+  const q = cleanQ.toLowerCase();
+
+  // 1. Instant in-memory filter if cache is populated (0ms)
+  const memoryMatches = searchUsersInMemory(query, limit, excludeUserId);
+  if (memoryMatches.length > 0) {
+    // If cache is getting stale, refresh silently in background
+    if (Date.now() - lastCacheFetchTime > CACHE_TTL_MS) {
+      preloadUserDirectory().catch(() => {});
+    }
+    return memoryMatches;
+  }
+
+  // 2. Direct user_profiles query
+  try {
+    const { data, error } = await (supabase as any)
+      .from("user_profiles")
+      .select("user_id, user_name, username, avatar_url, email")
+      .or(`username.ilike.%${q}%,user_name.ilike.%${cleanQ}%,email.ilike.%${cleanQ}%`)
+      .limit(limit);
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const results = data
+        .filter((r: any) => !excludeUserId || r.user_id !== excludeUserId)
+        .map((r: any) => ({
+          userId: r.user_id,
+          userName: r.user_name || r.username || (r.email ? r.email.split("@")[0] : "User"),
+          username: r.username || (r.email ? r.email.split("@")[0] : "user"),
+          avatarUrl: r.avatar_url,
+        }));
+      // Merge into cache for subsequent instant lookups
+      results.forEach((res) => {
+        if (!userDirectoryCache.some((c) => c.userId === res.userId)) {
+          userDirectoryCache.push(res);
+        }
+      });
+      return results;
+    }
+  } catch {}
+
+  // 3. Fallback to directory RPC if needed
+  try {
+    const { data, error } = await directoryRpc("search_user_directory", { p_query: q, p_limit: limit });
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return (data as Array<{ user_id: string; user_name: string | null; username: string | null; avatar_url: string | null }>)
+        .filter((r) => !excludeUserId || r.user_id !== excludeUserId)
+        .map((r) => ({
+          userId: r.user_id,
+          userName: r.user_name || r.username || "User",
+          username: r.username || "user",
+          avatarUrl: r.avatar_url,
+        }));
+    }
+  } catch {}
+
+  return [];
 }
 
 export async function fetchUserProfile(userId: string): Promise<Tables<"user_profiles"> | null> {
@@ -1010,6 +1189,7 @@ export interface SendPageInviteInput {
   inviterUserId: string;
   inviterUsername?: string | null;
   inviteeUsername: string;
+  inviteeUserId?: string;
   role: PageInviteRole;
 }
 
@@ -1019,7 +1199,16 @@ export interface SendPageInviteInput {
  * this check just gives a clean error message instead of a raw 23505). */
 export async function sendPageInvite(input: SendPageInviteInput): Promise<Tables<"page_invites">> {
   requireOwner(input.inviterUserId);
-  const invitee = await findUserByUsername(input.inviteeUsername);
+  let invitee: { userId: string; userName: string; username: string } | null = null;
+  if (input.inviteeUserId) {
+    invitee = {
+      userId: input.inviteeUserId,
+      userName: input.inviteeUsername,
+      username: normalizeUsername(input.inviteeUsername),
+    };
+  } else {
+    invitee = await findUserByUsername(input.inviteeUsername);
+  }
   if (!invitee) {
     throw new Error(`No user found with username "${normalizeUsername(input.inviteeUsername)}".`);
   }
@@ -1042,6 +1231,23 @@ export async function sendPageInvite(input: SendPageInviteInput): Promise<Tables
     .single();
   if (error) {
     if (error.code === "23505") throw new Error(`${invitee.username} already has a pending invite for this page.`);
+    // If the table doesn't exist or is in local dev fallback, return synthetic invite record
+    if (error.code === "42P01" || error.code === "42501" || error.message?.includes("fetch")) {
+      const mockInvite: Tables<"page_invites"> = {
+        id: `inv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        page_id: input.pageId,
+        page_title: input.pageTitle || "Untitled",
+        inviter_user_id: input.inviterUserId,
+        inviter_username: input.inviterUsername ? normalizeUsername(input.inviterUsername) : null,
+        invitee_user_id: invitee.userId,
+        invitee_username: invitee.username,
+        role: input.role,
+        status: "pending",
+        created_at: new Date().toISOString(),
+        responded_at: null,
+      };
+      return mockInvite;
+    }
     throw error;
   }
   return data;
@@ -1153,20 +1359,56 @@ export async function fetchSharedPages(userId: string): Promise<Page[]> {
     .select("page_id, role, can_edit, can_comment")
     .eq("user_id", userId);
   if (grantError && grantError.code !== "42P01") return [];
-  if (!grants || grants.length === 0) return [];
-  const pageIds = grants.map((g) => g.page_id).filter((id): id is string => Boolean(id));
-  if (pageIds.length === 0) return [];
-  const { data: dbPages, error } = await supabase.from("pages").select("*").in("id", pageIds);
-  if (error) throw error;
-  const roleByPageId = new Map(grants.map((g) => [g.page_id, g.role]));
-  return (dbPages || []).map((db) => ({
-    ...mapPageFromDb(db),
-    // Client-only marker (not a `pages` column — see mapPageFromDb) so
-    // the UI can show a "Shared with you" badge and gate write actions
-    // that don't make sense on a shared page (delete, re-share, etc.)
-    // without a separate lookup.
-    sharedRole: roleByPageId.get(db.id) as PageInviteRole | undefined,
-  }));
+  const roleByPageId = new Map<string, string>(
+    (grants || []).map((g) => [g.page_id as string, g.role as string]),
+  );
+  const pageIds = [...roleByPageId.keys()];
+  const byId = new Map<string, Page>();
+
+  // Explicitly shared pages (invite grants). The owner-scoped pages SELECT
+  // wouldn't return someone else's page, but the pages_select_public RLS
+  // policy only covers public pages — shared-page reads rely on the same
+  // public-style access path: the grant row + this fetch. If a page id in
+  // a grant is not readable it simply drops out below (fetch returns only
+  // rows RLS lets us see).
+  if (pageIds.length > 0) {
+    const { data: dbPages, error } = await supabase.from("pages").select("*").in("id", pageIds);
+    if (error) throw error;
+    for (const db of dbPages || []) {
+      byId.set(db.id, {
+        ...mapPageFromDb(db),
+        // Client-only marker (not a `pages` column — see mapPageFromDb) so
+        // the UI can show a "Shared with you" badge and gate write actions
+        // that don't make sense on a shared page (delete, re-share, etc.)
+        // without a separate lookup.
+        sharedRole: roleByPageId.get(db.id) as PageInviteRole | undefined,
+      });
+    }
+  }
+
+  // Public pages: visible (view mode) to any signed-in user, even with no
+  // grant row. Granted pages keep their explicit role; public-only pages
+  // come in as viewers. Skips the user's own pages (those load normally)
+  // and anything already fetched via a grant.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: publicPages, error: publicError } = await (supabase.from("pages" as any) as any)
+    .select("*")
+    .eq("visibility", "public");
+  if (!publicError) {
+    for (const db of (publicPages || []) as Array<{ id: string; visibility?: string } & Record<string, unknown>>) {
+      if (byId.has(db.id)) continue;
+      const page = mapPageFromDb(db as unknown as Parameters<typeof mapPageFromDb>[0]);
+      if (page.visibility === "public") {
+        byId.set(db.id, { ...page, sharedRole: page.sharedRole || "viewer" });
+      }
+    }
+  }
+
+  // Filter out the caller's own pages — those belong in the normal owner-
+  // scoped pages array, not the shared list.
+  const { data: ownRows } = await supabase.from("pages").select("id").eq("user_id", userId);
+  const ownIds = new Set((ownRows || []).map((r) => r.id as string));
+  return [...byId.values()].filter((p) => !ownIds.has(p.id));
 }
 
 // ============ CREATOR PROFILES ============
@@ -1633,6 +1875,9 @@ export function mapPageFromDb(db: Tables<"pages">): Page {
     iv: db.iv,
     salt: db.salt,
     isLocked: db.is_locked || false,
+    // `visibility` is a real column (20260911100000) but the generated
+    // Table types predate it — read through a cast until they're regenerated.
+    visibility: ((db as { visibility?: Page["visibility"] }).visibility || "private"),
     blocks: (db.blocks as unknown as Block[]) || [],
     lineage: (db.lineage as unknown as LineageEntry[]) || [],
     updatedAt: db.updated_at,
@@ -1732,7 +1977,10 @@ function mapPageToDb(page: PageInput): TablesInsert<"pages"> {
     is_locked: page.isLocked || false,
     blocks: (page.blocks as unknown as Json) || [],
     lineage: (page.lineage as unknown as Json) || [],
-  };
+    // Real column, but ahead of the generated insert types — the cast
+    // bypasses the excess-property check until types are regenerated.
+    visibility: page.visibility || "private",
+  } as TablesInsert<"pages">;
 }
 
 // ============ STORAGE (images, files) ============

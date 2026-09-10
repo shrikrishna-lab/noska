@@ -4,6 +4,14 @@ import { saveUserPreference, saveUserFact } from './userProfile.js';
 import { getBacklinks, getOutgoingLinks } from '../utils/pageLinks';
 import * as StudyCardsNS from '../features/study/studyCards';
 import type { GeneratedCard } from '../features/study/studyCards';
+import {
+  refreshIntegrationTools,
+  getIntegrationToolDefinitions,
+  getIntegrationTool,
+  getIntegrationSummary,
+  executeIntegrationTool,
+  validateIntegrationToolParams,
+} from './integrationTools';
 
 const TOOL_SOURCE = '<<TOOL:(\\w+)>>([\\s\\S]*?)<</TOOL>>';
 const TOOL_PATTERN = new RegExp(TOOL_SOURCE, 'g');
@@ -271,6 +279,11 @@ const DEFINITIONS = [
 ];
 
 function validateParams(name, params) {
+  const integ = getIntegrationTool(name);
+  if (integ) {
+    validateIntegrationToolParams(name, params);
+    return;
+  }
   const def = DEFINITIONS.find(d => d.name === name);
   if (!def) throw new Error(`Unknown tool: "${name}"`);
   for (const [key, spec] of Object.entries(def.params)) {
@@ -331,6 +344,24 @@ export function getToolInstructions(options: { compact?: boolean } = {}) {
       .join(", ");
     lines.push(`- **${def.name}**: ${def.description} ${params ? `— ${params}` : ""}`);
   }
+  // Connected external platforms (MCP integrations). Refresh is throttled
+  // and fire-and-forget: freshly connected tools appear on the next round.
+  void refreshIntegrationTools();
+  const integrationDefs = getIntegrationToolDefinitions();
+  if (integrationDefs.length > 0) {
+    lines.push(
+      "",
+      "### Connected Platform Tools",
+      "The user has connected external platforms (via Noska Integrations). Use these tools when the request touches those platforms — they execute for real against the connected account.",
+      "",
+    );
+    for (const def of integrationDefs) {
+      const params = Object.entries(def.params)
+        .map(([key, spec]) => `\`${key}\`${spec.required ? " (required)" : ""}: ${spec.desc}`)
+        .join(", ");
+      lines.push(`- **${def.name}**: ${def.description} ${params ? `— ${params}` : ""}`);
+    }
+  }
   if (!options.compact) {
     const capabilities = getCapabilities();
     lines.push("", "### Capability Status");
@@ -343,6 +374,12 @@ export function getToolInstructions(options: { compact?: boolean } = {}) {
 }
 
 export function getCapabilities() {
+  const integrations = getIntegrationSummary();
+  const connectedSlugs = new Set(getIntegrationToolDefinitions().map(d => d.connectorSlug));
+  const integrationStatus = integrations.connectedConnectors > 0 ? "✓" : "✕";
+  const integrationDesc = integrations.connectedConnectors > 0
+    ? `Connected platforms via MCP/API: ${integrations.connectedConnectors} connection${integrations.connectedConnectors === 1 ? "" : "s"}, ${integrations.toolCount} external tool${integrations.toolCount === 1 ? "" : "s"}`
+    : "Connect Notion, GitHub, Slack, Gmail, Calendar or any MCP server in Settings → Integrations";
   return [
     { name: "Page Management", description: "Create, rename, organize pages", status: "✓" },
     { name: "Rich Content Editing", description: "Headings, bullets, numbers, todos, quotes, code blocks, dividers, callouts, toggles", status: "✓" },
@@ -366,27 +403,75 @@ export function getCapabilities() {
     { name: "Agent Delegation", description: "Agents can invoke other agents as specialists (approval-gated)", status: "✓" },
     { name: "Real-time Collaboration", description: "Multi-user editing with presence", status: "⚠" },
     { name: "Audit Trail", description: "Action history and change tracking", status: "⚠" },
-    { name: "External Search", description: "Web search and external data access", status: "✕" },
+    { name: "External Integrations", description: integrationDesc, status: integrationStatus },
     { name: "File Uploads", description: "Upload and process files", status: "✕" },
-    { name: "Email Integration", description: "Send or read emails from workspace", status: "✕" },
-    { name: "Calendar Integration", description: "Access calendar events", status: "✕" }
+    { name: "Email Integration", description: "Read emails via the connected Gmail account", status: connectedSlugs.has("gmail") ? "✓" : "✕" },
+    { name: "Calendar Integration", description: "Access calendar events via the connected Google Calendar", status: connectedSlugs.has("google-calendar") ? "✓" : "✕" }
   ];
+}
+
+/**
+ * Repair common model-JSON mistakes so tool calls survive imperfect output:
+ * raw control characters inside strings, trailing commas, smart quotes,
+ * and truncated (unbalanced) JSON from max-token cutoffs.
+ */
+function repairToolJSON(raw) {
+  let s = String(raw).trim();
+  // Smart quotes → straight quotes (safe: apostrophes inside text stay intact)
+  s = s.replace(/[\u201c\u201d]/g, '"').replace(/[\u2018\u2019]/g, "'");
+  // Escape raw control characters that would break JSON parsing
+  s = s.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+  // Remove trailing commas before closing braces/brackets
+  s = s.replace(/,\s*([}\]])/g, '$1');
+  // Balance truncated JSON: track string state and open brackets, then close them
+  const stack = [];
+  let inString = false, escape = false;
+  for (const ch of s) {
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === '\\') escape = true;
+      else if (ch === '"') inString = false;
+    } else {
+      if (ch === '"') inString = true;
+      else if (ch === '{' || ch === '[') stack.push(ch);
+      else if (ch === '}' || ch === ']') stack.pop();
+    }
+  }
+  if (inString) s += '"';
+  while (stack.length > 0) s += stack.pop() === '{' ? '}' : ']';
+  return s;
 }
 
 function tryParseToolJSON(raw) {
   try {
     return JSON.parse(raw);
+  } catch { /* fall through to repair */ }
+  try {
+    return JSON.parse(repairToolJSON(raw));
+  } catch { /* fall through to quote rewrite */ }
+  // Last resort: single-quoted strings/keys → double-quoted
+  try {
+    return JSON.parse(repairToolJSON(raw).replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"'));
   } catch {
-    const fixed = raw
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
-      .replace(/\t/g, '\\t');
-    try {
-      return JSON.parse(fixed);
-    } catch {
-      return null;
-    }
+    return null;
   }
+}
+
+/** Canonical names of every registered tool, for tolerant matching. */
+const TOOL_NAME_SET = new Set(DEFINITIONS.map(d => d.name));
+
+/**
+ * Resolve a tool name to its canonical form — models frequently emit case,
+ * spacing, or hyphen/underscore variants of the registered names.
+ */
+function resolveToolName(name) {
+  if (TOOL_NAME_SET.has(name)) return name;
+  const lower = String(name).toLowerCase();
+  const exact = DEFINITIONS.find(d => d.name.toLowerCase() === lower);
+  if (exact) return exact.name;
+  const squash = v => v.toLowerCase().replace(/[\s_-]/g, "");
+  const loose = DEFINITIONS.find(d => squash(d.name) === squash(String(name)));
+  return loose ? loose.name : name;
 }
 
 export function parseToolCalls(text) {
@@ -395,7 +480,7 @@ export function parseToolCalls(text) {
   const regex = new RegExp(TOOL_PATTERN.source, 'g');
   while ((match = regex.exec(text)) !== null) {
     const params = tryParseToolJSON(match[2].trim()) || {};
-    calls.push({ name: match[1], params, raw: match[0] });
+    calls.push({ name: resolveToolName(match[1]), params, raw: match[0] });
   }
   return calls;
 }
@@ -406,8 +491,9 @@ export function parseToolCalls(text) {
  * gate before calling this). Throws on unknown tools or missing params.
  */
 export async function runTool(name, params, context) {
-  validateParams(name, params);
-  return await executeTool(name, params, context);
+  const canonical = resolveToolName(name);
+  validateParams(canonical, params);
+  return await executeTool(canonical, params, context);
 }
 
 export function stripToolCalls(text) {
@@ -445,6 +531,9 @@ function findPageByIdOrTitle(pageId, pages, currentPage) {
 async function executeTool(name, params, context) {
   if (name === "send_notification") return executeSendNotification(params, context);
   if (name === "create_flashcards") return executeCreateFlashcards(params, context);
+  // Connected external platforms (MCP integrations) — executed through
+  // the connector gateway; they need no workspace context.
+  if (getIntegrationTool(name)) return executeIntegrationTool(name, params);
   const { currentPage, pages, actions } = context;
 
   switch (name) {
@@ -485,15 +574,29 @@ async function executeTool(name, params, context) {
     }
 
     case "search_pages": {
-      const q = params.query.toLowerCase();
-      const matches = pages
-        .filter(p => !p.trashed && (
-          p.title.toLowerCase().includes(q) ||
-          p.tags?.some(t => t.toLowerCase().includes(q)) ||
-          (p.blocks || []).some(b => (b.text || '').toLowerCase().includes(q))
-        ))
-        .map(p => ({ id: p.id, title: p.title, icon: p.icon, tags: p.tags }));
-      return { count: matches.length, results: matches };
+      // Tokenized, ranked search: title matches weigh most, then tags, then
+      // body text. Exact title hits rank above partial ones so the best
+      // candidate is first instead of insertion order.
+      const terms = String(params.query || "").toLowerCase().split(/\s+/).filter(Boolean);
+      const results = pages
+        .filter(p => !p.trashed)
+        .map(p => {
+          const title = (p.title || "").toLowerCase();
+          const tags = (p.tags || []).map(t => String(t).toLowerCase());
+          const body = (p.blocks || []).map(b => b.text || "").join("\n").toLowerCase();
+          let score = 0;
+          for (const term of terms) {
+            if (title === term) score += 10;
+            else if (title.includes(term)) score += 5;
+            if (tags.some(t => t.includes(term))) score += 3;
+            if (body.includes(term)) score += 1;
+          }
+          return { page: p, score };
+        })
+        .filter(r => r.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(r => ({ id: r.page.id, title: r.page.title, icon: r.page.icon, tags: r.page.tags }));
+      return { count: results.length, results };
     }
 
     case "get_page_content": {

@@ -15,18 +15,18 @@
  * Never exposes chain-of-thought; emits only concise progress + outcomes.
  */
 
-import { aiManager } from "../AIManager";
+import { aiManager, buildReasoningDirective } from "../AIManager";
 import { getAgent } from "../agents";
 import { getToolInstructions, parseToolCalls, stripToolCalls, runTool } from "../tools";
 import { buildContext } from "../ContextBuilder";
 import { uid, now } from "../../utils/blockModel";
-import { classifyIntent, isAgenticIntent } from "./intent";
+import { classifyIntent, classifyIntentSmart, isAgenticIntent } from "./intent";
 import { buildPlan } from "./planner";
 import { evaluatePermission } from "./permissions";
 import { requestApproval } from "./approvals";
 import { verifyToolCall, collectAffectedResources } from "./verifier";
 import { selectModel, classifyModelNeed } from "./modelRouter";
-import { recallContext as recallAgentMemory } from "./agentMemory";
+import { recallContext as recallAgentMemory, rememberFact } from "./agentMemory";
 import { loopProtector } from "./loopProtection";
 import { upsertRun, persistRunRemote, recordRunEvent } from "./runStore";
 import { RESOURCE_LIMITS, redact } from "./serverContract";
@@ -43,7 +43,10 @@ import type {
 } from "./types";
 
 const EXEC_PROVENANCE_KEY = "__noskaExec";
-const MAX_MODEL_ROUNDS_PER_STEP = 3;
+/** Model rounds available per plan step. Each round can issue tool calls and
+ * see the results of its own previous rounds, so 5 gives complex steps room
+ * to search → read → act → verify within a single step. */
+const MAX_MODEL_ROUNDS_PER_STEP = 5;
 /** Multi-agent guard: an agent may delegate to another agent, but chains
  * cannot nest deeper than this (A→B→C is the practical ceiling). */
 const MAX_DELEGATION_DEPTH = 1;
@@ -58,6 +61,8 @@ export interface ExecutionContext {
   abort: { aborted: boolean };
   /** Observability trace — durable via runStore, surfaced live by the UI. */
   events: Array<{ seq: number; type: RunEventType; step?: string; detail?: string; at: number; durationMs?: number }>;
+  /** Reasoning effort applied to every model call in this run. */
+  effort: "low" | "medium" | "high";
 }
 
 function emptyRun(options: RuntimeJobOptions): RunRecord {
@@ -179,7 +184,7 @@ export class AgentRuntime {
 
     const run = emptyRun(options);
     const abort = { aborted: false };
-    const context: ExecutionContext = { run, vars: {}, abort, events: [] };
+    const context: ExecutionContext = { run, vars: {}, abort, events: [], effort: "medium" };
     this.activeRuns.set(run.id, context);
 
     /** Record an observability event (in-memory trace + durable write). */
@@ -206,7 +211,14 @@ export class AgentRuntime {
 
       // ── Understand ────────────────────────────────────────────────────
       const intentStart = Date.now();
-      const intentResult = classifyIntent(options.goal);
+      // Interactive AI requests get the LLM intent-refinement fallback for
+      // ambiguous multi-step asks; background workers don't need it (their
+      // instructions already force an agentic plan).
+      const intentResult = options.sourceKind === "ai"
+        ? await classifyIntentSmart(options.goal)
+        : classifyIntent(options.goal);
+      // Planning/analysis work earns a deeper reasoning protocol.
+      context.effort = ["plan", "analyze", "organize"].includes(intentResult.intent) ? "high" : "medium";
       run.steps.push({
         stepId: "understand",
         label: intentResult.intent === "question" ? "Understanding request" : `Understood: ${intentResult.rationale.toLowerCase()}`,
@@ -276,6 +288,14 @@ export class AgentRuntime {
       run.finishedAt = now();
       run.durationMs = new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime();
       run.summary = this.buildSummary(run, finalText);
+      // Persistent agents write their run outcome into their own memory so
+      // the next run recalls what happened before (Notion-style continuity).
+      if (options.sourceKind === "agent" && options.memoryMode === "persistent" && run.status === "completed" && run.summary) {
+        try {
+          rememberFact(options.sourceId, `run ${run.startedAt}`, run.summary, { category: "execution", importance: 0.55 });
+          rememberFact(options.sourceId, "last run", `${run.startedAt} — ${run.summary}`.slice(0, 500), { category: "state", importance: 0.9 });
+        } catch { /* memory write is best-effort */ }
+      }
       track(run.status === "failed" ? "RUN_FAILED" : "RUN_COMPLETED",
         run.summary.slice(0, 200), undefined, run.durationMs);
       emit();
@@ -321,7 +341,7 @@ export class AgentRuntime {
     }
   }
 
-  private buildSystemPrompt(options: RuntimeJobOptions, allowTools: boolean): string {
+  private buildSystemPrompt(options: RuntimeJobOptions, allowTools: boolean, effort?: "low" | "medium" | "high"): string {
     const agent = getAgent("assistant");
     let system = agent.system;
     if (options.instructions) {
@@ -331,13 +351,20 @@ export class AgentRuntime {
       system += `\n\n## Delegation (multi-agent)\nYou may invoke another persisted agent as a specialist:\n<<TOOL:run_agent>>{"agent_name":"Weekly Reporter","instruction":"compile this week's numbers"}<</TOOL>>\nThe delegate runs with its own permissions. Use it only when a named specialist is genuinely needed — approval may be required.`;
     }
     if (allowTools) system += `\n\n${getToolInstructions({ compact: true })}`;
+    // Same reasoning protocol the chat path applies — agentic steps get the
+    // effort chosen for this run (high for plan/analyze/organize work).
+    system += buildReasoningDirective(effort || "medium");
     return system;
   }
 
   private buildUserPrompt(instruction: string, options: RuntimeJobOptions): string {
     const sections: string[] = [];
-    const agentMemory = options.sourceKind === "agent" ? recallAgentMemory(options.sourceId) : "";
-    if (agentMemory) sections.push(agentMemory);
+    // Memory is honored per agent: "off" = none, "run"/undefined = recall only,
+    // "persistent" = recall here + run summaries are written after completion.
+    if (options.sourceKind === "agent" && options.memoryMode !== "off") {
+      const agentMemory = recallAgentMemory(options.sourceId);
+      if (agentMemory) sections.push(agentMemory);
+    }
 
     const toolCtx = options.getContext?.();
     if (toolCtx && (toolCtx.currentPage || (toolCtx.pages && toolCtx.pages.length > 0))) {
@@ -357,9 +384,10 @@ export class AgentRuntime {
     const messages = [{ role: "user", content: this.buildUserPrompt(step.instruction || options.goal, options) }];
     try {
       const result = await aiManager.sendRaw({
-        system: this.buildSystemPrompt(options, false),
+        system: this.buildSystemPrompt(options, false, context.effort),
         messages,
         maxTokens: 2048,
+        effort: context.effort,
         providerId: selection.providerId,
         modelId: selection.modelId,
       });
@@ -378,20 +406,26 @@ export class AgentRuntime {
     track: (type: RunEventType, detail?: string, step?: string, durationMs?: number) => void
   ): Promise<{ ok: boolean; detail?: string; text?: string; isText?: boolean; fatal?: boolean }> {
     const selection = selectModel("default");
-    let instruction = step.instruction || options.goal;
     let accumulatedText = "";
+    // Persistent transcript: each round keeps the workspace context and the
+    // model's own previous outputs/results, so it can self-correct across
+    // rounds instead of re-deriving everything from a fresh single message.
+    const transcript: Array<{ role: string; content: string }> = [];
 
     for (let round = 0; round < MAX_MODEL_ROUNDS_PER_STEP; round++) {
       if (context.abort.aborted) return { ok: false, detail: "Aborted" };
-      const messages = [{ role: "user", content: this.buildUserPrompt(instruction, options) }];
+      if (transcript.length === 0) {
+        transcript.push({ role: "user", content: this.buildUserPrompt(step.instruction || options.goal, options) });
+      }
       const roundStart = Date.now();
       track("MODEL_REQUEST", `round ${round + 1}`, step.label);
       let response: string;
       try {
         response = await aiManager.sendRaw({
-          system: this.buildSystemPrompt(options, true),
-          messages,
-          maxTokens: 1500,
+          system: this.buildSystemPrompt(options, true, context.effort),
+          messages: transcript,
+          maxTokens: 2048,
+          effort: context.effort,
           providerId: selection.providerId,
           modelId: selection.modelId,
         });
@@ -454,7 +488,11 @@ export class AgentRuntime {
       );
       context.run.affectedResources.push(...affected);
 
-      instruction = `Tool execution results:\n${outcomes.join("\n")}\n\nContinue the task based on these results. If the task is complete, write a short completion summary with no tool blocks.`;
+      transcript.push({ role: "assistant", content: visible || `(used tools: ${calls.map((c) => c.name).join(", ")})` });
+      transcript.push({
+        role: "user",
+        content: `Tool execution results:\n${outcomes.join("\n")}\n\nContinue the task based on these results. If a tool failed, try a different approach. If the task is complete, write a short completion summary with no tool blocks.`,
+      });
     }
 
     context.vars["ai.response"] = accumulatedText;

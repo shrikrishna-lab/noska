@@ -24,8 +24,11 @@ export class OpencodeZenModelDiscovery implements ModelDiscoveryAdapter {
       headers["Authorization"] = `Bearer ${config.apiKey.trim()}`;
     }
 
+    const isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined";
+    const resolvedBaseUrl = (isBrowser && baseUrl === "https://opencode.ai/zen/v1") ? "/api/proxy/opencode" : baseUrl;
+
     try {
-      const res = await fetch(`${baseUrl}/models`, {
+      const res = await fetch(`${resolvedBaseUrl}/models`, {
         method: "GET",
         headers,
         signal: config?.signal,

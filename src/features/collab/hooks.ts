@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '../../lib/supabase';
 import { realtimeCollab } from '../../lib/realtimeCollab';
 import {
   getUserPermission,
@@ -11,9 +12,9 @@ import {
 } from './permissions';
 import { joinCollabSession, leaveCollabSession, updateSessionStatus, getActiveSessions } from './session';
 import { logActivity } from './activity';
-import { createVersion, getVersions, shouldAutoVersion, canCreateVersion } from './versions';
-import { getComments, addComment, resolveComment } from './comments';
-import { getNotifications, getUnreadCount, markAsRead, markAllAsRead } from './notifications';
+import { createVersion, getVersions, canCreateVersion } from './versions';
+import { getComments, addComment, resolveComment, unresolveComment, deleteComment } from './comments';
+import { getNotifications, getUnreadCount, markAsRead, markAllAsRead, sendNotification } from './notifications';
 import type { DocumentPermission, CollabRole, CollabSession, VersionSnapshot, PageComment, CollabNotification, CollabUser } from './types';
 import type { Block } from '../../../types/blocks';
 
@@ -32,10 +33,22 @@ export function useDocumentPermissions(pageId: string | null, userId: string | n
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const grant = useCallback(async (targetUserId: string, targetUserName: string, role: CollabRole) => {
+  const grant = useCallback(async (targetUserId: string, targetUserName: string, role: CollabRole, inviterName?: string) => {
     if (!pageId || !userId) return;
     await grantPermission(pageId, targetUserId, targetUserName, role, userId);
-    logActivity(pageId, userId, '', 'permission_granted', `Granted ${role} access`);
+    logActivity(pageId, userId, inviterName || '', 'permission_granted', `Granted ${role} access to ${targetUserName || targetUserId}`);
+    // Push an invite alert so the invitee sees it live (realtime
+    // subscription on collab_notifications) and in their Alerts tab.
+    await sendNotification(
+      targetUserId,
+      'invite',
+      'You were invited to collaborate',
+      `${inviterName || 'Someone'} invited you as ${role}. Open the shared page to start collaborating.`,
+      pageId,
+      undefined,
+      userId,
+      inviterName,
+    );
     await refresh();
   }, [pageId, userId, refresh]);
 
@@ -131,9 +144,10 @@ export function usePresenceUsers(pageId: string | null) {
       if (data.pageId === pageId) {
         setUsers(data.users.map((u) => ({
           userId: u.id,
-          userName: (u.userName as string) || 'Anonymous',
-          userAvatar: (u.userAvatar as string) || '',
-          userColor: (u.userColor as string) || '#999',
+          // Accept both full and legacy short field names from older clients
+          userName: ((u.userName as string) || (u.name as string)) || 'Anonymous',
+          userAvatar: ((u.userAvatar as string) || (u.avatar as string)) || '',
+          userColor: ((u.userColor as string) || (u.color as string)) || '#999',
           status: (u.status as string) || 'viewing',
           currentBlockId: u.currentBlockId as string | null | undefined,
           onlineAt: (u.onlineAt as number) || Date.now(),
@@ -210,10 +224,13 @@ export function useSelections(pageId: string | null) {
         if (!data.blockId) {
           next.delete(data.userId);
         } else {
+          // Accept both startOffset/endOffset and legacy start/end spellings
+          const start = (data.startOffset ?? data.start) as number | undefined;
+          const end = (data.endOffset ?? data.end) as number | undefined;
           next.set(data.userId, {
             blockId: data.blockId as string,
-            startOffset: data.startOffset as number | undefined,
-            endOffset: data.endOffset as number | undefined,
+            startOffset: start,
+            endOffset: end,
             text: data.text as string | undefined,
             userName: (data as Record<string, unknown>).userName as string || '',
             userColor: (data as Record<string, unknown>).userColor as string || '#999',
@@ -231,16 +248,26 @@ export function useSelections(pageId: string | null) {
 
 export function useAutoVersion(pageId: string | null, userId: string | null, userName: string, blocks: Block[]) {
   const lastBlocksRef = useRef<string>('');
+  const lastIdsRef = useRef<string>('');
 
   useEffect(() => {
     if (!pageId || !userId || blocks.length === 0) return;
 
     const blocksJson = JSON.stringify(blocks);
     if (blocksJson === lastBlocksRef.current) return;
+    const isFirstLoad = lastBlocksRef.current === '';
     lastBlocksRef.current = blocksJson;
+    if (isFirstLoad) return;
 
-    if (shouldAutoVersion([]) && canCreateVersion()) {
-      createVersion(pageId, userId, userName, blocks, 'Auto-save');
+    // Structural change (block added/removed/reordered) → version immediately
+    // (cooldown still applies). Text-only edits → version at most once per
+    // cooldown window so rapid typing doesn't spam snapshots.
+    const ids = blocks.map(b => b.id).join(',');
+    const structural = ids !== lastIdsRef.current;
+    lastIdsRef.current = ids;
+
+    if (canCreateVersion()) {
+      createVersion(pageId, userId, userName, blocks, structural ? 'Structural change' : 'Auto-save');
     }
   }, [pageId, userId, userName, blocks]);
 }
@@ -258,6 +285,21 @@ export function useComments(pageId: string | null) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Live updates: other collaborators' comments/resolve states appear
+  // instantly instead of only after a panel remount.
+  useEffect(() => {
+    if (!pageId) return;
+    const channel = supabase
+      .channel(`comments:${pageId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'page_comments', filter: `page_id=eq.${pageId}` },
+        () => { refresh(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [pageId, refresh]);
+
   const add = useCallback(async (userId: string, userName: string, content: string, blockId?: string, userAvatar?: string) => {
     if (!pageId) return null;
     const comment = await addComment(pageId, userId, userName, content, blockId, undefined, userAvatar);
@@ -265,13 +307,25 @@ export function useComments(pageId: string | null) {
     return comment;
   }, [pageId, refresh]);
 
+  const remove = useCallback(async (commentId: string) => {
+    const ok = await deleteComment(commentId);
+    if (ok) await refresh();
+    return ok;
+  }, [refresh]);
+
   const resolve = useCallback(async (commentId: string, userId: string) => {
     const ok = await resolveComment(commentId, userId);
     if (ok) await refresh();
     return ok;
   }, [refresh]);
 
-  return { comments, loading, add, resolve, refresh };
+  const unresolve = useCallback(async (commentId: string) => {
+    const ok = await unresolveComment(commentId);
+    if (ok) await refresh();
+    return ok;
+  }, [refresh]);
+
+  return { comments, loading, add, remove, resolve, unresolve, refresh };
 }
 
 export function useVersions(pageId: string | null) {
@@ -309,8 +363,20 @@ export function useNotifications(userId: string | null) {
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, 30_000);
-    return () => clearInterval(interval);
-  }, [refresh]);
+    // Push-based refresh when someone mentions/replies/invites this user
+    const channel = supabase
+      .channel(`notifications:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'collab_notifications', filter: `user_id=eq.${userId}` },
+        () => { refresh(); },
+      )
+      .subscribe();
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [refresh, userId]);
 
   const markRead = useCallback(async (id: string) => {
     await markAsRead(id);
@@ -324,4 +390,31 @@ export function useNotifications(userId: string | null) {
   }, [userId, refresh]);
 
   return { notifications, unreadCount, markRead, markAllRead, refresh };
+}
+
+/**
+ * Whether a page is "public" for collaboration purposes: at least one
+ * non-owner permission row exists (someone was invited/granted access).
+ * Private pages (no collaborator rows) must not expose presence — no
+ * online list, cursors, or typing indicators. Re-checked periodically so
+ * revoking the last invite flips the page back to private everywhere.
+ */
+export function usePageIsShared(pageId: string | null): boolean {
+  const [isShared, setIsShared] = useState(false);
+
+  useEffect(() => {
+    if (!pageId) { setIsShared(false); return; }
+    let mounted = true;
+
+    const check = async () => {
+      const rows = await getPagePermissions(pageId);
+      if (mounted) setIsShared(rows.some(r => r.role !== 'owner'));
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+
+    return () => { mounted = false; clearInterval(interval); };
+  }, [pageId]);
+
+  return isShared;
 }

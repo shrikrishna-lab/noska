@@ -42,10 +42,10 @@ import ImagePicker from "./editor/ImagePicker";
 import PageIconBlock from "./editor/PageIconBlock";
 import PageTitleCustomizer, { TITLE_GRADIENTS } from "./editor/PageTitleCustomizer";
 import { PageIcon } from "./PageIcon";
-import DocumentOutlineRuler from "./editor/DocumentOutlineRuler";
 
 import InPageFind from "./InPageFind";
 import { CursorOverlay } from "../features/collab/CursorOverlay";
+import { useDebouncedCursor } from "../features/collab/performance";
 import useMultiBlockSelect from "../hooks/useMultiBlockSelect";
 import {
   AlignLeft, Heading1, Heading2, Heading3, Heading4, List, ListChecks, ChevronLeft, ChevronRight, ChevronDown, CheckSquare,
@@ -109,6 +109,7 @@ import { executeCommand } from "../core/commands/ActionExecutor";
 import CollabPresenceBar from "./collab/CollabPresenceBar";
 import { realtimeCollab } from "../lib/realtimeCollab";
 import CommentThread from "./comments/CommentThread";
+import { usePageIsShared } from "../features/collab/hooks";
 import Breadcrumbs from "./Breadcrumbs";
 import { usePresence } from "../hooks/usePresence";
 import CommandPalette from "./CommandPalette";
@@ -623,7 +624,13 @@ export default function Editor({
 
   const permission = React.useMemo(() => getPagePermission(page, pages), [page, pages]);
   const isEditable = !page.isLocked && permission === 'edit';
-  const { users, ownStatus, setStatus: setOwnStatus } = usePresence(page?.id);
+  // Privacy gate: presence UI/telemetry only for shared ("public") pages.
+  // A page nobody's been invited to is private — no online list, cursors,
+  // or typing indicators for anyone.
+  const sharedViaPermissions = usePageIsShared(page?.id ?? null);
+  const pageIsShared = !!page.sharedRole || sharedViaPermissions || page.visibility === "public";
+  const { users, ownStatus, setStatus: setOwnStatus } = usePresence(pageIsShared ? page?.id : null);
+  const sendCursor = useDebouncedCursor(pageIsShared ? page?.id : null);
 
   const handleExport = () => {
     const text = (page.blocks || []).map(b => b.text || "").join("\n\n");
@@ -814,15 +821,18 @@ export default function Editor({
         const pct = Math.round((target.scrollTop / total) * 100);
         onScrollPercent?.(pct);
       }}
+      onMouseMove={(e) => {
+        if (pageIsShared) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          sendCursor(e.clientX - rect.left, e.clientY - rect.top + e.currentTarget.scrollTop);
+        }
+      }}
       className={`min-h-0 flex-1 overflow-y-auto scrollbar-thin relative transition-all duration-200 ${page.fontStyle === "serif" ? "font-serif" : page.fontStyle === "mono" ? "font-mono" : "font-sans"
         }`}
       style={page.pageBg ? { background: page.pageBg } : undefined}
     >
       {/* Live cursors from other collaborators */}
       <CursorOverlay pageId={page.id} />
-
-      {/* Floating Outline / Section Minimap Ruler with preview popup */}
-      <DocumentOutlineRuler blocks={page?.blocks || []} pageTitle={page?.title} containerRef={editorContainerRef} />
 
       {/* Cover Banner — full width of editor container or constrained by coverSize without viewport overflow */}
       {Boolean(page.cover) && (
@@ -937,6 +947,17 @@ export default function Editor({
           </div>
 
           <div className="flex items-center gap-1 ml-auto">
+            {/* Live collaboration presence — only when someone else is actually
+                on this page; the solo state is covered by the top bar's
+                Collab pill (WorkspaceJoinBar) so we don't show it twice. */}
+            {pageIsShared && users.length > 0 && (
+              <CollabPresenceBar
+                users={users}
+                ownStatus={ownStatus}
+                pageId={page.id}
+                onStatusChange={(s) => setOwnStatus(s)}
+              />
+            )}
             <div className="relative flex items-center">
               <div ref={pageOptionsRef} className="flex items-center">
                 <button
@@ -1135,16 +1156,16 @@ export default function Editor({
                     await globalVoiceController.toggle();
                     const err = globalVoiceController.getError?.() || null;
                     if (err) {
-                      onToast?.(`Voice typing error: ${err.message}`);
+                      onToast?.(`Flow error: ${err.message}`);
                     }
                   } catch (err: any) {
-                    onToast?.(`Voice typing failed: ${err?.message || "Unknown error"}`);
+                    onToast?.(`Flow failed: ${err?.message || "Unknown error"}`);
                   }
                 }}
-                title="Toggle Voice Typing (Ctrl+Shift+Space)"
+                title="Toggle Flow (Ctrl+Shift+Space)"
               >
                 <Mic size={12} />
-                <span>Voice typing</span>
+                <span>Flow</span>
               </button>
             </div>
           )}

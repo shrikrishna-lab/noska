@@ -1,5 +1,6 @@
 export { CompanySwitcher } from "./CompanySwitcher"
 export { CreateCompanyModal } from "./CreateCompanyModal"
+export { JoinCompanyModal } from "./JoinCompanyModal"
 export { CompanyHome } from "./CompanyHome"
 export { CompanySettings } from "./CompanySettings"
 export { CompanyMembers } from "./CompanyMembers"

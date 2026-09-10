@@ -44,6 +44,7 @@ import {
   NotionStyleTemplate
 } from "./Constants";
 import { uid } from "../../utils/helpers";
+import { useUIActions } from "../../contexts/UIContext";
 import { getOfficialTemplateById } from "../canvas/templates/officialTemplates";
 import { generateCanvasFromTemplate } from "../canvas/templates/templateGenerator";
 import { saveCanvasData, savePositions } from "../canvas/canvasStore";
@@ -55,6 +56,7 @@ interface MarketplacePageProps {
 }
 
 export default function MarketplacePage({ pages, onDuplicate, onToast }: MarketplacePageProps) {
+  const { setSettingsOpen, setSettingsInitialTab } = useUIActions();
   const [activeNavTab, setActiveNavTab] = useState<MarketplaceNavTab>("discover");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<NotionStyleTemplate | null>(null);
@@ -754,6 +756,23 @@ export default function MarketplacePage({ pages, onDuplicate, onToast }: Marketp
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Connections — points to the real integrations hub in Settings */}
+        {activeNavTab === "connections" && (
+          <div className="rounded-2xl bg-[var(--surface-1)] border border-[var(--border)] p-10 flex flex-col items-center justify-center text-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)] grid place-items-center text-xl">🔌</div>
+            <h3 className="text-lg font-extrabold text-[var(--text)]">Connect your platforms</h3>
+            <p className="text-xs text-[var(--text-secondary)] max-w-sm leading-relaxed">
+              Notion, GitHub, Slack, Gmail, Calendar — or any MCP server. Connected tools become available to Noska AI, agents, and automations.
+            </p>
+            <button
+              onClick={() => { setSettingsInitialTab("Integrations"); setSettingsOpen(true); }}
+              className="mt-1 rounded-xl bg-[var(--text)] text-[var(--bg)] px-4 py-2 text-xs font-bold hover:opacity-90 transition cursor-pointer"
+            >
+              Open Settings → Integrations
+            </button>
           </div>
         )}
 

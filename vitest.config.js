@@ -17,7 +17,7 @@ export default defineConfig({
     environment: "jsdom",
     pool: "threads",
     globals: true,
-    setupFiles: ["./src/test/setup.js"],
+    setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
     exclude: ["node_modules/**", "dist/**", "e2e/**", ".opencode/**", "admin/**"],
   },

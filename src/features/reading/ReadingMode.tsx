@@ -18,8 +18,7 @@ import { plainText } from "../../utils/helpers";
 import type { Page } from "../../lib/supabaseService";
 import type { Block } from "../../../types/blocks";
 import { PageIcon } from "../../components/PageIcon";
-import DocumentOutlineRuler from "../../components/editor/DocumentOutlineRuler";
-
+import { LineNavigationRail } from "../navigation/line-nav";
 
 interface ReadingTheme {
   name: string;
@@ -106,11 +105,13 @@ const THEMES: Record<ThemeKey, ReadingTheme> = {
 
 export interface ReadingModeProps {
   page: Page;
+  pages?: Page[];
   onClose: () => void;
   onPagePatch: (pageId: string, patch: Partial<Page>) => void;
+  onSelectPage?: (pageId: string) => void;
 }
 
-export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeProps) {
+export default function ReadingMode({ page, pages, onClose, onPagePatch, onSelectPage }: ReadingModeProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -444,6 +445,22 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
 
       {/* Main Container */}
       <div className="flex-1 flex overflow-hidden relative">
+        {/* Navigation Outline Ruler for Reading Mode */}
+        <div className="hidden md:block z-30 pointer-events-auto">
+          <LineNavigationRail
+            pages={pages && pages.length > 0 ? pages : [page]}
+            activeId={page.id}
+            appView="page"
+            position="left"
+            sidebarOpen={false}
+            onSelectPage={(id) => {
+              if (onSelectPage && id !== page.id) {
+                onSelectPage(id);
+              }
+            }}
+          />
+        </div>
+
         {/* Left/Right settings sidebar overlay */}
         {showSettings && (
           <div className="absolute right-4 top-2 z-40 w-80 rounded-xl border border-[var(--reading-border)] bg-[var(--reading-bg)] shadow-2xl p-4 flex flex-col gap-4 select-none animate-in fade-in slide-in-from-top-2 duration-150">
@@ -623,8 +640,6 @@ export default function ReadingMode({ page, onClose, onPagePatch }: ReadingModeP
           ref={containerRef}
           className="flex-1 overflow-y-auto overflow-x-hidden flex justify-center py-10 px-6 scrollbar-thin relative"
         >
-          {/* Section Minimap Timeline Ruler & Hover Card */}
-          <DocumentOutlineRuler blocks={page?.blocks || []} pageTitle={page?.title} containerRef={containerRef} />
           {/* Highlight tooltip menu button */}
           {selection && (
             <div

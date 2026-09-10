@@ -255,6 +255,10 @@ export interface RuntimeJobOptions {
   permissions?: PermissionSpec;
   modelClassOverride?: ModelClass;
   maxSteps?: number;
+  /** Agent memory scope: "off" = never recall/write · "run" = recall only ·
+   * "persistent" = recall + write run summaries between runs. Undefined is
+   * treated as "run" for backward compatibility. */
+  memoryMode?: "off" | "run" | "persistent";
   /** extra system-level instructions merged into every model call */
   instructions?: string;
   /** context pages to seed retrieval (workspace snapshot provider) */

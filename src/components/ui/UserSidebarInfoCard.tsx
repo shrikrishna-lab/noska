@@ -16,7 +16,7 @@ import { useActiveInfoCard } from "@/hooks/useActiveInfoCard";
 import { infoCardService } from "@/lib/infoCardService";
 import { ExternalLink } from "lucide-react";
 
-export function UserSidebarInfoCard({ className }: { className?: string }) {
+export function UserSidebarInfoCard({ className, fallback }: { className?: string; fallback?: React.ReactNode }) {
   const { activeCard, handleDismiss, handleClick } = useActiveInfoCard();
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export function UserSidebarInfoCard({ className }: { className?: string }) {
     }
   }, [activeCard?.id]);
 
-  if (!activeCard) return null;
+  if (!activeCard) return fallback ? <>{fallback}</> : null;
 
   const isClaimed = infoCardService.isCardClaimed(activeCard.id, activeCard.storage_key);
 

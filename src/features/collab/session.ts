@@ -25,7 +25,6 @@ export async function joinCollabSession(pageId: string, userId: string): Promise
       status: 'active',
       last_activity: new Date().toISOString(),
       started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .select()
     .single();
@@ -76,7 +75,6 @@ export async function updateSessionStatus(pageId: string, userId: string, status
       status,
       current_block_id: blockId || null,
       last_activity: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .eq('page_id', pageId)
     .eq('user_id', userId);
@@ -109,7 +107,7 @@ function startHeartbeat(pageId: string, userId: string): void {
   heartbeatInterval = setInterval(async () => {
     const { error } = await supabase
       .from('collaboration_sessions')
-      .update({ last_activity: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ last_activity: new Date().toISOString() })
       .eq('page_id', pageId)
       .eq('user_id', userId);
 

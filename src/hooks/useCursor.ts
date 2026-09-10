@@ -25,7 +25,8 @@ interface CursorMoveTarget {
   targetBlockId?: string | null;
 }
 
-export function useCursor(pageId: string | null | undefined) {
+export function useCursor(pageId: string | null | undefined, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled !== false;
   const [cursors, setCursors] = useState<CursorMap>({});
   const cursorsRef = useRef<CursorMap>({});
   const animFrames = useRef<Record<string, number>>({});
@@ -78,7 +79,9 @@ export function useCursor(pageId: string | null | undefined) {
   };
 
   useEffect(() => {
-    if (!pageId || !realtimeCollab.isJoined()) return;
+    // `enabled: false` (e.g. private page) → no cursor channel join and no
+    // sends, so remote users never see this page's cursors.
+    if (!pageId || !enabled || !realtimeCollab.isJoined()) return;
 
     const cleanup = realtimeCollab.on('cursor:move', ({ pageId: pid, ...data }: { pageId: string; userId?: string } & CursorMoveTarget) => {
       if (pid !== pageRef.current) return;
@@ -108,9 +111,10 @@ export function useCursor(pageId: string | null | undefined) {
       animFrames.current = {};
       cursorsRef.current = {};
     };
-  }, [pageId]);
+  }, [pageId, enabled]);
 
   const handleMouseMove = useCallback((e: MouseEvent<HTMLElement>) => {
+    if (!enabled || !pageRef.current) return;
     const now = Date.now();
     if (now - lastSend.current < THROTTLE_MS) return;
     lastSend.current = now;
@@ -122,7 +126,7 @@ export function useCursor(pageId: string | null | undefined) {
       e.clientY - rect.top,
       null
     );
-  }, []);
+  }, [enabled]);
 
   return { cursors, handleMouseMove };
 }

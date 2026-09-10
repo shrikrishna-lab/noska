@@ -505,3 +505,22 @@ export function AnimatedJournal({ size = 16, color = "currentColor", className =
   );
 }
 
+// 41. AnimatedLibrary / Knowledge Archive Icon
+export function AnimatedLibrary({ size = 16, color = "currentColor", className = "", ...props }: AnimatedIconProps) {
+  return (
+    <IconWrapper hoverAnim={{ scale: 1.1, y: -1 }} pressAnim={{ scale: 0.92 }} className={className} {...props}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        {/* Sleek Modern Knowledge Archive & Vault */}
+        <rect x="3.5" y="4" width="4.5" height="16" rx="1.5" />
+        <rect x="9.5" y="4" width="4.5" height="16" rx="1.5" />
+        <path d="M15.5 5l4 15" />
+        <path d="M18 5l4 15" />
+        <line x1="15.5" y1="5" x2="18" y2="5" />
+        <line x1="19.5" y1="20" x2="22" y2="20" />
+        <circle cx="5.75" cy="7.5" r="0.75" fill="currentColor" />
+        <circle cx="11.75" cy="7.5" r="0.75" fill="currentColor" />
+      </svg>
+    </IconWrapper>
+  );
+}
+

@@ -244,15 +244,15 @@ export default function BlockContextMenu({
     <AnimatePresence>
       {open && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: -6 }}
+          initial={{ opacity: 0, scale: 0.95, y: -6 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -3 }}
-          transition={{ type: "spring", stiffness: 380, damping: 26 }}
-          style={{ width: 260 }}
-          className="flex flex-col overflow-hidden rounded-xl border border-[var(--border-strong)] bg-[var(--elevated)] shadow-[var(--shadow-floating)] z-[120] max-h-[480px]"
+          transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          style={{ width: 268 }}
+          className="flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]/95 backdrop-blur-xl shadow-[0_20px_45px_-12px_rgba(0,0,0,0.25)] z-[120] max-h-[480px]"
         >
           {/* Header Bar */}
-          <div className="flex items-center border-b border-[var(--border)] px-1.5 py-1 bg-[var(--hover)]">
+          <div className="flex items-center border-b border-[var(--border)] px-2 py-1.5 bg-[var(--surface-3)]/60">
             {activeSubmenu && (
               <button
                 onClick={() => {
@@ -260,32 +260,32 @@ export default function BlockContextMenu({
                   setSearch("");
                   setHighlightedIndex(-1);
                 }}
-                className="p-1 rounded text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer mr-1"
+                className="p-1 rounded-lg text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer mr-1"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={15} />
               </button>
             )}
-            <span className="flex-1 text-[11px] font-semibold text-[var(--secondary)] pl-1.5">
+            <span className="flex-1 text-[11px] font-semibold text-[var(--text-secondary)] pl-1">
               {activeSubmenu === "turn-into" ? "Turn block into..." : activeSubmenu === "color" ? "" : activeSubmenu === "move-to" ? "Move block to page..." : "Block actions"}
             </span>
           </div>
 
           {/* Color submenu header with tabs + custom picker */}
           {activeSubmenu === "color" && (
-            <div className="border-b border-[var(--border)] px-2 py-2 flex flex-col gap-2">
-              <div className="flex items-center gap-1">
+            <div className="border-b border-[var(--border)] px-2.5 py-2.5 flex flex-col gap-2">
+              <div className="flex items-center gap-1 p-0.5 rounded-xl bg-[var(--surface-3)] border border-[var(--border)]">
                 <button
                   onClick={() => setColorTab("text")}
-                  className={`flex-1 py-1 text-[10px] font-semibold rounded transition cursor-pointer ${
-                    colorTab === "text" ? "bg-[var(--accent)] text-white" : "text-[var(--secondary)] hover:bg-[var(--hover)]"
+                  className={`flex-1 py-1 text-[10px] font-semibold rounded-lg transition cursor-pointer ${
+                    colorTab === "text" ? "bg-[var(--surface-2)] text-[var(--text)] shadow-xs" : "text-[var(--secondary)] hover:text-[var(--text)]"
                   }`}
                 >
                   Text
                 </button>
                 <button
                   onClick={() => setColorTab("bg")}
-                  className={`flex-1 py-1 text-[10px] font-semibold rounded transition cursor-pointer ${
-                    colorTab === "bg" ? "bg-[var(--accent)] text-white" : "text-[var(--secondary)] hover:bg-[var(--hover)]"
+                  className={`flex-1 py-1 text-[10px] font-semibold rounded-lg transition cursor-pointer ${
+                    colorTab === "bg" ? "bg-[var(--surface-2)] text-[var(--text)] shadow-xs" : "text-[var(--secondary)] hover:text-[var(--text)]"
                   }`}
                 >
                   Background
@@ -296,7 +296,7 @@ export default function BlockContextMenu({
                   type="color"
                   value={customColor}
                   onChange={(e) => setCustomColor(e.target.value)}
-                  className="w-7 h-7 rounded border border-[var(--border)] cursor-pointer p-0 bg-transparent"
+                  className="w-7 h-7 rounded-lg border border-[var(--border)] cursor-pointer p-0 bg-transparent shrink-0"
                 />
                 <button
                   onClick={() => {
@@ -310,7 +310,7 @@ export default function BlockContextMenu({
                     }
                     onClose();
                   }}
-                  className="flex-1 py-1 text-[10px] font-semibold text-[var(--secondary)] bg-[var(--hover)] hover:bg-[var(--surface-3)] rounded transition cursor-pointer"
+                  className="flex-1 py-1 px-2 text-[10px] font-semibold text-[var(--text)] bg-[var(--surface-3)] hover:bg-[var(--surface-4)] border border-[var(--border)] rounded-lg transition cursor-pointer shadow-2xs"
                 >
                   Apply custom color
                 </button>

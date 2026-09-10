@@ -410,21 +410,6 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
         )}
       </div>
 
-      {/* Right Side Collaboration Presence & Open Actions */}
-      <div className="flex items-center gap-2 ml-auto pl-3 shrink-0 pb-0.5 z-20">
-        {activePageId && (
-          <CollabPresenceBar
-            users={users}
-            ownStatus={ownStatus}
-            pageId={activePageId}
-            onStatusChange={setStatus}
-            onOpenExternal={() => {
-              window.open(window.location.href, "_blank");
-            }}
-          />
-        )}
-      </div>
-
       {/* Tab Split Page Picker Popover */}
       {pickerState.open && pickerState.tab && (
         <PagePickerPopover

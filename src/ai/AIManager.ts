@@ -99,6 +99,7 @@ interface AISendConversationOpts {
   maxTokens?: number;
   effort?: "low" | "medium" | "high";
   thinking?: boolean;
+  temperature?: number;
   signal?: AbortSignal;
 }
 
@@ -140,6 +141,35 @@ function looksLikeMockFailure(text: string): boolean {
 function extractMockError(text: string): string {
   const m = (text || "").match(/Error:\s*([\s\S]{0,240})/);
   return m ? m[1].replace(/_/g, "").trim() : "provider returned an error";
+}
+
+/**
+ * Reasoning directive appended to system prompts. This is the "brain"
+ * tuning knob: it shapes HOW the model thinks, not just how verbose it is.
+ * Exported so the agent runtime can apply the same reasoning protocol to
+ * agentic steps, which bypass aiManager's prompt assembly.
+ */
+export function buildReasoningDirective(effort?: "low" | "medium" | "high", thinking?: boolean): string {
+  if (!effort && !thinking) return "";
+  let directive = "\n\n[REASONING ENGINE DIRECTIVE]";
+  if (effort === "low") {
+    directive += "\n- Reasoning Effort: LOW. Prioritize direct, concise, high-speed execution. Answer immediately — no preamble, no restating the question, no filler.";
+  } else if (effort === "medium") {
+    directive += "\n- Reasoning Effort: MEDIUM. Think before answering: identify what is actually being asked, decompose it into sub-problems, then answer with structured, comprehensive analysis. Show logical rationale for non-obvious claims.";
+  } else if (effort === "high") {
+    directive += [
+      "\n- Reasoning Effort: HIGH. Apply the full reasoning protocol BEFORE answering:",
+      "  1. DECOMPOSE — break the request into its atomic sub-problems and constraints.",
+      "  2. EXPLORE — consider at least two viable approaches or interpretations, including non-obvious ones.",
+      "  3. VERIFY — check each intermediate claim and edge case; if a step would fail, reason out why and adjust.",
+      "  4. SYNTHESIZE — deliver the highest-depth solution, noting trade-offs and any residual uncertainty honestly.",
+      "  Do not show this protocol in the output — only its results.",
+    ].join("\n");
+  }
+  if (thinking) {
+    directive += "\n- Deep Thinking Mode: Active. Internally draft, critique, and revise your answer before finalizing. Privately re-check facts, math, and logic; correct mistakes before responding rather than after.";
+  }
+  return directive;
 }
 
 // ─── Retry Logic ────────────────────────────────────────────────────────────
@@ -202,19 +232,7 @@ class AIManager {
   }
 
   _buildReasoningDirective(effort?: "low" | "medium" | "high", thinking?: boolean): string {
-    if (!effort && !thinking) return "";
-    let directive = "\n\n[REASONING ENGINE DIRECTIVE]";
-    if (effort === "low") {
-      directive += "\n- Reasoning Effort: LOW. Prioritize direct, concise, high-speed execution. Deliver direct answers with minimal preamble or redundant explanation.";
-    } else if (effort === "medium") {
-      directive += "\n- Reasoning Effort: MEDIUM. Provide balanced, structured, and comprehensive analysis with clear explanations and logical rationale.";
-    } else if (effort === "high") {
-      directive += "\n- Reasoning Effort: HIGH. Conduct deep, thorough reasoning. Analyze edge cases, explore alternative architectural paradigms, verify intermediate logic step-by-step, and synthesize high-depth solutions.";
-    }
-    if (thinking) {
-      directive += "\n- Deep Thinking Mode: Active. Perform internal chain-of-thought verification before formulating the final response.";
-    }
-    return directive;
+    return buildReasoningDirective(effort, thinking);
   }
 
   /**
@@ -507,6 +525,7 @@ class AIManager {
     maxTokens?: number;
     effort?: "low" | "medium" | "high";
     thinking?: boolean;
+    temperature?: number;
     signal?: AbortSignal;
   }) {
     const provider = getProvider(providerId);
@@ -525,6 +544,7 @@ class AIManager {
       maxTokens: opts.maxTokens || this.config.maxTokens,
       effort: opts.effort,
       thinking: opts.thinking,
+      temperature: opts.temperature,
       signal: opts.signal,
     });
   }
@@ -579,10 +599,12 @@ class AIManager {
    * Raw provider call used by the shared agent runtime.
    * Now throws AIError instead of returning mockResponse().
    */
-  async sendRaw({ system, messages, maxTokens, providerId, modelId, signal }: {
+  async sendRaw({ system, messages, maxTokens, effort, temperature, providerId, modelId, signal }: {
     system?: string;
     messages: Array<{ role: string; content: string }>;
     maxTokens?: number;
+    effort?: "low" | "medium" | "high";
+    temperature?: number;
     providerId?: string | null;
     modelId?: string | null;
     signal?: AbortSignal;
@@ -606,6 +628,8 @@ class AIManager {
           system,
           messages,
           maxTokens: maxTokens || this.config.maxTokens,
+          effort,
+          temperature,
           signal,
         }), signal);
 
@@ -631,7 +655,7 @@ class AIManager {
   /**
    * Send an AI request (non-streaming) with retry and fallback
    */
-  async send({ system, prompt, page, pages, agent, maxTokens, effort, thinking, signal }: AISendOpts) {
+  async send({ system, prompt, page, pages, agent, maxTokens, effort, thinking, temperature, signal }: AISendOpts) {
     let contextString = "";
     if (page || pages) {
       contextString = buildContext({
@@ -666,7 +690,7 @@ class AIManager {
     return await withRetry(async () => {
       try {
         const result = await this._tryProvider(provider!.id, {
-          system: fullSystem, messages, maxTokens, effort, thinking, signal
+          system: fullSystem, messages, maxTokens, effort, thinking, temperature, signal
         });
         if (looksLikeMockFailure(result)) {
           throw new Error(extractMockError(result));
@@ -679,7 +703,7 @@ class AIManager {
         for (const fbId of fallbacks) {
           try {
             const fbResult = await this._tryProvider(fbId, {
-              system: fullSystem, messages, maxTokens, effort, thinking, signal
+              system: fullSystem, messages, maxTokens, effort, thinking, temperature, signal
             });
             if (fbResult && !looksLikeMockFailure(fbResult)) {
               return this.guardResponse(fbResult, pages, page);
@@ -694,7 +718,7 @@ class AIManager {
   /**
    * Send a multi-turn conversation
    */
-  async sendConversation({ system, messages, page, pages, agent, maxTokens, effort, thinking, signal }: AISendConversationOpts) {
+  async sendConversation({ system, messages, page, pages, agent, maxTokens, effort, thinking, temperature, signal }: AISendConversationOpts) {
     const provider = this.getActiveProvider();
     const providerConfig = this.config.providers[this.config.activeProvider || ""] || {};
 
@@ -732,6 +756,7 @@ class AIManager {
         maxTokens: maxTokens || this.config.maxTokens,
         effort,
         thinking,
+        temperature,
         signal,
       });
       if (looksLikeMockFailure(result)) {
@@ -744,7 +769,7 @@ class AIManager {
   /**
    * Stream an AI response with cancellation, retry, and intelligence engine
    */
-  async stream({ system, prompt, messages, page, pages, agent, maxTokens, effort, thinking, onChunk, signal }: AIStreamOpts) {
+  async stream({ system, prompt, messages, page, pages, agent, maxTokens, effort, thinking, temperature, onChunk, signal }: AIStreamOpts) {
     let provider = this.getActiveProvider();
     let providerConfig = provider ? (this.config.providers[provider.id] || {}) : {};
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
@@ -855,6 +880,7 @@ class AIManager {
           maxTokens: maxTokens || this.config.maxTokens,
           effort,
           thinking,
+          temperature,
           signal,
         });
         for await (const chunk of iterator) {
@@ -897,6 +923,7 @@ class AIManager {
                 maxTokens: maxTokens || this.config.maxTokens,
                 effort,
                 thinking,
+                temperature,
                 signal,
               });
               for await (const chunk of fbIterator) {
@@ -931,6 +958,7 @@ class AIManager {
         maxTokens: maxTokens || this.config.maxTokens,
         effort,
         thinking,
+        temperature,
         signal,
       }), signal, MAX_RETRIES, diagnostics);
 

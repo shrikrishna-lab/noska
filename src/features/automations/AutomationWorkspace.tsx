@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Zap, Plus, Clock, ChevronRight, Trash2, ToggleLeft, ToggleRight,
   Activity, Play, Loader2, Copy, ShieldCheck, Sparkles, Wand2, XCircle,
+  ArrowUp, ArrowDown,
   type LucideIcon,
 } from "lucide-react";
 import { uid } from "../../utils/blockModel";
@@ -88,7 +89,9 @@ export default function AutomationWorkspace({ onToast }: AutomationWorkspaceProp
               onCancel={() => setEditing(null)}
             />
           ) : tab === "mine" ? (
-            <MyAutomationsView automations={automations} loading={loading} onNew={() => setEditing("new")} onEdit={(a) => setEditing(a)} onToggle={async (a) => {
+            <MyAutomationsView automations={automations} loading={loading}
+              latestRuns={Object.fromEntries(runs.filter(r => r.sourceKind === "automation").map(r => [r.sourceId, r]))}
+              onNew={() => setEditing("new")} onEdit={(a) => setEditing(a)} onToggle={async (a) => {
               const updated = { ...a, status: a.status === "active" ? ("paused" as const) : ("active" as const) };
               setAutomations(prev => prev.map(x => x.id === a.id ? updated : x));
               await saveAutomation(updated);
@@ -130,9 +133,10 @@ function TabButton({ icon: Icon, label, active, onClick, count }: { icon: Lucide
 
 // ─── My Automations ────────────────────────────────────────────────────────
 
-function MyAutomationsView({ automations, loading, onNew, onEdit, onToggle, onDelete, onRun }: {
+function MyAutomationsView({ automations, loading, latestRuns, onNew, onEdit, onToggle, onDelete, onRun }: {
   automations: NoskaAutomation[];
   loading: boolean;
+  latestRuns: Record<string, RunRecord>;
   onNew: () => void;
   onEdit: (a: NoskaAutomation) => void;
   onToggle: (a: NoskaAutomation) => void;
@@ -175,6 +179,7 @@ function MyAutomationsView({ automations, loading, onNew, onEdit, onToggle, onDe
                       <span className="text-[9px] text-[var(--muted)] bg-[var(--bg)] px-1.5 py-0.5 rounded">{a.conditions.op.toUpperCase()} · {a.conditions.conditions.length} condition{a.conditions.conditions.length !== 1 ? "s" : ""}</span>
                     )}
                     <span className="text-[9px] text-[var(--muted)] bg-[var(--bg)] px-1.5 py-0.5 rounded">{a.steps.length} step{a.steps.length !== 1 ? "s" : ""}</span>
+                    <LastRunChip run={latestRuns[a.id]} />
                     <HealthBadge health={a.health} streak={a.failureStreak} />
                     {a.nextRunAt && a.status === "active" && (
                       <span className="text-[9px] text-[var(--muted)] bg-[var(--bg)] px-1.5 py-0.5 rounded">next: {new Date(a.nextRunAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
@@ -305,6 +310,35 @@ function NaturalLanguageBuilder({ onSave, onCancel }: { onSave: (a: NoskaAutomat
 }
 
 // ─── Health indicator (#21) ────────────────────────────────────────────────
+
+/** Last outcome for this automation from the live run store. */
+function LastRunChip({ run }: { run?: RunRecord }) {
+  if (!run) return null;
+  const meta: Record<string, { color: string }> = {
+    completed: { color: "text-[var(--success)]" },
+    failed: { color: "text-[var(--danger)]" },
+    rejected: { color: "text-[var(--danger)]" },
+    awaiting_approval: { color: "text-[var(--warning)]" },
+    interrupted: { color: "text-[var(--warning)]" },
+  };
+  const m = meta[run.status] ?? { color: "text-[var(--muted)]" };
+  const ago = run.startedAt ? timeAgoShort(run.startedAt) : "";
+  return (
+    <span className={`text-[9px] font-semibold bg-[var(--bg)] px-1.5 py-0.5 rounded ${m.color}`} title={`Last run ${run.status}${run.summary ? `: ${run.summary.slice(0, 120)}` : ""}`}>
+      last: {run.status.replace("_", " ")}{ago ? ` · ${ago}` : ""}
+    </span>
+  );
+}
+
+function timeAgoShort(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 function HealthBadge({ health, streak }: { health: NoskaAutomation["health"]; streak: number }) {
   const meta: Record<string, { label: string; cls: string }> = {
@@ -463,6 +497,7 @@ function AutomationEditor({ initial, onSave, onCancel }: { initial: NoskaAutomat
               <option value="page_updated">Page updated</option>
               <option value="task_completed">Task completed</option>
               <option value="title_changed">Title changed</option>
+              <option value="page_trashed">Page trashed</option>
             </select>
           </div>
           {form.trigger.type === "schedule" && (
@@ -492,7 +527,21 @@ function AutomationEditor({ initial, onSave, onCancel }: { initial: NoskaAutomat
           <label className="text-xs font-medium text-[var(--secondary)] mb-1 block">THEN (steps)</label>
           <div className="space-y-1.5">
             {form.steps.map((step, i) => (
-              <StepRow key={step.id} index={i} step={step} onChange={(s) => setForm(f => ({ ...f, steps: f.steps.map(x => x.id === s.id ? s : x) }))} onDelete={() => setForm(f => ({ ...f, steps: f.steps.filter(x => x.id !== step.id) }))} />
+              <StepRow
+                key={step.id}
+                index={i}
+                total={form.steps.length}
+                step={step}
+                onChange={(s) => setForm(f => ({ ...f, steps: f.steps.map(x => x.id === s.id ? s : x) }))}
+                onDelete={() => setForm(f => ({ ...f, steps: f.steps.filter(x => x.id !== step.id) }))}
+                onMove={(dir) => setForm(f => {
+                  const j = i + dir;
+                  if (j < 0 || j >= f.steps.length) return f;
+                  const next = [...f.steps];
+                  [next[i], next[j]] = [next[j], next[i]];
+                  return { ...f, steps: next };
+                })}
+              />
             ))}
           </div>
           <div className="flex gap-1.5 mt-2">
@@ -507,6 +556,12 @@ function AutomationEditor({ initial, onSave, onCancel }: { initial: NoskaAutomat
               className="flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition"
             >
               <Zap size={9} /> Tool step
+            </button>
+            <button
+              onClick={() => setForm(f => ({ ...f, steps: [...f.steps, { id: uid(), label: "", kind: "approval", instruction: "" }] }))}
+              className="flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition"
+            >
+              <ShieldCheck size={9} /> Approval step
             </button>
           </div>
           <p className="text-[9px] text-[var(--muted)] mt-1.5">
@@ -539,16 +594,16 @@ function FlowPreview({ automation }: { automation: NoskaAutomation }) {
         <FlowNode icon={<ShieldCheck size={10} />} label={`${automation.conditions.conditions.length} condition(s)`} tone="condition" />
       )}
       {automation.steps.map((s, i) => (
-        <FlowNode key={s.id} icon={<Sparkles size={10} />} label={`${i + 1}. ${s.label || (s.kind === "tool" ? s.toolName : "AI step")}`} tone={s.kind === "tool" ? "tool" : "ai"} />
+        <FlowNode key={s.id} icon={s.kind === "tool" ? <Zap size={10} /> : s.kind === "approval" ? <ShieldCheck size={10} /> : <Sparkles size={10} />} label={`${i + 1}. ${s.label || (s.kind === "tool" ? s.toolName : s.kind === "approval" ? "Approval" : "AI step")}`} tone={s.kind === "tool" ? "tool" : s.kind === "approval" ? "approval" : "ai"} />
       ))}
     </div>
   );
 }
 
-function FlowNode({ icon, label, tone }: { icon: React.ReactNode; label: string; tone: "trigger" | "condition" | "ai" | "tool" }) {
+function FlowNode({ icon, label, tone }: { icon: React.ReactNode; label: string; tone: "trigger" | "condition" | "ai" | "tool" | "approval" }) {
   const color =
     tone === "trigger" ? "text-[var(--warning)]" :
-    tone === "condition" ? "text-[var(--accent)]" :
+    tone === "condition" || tone === "approval" ? "text-[var(--accent)]" :
     tone === "tool" ? "text-[var(--success)]" : "text-[var(--accent)]";
   return (
     <div className="flex items-center gap-2">
@@ -560,24 +615,41 @@ function FlowNode({ icon, label, tone }: { icon: React.ReactNode; label: string;
   );
 }
 
-function StepRow({ index, step, onChange, onDelete }: { index: number; step: AutomationStep; onChange: (s: AutomationStep) => void; onDelete: () => void }) {  return (
+function StepRow({ index, total, step, onChange, onDelete, onMove }: {
+  index: number;
+  total: number;
+  step: AutomationStep;
+  onChange: (s: AutomationStep) => void;
+  onDelete: () => void;
+  onMove: (dir: -1 | 1) => void;
+}) {  return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5">
       <div className="flex items-center gap-2 mb-1.5">
         <span className="text-[9px] font-bold text-[var(--muted)]">{index + 1}.</span>
         <select value={step.kind} onChange={e => onChange({ ...step, kind: e.target.value as AutomationStep["kind"] })} className="rounded bg-[var(--bg)] border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text)] outline-none">
           <option value="ai_step">AI step</option>
           <option value="tool">Tool</option>
+          <option value="approval">Approval</option>
         </select>
         {step.kind === "tool" && (
           <select value={step.toolName || "append_blocks"} onChange={e => onChange({ ...step, toolName: e.target.value })} className="rounded bg-[var(--bg)] border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text)] outline-none">
             {TOOL_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         )}
-        <button onClick={onDelete} className="ml-auto text-[var(--muted)] hover:text-[var(--danger)]"><Trash2 size={10} /></button>
+        <div className="ml-auto flex items-center gap-0.5">
+          <button onClick={() => onMove(-1)} disabled={index === 0} title="Move up" className="p-0.5 text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-30"><ArrowUp size={10} /></button>
+          <button onClick={() => onMove(1)} disabled={index === total - 1} title="Move down" className="p-0.5 text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-30"><ArrowDown size={10} /></button>
+          <button onClick={onDelete} title="Delete step" className="p-0.5 text-[var(--muted)] hover:text-[var(--danger)]"><Trash2 size={10} /></button>
+        </div>
       </div>
       <input value={step.label} onChange={e => onChange({ ...step, label: e.target.value })} placeholder="Step label (shown in progress)" className="w-full rounded bg-[var(--bg)] border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--text)] outline-none mb-1" />
       {step.kind === "ai_step" ? (
         <textarea value={step.instruction || ""} onChange={e => onChange({ ...step, instruction: e.target.value })} rows={2} placeholder="Instruction for the AI…" className="w-full rounded bg-[var(--bg)] border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--text)] outline-none resize-none" />
+      ) : step.kind === "approval" ? (
+        <>
+          <textarea value={step.instruction || ""} onChange={e => onChange({ ...step, instruction: e.target.value })} rows={2} placeholder="What the user is approving — the run pauses here until they decide…" className="w-full rounded bg-[var(--bg)] border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--text)] outline-none resize-none" />
+          <p className="text-[9px] text-[var(--muted)] mt-1">The run pauses and shows an approval prompt. Nothing after this step executes until approved.</p>
+        </>
       ) : (
         <textarea
           value={String(step.toolParams?.content ?? "")}

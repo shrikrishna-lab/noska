@@ -11,7 +11,7 @@ import {
   Plus, Link, Paperclip, Search, Mic, AtSign, Terminal,
   ChevronRight, Bot, Zap, ShieldCheck, CheckCircle2, XCircle,
   Loader2, Clock, ArrowUp, Check, ThumbsUp, ThumbsDown, Copy,
-  ArrowDownToLine, Trash2, RefreshCw
+  ArrowDownToLine, Trash2, RefreshCw, Square
 } from "lucide-react";
 import { aiManager } from "../ai/AIManager";
 import { getAllProviders, getProvider } from "../ai/providers";
@@ -22,6 +22,7 @@ import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
 import { renderAIMarkdown } from "../utils/aiMarkdownRenderer";
 import {
   classifyIntent,
+  classifyIntentSmart,
   isAgenticIntent,
   agentRuntime,
   proposeAgent,
@@ -35,10 +36,10 @@ import type { AgentProposal, AutomationProposal, ApprovalRequest, StepProgress }
 import { saveAgent, blankAgent } from "../features/agents/agentStore";
 import { saveAutomation, blankAutomation } from "../features/automations/automationStore";
 import { refreshDefinitions } from "../intelligence/triggerService";
+import { useStreamBuffer } from "./ai/useStreamBuffer";
 import { capture } from "../lib/posthog";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
-import DocumentOutlineRuler, { type OutlineSection } from "./editor/DocumentOutlineRuler";
 
 const SPRING = { type: "spring", stiffness: 400, damping: 28 } as const;
 const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 } as const;
@@ -233,23 +234,6 @@ export default function AIRightPanel({
   const [attachments, setAttachments] = useState<unknown[]>([]);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
-  const chatOutlineSections = useMemo<OutlineSection[]>(() => {
-    if (!messages || messages.length < 2) return [];
-    return messages.map((m) => {
-      const isUser = m.role === "user";
-      const clean = (m.content || m.text || "").toString().trim();
-      const firstLine = clean.split("\n")[0]?.trim() || (isUser ? "You" : "Noska AI");
-      const width = Math.min(26, Math.max(10, Math.round((clean.length / 90) * 16) + 10));
-      return {
-        id: m.id,
-        title: isUser ? `You: ${firstLine.slice(0, 36)}` : `Noska AI: ${firstLine.slice(0, 36)}`,
-        snippet: clean.slice(0, 160),
-        type: isUser ? "user" : "assistant",
-        depth: isUser ? 0 : 1,
-        width
-      };
-    });
-  }, [messages]);
   const pageId = page?.id;
   const relations = useMemo(() => {
     if (!pageId) return { backlinks: [], outgoing: [] };
@@ -351,6 +335,18 @@ export default function AIRightPanel({
 
   useEffect(() => subscribeApprovals((list) => setPendingApprovals(list)), []);
 
+  // ── Live streaming (rAF-batched) + stop support ───────────────────────
+  const streamBuffer = useStreamBuffer();
+  const abortRef = useRef<AbortController | null>(null);
+  const streamingMsgIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    streamBuffer.onFlush((accumulated) => {
+      const targetId = streamingMsgIdRef.current;
+      if (!targetId) return;
+      setMessages(prev => prev.map(m => m.id === targetId ? { ...m, content: stripToolCalls(accumulated) } : m));
+    });
+  }, [streamBuffer]);
+
   const handleSend = useCallback(async (text: string) => {
     if (!text?.trim() || loading) return;
     const chatId = ensureActiveChat();
@@ -373,8 +369,9 @@ export default function AIRightPanel({
       : ([...aiChats, updatedChat] as unknown as AIChat[]);
     onChatsChange?.(chats);
 
-    // ── Intelligent routing ──────────────────────────────────────────
-    const intentResult = classifyIntent(text);
+    // ── Intelligent routing (rules first, LLM refinement for ambiguous
+    // multi-step asks) ───────────────────────────────────────────────────
+    const intentResult = await classifyIntentSmart(text);
 
     try {
       if (intentResult.intent === "agent_intent" || intentResult.intent === "automation_intent") {
@@ -439,64 +436,122 @@ export default function AIRightPanel({
         return;
       }
 
-      // ── Plain conversational Q&A (existing behavior preserved) ─────
+      // ── Plain conversational Q&A — streamed live with rAF batching ──
       const startedAt = Date.now();
-      const result = await aiManager.sendConversation({
-        messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
-        page, pages,
-      });
+      const assistantMeta = { model: modelName, provider: providerName, latencyMs: 0 };
+      const aiMsgId = uid();
+      const aiPlaceholder: AIChatMessage = { id: aiMsgId, role: "assistant", content: "", createdAt: now(), ...assistantMeta };
+      setMessages([...updatedMessages, aiPlaceholder]);
+
+      // Selection-aware context: whatever block the user has selected on the
+      // page is appended to the API payload (not the stored chat message) as
+      // the primary focus hint, without changing the visible chat history.
+      const apiMessages: Array<{ role: string; content: string }> = updatedMessages.map(m => ({ role: m.role, content: m.content || m.text || "" }));
+      const selectedBlock = page?.blocks?.find((b) => (b as unknown as { selected?: boolean }).selected);
+      const selectedText = (selectedBlock as unknown as { text?: string } | undefined)?.text || "";
+      if (selectedText.trim() && apiMessages.length > 0) {
+        const last = apiMessages[apiMessages.length - 1];
+        apiMessages[apiMessages.length - 1] = {
+          ...last,
+          content: `${last.content}\n\n[System] The user has selected this text on the page — treat it as the primary focus when relevant:\n"""\n${selectedText}\n"""`,
+        };
+      }
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      streamingMsgIdRef.current = aiMsgId;
+      streamBuffer.reset();
+
+      let streamed = "";
+      try {
+        streamed = await aiManager.stream({
+          messages: apiMessages,
+          page, pages,
+          agent: activeAgent,
+          signal: controller.signal,
+          onChunk: (partial) => streamBuffer.appendChunk(partial),
+        });
+      } finally {
+        streamBuffer.flush();
+        streamingMsgIdRef.current = null;
+        abortRef.current = null;
+      }
       const latencyMs = Date.now() - startedAt;
+      setTokenEstimate(prev => prev + Math.ceil(streamed.length / 4));
 
-      let processedMessages = updatedMessages;
+      let processedMessages: AIChatMessage[] = [...updatedMessages];
 
-      if (hasToolCalls(result)) {
-        const cleaned = stripToolCalls(result);
+      if (hasToolCalls(streamed)) {
+        const cleaned = stripToolCalls(streamed);
         if (cleaned?.trim()) {
-          const toolMsg: AIChatMessage = { id: uid(), role: "assistant", content: cleaned, createdAt: now(), model: modelName, provider: providerName, latencyMs };
+          const toolMsg: AIChatMessage = { id: uid(), role: "assistant", content: cleaned, createdAt: now(), ...assistantMeta, latencyMs };
           processedMessages = [...processedMessages, toolMsg];
           setMessages(processedMessages);
         }
-        const toolResults = await executeAllToolCalls(result, toolContext);
+        const toolResults = await executeAllToolCalls(streamed, toolContext);
         const toolResultText = toolResults.map((r: { name: string; error?: string; result?: unknown }) => {
           const success = r.error ? `Error: ${r.error}` : JSON.stringify(r.result, null, 2);
           return `Tool: ${r.name}\nResult: ${success}`;
         }).join("\n\n");
-        const followUp = await aiManager.sendConversation({
-          messages: [
-            ...processedMessages.map(m => ({ role: m.role, content: m.content })),
-            { role: "user", content: `Tool execution results:\n${toolResultText}\n\nSummarize or continue based on these results.` }
-          ],
-          page, pages,
-        });
+
+        // Follow-up synthesis — also streamed so users see progress immediately.
+        const followUpId = uid();
+        const followUpPlaceholder: AIChatMessage = { id: followUpId, role: "assistant", content: "", createdAt: now(), ...assistantMeta };
+        setMessages(prev => [...prev.filter(m => m.id !== aiMsgId || cleaned?.trim()), followUpPlaceholder]);
+        streamingMsgIdRef.current = followUpId;
+        streamBuffer.reset();
+        let followUp = "";
+        try {
+          followUp = await aiManager.stream({
+            messages: [
+              ...apiMessages,
+              ...(cleaned?.trim() ? [{ role: "assistant", content: cleaned }] : []),
+              { role: "user", content: `Tool execution results:\n${toolResultText}\n\nSummarize or continue based on these results.` },
+            ],
+            page, pages,
+            agent: activeAgent,
+            signal: controller.signal,
+            onChunk: (partial) => streamBuffer.appendChunk(partial),
+          });
+        } finally {
+          streamBuffer.flush();
+          streamingMsgIdRef.current = null;
+        }
         const finalContent = hasToolCalls(followUp) ? stripToolCalls(followUp) : followUp;
-        const finalMsg: AIChatMessage = { id: uid(), role: "assistant", content: finalContent, createdAt: now(), model: modelName, provider: providerName, latencyMs };
-        processedMessages = [...processedMessages, finalMsg];
+        processedMessages = [...processedMessages, { id: followUpId, role: "assistant", content: finalContent, createdAt: now(), ...assistantMeta, latencyMs }];
       } else {
-        const aiMsg: AIChatMessage = { id: uid(), role: "assistant", content: result, createdAt: now(), model: modelName, provider: providerName, latencyMs };
+        const aiMsg: AIChatMessage = { id: aiMsgId, role: "assistant", content: streamed, createdAt: now(), ...assistantMeta, latencyMs };
         processedMessages = [...processedMessages, aiMsg];
       }
-
-      setTokenEstimate(prev => prev + Math.ceil(result.length / 4));
 
       setMessages(processedMessages);
       const finalChats = chats.map(c => c.id === chatId ? { ...c, messages: processedMessages, updatedAt: now() } : c) as unknown as AIChat[];
       onChatsChange?.(finalChats);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : undefined;
-      const friendly = message?.includes("not configured") || message?.includes("API key")
-        ? "AI provider not configured. Add an API key in Settings → AI Providers."
-        : message?.includes("fetch") || message?.includes("network") || message?.includes("Failed to fetch")
-          ? "Network error. Check your internet connection and try again."
-          : message?.includes("timeout") || message?.includes("timed out")
-            ? "AI request timed out. Try again or use a different model."
-            : message || "AI request failed. Please try again.";
+      const stopped = message === "Generation stopped." || (err as { type?: string })?.type === "cancelled";
+      const friendly = stopped
+        ? "Generation stopped."
+        : message?.includes("not configured") || message?.includes("API key")
+          ? "AI provider not configured. Add an API key in Settings → AI Providers."
+          : message?.includes("fetch") || message?.includes("network") || message?.includes("Failed to fetch")
+            ? "Network error. Check your internet connection and try again."
+            : message?.includes("timeout") || message?.includes("timed out")
+              ? "AI request timed out. Try again or use a different model."
+              : message || "AI request failed. Please try again.";
       const errMsg: AIChatMessage = { id: uid(), role: "assistant", content: friendly, createdAt: now(), model: modelName, provider: providerName };
       setMessages([...updatedMessages, errMsg]);
       onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: [...updatedMessages, errMsg], updatedAt: now() } : c) as unknown as AIChat[]);
     } finally {
       setLoading(false);
     }
-  }, [loading, messages, aiChats, activeChatId, page, pages, appView, pageMode, apiKey, aiProvider, nvidiaKey, toolContext, onChatsChange, onActiveChat, ensureActiveChat]);
+  }, [loading, messages, aiChats, activeChatId, page, pages, appView, pageMode, activeAgent, openPanePages, apiKey, aiProvider, nvidiaKey, toolContext, onChatsChange, onActiveChat, ensureActiveChat, streamBuffer]);
+
+  const handleStop = useCallback(() => {
+    if (activeRunId) agentRuntime.abort(activeRunId);
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, [activeRunId]);
 
   const handleQuickAction = useCallback((actionId: string) => {
     const action = AI_ACTIONS.find(a => a.id === actionId) || QUICK_ACTIONS.find(a => a.id === actionId) || WORKFLOW_ACTIONS.find(a => a.id === actionId);
@@ -775,13 +830,6 @@ export default function AIRightPanel({
               ref={chatScrollRef}
               className="flex-1 overflow-y-auto min-h-0 p-3.5 scrollbar-thin space-y-3 select-text relative"
             >
-              {chatOutlineSections.length >= 2 && (
-                <DocumentOutlineRuler
-                  sections={chatOutlineSections}
-                  containerRef={chatScrollRef}
-                  side="right"
-                />
-              )}
               {/* Clean Empty State */}
               {!hasMessages && !loading && (
                 <div className="flex flex-col items-center justify-center py-12 text-center select-none">
@@ -998,10 +1046,11 @@ export default function AIRightPanel({
                   {loading ? (
                     <button
                       type="button"
-                      onClick={() => {}}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] transition cursor-pointer shrink-0"
+                      onClick={handleStop}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--hover)] transition cursor-pointer shrink-0"
+                      title="Stop generating"
                     >
-                      <Loader2 size={13} className="animate-spin text-[var(--accent)]" />
+                      <Square size={10} fill="currentColor" />
                     </button>
                   ) : (
                     <button

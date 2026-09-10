@@ -40,11 +40,17 @@ type ConnectorRow = Row & {
   id: string; slug: string; name: string;
   mcp_server_url: string; oauth_config: Row; default_scopes: string[];
   tool_scope_map: Row; call_rate_limit: number;
+  /** Which flows this connector supports: 'oauth' and/or 'token'. */
+  auth_modes: string[] | null;
 };
 type ConnectionRow = Row & {
   id: string; user_id: string; connector_id: string; status: string;
   access_token_encrypted: string | null; refresh_token_encrypted: string | null;
   token_expires_at: string | null; granted_scopes: string[];
+  /** 'oauth' | 'token' — how this connection was established. */
+  auth_mode: string | null;
+  /** Per-connection MCP server URL (Custom MCP Server, self-hosted). */
+  server_url_override: string | null;
 };
 
 /* ─── In-isolate caches (per edge-runtime instance; TTL-bounded) ─── */
@@ -83,6 +89,20 @@ export async function resolveConnector(idOrSlug: string): Promise<ConnectorRow> 
 
 function isConnectorActive(c: Row): boolean {
   return c.is_active === true;
+}
+
+function authModes(connector: ConnectorRow): string[] {
+  return Array.isArray(connector.auth_modes) && connector.auth_modes.length
+    ? connector.auth_modes.map(String)
+    : ["oauth"];
+}
+
+function supportsOAuth(connector: ConnectorRow): boolean {
+  return authModes(connector).includes("oauth");
+}
+
+function supportsToken(connector: ConnectorRow): boolean {
+  return authModes(connector).includes("token");
 }
 
 /* ─── OAuth client credentials: env vars win over the catalog row so
@@ -125,6 +145,11 @@ export async function startConnect(
   connector: ConnectorRow,
   redirectUri: string,
 ): Promise<{ authorize_url: string; connector: Row }> {
+  if (!supportsOAuth(connector)) {
+    throw errors.validation(
+      `${connector.name} does not support OAuth connect — use the token/API-key flow instead.`,
+    );
+  }
   const { clientId, cfg } = clientCredentials(connector);
   const authorizationEndpoint = requiredEndpoint(cfg, "authorization_endpoint", connector.slug);
 
@@ -203,7 +228,18 @@ export async function connectorSlugFromState(state?: string): Promise<string> {
   }
 }
 
-async function persistConnection(userId: string, connector: ConnectorRow, tokens: Row): Promise<Row> {
+interface PersistExtras {
+  authMode?: "oauth" | "token";
+  serverUrlOverride?: string | null;
+  label?: string;
+}
+
+async function persistConnection(
+  userId: string,
+  connector: ConnectorRow,
+  tokens: Row,
+  extras: PersistExtras = {},
+): Promise<Row> {
   const expiresIn = Number(tokens.expires_in ?? 3600);
   const accessToken = String(tokens.access_token);
   const granted = typeof tokens.scope === "string"
@@ -224,8 +260,11 @@ async function persistConnection(userId: string, connector: ConnectorRow, tokens
     refresh_token_encrypted: tokens.refresh_token
       ? await encryptSecret(String(tokens.refresh_token), TOKEN_KEY_ENV)
       : null,
-    token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+    token_expires_at: tokens.expires_in === undefined ? null : new Date(Date.now() + expiresIn * 1000).toISOString(),
     granted_scopes: granted,
+    auth_mode: extras.authMode ?? "oauth",
+    server_url_override: extras.serverUrlOverride ?? null,
+    label: extras.label ?? "",
     external_account_label: labelFromIdToken(tokens.id_token),
     token_hint: accessToken.slice(-4),
     metadata: {},
@@ -247,6 +286,89 @@ function labelFromIdToken(idToken: unknown): string {
     return typeof payload.email === "string" ? payload.email : "";
   } catch {
     return "";
+  }
+}
+
+/* ─── Token/API-key connect (no OAuth round trip) ────────────────────── */
+
+export interface TokenConnectInput {
+  token: string;
+  label?: string;
+  /** Required for the Custom MCP Server connector; overrides the
+   * catalog URL for any connector when provided. */
+  serverUrl?: string;
+}
+
+/** Connect by pasting a token (Notion internal integration secret,
+ * GitHub PAT, arbitrary bearer token for a custom MCP server). The
+ * token is validated with a live initialize + tools/list probe BEFORE
+ * it is persisted, so a typo never stores a dead connection. */
+export async function connectWithToken(
+  userId: string,
+  connector: ConnectorRow,
+  input: TokenConnectInput,
+): Promise<{ connector: Row; connection: Row; tool_count: number }> {
+  if (!supportsToken(connector)) {
+    throw errors.validation(
+      `${connector.name} does not support token connect — use the OAuth flow instead.`,
+    );
+  }
+  const token = String(input.token ?? "").trim();
+  if (!token) throw errors.validation("token is required.");
+  const serverUrl = (input.serverUrl ?? "").trim() || connector.mcp_server_url;
+  if (!/^https:\/\//i.test(serverUrl)) {
+    throw errors.validation("A valid https:// MCP server URL is required.");
+  }
+
+  // Probe: prove the URL + token actually speak MCP before persisting.
+  const probe = new McpClient({ serverUrl, accessToken: token });
+  let tools: string[] = [];
+  try {
+    await probe.connect();
+    tools = (await probe.listTools()).map((t) => String(t.name));
+  } catch (err) {
+    throw new PlatformError(400, "CONNECTION_PROBE_FAILED",
+      `Could not reach the MCP server with this token: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const connection = await persistConnection(userId, connector, { access_token: token }, {
+    authMode: "token",
+    serverUrlOverride: input.serverUrl?.trim() ? serverUrl : null,
+    label: String(input.label ?? "").slice(0, 200),
+  });
+  await audit({
+    userId, action: "connector.connected", resource: "connector",
+    resourceId: connector.slug, surface: "token",
+  });
+  bustUserCaches(userId, connector.id);
+  return { connector: safeConnector(connector), connection, tool_count: tools.length };
+}
+
+/** Health check for the settings UI: reconnects to the MCP server and
+ * re-activates an expired connection if the server accepts the token. */
+export async function testConnection(userId: string, connectionId: string): Promise<{ ok: boolean; tool_count: number }> {
+  const { data } = await db().from("user_connections").select("*")
+    .eq("user_id", userId).eq("id", connectionId).maybeSingle();
+  if (!data) throw errors.notFound("Connection");
+  const connection = data as ConnectionRow;
+  const connector = await resolveConnector(String(connection.connector_id));
+
+  try {
+    const accessToken = await ensureFreshAccessToken(userId, connector, connection);
+    const client = await getConnectedClient(connector, accessToken, connection.server_url_override);
+    const tools = await client.listTools();
+    if (connection.status === "expired") {
+      await db().from("user_connections").update({ status: "connected" })
+        .eq("user_id", userId).eq("id", connection.id);
+      bustUserCaches(userId, connector.id);
+    }
+    return { ok: true, tool_count: tools.length };
+  } catch (err) {
+    if (err instanceof McpTransportError && (err.status === 401 || err.status === 403)) {
+      await markConnectionExpired(userId, connection);
+      throw new PlatformError(401, "CONNECTION_EXPIRED", `${connector.name} rejected the access token — reconnect it.`);
+    }
+    throw err;
   }
 }
 
@@ -317,11 +439,16 @@ async function postForm(
 
 /* ─── MCP session management ─── */
 
-async function getConnectedClient(connector: ConnectorRow, accessToken: string): Promise<McpClient> {
-  const key = String(connector.id);
+async function getConnectedClient(
+  connector: ConnectorRow,
+  accessToken: string,
+  serverUrlOverride?: string | null,
+): Promise<McpClient> {
+  const serverUrl = serverUrlOverride?.trim() || connector.mcp_server_url;
+  const key = `${connector.id}:${serverUrl}`;
   const cached = clientCache.get(key);
   if (cached && cached.token === accessToken && cached.expires > Date.now()) return cached.client;
-  const client = new McpClient({ serverUrl: connector.mcp_server_url, accessToken });
+  const client = new McpClient({ serverUrl, accessToken });
   await client.connect();
   clientCache.set(key, { client, token: accessToken, expires: Date.now() + CLIENT_CACHE_TTL_MS });
   return client;
@@ -342,7 +469,8 @@ export async function listAvailableTools(
   }
 
   let query = db().from("user_connections").select(`
-      id, connector_id, status, token_expires_at, access_token_encrypted, refresh_token_encrypted, connected_at,
+      id, connector_id, status, token_expires_at, access_token_encrypted, refresh_token_encrypted,
+      connected_at, auth_mode, server_url_override,
       connectors!inner(id, slug, name, mcp_server_url, is_active)
     `)
     .eq("user_id", userId).eq("status", "connected");
@@ -356,7 +484,7 @@ export async function listAvailableTools(
     if (!isConnectorActive(connector)) return { tools: [] as Row[], unavailable: [] as Row[] };
     try {
       const accessToken = await ensureFreshAccessToken(userId, connector as unknown as ConnectorRow, connection);
-      const client = await getConnectedClient(connector as unknown as ConnectorRow, accessToken);
+      const client = await getConnectedClient(connector as unknown as ConnectorRow, accessToken, connection.server_url_override);
       const tools = await client.listTools();
       return {
         tools: tools.map((t) => ({
@@ -435,10 +563,14 @@ export async function callTool(
       { limit: connector.call_rate_limit, retry_after_seconds: 60 });
   }
 
-  // ── Scope gate: tool_scope_map names the OAuth scopes a tool needs. ──
-  const requiredScopes = Array.isArray((connector.tool_scope_map ?? {})[toolName])
-    ? ((connector.tool_scope_map ?? {})[toolName] as unknown[]).map(String)
-    : [];
+  // ── Scope gate: tool_scope_map names the OAuth scopes a tool needs.
+  // Token/API-key connections skip it — the token's server-side ACL is
+  // the boundary, and granted_scopes is empty by design. ──
+  const requiredScopes = connection.auth_mode === "token"
+    ? []
+    : Array.isArray((connector.tool_scope_map ?? {})[toolName])
+      ? ((connector.tool_scope_map ?? {})[toolName] as unknown[]).map(String)
+      : [];
   const granted = new Set(connection.granted_scopes ?? []);
   const missing = requiredScopes.filter((s) => !granted.has(s));
   if (missing.length) {
@@ -449,7 +581,7 @@ export async function callTool(
   let result: McpCallResult;
   try {
     const accessToken = await ensureFreshAccessToken(userId, connector, connection);
-    const client = await getConnectedClient(connector, accessToken);
+    const client = await getConnectedClient(connector, accessToken, connection.server_url_override);
     result = await client.callTool(toolName, args);
   } catch (err) {
     await logToolCall(userId, connector, connection, toolName, "failure",
@@ -542,7 +674,7 @@ export async function revokeConnection(userId: string, connectionId: string): Pr
 
 export async function listConnectors(): Promise<{ connectors: Row[] }> {
   const { data, error } = await db().from("connectors").select(
-    "id,slug,name,description,publisher,icon_url,default_scopes,call_rate_limit",
+    "id,slug,name,description,publisher,icon_url,default_scopes,auth_modes,call_rate_limit",
   ).eq("is_active", true).order("name");
   if (error) throw errors.internal(error.message);
   return { connectors: data ?? [] };
@@ -550,7 +682,8 @@ export async function listConnectors(): Promise<{ connectors: Row[] }> {
 
 export async function listConnections(userId: string): Promise<{ connections: Row[] }> {
   const { data, error } = await db().from("user_connections").select(`
-      id, connector_id, status, external_account_label, granted_scopes, token_hint,
+      id, connector_id, status, auth_mode, server_url_override, label,
+      external_account_label, granted_scopes, token_hint,
       connected_at, last_used_at, revoked_at,
       connectors(slug, name, icon_url)
     `)

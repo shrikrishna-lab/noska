@@ -37,13 +37,17 @@ import {
   RotateCw,
   Keyboard,
   CreditCard,
+  Plug,
+  Layout,
   type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
 import CustomProviders from "./settings/CustomProviders";
+import IntegrationsSettings from "./settings/IntegrationsSettings";
 import VoiceCustomizationSettings from "./settings/VoiceCustomizationSettings";
 import ShortcutsSettings from "./ShortcutsSettings";
 import { BillingPromotionalTab } from "./settings/BillingPromotionalTab";
+import SidebarCustomizer from "./customization/SidebarCustomizer";
 import { PageIcon } from "./PageIcon";
 import ApiKeysManager from "../features/api/ApiKeysManager";
 import { aiManager } from "../ai/AIManager";
@@ -60,7 +64,7 @@ import {
   sendPageInvite, fetchSentPageInvites, withdrawPageInvite, type PageInviteRole,
   isUsernameAvailable, isValidUsernameFormat, normalizeUsername, setUsername,
   fetchUserProfile, updateUserProfile, detectLocationFromIp,
-  uploadImage, ensureImagesBucket
+  uploadImage, ensureImagesBucket, searchUsersByUsername, preloadUserDirectory, searchUsersInMemory, type UserSearchResult
 } from "../lib/supabaseService";
 import type { Page } from "../lib/supabaseService";
 import type { Tables } from "../../types/supabase";
@@ -455,7 +459,7 @@ export function SettingsModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 10 }}
         transition={SPRING_PRESETS.soft}
-        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" || tab === "Billing" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[#e8e4db] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
+        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" || tab === "Billing" || tab === "Sidebar" || tab === "Customization" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[#e8e4db] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Left Wispr Flow Clean Sidebar */}
@@ -471,6 +475,7 @@ export function SettingsModal({
                   { id: "Shortcuts", label: "Shortcuts", icon: Keyboard },
                   { id: "Voice & Dictation", label: "Voice & Dictation", icon: Mic },
                   { id: "Noska AI", label: "Noska AI", icon: Sparkles },
+                  { id: "Integrations", label: "Integrations", icon: Plug },
                   { id: "Developer", label: "Developer", icon: Code2 },
                   { id: "Offline", label: "Offline", icon: HardDrive },
                 ].map((item) => (
@@ -492,7 +497,7 @@ export function SettingsModal({
               <div className="space-y-0.5">
                 <SettingsNavItem icon={UserRound} label="My Profile" active={tab === "Profile"} onClick={() => setTab("Profile")} />
                 <SettingsNavItem icon={Bot} label={displayName || "Account"} active={tab === "Account"} onClick={() => setTab("Account")} />
-                <SettingsNavItem icon={Palette} label="Customization" active={tab === "Customization"} onClick={() => setTab("Customization")} />
+                <SettingsNavItem icon={Palette} label="Customization" active={tab === "Customization" || tab === "Sidebar"} onClick={() => setTab("Customization")} />
               </div>
             </div>
 
@@ -629,6 +634,20 @@ export function SettingsModal({
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {tab === "Integrations" && (
+            <div className="max-w-2xl space-y-6 pb-16 font-sans">
+              <div className="pt-1">
+                <h1 className="text-[28px] font-normal tracking-tight font-serif text-[#1c1b18] dark:text-white">
+                  Integrations
+                </h1>
+                <p className="text-xs text-[#706c64] dark:text-white/60 mt-1">
+                  Connect your platforms — Notion, GitHub, Slack, Gmail, Calendar, or any MCP server. Connected tools become available to Noska AI, agents, and automations.
+                </p>
+              </div>
+              <IntegrationsSettings onToast={(msg) => setSaveStatus(msg)} />
             </div>
           )}
 
@@ -1290,8 +1309,13 @@ export function SettingsModal({
             </div>
           )}
 
-          {tab === "Customization" && (
-            <ProfileCardCustomization />
+          {(tab === "Customization" || tab === "Sidebar") && (
+            <ProfileCardCustomization
+              onToast={(msg) => {
+                setSaveStatus(msg);
+                setTimeout(() => setSaveStatus(""), 3000);
+              }}
+            />
           )}
           {tab === "Noska AI" && (
             <NoskaAISettings
@@ -1728,6 +1752,12 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
   const [generalAccessOpen, setGeneralAccessOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(true);
   const [copied, setCopied] = useState(false);
+  // Username typeahead: as you type, matching user_profiles rows show in a
+  // dropdown — click one to select it, then Invite sends to that exact user.
+  const [suggestions, setSuggestions] = useState<UserSearchResult[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1753,6 +1783,72 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
 
   React.useEffect(() => { loadSentInvites(); }, [loadSentInvites]);
 
+  // Preload directory in memory as soon as Share modal opens for 0ms instant typing responses
+  React.useEffect(() => {
+    preloadUserDirectory().catch(() => {});
+  }, []);
+
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Snappy typeahead search — instantaneous in-memory results + fast async sync
+  React.useEffect(() => {
+    const clean = usernameInput.trim().replace(/^@/, "");
+    if (clean.length < 1 || selectedUser?.username === clean.toLowerCase()) {
+      setSuggestions([]);
+      setSearched(false);
+      setIsSearching(false);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const invited = new Set(sentInvites.map((inv) => (inv.invitee_username || "").toLowerCase()));
+
+    // 1. Instant 0ms memory lookup
+    const memMatches = searchUsersInMemory(clean, 6, currentUserId || undefined);
+    const filteredMem = memMatches.filter((r) => !invited.has(r.username.toLowerCase()));
+
+    if (filteredMem.length > 0) {
+      setSuggestions(filteredMem);
+      setSearched(true);
+      setIsSearching(false);
+      setShowSuggestions(true);
+    } else {
+      setIsSearching(true);
+      setShowSuggestions(true);
+    }
+
+    let isMounted = true;
+
+    // 2. Fast background query for complete/fresh directory matches
+    const t = setTimeout(async () => {
+      try {
+        const results = await searchUsersByUsername(clean, 6, currentUserId || undefined);
+        if (!isMounted) return;
+        setSuggestions(results.filter((r) => !invited.has(r.username.toLowerCase())));
+        setSearched(true);
+      } catch {
+        if (!isMounted) return;
+        if (filteredMem.length === 0) setSuggestions([]);
+        setSearched(true);
+      } finally {
+        if (isMounted) setIsSearching(false);
+      }
+    }, 60);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(t);
+    };
+  }, [usernameInput, currentUserId, sentInvites, selectedUser]);
+
+  const selectSuggestedUser = (user: UserSearchResult) => {
+    setSelectedUser(user);
+    setUsernameInput(user.username);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setInviteError(null);
+  };
+
   const currentUser = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.();
   const userName = currentUser?.userName || 'Workspace User';
   const userHandle = currentUsername ? `@${currentUsername}` : (currentUser?.userId || 'local@workspace');
@@ -1770,8 +1866,9 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const sendInvite = async () => {
-    const handle = usernameInput.trim().replace(/^@/, "");
+  const sendInvite = async (targetUser?: UserSearchResult) => {
+    const userToInvite = targetUser || selectedUser;
+    const handle = (userToInvite ? userToInvite.username : usernameInput).trim().replace(/^@/, "");
     if (!handle || !currentUserId) return;
     setSending(true);
     setInviteError(null);
@@ -1782,9 +1879,12 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
         inviterUserId: currentUserId,
         inviterUsername: currentUsername,
         inviteeUsername: handle,
+        inviteeUserId: userToInvite?.userId,
         role: access,
       });
       setUsernameInput("");
+      setSelectedUser(null);
+      setShowSuggestions(false);
       onToast?.(`Invited @${handle.toLowerCase()}`);
       await loadSentInvites();
     } catch (e) {
@@ -1809,151 +1909,351 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 backdrop-blur-[6px] bg-black/30"
+      className="fixed inset-0 z-50 backdrop-blur-md bg-black/40 flex items-center justify-center p-4 select-none"
       onMouseDown={onClose}
     >
-      <div className="relative mx-auto flex h-full max-w-5xl items-start justify-end px-6 pt-16" onMouseDown={(e) => e.stopPropagation()}>
-        {importOpen && (
-          <div className="absolute left-6 top-24 w-[300px] rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 shadow-[var(--shadow-floating)] fade-in">
-            <button onClick={() => setImportOpen(false)} className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded text-[var(--text-secondary)] hover:bg-[var(--surface-3)] cursor-pointer">
-              <X size={14} />
-            </button>
-            <div className="mb-3 flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded bg-[var(--surface-3)] text-xs font-bold text-[var(--text)]">S</span>
-              <span className="grid h-8 w-8 place-items-center rounded bg-[var(--surface-3)] text-xs font-bold text-[var(--text)]">G</span>
-              <span className="grid h-8 w-8 place-items-center rounded bg-[var(--surface-3)] text-xs font-bold text-[var(--text)]">M</span>
+      {/* Main Share & Publish Modal */}
+      <motion.div
+        initial={{ y: 8, opacity: 0, scale: 0.97 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 8, opacity: 0, scale: 0.97 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="w-[500px] max-w-[calc(100vw-32px)] rounded-[28px] border border-black/[0.08] dark:border-white/10 bg-white dark:bg-[#1a1917] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.25)] font-sans p-6 text-neutral-900 dark:text-white relative"
+      >
+        {/* Header: Page Icon, Title & Subtitle, Close Button */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-2xl bg-neutral-100 dark:bg-white/5 border border-black/[0.06] dark:border-white/10 flex items-center justify-center text-lg shrink-0 shadow-2xs">
+              <PageIcon icon={page.icon} size={20} />
             </div>
-            <div className="pr-6 text-sm font-semibold leading-5 text-[var(--text)]">Import contacts from Google, Slack, or Microsoft</div>
-            <div className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">Collaborate faster by importing contacts from your favorite tools.</div>
-            <div className="mt-4 flex justify-end gap-3 text-sm">
-              <button onClick={() => setImportOpen(false)} className="text-[var(--text-secondary)] hover:text-[var(--text)] cursor-pointer">Not now</button>
-              <button onClick={() => setImportOpen(false)} className="font-semibold text-[var(--text)] hover:underline cursor-pointer">Get started</button>
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-neutral-900 dark:text-white truncate leading-tight">
+                {page.title || "Untitled"}
+              </h2>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
+                Share and manage access permissions
+              </p>
             </div>
           </div>
-        )}
-        <motion.div
-          initial={{ y: -15, opacity: 0, scale: 0.96 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
-          exit={{ y: -10, opacity: 0, scale: 0.96 }}
-          transition={SPRING_PRESETS.soft}
-          className="w-[420px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] shadow-[var(--shadow-modal)]"
-        >
-          <div className="flex border-b border-[var(--border-strong)] px-4">
-            {["share", "publish"].map((item) => (
+
+          <button
+            onClick={onClose}
+            className="h-8 w-8 rounded-full flex items-center justify-center text-neutral-400 hover:text-neutral-700 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer shrink-0"
+            title="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Top Segmented Mode Switcher: Share / Publish to Web */}
+        <div className="mt-5 p-1 rounded-2xl bg-neutral-100/80 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06] grid grid-cols-2 gap-1">
+          {[
+            { id: "share", label: "Share", icon: Share2 },
+            { id: "publish", label: "Publish to Web", icon: Globe }
+          ].map((item) => {
+            const isSelected = tab === item.id;
+            const Icon = item.icon;
+            return (
               <button
-                key={item}
-                onClick={() => setTab(item)}
-                className={`border-b-2 px-3 py-3 text-sm font-medium capitalize ${
-                  tab === item ? "border-[var(--accent)] text-[var(--text)]" : "border-transparent text-[var(--secondary)] hover:text-[var(--text)]"
+                key={item.id}
+                onClick={() => setTab(item.id)}
+                className={`relative py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer select-none ${
+                  isSelected
+                    ? "bg-white dark:bg-[#282724] text-neutral-900 dark:text-white shadow-xs border border-black/[0.04] dark:border-white/10"
+                    : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white"
                 }`}
               >
-                {item}
+                <Icon size={14} />
+                <span>{item.label}</span>
               </button>
-            ))}
-          </div>
-          {tab === "share" ? (
-            <div className="p-4">
-              <div className="flex gap-2">
-                <MotionInput
+            );
+          })}
+        </div>
+
+        {tab === "share" ? (
+          <div className="mt-4 space-y-4">
+            {/* Invite Input Bar */}
+            <div className="relative">
+              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-neutral-100/70 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.08] focus-within:border-black/20 dark:focus-within:border-white/20 transition">
+                <Search size={14} className="text-neutral-400 ml-2.5 shrink-0" />
+                <input
                   value={usernameInput}
-                  onChange={(e) => { setUsernameInput(e.target.value); setInviteError(null); }}
+                  onChange={(e) => { setUsernameInput(e.target.value); setSelectedUser(null); setInviteError(null); }}
+                  onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                   onKeyDown={(e) => { if (e.key === "Enter" && usernameInput.trim() && !sending) sendInvite(); }}
-                  placeholder="Username, e.g. jane_doe"
-                  className="min-w-0 flex-1"
+                  placeholder="Invite user or email..."
+                  className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 outline-none border-none ring-0 focus:ring-0 focus:outline-none"
+                  style={{ outline: "none", boxShadow: "none" }}
                 />
-                <select
-                  value={access}
-                  onChange={(e) => setAccess(e.target.value as PageInviteRole)}
-                  className="shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface-3)] px-2 text-xs text-[var(--text)] outline-none cursor-pointer hover:bg-[var(--surface-4)] transition"
-                >
-                  <option value="editor">Can edit</option>
-                  <option value="commenter">Can comment</option>
-                  <option value="viewer">Can view</option>
-                </select>
+
+                {/* Role Pill Dropdown */}
+                <div className="relative shrink-0">
+                  <select
+                    value={access}
+                    onChange={(e) => setAccess(e.target.value as PageInviteRole)}
+                    className="appearance-none rounded-xl border border-black/[0.08] dark:border-white/10 bg-white dark:bg-[#282724] pl-2.5 pr-6 py-1.5 text-xs font-medium text-neutral-800 dark:text-neutral-200 outline-none cursor-pointer shadow-2xs hover:bg-neutral-50 dark:hover:bg-white/10 transition"
+                  >
+                    <option value="editor">Can edit ✍️</option>
+                    <option value="commenter">Can comment 💬</option>
+                    <option value="viewer">Can view 👁️</option>
+                  </select>
+                  <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+                </div>
+
+                {/* Invite Button */}
                 <button
                   disabled={!usernameInput.trim() || !currentUserId || sending}
-                  onClick={sendInvite}
-                  className="shrink-0 rounded-md bg-[var(--accent)] text-[var(--bg)] px-4 py-2 text-sm font-semibold hover:-translate-y-px active:scale-95 disabled:opacity-40 transition cursor-pointer"
+                  onClick={() => sendInvite()}
+                  className="shrink-0 px-3.5 py-1.5 rounded-xl bg-[#E3CFB3] hover:bg-[#d8c2a2] text-neutral-900 text-xs font-semibold shadow-2xs disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer active:scale-95"
                 >
                   {sending ? "Inviting..." : "Invite"}
                 </button>
               </div>
-              {inviteError && <p className="mt-1.5 text-xs text-[var(--danger)]">{inviteError}</p>}
-              {!invitesLoading && sentInvites.length > 0 && (
-                <div className="mt-3 space-y-1 max-h-32 overflow-y-auto">
-                  {sentInvites.map((inv) => (
-                    <div key={inv.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-[var(--text)]">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--surface-3)] text-[9px] font-bold">
-                        {inv.invitee_username[0]?.toUpperCase()}
-                      </span>
-                      <span className="flex-1 truncate">@{inv.invitee_username}</span>
-                      <span className="text-[var(--muted)] text-[9px]">Pending · {inv.role}</span>
-                      <button onClick={() => removeInvite(inv.id)} className="text-[var(--danger)] hover:text-[var(--danger)] text-[9px]" title="Withdraw invite">✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="mt-4 flex items-center gap-3 rounded-md py-2">
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--surface)] text-sm font-semibold text-[var(--text)]">
-                  {userName[0]?.toUpperCase() || '?'}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-[var(--text)]">{userName} (You)</div>
-                  <div className="truncate text-xs text-[var(--text-secondary)]">{userHandle} · Owner</div>
-                </div>
-              </div>
-              <div className="mt-4 border-t border-[var(--border-strong)] pt-4">
-                <div className="mb-2 text-xs font-medium text-[var(--secondary)]">General access</div>
-                <button
-                  onClick={() => setGeneralAccessOpen((open) => !open)}
-                  className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm text-[var(--text)] hover:bg-[var(--hover)]"
-                >
-                  <Lock size={15} className="text-[var(--secondary)]" />
-                  <span className="flex-1">{generalAccess}</span>
-                  <ChevronDown size={14} className={`text-[var(--secondary)] transition ${generalAccessOpen ? "rotate-180" : ""}`} />
-                </button>
-                {generalAccessOpen && (
-                  <div className="mt-1 space-y-1 rounded-md border border-[var(--border-strong)] bg-[var(--bg)] p-1">
-                    {["Only people invited", "Anyone with the link", "Public"].map((option) => (
-                      <button
-                        key={option}
-                        onClick={() => {
-                          setGeneralAccess(option);
-                          setGeneralAccessOpen(false);
-                        }}
-                        className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
-                          generalAccess === option ? "bg-[var(--surface)] text-[var(--text)]" : "text-[var(--secondary)] hover:bg-[var(--hover)]"
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
+
+              {/* Suggestions Dropdown */}
+              <AnimatePresence>
+                {showSuggestions && (
+                  <>
+                    <div className="fixed inset-0 z-20" onMouseDown={() => setShowSuggestions(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute left-0 right-0 top-full mt-1.5 z-30 rounded-2xl border border-black/[0.08] dark:border-white/10 bg-white dark:bg-[#22211e] p-1.5 shadow-xl max-h-56 overflow-y-auto"
+                    >
+                      {suggestions.length > 0 ? (
+                        <>
+                          {suggestions.map((user) => (
+                            <button
+                              key={user.userId}
+                              onClick={() => selectSuggestedUser(user)}
+                              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition cursor-pointer ${
+                                selectedUser?.userId === user.userId
+                                  ? "bg-black/5 dark:bg-white/10"
+                                  : "hover:bg-black/5 dark:hover:bg-white/5"
+                              }`}
+                            >
+                              {user.avatarUrl ? (
+                                <img src={user.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+                              ) : (
+                                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-neutral-200 dark:bg-white/15 text-[10px] font-bold text-neutral-800 dark:text-white">
+                                  {(user.userName || user.username)[0]?.toUpperCase()}
+                                </span>
+                              )}
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium text-neutral-900 dark:text-white">{user.userName}</span>
+                                <span className="block truncate text-[10px] text-neutral-400">@{user.username}</span>
+                              </span>
+                              {selectedUser?.userId === user.userId && (
+                                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">✓ selected</span>
+                              )}
+                            </button>
+                          ))}
+                          <div className="px-2 pt-1 pb-0.5 text-[10px] text-neutral-400">
+                            Click a user to select, then press Invite.
+                          </div>
+                        </>
+                      ) : (
+                        <div className="px-3 py-2.5 text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-2">
+                          {isSearching ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                              <span>Searching users...</span>
+                            </>
+                          ) : currentUsername && usernameInput.trim().toLowerCase().replace(/^@/, "") === currentUsername.toLowerCase() ? (
+                            <span>That's your account (you cannot invite yourself).</span>
+                          ) : (
+                            <span>No other users found matching &quot;{usernameInput.trim()}&quot;</span>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  </>
                 )}
+              </AnimatePresence>
+            </div>
+
+            {inviteError && (
+              <p className="text-[11px] font-medium text-rose-500 pl-1">{inviteError}</p>
+            )}
+
+            {/* PEOPLE WITH ACCESS Card Section */}
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold tracking-wider text-neutral-400 dark:text-neutral-500 uppercase px-1">
+                PEOPLE WITH ACCESS
               </div>
-              <div className="mt-5 flex items-center justify-between gap-3">
-                <button className="flex items-center gap-1.5 text-xs text-[var(--secondary)] hover:text-[var(--text)]">
-                  <CircleHelp size={14} />
-                  Learn about sharing
-                </button>
-                <button onClick={copyLink} className="flex items-center gap-2 rounded-md border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--hover)]">
-                  <Link2 size={15} />
-                  {copied ? "Copied!" : "Copy link"}
-                </button>
+
+              <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-neutral-50/50 dark:bg-white/[0.02] p-2 space-y-1.5">
+                {/* Current User Row */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative shrink-0">
+                      <div className="h-9 w-9 rounded-full bg-neutral-900 dark:bg-neutral-800 text-white flex items-center justify-center text-xs font-bold overflow-hidden shadow-2xs">
+                        {userName[0]?.toUpperCase() || 'U'}
+                      </div>
+                      {/* Active green status dot */}
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1a1917]" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                        <span>{userName}</span>
+                        <span className="text-neutral-400 font-normal text-[11px]">(You)</span>
+                      </div>
+                      <div className="truncate text-[11px] text-neutral-400 dark:text-neutral-500">
+                        {userHandle}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300 bg-white dark:bg-[#282724] border border-black/[0.08] dark:border-white/10 px-3 py-1 rounded-lg shadow-2xs">
+                    Owner
+                  </span>
+                </div>
+
+                {/* Pending Sent Invites */}
+                {!invitesLoading && sentInvites.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className="flex items-center justify-between p-3 rounded-xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#282724] shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 shrink-0 rounded-full bg-neutral-100 dark:bg-white/10 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                        {inv.invitee_username[0]?.toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-semibold text-neutral-900 dark:text-white">
+                          @{inv.invitee_username}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          <span>Pending invitation · {inv.role}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeInvite(inv.id)}
+                      className="text-xs font-medium text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 transition cursor-pointer active:scale-95"
+                    >
+                      Withdraw
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
-          ) : (
-            <div className="space-y-4 p-4 text-sm text-[var(--secondary)]">
-              <div className="text-[var(--text)]">Publish this page to the web</div>
-              <p>Anyone with the public link can view this page. Publishing is off by default.</p>
-              <button onClick={copyLink} className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--accent)] hover:bg-[var(--accent-deep)] px-3 py-2 font-medium text-white transition">
-                <Globe size={15} />
-                Publish to web
+
+            {/* General Access / Restricted Section Card */}
+            <div className="relative">
+              <button
+                onClick={() => setGeneralAccessOpen((open) => !open)}
+                className="flex w-full items-center justify-between p-3 rounded-2xl border border-black/[0.06] dark:border-white/10 bg-neutral-50/70 dark:bg-white/[0.03] hover:bg-neutral-100/70 dark:hover:bg-white/[0.05] text-left transition shadow-2xs cursor-pointer"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-9 w-9 rounded-xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#282724] flex items-center justify-center text-amber-700/80 dark:text-amber-400/80 shadow-2xs shrink-0">
+                    {generalAccess === "Public" ? <Globe size={15} /> : <Lock size={15} />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-neutral-900 dark:text-white">
+                      {generalAccess === "Only people invited" ? "Restricted" : generalAccess}
+                    </div>
+                    <div className="text-[11px] text-neutral-400 dark:text-neutral-500 truncate">
+                      {generalAccess === "Only people invited"
+                        ? "Only invited people can access"
+                        : generalAccess === "Anyone with the link"
+                        ? "Anyone with the link can view"
+                        : "Indexed on public web"}
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown size={14} className={`text-neutral-400 transition-transform duration-200 ${generalAccessOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              <AnimatePresence>
+                {generalAccessOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onMouseDown={() => setGeneralAccessOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute left-0 right-0 bottom-full mb-2 z-30 space-y-0.5 rounded-2xl border border-black/[0.08] dark:border-white/10 bg-white dark:bg-[#22211e] p-1.5 shadow-2xl backdrop-blur-md"
+                    >
+                      {[
+                        { id: "Only people invited", title: "Restricted", desc: "Only invited people can access" },
+                        { id: "Anyone with the link", title: "Anyone with the link", desc: "Anyone with the link can view" },
+                        { id: "Public", title: "Public", desc: "Indexed on public web" }
+                      ].map((option) => {
+                        const isSelected = generalAccess === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => {
+                              setGeneralAccess(option.id);
+                              setGeneralAccessOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition cursor-pointer ${
+                              isSelected
+                                ? "bg-neutral-100 dark:bg-white/10 font-semibold text-neutral-900 dark:text-white"
+                                : "text-neutral-600 dark:text-neutral-300 hover:bg-black/5 dark:hover:bg-white/5"
+                            }`}
+                          >
+                            <div>
+                              <div className="font-semibold">{option.title}</div>
+                              <div className="text-[10px] text-neutral-400 font-normal">{option.desc}</div>
+                            </div>
+                            {isSelected && <Check size={14} className="text-neutral-900 dark:text-white shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Bottom Footer Actions: Copy Link & Done */}
+            <div className="pt-2 flex items-center justify-between gap-3">
+              <button
+                onClick={copyLink}
+                className="px-4 py-2 rounded-xl border border-black/[0.08] dark:border-white/10 bg-neutral-100/80 dark:bg-white/5 hover:bg-neutral-200/80 dark:hover:bg-white/10 text-xs font-semibold text-neutral-800 dark:text-white shadow-2xs transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+              >
+                {copied ? <Check size={13} className="text-emerald-500" /> : <Link2 size={13} />}
+                <span>{copied ? "Copied Link!" : "Copy Link"}</span>
+              </button>
+
+              <button
+                onClick={onClose}
+                className="px-6 py-2 rounded-xl bg-[#E3CFB3] hover:bg-[#d8c2a2] text-neutral-900 text-xs font-semibold shadow-2xs transition active:scale-95 cursor-pointer"
+              >
+                Done
               </button>
             </div>
-          )}
-        </motion.div>
-      </div>
+          </div>
+        ) : (
+          <div className="mt-6 p-6 space-y-4 text-center rounded-2xl bg-neutral-50/50 dark:bg-white/[0.02] border border-black/[0.06] dark:border-white/10">
+            <div className="h-12 w-12 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-[#a8824b] flex items-center justify-center mx-auto shadow-2xs">
+              <Globe size={22} />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-neutral-900 dark:text-white">Publish this page to the web</div>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                Anyone with the public URL will be able to read and explore this page.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                copyLink();
+                onToast?.("Page published to web and URL copied!");
+              }}
+              className="w-full py-2.5 rounded-xl bg-[#E3CFB3] hover:bg-[#d8c2a2] text-neutral-900 text-xs font-semibold shadow-2xs flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
+            >
+              <Globe size={14} />
+              <span>Publish to web & Copy URL</span>
+            </button>
+          </div>
+        )}
+      </motion.div>
     </motion.div>
   );
 }
@@ -2300,7 +2600,8 @@ export function CustomDialog({ open, type, title, placeholder, defaultValue, onC
   );
 }
 
-function ProfileCardCustomization() {
+function ProfileCardCustomization({ onToast }: { onToast?: (message: string) => void }) {
+  const [customSubTab, setCustomSubTab] = useState<"sidebar" | "profile">("sidebar");
   const [selected, setSelected] = useState<ProfileCardGradient>(() => getProfileCardGradient());
   const [hovered, setHovered] = useState<ProfileCardGradient | null>(null);
   const [saved, setSaved] = useState(false);
@@ -2313,6 +2614,7 @@ function ProfileCardCustomization() {
     setSelected(g);
     setProfileCardGradient(g.id);
     setSaved(true);
+    onToast?.(`Applied ${g.label} gradient`);
     window.setTimeout(() => setSaved(false), 1400);
   };
 
@@ -2334,6 +2636,7 @@ function ProfileCardCustomization() {
         count++;
         setCustomIcons(getImportedIcons());
         setIconUploadSuccess(`Imported ${count} icon(s) into "${cat}"`);
+        onToast?.(`Imported ${count} icon(s)`);
         setTimeout(() => setIconUploadSuccess(""), 3000);
       };
       reader.readAsDataURL(file);
@@ -2344,23 +2647,63 @@ function ProfileCardCustomization() {
   const categories = Array.from(new Set(customIcons.map(i => i.category || "Custom")));
 
   return (
-    <div className="max-w-2xl space-y-6 text-[#1c1b18] pb-16 font-sans">
-      {/* Title */}
-      <div className="flex items-center justify-between pt-1">
-        <div>
-          <h1 className="text-[32px] font-normal tracking-tight font-serif text-[#1c1b18]">
-            Customization
-          </h1>
-          <p className="text-xs text-[#706c64] mt-1">
-            Personalize profile card gradients, appearance themes, and custom icon packs.
-          </p>
-        </div>
-        {saved && (
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl">
-            <Check size={13} /> Saved
+    <div className="space-y-6 text-[#1c1b18] pb-16 font-sans">
+      {/* Top Customization Mode Switcher */}
+      <div className="flex items-center gap-2 p-1 rounded-2xl bg-[#f8f6f0] border border-[#e8e4db] max-w-md mb-2">
+        <button
+          onClick={() => setCustomSubTab("sidebar")}
+          className={`relative flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer select-none ${
+            customSubTab === "sidebar" ? "text-[#1c1b18]" : "text-[#706c64] hover:text-[#1c1b18]"
+          }`}
+        >
+          {customSubTab === "sidebar" && (
+            <motion.div
+              layoutId="customizationSubTabActive"
+              className="absolute inset-0 rounded-xl bg-white shadow-xs border border-[#e8e4db]"
+              transition={{ type: "spring", stiffness: 440, damping: 32 }}
+            />
+          )}
+          <span className="relative z-10 flex items-center gap-1.5">
+            <Layout size={14} />
+            <span>Sidebar Customizer</span>
           </span>
-        )}
+        </button>
+
+        <button
+          onClick={() => setCustomSubTab("profile")}
+          className={`relative flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer select-none ${
+            customSubTab === "profile" ? "text-[#1c1b18]" : "text-[#706c64] hover:text-[#1c1b18]"
+          }`}
+        >
+          {customSubTab === "profile" && (
+            <motion.div
+              layoutId="customizationSubTabActive"
+              className="absolute inset-0 rounded-xl bg-white shadow-xs border border-[#e8e4db]"
+              transition={{ type: "spring", stiffness: 440, damping: 32 }}
+            />
+          )}
+          <span className="relative z-10 flex items-center gap-1.5">
+            <Palette size={14} />
+            <span>Profile Card & Icons</span>
+          </span>
+        </button>
       </div>
+
+      {customSubTab === "sidebar" ? (
+        <SidebarCustomizer onToast={onToast} />
+      ) : (
+        <div className="max-w-2xl space-y-6">
+          {/* Title */}
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <h1 className="text-[32px] font-normal tracking-tight font-serif text-[#1c1b18]">
+                Profile Card & Icons
+              </h1>
+              <p className="text-xs text-[#706c64] mt-1">
+                Personalize profile card gradients, appearance themes, and custom icon packs.
+              </p>
+            </div>
+          </div>
 
       {/* ─── Profile Card Gradient Card ─── */}
       <div className="rounded-2xl bg-[#f8f6f0] p-6 shadow-sm space-y-4">
@@ -2537,6 +2880,8 @@ function ProfileCardCustomization() {
           )}
         </div>
       </div>
+      </div>
+      )}
     </div>
   );
 }

@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  ChevronDown, Link2, Copy, ArchiveRestore, Lock, Star,
+  ChevronDown, ChevronRight, Link2, Copy, ArchiveRestore, Lock, Star,
   Plus, MoreHorizontal, Sparkles, Eye, GripVertical,
   Columns, ArrowRight, ArrowLeft, ArrowUp, ArrowDown,
 } from 'lucide-react';
@@ -74,132 +74,56 @@ export function selectOptionsFromEvent(e: { altKey: boolean; metaKey: boolean; s
   };
 }
 
-interface TreeConnectorProps {
+interface TreeSvgConnectorProps {
   depth: number;
-  activePath: boolean | undefined;
-  hoverPath: boolean | undefined;
-  depthLevel: number;
+  isLastChild?: boolean;
+  ancestorHasMore?: boolean[];
 }
 
-function TreeConnector({ depth, activePath, hoverPath, depthLevel }: TreeConnectorProps) {
-  const opacity = activePath ? 0.6 : hoverPath ? 0.4 : smartDepthOpacity(depthLevel);
-  const color = activePath ? 'var(--accent)' : hoverPath ? 'var(--text)' : 'var(--border)';
+function TreeSvgConnector({ depth, isLastChild, ancestorHasMore }: TreeSvgConnectorProps) {
   if (depth <= 0) return null;
-  const segments = [];
-  for (let d = 0; d < depth; d++) {
-    // Real pre-existing quirk, preserved exactly: both call sites pass a
-    // plain boolean for activePath/hoverPath (`active`, `isHovered ||
-    // parentHovered`), not an array — so the original JS's
-    // `d < activePath.length` was really `d < undefined`, which is always
-    // `false`. isActive/isHover here were therefore always false at
-    // runtime; only the top-level opacity/color ternary above the loop
-    // ever had any visual effect. Replicating that exact always-false
-    // result explicitly rather than guessing this was meant to check
-    // array membership (which would change the rendered look).
-    const isActive = false;
-    const isHover = false;
-    const segOpacity = isActive ? 0.6 : isHover ? 0.4 : smartDepthOpacity(d);
-    const segColor = isActive ? 'var(--accent)' : isHover ? 'var(--text)' : 'var(--border)';
-    segments.push(
-      <motion.div
-        key={d}
-        initial={{ opacity: 0, scaleY: 0 }}
-        animate={{ opacity: segOpacity, scaleY: 1 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 25, delay: d * 0.02 }}
-        className="absolute left-0 top-0 w-px origin-top"
-        style={{
-          left: d * 14 + 7,
-          height: '100%',
-          backgroundColor: segColor,
-          opacity: segOpacity,
-          borderRadius: 1,
-        }}
-      />
-    );
-  }
-  return <>{segments}</>;
-}
-
-interface TreeBranchProps {
-  children: ReactNode;
-  depth: number;
-  isLast: boolean;
-  expanded: boolean;
-  animateHeight: boolean;
-}
-
-function TreeBranch({ children, depth, isLast, expanded, animateHeight }: TreeBranchProps) {
   return (
-    <AnimatePresence initial={false}>
-      {expanded && (
-        <motion.div
-          initial={animateHeight ? { height: 0, opacity: 0 } : false}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 350, damping: 28, mass: 0.8 }}
-          className="overflow-hidden"
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-interface HoverToolbarProps {
-  onAddInside?: () => void;
-  onMenu?: () => void;
-  onFavorite?: () => void;
-  onAI?: () => void;
-  onPeek?: () => void;
-  isFavorite?: boolean;
-  isHovered: boolean;
-}
-
-function HoverToolbar({ onAddInside, onMenu, onFavorite, onAI, onPeek, isFavorite, isHovered }: HoverToolbarProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 8 }}
-      animate={{ opacity: isHovered ? 1 : 0, x: isHovered ? 0 : 8 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className="flex items-center gap-0.5 mr-1 z-20"
+    <div
+      className="pointer-events-none absolute left-0 top-0 bottom-0 z-0 select-none text-neutral-300 dark:text-neutral-700/70"
+      style={{ width: depth * 16 + 10 }}
     >
-      <button
-        onClick={(e) => { e.stopPropagation(); onAddInside?.(); }}
-        className="grid h-5 w-5 place-items-center rounded-md hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] cursor-pointer transition-colors"
-        title="Add page inside"
+      {/* Ancestor straight vertical pass-through lines */}
+      {ancestorHasMore?.map((hasMore, d) => {
+        if (!hasMore || d >= depth - 1) return null;
+        return (
+          <svg
+            key={d}
+            aria-hidden="true"
+            width="12"
+            height="100%"
+            className="absolute top-0"
+            style={{ left: d * 16 + 10 }}
+          >
+            <line x1="0.5" y1="0" x2="0.5" y2="1000" stroke="currentColor" strokeWidth="1" />
+          </svg>
+        );
+      })}
+
+      {/* Immediate parent curved branch into this child node */}
+      <svg
+        aria-hidden="true"
+        width="16"
+        height="100%"
+        className="absolute top-0"
+        style={{ left: (depth - 1) * 16 + 10 }}
       >
-        <Plus size={11} />
-      </button>
-      <button
-        onClick={(e) => { e.stopPropagation(); onMenu?.(); }}
-        className="grid h-5 w-5 place-items-center rounded-md hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] cursor-pointer transition-colors"
-        title="Page options"
-      >
-        <MoreHorizontal size={11} />
-      </button>
-      <button
-        onClick={(e) => { e.stopPropagation(); onFavorite?.(); }}
-        className={`grid h-5 w-5 place-items-center rounded-md hover:bg-[var(--hover)] cursor-pointer transition-colors ${isFavorite ? 'text-[var(--accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
-        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-      >
-        <Star size={11} className={isFavorite ? 'fill-[var(--accent)]' : ''} />
-      </button>
-      <button
-        onClick={(e) => { e.stopPropagation(); onAI?.(); }}
-        className="grid h-5 w-5 place-items-center rounded-md hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] cursor-pointer transition-colors"
-        title="AI actions"
-      >
-        <Sparkles size={11} />
-      </button>
-      <button
-        onClick={(e) => { e.stopPropagation(); onPeek?.(); }}
-        className="grid h-5 w-5 place-items-center rounded-md hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] cursor-pointer transition-colors"
-        title="Peek preview"
-      >
-        <Eye size={11} />
-      </button>
-    </motion.div>
+        <path
+          d={
+            isLastChild
+              ? "M0.5 0 V11 Q0.5 16 5.5 16 H14"
+              : "M0.5 0 V11 Q0.5 16 5.5 16 H14 M0.5 16 V1000"
+          }
+          stroke="currentColor"
+          strokeWidth="1"
+          fill="none"
+        />
+      </svg>
+    </div>
   );
 }
 
@@ -233,8 +157,7 @@ function PageMenuAction({ icon: Icon, label, shortcut, right, muted, onClick }: 
   );
 }
 
-// Shared handler props threaded down through every tree-item level —
-// PremiumBranch, PremiumPageItem, and BranchExpanded all take the same set.
+// Shared handler props threaded down through tree items
 interface TreeHandlerProps {
   onToggleCollapse?: OnPageIdAction;
   onSelect: OnSelect;
@@ -249,217 +172,6 @@ interface TreeHandlerProps {
   onToast?: (message: string) => void;
 }
 
-interface BranchExpandedProps extends TreeHandlerProps {
-  page: Page;
-  allBlocks: Page[];
-  activeId: string | null;
-  collapsedPages: Set<string>;
-}
-
-function BranchExpandedBase({ page, allBlocks, activeId, collapsedPages, onToggleCollapse, onSelect, onAddInside, onPatchPage, onDuplicatePage, onRenamePage, onTrashPage, onCopyLink, onRemoveFromRecents, onToggleOffline, onToast }: BranchExpandedProps) {
-  const [childHoverId, setChildHoverId] = useState<string | null>(null);
-  if (!collapsedPages.has(page.id) && page.content?.length) {
-    const children = page.content.filter(id => isPageEntity(allBlocks.find(b => b.id === id)));
-    if (children.length === 0) return null;
-    return (
-      <motion.div
-        initial={{ height: 0, opacity: 0 }}
-        animate={{ height: 'auto', opacity: 1 }}
-        exit={{ height: 0, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-        className="relative"
-        onMouseEnter={() => setChildHoverId(page.id)}
-        onMouseLeave={() => setChildHoverId(null)}
-      >
-        {children.map((childId, ci) => {
-          const childPage = allBlocks.find(b => b.id === childId);
-          if (!childPage) return null;
-          const grandChildren = childPage.content?.filter(id => isPageEntity(allBlocks.find(b => b.id === id))) || [];
-          return (
-            <div key={childPage.id} className="relative">
-              <PremiumBranch
-                page={childPage}
-                depth={1}
-                active={childPage.id === activeId}
-                hasChildren={grandChildren.length > 0}
-                expanded={!collapsedPages.has(childPage.id)}
-                onToggleCollapse={onToggleCollapse}
-                onSelect={onSelect}
-                onAddInside={onAddInside}
-                onPatchPage={onPatchPage}
-                onDuplicatePage={onDuplicatePage}
-                onRenamePage={onRenamePage}
-                onTrashPage={onTrashPage}
-                onCopyLink={onCopyLink}
-                onRemoveFromRecents={onRemoveFromRecents}
-                onToggleOffline={onToggleOffline}
-                onToast={onToast}
-                parentHovered={childHoverId === page.id}
-              />
-            </div>
-          );
-        })}
-      </motion.div>
-    );
-  }
-  return null;
-}
-const BranchExpanded = React.memo(BranchExpandedBase);
-
-interface PremiumBranchProps extends TreeHandlerProps {
-  page: Page;
-  depth: number;
-  active: boolean;
-  hasChildren: boolean;
-  expanded: boolean;
-  parentHovered: boolean;
-}
-
-function PremiumBranchBase({
-  page, depth, active, hasChildren, expanded, onToggleCollapse,
-  onSelect, onAddInside, onPatchPage, parentHovered,
-  onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
-  onRemoveFromRecents, onToggleOffline, onToast,
-}: PremiumBranchProps) {
-  const { splitPage } = useTabs();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
-
-  const handleClick = useCallback((e: ReactMouseEvent) => {
-    onSelect(page.id, selectOptionsFromEvent(e));
-  }, [page.id, onSelect]);
-
-  const handleAuxClick = useCallback((e: ReactMouseEvent) => {
-    if (e.button !== 1) return;
-    e.preventDefault();
-    onSelect(page.id, selectOptionsFromEvent(e));
-  }, [page.id, onSelect]);
-
-  return (
-    <div
-      data-page-id={page.id}
-      className={`group relative flex items-center min-h-[30px] rounded-lg transition-all duration-150 cursor-pointer select-none ${
-        active
-          ? 'text-[var(--text)] font-semibold'
-          : 'text-[var(--text-secondary)] hover:text-[var(--text)]'
-      }`}
-      style={{ paddingLeft: depth * 14 + 8, paddingRight: 4 }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={handleClick}
-      onAuxClick={handleAuxClick}
-      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(true); }}
-    >
-      <TreeConnector
-        depth={depth}
-        activePath={active}
-        hoverPath={isHovered || parentHovered}
-        depthLevel={depth}
-      />
-
-      {/* Chevron */}
-      <div className="z-10 flex items-center shrink-0" style={{ marginLeft: -depth * 14 }}>
-        {hasChildren ? (
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            className="grid h-5 w-5 shrink-0 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] z-10 cursor-pointer transition-colors"
-            onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(page.id); }}
-          >
-            <motion.div
-              animate={{ rotate: expanded ? 0 : -90 }}
-              transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            >
-              <ChevronDown size={11} />
-            </motion.div>
-          </motion.button>
-        ) : (
-          <div className="w-5 h-5 shrink-0" />
-        )}
-      </div>
-
-      {/* Icon */}
-      <motion.button
-        whileTap={{ scale: 0.9 }}
-        className="grid h-5 w-[18px] shrink-0 place-items-center text-[13px] cursor-pointer z-10"
-        onClick={(e) => {
-          e.stopPropagation();
-          onPatchPage(page.id, { icon: emojis[(emojis.indexOf(page.icon) + 1) % emojis.length] });
-        }}
-      >
-        <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
-      </motion.button>
-
-      {/* Title */}
-      <div className="flex min-w-0 flex-1 items-center gap-1 z-10 pl-0.5">
-        <span className={`truncate text-[12.5px] ${active ? 'font-semibold' : 'font-normal'}`}>
-          {page.title || 'Untitled'}
-        </span>
-        {page.favorite && <Star size={8} className="text-[var(--accent)] shrink-0 inline fill-[var(--accent)] ml-0.5" />}
-        {page.isEncrypted && <Lock size={9} className="text-[var(--secondary)] shrink-0 inline ml-0.5" />}
-      </div>
-
-      {/* Hover Toolbar */}
-      <HoverToolbar
-        onAddInside={() => onAddInside?.(page.id)}
-        onMenu={() => setMenuOpen(true)}
-        onFavorite={() => onPatchPage(page.id, { favorite: !page.favorite })}
-        isFavorite={page.favorite}
-        onPeek={() => onSelect(page.id, { sidePeek: true })}
-        isHovered={isHovered}
-      />
-
-      {/* Floating Menu */}
-      <FloatingMenu open={menuOpen} anchorRef={menuButtonRef} onClose={() => setMenuOpen(false)}>
-        <div className="px-2 pb-2 text-xs font-semibold text-[var(--secondary)]">Page</div>
-        <PageMenuAction
-          icon={AnimatedBookmark}
-          label={page.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
-          onClick={() => { onPatchPage(page.id, { favorite: !page.favorite }); setMenuOpen(false); }}
-        />
-        <PageMenuAction
-          icon={ArchiveRestore}
-          label="Remove from Recents"
-          muted
-          onClick={() => { onRemoveFromRecents?.(page.id); setMenuOpen(false); }}
-        />
-        <div className="my-2 border-t border-[var(--border)]" />
-        <PageMenuAction
-          icon={AnimatedDownload}
-          label="Available offline"
-          onClick={() => { onToggleOffline?.(page.id); setMenuOpen(false); }}
-          right={
-            <span className={`flex h-6 w-10 items-center rounded-full p-0.5 transition ${page.offline ? 'bg-[var(--accent)] justify-end' : 'bg-[var(--toggle)] justify-start'}`}>
-              <span className="h-5 w-5 rounded-full bg-[var(--surface-2)]" />
-            </span>
-          }
-        />
-        <div className="my-2 border-t border-[var(--border)]" />
-        <PageMenuAction icon={Link2} label="Copy link" onClick={() => { onCopyLink?.(page.id); setMenuOpen(false); }} />
-        <PageMenuAction icon={Copy} label="Duplicate" shortcut="Ctrl+D" onClick={() => { onDuplicatePage?.(page.id); setMenuOpen(false); }} />
-        <PageMenuAction icon={AnimatedSend} label="Rename" shortcut="Ctrl+Shift+R" onClick={() => { onRenamePage?.(page.id); setMenuOpen(false); }} />
-        <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" onClick={() => { onToast?.("Move to is not yet implemented"); setMenuOpen(false); }} />
-        <PageMenuAction icon={AnimatedTrash} label="Move to Trash" onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
-        <div className="my-2 border-t border-[var(--border)]" />
-        <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Shift+Enter" onClick={() => { window.open(pageUrl(page.id), '_blank'); setMenuOpen(false); }} />
-        <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(pageUrl(page.id), '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
-        <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
-
-        {/* Split Submenu / Actions */}
-        <div className="my-2 border-t border-[var(--border)]" />
-        <div className="px-2 py-0.5 text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">
-          Split
-        </div>
-        <PageMenuAction icon={ArrowRight} label="Split right" onClick={() => { splitPage({ pageId: page.id, direction: 'right' }); setMenuOpen(false); }} />
-        <PageMenuAction icon={ArrowLeft} label="Split left" onClick={() => { splitPage({ pageId: page.id, direction: 'left' }); setMenuOpen(false); }} />
-        <PageMenuAction icon={ArrowUp} label="Split above" onClick={() => { splitPage({ pageId: page.id, direction: 'above' }); setMenuOpen(false); }} />
-        <PageMenuAction icon={ArrowDown} label="Split below" onClick={() => { splitPage({ pageId: page.id, direction: 'below' }); setMenuOpen(false); }} />
-      </FloatingMenu>
-    </div>
-  );
-}
-const PremiumBranch = React.memo(PremiumBranchBase);
-
 interface PremiumPageItemProps extends TreeHandlerProps {
   page: Page;
   active: boolean;
@@ -467,6 +179,8 @@ interface PremiumPageItemProps extends TreeHandlerProps {
   hasChildren: boolean;
   expanded: boolean;
   depth: number;
+  isLastChild?: boolean;
+  ancestorHasMore?: boolean[];
   ancestors: string[];
   allBlocks: Page[];
   collapsedPages: Set<string>;
@@ -475,7 +189,7 @@ interface PremiumPageItemProps extends TreeHandlerProps {
 
 function PremiumPageItemBase({
   page, active, selected, hasChildren, expanded,
-  depth, ancestors, onToggleCollapse, onSelect, onPatchPage,
+  depth, isLastChild, ancestorHasMore, ancestors, onToggleCollapse, onSelect, onPatchPage,
   onAddInside, allBlocks, collapsedPages, activeId,
   onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
   onRemoveFromRecents, onToggleOffline, onToast,
@@ -486,13 +200,12 @@ function PremiumPageItemBase({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const isAncestor = ancestors?.includes(page.id);
-  const showActivePath = active || isAncestor;
 
   return (
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="relative"
+      className="relative select-none"
     >
       <div
         data-page-id={page.id}
@@ -500,122 +213,132 @@ function PremiumPageItemBase({
         aria-expanded={hasChildren ? expanded : undefined}
         aria-level={depth + 1}
         aria-selected={active}
-        className={`group relative flex items-center transition-all duration-150 cursor-pointer select-none ${
-          active
-            ? 'text-[var(--text)] font-semibold'
-            : 'text-[var(--text-secondary)] hover:text-[var(--text)]'
-        }`}
+        className={`group relative flex items-center justify-between min-h-[26px] h-[26px] rounded-lg transition-all duration-150 cursor-pointer select-none ${active
+          ? 'text-neutral-900 dark:text-white font-medium bg-black/[0.055] dark:bg-white/[0.08] border border-black/[0.03] dark:border-white/[0.06] shadow-2xs'
+          : 'text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-black/[0.035] dark:hover:bg-white/[0.05]'
+          }`}
         style={{
-          minHeight: 30,
-          paddingLeft: depth * 14 + 6,
-          paddingRight: 2,
+          paddingLeft: depth === 0 ? 6 : depth * 12 + 6,
+          paddingRight: 4,
         }}
         onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            onSelect(page.id, selectOptionsFromEvent(e));
-          }
+          onSelect(page.id, selectOptionsFromEvent(e));
         }}
         onAuxClick={(e) => {
           if (e.button !== 1) return;
           e.preventDefault();
-          if (e.target === e.currentTarget) {
-            onSelect(page.id, selectOptionsFromEvent(e));
-          }
+          onSelect(page.id, selectOptionsFromEvent(e));
         }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(true); }}
       >
-        {/* Animated active background */}
-        {active && (
-          <motion.div
-            layoutId="tree-active-bg"
-            initial={false}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className="absolute inset-0 rounded-lg bg-[var(--active)] border border-[var(--border)] shadow-sm z-0"
-            style={{ marginLeft: depth * 14, marginRight: 2 }}
-          />
-        )}
-        {selected && !active && (
-          <div
-            className="absolute inset-0 rounded-lg bg-[var(--accent-soft)] border border-[var(--accent)]/20 shadow-sm z-0"
-            style={{ marginLeft: depth * 14, marginRight: 2 }}
-          />
-        )}
-
-        {/* Active ancestry glow */}
+        {/* Active ancestry subtle highlight */}
         {isAncestor && !active && (
           <div
-            className="absolute inset-0 rounded-lg bg-[var(--accent)]/[0.04] z-0"
-            style={{ marginLeft: depth * 14, marginRight: 2 }}
+            className="absolute inset-0 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] z-0 pointer-events-none"
           />
         )}
 
-        {/* Connectors */}
-        <TreeConnector
+        {/* SVG Curved Branching Tree Connectors */}
+        <TreeSvgConnector
           depth={depth}
-          activePath={showActivePath}
-          hoverPath={isHovered}
-          depthLevel={depth}
+          isLastChild={isLastChild}
+          ancestorHasMore={ancestorHasMore}
         />
 
-        {/* Chevron */}
-        <div className="z-10 flex items-center shrink-0">
-          {hasChildren ? (
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              className="grid h-5 w-5 shrink-0 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] z-10 cursor-pointer transition-colors"
-              onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(page.id); }}
+        {/* Left Content: Icon + Title */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 z-10 mr-1">
+          {/* Page Icon button */}
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.9 }}
+            className="grid h-4.5 w-4 shrink-0 place-items-center text-[11.5px] cursor-pointer z-10"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPatchPage(page.id, {
+                icon: emojis[(emojis.indexOf(page.icon) + 1) % emojis.length],
+              });
+            }}
+            title="Change icon"
+          >
+            <PageIcon icon={page.icon} size={13.5} fallback={<span className="text-[11px] leading-none">📄</span>} />
+          </motion.button>
+
+          {/* Title */}
+          <span className={`truncate text-[11.5px] leading-tight ${active ? 'font-medium text-neutral-900 dark:text-white' : 'font-normal text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white'}`}>
+            {page.title || 'Untitled'}
+          </span>
+          {page.favorite && <Star size={8} className="text-amber-500 shrink-0 inline fill-amber-500 ml-0.5" />}
+          {page.isEncrypted && <Lock size={8} className="text-neutral-400 shrink-0 inline ml-0.5" />}
+        </div>
+
+        {/* Right Content: Expand/Collapse Chevron */}
+        <div className="relative z-10 flex items-center shrink-0">
+          {hasChildren && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCollapse?.(page.id);
+              }}
+              className="grid h-6 w-6 place-items-center rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors cursor-pointer"
               title={expanded ? 'Collapse' : 'Expand'}
             >
-              <motion.div
-                animate={{ rotate: expanded ? 0 : -90 }}
-                transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-              >
-                <ChevronDown size={11} />
-              </motion.div>
-            </motion.button>
-          ) : (
-            <div className="w-5 h-5 shrink-0" />
+              <ChevronRight
+                size={13}
+                className={`transition-transform duration-200 ${expanded ? 'rotate-90 text-neutral-700 dark:text-neutral-200' : 'text-neutral-400'
+                  }`}
+              />
+            </button>
           )}
         </div>
 
-        {/* Icon */}
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          className="grid h-5 w-[18px] shrink-0 place-items-center text-[13px] cursor-pointer z-10"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPatchPage(page.id, {
-              icon: emojis[(emojis.indexOf(page.icon) + 1) % emojis.length],
-            });
-          }}
-        >
-          <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
-        </motion.button>
-
-        {/* Title */}
-        <div
-          className="flex min-w-0 flex-1 items-center gap-1 z-10 pl-0.5 cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(page.id, selectOptionsFromEvent(e));
-          }}
-        >
-          <span className={`truncate text-[12.5px] ${active ? 'font-semibold' : 'font-normal'}`}>
-            {page.title || 'Untitled'}
-          </span>
-          {page.favorite && <Star size={8} className="text-[var(--accent)] shrink-0 inline fill-[var(--accent)] ml-0.5" />}
-          {page.isEncrypted && <Lock size={9} className="text-[var(--secondary)] shrink-0 inline ml-0.5" />}
-        </div>
-
-        {/* Hover Toolbar */}
-        <HoverToolbar
-          onAddInside={() => onAddInside?.(page.id)}
-          onMenu={() => setMenuOpen(true)}
-          onFavorite={() => onPatchPage(page.id, { favorite: !page.favorite })}
-          isFavorite={page.favorite}
-          onPeek={() => onSelect(page.id, { sidePeek: true })}
-          isHovered={isHovered}
-        />
+        {/* Floating Hover Action Toolbar (Overlays right edge without squeezing title width) */}
+        <AnimatePresence>
+          {(isHovered || menuOpen) && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.12 }}
+              className="absolute right-1 top-1/2 -translate-y-1/2 z-20 flex items-center gap-0.5 rounded-lg bg-neutral-100/95 dark:bg-neutral-800/95 border border-black/5 dark:border-white/10 px-1 py-0.5 shadow-sm backdrop-blur-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onAddInside?.(page.id); }}
+                className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                title="Add page inside"
+              >
+                <Plus size={12} />
+              </button>
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
+                className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                title="Page options"
+              >
+                <MoreHorizontal size={12} />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onPatchPage(page.id, { favorite: !page.favorite }); }}
+                className={`grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer ${page.favorite ? 'text-amber-500' : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'}`}
+                title={page.favorite ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <Star size={12} className={page.favorite ? 'fill-amber-500' : ''} />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onSelect(page.id, { sidePeek: true }); }}
+                className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                title="Side peek"
+              >
+                <Eye size={12} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Floating Menu */}
         <FloatingMenu open={menuOpen} anchorRef={menuButtonRef} onClose={() => setMenuOpen(false)}>
@@ -916,34 +639,63 @@ export default function PageTree({
           {visibleItems.length === 0 && (
             <div className="px-2 py-1 text-[10px] text-[var(--muted)] italic">{emptyMessage}</div>
           )}
-          {visibleItems.map((page, vi) => (
-            <SortablePremiumItem
-              key={page.id}
-              id={page.id}
-              page={page}
-              active={page.id === activeId}
-              selected={selectedIds.has(page.id)}
-              focused={vi === focusedIndex}
-              hasChildren={page._hasChildren}
-              expanded={!collapsedPages.has(page.id)}
-              depth={page._depth}
-              ancestors={ancestorIds}
-              onToggleCollapse={onToggleCollapse}
-              onSelect={handleSelect}
-              onPatchPage={onPatchPage}
-              onDuplicatePage={onDuplicatePage}
-              onAddInside={onAddInside}
-              onRenamePage={onRenamePage}
-              onRemoveFromRecents={onRemoveFromRecents}
-              onToggleOffline={onToggleOffline}
-              onCopyLink={onCopyLink}
-              onTrashPage={onTrashPage}
-              onToast={onToast}
-              allBlocks={allBlocks}
-              collapsedPages={collapsedPages}
-              activeId={activeId}
-            />
-          ))}
+          {visibleItems.map((page, vi) => {
+            const isLastChild = (() => {
+              if (page._depth === 0) return false;
+              for (let j = vi + 1; j < visibleItems.length; j++) {
+                if (visibleItems[j]._depth < page._depth) return true;
+                if (visibleItems[j]._depth === page._depth) return false;
+              }
+              return true;
+            })();
+
+            const ancestorHasMore = (() => {
+              const res: boolean[] = [];
+              for (let d = 0; d < page._depth - 1; d++) {
+                let hasMore = false;
+                for (let j = vi + 1; j < visibleItems.length; j++) {
+                  if (visibleItems[j]._depth < d + 1) break;
+                  if (visibleItems[j]._depth === d + 1) {
+                    hasMore = true;
+                    break;
+                  }
+                }
+                res.push(hasMore);
+              }
+              return res;
+            })();
+
+            return (
+              <SortablePremiumItem
+                key={page.id}
+                id={page.id}
+                page={page}
+                active={page.id === activeId}
+                selected={selectedIds.has(page.id)}
+                focused={vi === focusedIndex}
+                hasChildren={page._hasChildren}
+                expanded={!collapsedPages.has(page.id)}
+                depth={page._depth}
+                isLastChild={isLastChild}
+                ancestorHasMore={ancestorHasMore}
+                ancestors={ancestorIds}
+                onToggleCollapse={onToggleCollapse}
+                onSelect={handleSelect}
+                onPatchPage={onPatchPage}
+                onDuplicatePage={onDuplicatePage}
+                onAddInside={onAddInside}
+                onRenamePage={onRenamePage}
+                onRemoveFromRecents={onRemoveFromRecents}
+                onToggleOffline={onToggleOffline}
+                onCopyLink={onCopyLink}
+                onTrashPage={onTrashPage}
+                onToast={onToast}
+                allBlocks={allBlocks}
+                collapsedPages={collapsedPages}
+                activeId={activeId}
+              />
+            );
+          })}
         </div>
       </SortableContext>
       {createPortal(

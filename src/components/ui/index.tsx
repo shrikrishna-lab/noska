@@ -366,6 +366,11 @@ export * from "../../lib/voice/voice-settings";
 export { Banner04 } from "./banner-04";
 export { default as HowItWorks } from "./how-it-works";
 export type { HowItWorksProps, Step, StepPosition } from "./how-it-works";
-
-
-
+export { InteractiveTOC } from "./interactive-toc";
+export type { TOCItem, InteractiveTOCProps } from "./interactive-toc";
+export { ChapterScrubber, default as ChapterScrubberDefault } from "./chapter-scrubber";
+export type { Chapter, ChapterScrubberProps } from "./chapter-scrubber";
+export { LineNavigationRail, default as LineNavigationRailDefault } from "../../features/navigation/line-nav/LineNavigationRail";
+export * from "../../features/navigation/line-nav/types";
+export * from "../../features/navigation/line-nav/previewExtractor";
+export * from "../../features/navigation/line-nav/PagePreviewCard";

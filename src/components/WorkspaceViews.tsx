@@ -213,7 +213,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
 
   if (view === "daily" || view === "journal") return <DailyWorkspace onToast={onToast || (() => {})} currentUserId={currentUserId} currentUsername={userName} />;
   if (view === "marketplace") return <MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} />;
-  if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} onDuplicate={onDuplicate || (() => {})} />;
+  if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} />;
   if (view === "agents") return <AgentWorkspace pages={pages} currentUserId={currentUserId} onToast={onToast} toolContext={toolContext} />;
   if (view === "automations") return <AutomationWorkspace onToast={onToast} />;
   if (view === "commandCenter") return <CommandCenter onToast={onToast} onNavigate={(v) => onView?.(v)} />;
@@ -2210,13 +2210,6 @@ function InboxRoute({
       subtitle="Realtime notifications, team invitations & synchronized tasks"
       actions={
         <div className="flex items-center gap-2.5">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.08] text-xs text-slate-500 shadow-2xs">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="font-medium text-[11px] text-slate-600 dark:text-slate-300">Live</span>
-          </div>
           {activeReminders.length > 0 && (
             <button
               onClick={() => {
@@ -2598,21 +2591,6 @@ function InboxRoute({
                   className="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.02] hover:bg-black/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06] px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition active:scale-95 cursor-pointer"
                 >
                   New document
-                </button>
-
-                <button
-                  onClick={() => {
-                    const sampleItems: InboxReminder[] = [
-                      { id: uid(), text: "Submit Q3 project proposal & roadmap", date: new Date(Date.now() + 6 * 3600 * 1000).toISOString(), priority: "high", dismissed: false, createdAt: new Date().toISOString() },
-                      { id: uid(), text: "Review UI design mockups for mobile app", date: new Date(Date.now() + 24 * 3600 * 1000).toISOString(), priority: "medium", dismissed: false, createdAt: new Date().toISOString() },
-                      { id: uid(), text: "Schedule quarterly sync with design leads", date: new Date(Date.now() + 48 * 3600 * 1000).toISOString(), priority: "low", dismissed: false, createdAt: new Date().toISOString() },
-                    ];
-                    setReminders(sampleItems);
-                    onToast?.("Sample reminders loaded!");
-                  }}
-                  className="rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/50 px-3.5 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 transition active:scale-95 cursor-pointer"
-                >
-                  Load demo reminders
                 </button>
               </div>
             </motion.div>

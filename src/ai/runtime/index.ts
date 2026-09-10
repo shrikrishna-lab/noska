@@ -30,7 +30,7 @@ export type {
 } from "./types";
 
 export { FULL_AUTO_PERMISSIONS, READ_ONLY_PERMISSIONS, defaultPermissions } from "./types";
-export { classifyIntent, isAgenticIntent } from "./intent";
+export { classifyIntent, classifyIntentSmart, refineIntentWithLLM, looksLikeComplexAction, isAgenticIntent } from "./intent";
 export { resolveTemplate, resolveParams, buildVars } from "./variables";
 export { categoryForTool, evaluatePermission, describePermissions } from "./permissions";
 export { LoopProtector, loopProtector } from "./loopProtection";

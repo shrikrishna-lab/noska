@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Store, Upload, Image, Video, DollarSign, Users, Settings, ExternalLink, Grid, BarChart3, ChevronLeft, Plus, Save } from "lucide-react";
+import { Store, Upload, Image, Video, DollarSign, Users, Settings, ExternalLink, Grid, BarChart3, ChevronLeft, Plus, Save, Trash2, Copy, Send, type LucideIcon } from "lucide-react";
 import { uid } from "../../utils/helpers";
 import { capture } from "../../lib/posthog";
 
@@ -12,13 +12,62 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-export default function CreatorDashboard({ pages, onToast, onDuplicate }) {
+// ─── Persistence (localStorage mirrors; Supabase-ready shape) ──────────────
+
+export interface CreatorListing {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  price: number;
+  sourcePageId: string;
+  sourcePageTitle?: string;
+  status: 'draft' | 'in_review' | 'published' | 'rejected';
+  addCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const LISTINGS_KEY = "noska_creator_listings";
+const PROFILE_KEY = "noska_creator_profile";
+
+function loadListings(): CreatorListing[] {
+  try {
+    const raw = localStorage.getItem(LISTINGS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function saveListings(listings: CreatorListing[]): void {
+  try { localStorage.setItem(LISTINGS_KEY, JSON.stringify(listings)); } catch { /* best-effort */ }
+}
+
+function loadProfile(): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+export default function CreatorDashboard({ pages, onToast }: {
+  pages: Array<{ id: string; title?: string; icon?: string; trashed?: boolean }>;
+  onToast?: (message: string) => void;
+}) {
   const [tab, setTab] = useState('listings');
   const [showPublish, setShowPublish] = useState(false);
-  const [listings, setListings] = useState([]);
+  const [listings, setListings] = useState<CreatorListing[]>(loadListings);
 
-  const handlePublish = (listing) => {
-    setListings(prev => [{ ...listing, id: uid(), status: 'draft', addCount: 0, createdAt: new Date().toISOString() }, ...prev]);
+  // Keep the mirror in sync whenever listings change.
+  useEffect(() => { saveListings(listings); }, [listings]);
+
+  const updateListing = (id: string, patch: Partial<CreatorListing>) => {
+    setListings(prev => prev.map(l => l.id === id ? { ...l, ...patch, updatedAt: new Date().toISOString() } : l));
+  };
+
+  const handlePublish = (listing: Omit<CreatorListing, "id" | "status" | "addCount" | "createdAt" | "updatedAt">) => {
+    const nowIso = new Date().toISOString();
+    setListings(prev => [{ ...listing, id: uid(), status: 'draft', addCount: 0, createdAt: nowIso, updatedAt: nowIso }, ...prev]);
     setShowPublish(false);
     capture("template_created", { creation_source: "creator_studio" });
     onToast?.('Template created as draft');
@@ -51,7 +100,7 @@ export default function CreatorDashboard({ pages, onToast, onDuplicate }) {
           {showPublish ? (
             <PublishForm pages={pages} onPublish={handlePublish} onCancel={() => setShowPublish(false)} />
           ) : tab === 'listings' ? (
-            <ListingsView listings={listings} onToast={onToast} />
+            <ListingsView listings={listings} onToast={onToast} onDelete={(id) => { setListings(prev => prev.filter(l => l.id !== id)); onToast?.("Listing deleted"); }} onSubmitReview={(id) => { updateListing(id, { status: 'in_review' }); onToast?.("Submitted for review"); }} onRevertToDraft={(id) => updateListing(id, { status: 'draft' })} onDuplicate={(l) => { const nowIso = new Date().toISOString(); setListings(prev => [{ ...l, id: uid(), title: `${l.title} (copy)`, status: 'draft', addCount: 0, createdAt: nowIso, updatedAt: nowIso }, ...prev]); onToast?.("Listing duplicated"); }} />
           ) : tab === 'analytics' ? (
             <AnalyticsView listings={listings} />
           ) : tab === 'payouts' ? (
@@ -67,13 +116,18 @@ export default function CreatorDashboard({ pages, onToast, onDuplicate }) {
   );
 }
 
-function PublishForm({ pages, onPublish, onCancel }) {
-  const [form, setForm] = useState({ title: '', description: '', category: 'work', price: 0, sourcePageId: '', screenshots: [], videoUrl: '' });
+function PublishForm({ pages, onPublish, onCancel }: {
+  pages: Array<{ id: string; title?: string; icon?: string; trashed?: boolean }>;
+  onPublish: (listing: Omit<CreatorListing, "id" | "status" | "addCount" | "createdAt" | "updatedAt">) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({ title: '', description: '', category: 'work', price: 0, sourcePageId: '', screenshots: [] as string[], videoUrl: '' });
+  const sourcePage = pages.find(p => p.id === form.sourcePageId);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
-    onPublish({ ...form, title: form.title.trim(), description: form.description.trim() });
+    if (!form.title.trim() || !form.sourcePageId) return;
+    onPublish({ ...form, title: form.title.trim(), description: form.description.trim(), sourcePageTitle: sourcePage?.title || "Untitled" });
   };
 
   return (
@@ -118,7 +172,7 @@ function PublishForm({ pages, onPublish, onCancel }) {
           <p className="text-[10px] text-[var(--warning)]">Make sure all linked content is inside the template page tree. Pages linking to external content will be blocked from publishing.</p>
         </div>
         <div className="flex items-center gap-3 pt-2">
-          <button type="submit" className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent)]/90 transition"><Save size={14} /> Create Draft</button>
+          <button type="submit" disabled={!form.sourcePageId} title={!form.sourcePageId ? "Pick a source page first" : undefined} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent)]/90 transition disabled:opacity-50"><Save size={14} /> Create Draft</button>
           <button type="button" onClick={onCancel} className="text-xs text-[var(--muted)] hover:text-[var(--text)]">Cancel</button>
         </div>
       </form>
@@ -126,10 +180,19 @@ function PublishForm({ pages, onPublish, onCancel }) {
   );
 }
 
-function ListingsView({ listings, onToast }) {
+function ListingsView({ listings, onToast, onDelete, onSubmitReview, onRevertToDraft, onDuplicate }: {
+  listings: CreatorListing[];
+  onToast?: (m: string) => void;
+  onDelete: (id: string) => void;
+  onSubmitReview: (id: string) => void;
+  onRevertToDraft: (id: string) => void;
+  onDuplicate: (l: CreatorListing) => void;
+}) {
+  void onToast;
   return (
     <div className="p-6">
-      <h2 className="text-sm font-semibold text-[var(--text)] mb-4">My Listings ({listings.length})</h2>
+      <h2 className="text-sm font-semibold text-[var(--text)] mb-1">My Listings ({listings.length})</h2>
+      <p className="text-[10px] text-[var(--muted)] mb-4">Drafts are saved locally and survive restarts. Submit a draft when it&apos;s ready for review.</p>
       {listings.length === 0 ? (
         <div className="text-center py-12">
           <Store size={32} className="mx-auto text-[var(--muted)] mb-2" />
@@ -142,15 +205,26 @@ function ListingsView({ listings, onToast }) {
               <div className="h-10 w-14 rounded-lg bg-gradient-to-br from-[var(--accent)]/20 to-[var(--accent)]/5 flex items-center justify-center text-lg">📄</div>
               <div className="flex-1 min-w-0">
                 <h4 className="text-xs font-semibold text-[var(--text)]">{l.title}</h4>
-                <div className="flex items-center gap-2 text-[10px] text-[var(--muted)] mt-0.5">
+                <div className="flex items-center gap-2 text-[10px] text-[var(--muted)] mt-0.5 flex-wrap">
                   <span className="capitalize">{l.category}</span>
                   <span>·</span>
                   <span>{l.price === 0 ? 'Free' : `$${l.price.toFixed(2)}`}</span>
                   <span>·</span>
                   <span>{l.addCount} adds</span>
+                  {l.sourcePageTitle && (<><span>·</span><span className="truncate max-w-[140px]">from “{l.sourcePageTitle}”</span></>)}
                 </div>
               </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${l.status === 'published' ? 'bg-[var(--success)]/10 text-[var(--success)]' : l.status === 'draft' ? 'bg-[var(--warning)]/10 text-[var(--warning)]' : l.status === 'in_review' ? 'bg-[var(--noska-blue-soft)] text-[var(--noska-blue)]' : 'bg-[var(--danger)]/10 text-[var(--danger)]'}`}>{l.status}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize shrink-0 ${l.status === 'published' ? 'bg-[var(--success)]/10 text-[var(--success)]' : l.status === 'draft' ? 'bg-[var(--warning)]/10 text-[var(--warning)]' : l.status === 'in_review' ? 'bg-[var(--noska-blue-soft)] text-[var(--noska-blue)]' : 'bg-[var(--danger)]/10 text-[var(--danger)]'}`}>{l.status.replace('_', ' ')}</span>
+              <div className="flex items-center gap-1 shrink-0">
+                {l.status === 'draft' && (
+                  <IconBtn title="Submit for review" onClick={() => onSubmitReview(l.id)}><Send size={12} /></IconBtn>
+                )}
+                {l.status === 'in_review' && (
+                  <IconBtn title="Back to draft" onClick={() => onRevertToDraft(l.id)}><ChevronLeft size={12} /></IconBtn>
+                )}
+                <IconBtn title="Duplicate" onClick={() => onDuplicate(l)}><Copy size={12} /></IconBtn>
+                <IconBtn title="Delete" danger onClick={() => { if (window.confirm(`Delete “${l.title}”? This cannot be undone.`)) onDelete(l.id); }}><Trash2 size={12} /></IconBtn>
+              </div>
             </div>
           ))}
         </div>
@@ -159,7 +233,19 @@ function ListingsView({ listings, onToast }) {
   );
 }
 
-function AnalyticsView({ listings }) {
+function IconBtn({ children, title, onClick, danger }: { children: React.ReactNode; title: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`p-1.5 rounded transition-colors ${danger ? "text-[var(--muted)] hover:text-[var(--danger)] hover:bg-[var(--hover)]" : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function AnalyticsView({ listings }: { listings: CreatorListing[] }) {
   const totalAdds = listings.reduce((sum, l) => sum + (l.addCount || 0), 0);
   const totalEarnings = listings.filter(l => l.status === 'published').reduce((sum, l) => sum + (l.price || 0) * (l.addCount || 0), 0);
   return (
@@ -208,8 +294,22 @@ function PayoutsView() {
   );
 }
 
-function ProfileEditor({ onToast }) {
-  const [profile, setProfile] = useState({ displayName: '', bio: '', photoUrl: '', coverUrl: '', links: [''] });
+function ProfileEditor({ onToast }: { onToast?: (m: string) => void }) {
+  const [profile, setProfile] = useState(() => {
+    const saved = loadProfile();
+    return {
+      displayName: (saved.displayName as string) || '',
+      bio: (saved.bio as string) || '',
+      photoUrl: (saved.photoUrl as string) || '',
+      coverUrl: (saved.coverUrl as string) || '',
+      links: (saved.links as string[]) || [''],
+    };
+  });
+
+  const save = () => {
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); onToast?.('Profile saved'); } catch { onToast?.("Couldn't save profile"); }
+  };
+
   return (
     <div className="p-6">
       <h2 className="text-sm font-semibold text-[var(--text)] mb-4">Creator Profile</h2>
@@ -230,7 +330,7 @@ function ProfileEditor({ onToast }) {
           <label className="text-xs font-medium text-[var(--secondary)] mb-1 block">Cover URL</label>
           <input value={profile.coverUrl} onChange={e => setProfile(p => ({ ...p, coverUrl: e.target.value }))} placeholder="https://..." className="w-full rounded-lg bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] outline-none" />
         </div>
-        <button onClick={() => { onToast?.('Profile saved'); }} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white"><Save size={13} /> Save Profile</button>
+        <button onClick={save} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white"><Save size={13} /> Save Profile</button>
       </div>
     </div>
   );

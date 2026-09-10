@@ -152,3 +152,73 @@ export function classifyIntent(text: string): IntentResult {
 export function isAgenticIntent(intent: RuntimeIntent): boolean {
   return ["create", "edit", "analyze", "organize", "plan", "action"].includes(intent);
 }
+
+// ─── LLM refinement fallback ────────────────────────────────────────────────
+
+const VALID_INTENTS: RuntimeIntent[] = [
+  "question", "search", "create", "edit", "analyze", "organize",
+  "plan", "action", "agent_intent", "automation_intent",
+];
+
+const MULTI_STEP_HINTS = /\b(?:then|after that|and then|and also|as well as|finally|afterwards)\b|[;\n]|\d\.\s/i;
+const ACTION_VERBS = /\b(write|draft|add|append|insert|update|change|delete|remove|rename|move|archive|merge|split|convert|reorganiz|restructur|clean ?up|extract|collect|compare|compile|export|fill|populate|assign|schedule|set ?up)\b/i;
+
+/**
+ * Cheap heuristic: flags requests the regex rules can't classify but that
+ * look like multi-step work rather than a plain question. Gates the LLM
+ * refinement so ordinary chat never pays an extra round-trip.
+ */
+export function looksLikeComplexAction(text: string): boolean {
+  const input = (text || "").trim();
+  if (input.length < 24) return false;
+  if (QUESTION_GUARDS.some((g) => g.test(input))) return false;
+  return MULTI_STEP_HINTS.test(input) && ACTION_VERBS.test(input);
+}
+
+/**
+ * One small LLM call to classify an ambiguous request. Returns null on any
+ * failure (unconfigured provider, unparseable reply) so callers can fall
+ * back to the rule-based result — the fallback is always safe.
+ */
+export async function refineIntentWithLLM(text: string): Promise<IntentResult | null> {
+  try {
+    const { aiManager } = await import("../AIManager");
+    if (!aiManager.isConfigured()) return null;
+    const raw = await aiManager.sendRaw({
+      system: [
+        "You classify user requests for a workspace AI assistant. Reply with ONLY a JSON object, no prose:",
+        '{"intent":"<intent>","multiStep":<true|false>,"rationale":"<max 12 words>"}',
+        'Intent is exactly one of: question, search, create, edit, analyze, organize, plan, action, agent_intent, automation_intent.',
+        'agent_intent = the user wants a PERSISTENT automated worker created. automation_intent = recurring/scheduled work. question = informational answer. edit/analyze/plan/organize/action = concrete multi-step workspace work. create = making new pages/content.',
+      ].join("\n"),
+      messages: [{ role: "user", content: text.slice(0, 500) }],
+      maxTokens: 120,
+    });
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]) as { intent?: string; multiStep?: boolean; rationale?: string };
+    if (!parsed.intent || !VALID_INTENTS.includes(parsed.intent as RuntimeIntent)) return null;
+    return {
+      intent: parsed.intent as RuntimeIntent,
+      multiStep: Boolean(parsed.multiStep),
+      rationale: String(parsed.rationale || "Refined by model").slice(0, 80),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rule-based classification first (fast, free, deterministic); the LLM is
+ * consulted only for requests the rules fall through on AND that the cheap
+ * heuristic flags as likely multi-step work. Never throws.
+ */
+export async function classifyIntentSmart(text: string): Promise<IntentResult> {
+  const ruleResult = classifyIntent(text);
+  const fellThrough = ruleResult.intent === "question" && ruleResult.rationale === "General request";
+  if (fellThrough && looksLikeComplexAction(text)) {
+    const refined = await refineIntentWithLLM(text);
+    if (refined) return refined;
+  }
+  return ruleResult;
+}

@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Users, ExternalLink, Sparkles, Check } from 'lucide-react';
+import { ExternalLink, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { realtimeCollab } from '../../lib/realtimeCollab';
 
 function getStatusIcon(status: string) {
   switch (status) {
     case 'editing': return '✏️';
+    case 'typing': return '⌨️';
     case 'idle': return '💤';
     default: return '👁️';
   }
@@ -13,6 +15,7 @@ function getStatusIcon(status: string) {
 function getStatusLabel(status: string) {
   switch (status) {
     case 'editing': return 'Editing';
+    case 'typing': return 'Typing';
     case 'idle': return 'Idle';
     default: return 'Viewing';
   }
@@ -36,11 +39,36 @@ export default function CollabPresenceBar({
   className = ''
 }: CollabPresenceBarProps) {
   const [showPicker, setShowPicker] = useState(false);
+  const [typingNames, setTypingNames] = useState<string[]>([]);
+  const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const allUsers = users || [];
+  const othersOnline = allUsers.length > 0;
   const activeCount = allUsers.filter(u => u.status !== 'idle').length + 1;
+
+  // Live typing indicator: peers' `typing` broadcasts show in the capsule
+  // for a couple of seconds after their last keystroke event.
+  useEffect(() => {
+    if (!pageId) return;
+    const unsub = realtimeCollab.on('typing', ({ pageId: pid, userId, userName }) => {
+      if (pid !== pageId || !userId || userId === realtimeCollab.getUser().userId) return;
+      const name = (userName as string) || 'Someone';
+      setTypingNames(prev => (prev.includes(name) ? prev : [...prev, name]));
+      const existing = typingTimers.current.get(userId);
+      if (existing) clearTimeout(existing);
+      typingTimers.current.set(userId, setTimeout(() => {
+        setTypingNames(prev => prev.filter(n => n !== name));
+        typingTimers.current.delete(userId);
+      }, 2500));
+    });
+    return () => {
+      unsub();
+      typingTimers.current.forEach(t => clearTimeout(t));
+      typingTimers.current.clear();
+    };
+  }, [pageId]);
 
   // Close picker on outside click
   useEffect(() => {
@@ -75,31 +103,57 @@ export default function CollabPresenceBar({
         } shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]`}
         title="Collaboration presence & status"
       >
-        {/* User Avatars or Icon */}
-        <div className="flex items-center -space-x-1 shrink-0">
-          {allUsers.length > 0 ? (
-            allUsers.slice(0, 3).map((u, i) => (
-              <span
-                key={u.userId || u.id || `user-${i}`}
-                className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] border border-white/40 shadow-xs relative"
-                style={{ backgroundColor: (u.userColor || '#0066FF') + '33', borderColor: u.userColor || '#0066FF' }}
-              >
-                {u.userAvatar || '👤'}
+        {/* Solo: muted "Collab" pill. Others present: avatar stack + count. */}
+        {othersOnline ? (
+          <>
+            <div className="flex items-center -space-x-1 shrink-0">
+              {allUsers.slice(0, 3).map((u, i) => (
+                <span
+                  key={u.userId || u.id || `user-${i}`}
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] border border-white/40 shadow-xs relative"
+                  style={{ backgroundColor: (u.userColor || '#0066FF') + '33', borderColor: u.userColor || '#0066FF' }}
+                >
+                  {u.userAvatar || '👤'}
+                </span>
+              ))}
+              {allUsers.length > 3 && (
+                <span className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold border border-white/40 bg-black/10 dark:bg-white/10 text-[var(--text-secondary)]">
+                  +{allUsers.length - 3}
+                </span>
+              )}
+            </div>
+
+            {/* Online Count, or typing indicator when someone is typing */}
+            {typingNames.length > 0 ? (
+              <span className="leading-none text-[var(--accent)]">
+                {typingNames.length === 1 ? `${typingNames[0]} is typing` : `${typingNames.length} typing`}
+                <span className="animate-pulse">…</span>
               </span>
-            ))
-          ) : (
-            <Users size={12} className="text-[var(--text-secondary)] group-hover:text-[var(--text)] transition-colors" />
-          )}
-        </div>
+            ) : (
+              <span className="leading-none">{activeCount} online</span>
+            )}
 
-        {/* Online Count */}
-        <span className="leading-none">{activeCount} online</span>
-
-        {/* Glowing Presence Dot */}
-        <span className="relative flex h-1.5 w-1.5 ml-0.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-        </span>
+            {/* Glowing Presence Dot */}
+            <span className="relative flex h-1.5 w-1.5 ml-0.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+            </span>
+          </>
+        ) : (
+          <>
+            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${typingNames.length > 0 ? 'bg-emerald-500' : 'bg-[var(--text-muted)]/40'}`} />
+            <span className="leading-none">
+              {typingNames.length > 0 ? (
+                <>
+                  {typingNames.length === 1 ? `${typingNames[0]} is typing` : `${typingNames.length} typing`}
+                  <span className="animate-pulse">…</span>
+                </>
+              ) : (
+                'Collab'
+              )}
+            </span>
+          </>
+        )}
       </button>
 
       {/* External / Popout Action Button if provided */}

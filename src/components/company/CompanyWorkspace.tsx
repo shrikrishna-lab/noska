@@ -6,7 +6,7 @@ import {
   BarChart3, Eye, Lock, Globe, UserPlus, X, FolderKanban, Database,
   Home, Briefcase, Activity, ChevronRight, Star, MoreHorizontal,
   Crown, ShieldCheck, UserMinus, Send, RotateCcw, Calendar,
-  Hash, LayoutGrid, List, ArrowUpRight, Sparkles, Command, CheckSquare, Key, Webhook, FileWarning
+  Hash, LayoutGrid, List, ArrowUpRight, Sparkles, Command, CheckSquare, Key, Webhook, FileWarning, LogOut
 } from "lucide-react"
 import { supabase } from "../../lib/supabase"
 import { useCompany } from "../../contexts/CompanyContext"
@@ -171,7 +171,7 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
   const {
     currentCompany, currentMember, companyMembers, companyTeams,
     companyInvitations, companies, refreshMembers, refreshTeams,
-    refreshInvitations, switchCompany, refreshCompany
+    refreshInvitations, switchCompany, resignFromCompany, refreshCompany
   } = useCompany()
 
   const [view, setView] = useState<CompanyView>("dashboard")
@@ -201,8 +201,14 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false)
   const { starredPageIds, togglePageStar, isPageStarred } = useFavorites()
 
-  const isAdmin = isCompanyAdmin(currentMember, currentCompany!)
-  const isOwner = isCompanyOwner(currentMember, currentCompany!)
+  // Guard: if no company selected (e.g. after resign), bail out early
+  if (!currentCompany) {
+    onBack()
+    return null
+  }
+
+  const isAdmin = isCompanyAdmin(currentMember, currentCompany)
+  const isOwner = isCompanyOwner(currentMember, currentCompany)
 
   // Fetch audit logs
   useEffect(() => {
@@ -286,8 +292,118 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
     setTeamSettingsTeam(team)
     setTeamSettingsOpen(true)
   }, [])
+  const { createCompany } = useCompany()
+  const [setupName, setSetupName] = useState("")
+  const [setupSlug, setSetupSlug] = useState("")
+  const [setupCreating, setSetupCreating] = useState(false)
+  const [setupError, setSetupError] = useState("")
 
-  if (!currentCompany) return null
+  useEffect(() => {
+    if (!currentCompany && companies.length > 0) {
+      switchCompany(companies[0].id)
+    }
+  }, [currentCompany, companies, switchCompany])
+
+  const handleCreateNewCompany = async (nameToUse?: string, slugToUse?: string) => {
+    const orgName = (nameToUse || setupName || "Acme Corp").trim()
+    const orgSlug = (slugToUse || setupSlug || orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-")).trim()
+    if (!orgName) return
+    setSetupCreating(true)
+    setSetupError("")
+    try {
+      await createCompany(orgName, orgSlug)
+    } catch (e) {
+      setSetupError(e instanceof Error ? e.message : "Failed to create organization")
+    } finally {
+      setSetupCreating(false)
+    }
+  }
+
+  if (!currentCompany) {
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col bg-[var(--bg)] select-none">
+        {/* Top bar with back button */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--surface-2)]/80 backdrop-blur-md">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-xs font-semibold text-[var(--secondary)] hover:text-[var(--text)] hover:bg-[var(--hover)] px-3 py-1.5 rounded-xl transition cursor-pointer"
+          >
+            <ArrowLeft size={14} />
+            <span>Back to Personal Workspace</span>
+          </button>
+        </div>
+
+        {/* Central Onboarding Card */}
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-[480px] rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-2xl space-y-6 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto shadow-xs text-indigo-500">
+              <Building2 size={26} />
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold text-[var(--text)] tracking-tight">Create Organization Workspace</h2>
+              <p className="text-xs text-[var(--muted)] mt-1.5 leading-relaxed max-w-sm mx-auto">
+                Set up an organization to manage cross-functional teams, private documents, audit trails, and company departments.
+              </p>
+            </div>
+
+            <div className="space-y-3 text-left">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Organization Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Acme Corporation, Linear Lab"
+                  value={setupName}
+                  onChange={(e) => {
+                    setSetupName(e.target.value)
+                    setSetupSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"))
+                  }}
+                  className="w-full px-3.5 py-2 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:ring-2 focus:ring-[var(--accent)]/30 transition"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Workspace URL Slug</label>
+                <div className="flex items-center px-3.5 py-2 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-xs text-[var(--muted)]">
+                  <span>noska.app/</span>
+                  <input
+                    type="text"
+                    placeholder="acme"
+                    value={setupSlug}
+                    onChange={(e) => setSetupSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}
+                    className="flex-1 bg-transparent text-[var(--text)] outline-none ml-0.5"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {setupError && (
+              <p className="text-xs text-rose-500">{setupError}</p>
+            )}
+
+            <div className="space-y-2 pt-2">
+              <button
+                disabled={!setupName.trim() || setupCreating}
+                onClick={() => handleCreateNewCompany()}
+                className="w-full py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white text-xs font-semibold shadow-xs disabled:opacity-40 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {setupCreating ? <Loader2 size={14} className="animate-spin" /> : <Building2 size={14} />}
+                <span>{setupCreating ? "Setting up..." : "Create Organization"}</span>
+              </button>
+
+              <button
+                disabled={setupCreating}
+                onClick={() => handleCreateNewCompany("Noska Labs", "noska-labs")}
+                className="w-full py-2 rounded-xl border border-[var(--border)] hover:bg-[var(--hover)] text-xs font-semibold text-[var(--text-secondary)] transition cursor-pointer"
+              >
+                Launch Demo Organization (Noska Labs)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const activeMembers = companyMembers.filter(m => m.status === "active")
   const pendingInvites = companyInvitations.filter(i => i.status === "pending")
@@ -388,7 +504,7 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
                         key={c.id}
                         onClick={() => { switchCompany(c.id); setCompanySwitcherOpen(false) }}
                         className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-left rounded-xl transition-all cursor-pointer ${
-                          c.id === currentCompany.id
+                          c.id === currentCompany?.id
                             ? "bg-[var(--accent)]/10 text-[var(--text)] font-semibold border border-[var(--accent)]/20 shadow-xs"
                             : "hover:bg-[var(--hover)] text-[var(--secondary)] hover:text-[var(--text)]"
                         }`}
@@ -400,10 +516,32 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
                           <div className="text-xs font-semibold text-[var(--text)] truncate">{c.name}</div>
                           <div className="text-[10px] text-[var(--muted)]">/{c.slug}</div>
                         </div>
-                        {c.id === currentCompany.id && <Check size={13} className="text-[var(--accent)] shrink-0" />}
+                        {c.id === currentCompany?.id && <Check size={13} className="text-[var(--accent)] shrink-0" />}
                       </button>
                     ))}
                   </div>
+
+                  {/* Resign / Leave Organization Action */}
+                  {currentCompany && (
+                    <div className="border-t border-[var(--border)]/70 p-1.5 bg-black/[0.02] dark:bg-white/[0.02]">
+                      <button
+                        onClick={async () => {
+                          const confirmed = await window.noskaConfirm?.(
+                            `Are you sure you want to resign / leave ${currentCompany.name}?`
+                          ) ?? confirm(`Are you sure you want to resign / leave ${currentCompany.name}?`);
+                          if (confirmed) {
+                            setCompanySwitcherOpen(false)
+                            onBack()
+                            await resignFromCompany()
+                          }
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer text-left text-xs font-semibold"
+                      >
+                        <LogOut size={13} className="text-rose-500 shrink-0" />
+                        <span>Resign from {currentCompany.name}</span>
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

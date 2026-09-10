@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 
 export default function PearlButton({
-  label = "New AI chat",
+  label = "AI",
   icon1,
   icon2,
   onClick,

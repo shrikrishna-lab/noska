@@ -60,6 +60,10 @@ class RealtimeCollab {
   private userColor: string | null = null;
   private listeners = new Map<string, Set<(data: unknown) => void>>();
   private _joinedWorkspace = false;
+  /** Per-page join refcount: usePresence, useCursor and session.ts may all
+   * join the same page — channels must survive until the LAST consumer
+   * leaves, not the first. */
+  private _pageRefs = new Map<string, number>();
 
   // Throttle state for高频 events (cursor, typing)
   private _lastCursorSend = 0;
@@ -87,6 +91,17 @@ class RealtimeCollab {
   }
 
   getUser(): CollabUser {
+    return {
+      userId: this.userId as string,
+      userName: this.userName as string,
+      userAvatar: this.userAvatar as string,
+      userColor: this.userColor as string,
+    };
+  }
+
+  /** Identity fields merged into every broadcast payload so receivers can
+   * render names/colors without a second presence lookup. */
+  private _identity(): CollabUser {
     return {
       userId: this.userId as string,
       userName: this.userName as string,
@@ -142,7 +157,13 @@ class RealtimeCollab {
 
   joinPage(pageId: string): void {
     if (!this._joinedWorkspace) return;
-    if (this._channel(`presence:${pageId}`) || this._channel(`broadcast:${pageId}`)) return;
+    // Refcount: if another consumer already joined this page, keep channels
+    // alive and just bump the count instead of tearing them down early.
+    if (this._channel(`presence:${pageId}`) && this._channel(`broadcast:${pageId}`)) {
+      this._pageRefs.set(pageId, (this._pageRefs.get(pageId) ?? 0) + 1);
+      return;
+    }
+    this._pageRefs.set(pageId, Math.max(this._pageRefs.get(pageId) ?? 0, 1));
 
     const pres = supabase.channel(`presence:${pageId}`, {
       config: { presence: { key: this.userId as string } },
@@ -166,13 +187,14 @@ class RealtimeCollab {
     pres.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         try {
-          // Minimal presence payload - only essential fields
-          const payload = {
-            userId: this.userId as string,
-            name: this.userName as string, // Shortened
-            color: this.userColor as string, // Shortened
+          // Full identity — consumers (usePresenceUsers, CollabPresenceBar,
+          // CollabPanel People tab) read userName/userAvatar/userColor directly.
+          const payload: PresenceTrackPayload = {
+            ...this._identity(),
             pageId,
             status: "viewing",
+            currentBlockId: null,
+            onlineAt: Date.now(),
           };
           await pres.track(payload);
         } catch (e) {
@@ -223,6 +245,12 @@ class RealtimeCollab {
   }
 
   leavePage(pageId: string): void {
+    const remaining = (this._pageRefs.get(pageId) ?? 1) - 1;
+    if (remaining > 0) {
+      this._pageRefs.set(pageId, remaining);
+      return;
+    }
+    this._pageRefs.delete(pageId);
     this._delChannel(`presence:${pageId}`);
     this._delChannel(`broadcast:${pageId}`);
   }
@@ -255,12 +283,12 @@ class RealtimeCollab {
 
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
-    // Minimal payload - only essential fields
+    // Identity included so remote cursor layers can render name/color directly
     ch.send({
       type: "broadcast",
       event: "cursor",
       payload: {
-        userId: this.userId,
+        ...this._identity(),
         x,
         y,
         targetBlockId, // Keep full name for compatibility
@@ -273,15 +301,16 @@ class RealtimeCollab {
   sendSelection(pageId: string, range?: SelectionRange | null): void {
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
-    // Minimal payload - only essential fields
     ch.send({
       type: "broadcast",
       event: "selection",
       payload: {
-        userId: this.userId,
+        ...this._identity(),
         blockId: range?.blockId,
-        start: range?.startOffset, // Shortened
-        end: range?.endOffset, // Shortened
+        // Consumers read startOffset/endOffset (useSelections) — keep both
+        // spellings in sync; do not shorten one side only.
+        startOffset: range?.startOffset,
+        endOffset: range?.endOffset,
       },
     }).catch((e) => {
       console.warn("realtimeCollab: sendSelection failed", e);
@@ -348,11 +377,10 @@ class RealtimeCollab {
 
     const ch = this._channel(`broadcast:${pageId}`);
     if (!ch) return;
-    // Minimal payload
     ch.send({
       type: "broadcast",
       event: "typing",
-      payload: { userId: this.userId, p: pageId }, // Shortened field names
+      payload: { ...this._identity() },
     }).catch((e) => {
       console.warn("realtimeCollab: sendTyping failed", e);
     });
@@ -361,6 +389,7 @@ class RealtimeCollab {
   destroy(): void {
     for (const key of this.channels.keys()) this._delChannel(key);
     this.channels.clear();
+    this._pageRefs.clear();
     this.listeners.clear();
   }
 }

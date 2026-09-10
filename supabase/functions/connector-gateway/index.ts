@@ -24,7 +24,7 @@ import { errors, PlatformError } from "../_shared/core/pure.ts";
 import {
   listAvailableTools, listConnectors, listConnections,
   callTool, startConnect, handleCallback, revokeConnection,
-  resolveConnector, connectorSlugFromState,
+  connectWithToken, testConnection, resolveConnector, connectorSlugFromState,
 } from "../_shared/connectors/gateway.ts";
 
 const CORS = {
@@ -48,7 +48,12 @@ async function requireUserJwt(req: Request): Promise<string> {
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "").trim();
   if (!token) throw errors.authRequired("Missing Authorization bearer token.");
   const { data, error } = await dbClient().auth.getUser(token);
-  if (error || !data?.user?.id) throw errors.authRequired("Invalid or expired session.");
+  if (error || !data?.user?.id) {
+    // Surface the underlying GoTrue reason — it makes session problems
+    // diagnosable from the settings UI (contains no secrets).
+    console.error("[connector-gateway] auth.getUser failed:", error?.message);
+    throw errors.authRequired(`Invalid or expired session${error?.message ? ` — ${error.message}` : ""}.`);
+  }
   return data.user.id;
 }
 
@@ -84,7 +89,9 @@ Deno.serve(async (req: Request) => {
           connectors: "/connector-gateway/connectors",
           connections: "/connector-gateway/connections",
           connect: "/connector-gateway/connect",
+          "connect/manual": "/connector-gateway/connect/manual",
           callback: "/connector-gateway/callback",
+          "connections/test": "/connector-gateway/connections/test",
           tools: "/connector-gateway/tools",
           call: "/connector-gateway/tools/call",
         },
@@ -113,6 +120,28 @@ Deno.serve(async (req: Request) => {
         ? body.redirect_uri
         : `${callbackBase(req)}/callback`;
       return json(await startConnect(userId, connector, redirectUri));
+    }
+
+    if (action === "connect/manual" && req.method === "POST") {
+      const userId = await requireUserJwt(req);
+      const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+      const connectorRef = String(body.connector ?? body.connector_id ?? body.slug ?? "custom-mcp");
+      const token = String(body.token ?? body.api_key ?? "");
+      if (!token) throw errors.validation("token is required.");
+      const connector = await resolveConnector(connectorRef);
+      return json(await connectWithToken(userId, connector, {
+        token,
+        label: typeof body.label === "string" ? body.label : undefined,
+        serverUrl: typeof body.server_url === "string" ? body.server_url : undefined,
+      }));
+    }
+
+    if (action === "connections/test" && req.method === "POST") {
+      const userId = await requireUserJwt(req);
+      const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+      const connectionId = String(body.connection_id ?? body.id ?? "");
+      if (!connectionId) throw errors.validation("connection_id is required.");
+      return json(await testConnection(userId, connectionId));
     }
 
     if (action.startsWith("connections/") && req.method === "DELETE") {

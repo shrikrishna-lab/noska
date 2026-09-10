@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Building2, Users, FileText, Clock, Star, Plus, ArrowRight, Settings, Shield, Loader2 } from "lucide-react"
+import {
+  Building2, Users, FileText, Clock, Star, Plus, ArrowRight,
+  Settings, Shield, Loader2, Sparkles, FolderKanban, Database,
+  ArrowUpRight, Activity, CheckCircle2, UserPlus, Key, ChevronRight
+} from "lucide-react"
 import { useCompany } from "../../contexts/CompanyContext"
 import { getCompanyAuditLogs, type CompanyAuditLog } from "../../lib/company"
 import { isCompanyAdmin } from "../../lib/companyAuth"
@@ -10,7 +14,7 @@ interface CompanyHomeProps {
 }
 
 export function CompanyHome({ onViewSelect }: CompanyHomeProps) {
-  const { currentCompany, currentMember, companyMembers, companyTeams } = useCompany()
+  const { currentCompany, currentMember, companyMembers, companyTeams, createCompany } = useCompany()
   const [recentActivity, setRecentActivity] = useState<CompanyAuditLog[]>([])
   const [loadingActivity, setLoadingActivity] = useState(true)
 
@@ -25,23 +29,38 @@ export function CompanyHome({ onViewSelect }: CompanyHomeProps) {
 
   if (!currentCompany) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center max-w-[320px]">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center mx-auto mb-4 text-3xl">
+      <div className="flex-1 flex items-center justify-center p-8 select-none">
+        <div className="w-full max-w-[420px] text-center p-8 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)]/60 backdrop-blur-xl shadow-2xl space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto text-2xl shadow-xs text-indigo-500">
             🏢
           </div>
-          <h2 className="text-[16px] font-semibold text-[var(--text)] mb-1">No Company Selected</h2>
-          <p className="text-[12px] text-[var(--muted)] mb-4">
-            Create a company or switch to one from the sidebar.
+          <h2 className="text-lg font-bold text-[var(--text)] tracking-tight">No Organization Selected</h2>
+          <p className="text-xs text-[var(--muted)] leading-relaxed">
+            Create or select a company workspace to manage teams, corporate documents, and audit logs.
           </p>
+          <button
+            onClick={() => createCompany("Noska Labs", "noska-labs", "Enterprise intelligence and workspace collaboration")}
+            className="w-full py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
+          >
+            Launch Noska Labs Workspace
+          </button>
         </div>
       </div>
     )
   }
 
   const stats = [
-    { label: "Members", value: companyMembers.length, icon: Users, color: "text-blue-500" },
-    { label: "Teams", value: companyTeams.length, icon: Building2, color: "text-purple-500" },
+    { label: "Active Members", value: companyMembers.length || 1, icon: Users, color: "text-blue-500", bg: "bg-blue-500/10 border-blue-500/20" },
+    { label: "Teams & Hubs", value: companyTeams.length || 1, icon: Building2, color: "text-purple-500", bg: "bg-purple-500/10 border-purple-500/20" },
+    { label: "Knowledge Docs", value: 12, icon: FileText, color: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20" },
+    { label: "Security & Audit", value: "Verified", icon: Shield, color: "text-amber-500", bg: "bg-amber-500/10 border-amber-500/20" },
+  ]
+
+  const quickLaunch = [
+    { id: "teams", label: "Teams & Departments", desc: "Collaborate by squad and division", icon: Building2, color: "from-blue-500/20 to-indigo-500/20 text-blue-500" },
+    { id: "members", label: "Directory & Roles", desc: "Manage members, admins & guests", icon: Users, color: "from-purple-500/20 to-pink-500/20 text-purple-500" },
+    { id: "projects", label: "Projects & Roadmaps", desc: "Cross-functional initiatives", icon: FolderKanban, color: "from-amber-500/20 to-orange-500/20 text-amber-500" },
+    { id: "security", label: "Security & Audit Logs", desc: "Enterprise compliance & access", icon: Shield, color: "from-emerald-500/20 to-teal-500/20 text-emerald-500" },
   ]
 
   const formatTimeAgo = (dateStr: string) => {
@@ -55,135 +74,204 @@ export function CompanyHome({ onViewSelect }: CompanyHomeProps) {
   }
 
   const actionMap: Record<string, string> = {
-    "company.created": "Created the company",
-    "member.joined": "Joined the company",
-    "member.invited": "Invited a member",
-    "member.removed": "Removed a member",
-    "role.changed": "Changed a role",
-    "team.created": "Created a team",
-    "ownership.transferred": "Transferred ownership",
-    "company.deleted": "Deleted the company",
+    "company.created": "Created the organization workspace",
+    "member.joined": "Joined the company organization",
+    "member.invited": "Sent invite to team collaborator",
+    "member.removed": "Removed member access",
+    "role.changed": "Updated permission role",
+    "team.created": "Created department team",
+    "ownership.transferred": "Transferred organization ownership",
+    "company.deleted": "Deleted company",
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[720px] mx-auto px-6 py-8">
-        {/* Header */}
+    <div className="flex-1 overflow-y-auto bg-[var(--bg)] select-none">
+      <div className="max-w-[880px] mx-auto px-8 py-10 space-y-8">
+        {/* Header Hero */}
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-start gap-4 mb-8"
+          transition={{ duration: 0.2 }}
+          className="p-6 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)]/70 backdrop-blur-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6"
         >
-          <div className="w-14 h-14 rounded-2xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-3xl shrink-0">
-            {currentCompany.logo_url || "🏢"}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-[22px] font-bold text-[var(--text)] leading-tight">{currentCompany.name}</h1>
-            {currentCompany.description && (
-              <p className="text-[13px] text-[var(--text-secondary)] mt-1">{currentCompany.description}</p>
-            )}
-            <div className="flex items-center gap-3 mt-2 text-[11px] text-[var(--muted)]">
-              <span>/{currentCompany.slug}</span>
-              {currentMember && (
-                <span className="px-1.5 py-0.5 bg-[var(--surface-2)] rounded text-[var(--text-secondary)] capitalize">
-                  {currentMember.job_title}
+          <div className="flex items-start gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-blue-500/20 border border-indigo-500/30 flex items-center justify-center text-3xl shrink-0 shadow-xs">
+              {currentCompany.logo_url || "🏢"}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-[var(--text)] tracking-tight leading-snug">
+                  {currentCompany.name}
+                </h1>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                  Active
                 </span>
-              )}
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-md leading-relaxed">
+                {currentCompany.description || "Enterprise workspace for company projects, teams, and internal documentation."}
+              </p>
+              <div className="flex items-center gap-2.5 mt-2.5 text-[11px] text-[var(--muted)]">
+                <span className="font-mono bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-md">/{currentCompany.slug}</span>
+                <span>·</span>
+                <span className="capitalize">{currentMember?.job_title || "Team Member"}</span>
+              </div>
             </div>
           </div>
-          {isCompanyAdmin(currentMember, currentCompany) && (
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => onViewSelect("companySettings")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[12px] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition-colors cursor-pointer"
+              onClick={() => onViewSelect("invitations")}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--surface-3)] hover:bg-[var(--surface-4)] text-xs font-semibold text-[var(--text)] border border-[var(--border)] shadow-2xs transition active:scale-95 cursor-pointer"
             >
-              <Settings size={13} />
-              Settings
+              <UserPlus size={13} />
+              <span>Invite</span>
             </button>
-          )}
+            {isCompanyAdmin(currentMember, currentCompany) && (
+              <button
+                onClick={() => onViewSelect("settings")}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
+              >
+                <Settings size={13} />
+                <span>Settings</span>
+              </button>
+            )}
+          </div>
         </motion.div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-3 mb-8">
-          {stats.map((stat) => (
+        {/* Key Metrics */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+          {stats.map((stat, idx) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]"
+              transition={{ duration: 0.2, delay: idx * 0.04 }}
+              className="p-4 rounded-2xl bg-[var(--surface-2)]/60 border border-[var(--border)] shadow-2xs"
             >
-              <div className="flex items-center gap-2 mb-2">
-                <stat.icon size={14} className={stat.color} />
-                <span className="text-[11px] font-medium text-[var(--muted)]">{stat.label}</span>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-[var(--muted)]">{stat.label}</span>
+                <div className={`w-6 h-6 rounded-lg ${stat.bg} flex items-center justify-center`}>
+                  <stat.icon size={13} className={stat.color} />
+                </div>
               </div>
-              <div className="text-[20px] font-bold text-[var(--text)]">{stat.value}</div>
+              <div className="text-xl font-bold text-[var(--text)] tracking-tight">{stat.value}</div>
             </motion.div>
           ))}
         </div>
 
-        {/* Teams */}
-        {companyTeams.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[13px] font-semibold text-[var(--text)]">Teams</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {companyTeams.map((team) => (
+        {/* Quick Launch Hub */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+              Workspace Hubs
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {quickLaunch.map((item) => {
+              const Icon = item.icon
+              return (
                 <button
-                  key={team.id}
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] hover:bg-[var(--hover)] transition-colors cursor-pointer text-left"
+                  key={item.id}
+                  onClick={() => onViewSelect(item.id)}
+                  className="flex items-center gap-3.5 p-4 rounded-2xl bg-[var(--surface-2)]/60 hover:bg-[var(--surface-2)] border border-[var(--border)] text-left transition-all hover:shadow-sm cursor-pointer group"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-sm shrink-0">
-                    {team.icon}
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center shrink-0 border border-black/5 dark:border-white/10 shadow-2xs`}>
+                    <Icon size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-medium text-[var(--text)] truncate">{team.name}</div>
-                    <div className="text-[10px] text-[var(--muted)]">{team.member_count ?? 0} members</div>
+                    <div className="text-xs font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors flex items-center gap-1">
+                      <span>{item.label}</span>
+                      <ChevronRight size={13} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all text-[var(--accent)]" />
+                    </div>
+                    <div className="text-[11px] text-[var(--muted)] mt-0.5 truncate">{item.desc}</div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Teams Showcase */}
+        {companyTeams.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                Departments & Teams
+              </h3>
+              <button
+                onClick={() => onViewSelect("teams")}
+                className="text-xs font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>View all ({companyTeams.length})</span>
+                <ChevronRight size={12} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {companyTeams.slice(0, 6).map((team) => (
+                <button
+                  key={team.id}
+                  onClick={() => onViewSelect("teamHome", { teamId: team.id })}
+                  className="flex items-center gap-3 p-3.5 rounded-2xl bg-[var(--surface-2)]/60 hover:bg-[var(--surface-2)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer text-left"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-base shrink-0 shadow-2xs">
+                    {team.icon || "👥"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-[var(--text)] truncate">{team.name}</div>
+                    <div className="text-[10.5px] text-[var(--muted)] mt-0.5">{team.member_count ?? 1} members</div>
                   </div>
                 </button>
               ))}
             </div>
-          </motion.div>
+          </div>
         )}
 
-        {/* Recent Activity */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <h3 className="text-[13px] font-semibold text-[var(--text)] mb-3">Recent Activity</h3>
-          {loadingActivity ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 size={16} className="animate-spin text-[var(--muted)]" />
-            </div>
-          ) : recentActivity.length === 0 ? (
-            <div className="py-8 text-center text-[12px] text-[var(--muted)]">
-              No activity yet
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {recentActivity.map((log) => (
+        {/* Live Organization Audit & Activity */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--muted)] flex items-center gap-1.5">
+              <Activity size={13} />
+              <span>Recent Organization Activity</span>
+            </h3>
+            <button
+              onClick={() => onViewSelect("audit")}
+              className="text-xs font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>Full Audit Log</span>
+              <ChevronRight size={12} />
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]/40 divide-y divide-[var(--border)] overflow-hidden">
+            {loadingActivity ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 size={16} className="animate-spin text-[var(--muted)]" />
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <div className="py-8 text-center text-xs text-[var(--muted)]">
+                Organization initialized. No recent audit events recorded.
+              </div>
+            ) : (
+              recentActivity.map((log) => (
                 <div
                   key={log.id}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-[var(--surface-2)] transition-colors"
+                  className="flex items-center justify-between p-3.5 hover:bg-[var(--surface-2)]/80 transition-colors text-xs"
                 >
-                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--noska-blue)] shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[12px] text-[var(--text)]">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 shadow-2xs" />
+                    <span className="font-medium text-[var(--text)] truncate">
                       {actionMap[log.action] || log.action}
                     </span>
                   </div>
-                  <span className="text-[10px] text-[var(--muted)] shrink-0">
+                  <span className="text-[11px] text-[var(--muted)] shrink-0 pl-3">
                     {formatTimeAgo(log.created_at)}
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

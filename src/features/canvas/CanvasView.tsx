@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { usePresence } from "../../hooks/usePresence";
 import { useCursor } from "../../hooks/useCursor";
+import { usePageIsShared } from "../collab/hooks";
 import CollabPresenceBar from "../../components/collab/CollabPresenceBar";
 import CollabCursorLayer from "../../components/collab/CollabCursorLayer";
 import CanvasCollabLayer from "./CanvasCollabLayer";
@@ -149,8 +150,12 @@ export default function CanvasView({ page, onBlockPatch, onAddBlock }: CanvasVie
   const redoStack = useRef<Array<{ positions: Record<string, { x: number; y: number }>; data: CanvasData }>>([]);
   const [, forceUndoRender] = useState(0);
 
-  const { users, ownStatus, setStatus } = usePresence(page?.id);
-  const { cursors, handleMouseMove: handleCursorMove } = useCursor(page?.id);
+  // Privacy gate: presence/cursors only broadcast on shared pages
+  const sharedViaPermissions = usePageIsShared(page?.id ?? null);
+  const canvasPage = page as { sharedRole?: string; visibility?: string } | undefined;
+  const pageIsShared = !!canvasPage?.sharedRole || canvasPage?.visibility === "public" || sharedViaPermissions;
+  const { users, ownStatus, setStatus } = usePresence(pageIsShared ? page?.id : null);
+  const { cursors, handleMouseMove: handleCursorMove } = useCursor(pageIsShared ? page?.id : null, { enabled: pageIsShared });
 
   // ── Load / init ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -847,11 +852,6 @@ export default function CanvasView({ page, onBlockPatch, onAddBlock }: CanvasVie
     >
       <CollabCursorLayer cursors={cursors} containerRef={canvasRef} />
       <CanvasCollabLayer cursors={cursors} />
-
-      {/* Collaboration presence pill */}
-      <div className="absolute top-3 left-3 z-20 pointer-events-auto">
-        <CollabPresenceBar users={users} ownStatus={ownStatus} pageId={page?.id} onStatusChange={setStatus} />
-      </div>
 
       {/* Board Onboarding Checklist Bar */}
       <CanvasChecklistBar

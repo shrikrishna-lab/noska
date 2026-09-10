@@ -50,6 +50,8 @@ export interface ProviderSendOpts {
   maxTokens?: number;
   effort?: "low" | "medium" | "high";
   thinking?: boolean;
+  /** Explicit per-request sampling temperature — overrides the effort curve. */
+  temperature?: number;
   signal?: AbortSignal;
 }
 
@@ -144,6 +146,20 @@ async function checkResponse(res: Response, provider: string, model: string): Pr
   }
 }
 
+/**
+ * Resolve the sampling temperature for OpenAI-compatible endpoints:
+ * an explicit per-request override wins; otherwise reasoning effort maps to
+ * a sensible curve (low = focused/deterministic, high = exploratory).
+ */
+function resolveTemperature(temperature?: number, effort?: "low" | "medium" | "high", fallback = 0.4): number {
+  if (typeof temperature === "number" && Number.isFinite(temperature)) {
+    return Math.min(Math.max(temperature, 0), 2);
+  }
+  if (effort === "low") return 0.2;
+  if (effort === "high") return 0.6;
+  return fallback;
+}
+
 // ─── Provider Definitions ───────────────────────────────────────────────────
 
 const PROVIDERS: Record<string, AIProvider> = {
@@ -175,13 +191,13 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "mistralai/mistral-large-2407", name: "Mistral Large 2", context: 128000 }
     ],
     defaultModel: "anthropic/claude-opus-4.6",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
       if (!apiKey) throw configError("OpenRouter");
       const modelId = model || this.defaultModel;
       const payload: Record<string, any> = {
         model: modelId,
         max_tokens: maxTokens,
-        temperature: effort === "low" ? 0.2 : effort === "high" ? 0.6 : 0.4,
+        temperature: resolveTemperature(temperature, effort),
         messages: [
           ...(system ? [{ role: "system", content: system }] : []),
           ...messages
@@ -207,13 +223,13 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("OpenRouter", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
       if (!apiKey) throw configError("OpenRouter");
       const modelId = model || this.defaultModel;
       const payload: Record<string, any> = {
         model: modelId,
         max_tokens: maxTokens,
-        temperature: effort === "low" ? 0.2 : effort === "high" ? 0.6 : 0.4,
+        temperature: resolveTemperature(temperature, effort),
         stream: true,
         messages: [
           ...(system ? [{ role: "system", content: system }] : []),
@@ -259,7 +275,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", context: 1048576 }
     ],
     defaultModel: "gemini-2.5-flash",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
       if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
@@ -267,8 +283,8 @@ const PROVIDERS: Record<string, AIProvider> = {
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }]
         }));
-        const generationConfig: Record<string, any> = { maxOutputTokens: maxTokens, temperature: 0.4 };
-        if (modelId.includes("3.7") || modelId.includes("3.6") || modelId.includes("3.5") || modelId.includes("thinking") || thinking) {
+        const generationConfig: Record<string, any> = { maxOutputTokens: maxTokens, temperature: resolveTemperature(temperature, effort) };
+        if (modelId.includes("3.7") || modelId.includes("3.6") || modelId.includes("3.5") || modelId.includes("2.5") || modelId.includes("thinking") || thinking) {
           generationConfig.thinkingConfig = {
             thinkingBudget: effort === "high" ? 16000 : effort === "low" ? 2048 : 8000
           };
@@ -297,7 +313,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Gemini", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
       if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
@@ -305,8 +321,8 @@ const PROVIDERS: Record<string, AIProvider> = {
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }]
         }));
-        const generationConfig: Record<string, any> = { maxOutputTokens: maxTokens, temperature: 0.4 };
-        if (modelId.includes("3.7") || modelId.includes("3.6") || modelId.includes("3.5") || modelId.includes("thinking") || thinking) {
+        const generationConfig: Record<string, any> = { maxOutputTokens: maxTokens, temperature: resolveTemperature(temperature, effort) };
+        if (modelId.includes("3.7") || modelId.includes("3.6") || modelId.includes("3.5") || modelId.includes("2.5") || modelId.includes("thinking") || thinking) {
           generationConfig.thinkingConfig = {
             thinkingBudget: effort === "high" ? 16000 : effort === "low" ? 2048 : 8000
           };
@@ -354,7 +370,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "chatgpt-4o-latest", name: "ChatGPT 4o Latest", context: 128000 }
     ],
     defaultModel: "gpt-5.6-sol",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
       if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
       const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.includes("gpt-5") || Boolean(thinking);
@@ -368,7 +384,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           ]
         };
         if (!isReasoning) {
-          payload.temperature = effort === "low" ? 0.2 : effort === "high" ? 0.7 : 0.4;
+          payload.temperature = resolveTemperature(temperature, effort);
         } else {
           payload.reasoning_effort = effort || "medium";
         }
@@ -388,7 +404,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("OpenAI", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
       if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
       const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.includes("gpt-5") || Boolean(thinking);
@@ -403,7 +419,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           ]
         };
         if (!isReasoning) {
-          payload.temperature = effort === "low" ? 0.2 : effort === "high" ? 0.7 : 0.4;
+          payload.temperature = resolveTemperature(temperature, effort);
         } else {
           payload.reasoning_effort = effort || "medium";
         }
@@ -441,7 +457,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 }
     ],
     defaultModel: "claude-opus-5",
-    async send({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, signal }) {
       if (!apiKey) throw configError("Anthropic");
       const modelId = model || this.defaultModel;
       const isAdaptiveThinking = modelId.includes("claude-3-7") || modelId.includes("5") || Boolean(thinking);
@@ -457,6 +473,9 @@ const PROVIDERS: Record<string, AIProvider> = {
           const budget = effort === "high" ? 16000 : effort === "low" ? 2048 : 8000;
           payload.thinking = { type: "enabled", budget_tokens: budget };
           payload.max_tokens = Math.max(payload.max_tokens, budget + 4096);
+        } else if (typeof temperature === "number" && Number.isFinite(temperature)) {
+          // Extended-thinking payloads must not carry temperature (API 400s).
+          payload.temperature = Math.min(Math.max(temperature, 0), 1);
         }
         const res = await fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
@@ -476,7 +495,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Anthropic", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, signal }) {
       if (!apiKey) throw configError("Anthropic");
       const modelId = model || this.defaultModel;
       const isAdaptiveThinking = modelId.includes("claude-3-7") || modelId.includes("5") || Boolean(thinking);
@@ -492,6 +511,9 @@ const PROVIDERS: Record<string, AIProvider> = {
           const budget = effort === "high" ? 16000 : effort === "low" ? 2048 : 8000;
           payload.thinking = { type: "enabled", budget_tokens: budget };
           payload.max_tokens = Math.max(payload.max_tokens, budget + 4096);
+        } else if (typeof temperature === "number" && Number.isFinite(temperature)) {
+          // Extended-thinking payloads must not carry temperature (API 400s).
+          payload.temperature = Math.min(Math.max(temperature, 0), 1);
         }
         const res = await fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
@@ -530,7 +552,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "llama-3.2-90b-vision-preview", name: "Llama 3.2 90B Vision", context: 128000 }
     ],
     defaultModel: "llama-3.3-70b-versatile",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("Groq");
       const modelId = model || this.defaultModel;
       try {
@@ -543,7 +565,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
@@ -558,7 +580,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Groq", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("Groq");
       const modelId = model || this.defaultModel;
       try {
@@ -571,7 +593,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             stream: true,
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
@@ -602,7 +624,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "deepseek-vl2", name: "DeepSeek Vision Language 2", context: 64000 }
     ],
     defaultModel: "deepseek-chat",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("DeepSeek");
       const modelId = model || this.defaultModel;
       try {
@@ -612,7 +634,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
         }, signal);
@@ -624,7 +646,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("DeepSeek", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("DeepSeek");
       const modelId = model || this.defaultModel;
       try {
@@ -634,7 +656,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             stream: true,
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
@@ -666,7 +688,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "mistral-embed", name: "Mistral Embed", context: 8192 }
     ],
     defaultModel: "mistral-large-latest",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("Mistral");
       const modelId = model || this.defaultModel;
       try {
@@ -676,7 +698,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
         }, signal);
@@ -688,7 +710,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Mistral", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("Mistral");
       const modelId = model || this.defaultModel;
       try {
@@ -698,7 +720,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             stream: true,
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
@@ -730,7 +752,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF", name: "Nemotron 70B Turbo", context: 131072 }
     ],
     defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("Together");
       const modelId = model || this.defaultModel;
       try {
@@ -740,7 +762,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
         }, signal);
@@ -752,7 +774,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Together", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("Together");
       const modelId = model || this.defaultModel;
       try {
@@ -762,7 +784,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             stream: true,
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
@@ -791,7 +813,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "grok-beta", name: "Grok Beta Preview", context: 131072 }
     ],
     defaultModel: "grok-2-latest",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("xAI");
       const modelId = model || this.defaultModel;
       try {
@@ -801,7 +823,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
         }, signal);
@@ -813,7 +835,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("xAI", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("xAI");
       const modelId = model || this.defaultModel;
       try {
@@ -823,7 +845,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             stream: true,
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
@@ -857,7 +879,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "meta/llama-3.2-90b-vision-instruct", name: "Llama 3.2 90B Vision", context: 131072 }
     ],
     defaultModel: "nvidia/nemotron-3.5-lightning-30b-a3b",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("NVIDIA");
       const modelId = model || this.defaultModel;
       try {
@@ -871,7 +893,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.5,
+            temperature: resolveTemperature(temperature, effort, 0.5),
             top_p: 1,
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
@@ -887,7 +909,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("NVIDIA", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError("NVIDIA");
       const modelId = model || this.defaultModel;
       try {
@@ -901,7 +923,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.5,
+            temperature: resolveTemperature(temperature, effort, 0.5),
             top_p: 1,
             stream: true,
             messages: [
@@ -943,7 +965,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro (Zen)", context: 65536 }
     ],
     defaultModel: "nemotron-3.5-lightning-free",
-    async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
       const modelId = model || this.defaultModel;
       if (!modelId) {
@@ -978,7 +1000,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           : JSON.stringify({
               model: modelId,
               max_tokens: maxTokens,
-              temperature: 0.4,
+              temperature: resolveTemperature(temperature, effort),
               messages: [
                 ...(system ? [{ role: "system", content: system }] : []),
                 ...messages
@@ -1003,7 +1025,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("OpenCode Zen", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
       const modelId = model || this.defaultModel;
       if (!modelId) {
@@ -1040,7 +1062,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           : JSON.stringify({
               model: modelId,
               max_tokens: maxTokens,
-              temperature: 0.4,
+              temperature: resolveTemperature(temperature, effort),
               stream: true,
               messages: [
                 ...(system ? [{ role: "system", content: system }] : []),
@@ -1100,7 +1122,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         return [];
       }
     },
-    async send({ baseUrl, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       const url = baseUrl || this.baseUrl;
       const modelId = model || this.defaultModel;
       if (!modelId) throw configError("Ollama");
@@ -1111,7 +1133,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             stream: false,
-            options: { num_predict: maxTokens, temperature: 0.4 },
+            options: { num_predict: maxTokens, temperature: resolveTemperature(temperature, effort) },
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
@@ -1126,7 +1148,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Ollama", modelId, err as Error);
       }
     },
-    async *stream({ baseUrl, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       const url = baseUrl || this.baseUrl;
       const modelId = model || this.defaultModel;
       if (!modelId) throw configError("Ollama");
@@ -1137,7 +1159,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             stream: true,
-            options: { num_predict: maxTokens, temperature: 0.4 },
+            options: { num_predict: maxTokens, temperature: resolveTemperature(temperature, effort) },
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
@@ -1186,7 +1208,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         return [];
       }
     },
-    async send({ baseUrl, apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ baseUrl, apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       const url = baseUrl || this.baseUrl;
       const modelId = model || this.defaultModel;
       if (!modelId) throw configError("LM Studio");
@@ -1200,7 +1222,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
@@ -1216,7 +1238,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       }
     },
     // NEW: LM Studio streaming
-    async *stream({ baseUrl, apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ baseUrl, apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       const url = baseUrl || this.baseUrl;
       const modelId = model || this.defaultModel;
       if (!modelId) throw configError("LM Studio");
@@ -1230,7 +1252,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             stream: true,
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
@@ -1292,7 +1314,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
     keyPlaceholder: "sk-… / API key",
     models: cfg.models.map((m) => ({ id: m.id, name: m.name || m.id, context: 128000 })),
     defaultModel: cfg.defaultModel || cfg.models[0]?.id || "",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError(cfg.name);
       const modelId = model || this.defaultModel;
       try {
@@ -1302,7 +1324,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages,
@@ -1317,7 +1339,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
         throw classifyNetworkError(cfg.name, modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
       if (!apiKey) throw configError(cfg.name);
       const modelId = model || this.defaultModel;
       try {
@@ -1327,7 +1349,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
           body: JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            temperature: 0.4,
+            temperature: resolveTemperature(temperature, effort),
             stream: true,
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),

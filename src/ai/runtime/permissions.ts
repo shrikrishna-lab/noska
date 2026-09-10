@@ -11,6 +11,7 @@
 
 import type { PermissionCategory, PermissionMode, PermissionSpec } from "./types";
 import { defaultPermissions } from "./types";
+import { integrationCategoryForTool } from "../integrationTools";
 
 const TOOL_CATEGORY: Record<string, PermissionCategory> = {
   // Reads
@@ -54,6 +55,10 @@ const TOOL_CATEGORY: Record<string, PermissionCategory> = {
 };
 
 export function categoryForTool(toolName: string): PermissionCategory | null {
+  // Connected-platform tools (MCP integrations) map by their MCP
+  // annotations: read-only tools → 'read', everything else → 'external'.
+  const integrationCategory = integrationCategoryForTool(toolName);
+  if (integrationCategory) return integrationCategory;
   return TOOL_CATEGORY[toolName] ?? null;
 }
 

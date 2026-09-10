@@ -85,3 +85,11 @@ src-tauri/gen/schemas/
 **/__tests__/
 *.test.ts
 *.test.tsx
+
+# Local debug and temp logs
+auth_logs.json
+auth_out.txt
+fl.json
+gw_logs*.json
+.zcode/
+

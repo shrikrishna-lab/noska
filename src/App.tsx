@@ -19,6 +19,7 @@ import { TabProvider, useTabs } from "./contexts/TabContext";
 import { WorkspaceTabBar } from "./components/tabs/WorkspaceTabBar";
 import { Confetti, Toast, VoiceFloatingIndicator } from "./components/ui";
 import Sidebar from "./components/Sidebar";
+import { LineNavigationRail } from "./features/navigation/line-nav";
 import Topbar from "./components/Topbar";
 import Editor from "./components/Editor";
 import { WorkspaceView, NewPageOverlay } from "./components/WorkspaceViews";
@@ -234,7 +235,7 @@ function AppContent() {
 
   const [{ theme, themeFx }, { setTheme, setThemeFx }] = useTheme();
 
-  const { openTab, panes: tabPanes } = useTabs();
+  const { openTab, splitPage, panes: tabPanes } = useTabs();
 
   // Split-pane awareness (#36): pages currently open in any pane/tab, so the
   // AI can reason about "the page in the other pane" and agents can target
@@ -1625,36 +1626,39 @@ function AppContent() {
       openTab("page", pageId, { inNewTab: true, makeActive: true });
       return;
     }
-    // Make regular sidebar/favorites/recents navigation update the active tab
-    // in the same event as the workspace selection. Relying only on
-    // TabProvider's follow-up sync effect left one render showing the previous
-    // page, which was especially visible when switching immediately after
-    // creating a new page.
-    if (!options.altKey && !options.sidePeek) {
-      openTab("page", pageId, { inNewTab: false, makeActive: true });
-    }
-    setAppView("page");
     if (options.altKey || options.sidePeek) {
+      splitPage({ pageId, direction: 'right' });
+      setAppView("page");
+      setActiveId(pageId);
       setStackedPageIds((prev) => prev.includes(pageId) ? prev : [...prev, pageId]);
-      setActiveId(pageId);
-    } else {
-      setStackedPageIds((prev) => {
-        if (prev.length <= 1) return [pageId];
-        const idx = prev.indexOf(pageId);
-        if (idx >= 0) return prev.slice(0, idx + 1);
-        return [...prev.slice(0, -1), pageId];
-      });
-      setActiveId(pageId);
+      return;
     }
-  }, [setAppView, setStackedPageIds, setActiveId, openTab]);
+    // Make regular sidebar/favorites/recents navigation update the active tab
+    // in the same event as the workspace selection.
+    openTab("page", pageId, { inNewTab: false, makeActive: true });
+    setAppView("page");
+    setStackedPageIds((prev) => {
+      if (prev.length <= 1) return [pageId];
+      const idx = prev.indexOf(pageId);
+      if (idx >= 0) return prev.slice(0, idx + 1);
+      return [...prev.slice(0, -1), pageId];
+    });
+    setActiveId(pageId);
+  }, [setAppView, setStackedPageIds, setActiveId, openTab, splitPage]);
 
   const handleViewSelect = useCallback((view: string, options: PageSelectOptions = {}) => {
     if (options.openInNewTab) {
       openTab("view", view, { inNewTab: true, makeActive: true });
       return;
     }
+    if (options.altKey || options.sidePeek) {
+      splitPage({ pageId: view, direction: 'right', type: 'view' });
+      setAppView(view);
+      return;
+    }
+    openTab("view", view, { inNewTab: false, makeActive: true });
     setAppView(view);
-  }, [setAppView, openTab]);
+  }, [setAppView, openTab, splitPage]);
 
   const handleTabNavigate = useCallback((type: "page" | "view", targetId: string) => {
     if (type === "page") {
@@ -1685,15 +1689,22 @@ function AppContent() {
   }, [routeParams.pageId, pages, setActiveId, setAppView, setStackedPageIds]);
 
   const navigateToChildPage = useCallback((pageId: string, options: PageSelectOptions = {}) => {
+    if (options.altKey || options.sidePeek) {
+      splitPage({ pageId, direction: 'right' });
+      setAppView("page");
+      setActiveId(pageId);
+      setStackedPageIds((prev) => (prev.includes(pageId) ? prev : [...prev, pageId]));
+      return;
+    }
     setAppView("page");
+    openTab("page", pageId, { inNewTab: false, makeActive: true });
     setActiveId(pageId);
     setStackedPageIds((prev) => {
       const idx = prev.indexOf(pageId);
       if (idx >= 0) return prev.slice(0, idx + 1);
-      if (options.altKey || options.sidePeek) return [...prev, pageId];
       return [...prev.slice(0, -1), pageId];
     });
-  }, [setAppView, setActiveId, setStackedPageIds]);
+  }, [setAppView, setActiveId, setStackedPageIds, openTab, splitPage]);
 
   const closeStackedColumn = (pageId: string) => {
     setStackedPageIds((prev) => {
@@ -2865,6 +2876,16 @@ function AppContent() {
             currentUserEmail={currentUserEmail}
             currentUserAvatar={currentUserAvatar}
           />
+          {!sidebarOpen && (appView === "page" || appView === "chats" || appView === "chat" || appView === "ai" || aiOpen || aiRightOpen) && (
+            <LineNavigationRail
+              pages={visiblePages}
+              activeId={activeId}
+              appView={appView}
+              sidebarOpen={sidebarOpen}
+              onSelectPage={handlePageSelect}
+              onSelectView={handleViewSelect}
+            />
+          )}
           <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)]">
             <WorkspaceTabBar
               pages={visiblePages}
@@ -2901,6 +2922,7 @@ function AppContent() {
               onCollab={() => setCollabOpen(true)}
               onLockPage={() => setEncryptOpen(true)}
               onRemoveEncryption={handleRemoveEncryption}
+              onVisibilityChange={(visibility) => updatePage(activePage.id, { visibility })}
             />
             <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
               <AnimatePresence mode="wait">
@@ -3346,7 +3368,15 @@ onLineage={() => setLineageOpen(true)}
           {readingPage && (
             <ReadingMode
               page={readingPage}
+              pages={visiblePages}
               onClose={() => setReadingPage(null)}
+              onSelectPage={(id) => {
+                const target = pages.find((p) => p.id === id);
+                if (target) {
+                  setReadingPage(target);
+                  setActiveId(id);
+                }
+              }}
               onPagePatch={(id, patch) => {
                 updatePage(id, patch);
                 setReadingPage((prev) => prev && prev.id === id ? { ...prev, ...patch } : prev);

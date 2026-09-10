@@ -125,6 +125,7 @@ export async function launchAgent(agent: NoskaAgent, event: WorkspaceEvent): Pro
     trigger: agent.trigger.type,
     triggerDetail: event.pageTitle || event.detail,
     permissions: agent.permissions,
+    memoryMode: agent.memoryMode,
     modelClassOverride: agent.modelClass === "default" ? undefined : agent.modelClass,
     instructions: `You are running as the persistent worker "${agent.name}". ${agent.description ? `Purpose: ${agent.description}.` : ""} Trigger context: ${event.type}${event.pageTitle ? ` on page "${event.pageTitle}"` : ""}.`,
     getContext: () => safeContext(),

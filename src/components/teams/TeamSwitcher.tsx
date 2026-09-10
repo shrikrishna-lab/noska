@@ -77,23 +77,23 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
           setCurrentTeam(null)
           onView?.("library")
         }}
-        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left transition-all duration-150 cursor-pointer group border ${
+        className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-left transition-all duration-150 cursor-pointer group border ${
           !currentTeam
-            ? "bg-[var(--surface-2)] text-[var(--text)] shadow-xs border-[var(--border-strong)]"
-            : "border-transparent text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--border)]"
+            ? "bg-black/[0.055] dark:bg-white/[0.08] text-neutral-900 dark:text-white border-black/[0.04] dark:border-white/[0.06] shadow-2xs"
+            : "border-transparent text-neutral-600 dark:text-neutral-300 hover:bg-black/[0.035] dark:hover:bg-white/[0.05] hover:text-neutral-900 dark:hover:text-white"
         }`}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--surface-3)] border border-[var(--border)] text-xs shadow-xs shrink-0">
+          <div className="flex h-5 w-5 items-center justify-center rounded-md bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.04] dark:border-white/[0.06] text-[11px] shadow-2xs shrink-0">
             🏠
           </div>
           <div className="min-w-0">
-            <div className="text-xs font-semibold text-[var(--text)] truncate leading-tight">Personal</div>
-            <div className="text-[9.5px] text-[var(--muted)] truncate">Your workspace</div>
+            <div className={`text-[11.5px] ${!currentTeam ? "font-medium text-neutral-900 dark:text-white" : "font-normal text-neutral-700 dark:text-neutral-200"} truncate leading-tight`}>Personal</div>
+            <div className="text-[9px] text-neutral-400 dark:text-neutral-500 truncate leading-none mt-0.5">Your workspace</div>
           </div>
         </div>
         {!currentTeam && (
-          <span className="text-[9.5px] font-bold text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded-md border border-[var(--accent)]/20">
+          <span className="text-[8px] font-semibold text-neutral-600 dark:text-neutral-300 bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded border border-black/5 dark:border-white/10 uppercase tracking-wider">
             Active
           </span>
         )}
@@ -109,25 +109,25 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
                 setCurrentTeam(team)
                 onView?.("teamspace")
               }}
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left transition-all duration-150 cursor-pointer border ${
+              className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-left transition-all duration-150 cursor-pointer border ${
                 isActive
-                  ? "bg-[var(--surface-2)] text-[var(--text)] shadow-xs border-[var(--border-strong)]"
-                  : "border-transparent text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--border)]"
+                  ? "bg-black/[0.055] dark:bg-white/[0.08] text-neutral-900 dark:text-white border-black/[0.04] dark:border-white/[0.06] shadow-2xs"
+                  : "border-transparent text-neutral-600 dark:text-neutral-300 hover:bg-black/[0.035] dark:hover:bg-white/[0.05] hover:text-neutral-900 dark:hover:text-white"
               }`}
             >
               <div className="flex items-center gap-2 min-w-0 pr-6">
-                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--surface-3)] border border-[var(--border)] text-xs shadow-xs shrink-0">
+                <div className="flex h-5 w-5 items-center justify-center rounded-md bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.04] dark:border-white/[0.06] text-[11px] shadow-2xs shrink-0">
                   {team.icon || "👥"}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-[var(--text)] truncate leading-tight">{team.name}</div>
-                  <div className="text-[9.5px] text-[var(--muted)] truncate">
+                  <div className="text-[11.5px] font-medium text-neutral-900 dark:text-white truncate leading-tight">{team.name}</div>
+                  <div className="text-[9px] text-neutral-400 dark:text-neutral-500 truncate leading-none mt-0.5">
                     {team.member_count ?? 1} members · Teamspace
                   </div>
                 </div>
               </div>
               {isActive && (
-                <span className="text-[9.5px] font-bold text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded-md border border-[var(--accent)]/20">
+                <span className="text-[8px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
                   Active
                 </span>
               )}
@@ -137,10 +137,10 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
                 e.stopPropagation()
                 setSettingsTeam(team.id)
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover/item:grid h-6 w-6 place-items-center rounded-lg hover:bg-[var(--surface-3)] text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover/item:grid h-5 w-5 place-items-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-neutral-400 hover:text-neutral-800 dark:hover:text-white transition cursor-pointer"
               title="Team Settings & Members"
             >
-              <Settings size={12} />
+              <Settings size={11} />
             </button>
           </div>
         )
@@ -148,12 +148,12 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
 
       {/* 3. Inline Create New Teamspace */}
       {creating ? (
-        <div className="space-y-2 p-2 bg-[var(--surface)] rounded-xl border border-[var(--border-strong)] shadow-xs mt-1">
+        <div className="space-y-1.5 p-1.5 bg-black/[0.02] dark:bg-white/[0.03] rounded-lg border border-black/[0.06] dark:border-white/[0.08] shadow-2xs mt-1">
           <div className="flex items-center gap-1.5">
             <select
               value={newIcon}
               onChange={(e) => setNewIcon(e.target.value)}
-              className="w-9 h-7 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] text-center text-xs outline-none cursor-pointer"
+              className="w-8 h-6 rounded-md border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-800 text-center text-xs outline-none cursor-pointer"
             >
               {TEAM_ICONS.map((ic) => (
                 <option key={ic} value={ic}>{ic}</option>
@@ -168,20 +168,20 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
                 if (e.key === "Escape") setCreating(false)
               }}
               placeholder="Teamspace name..."
-              className="flex-1 min-w-0 h-7 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]"
+              className="flex-1 min-w-0 h-6 rounded-md border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-800 px-1.5 text-[11.5px] text-neutral-900 dark:text-white outline-none placeholder:text-neutral-400 focus:border-amber-500"
             />
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1">
             <button
               onClick={handleCreate}
               disabled={!newName.trim()}
-              className="flex-1 h-7 rounded-lg bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 disabled:opacity-40 transition cursor-pointer"
+              className="flex-1 h-6 rounded-md bg-amber-500 text-white text-[11px] font-semibold hover:opacity-90 active:scale-95 disabled:opacity-40 transition cursor-pointer"
             >
               Create
             </button>
             <button
               onClick={() => setCreating(false)}
-              className="h-7 rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--muted)] hover:bg-[var(--hover)] transition cursor-pointer"
+              className="h-6 rounded-md border border-black/10 dark:border-white/10 px-2 text-[11px] text-neutral-400 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
             >
               Cancel
             </button>
@@ -190,9 +190,9 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
       ) : (
         <button
           onClick={() => setCreating(true)}
-          className="w-full flex items-center justify-start gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition cursor-pointer"
+          className="w-full flex min-h-[26px] h-[26px] items-center justify-start gap-2 px-2 rounded-lg text-[11.5px] font-normal text-neutral-400 dark:text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.05] transition cursor-pointer"
         >
-          <Plus size={13} className="text-[var(--accent)]" />
+          <Plus size={13} className="text-amber-500 shrink-0" />
           <span>New teamspace</span>
         </button>
       )}

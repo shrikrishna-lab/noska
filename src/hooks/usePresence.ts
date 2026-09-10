@@ -8,14 +8,17 @@ interface PresenceUser {
   [key: string]: unknown;
 }
 
-export function usePresence(pageId: string | null | undefined) {
+export function usePresence(pageId: string | null | undefined, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled !== false;
   const [users, setUsers] = useState<PresenceUser[]>([]);
   const [ownStatus, setOwnStatus] = useState<CollaborationStatus | string>("viewing");
   const pageRef = useRef(pageId);
   pageRef.current = pageId;
 
   useEffect(() => {
-    if (!pageId || !realtimeCollab.isJoined()) return;
+    // `enabled: false` (e.g. private page) → never join channels, so no
+    // presence/cursor/typing of this page is broadcast or received.
+    if (!pageId || !enabled || !realtimeCollab.isJoined()) return;
 
     const unsubs = [
       realtimeCollab.on("presence:sync", ({ pageId: pid, users: u }) => {
@@ -44,12 +47,13 @@ export function usePresence(pageId: string | null | undefined) {
       unsubs.forEach((fn) => fn());
       realtimeCollab.leavePage(pageId);
     };
-  }, [pageId]);
+  }, [pageId, enabled]);
 
   const setStatus = useCallback((status: string) => {
     setOwnStatus(status);
+    if (!enabled) return;
     realtimeCollab.updateStatus(pageRef.current as string, status);
-  }, []);
+  }, [enabled]);
 
   return { users, ownStatus, setStatus, onlineCount: users.length + 1 };
 }

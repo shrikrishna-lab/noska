@@ -66,7 +66,7 @@ export class TauriWhisperEngine implements SpeechEngine {
 
   static async capabilityCheck(): Promise<LocalCapability> {
     if (!isDesktop()) {
-      return { available: false, realtime: false, reason: "desktop-runtime-unavailable" };
+      return { available: false, realtime: false, multilingual: false, reason: "desktop-runtime-unavailable" };
     }
     return invoke<LocalCapability>("capability_check");
   }

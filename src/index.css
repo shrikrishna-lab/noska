@@ -447,7 +447,7 @@ select {
 }
 
 /* ─── Focus Ring System ─── */
-:focus-visible:not([contenteditable]) {
+:focus-visible:not(input):not(textarea):not(select):not([contenteditable]) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--radius-xs);
@@ -455,9 +455,11 @@ select {
 
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 4px var(--accent-glow);
+select:focus-visible,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
 }
 
 /* ─── Block Hover Tools ─── */
