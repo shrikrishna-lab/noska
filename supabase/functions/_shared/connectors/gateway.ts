@@ -20,6 +20,10 @@
  *     blob so the public /callback can complete without a session.
  * ========================================================================== */
 
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+};
+
 import {
   db, encryptSecret, decryptSecret, verifyPersisted, audit,
   errors, PlatformError, type Row,
@@ -338,7 +342,7 @@ export async function connectWithToken(
   });
   await audit({
     userId, action: "connector.connected", resource: "connector",
-    resourceId: connector.slug, surface: "token",
+    resourceId: connector.slug, surface: "mcp",
   });
   bustUserCaches(userId, connector.id);
   return { connector: safeConnector(connector), connection, tool_count: tools.length };
@@ -754,10 +758,10 @@ export async function resolveExternalResource(
       userConnections = (conns ?? []) as ConnectionRow[];
     }
 
-    const accessibleAccounts = userConnections.map((c) => ({
-      id: c.id,
-      label: c.label || c.external_account_label || "GitHub Account",
-      username: c.external_account_label || "GitHub",
+    const accessibleAccounts: Array<{ id: string; label: string; username: string }> = userConnections.map((c) => ({
+      id: String(c.id),
+      label: String(c.label || c.external_account_label || "GitHub Account"),
+      username: String(c.external_account_label || "GitHub"),
     }));
 
     // If preferred connection ID given, sort it first
