@@ -1,10 +1,11 @@
 import { motion } from "framer-motion";
-import { Server, RefreshCw, Activity, AlertTriangle, Clock, ExternalLink } from "lucide-react";
+import { Server, RefreshCw, Activity, AlertTriangle, Clock, ExternalLink, Radio, HardDrive } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BrandIcon } from "@/components/ui/BrandIcon";
 import { useServiceStatuses } from "@/lib/monitoring/hooks";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -59,7 +60,16 @@ export function MonitoringInfrastructure() {
             <Card className={`border-l-4 ${svc.status === "operational" ? "border-l-green-500" : svc.status === "degraded" ? "border-l-yellow-500" : "border-l-red-500"}`}>
               <CardHeader className="flex-row items-center justify-between pb-2">
                 <div className="flex items-center gap-3">
-                  <div className={`h-3 w-3 rounded-full ${STATUS_COLOR[svc.status]}`} />
+                  <div className="relative flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/30">
+                    {["Clerk", "Supabase", "Resend", "Sentry", "PostHog", "Vercel"].includes(svc.name) ? (
+                      <BrandIcon name={svc.name} className="h-5 w-5" />
+                    ) : svc.name === "Realtime" ? (
+                      <Radio className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <HardDrive className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${STATUS_COLOR[svc.status]}`} />
+                  </div>
                   <CardTitle className="text-sm font-medium">{svc.name}</CardTitle>
                 </div>
                 <Badge variant={svc.status === "operational" ? "secondary" : "destructive"}>

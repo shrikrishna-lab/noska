@@ -83,6 +83,60 @@ function bumpContent(content: string, kind: "json" | "toml", version: string): s
   return content.replace(/(version\s*=\s*)"[^"]*"/, `$1"${version}"`);
 }
 
+function extractVersion(content: string, kind: "json" | "toml"): string | null {
+  const m = content.match(kind === "json" ? /"version"\s*:\s*"([^"]+)"/ : /version\s*=\s*"([^"]+)"/);
+  return m?.[1] ?? null;
+}
+
+const CONVENTIONAL = /^(feat|fix|chore|docs|refactor|perf|test|build|ci|style|revert)(\([^)]*\))?(!)?:\s*/;
+
+interface CommitInfo {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  type: "feat" | "fix" | "other";
+  rawType: string;
+  breaking: boolean;
+}
+
+function analyzeCommit(sha: string, message: string, author: string, date: string): CommitInfo {
+  const subject = message.split("\n")[0];
+  const m = subject.match(CONVENTIONAL);
+  const rawType = m?.[1] ?? "other";
+  const breaking = m?.[3] === "!" || /BREAKING CHANGE:/m.test(message);
+  return {
+    sha,
+    message: subject,
+    author,
+    date,
+    type: rawType === "feat" ? "feat" : rawType === "fix" ? "fix" : "other",
+    rawType,
+    breaking,
+  };
+}
+
+function bumpVersion(v: string, kind: "major" | "minor" | "patch"): string {
+  const [ma, mi, pa] = v.split("-")[0].split(".").map(Number);
+  if (kind === "major") return `${(ma || 0) + 1}.0.0`;
+  if (kind === "minor") return `${ma || 0}.${(mi || 0) + 1}.0`;
+  return `${ma || 0}.${mi || 0}.${(pa || 0) + 1}`;
+}
+
+async function readVersions(token: string, branch: string) {
+  return Promise.all(
+    VERSION_FILES.map(async (f) => {
+      const r = await gh<{ content: string }>(token, `/repos/${REPO}/contents/${f.path}?ref=${branch}`);
+      if (!r.ok) return { path: f.path, version: null, error: `HTTP ${r.status}` };
+      const text = new TextDecoder().decode(
+        Uint8Array.from(atob((r.data!.content ?? "").replace(/\n/g, "")), (c) => c.charCodeAt(0)),
+      );
+      const version = extractVersion(text, f.kind);
+      return { path: f.path, version, error: version ? null : "version string not found" };
+    }),
+  );
+}
+
 interface GitHubRef {
   object: { sha: string };
 }
@@ -136,7 +190,7 @@ Deno.serve(async (req: Request) => {
   try { Object.assign(body, await req.json()); } catch { /* ignore */ }
 
   try {
-    if (body.action === "status" || body.action === "runs" || body.action === "releases") {
+    if (body.action === "status" || body.action === "runs" || body.action === "releases" || body.action === "whatsnew") {
       if (!requireRole(admin, "support")) return resError("Forbidden", 403);
     } else if (body.action === "trigger") {
       if (!requireRole(admin, "admin")) return resError("Forbidden: admin role required to ship releases", 403);
@@ -152,22 +206,7 @@ Deno.serve(async (req: Request) => {
       if (!repoInfo.ok) return resError(`GitHub API ${repoInfo.status}: ${repoInfo.raw}`, 502);
       const branch = repoInfo.data!.default_branch;
 
-      const versions = await Promise.all(
-        VERSION_FILES.map(async (f) => {
-          const r = await gh<{ content: string }>(
-            token,
-            `/repos/${REPO}/contents/${f.path}?ref=${branch}`,
-          );
-          if (!r.ok) return { path: f.path, version: null, error: `HTTP ${r.status}` };
-          const text = new TextDecoder().decode(
-            Uint8Array.from(atob((r.data!.content ?? "").replace(/\n/g, "")), (c) => c.charCodeAt(0)),
-          );
-          const m = text.match(f.kind === "json"
-            ? /"version"\s*:\s*"([^"]+)"/
-            : /version\s*=\s*"([^"]+)"/);
-          return { path: f.path, version: m?.[1] ?? null, error: m ? null : "version string not found" };
-        }),
-      );
+      const versions = await readVersions(token, branch);
       const tauri = versions.find((v) => v.path.includes("tauri.conf.json"));
 
       const [runsR, releasesR] = await Promise.all([
@@ -185,6 +224,128 @@ Deno.serve(async (req: Request) => {
         currentVersion: tauri?.version ?? null,
         runs: runsR.ok ? (runsR.data!.workflow_runs ?? []) : [],
         releases: releasesR.ok ? (releasesR.data ?? []) : [],
+      });
+    }
+
+    if (body.action === "whatsnew") {
+      const repoInfo = await gh<{ default_branch: string }>(token, `/repos/${REPO}`);
+      if (!repoInfo.ok) return resError(`GitHub API ${repoInfo.status}: ${repoInfo.raw}`, 502);
+      const branch = repoInfo.data!.default_branch;
+
+      const versions = await readVersions(token, branch);
+      const tauri = versions.find((v) => v.path.includes("tauri.conf.json"));
+      const currentVersion = tauri?.version ?? null;
+
+      // Latest desktop-v* tag (draft releases carry their tag already, so this
+      // includes yet-to-be-published versions — the right base for "what's new").
+      const tagsR = await gh<Array<{ name: string; commit: { sha: string } }>>(
+        token,
+        `/repos/${REPO}/tags?per_page=100`,
+      );
+      if (!tagsR.ok) return resError(`GitHub API ${tagsR.status}: ${tagsR.raw}`, 502);
+      const desktopTags = (tagsR.data ?? [])
+        .filter((t) => /^desktop-v\d/.test(t.name))
+        .sort((a, b) => compareVersions(b.name.slice("desktop-v".length), a.name.slice("desktop-v".length)));
+      const baseTag = desktopTags[0]?.name ?? null;
+      const baseVersion = baseTag ? baseTag.slice("desktop-v".length) : null;
+
+      const suggestions: Array<{ level: "info" | "warn"; title: string; detail: string; url?: string }> = [];
+
+      let commits: CommitInfo[] = [];
+      if (baseTag) {
+        const cmpR = await gh<{
+          commits: Array<{ sha: string; commit: { message: string; author?: { name?: string }; committer?: { date?: string } } }>;
+          status: string;
+        }>(token, `/repos/${REPO}/compare/${baseTag}...${branch}?per_page=100`);
+        if (!cmpR.ok) return resError(`GitHub compare failed: ${cmpR.status} ${cmpR.raw}`, 502);
+        commits = (cmpR.data!.commits ?? [])
+          .map((c) => analyzeCommit(
+            c.sha.slice(0, 7),
+            c.commit.message,
+            c.commit.author?.name ?? "unknown",
+            c.commit.committer?.date ?? "",
+          ))
+          // Version-bump commits made by previous releases are noise.
+          .filter((c) => !/^chore\(release\):/i.test(c.message));
+      }
+
+      const counts = {
+        total: commits.length,
+        feat: commits.filter((c) => c.type === "feat").length,
+        fix: commits.filter((c) => c.type === "fix").length,
+        breaking: commits.filter((c) => c.breaking).length,
+        other: commits.filter((c) => c.type === "other").length,
+      };
+
+      // Version suggestion derived purely from the actual commit types.
+      let suggested: { version: string; kind: "major" | "minor" | "patch"; reason: string } | null = null;
+      if (currentVersion) {
+        if (counts.total === 0) {
+          suggested = null;
+        } else if (counts.breaking > 0) {
+          suggested = { version: bumpVersion(currentVersion, "major"), kind: "major", reason: `${counts.breaking} breaking change${counts.breaking > 1 ? "s" : ""} since ${baseTag ?? "start"}` };
+        } else if (counts.feat > 0) {
+          suggested = { version: bumpVersion(currentVersion, "minor"), kind: "minor", reason: `${counts.feat} new feature${counts.feat > 1 ? "s" : ""} since ${baseTag ?? "start"}` };
+        } else {
+          suggested = { version: bumpVersion(currentVersion, "patch"), kind: "patch", reason: `${counts.fix} fix${counts.fix === 1 ? "" : "es"} and maintenance since ${baseTag ?? "start"}` };
+        }
+      }
+
+      // --- Suggestions from real state only ---
+      const uniq = new Set(versions.map((v) => v.version));
+      if (uniq.size > 1) {
+        suggestions.push({
+          level: "warn",
+          title: "Version files are out of sync",
+          detail: versions.map((v) => `${v.path}: ${v.version ?? "?"}`).join(" · "),
+        });
+      }
+      if (baseVersion && currentVersion && compareVersions(currentVersion, baseVersion) < 0) {
+        suggestions.push({
+          level: "warn",
+          title: "Version files are older than the last tag",
+          detail: `Files say ${currentVersion} but ${baseTag} already exists. Release ${bumpVersion(baseVersion, "patch")} or higher.`,
+        });
+      }
+      if (counts.total === 0 && baseTag) {
+        suggestions.push({
+          level: "info",
+          title: "Nothing new to release",
+          detail: `No commits since ${baseTag} — the working tree matches the last tagged release.`,
+        });
+      }
+      if (suggested) {
+        suggestions.push({
+          level: "info",
+          title: `Release ${suggested.version}`,
+          detail: `${suggested.reason} — ${counts.feat} feat · ${counts.fix} fix · ${counts.other} chore/docs/other.`,
+        });
+      }
+
+      const releasesR = await gh<GitHubRelease[]>(token, `/repos/${REPO}/releases?per_page=20`);
+      const drafts = (releasesR.ok ? (releasesR.data ?? []) : []).filter((r) => r.draft);
+      if (drafts.length > 0) {
+        // Aggregate instead of one warning per draft — 12 identical rows help
+        // nobody; one row with the version list does.
+        const draftTags = [...new Set(drafts.map((d) => d.tag_name))]
+          .sort((a, b) => compareVersions(b.slice("desktop-v".length), a.slice("desktop-v".length)));
+        const shown = draftTags.slice(0, 5).join(", ") + (draftTags.length > 5 ? ` +${draftTags.length - 5} more` : "");
+        suggestions.push({
+          level: "warn",
+          title: `${drafts.length} desktop release${drafts.length === 1 ? " is" : "s are"} still unpublished drafts (${shown})`,
+          detail: "Staged in the private repo; each needs publishing (or deletion) so users actually receive the update.",
+          url: `https://github.com/${REPO}/releases`,
+        });
+      }
+
+      return res({
+        baseTag,
+        currentVersion,
+        suggested,
+        counts,
+        commits: commits.slice(0, 30),
+        drafts: drafts.map((d) => ({ tag: d.tag_name, url: d.html_url, created_at: d.created_at })),
+        suggestions,
       });
     }
 

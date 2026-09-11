@@ -1,10 +1,11 @@
 import { motion } from "framer-motion";
-import { Puzzle, RefreshCw, CheckCircle, XCircle, ExternalLink, Clock, AlertTriangle } from "lucide-react";
+import { Puzzle, RefreshCw, ExternalLink, Clock, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BrandIcon } from "@/components/ui/BrandIcon";
 import { useIntegrationStatuses } from "@/lib/monitoring/hooks";
 
 export function MonitoringIntegrations() {
@@ -45,11 +46,14 @@ export function MonitoringIntegrations() {
             <Card>
               <CardHeader className="flex-row items-center justify-between pb-2">
                 <div className="flex items-center gap-3">
-                  {integration.configured ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
+                  <div className="relative flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/30">
+                    <BrandIcon name={integration.name} className="h-5 w-5" />
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${
+                        integration.configured ? "bg-green-500" : "bg-red-500"
+                      }`}
+                    />
+                  </div>
                   <CardTitle className="text-sm font-medium">{integration.name}</CardTitle>
                 </div>
                 <Badge variant={integration.configured ? "secondary" : "destructive"}>

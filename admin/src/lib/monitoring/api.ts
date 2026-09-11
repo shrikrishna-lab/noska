@@ -21,10 +21,21 @@ async function invokeService<T>(service: Service, params: Record<string, string>
   });
 
   if (fnError) {
-    const msg = typeof fnError === "object" && fnError !== null ? String((fnError as Record<string, unknown>).message ?? "") : String(fnError);
-    if (msg.includes("503") || msg.includes("not configured")) {
+    // supabase-js wraps non-2xx responses in FunctionsHttpError whose message
+    // is generic — read the status and error payload off the wrapped response.
+    const ctx = (fnError as { context?: Response }).context;
+    const status = typeof ctx?.status === "number" ? ctx.status : 0;
+    let fnMessage = "";
+    if (ctx && typeof ctx.json === "function") {
+      try {
+        const body = (await ctx.clone().json()) as { error?: string };
+        fnMessage = body.error ?? "";
+      } catch { /* body wasn't JSON */ }
+    }
+    if (status === 503 || fnMessage.includes("not configured") || fnMessage.includes("Not configured")) {
       throw new Error("SERVICE_NOT_CONFIGURED");
     }
+    if (fnMessage) throw new Error(fnMessage);
     throw fnError;
   }
 
@@ -155,9 +166,31 @@ export interface TriggerReleaseResult {
   warning: string | null;
 }
 
+export interface WhatsNewCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  type: "feat" | "fix" | "other";
+  rawType: string;
+  breaking: boolean;
+}
+
+export interface WhatsNew {
+  baseTag: string | null;
+  currentVersion: string | null;
+  suggested: { version: string; kind: "major" | "minor" | "patch"; reason: string } | null;
+  counts: { total: number; feat: number; fix: number; breaking: number; other: number };
+  commits: WhatsNewCommit[];
+  drafts: Array<{ tag: string; url: string; created_at: string }>;
+  suggestions: Array<{ level: "info" | "warn"; title: string; detail: string; url?: string }>;
+}
+
 export const releaseApi = {
   status: () =>
     invokeEdgeFunction<ReleaseStatus>("admin-trigger-release", { action: "status" }),
+  whatsnew: () =>
+    invokeEdgeFunction<WhatsNew>("admin-trigger-release", { action: "whatsnew" }),
   trigger: (version: string, notes: string) =>
     invokeEdgeFunction<TriggerReleaseResult>("admin-trigger-release", { action: "trigger", version, notes }),
   runs: () =>
@@ -177,10 +210,22 @@ async function invokeEdgeFunction<T>(fn: string, body: Record<string, unknown>):
   });
 
   if (fnError) {
-    const msg = typeof fnError === "object" && fnError !== null ? String((fnError as Record<string, unknown>).message ?? "") : String(fnError);
-    if (msg.includes("503") || msg.includes("not configured")) {
+    // supabase-js wraps non-2xx responses in FunctionsHttpError whose message
+    // is the generic "Edge Function returned a non-2xx status code" — the
+    // actual status and payload live on the wrapped response.
+    const ctx = (fnError as { context?: Response }).context;
+    const status = typeof ctx?.status === "number" ? ctx.status : 0;
+    let fnMessage = "";
+    if (ctx && typeof ctx.json === "function") {
+      try {
+        const body = (await ctx.clone().json()) as { error?: string };
+        fnMessage = body.error ?? "";
+      } catch { /* body wasn't JSON */ }
+    }
+    if (status === 503 || fnMessage.includes("not configured") || fnMessage.includes("Not configured")) {
       throw new Error("SERVICE_NOT_CONFIGURED");
     }
+    if (fnMessage) throw new Error(fnMessage);
     throw fnError;
   }
 
