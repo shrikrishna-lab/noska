@@ -57,7 +57,7 @@ export function MonitoringInfrastructure() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
           >
-            <Card className={`border-l-4 ${svc.status === "operational" ? "border-l-green-500" : svc.status === "degraded" ? "border-l-yellow-500" : "border-l-red-500"}`}>
+            <Card className={`border-l-4 ${svc.status === "operational" ? "border-l-green-500" : svc.status === "degraded" ? "border-l-yellow-500" : svc.status === "outage" ? "border-l-red-500" : "border-l-gray-400"}`}>
               <CardHeader className="flex-row items-center justify-between pb-2">
                 <div className="flex items-center gap-3">
                   <div className="relative flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/30">
@@ -72,7 +72,7 @@ export function MonitoringInfrastructure() {
                   </div>
                   <CardTitle className="text-sm font-medium">{svc.name}</CardTitle>
                 </div>
-                <Badge variant={svc.status === "operational" ? "secondary" : "destructive"}>
+                <Badge variant={svc.status === "operational" || svc.status === "unknown" ? "secondary" : "destructive"}>
                   {STATUS_TEXT[svc.status]}
                 </Badge>
               </CardHeader>
@@ -82,14 +82,14 @@ export function MonitoringInfrastructure() {
                     <Activity className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <p className="text-xs text-muted-foreground">Latency</p>
-                      <p className="text-sm font-medium">{svc.latency}ms</p>
+                      <p className="text-sm font-medium">{svc.latency > 0 ? `${svc.latency}ms` : "—"}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2">
                     <Activity className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <p className="text-xs text-muted-foreground">Health</p>
-                      <p className="text-sm font-medium">{svc.health}%</p>
+                      <p className="text-sm font-medium">{svc.status === "unknown" ? "—" : `${svc.health}%`}</p>
                     </div>
                   </div>
                 </div>

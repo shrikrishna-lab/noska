@@ -1,127 +1,174 @@
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Badge } from "@/components/ui/badge";
-import { useUsers, useUserCount, usePageCount, useAuditEvents, useRealtimeInvalidate } from "@/lib/queries";
+import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useMemo } from "react";
-import { BarChart3, Activity, Users, FileText, Clock, TrendingUp } from "lucide-react";
+import { IntegrationErrorNotice } from "@/components/ui/IntegrationErrorNotice";
+import { RefreshCw, Users, Activity, Clock, TrendingUp, Globe, Monitor } from "lucide-react";
+import { posthog } from "@/lib/monitoring/api";
+import { formatNumber } from "@/lib/utils";
+
+interface PostHogData {
+  liveUsers: number;
+  todaySessions: number;
+  pageviews24h: number;
+  avgSessionDuration: number;
+  bounceRate: number;
+  returningUsers: number;
+  topPages: Array<{ path: string; views: number }>;
+  topCountries: Array<{ country: string; count: number }>;
+  topBrowsers: Array<{ browser: string; count: number }>;
+}
 
 export function PostHog() {
-  const { data: users } = useUsers();
-  const { data: userCount } = useUserCount();
-  const { data: pageCount } = usePageCount();
-  const { data: events, isLoading } = useAuditEvents(500);
-  useRealtimeInvalidate(["admin", "posthog"], "audit_events", "*");
-
-  const todayEvents = useMemo(() => {
-    if (!events) return 0;
-    const today = new Date().toDateString();
-    return events.filter((e) => e.created_at && new Date(e.created_at).toDateString() === today).length;
-  }, [events]);
-
-  const uniqueUsers = useMemo(() => {
-    if (!events) return 0;
-    return new Set(events.filter((e) => e.user_id).map((e) => e.user_id)).size;
-  }, [events]);
-
-  const topActions = useMemo(() => {
-    if (!events) return [];
-    const counts = new Map<string, number>();
-    for (const e of events) {
-      counts.set(e.action, (counts.get(e.action) || 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([action, count]) => ({ action, count }));
-  }, [events]);
-
-  const hourlyActivity = useMemo(() => {
-    if (!events) return [];
-    const hours = new Array(24).fill(0);
-    const now = new Date();
-    for (const e of events) {
-      if (!e.created_at) continue;
-      const d = new Date(e.created_at);
-      if (now.getTime() - d.getTime() < 86400000) {
-        hours[d.getHours()]++;
+  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
+    queryKey: ["monitoring", "posthog-page"],
+    queryFn: async (): Promise<PostHogData> => {
+      // liveUsers is the connectivity probe — if PostHog is unreachable or
+      // unconfigured, the page shows a real error state instead of zeros.
+      const live = await posthog.liveUsers();
+      const out: PostHogData = {
+        liveUsers: live.liveUsers,
+        todaySessions: 0, pageviews24h: 0, avgSessionDuration: 0, bounceRate: 0, returningUsers: 0,
+        topPages: [], topCountries: [], topBrowsers: [],
+      };
+      const [sessions] = await Promise.allSettled([
+        posthog.sessionAnalytics(),
+      ]);
+      if (sessions.status === "fulfilled") {
+        const s = sessions.value;
+        out.todaySessions = s.todaySessions;
+        out.avgSessionDuration = s.avgSessionDuration;
+        out.bounceRate = s.bounceRate;
+        out.returningUsers = s.returningUsers;
+        out.topPages = s.topPages ?? [];
+        out.topCountries = s.topCountries ?? [];
+        out.topBrowsers = s.topBrowsers ?? [];
+        out.pageviews24h = (s.topPages ?? []).reduce((sum, p) => sum + p.views, 0);
       }
-    }
-    return hours.map((count, hour) => ({ hour: `${hour}:00`, count }));
-  }, [events]);
-
-  const maxHourly = Math.max(...hourlyActivity.map((h) => h.count), 1);
+      return out;
+    },
+    refetchInterval: 30000,
+    staleTime: 15000,
+    retry: 1,
+  });
 
   if (isLoading) return <div className="p-6"><PageHeader title="Product Analytics" description="User behavior and engagement" /><LoadingState count={4} /></div>;
 
+  if (isError) {
+    return (
+      <div className="p-6">
+        <PageHeader
+          title="Product Analytics"
+          description="User behavior and engagement metrics"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          }
+        />
+        <IntegrationErrorNotice
+          service="PostHog"
+          error={error}
+          notConfiguredHint="Set POSTHOG_PERSONAL_TOKEN (with the query:read scope) and POSTHOG_PROJECT_ID on the monitoring-posthog edge function to see real product analytics here."
+          onRetry={() => refetch()}
+          isRetrying={isRefetching}
+        />
+      </div>
+    );
+  }
+
+  const stats = [
+    { title: "Live Users", value: formatNumber(data?.liveUsers ?? 0), icon: Users, color: "text-blue-500" },
+    { title: "Sessions Today", value: formatNumber(data?.todaySessions ?? 0), icon: Activity, color: "text-violet-500" },
+    { title: "Pageviews (top pages)", value: formatNumber(data?.pageviews24h ?? 0), icon: TrendingUp, color: "text-emerald-500" },
+    { title: "Avg Session Duration", value: data ? `${Math.floor(data.avgSessionDuration / 60)}m ${data.avgSessionDuration % 60}s` : "—", icon: Clock, color: "text-amber-500" },
+  ];
+
   return (
     <div className="p-6">
-      <PageHeader title="Product Analytics" description="User behavior and engagement metrics" />
+      <PageHeader
+        title="Product Analytics"
+        description="User behavior and engagement metrics"
+        actions={
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        }
+      />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Total Users</CardTitle></CardHeader>
-          <CardContent className="flex items-center gap-2"><Users className="h-4 w-4 text-blue-500" /><p className="text-2xl font-bold">{userCount ?? 0}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Total Pages</CardTitle></CardHeader>
-          <CardContent className="flex items-center gap-2"><FileText className="h-4 w-4 text-emerald-500" /><p className="text-2xl font-bold">{pageCount ?? 0}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Today's Events</CardTitle></CardHeader>
-          <CardContent className="flex items-center gap-2"><Activity className="h-4 w-4 text-violet-500" /><p className="text-2xl font-bold">{todayEvents}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Active Users (all time)</CardTitle></CardHeader>
-          <CardContent className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-amber-500" /><p className="text-2xl font-bold">{uniqueUsers}</p></CardContent>
-        </Card>
+        {stats.map(({ title, value, icon: Icon, color }) => (
+          <Card key={title}>
+            <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle></CardHeader>
+            <CardContent className="flex items-center gap-2"><Icon className={`h-4 w-4 ${color}`} /><p className="text-2xl font-bold">{value}</p></CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Hourly Activity (24h) */}
       <Card className="mb-6">
-        <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Activity (Last 24h)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm font-medium">Top Pages</CardTitle></CardHeader>
         <CardContent>
-          <div className="flex items-end gap-1 h-32">
-            {hourlyActivity.map((h) => (
-              <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
-                <div
-                  className="w-full bg-gradient-to-t from-violet-500 to-violet-400 rounded-t transition-all"
-                  style={{ height: `${(h.count / maxHourly) * 100}%`, minHeight: h.count > 0 ? 4 : 0 }}
-                  title={`${h.hour}: ${h.count} events`}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
-            <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>23:00</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-sm font-medium">Top Actions</CardTitle></CardHeader>
-        <CardContent>
-          {topActions.length > 0 ? (
+          {data && data.topPages.length > 0 ? (
             <div className="space-y-2">
-              {topActions.map(({ action, count }) => {
-                const maxCount = topActions[0]?.count ?? 1;
+              {data.topPages.map(({ path, views }) => {
+                const maxViews = data.topPages[0]?.views ?? 1;
                 return (
-                  <div key={action} className="flex items-center gap-3 rounded-lg border p-3">
-                    <span className="text-sm font-medium min-w-[140px] truncate">{action}</span>
+                  <div key={path} className="flex items-center gap-3 rounded-lg border p-3">
+                    <span className="text-sm font-medium min-w-[140px] truncate font-mono">{path}</span>
                     <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-violet-500 to-blue-500 rounded-full" style={{ width: `${(count / maxCount) * 100}%` }} />
+                      <div className="h-full bg-gradient-to-r from-violet-500 to-blue-500 rounded-full" style={{ width: `${(views / maxViews) * 100}%` }} />
                     </div>
-                    <span className="text-sm text-muted-foreground font-mono min-w-[60px] text-right">{count}</span>
+                    <span className="text-sm text-muted-foreground font-mono min-w-[60px] text-right">{formatNumber(views)}</span>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <EmptyState title="No events recorded" description="Events will appear once users start interacting with the platform." icon={Activity} />
+            <EmptyState title="No pageviews recorded" description="Traffic will appear once PostHog receives events from the app." icon={Activity} />
           )}
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><Globe className="h-4 w-4" />Top Countries</CardTitle></CardHeader>
+          <CardContent>
+            {data && data.topCountries.length > 0 ? (
+              <div className="space-y-2">
+                {data.topCountries.slice(0, 8).map(({ country, count }) => (
+                  <div key={country} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                    <span>{country}</span>
+                    <span className="font-mono text-muted-foreground">{formatNumber(count)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No country data yet.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><Monitor className="h-4 w-4" />Top Browsers</CardTitle></CardHeader>
+          <CardContent>
+            {data && data.topBrowsers.length > 0 ? (
+              <div className="space-y-2">
+                {data.topBrowsers.slice(0, 8).map(({ browser, count }) => (
+                  <div key={browser} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                    <span>{browser}</span>
+                    <span className="font-mono text-muted-foreground">{formatNumber(count)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No browser data yet.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

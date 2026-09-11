@@ -43,6 +43,17 @@ export default function Footer() {
   const [subscribed, setSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const fallbackSocialLinks = [
+    { platform: 'x', url: 'https://x.com/noska_app', label: 'X (Twitter)', active: true },
+    { platform: 'github', url: 'https://github.com/shrikrishna-lab/noska', label: 'GitHub', active: true },
+    { platform: 'discord', url: 'https://discord.gg/noska', label: 'Discord', active: true },
+    { platform: 'linkedin', url: 'https://linkedin.com/company/noska', label: 'LinkedIn', active: true },
+  ];
+
+  const activeSocialLinks = links && links.length > 0 && links.some((l) => l.active)
+    ? links.filter((l) => l.active)
+    : fallbackSocialLinks;
+
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !email.includes('@')) return;
@@ -132,18 +143,16 @@ export default function Footer() {
                   <ul className="liquid-glass-link-list">
                     <li><Link to="/product" className="liquid-link-item">Noska AI</Link></li>
                     <li><Link to="/flow" className="liquid-link-item">Noska Flow</Link></li>
-                    <li><Link to="/product" className="liquid-link-item">Docs & Notes</Link></li>
-                    <li><Link to="/product" className="liquid-link-item">Databases</Link></li>
+                    <li><Link to="/docs" className="liquid-link-item">Docs & Notes</Link></li>
+                    <li><Link to="/docs?section=databases" className="liquid-link-item">Databases</Link></li>
                     <li><Link to="/resources" className="liquid-link-item">Templates</Link></li>
                     <li><Link to="/download" className="liquid-link-item">Desktop app</Link></li>
-                    {settings.show_changelog && (
-                      <li>
-                        <Link to="/changelog" className="liquid-link-item with-badge">
-                          <span>What's new</span>
-                          <span className="liquid-glass-mini-tag">v2.4</span>
-                        </Link>
-                      </li>
-                    )}
+                    <li>
+                      <Link to="/new-updated" className="liquid-link-item with-badge">
+                        <span>What's new</span>
+                        <span className="liquid-glass-mini-tag">v2.4</span>
+                      </Link>
+                    </li>
                   </ul>
                 </div>
 
@@ -162,11 +171,14 @@ export default function Footer() {
                 <div className="liquid-glass-link-col">
                   <p className="liquid-glass-col-header">Resources</p>
                   <ul className="liquid-glass-link-list">
-                    {settings.show_docs && <li><Link to="/docs" className="liquid-link-item">Documentation</Link></li>}
-                    {settings.show_blog && <li><Link to="/blog" className="liquid-link-item">Blog</Link></li>}
-                    {settings.show_changelog && <li><Link to="/changelog" className="liquid-link-item">Changelog</Link></li>}
+                    <li><Link to="/docs" className="liquid-link-item">Documentation</Link></li>
+                    <li><Link to="/docs?section=integrations-overview" className="liquid-link-item">Integrations</Link></li>
+                    <li><Link to="/ticket" className="liquid-link-item">Submit Ticket</Link></li>
+                    <li><Link to="/docs?section=contact-support" className="liquid-link-item">Help & Support</Link></li>
+                    <li><Link to="/changelog" className="liquid-link-item">Changelog</Link></li>
+                    <li><Link to="/roadmap" className="liquid-link-item">Roadmap</Link></li>
                     <li><Link to="/resources" className="liquid-link-item">Guides & shortcuts</Link></li>
-                    {settings.show_login && <li><Link to="/login" className="liquid-link-item">Help center</Link></li>}
+                    <li><Link to="/blog" className="liquid-link-item">Blog</Link></li>
                   </ul>
                 </div>
 
@@ -174,11 +186,13 @@ export default function Footer() {
                 <div className="liquid-glass-link-col">
                   <p className="liquid-glass-col-header">Company</p>
                   <ul className="liquid-glass-link-list">
-                    {settings.show_pricing && <li><Link to="/pricing" className="liquid-link-item">Pricing</Link></li>}
+                    <li><Link to="/pricing" className="liquid-link-item">Pricing</Link></li>
                     <li><Link to="/enterprise" className="liquid-link-item">Enterprise</Link></li>
-                    {settings.show_blog && <li><Link to="/blog" className="liquid-link-item">Stories</Link></li>}
+                    <li><Link to="/support" className="liquid-link-item">Support & Tickets</Link></li>
+                    <li><Link to="/new-updated" className="liquid-link-item">What's Updated</Link></li>
                     <li><Link to="/launch" className="liquid-link-item">About Noska</Link></li>
-                    <li><Link to="/launch" className="liquid-link-item">Brand assets</Link></li>
+                    <li><Link to="/resources" className="liquid-link-item">Brand assets</Link></li>
+                    <li><Link to="/launch" className="liquid-link-item">Join Waitlist</Link></li>
                   </ul>
                 </div>
 
@@ -189,9 +203,8 @@ export default function Footer() {
                     <li><Link to="/api-keys" className="liquid-link-item">API Keys</Link></li>
                     <li><Link to="/mcp" className="liquid-link-item">MCP</Link></li>
                     <li><Link to="/plugins" className="liquid-link-item">Plugins</Link></li>
-                    {settings.show_docs && <li><Link to="/docs" className="liquid-link-item">API Reference</Link></li>}
-                    {settings.show_docs && <li><Link to="/docs/mcp" className="liquid-link-item">Webhooks & MCP docs</Link></li>}
-                    {settings.show_login && <li><Link to="/login" className="liquid-link-item">Status page</Link></li>}
+                    <li><Link to="/docs?section=api-reference" className="liquid-link-item">API Reference</Link></li>
+                    <li><Link to="/docs/mcp" className="liquid-link-item">Webhooks & MCP docs</Link></li>
                   </ul>
                 </div>
               </div>
@@ -220,7 +233,7 @@ export default function Footer() {
               {/* Social Buttons */}
               {showSocial && (
                 <div className="liquid-glass-social-row">
-                  {links.filter((l) => l.active).map((link) => (
+                  {activeSocialLinks.map((link) => (
                     <motion.a
                       key={link.platform}
                       href={link.url}

@@ -13,6 +13,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { useAllPlatformSettings, useUpdatePlatformSetting, useRealtimeInvalidate } from "@/lib/queries";
 import { supabase, getAdminToken } from "@/lib/supabase";
 import { sendEmail } from "@/lib/email";
+import { releaseApi } from "@/lib/monitoring/api";
 import { Save, Trash2, AlertTriangle, Loader2, CheckCircle2, Mail } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "@/components/ui/ConfirmationDialog";
@@ -26,7 +27,16 @@ export function Settings() {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState(false);
+  const [adminVersion, setAdminVersion] = useState<string | null>(null);
   useRealtimeInvalidate(["admin", "settings"], "platform_settings");
+
+  useEffect(() => {
+    let cancelled = false;
+    releaseApi.status()
+      .then((s) => { if (!cancelled && s.currentVersion) setAdminVersion(s.currentVersion); })
+      .catch(() => { /* release function not configured; show "—", never a made-up number */ });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (settings && Object.keys(values).length === 0) {
@@ -349,7 +359,7 @@ export function Settings() {
             <CardHeader><CardTitle>System Information</CardTitle><CardDescription>Runtime details about this deployment</CardDescription></CardHeader>
             <CardContent>
               <dl className="space-y-3 text-sm">
-                <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Admin Version</dt><dd className="font-mono">{import.meta.env.VITE_APP_VERSION || "2.1.0"}</dd></div>
+                <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Admin Version</dt><dd className="font-mono">{adminVersion ?? import.meta.env.VITE_APP_VERSION ?? "—"}</dd></div>
                 <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Environment</dt><dd className="font-mono capitalize">{import.meta.env.DEV ? "development" : "production"}</dd></div>
                 <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Node Environment</dt><dd className="font-mono">{import.meta.env.MODE}</dd></div>
                 <div className="flex justify-between border-b pb-2"><dt className="text-muted-foreground">Database</dt><dd className="font-mono">PostgreSQL (Supabase)</dd></div>

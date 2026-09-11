@@ -9,7 +9,7 @@ import {
   listRuns, refreshFromRemote, fetchRunEvents, subscribeRunLive, subscribeRuns,
 } from "../../ai/runtime";
 import type { RunRecord } from "../../ai/runtime";
-import { supabase } from "../../lib/supabase";
+import { supabase, currentAccessToken } from "../../lib/supabase";
 import { WhyCard, ActionReceipts, FailureDiagnostics } from "./AgentTransparency";
 
 const anyDb = () => supabase as unknown as {
@@ -102,7 +102,7 @@ export default function RunsExplorer({ sourceKind = "all", sourceId, agents = []
   const retryRun = async (run: RunRecord) => {
     try {
       if (run.sourceKind === "ai") { onToast?.("Interactive sessions can't be retried"); return; }
-      const token = await supabase.auth.getSession().then((s) => s.data.session?.access_token ?? "");
+      const token = (await currentAccessToken()) ?? "";
       if (!token) { onToast?.("Sign in first"); return; }
       const res = await fetch(`${SUPABASE_URL}/functions/v1/agent-runtime`, {
         method: "POST",

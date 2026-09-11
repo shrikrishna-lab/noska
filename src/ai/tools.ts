@@ -1011,9 +1011,8 @@ async function executeTool(name, params, context) {
 
 async function executeSendNotification(params, context) {
   void context;
-  const { supabase } = await import('../lib/supabase');
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData?.user?.id;
+  const { supabase, getAuthUserId } = await import('../lib/supabase');
+  const userId = await getAuthUserId();
   if (!userId) throw new Error("You must be signed in to send notifications");
   const { error } = await supabase.from('notifications').insert({
     user_id: userId,

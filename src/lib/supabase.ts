@@ -81,3 +81,18 @@ export const isSupabaseConfigured = Boolean(
   import.meta.env.VITE_SUPABASE_ANON_KEY &&
   !import.meta.env.VITE_SUPABASE_URL.includes("placeholder")
 );
+
+/** Extracts the authenticated user ID from the active Clerk or desktop session JWT. */
+export async function getAuthUserId(): Promise<string | null> {
+  const token = await currentAccessToken();
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(base64));
+    return payload.sub || payload.id || payload.user_id || null;
+  } catch {
+    return null;
+  }
+}

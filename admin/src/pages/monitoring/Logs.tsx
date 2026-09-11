@@ -24,8 +24,9 @@ const LEVEL_BADGE: Record<string, string> = {
   debug: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400",
 };
 
-const SOURCES = ["all", "application", "edge_function", "webhook", "email", "audit", "auth"];
-const LEVELS = ["all", "error", "warn", "info", "debug"];
+// Only sources that actually exist: audit trail and Resend email delivery.
+const SOURCES = ["all", "audit", "email"];
+const LEVELS = ["all", "info", "error"];
 
 export function MonitoringLogs() {
   const [level, setLevel] = useState("all");
@@ -36,7 +37,7 @@ export function MonitoringLogs() {
   if (isLoading) {
     return (
       <div className="p-6">
-        <PageHeader title="Logs" description="Centralized log viewer across all services" />
+        <PageHeader title="Logs" description="Platform audit trail and email delivery logs" />
         <LoadingState count={10} />
       </div>
     );
@@ -47,7 +48,7 @@ export function MonitoringLogs() {
       <div className="p-6">
         <PageHeader
           title="Logs"
-          description="Centralized log viewer across all services"
+          description="Platform audit trail and email delivery logs"
           actions={
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
               <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
@@ -64,7 +65,7 @@ export function MonitoringLogs() {
     <div className="p-6">
       <PageHeader
         title="Logs"
-        description="Centralized log viewer across all services"
+        description="Platform audit trail and email delivery logs"
         actions={
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />

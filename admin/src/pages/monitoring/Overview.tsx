@@ -6,6 +6,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BrandIcon } from "@/components/ui/BrandIcon";
 import { useOverviewMetrics } from "@/lib/monitoring/hooks";
 import { formatNumber } from "@/lib/utils";
 
@@ -62,6 +63,7 @@ export function MonitoringOverview() {
     { title: "Storage Used", value: metrics.storageUsed, icon: HardDrive },
   ];
 
+  const BRANDS = new Set(["Supabase", "Clerk", "Resend", "Sentry", "PostHog"]);
   const services: Array<{ label: string; status: string; icon: typeof Activity }> = [
     { label: "Supabase", status: metrics.supabaseStatus, icon: Database },
     { label: "Clerk", status: metrics.clerkStatus, icon: Shield },
@@ -133,7 +135,11 @@ export function MonitoringOverview() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {services.map((svc) => (
                 <div key={svc.label} className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
-                  <svc.icon className="h-4 w-4 text-muted-foreground" />
+                  {BRANDS.has(svc.label) ? (
+                    <BrandIcon name={svc.label} className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <svc.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  )}
                   <div className="flex-1">
                     <p className="text-xs font-medium">{svc.label}</p>
                     <div className="flex items-center gap-1.5">

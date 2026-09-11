@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Cloud, KeyRound, Loader2, ShieldCheck, Globe2, Circle, CheckCircle2, XCircle, ChevronRight } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { supabase, currentAccessToken } from "../../lib/supabase";
 
 interface SettingsRow {
   allow_background: boolean;
@@ -23,19 +23,25 @@ interface RuntimeStatus {
 
 const TIMEZONES = [
   "UTC",
-  Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-  "America/New_York", "America/Chicago", "America/Los_Angeles", "Europe/London",
-  "Europe/Berlin", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Tokyo",
+  "America/New_York",
+  "America/Los_Angeles",
+  "America/Chicago",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Asia/Kolkata",
   "Australia/Sydney",
-].filter((v, i, arr) => arr.indexOf(v) === i);
+];
 
-const SUPABASE_URL = (import.meta as unknown as { env: Record<string, string> }).env.VITE_SUPABASE_URL ?? "";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 /**
  * Background execution setup wizard (#2/#3).
  * Status derives from the REAL runtime (edge fn self-report) — never faked.
  */
-export default function BackgroundExecutionSettings({ onToast }: { onToast?: (m: string) => void }) {
+export default function BackgroundExecutionSettings({ onToast }: { onToast?: (msg: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<SettingsRow>({ allow_background: false, provider: "groq", model_class: "default", key_hint: null, timezone: TIMEZONES[1] });
@@ -47,7 +53,7 @@ export default function BackgroundExecutionSettings({ onToast }: { onToast?: (m:
 
   const refreshStatus = async () => {
     try {
-      const token = await supabase.auth.getSession().then((r) => r.data.session?.access_token);
+      const token = await currentAccessToken();
       if (!token) return;
       const res = await fetch(`${SUPABASE_URL}/functions/v1/agent-runtime`, {
         method: "POST",
@@ -98,7 +104,7 @@ export default function BackgroundExecutionSettings({ onToast }: { onToast?: (m:
   const save = async () => {
     setSaving(true);
     try {
-      const token = await supabase.auth.getSession().then((r) => r.data.session?.access_token);
+      const token = await currentAccessToken();
       if (!token) { onToast?.("Sign in first"); return; }
       const res = await fetch(`${SUPABASE_URL}/functions/v1/agent-runtime`, {
         method: "POST",

@@ -461,7 +461,7 @@ export function SettingsModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 10 }}
         transition={SPRING_PRESETS.soft}
-        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" || tab === "Billing" || tab === "Sidebar" || tab === "Customization" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[#e8e4db] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
+        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" || tab === "Billing" || tab === "Sidebar" || tab === "Customization" || tab === "Integrations" || tab === "Connections" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[#e8e4db] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Left Wispr Flow Clean Sidebar */}
@@ -640,13 +640,18 @@ export function SettingsModal({
           )}
 
           {(tab === "Integrations" || tab === "Connections") && (
-            <div className="max-w-2xl space-y-6 pb-16 font-sans">
+            <div className="w-full max-w-5xl space-y-6 pb-16 font-sans">
               <div className="pt-1">
-                <h1 className="text-[28px] font-normal tracking-tight font-serif text-[#1c1b18] dark:text-white">
-                  Integrations
-                </h1>
+                <div className="flex items-center gap-2.5">
+                  <h1 className="text-[28px] font-normal tracking-tight font-serif text-[#1c1b18] dark:text-white">
+                    Integrations & Ecosystems
+                  </h1>
+                  <span className="rounded-full bg-[#ede8df] dark:bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#78716c] dark:text-white/70 border border-[#e3ded4] dark:border-white/10">
+                    Ecosystem-First
+                  </span>
+                </div>
                 <p className="text-xs text-[#706c64] dark:text-white/60 mt-1">
-                  Connect your platforms and tools to power AI agents and automations.
+                  Connect your entire workspace suite once (Google Workspace, Microsoft 365, Atlassian, GitHub) and granularly manage child services and tools for AI agents.
                 </p>
               </div>
               <IntegrationsSettings onToast={(msg) => setSaveStatus(msg)} />

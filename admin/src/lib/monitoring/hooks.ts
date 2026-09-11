@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase, getAdminToken, SUPABASE_ENABLED } from "@/lib/supabase";
-import { sentry, posthog, resend, vercel, clerk, storageStats, isSupabaseAvailable } from "./api";
+import { sentry, posthog, resend, vercel, clerk, storageStats, releaseApi, isSupabaseAvailable } from "./api";
 import type {
   OverviewMetrics, SentryError, PerformanceMetric, PerformancePoint,
   SessionData, ServiceStatus, EmailMetric, RecentEmail, EmailCampaignMetric,
-  Deployment, LogEntry, IntegrationStatus,
+  Deployment, LogEntry, IntegrationStatus, ConnectorStat,
 } from "./types";
+import { CONNECTOR_CATALOG } from "@/lib/connectorCatalog";
 
 const RETRY = { maxRetries: 1, delay: 2000 };
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? "1.0.0";
@@ -39,6 +40,34 @@ function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+// Joins a throwaway realtime channel — an actual socket round trip against
+// the project's Realtime server, not an inference from another request.
+export function probeRealtime(timeoutMs = 5000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const client = supabase;
+    if (!client) {
+      reject(new Error("Supabase client not initialized"));
+      return;
+    }
+    const channel = client.channel(`admin-health-${Date.now()}`);
+    const timer = setTimeout(() => {
+      client.removeChannel(channel);
+      reject(new Error("Realtime connect timed out"));
+    }, timeoutMs);
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        clearTimeout(timer);
+        client.removeChannel(channel);
+        resolve();
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        clearTimeout(timer);
+        client.removeChannel(channel);
+        reject(new Error(`Realtime ${status.toLowerCase()}`));
+      }
+    });
+  });
 }
 
 async function adminSelect(
@@ -82,7 +111,17 @@ export function useOverviewMetrics() {
       };
 
       await Promise.allSettled([
-        adminCount("workspaces").then((n) => { if (n !== null) out.workspaces = n; }),
+        adminCount("workspaces").then((n) => {
+          if (n !== null) {
+            out.workspaces = n;
+            // The count succeeded, so PostgREST answered a real authenticated query.
+            out.databaseStatus = "healthy";
+            out.supabaseStatus = "operational";
+          } else {
+            out.databaseStatus = "degraded";
+            out.supabaseStatus = "degraded";
+          }
+        }),
         adminCount("pages").then((n) => { if (n !== null) out.pages = n; }),
         (async () => {
           if (!isSupabaseAvailable()) return;
@@ -134,13 +173,17 @@ export function useOverviewMetrics() {
           out.storageBytes = s.storageBytes;
           out.storageUsed = formatBytes(s.storageBytes);
         }).catch(() => { /* storage stat is best-effort */ }),
+        probeRealtime().then(() => {
+          out.realtimeStatus = "connected";
+        }).catch(() => {
+          out.realtimeStatus = "error";
+        }),
+        releaseApi.status().then((r) => {
+          if (r.currentVersion) out.currentVersion = r.currentVersion;
+        }).catch(() => { /* release function not configured; keep env version */ }),
       ]);
 
-      if (isSupabaseAvailable()) {
-        out.supabaseStatus = "operational";
-        out.databaseStatus = "healthy";
-        out.realtimeStatus = "connected";
-      } else {
+      if (!isSupabaseAvailable()) {
         out.databaseStatus = "degraded";
         out.realtimeStatus = "disconnected";
       }
@@ -185,7 +228,7 @@ export function usePerformanceMetrics() {
       const out: PerformanceMetric = {
         lcp: 0, cls: 0, fcp: 0, inp: 0, ttfb: 0, vitalsSamples: 0,
         pageviews24h: 0, realtimeConnections: 0, pageVersions24h: 0,
-        largestSnapshot: "—",
+        largestSnapshot: "—", posthogError: null,
       };
 
       await Promise.allSettled([
@@ -196,6 +239,9 @@ export function usePerformanceMetrics() {
           out.ttfb = v.ttfb.p75;
           out.cls = v.cls.p75;
           out.vitalsSamples = v.samples;
+        }).catch((err) => {
+          // Surfaced on the page — zeros with a hidden failure would lie.
+          out.posthogError = err instanceof Error ? err.message : "PostHog request failed";
         }),
         posthog.sessionAnalytics().then((s) => {
           out.pageviews24h = (s.topPages ?? []).reduce((sum, p) => sum + p.views, 0);
@@ -273,14 +319,17 @@ export function useSessionData() {
   return useQuery({
     queryKey: ["monitoring", "sessions"],
     queryFn: async () => {
+      // liveUsers is the connectivity probe: if PostHog fails (missing key,
+      // missing scope, outage) the error propagates so the page shows a real
+      // error state instead of a wall of zeros.
+      const live = await posthog.liveUsers();
       const out: SessionData = {
-        liveUsers: 0, todaySessions: 0, returningUsers: 0,
+        liveUsers: live.liveUsers, todaySessions: 0, returningUsers: 0,
         retention: 0, bounceRate: 0, avgSessionDuration: 0, replayCount: 0,
         topPages: [], topCountries: [], topBrowsers: [], topDevices: [],
       };
 
       await Promise.allSettled([
-        posthog.liveUsers().then((r) => { out.liveUsers = r.liveUsers; }),
         posthog.sessionAnalytics().then((s) => {
           out.todaySessions = s.todaySessions;
           out.returningUsers = s.returningUsers;
@@ -324,7 +373,7 @@ export function useServiceStatuses() {
 
       const healthy = (name: string, t0: number) => {
         const latency = Date.now() - t0;
-        byName[name] = { ...byName[name], status: "operational", latency, health: Math.max(90, 100 - Math.round(latency / 10)) };
+        byName[name] = { ...byName[name], status: "operational", latency, health: 100 };
       };
       const probe = async (name: string, check: () => Promise<unknown>) => {
         const t0 = Date.now();
@@ -343,12 +392,10 @@ export function useServiceStatuses() {
         probe("Clerk", () => clerk.userCount()),
         probe("Supabase", async () => {
           const n = await adminCount("workspaces");
-          if (n === null) return false;
-          // Realtime rides the same PostgREST/gateway path the client's
-          // realtime socket authenticates against — mark it from the same
-          // successful round-trip.
-          healthy("Realtime", Date.now());
+          if (n === null) throw new Error("Database query failed");
+          return n;
         }),
+        probe("Realtime", () => probeRealtime()),
         probe("Storage", () => storageStats()),
         probe("Resend", () => resend.analytics()),
         probe("Sentry", () => sentry.issueCounts()),
@@ -450,50 +497,72 @@ export function useDeployments() {
   });
 }
 
+// Real log sources only: audit_events for platform activity and Resend for
+// email delivery. Failed/bounced emails are genuinely error-level; audit
+// actions are informational, not fabricated "errors".
 export function useLogEntries(filters?: { level?: string; source?: string; search?: string }) {
   return useQuery({
     queryKey: ["monitoring", "logs", filters],
     queryFn: async () => {
-      const rows = await adminSelect(
-        "audit_events",
-        "id, action, user_name, detail, block_type, page_id, created_at",
-        { p_order_col: "created_at", p_order_dir: "desc", p_limit: 200 },
-      );
-      if (!rows) return [] as LogEntry[];
-
-      const ERROR_ACTIONS = new Set(["delete", "trashed"]);
-      const WARN_ACTIONS = new Set(["ai_generated"]);
+      const source = filters?.source ?? "all";
       const search = (filters?.search ?? "").toLowerCase();
 
-      return rows
-        .filter((row) => {
-          const action = String(row.action ?? "");
-          const message = `${action} ${String(row.block_type ?? "").trim()}`.trim();
-          if (filters?.level && filters.level !== "all") {
-            const level = ERROR_ACTIONS.has(action) ? "error" : WARN_ACTIONS.has(action) ? "warn" : "info";
-            if (level !== filters.level) return false;
-          }
-          if (search) {
-            const hay = `${action} ${String(row.user_name ?? "")} ${String(row.detail ?? "")} ${String(row.block_type ?? "")}`.toLowerCase();
-            if (!hay.includes(search)) return false;
-          }
-          return true;
-        })
-        .slice(0, 50)
-        .map((row) => {
+      const [auditRows, emailRows] = await Promise.all([
+        source === "all" || source === "audit"
+          ? adminSelect(
+              "audit_events",
+              "id, action, user_name, detail, block_type, created_at",
+              { p_order_col: "created_at", p_order_dir: "desc", p_limit: 200 },
+            ).catch(() => null)
+          : Promise.resolve(null),
+        source === "all" || source === "email"
+          ? resend.emails("50").catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      const entries: LogEntry[] = [];
+
+      if (auditRows) {
+        for (const row of auditRows) {
           const action = String(row.action ?? "");
           const blockType = String(row.block_type ?? "").trim();
           const user = String(row.user_name ?? "");
-          const level: LogEntry["level"] = ERROR_ACTIONS.has(action) ? "error" : WARN_ACTIONS.has(action) ? "warn" : "info";
-          return {
-            id: String(row.id ?? ""),
+          const detail = row.detail ? String(row.detail) : undefined;
+          const hay = `${action} ${user} ${detail ?? ""} ${blockType}`.toLowerCase();
+          if (search && !hay.includes(search)) continue;
+          entries.push({
+            id: `audit-${String(row.id ?? "")}`,
             timestamp: String(row.created_at ?? new Date().toISOString()),
-            level,
-            source: "audit" as const,
+            level: "info",
+            source: "audit",
             message: blockType ? `${action} ${blockType}` : action,
-            detail: user ? `${user}${row.detail ? ` · ${row.detail}` : ""}` : (row.detail ? String(row.detail) : undefined),
-          } as LogEntry;
-        });
+            detail: user ? `${user}${detail ? ` · ${detail}` : ""}` : detail,
+          });
+        }
+      }
+
+      if (emailRows && Array.isArray(emailRows)) {
+        for (const e of emailRows) {
+          const status = String(e.status ?? "sent");
+          const to = String(e.to ?? "");
+          const subject = String(e.subject ?? "");
+          if (search && !`${subject} ${to} ${status}`.toLowerCase().includes(search)) continue;
+          entries.push({
+            id: `email-${String(e.id ?? "")}`,
+            timestamp: String(e.createdAt ?? e.sentAt ?? new Date().toISOString()),
+            level: status === "failed" || status === "bounced" ? "error" : "info",
+            source: "email",
+            message: `email ${status}: ${subject}`,
+            detail: to || undefined,
+          });
+        }
+      }
+
+      const level = filters?.level;
+      return entries
+        .filter((e) => !level || level === "all" || e.level === level)
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+        .slice(0, 50);
     },
     staleTime: 10000,
     refetchInterval: 15000,
@@ -514,6 +583,7 @@ export function useIntegrationStatuses() {
           await check();
           return { name, configured: true, environment: "production", lastSync: new Date().toISOString(), lastError: null, dashboardUrl };
         } catch (err) {
+          const scopeMissing = err instanceof Error && err.message === "POSTHOG_TOKEN_MISSING_SCOPE";
           return {
             name,
             configured: false,
@@ -521,7 +591,9 @@ export function useIntegrationStatuses() {
             lastSync: null,
             lastError: isNotConfigured(err)
               ? notConfiguredMsg
-              : err instanceof Error ? err.message.slice(0, 200) : "Check failed",
+              : scopeMissing
+                ? "Personal API key is missing the 'query:read' scope — create a new key in PostHog (Settings → Personal API Keys) and update POSTHOG_PERSONAL_TOKEN"
+                : err instanceof Error ? err.message.slice(0, 200) : "Check failed",
             dashboardUrl,
           };
         }
@@ -544,6 +616,63 @@ export function useIntegrationStatuses() {
       ]);
 
       return results;
+    },
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+}
+
+// Real per-connector connection stats for the app connectors (GitHub, Jira,
+// Slack, …): active connections, total rows, and last connection time from
+// user_connections joined to the connectors catalog. Returns available:false
+// when the admin_select allowlist migration hasn't been applied yet.
+export function useConnectorStats() {
+  return useQuery({
+    queryKey: ["monitoring", "connector-stats"],
+    queryFn: async (): Promise<{ available: boolean; stats: ConnectorStat[] }> => {
+      const [catalogRows, connectionRows] = await Promise.all([
+        adminSelect("connectors", "id, slug, name", { p_limit: 500 }).catch((err) => {
+          if (err instanceof Error && err.message.includes("TABLE_NOT_ALLOWED")) return { notAllowed: true as const };
+          return null;
+        }),
+        adminSelect("user_connections_admin", "connector_id, status, external_account_label, connected_at", {
+          p_order_col: "connected_at", p_order_dir: "desc", p_limit: 2000,
+        }).catch((err) => {
+          if (err instanceof Error && err.message.includes("TABLE_NOT_ALLOWED")) return { notAllowed: true as const };
+          return null;
+        }),
+      ]);
+
+      if (!catalogRows || !connectionRows || "notAllowed" in catalogRows || "notAllowed" in connectionRows) {
+        return { available: false, stats: [] };
+      }
+
+      const slugById = new Map(catalogRows.map((c) => [String(c.id), String(c.slug ?? "").toLowerCase()]));
+      const agg = new Map<string, { active: number; total: number; last: string | null }>();
+      for (const row of connectionRows) {
+        const slug = slugById.get(String(row.connector_id)) ?? "";
+        if (!slug) continue;
+        const entry = agg.get(slug) ?? { active: 0, total: 0, last: null };
+        entry.total += 1;
+        if (String(row.status ?? "") !== "revoked") entry.active += 1;
+        const at = String(row.connected_at ?? "");
+        if (at && (!entry.last || at > entry.last)) entry.last = at;
+        agg.set(slug, entry);
+      }
+
+      const stats: ConnectorStat[] = CONNECTOR_CATALOG.map((c) => {
+        const entry = agg.get(c.id.toLowerCase());
+        return {
+          id: c.id,
+          name: c.name,
+          category: c.category,
+          activeConnections: entry?.active ?? 0,
+          totalConnections: entry?.total ?? 0,
+          lastConnectedAt: entry?.last ?? null,
+          inCatalog: agg.has(c.id.toLowerCase()),
+        };
+      });
+      return { available: true, stats };
     },
     refetchInterval: 60000,
     staleTime: 30000,

@@ -90,7 +90,7 @@ export default function Navbar() {
                               <p className="liquid-dropdown-desc">Speech-to-text & fluid voice dictation</p>
                             </div>
                           </Link>
-                          <Link to="/product" className="liquid-dropdown-item">
+                          <Link to="/docs" className="liquid-dropdown-item">
                             <div className="liquid-dropdown-icon-box blue">
                               <FileText size={16} />
                             </div>
@@ -99,7 +99,7 @@ export default function Navbar() {
                               <p className="liquid-dropdown-desc">Fluid markdown canvas & blocks</p>
                             </div>
                           </Link>
-                          <Link to="/product" className="liquid-dropdown-item">
+                          <Link to="/docs?section=databases" className="liquid-dropdown-item">
                             <div className="liquid-dropdown-icon-box red">
                               <Database size={16} />
                             </div>
@@ -117,7 +117,7 @@ export default function Navbar() {
                               <p className="liquid-dropdown-desc">Connected tasks & team roadmaps</p>
                             </div>
                           </Link>
-                          <Link to="/product" className="liquid-dropdown-item">
+                          <Link to="/docs?section=canvas" className="liquid-dropdown-item">
                             <div className="liquid-dropdown-icon-box sage">
                               <LayoutGrid size={16} />
                             </div>
@@ -211,7 +211,7 @@ export default function Navbar() {
                               <p className="liquid-dropdown-desc">Keyboard mastery and workflows</p>
                             </div>
                           </Link>
-                          {settings.show_docs && (
+                          {settings.show_docs !== false && (
                             <Link to="/docs" className="liquid-dropdown-item">
                               <div className="liquid-dropdown-icon-box blue">
                                 <FileText size={16} />
@@ -365,8 +365,8 @@ export default function Navbar() {
                   <p className="liquid-mobile-group-header">Product</p>
                   <Link to="/product" className="liquid-mobile-item">Noska AI</Link>
                   <Link to="/flow" className="liquid-mobile-item">Noska Flow</Link>
-                  <Link to="/product" className="liquid-mobile-item">Docs & Notes</Link>
-                  <Link to="/product" className="liquid-mobile-item">Databases</Link>
+                  <Link to="/docs" className="liquid-mobile-item">Docs & Notes</Link>
+                  <Link to="/docs?section=databases" className="liquid-mobile-item">Databases</Link>
                   <Link to="/product" className="liquid-mobile-item">Projects</Link>
                 </div>
 
@@ -381,9 +381,9 @@ export default function Navbar() {
                   <p className="liquid-mobile-group-header">Resources</p>
                   <Link to="/download" className="liquid-mobile-item">Download for Desktop</Link>
                   <Link to="/resources" className="liquid-mobile-item">Guides & Shortcuts</Link>
-                  {settings.show_docs && <Link to="/docs" className="liquid-mobile-item">Documentation</Link>}
-                  {settings.show_changelog && <Link to="/changelog" className="liquid-mobile-item">Changelog</Link>}
-                  {settings.show_pricing && <Link to="/pricing" className="liquid-mobile-item">Pricing</Link>}
+                  {settings.show_docs !== false && <Link to="/docs" className="liquid-mobile-item">Documentation</Link>}
+                  {settings.show_changelog !== false && <Link to="/changelog" className="liquid-mobile-item">Changelog</Link>}
+                  {settings.show_pricing !== false && <Link to="/pricing" className="liquid-mobile-item">Pricing</Link>}
                 </div>
 
                 <div className="liquid-mobile-group">

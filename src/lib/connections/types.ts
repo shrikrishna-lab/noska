@@ -1,9 +1,24 @@
 /**
- * External Connections & Link Preview — Core Data Types
+ * External Connections, Ecosystem Connectors & Link Preview — Core Data Types
  *
- * Models providers, capabilities, normalized external resources,
- * connection accounts, and preview lifecycle states.
+ * Models ecosystem parent connectors (Google Workspace, Microsoft 365, Atlassian,
+ * GitHub, Slack, Notion, etc.), child services (Gmail, Drive, Calendar, Jira,
+ * Repositories, etc.), granular permissions, dynamic resource selection,
+ * and AI agent capability bindings.
  */
+
+export type EcosystemCategory =
+  | "All"
+  | "Recommended"
+  | "Connected"
+  | "Workspace"
+  | "Communication"
+  | "Development"
+  | "Project Management"
+  | "Design"
+  | "Files"
+  | "Data"
+  | "Automation";
 
 export type ProviderCategory =
   | "Engineering"
@@ -16,7 +31,101 @@ export type ProviderCategory =
   | "Security"
   | "Collaboration";
 
-export type ConnectionAuthMode = "oauth" | "token";
+export type ConnectionAuthMode = "oauth" | "token" | "api_key" | "github_app" | "mcp" | "custom_mcp";
+
+export interface ProviderPermissionScope {
+  key: string;
+  label: string;
+  description: string;
+  category: "read" | "write" | "admin";
+}
+
+export interface EcosystemServiceDefinition {
+  id: string; // e.g. "gmail", "drive", "calendar", "jira", "repositories"
+  name: string; // e.g. "Gmail", "Google Drive", "Jira Software"
+  description: string;
+  icon: string;
+  defaultEnabled: boolean;
+  requiredScopes: string[];
+  permissions: Array<{
+    id: string;
+    label: string;
+    description: string;
+    type: "read" | "write" | "admin";
+  }>;
+  resourceTypes: Array<{
+    id: string;
+    name: string;
+    pluralName: string;
+    icon: string;
+  }>;
+  toolNames: string[]; // Agent-facing tools enabled by this service (e.g. "gmail.search", "gmail.createDraft")
+}
+
+export interface EcosystemConnectorDefinition {
+  id: string; // e.g. "google-workspace", "microsoft-365", "atlassian", "github"
+  name: string;
+  slug: string;
+  /** Gateway catalog slugs this ecosystem can connect through when its own
+   * slug has no catalog row (e.g. google-workspace → gmail + google-calendar). */
+  gatewaySlugs?: string[];
+  description: string;
+  tagline: string;
+  category: EcosystemCategory;
+  secondaryCategories?: EcosystemCategory[];
+  icon: string;
+  brandColor?: string;
+  authModes: ConnectionAuthMode[];
+  services: EcosystemServiceDefinition[];
+  defaultScopes: string[];
+  websiteUrl?: string;
+  docsUrl?: string;
+  isRecommended?: boolean;
+}
+
+export interface ConnectionServiceState {
+  serviceId: string;
+  enabled: boolean;
+  grantedPermissions: string[];
+  status: "active" | "disabled" | "permission_required" | "error";
+  updatedAt: string;
+}
+
+export interface ConnectionResourceItem {
+  id: string;
+  externalResourceId: string;
+  serviceId: string;
+  name: string;
+  resourceType: string;
+  selected: boolean;
+  parentName?: string;
+  url?: string;
+  metadata?: Record<string, unknown>;
+  lastSyncedAt?: string;
+}
+
+export interface EcosystemConnection {
+  id: string;
+  userId: string;
+  providerId: string; // matches EcosystemConnectorDefinition.id
+  status: "connected" | "connecting" | "syncing" | "expired" | "revoked" | "error" | "reauth_required";
+  authMode: ConnectionAuthMode;
+  accountEmail?: string;
+  accountUsername: string;
+  accountAvatarUrl?: string;
+  displayName: string;
+  tenantId?: string; // Tenant / Workspace ID for multi-tenant providers
+  services: Record<string, ConnectionServiceState>; // serviceId -> state
+  resources: ConnectionResourceItem[];
+  grantedScopes: string[];
+  connectedAt: string;
+  updatedAt: string;
+  lastVerifiedAt?: string;
+  lastSyncedAt?: string;
+  syncError?: string | null;
+}
+
+// ─── Legacy & Link Preview Backward Compatibility ──────────────
 
 export interface ProviderCapabilities {
   oauth: boolean;
@@ -31,25 +140,18 @@ export interface ProviderCapabilities {
   connectedProperties?: boolean;
 }
 
-export interface ProviderPermissionScope {
-  key: string;
-  label: string;
-  description: string;
-  category: "read" | "write" | "admin";
-}
-
 export interface IntegrationProviderDefinition {
   id: string;
   name: string;
   slug: string;
   description: string;
   category: ProviderCategory;
-  icon: string; // SVG path / identifier or brand name
+  icon: string;
   brandColor?: string;
   aliases: string[];
   capabilities: ProviderCapabilities;
   authModes: ConnectionAuthMode[];
-  permissions: string[]; // Human-readable data access items, e.g. "Repositories", "Issues & Pull Requests"
+  permissions: string[];
   detailedScopes?: ProviderPermissionScope[];
   status: "live" | "available" | "coming_soon";
   websiteUrl?: string;
@@ -86,7 +188,7 @@ export interface NormalizedResourceAuthor {
 export interface NormalizedResourceStatus {
   key: "open" | "closed" | "merged" | "draft" | "in_progress" | "done" | "todo" | "active" | "archived" | string;
   label: string;
-  color?: string; // CSS color or Tailwind class indicator
+  color?: string;
   bg?: string;
 }
 

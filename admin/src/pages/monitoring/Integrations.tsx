@@ -1,15 +1,16 @@
 import { motion } from "framer-motion";
-import { Puzzle, RefreshCw, ExternalLink, Clock, AlertTriangle } from "lucide-react";
+import { Puzzle, RefreshCw, ExternalLink, Clock, AlertTriangle, Link2, Unplug } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BrandIcon } from "@/components/ui/BrandIcon";
-import { useIntegrationStatuses } from "@/lib/monitoring/hooks";
+import { useConnectorStats, useIntegrationStatuses } from "@/lib/monitoring/hooks";
 
 export function MonitoringIntegrations() {
   const { data: integrations, isLoading, refetch, isRefetching } = useIntegrationStatuses();
+  const { data: connectorStats } = useConnectorStats();
 
   if (isLoading) {
     return (
@@ -92,6 +93,79 @@ export function MonitoringIntegrations() {
           </motion.div>
         ))}
       </div>
+
+      <h2 className="mb-3 mt-8 text-sm font-semibold text-muted-foreground">
+        App Connectors ({connectorStats?.stats.length ?? 0})
+      </h2>
+      {!connectorStats ? (
+        <LoadingState count={4} />
+      ) : !connectorStats.available ? (
+        <Card>
+          <CardContent className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-600" />
+            Live connector stats need the admin_select allowlist migration
+            (20260912000000_add_connector_tables_to_admin_select.sql) applied to the database.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {connectorStats.stats.map((connector, i) => (
+            <motion.div
+              key={connector.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+            >
+              <Card>
+                <CardHeader className="flex-row items-center justify-between pb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/30">
+                      <BrandIcon name={connector.name} className="h-5 w-5" />
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${
+                          connector.activeConnections > 0 ? "bg-green-500" : "bg-gray-400"
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm font-medium">{connector.name}</CardTitle>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{connector.category}</p>
+                    </div>
+                  </div>
+                  <Badge variant={connector.activeConnections > 0 ? "secondary" : "outline"}>
+                    {connector.activeConnections > 0 ? "In Use" : "No Connections"}
+                  </Badge>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2">
+                      <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      <div>
+                        <span className="text-muted-foreground">Active</span>
+                        <p className="font-medium">{connector.activeConnections}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2">
+                      <Unplug className="h-3.5 w-3.5 text-muted-foreground" />
+                      <div>
+                        <span className="text-muted-foreground">Total (incl. revoked)</span>
+                        <p className="font-medium">{connector.totalConnections}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      Last connected:{" "}
+                      {connector.lastConnectedAt ? new Date(connector.lastConnectedAt).toLocaleString() : "—"}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

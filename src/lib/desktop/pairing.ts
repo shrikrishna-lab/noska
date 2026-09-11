@@ -1,4 +1,4 @@
-﻿// Desktop browser-pairing authentication.
+// Desktop browser-pairing authentication.
 //
 // The desktop webview cannot complete Clerk logins (OAuth redirects die on
 // the custom origin), so authentication happens in the user's BROWSER:
@@ -90,15 +90,6 @@ export function loadSession(): StoredSession | null {
 export function saveSession(s: StoredSession): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify(s));
   cachedIdentity = s.identity;
-  // Mirror into the shared supabase client so supabase.auth.getSession()
-  // callers (teams, agent runtime, â€¦) see the paired identity too.
-  import("../supabase")
-    .then(({ supabase }) =>
-      supabase.auth.setSession({
-        access_token: s.access_token,
-        refresh_token: s.sid,
-      }))
-    .catch(() => {});
   emit();
 }
 

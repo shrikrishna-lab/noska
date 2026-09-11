@@ -7,6 +7,10 @@
 
 import type { IntegrationProviderDefinition, ProviderCategory } from "./types";
 
+// status guide: "live" = connectable through the connector-gateway catalog
+// (the `connectors` table must have a row with working OAuth/token config);
+// "coming_soon" = defined here but not yet seeded in the gateway catalog, so
+// Connect would fail server-side.
 const PROVIDERS: IntegrationProviderDefinition[] = [
   {
     id: "github",
@@ -71,7 +75,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "Issues, epics, stories, and task states",
       "Issue comments and worklog updates",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://www.atlassian.com/software/jira",
   },
   {
@@ -100,7 +104,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "Merge requests and pipeline statuses",
       "Issues and milestone trackers",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://gitlab.com",
   },
   {
@@ -158,7 +162,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "Projects, cycles, and initiatives",
       "Team rosters and workflow states",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://linear.app",
   },
   {
@@ -186,7 +190,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "File metadata and frame previews",
       "Comments and design team libraries",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://figma.com",
   },
   {
@@ -242,7 +246,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "Projects, tasks, and subtasks",
       "Assignees and due date milestones",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://asana.com",
   },
   {
@@ -270,7 +274,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "Server channel list and permissions",
       "Send messages and bot integrations",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://discord.com",
   },
   {
@@ -298,7 +302,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "Boards, lists, and cards",
       "Card members and checklists",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://trello.com",
   },
   {
@@ -326,7 +330,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "Read file metadata and previews",
       "Account team folder references",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://dropbox.com",
   },
   {
@@ -354,7 +358,7 @@ const PROVIDERS: IntegrationProviderDefinition[] = [
       "Tickets, comments, and priority metrics",
       "Requester and agent assignments",
     ],
-    status: "available",
+    status: "coming_soon",
     websiteUrl: "https://zendesk.com",
   },
 ];

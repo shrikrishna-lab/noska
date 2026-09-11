@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, BookOpen, ChevronRight, Terminal, Shield, Users, Key, Database, Brain, Layout, Share2, Keyboard, FileText, HelpCircle, ExternalLink, Menu, X } from 'lucide-react';
+import { Search, BookOpen, ChevronRight, Terminal, Shield, Users, Key, Database, Brain, Layout, Share2, Keyboard, FileText, HelpCircle, ExternalLink, Menu, X, Plug, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import './Docs.css';
 
 interface DocSection {
@@ -27,6 +27,22 @@ const sections: DocSection[] = [
       { id: 'introduction', title: 'Introduction' },
       { id: 'quickstart', title: 'Quick Start' },
       { id: 'core-concepts', title: 'Core Concepts' },
+    ],
+  },
+  {
+    id: 'integrations',
+    icon: Plug,
+    title: 'Integrations & Ecosystems',
+    items: [
+      { id: 'integrations-overview', title: 'Ecosystem Architecture' },
+      { id: 'google-workspace-integration', title: 'Google Workspace' },
+      { id: 'microsoft-365-integration', title: 'Microsoft 365' },
+      { id: 'atlassian-integration', title: 'Atlassian (Jira & Confluence)' },
+      { id: 'github-integration', title: 'GitHub' },
+      { id: 'slack-discord-integration', title: 'Slack & Discord' },
+      { id: 'notion-linear-integration', title: 'Notion, Linear & Tasks' },
+      { id: 'developer-cloud-integrations', title: 'Databases & Cloud Storage' },
+      { id: 'all-ecosystems-catalog', title: 'All 28 Connected Apps' },
     ],
   },
   {
@@ -77,6 +93,16 @@ const sections: DocSection[] = [
     items: [
       { id: 'plans', title: 'Plans & Pricing' },
       { id: 'import-export', title: 'Import & Export' },
+    ],
+  },
+  {
+    id: 'support',
+    icon: HelpCircle,
+    title: 'Help & Support',
+    items: [
+      { id: 'contact-support', title: 'Support & Community' },
+      { id: 'troubleshooting', title: 'Troubleshooting & Diagnostics' },
+      { id: 'faq', title: 'Frequently Asked Questions' },
     ],
   },
 ];
@@ -723,6 +749,318 @@ GET    /api/v1/search?q=          Search workspace
 - Pro: 1,000 requests/hour
 - Enterprise: Custom limits`,
   },
+  'integrations-overview': {
+    title: 'Ecosystem Architecture Overview',
+    body: `Noska provides an enterprise-grade, **ecosystem-first integration system** designed to eliminate connection fragmentation, reduce OAuth authorization fatigue, and grant granular, resource-level data boundaries for your AI workflows.
+
+**The Ecosystem-First Paradigm**
+
+Traditional productivity software treats every tool as an isolated, top-level card (forcing you to authenticate Gmail, Google Drive, Google Calendar, and Google Docs as 4 completely separate connections). 
+
+Noska unifies related products under a single **Parent Ecosystem Connector**:
+
+\`\`\`
+Google Workspace (Parent Connection)
+  ├── Gmail (Child Service: Active)
+  ├── Google Drive (Child Service: Active - Filtered to 3 folders)
+  ├── Google Calendar (Child Service: Active)
+  ├── Google Docs (Child Service: Active)
+  └── Google Sheets (Child Service: Disabled)
+\`\`\`
+
+**Core Architectural Pillars**
+
+1. **Single Connection & Unified Token Lifecycle** — Connect an entire workspace (Google, Microsoft 365, Atlassian, GitHub) in a single flow. OAuth tokens, refresh lifecycles, and scopes are managed centrally without repeated sign-ins.
+2. **Granular Child Service Toggles** — Each child service under an ecosystem can be enabled or disabled independently at any time. If you want Noska's AI to search your Google Drive documents and Calendar events but NOT read your Gmail inbox, simply toggle Gmail off.
+3. **Resource-Level Scoping & Boundaries** — Restrict access to specific repositories, folders, channels, or database tables. Noska will never perform broad scans across your entire enterprise cloud.
+4. **Zero Background Polling** — Noska operates on an on-demand retrieval model. External services are queried only when you actively trigger a search or when an AI prompt requires fresh contextual data. This eliminates background battery drain and prevents hitting third-party API rate limits.
+5. **AI Engine Tool Filtering** — When you chat with Noska AI, only tools corresponding to connected and currently-enabled child services are registered into the model's function-calling toolset (\`integrationTools.ts\`).
+6. **Fault Isolation & Resilience** — If a single service experiences an API rate limit or schema change, the parent connection and other child services remain fully operational.
+
+**Managing Integrations in Settings**
+
+Open **Settings → Integrations** to view all available ecosystems. You can filter by category, search across 28+ ecosystems and their sub-services, and click **Manage** on any connected card to configure granular permissions, scopes, and connected resources.`,
+  },
+  'google-workspace-integration': {
+    title: 'Google Workspace Integration',
+    body: `The Google Workspace connector connects your Google Cloud identity and productivity apps to Noska under a single unified authorization.
+
+**Included Services**
+
+- **Gmail** — Search threads, summarize message history, draft replies, and query unread communication.
+- **Google Drive** — Search files, inspect folder structures, read PDF/Doc contents, and manage project assets.
+- **Google Calendar** — Check schedule availability, query upcoming meetings, find free time slots, and schedule events.
+- **Google Docs** — Read and export document outlines, convert Google Docs into Noska pages, and insert live blocks.
+- **Google Sheets** — Query structured tabular data, extract summary metrics, and link spreadsheet ranges to Noska databases.
+
+**Granular Permissions & Scopes**
+
+| Service | OAuth Scope | Access Level |
+|---------|-------------|--------------|
+| Gmail | \`gmail.readonly\` / \`gmail.send\` | Read messages, draft emails |
+| Google Drive | \`drive.file\` / \`drive.readonly\` | Access selected folders & files |
+| Google Calendar | \`calendar.events\` | Read and create schedule events |
+| Google Docs | \`documents.readonly\` | Read document content |
+| Google Sheets | \`spreadsheets.readonly\` | Read tabular worksheet rows |
+
+**Configuring Resource Boundaries**
+
+In the **Manage → Resources** drawer of your Google Workspace connection:
+- You can specify exact Google Drive folder IDs so Noska only searches within designated project folders.
+- You can select primary vs. secondary calendars to prevent personal events from being ingested into workspace search.
+
+**AI Function Calling Examples**
+
+When Google Workspace is connected, your AI assistant can execute queries like:
+- *"What meetings do I have scheduled for tomorrow afternoon?"* → Executes \`google_calendar_list_events\`
+- *"Search my Google Drive for the Q3 Financial Roadmap PDF and summarize key takeaways"* → Executes \`google_drive_search\` and \`google_drive_read_file\`
+- *"Draft a follow-up email to Alex regarding yesterday's project kickoff"* → Executes \`gmail_draft_email\``,
+  },
+  'microsoft-365-integration': {
+    title: 'Microsoft 365 Integration',
+    body: `The Microsoft 365 connector links your Microsoft Entra ID (Azure AD) and Microsoft Graph ecosystem into Noska.
+
+**Included Services**
+
+- **Outlook Mail** — Search emails, query flagged messages, and draft communications via Microsoft Graph Mail API.
+- **OneDrive** — Access personal and business cloud files, synced documents, and shared attachments.
+- **SharePoint** — Search corporate intranet document libraries, team sites, and enterprise knowledge repositories.
+- **Microsoft Teams** — Query channel announcements, summarize missed chats, and send team updates.
+- **Microsoft Calendar** — View calendar schedules, query meeting links, and coordinate cross-organization availability.
+
+**Authentication & Security**
+
+Noska supports both Microsoft 365 Multi-Tenant and Custom Single-Tenant enterprise configurations:
+- **Client ID & Tenant ID**: Configurable for enterprise IT compliance.
+- **Microsoft Graph Scopes**: \`User.Read\`, \`Mail.ReadWrite\`, \`Files.Read.All\`, \`Calendars.ReadWrite\`, \`ChannelMessage.Read.All\`.
+- **Zero Data Ingestion**: Files and messages remain in your Microsoft tenant; Noska queries live data ephemerally during AI execution.
+
+**AI Function Calling Examples**
+
+- *"Summarize the latest design feedback from the #marketing Teams channel"* → Executes \`m365_teams_get_messages\`
+- *"Find the executive proposal on SharePoint and extract the milestone dates"* → Executes \`m365_sharepoint_search\`
+- *"What is on my Outlook calendar for the rest of today?"* → Executes \`m365_calendar_list_events\``,
+  },
+  'atlassian-integration': {
+    title: 'Atlassian Integration (Jira & Confluence)',
+    body: `The Atlassian connector unifies project tracking in Jira Software and documentation in Confluence under a single connection.
+
+**Included Services**
+
+- **Jira Software** — Query active sprint boards, search backlog issues using JQL, create bug reports, and update issue statuses.
+- **Confluence** — Search space page trees, import Confluence articles into Noska, and keep technical documentation synchronized.
+
+**Multi-Site Routing & Granular Scopes**
+
+Because Atlassian accounts can belong to multiple cloud sites (e.g. \`acme.atlassian.net\` and \`acme-labs.atlassian.net\`), Noska allows you to select the exact Atlassian Site and limit indexing to specific Jira Project Keys and Confluence Space Keys:
+
+\`\`\`
+Atlassian Connection (Site: noska-workspace.atlassian.net)
+  ├── Jira Projects: [ENG, PROD, SEC] (Other projects excluded)
+  └── Confluence Spaces: [ENGINEERING, PRODUCT] (HR/Legal excluded)
+\`\`\`
+
+**AI Function Calling Examples**
+
+- *"List all High priority bugs in Jira assigned to sprint 42"* → Executes \`jira_search_issues(jql: "project = ENG AND type = Bug AND priority = High")\`
+- *"Create a Jira ticket to investigate the payment webhook timeout"* → Executes \`jira_create_issue\`
+- *"Find the Confluence architecture guide for our authentication service"* → Executes \`confluence_search_pages\``,
+  },
+  'github-integration': {
+    title: 'GitHub Integration',
+    body: `The GitHub connector provides deep source code, issue tracking, pull request, and DevOps visibility inside Noska.
+
+**Included Services**
+
+- **Repositories** — Browse file trees, read code files, inspect READMEs, and check commit histories.
+- **Issues** — Search open and closed issues, filter by labels and milestones, and create new issue tickets.
+- **Pull Requests** — Review PR descriptions, inspect diff summaries, and track approval states.
+- **GitHub Actions** — Monitor CI/CD workflow runs, check build failures, and re-run jobs.
+- **Releases** — Track semantic version tags, release notes, and published binary assets.
+
+**Granular Repository Access**
+
+Noska supports selecting specific repositories during GitHub App / OAuth authorization. You do not need to grant organization-wide read access.
+
+**AI Function Calling Examples**
+
+- *"Show me all open pull requests awaiting review on the frontend repository"* → Executes \`github_list_prs(repo: "noska/frontend", state: "open")\`
+- *"What failed in the latest CI workflow for main branch?"* → Executes \`github_get_workflow_run_logs\`
+- *"Create an issue on noska/desktop titled 'Support high-DPI scaling on Linux'"* → Executes \`github_create_issue\``,
+  },
+  'slack-discord-integration': {
+    title: 'Slack & Discord Integrations',
+    body: `Connect your team's real-time communication hubs to Noska to bridge asynchronous notes with active team discussions.
+
+**Slack Ecosystem**
+
+- **Public & Private Channels** — Ingest meeting notes or share document summaries directly to designated channels.
+- **Thread Search & Summarization** — Ask AI to summarize 50+ messages in a technical support thread into an actionable task list.
+- **Direct Messages & Mentions** — Query unread notifications and urgent pings without context-switching into the full Slack client.
+
+**Discord Ecosystem**
+
+- **Guild Channels & Announcement Feeds** — Monitor community questions, feature requests, and server announcements.
+- **Webhook Dispatch** — Automatically push Noska page updates and database state changes to Discord webhooks.
+
+**Privacy & Security**
+
+- Only explicit channels authorized by workspace administrators are accessible.
+- Personal direct messages remain completely private unless granted under explicit user OAuth tokens.`,
+  },
+  'notion-linear-integration': {
+    title: 'Notion, Linear & Task Suites',
+    body: `Unify your external issue trackers, product roadmaps, and document silos into Noska's central knowledge canvas.
+
+**Notion Integration**
+
+- **Database Sync** — Query Notion database properties, select fields, and relation columns directly inside Noska.
+- **Page Import & Conversion** — Seamlessly migrate Notion pages and nested blocks into Noska's high-performance local canvas.
+
+**Linear Integration**
+
+- **Teams, Projects & Cycles** — Track active cycle burn-downs, project roadmaps, and sprint velocity.
+- **Issue Creation & Triage** — Quickly turn bullet points in Noska notes into fully-formatted Linear issues with priority, assignee, and estimates.
+
+**ClickUp, Asana & Trello**
+
+- **ClickUp** — Manage Spaces, Folders, Lists, and custom task statuses.
+- **Asana** — Sync project tasks, subtasks, milestone tracking, and team portfolios.
+- **Trello** — View boards, lists, and cards with attachment previews.`,
+  },
+  'developer-cloud-integrations': {
+    title: 'Databases & Cloud Storage',
+    body: `Noska connects directly to developer backend infrastructure, cloud databases, and object storage providers.
+
+**Supported Database & Cloud Platforms**
+
+1. **Supabase** — Query Postgres tables, execute parameterized SQL, inspect schema definitions, and link database records to Noska database views.
+2. **Airtable** — Read bases, tables, views, formulas, and attachments with live bidirectional synchronization.
+3. **Firebase** — Access Firestore collections, documents, and Firebase Storage bucket assets.
+4. **AWS S3** — Query object buckets, generate pre-signed read/write URLs, and manage media files securely.
+5. **Cloudflare R2** — Zero-egress S3-compatible storage integration for high-throughput asset delivery.
+
+**Security Safeguards**
+
+- **Read-Only Mode Default** — All database queries are executed with read-only privileges unless write access is explicitly authorized.
+- **Row-Level Security (RLS)** — User JWTs are forwarded to Supabase and Firebase to enforce your existing database security policies.`,
+  },
+  'all-ecosystems-catalog': {
+    title: 'All 28 Connected Apps Catalog',
+    body: `Noska natively supports **28 top-level ecosystems** spanning communication, productivity, engineering, design, cloud storage, CRM, and developer platforms.
+
+**Complete Ecosystem Catalog**
+
+| Ecosystem | Category | Included Child Services | Primary Resource Types |
+|-----------|----------|-------------------------|------------------------|
+| **Google Workspace** | Productivity | Gmail, Drive, Calendar, Docs, Sheets | Folders, Files, Calendars |
+| **Microsoft 365** | Productivity | Outlook, OneDrive, SharePoint, Teams, Calendar | Libraries, Channels, Folders |
+| **Atlassian** | Engineering | Jira Software, Confluence | Projects, Boards, Spaces |
+| **GitHub** | Engineering | Repos, Issues, Pull Requests, Actions, Releases | Repositories, Branches |
+| **GitLab** | Engineering | Projects, Merge Requests, Issues, Pipelines | Repositories, Groups |
+| **Slack** | Communication | Channels, DMs, Threads, Mentions | Public/Private Channels |
+| **Discord** | Communication | Guild Channels, Webhooks, Forum Threads | Guilds, Channels |
+| **Notion** | Productivity | Pages, Databases, Blocks | Workspaces, Databases |
+| **Linear** | Engineering | Issues, Projects, Cycles, Teams | Teams, Projects |
+| **Figma** | Design | Files, Components, Styles, Comments | Teams, Projects, Files |
+| **ClickUp** | Productivity | Spaces, Folders, Lists, Tasks | Spaces, Lists |
+| **Asana** | Productivity | Tasks, Projects, Portfolios | Workspaces, Projects |
+| **Trello** | Productivity | Boards, Lists, Cards | Boards, Lists |
+| **Supabase** | Cloud & DB | Postgres Tables, Storage, Auth | Tables, Storage Buckets |
+| **Airtable** | Cloud & DB | Bases, Tables, Views, Records | Bases, Tables |
+| **Firebase** | Cloud & DB | Firestore, Cloud Storage | Collections, Buckets |
+| **HubSpot** | CRM | Contacts, Companies, Deals, Tickets | Pipelines, Lists |
+| **Salesforce** | CRM | Leads, Accounts, Opportunities, Cases | Objects, Reports |
+| **Stripe** | Finance | Customers, Invoices, Subscriptions, Payments | Accounts, Customers |
+| **Zendesk** | Support | Tickets, Users, Organizations, Help Center | Ticket Views, Brands |
+| **Intercom** | Support | Conversations, Users, Articles | Inboxes, Collections |
+| **Zoom** | Communication | Meetings, Recordings, Webinars | Users, Meeting Rooms |
+| **Dropbox** | Cloud & DB | Files, Folders, Paper Docs | Folders, Shared Links |
+| **Box** | Cloud & DB | Files, Folders, Enterprise Metadata | Folders, Metadata Templates |
+| **AWS** | Cloud & DB | S3 Buckets, Lambda Functions | Buckets, Function Names |
+| **Cloudflare** | Cloud & DB | R2 Storage, Workers, DNS | Buckets, Worker Scripts |
+| **Twitter / X** | Social | Posts, Mentions, Timelines, Bookmarks | User Timelines |
+| **LinkedIn** | Social | Profile, Posts, Organization Updates | Company Pages |
+
+**Connecting an App**
+
+To connect any of the ecosystems above:
+1. Open **Settings** (gear icon in sidebar or press \`Cmd/Ctrl + ,\`).
+2. Select the **Integrations** tab.
+3. Use the search bar or category pills to find the ecosystem.
+4. Click **Connect** and authorize access via OAuth or API credentials.
+5. In the **Manage** drawer, toggle child services and select the specific resources you wish to expose to Noska.`,
+  },
+  'contact-support': {
+    title: 'Support & Community',
+    body: `We're here to help you get the most out of Noska. Whether you have a technical question, hit a bug, or want to discuss a custom integration, our core engineering team is accessible across multiple channels.
+
+**Direct Channels:**
+
+- **Email Support** — [support@noska.app](mailto:support@noska.app). All tickets receive a human response within 24 hours (under 4 hours for Plus and Enterprise customers).
+- **Discord Community** — Join thousands of power users, creators, and engineers on our [Official Discord](https://discord.gg/noska) to share templates and discuss upcoming features.
+- **GitHub Discussions & Bug Tracker** — Report bugs or submit feature proposals directly on our [GitHub Repository](https://github.com/shrikrishna-lab/noska/issues).
+- **Twitter / X** — Follow [@noska_app](https://x.com/noska_app) for real-time changelogs, system status updates, and release announcements.
+
+**Enterprise Support:**
+
+Enterprise organizations receive a dedicated Slack or Microsoft Teams shared channel, tailored onboarding sessions, custom MCP connector development, and a 99.9% uptime Service Level Agreement (SLA). Contact [enterprise@noska.app](mailto:enterprise@noska.app) for details.`,
+  },
+  'troubleshooting': {
+    title: 'Troubleshooting & Diagnostics',
+    body: `Quick solutions for the most common issues in Noska desktop and web apps.
+
+**1. Desktop App Reload & Deep Cache Flush**
+
+If you encounter unexpected rendering artifacts or want to reload the latest UI build:
+- Press \`Cmd/Ctrl + Shift + R\` inside the desktop app to force-reload the renderer process.
+- Alternatively, open **Settings > Diagnostics** and click **Clear Local Cache**.
+
+**2. Sync Conflicts & Offline State**
+
+Noska uses a Conflict-Free Replicated Data Type (CRDT) engine with local SQLite persistence:
+- When you are offline, all changes are saved locally with microsecond timestamps.
+- Once connectivity is restored, mutations are merged seamlessly without overwriting adjacent paragraphs.
+- Look at the cloud indicator in the bottom-left sidebar: **Green checkmark** indicates all local changes are fully synced to cloud replicas.
+
+**3. Resetting Integration Tokens**
+
+If an external ecosystem (e.g. Google Workspace or GitHub) reports an \`Auth Expired\` error:
+1. Open **Settings > Integrations**.
+2. Find the connected ecosystem and click **Manage**.
+3. Click **Reconnect Token** or click **Disconnect** and re-authorize the account.
+
+**4. Custom MCP Connection Failures**
+
+When debugging self-hosted or local Model Context Protocol (MCP) servers:
+- Verify that your local stdio command or SSE URL is accessible without firewall blocking.
+- Ensure the executable path is absolute (e.g. \`/usr/local/bin/node\` or \`C:\\Program Files\\nodejs\\node.exe\`).
+- Check that the server returns valid JSON-RPC 2.0 initialization responses.`,
+  },
+  'faq': {
+    title: 'Frequently Asked Questions',
+    body: `**Is Noska local-first?**
+
+Yes. On desktop, all your documents, databases, and canvases are stored in a local SQLite database on your device. You can write, search, and navigate your entire workspace with 0ms network latency, even completely offline on an airplane.
+
+**How does Bring-Your-Own-Key (BYOK) work?**
+
+Noska lets you bring your own API keys for OpenAI, Anthropic, Google Gemini, Groq, Ollama, DeepSeek, Mistral, and OpenRouter. Keys are encrypted on your device and sent directly to provider APIs. We never proxy or store your keys on centralized servers.
+
+**Can I export all my data if I decide to leave?**
+
+Absolutely. You retain 100% ownership of your work. You can export individual pages or your entire workspace into standard Markdown files, CSV/JSON relational database tables, or raw SQLite database archives at any time with a single click.
+
+**How does the Thought Graph generate connections?**
+
+The Thought Graph automatically analyzes bi-directional wiki links (\`[[Page Name]]\`), database relation properties, tag intersections, and semantic embeddings to build a living neural graph of your concepts.
+
+**What is the difference between Personal, Plus, and Enterprise plans?**
+
+- **Free / Personal**: Full access to documents, infinite canvas, and Bring-Your-Own-Key AI.
+- **Plus**: Unlimited file uploads, 30-day version history, team collaboration, and cloud sync.
+- **Enterprise**: Custom SSO / SAML, audit logs, shared teamspaces, custom MCP connector deployment, and dedicated SLAs.`,
+  },
 };
 
 function parseInlineMarkdown(text: string): React.ReactNode[] {
@@ -756,12 +1094,254 @@ function parseInlineMarkdown(text: string): React.ReactNode[] {
   });
 }
 
+function CodeBlock({ code, lang }: { code: string; lang?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="docs-code-block-wrapper">
+      <div className="docs-code-header">
+        <span className="docs-code-lang">{lang || 'terminal'}</span>
+        <button className="docs-code-copy-btn" onClick={handleCopy} aria-label="Copy code">
+          {copied ? (
+            <>
+              <Check size={12} className="text-emerald-400" />
+              <span>Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="docs-code-block"><code>{code}</code></pre>
+    </div>
+  );
+}
+
+function DocsFeedback({ sectionId }: { sectionId: string }) {
+  const [voted, setVoted] = useState<'yes' | 'no' | null>(null);
+
+  useEffect(() => {
+    setVoted(null);
+  }, [sectionId]);
+
+  return (
+    <div className="docs-feedback-card">
+      <div className="docs-feedback-text">
+        <p className="docs-feedback-title">Was this helpful?</p>
+        <p className="docs-feedback-sub">Let us know how we can make Noska docs better</p>
+      </div>
+      <div className="docs-feedback-actions">
+        {voted ? (
+          <div className="docs-feedback-thanks">
+            <Check size={14} className="text-emerald-500" />
+            <span>Thank you for your feedback!</span>
+          </div>
+        ) : (
+          <>
+            <button className="docs-feedback-btn" onClick={() => setVoted('yes')}>
+              <ThumbsUp size={13} /> Yes
+            </button>
+            <button className="docs-feedback-btn" onClick={() => setVoted('no')}>
+              <ThumbsDown size={13} /> No
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function parseMarkdownBlocks(body: string): React.ReactNode[] {
+  const lines = body.split('\n');
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line === '[[OPEN_MCP_DOCS]]') {
+      blocks.push(
+        <div key={`mcp-${i}`} className="my-5">
+          <Link
+            to="/docs/mcp"
+            className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 shadow-sm"
+          >
+            Open the MCP Documentation <ChevronRight size={14} />
+          </Link>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    if (line.startsWith('```')) {
+      const lang = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // Skip closing ```
+      blocks.push(<CodeBlock key={`code-${i}`} code={codeLines.join('\n')} lang={lang} />);
+      continue;
+    }
+
+    if (line.startsWith('> ')) {
+      const quoteText = line.slice(2);
+      blocks.push(
+        <div key={`quote-${i}`} className="docs-callout-box">
+          <div className="docs-callout-icon">💡</div>
+          <div className="docs-callout-text">{parseInlineMarkdown(quoteText)}</div>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    if (line.startsWith('### ')) {
+      blocks.push(<h3 key={`h3-${i}`} className="docs-h3">{parseInlineMarkdown(line.slice(4))}</h3>);
+      i++;
+      continue;
+    }
+
+    if (line.startsWith('## ')) {
+      blocks.push(<h2 key={`h2-${i}`} className="docs-h2">{parseInlineMarkdown(line.slice(3))}</h2>);
+      i++;
+      continue;
+    }
+
+    if (line.startsWith('**') && line.endsWith('**') && !line.slice(2, -2).includes('**')) {
+      blocks.push(<p key={`strong-${i}`} className="docs-strong-line">{parseInlineMarkdown(line.slice(2, -2))}</p>);
+      i++;
+      continue;
+    }
+
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      const listItems: string[] = [];
+      while (i < lines.length && (lines[i].startsWith('- ') || lines[i].startsWith('* '))) {
+        listItems.push(lines[i].slice(2));
+        i++;
+      }
+      blocks.push(
+        <ul key={`ul-${i}`} className="docs-ul">
+          {listItems.map((item, idx) => (
+            <li key={idx} className="docs-li">{parseInlineMarkdown(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    if (/^\d+\.\s/.test(line)) {
+      const listItems: string[] = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        listItems.push(lines[i].replace(/^\d+\.\s/, ''));
+        i++;
+      }
+      blocks.push(
+        <ol key={`ol-${i}`} className="docs-ol">
+          {listItems.map((item, idx) => (
+            <li key={idx} className="docs-oli">{parseInlineMarkdown(item)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    if (line.startsWith('| ')) {
+      const headerLine = line;
+      const headerCells = headerLine.split('|').map(c => c.trim()).filter(Boolean);
+      i++; // separator line
+      if (i < lines.length && lines[i].startsWith('| ') && lines[i].includes('---')) {
+        i++;
+      }
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].startsWith('| ')) {
+        const cells = lines[i].split('|').map(c => c.trim()).filter(Boolean);
+        rows.push(cells);
+        i++;
+      }
+      blocks.push(
+        <div key={`table-wrap-${i}`} className="docs-table-container">
+          <table className="docs-table">
+            <thead>
+              <tr>
+                {headerCells.map((c, ci) => <th key={ci}>{parseInlineMarkdown(c)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, ri) => (
+                <tr key={ri}>
+                  {row.map((c, ci) => <td key={ci}>{parseInlineMarkdown(c)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    if (line.trim() === '') {
+      i++;
+      continue;
+    }
+
+    blocks.push(<p key={`p-${i}`} className="docs-p">{parseInlineMarkdown(line)}</p>);
+    i++;
+  }
+
+  return blocks;
+}
+
 export default function Docs() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSection = searchParams.get('section') || 'introduction';
   const [search, setSearch] = useState('');
-  const [activeSection, setActiveSection] = useState('introduction');
+  const [activeSection, setActiveSection] = useState(initialSection);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    const sectionParam = searchParams.get('section');
+    if (sectionParam && docs[sectionParam]) {
+      setActiveSection(sectionParam);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && search) {
+        setSearch('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [search]);
+
   const currentDoc = docs[activeSection] ?? docs.introduction;
+
+  const currentSectionMeta = useMemo(() => {
+    for (const sec of sections) {
+      const item = sec.items.find((i) => i.id === activeSection);
+      if (item) return { category: sec.title, title: item.title, icon: sec.icon };
+    }
+    return { category: 'Getting Started', title: currentDoc.title, icon: BookOpen };
+  }, [activeSection, currentDoc.title]);
+
+  const readTimeEstimate = useMemo(() => {
+    const words = (currentDoc.body || '').split(/\s+/).length;
+    const minutes = Math.max(1, Math.ceil(words / 180));
+    return `${minutes} min read`;
+  }, [currentDoc.body]);
 
   const searchResults = useMemo(() => {
     if (!search.trim()) return null;
@@ -770,7 +1350,7 @@ export default function Docs() {
     for (const section of sections) {
       for (const item of section.items) {
         const doc = docs[item.id];
-        if (doc.title.toLowerCase().includes(q) || doc.body.toLowerCase().includes(q)) {
+        if (doc && (doc.title.toLowerCase().includes(q) || doc.body.toLowerCase().includes(q))) {
           results.push({ id: item.id, title: doc.title, section: section.title });
         }
       }
@@ -780,48 +1360,69 @@ export default function Docs() {
 
   const handleSearchSelect = (id: string) => {
     setActiveSection(id);
+    setSearchParams({ section: id });
     setSearch('');
     setSidebarOpen(false);
   };
 
+  const SectionIcon = currentSectionMeta.icon;
+
   return (
     <div className="docs-wrapper">
-      <div className="docs-search-bar mkt-container">
-        <div className="docs-search-inner">
-          <Search size={15} className="docs-search-icon" />
-          <input
-            type="text"
-            placeholder="Search documentation..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="docs-search-input"
-          />
-          <button className="docs-sidebar-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            <Menu size={16} />
-          </button>
-        </div>
-      </div>
-
+      {/* Search Popup Overlay */}
       {search && searchResults && (
         <div className="docs-search-overlay" onClick={() => setSearch('')}>
           <div className="docs-search-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="docs-search-popup-header">
+              <span>{searchResults.length} {searchResults.length === 1 ? 'match' : 'matches'} for "{search}"</span>
+              <span className="docs-search-esc-hint">Press Esc to close</span>
+            </div>
             {searchResults.length === 0 ? (
-              <p className="docs-search-empty">No results found.</p>
+              <p className="docs-search-empty">No results found for "{search}".</p>
             ) : (
-              searchResults.map((r) => (
-                <button key={r.id} className="docs-search-result" onClick={() => handleSearchSelect(r.id)}>
-                  <span className="docs-search-result-title">{r.title}</span>
-                  <span className="docs-search-result-section">{r.section}</span>
-                </button>
-              ))
+              <div className="docs-search-results-list">
+                {searchResults.map((r) => (
+                  <button key={r.id} className="docs-search-result" onClick={() => handleSearchSelect(r.id)}>
+                    <span className="docs-search-result-title">{r.title}</span>
+                    <span className="docs-search-result-section">{r.section}</span>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         </div>
       )}
 
+      {/* Mobile Topbar */}
+      <div className="docs-mobile-topbar mkt-container">
+        <button className="docs-mobile-menu-trigger" onClick={() => setSidebarOpen(true)}>
+          <Menu size={15} />
+          <span>{currentSectionMeta.category} / {currentDoc.title}</span>
+        </button>
+      </div>
+
       <div className="docs-body mkt-container">
         <aside className={`docs-sidebar ${sidebarOpen ? 'open' : ''}`} data-lenis-prevent>
           {sidebarOpen && <div className="docs-sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+          
+          <div className="docs-sidebar-search">
+            <div className="docs-search-inner">
+              <Search size={14} className="docs-search-icon" />
+              <input
+                type="text"
+                placeholder="Search documentation..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="docs-search-input"
+              />
+              {search && (
+                <button className="docs-search-clear-btn" onClick={() => setSearch('')} aria-label="Clear search">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
           <nav className="docs-nav">
             {sections.map((section) => {
               const Icon = section.icon;
@@ -846,70 +1447,34 @@ export default function Docs() {
         <main className="docs-content">
           <motion.div
             key={activeSection}
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
           >
-            <h1 className="docs-content-title">{currentDoc.title}</h1>
-            <div className="docs-content-body">
-              {currentDoc.body.split('\n').map((line, i, lines) => {
-                if (line === '[[OPEN_MCP_DOCS]]') {
-                  return (
-                    <div key={i} className="my-4">
-                      <Link
-                        to="/docs/mcp"
-                        className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                      >
-                        Open the MCP documentation <ChevronRight size={14} />
-                      </Link>
-                    </div>
-                  );
-                }
-                if (line.startsWith('```')) {
-                  const lang = line.slice(3).trim();
-                  const codeLines: string[] = [];
-                  let j = i + 1;
-                  while (j < lines.length && !lines[j].startsWith('```')) {
-                    codeLines.push(lines[j]);
-                    j++;
-                  }
-                  const code = codeLines.join('\n');
-                  return (
-                    <div key={i} className="docs-code-block-wrapper">
-                      {lang && <div className="docs-code-lang">{lang}</div>}
-                      <pre className="docs-code-block"><code>{code}</code></pre>
-                    </div>
-                  );
-                }
-                if (line.startsWith('### ')) {
-                  return <h3 key={i} className="docs-h3">{parseInlineMarkdown(line.slice(4))}</h3>;
-                }
-                if (line.startsWith('## ')) {
-                  return <h2 key={i} className="docs-h2">{parseInlineMarkdown(line.slice(3))}</h2>;
-                }
-                if (line.startsWith('**') && line.endsWith('**')) {
-                  return <p key={i} className="docs-strong-line">{parseInlineMarkdown(line.slice(2, -2))}</p>;
-                }
-                if (line.startsWith('- ')) {
-                  return <li key={i} className="docs-li">{parseInlineMarkdown(line.slice(2))}</li>;
-                }
-                if (line.startsWith('| ')) {
-                  const cells = line.split('|').filter(Boolean).map(c => c.trim());
-                  if (cells.every(c => /^[-]+$/.test(c))) return null;
-                  if (i > 0 && lines[i - 1]?.startsWith('| ')) {
-                    return <tr key={i}>{cells.map((c, ci) => <td key={ci}>{parseInlineMarkdown(c)}</td>)}</tr>;
-                  }
-                  return (
-                    <table key={i} className="docs-table">
-                      <thead><tr>{cells.map((c, ci) => <th key={ci}>{parseInlineMarkdown(c)}</th>)}</tr></thead>
-                      <tbody></tbody>
-                    </table>
-                  );
-                }
-                if (line.trim() === '') return null;
-                return <p key={i} className="docs-p">{parseInlineMarkdown(line)}</p>;
-              })}
+            {/* Breadcrumb & Metadata Header */}
+            <div className="docs-meta-header">
+              <div className="docs-breadcrumbs">
+                <span className="docs-breadcrumb-item">Docs</span>
+                <ChevronRight size={12} className="docs-breadcrumb-sep" />
+                <span className="docs-breadcrumb-item">{currentSectionMeta.category}</span>
+                <ChevronRight size={12} className="docs-breadcrumb-sep" />
+                <span className="docs-breadcrumb-active">{currentDoc.title}</span>
+              </div>
+              <div className="docs-meta-pill">
+                <SectionIcon size={12} />
+                <span>{currentSectionMeta.category}</span>
+                <span className="docs-meta-dot">•</span>
+                <span>{readTimeEstimate}</span>
+              </div>
             </div>
+
+            <h1 className="docs-content-title">{currentDoc.title}</h1>
+            
+            <div className="docs-content-body">
+              {parseMarkdownBlocks(currentDoc.body)}
+            </div>
+
+            <DocsFeedback sectionId={activeSection} />
           </motion.div>
 
           <div className="docs-footer-nav">

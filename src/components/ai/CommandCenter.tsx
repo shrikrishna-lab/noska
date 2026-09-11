@@ -11,7 +11,7 @@ import {
 import type { RunRecord, ApprovalRequest } from "../../ai/runtime";
 import { fetchAgents, type NoskaAgent } from "../../features/agents/agentStore";
 import { fetchAutomations, type NoskaAutomation } from "../../features/automations/automationStore";
-import { supabase } from "../../lib/supabase";
+import { supabase, currentAccessToken } from "../../lib/supabase";
 import { usageStats, splitByWindow } from "../../ai/runtime/agentOps";
 
 const SUPABASE_URL = (import.meta as unknown as { env: Record<string, string> }).env.VITE_SUPABASE_URL ?? "";
@@ -48,7 +48,7 @@ function useBackgroundApprovals() {
 
 async function resolveServerApproval(runId: string, approved: boolean): Promise<boolean> {
   try {
-    const token = await supabase.auth.getSession().then((r) => r.data.session?.access_token);
+    const token = await currentAccessToken();
     if (!token) return false;
     const res = await fetch(`${SUPABASE_URL}/functions/v1/agent-runtime`, {
       method: "POST",
@@ -89,7 +89,7 @@ export default function CommandCenter({ onToast, onNavigate }: CommandCenterProp
       } catch { setMemoryCount(null); }
       // Real runtime self-report — never assume operational (#39).
       try {
-        const token = await supabase.auth.getSession().then((r) => r.data.session?.access_token);
+        const token = await currentAccessToken();
         if (token) {
           const res = await fetch(`${SUPABASE_URL}/functions/v1/agent-runtime`, {
             method: "POST",

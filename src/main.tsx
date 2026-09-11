@@ -45,6 +45,7 @@ const EnterCodePage = lazy(() => import("./pages/invite/EnterCodePage").then(m =
 const DesktopAuthPage = lazy(() => import("./pages/DesktopAuthPage"));
 const InfoCardDemo = lazy(() => import("./components/ui/info-card-demo"));
 const NoskaWispr = lazy(() => import("./pages/marketing/NoskaWispr"));
+const SupportTicket = lazy(() => import("./pages/marketing/SupportTicket"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-white">
@@ -119,6 +120,8 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/new-updated" element={<MarketingShell><NewUpdated /></MarketingShell>} />
           <Route path="/launch" element={<Launch />} />
           <Route path="/download" element={<MarketingShell><Download /></MarketingShell>} />
+          <Route path="/ticket" element={<MarketingShell><SupportTicket /></MarketingShell>} />
+          <Route path="/support" element={<MarketingShell><SupportTicket /></MarketingShell>} />
           <Route path="/plugins" element={<MarketingShell><PluginsLanding /></MarketingShell>} />
           <Route path="/mcp" element={<MarketingShell><McpLanding /></MarketingShell>} />
           <Route path="/api-keys" element={<MarketingShell><ApiKeysLanding /></MarketingShell>} />

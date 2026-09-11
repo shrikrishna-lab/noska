@@ -2,110 +2,109 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/badge";
-import { useAuditEvents, useRealtimeInvalidate } from "@/lib/queries";
+import { Button } from "@/components/ui/button";
+import { useSentryErrors } from "@/lib/monitoring/hooks";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useMemo } from "react";
-import { formatRelativeTime } from "@/lib/utils";
-import { AlertTriangle, ShieldAlert, Clock, TrendingDown } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { formatNumber } from "@/lib/utils";
+import type { SentryError } from "@/lib/monitoring/types";
 
-interface ErrorEvent {
-  id: string;
-  action: string;
-  user_name: string;
-  detail: string | null;
-  created_at: string | null;
-}
+const LEVEL_BADGE: Record<string, string> = {
+  fatal: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  error: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+  warning: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  info: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+};
 
-const columns: Column<ErrorEvent>[] = [
-  { key: "action", label: "Action", sortable: true, render: (row) => <Badge variant="destructive" className="font-mono text-xs">{row.action}</Badge> },
-  { key: "user_name", label: "User", sortable: true },
-  { key: "detail", label: "Detail", sortable: true, className: "max-w-[300px] truncate hidden md:table-cell" },
-  { key: "created_at", label: "Time", sortable: true, render: (row) => row.created_at ? formatRelativeTime(row.created_at) : "—" },
+const columns: Column<SentryError>[] = [
+  { key: "title", label: "Error", sortable: true },
+  { key: "level", label: "Level", sortable: true, render: (row) => <Badge className={LEVEL_BADGE[row.level]}>{row.level}</Badge> },
+  { key: "count", label: "Events", sortable: true },
+  { key: "users", label: "Users", sortable: true },
+  { key: "release", label: "Release", sortable: true, className: "hidden md:table-cell" },
+  { key: "lastSeen", label: "Last Seen", sortable: true, render: (row) => <span className="text-xs text-muted-foreground">{new Date(row.lastSeen).toLocaleString()}</span> },
 ];
 
 export function Sentry() {
-  const { data: events, isLoading } = useAuditEvents(500);
-  useRealtimeInvalidate(["admin", "sentry"], "audit_events", "*");
-
-  const errorEvents = useMemo(() =>
-    (events ?? []).filter((e) =>
-      e.action?.toLowerCase().includes("error") ||
-      e.action?.toLowerCase().includes("fail") ||
-      e.detail?.toLowerCase().includes("error") ||
-      e.detail?.toLowerCase().includes("exception") ||
-      e.detail?.toLowerCase().includes("crash") ||
-      e.detail?.toLowerCase().includes("fail")
-    ), [events]);
-
-  const totalEvents = events?.length ?? 0;
-  const errorCount = errorEvents.length;
-  const errorRate = totalEvents > 0 ? ((errorCount / totalEvents) * 100).toFixed(1) : "0.0";
-
-  const last24h = useMemo(() => {
-    const cutoff = Date.now() - 86400000;
-    return errorEvents.filter((e) => e.created_at && new Date(e.created_at).getTime() > cutoff).length;
-  }, [errorEvents]);
-
-  const lastHour = useMemo(() => {
-    const cutoff = Date.now() - 3600000;
-    return errorEvents.filter((e) => e.created_at && new Date(e.created_at).getTime() > cutoff).length;
-  }, [errorEvents]);
-
-  const topErrorActions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const e of errorEvents) {
-      counts.set(e.action, (counts.get(e.action) || 0) + 1);
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [errorEvents]);
+  const { data: issues, isLoading, isError, error, refetch, isRefetching } = useSentryErrors();
 
   if (isLoading) return <div className="p-6"><PageHeader title="Error Monitoring" description="Application error tracking" /><LoadingState count={4} /></div>;
 
+  if (isError) {
+    const notConfigured = error instanceof Error && error.message === "SERVICE_NOT_CONFIGURED";
+    return (
+      <div className="p-6">
+        <PageHeader
+          title="Error Monitoring"
+          description="Application error tracking"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          }
+        />
+        <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-6 text-center dark:border-yellow-700 dark:bg-yellow-900/20">
+          <AlertTriangle className="mx-auto h-8 w-8 text-yellow-600" />
+          <h3 className="mt-2 text-sm font-semibold">{notConfigured ? "Sentry is not configured" : "Sentry unavailable"}</h3>
+          <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+            {notConfigured
+              ? "Set SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT on the monitoring-sentry edge function to see real error data here."
+              : `Could not load errors from Sentry (${(error instanceof Error ? error.message : "unknown error").slice(0, 160)}).`}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // All figures below come straight from Sentry issues in the last 24h.
+  const totalEvents = (issues ?? []).reduce((s, i) => s + i.count, 0);
+  const unresolved = (issues ?? []).filter((i) => i.status === "unresolved").length;
+  const fatalCount = (issues ?? []).filter((i) => i.level === "fatal" || i.level === "error").reduce((s, i) => s + i.count, 0);
+  const topIssues = [...(issues ?? [])].sort((a, b) => b.count - a.count).slice(0, 5);
+
   return (
     <div className="p-6">
-      <PageHeader title="Error Monitoring" description="Track and investigate application errors" />
+      <PageHeader
+        title="Error Monitoring"
+        description="Track and investigate application errors"
+        actions={
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        }
+      />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Total Errors</CardTitle></CardHeader>
-          <CardContent className="flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-red-500" />
-            <p className="text-2xl font-bold text-red-500">{errorCount}</p>
-          </CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Open Issues</CardTitle></CardHeader>
+          <CardContent><p className="text-2xl font-bold">{issues?.length ?? 0}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Error Rate</CardTitle></CardHeader>
-          <CardContent className="flex items-center gap-2">
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
-            <p className="text-2xl font-bold">{errorRate}%</p>
-          </CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Events (24h)</CardTitle></CardHeader>
+          <CardContent><p className="text-2xl font-bold">{formatNumber(totalEvents)}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Last 24h</CardTitle></CardHeader>
-          <CardContent className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <p className="text-2xl font-bold">{last24h}</p>
-          </CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Unresolved</CardTitle></CardHeader>
+          <CardContent><p className="text-2xl font-bold">{unresolved}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Last Hour</CardTitle></CardHeader>
-          <CardContent className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-            <p className="text-2xl font-bold">{lastHour}</p>
-          </CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Error + Fatal Events</CardTitle></CardHeader>
+          <CardContent><p className="text-2xl font-bold text-red-500">{formatNumber(fatalCount)}</p></CardContent>
         </Card>
       </div>
 
-      {topErrorActions.length > 0 && (
+      {topIssues.length > 0 && (
         <Card className="mb-6">
           <CardHeader><CardTitle className="text-sm font-medium">Top Error Types</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {topErrorActions.map(([action, count]) => (
-                <div key={action} className="flex items-center justify-between rounded-lg border p-3">
-                  <Badge variant="destructive" className="font-mono text-xs mr-3">{action}</Badge>
-                  <span className="text-sm font-medium">{count} occurrences</span>
+              {topIssues.map((issue) => (
+                <div key={issue.id} className="flex items-center justify-between rounded-lg border p-3">
+                  <span className="min-w-0 truncate text-sm">{issue.title}</span>
+                  <span className="ml-3 shrink-0 text-sm font-medium">{formatNumber(issue.count)} events</span>
                 </div>
               ))}
             </div>
@@ -113,19 +112,25 @@ export function Sentry() {
         </Card>
       )}
 
-      {errorEvents.length > 0 ? (
+      {issues && issues.length > 0 ? (
         <Card>
-          <CardHeader><CardTitle className="text-sm font-medium">Error Events</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm font-medium">Issues (last 24h)</CardTitle></CardHeader>
           <CardContent>
-            <DataTable columns={columns} data={errorEvents} searchable searchPlaceholder="Search errors..." />
+            <DataTable
+              columns={columns}
+              data={issues}
+              onRowClick={(row) => {
+                if (row.permalink) window.open(row.permalink, "_blank");
+              }}
+            />
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardContent className="py-12 text-center">
-            <ShieldAlert className="h-8 w-8 mx-auto mb-3 text-emerald-500 opacity-50" />
+            <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-emerald-500 opacity-50" />
             <p className="text-sm font-medium text-emerald-600">No errors recorded</p>
-            <p className="text-xs text-muted-foreground mt-1">Your application is running smoothly.</p>
+            <p className="text-xs text-muted-foreground mt-1">Sentry reported no issues in the last 24 hours.</p>
           </CardContent>
         </Card>
       )}

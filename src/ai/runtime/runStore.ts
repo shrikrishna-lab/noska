@@ -7,7 +7,7 @@
  * writes, so observability is unified no matter where execution happened.
  */
 
-import { supabase } from "../../lib/supabase";
+import { supabase, getAuthUserId } from "../../lib/supabase";
 import { redact } from "./serverContract";
 import type { RunRecord } from "./types";
 
@@ -137,8 +137,8 @@ let ownerIdCache: string | null | undefined;
 async function getOwnerId(): Promise<string | null> {
   if (ownerIdCache !== undefined) return ownerIdCache;
   try {
-    const { data } = await supabase.auth.getUser();
-    ownerIdCache = data?.user?.id || null;
+    const id = await getAuthUserId();
+    ownerIdCache = id || null;
     return ownerIdCache;
   } catch {
     return null;

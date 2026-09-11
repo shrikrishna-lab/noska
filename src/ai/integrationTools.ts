@@ -15,6 +15,8 @@
  */
 
 import { connectorGateway, type GatewayTool } from "../lib/connectorGateway";
+import { ecosystemManager } from "../lib/connections/ecosystemManager";
+import { getEcosystemConnectorByGatewaySlug } from "../lib/connections/ecosystemRegistry";
 
 export interface IntegrationToolDefinition {
   /** Canonical agent-facing name, e.g. `github__create_issue`. */
@@ -151,14 +153,66 @@ export async function refreshIntegrationTools(force = false): Promise<void> {
   return inFlight;
 }
 
+// Subscribe to ecosystem changes so AI agent tool definitions stay in sync
+ecosystemManager.subscribe(() => {
+  notify();
+});
+
+/* ─── Service-enablement gating ──────────────────────────────────────── */
+
+/**
+ * Find which child service of an ecosystem an MCP tool belongs to, using
+ * word-boundary matching on the tool's own name. Substring matching is too
+ * loose here — e.g. a service id "docs" would otherwise swallow a tool
+ * named "search_documents".
+ */
+function matchServiceForTool(
+  eco: NonNullable<ReturnType<typeof getEcosystemConnectorByGatewaySlug>>,
+  toolName: string,
+): { id: string } | undefined {
+  const name = toolName.toLowerCase();
+  return eco.services.find((s) => {
+    const id = s.id.toLowerCase();
+    if (name === id || name.startsWith(`${id}_`) || name.endsWith(`_${id}`) || name.includes(`_${id}_`)) {
+      return true;
+    }
+    // Registered agent tool names look like "<slug>.<verb>" — match on the
+    // verb part so "gmail.search" gates tools literally named "search".
+    return s.toolNames.some((tn) => tn.toLowerCase().split(".").pop() === name);
+  });
+}
+
 /* ─── Accessors ───────────────────────────────────────────────────────── */
 
 export function getIntegrationToolDefinitions(): IntegrationToolDefinition[] {
-  return [...registry.values()];
+  const all = [...registry.values()];
+  return all.filter((tool) => {
+    const eco = getEcosystemConnectorByGatewaySlug(tool.connectorSlug);
+    if (!eco) return true; // Custom MCP or unmatched, allow if connected
+
+    const matchingService = matchServiceForTool(eco, tool.originalName);
+    if (matchingService) {
+      // If service is explicitly disabled by the user, omit from agent tool definitions
+      return ecosystemManager.isServiceEnabled(eco.id, matchingService.id);
+    }
+
+    return true;
+  });
 }
 
 export function getIntegrationTool(name: string): IntegrationToolDefinition | undefined {
-  return registry.get(String(name));
+  const def = registry.get(String(name));
+  if (!def) return undefined;
+
+  // Verify service is enabled
+  const eco = getEcosystemConnectorByGatewaySlug(def.connectorSlug);
+  if (eco) {
+    const matchingService = matchServiceForTool(eco, def.originalName);
+    if (matchingService && !ecosystemManager.isServiceEnabled(eco.id, matchingService.id)) {
+      return undefined;
+    }
+  }
+  return def;
 }
 
 export function getIntegrationSummary(): IntegrationSummary {

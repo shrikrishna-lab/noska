@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { usePerformanceMetrics, usePerformanceHistory } from "@/lib/monitoring/hooks";
+import { IntegrationErrorNotice } from "@/components/ui/IntegrationErrorNotice";
 import { formatNumber } from "@/lib/utils";
 
 export function MonitoringPerformance() {
@@ -64,6 +65,18 @@ export function MonitoringPerformance() {
           <KpiCard key={v.title} {...v} />
         ))}
       </div>
+
+      {metrics.posthogError && (
+        <div className="mt-4">
+          <IntegrationErrorNotice
+            service="PostHog"
+            error={new Error(metrics.posthogError)}
+            notConfiguredHint="Web Vitals come from PostHog $web_vitals events. Set POSTHOG_PERSONAL_TOKEN (with the query:read scope) and POSTHOG_PROJECT_ID on the monitoring-posthog edge function."
+            onRetry={() => refetch()}
+            isRetrying={isRefetching}
+          />
+        </div>
+      )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <Card>

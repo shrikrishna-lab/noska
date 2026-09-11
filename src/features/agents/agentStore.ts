@@ -8,7 +8,7 @@
  * column; legacy columns stay in sync where they exist.
  */
 
-import { supabase } from "../../lib/supabase";
+import { supabase, getAuthUserId } from "../../lib/supabase";
 import { uid } from "../../utils/blockModel";
 import type { PermissionSpec, TriggerSpec } from "../../ai/runtime/types";
 import { defaultPermissions } from "../../ai/runtime/types";
@@ -42,8 +42,8 @@ const ownerIdCache: { value: string | null } = { value: null };
 export async function getOwnerId(): Promise<string | null> {
   if (ownerIdCache.value) return ownerIdCache.value;
   try {
-    const { data } = await supabase.auth.getUser();
-    ownerIdCache.value = data?.user?.id || null;
+    const id = await getAuthUserId();
+    ownerIdCache.value = id || null;
     return ownerIdCache.value;
   } catch {
     return null;

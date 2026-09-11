@@ -72,14 +72,7 @@ export default function MarketingLayout({ children }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (loading) return;
-    const p = location.pathname;
-    if (p === '/pricing' && !settings.show_pricing) { navigate('/', { replace: true }); return; }
-    if (p.startsWith('/blog') && !settings.show_blog) { navigate('/', { replace: true }); return; }
-    if (p === '/docs' && !settings.show_docs) { navigate('/', { replace: true }); return; }
-    if (p === '/changelog' && !settings.show_changelog) { navigate('/', { replace: true }); return; }
-  }, [loading, location.pathname, settings, navigate]);
+
 
   return (
     <>

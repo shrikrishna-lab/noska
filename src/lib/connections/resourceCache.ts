@@ -95,9 +95,7 @@ export class ResourceCache {
     // Trigger background or foreground fetch
     const fetchPromise = (async (): Promise<ResolveResourceResult> => {
       try {
-        const token = (await currentAccessToken())
-          ?? (await supabase.auth.getSession().then((r) => r.data.session?.access_token));
-
+        const token = await currentAccessToken();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 

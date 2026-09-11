@@ -35,6 +35,11 @@ async function invokeService<T>(service: Service, params: Record<string, string>
     if (status === 503 || fnMessage.includes("not configured") || fnMessage.includes("Not configured")) {
       throw new Error("SERVICE_NOT_CONFIGURED");
     }
+    // PostHog personal API keys are created with explicit scopes — a 403
+    // permission_denied means the key exists but lacks query:read.
+    if (fnMessage.includes("missing required scope")) {
+      throw new Error("POSTHOG_TOKEN_MISSING_SCOPE");
+    }
     if (fnMessage) throw new Error(fnMessage);
     throw fnError;
   }

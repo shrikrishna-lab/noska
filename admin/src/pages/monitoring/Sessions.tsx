@@ -8,11 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { DataTable } from "@/components/ui/DataTable";
+import { IntegrationErrorNotice } from "@/components/ui/IntegrationErrorNotice";
 import { useSessionData } from "@/lib/monitoring/hooks";
 import { formatNumber } from "@/lib/utils";
 
 export function MonitoringSessions() {
-  const { data: session, isLoading, refetch, isRefetching } = useSessionData();
+  const { data: session, isLoading, isError, error, refetch, isRefetching } = useSessionData();
 
   if (isLoading) {
     return (
@@ -23,7 +24,29 @@ export function MonitoringSessions() {
     );
   }
 
-  if (!session) return null;
+  if (isError || !session) {
+    return (
+      <div className="p-6">
+        <PageHeader
+          title="Sessions"
+          description="Real-time user activity and analytics"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          }
+        />
+        <IntegrationErrorNotice
+          service="PostHog"
+          error={error}
+          notConfiguredHint="Sessions analytics are powered by PostHog. Set POSTHOG_PERSONAL_TOKEN (with the query:read scope) and POSTHOG_PROJECT_ID on the monitoring-posthog edge function."
+          onRetry={() => refetch()}
+          isRetrying={isRefetching}
+        />
+      </div>
+    );
+  }
 
   const kpis = [
     { title: "Live Users", value: formatNumber(session.liveUsers), icon: Users },

@@ -109,8 +109,12 @@ function parseJwt(token: string) {
 
 /** Verify a Clerk RS256 JWT (signature via JWKS, issuer, expiry) and
  * return its sub (the raw Clerk user id, e.g. "user_2abc…"). Returns
- * null for anything that isn't a Clerk token so GoTrue auth stays the
- * fallback path for desktop sessions. */
+ * null for anything that isn't a Clerk token or fails verification so
+ * GoTrue auth stays the fallback path for desktop sessions.
+ *
+ * Verification is mandatory and the issuer must be allowlisted: the sub
+ * and iss claims are attacker-controlled, so an unsigned token or a token
+ * signed under an attacker's own JWKS must never grant access. */
 async function verifyClerkJwt(token: string): Promise<string | null> {
   const parsed = parseJwt(token);
   if (!parsed) return null;
@@ -119,41 +123,47 @@ async function verifyClerkJwt(token: string): Promise<string | null> {
   const sub = String(payload.sub ?? "").trim();
   if (!sub) return null;
   if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now()) return null;
+  if (header?.alg !== "RS256") return null;
 
   const iss = typeof payload.iss === "string" ? payload.iss.replace(/\/$/, "") : "";
-  const isClerk = sub.startsWith("user_") || (iss && (iss.includes("clerk") || iss.includes("noska")));
+  const isClerk = sub.startsWith("user_") || (iss && iss.includes("clerk"));
   if (!isClerk) return null;
 
-  // Attempt cryptographic JWKS verification
-  if (header?.kid && iss) {
-    try {
-      const key = await getClerkVerificationKey(header.kid, iss);
-      if (key) {
-        const signature = base64UrlToBytes(parts[2]);
-        const signed = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
-        const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature as BufferSource, signed as BufferSource);
-        if (valid) return sub;
-      }
-    } catch (e) {
-      console.warn("[connector-gateway] JWKS verification error:", e);
+  if (!iss || !CLERK_ISSUERS.includes(iss)) {
+    console.warn("[connector-gateway] Clerk JWT issuer not allowlisted; rejecting.");
+    return null;
+  }
+  if (!header?.kid) {
+    console.warn("[connector-gateway] Clerk JWT missing kid; rejecting.");
+    return null;
+  }
+
+  try {
+    const key = await getClerkVerificationKey(header.kid, iss);
+    if (!key) {
+      console.warn("[connector-gateway] No JWKS key found for kid; rejecting Clerk token.");
+      return null;
     }
+    const signature = base64UrlToBytes(parts[2]);
+    const signed = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+    const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature as BufferSource, signed as BufferSource);
+    if (valid) return sub;
+    console.warn("[connector-gateway] Clerk JWT signature verification failed; rejecting.");
+    return null;
+  } catch (e) {
+    console.warn("[connector-gateway] JWKS verification error:", e);
+    return null;
   }
-
-  // If sub is a Clerk user ID ("user_...") and token is within valid lifetime
-  if (sub.startsWith("user_")) {
-    return sub;
-  }
-
-  return null;
 }
 
 async function getClerkVerificationKey(kid: string, issuer?: string): Promise<CryptoKey | null> {
   const cached = jwksCache.get(kid);
   if (cached && cached.expires > Date.now()) return cached.key;
-  const issuers = Array.from(new Set([
-    ...(issuer ? [issuer] : []),
-    ...CLERK_ISSUERS,
-  ])).filter(Boolean);
+  // Never fetch JWKS from an issuer the token merely claims — only the
+  // configured allowlist. An attacker-hosted JWKS would otherwise verify
+  // their own forged tokens.
+  const issuers = CLERK_ISSUERS;
+  if (issuer && !issuers.includes(issuer)) return null;
 
   for (const iss of issuers) {
     try {
@@ -185,7 +195,9 @@ function callbackBase(req: Request): string {
 }
 
 function appRedirect(status: "connected" | "error", connectorSlug: string, message?: string): Response {
-  const url = new URL(`${SITE}/settings/connectors`);
+  // Back to the authenticated app (IntegrationsSettings reads the
+  // connector/status/message query params once and cleans the URL).
+  const url = new URL(`${SITE}/dashboard`);
   url.searchParams.set("connector", connectorSlug);
   url.searchParams.set("status", status);
   if (message) url.searchParams.set("message", message);

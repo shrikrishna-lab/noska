@@ -27,6 +27,18 @@ export interface PerformanceMetric {
   realtimeConnections: number;
   pageVersions24h: number;
   largestSnapshot: string;
+  // Real PostHog failure surfaced to the UI; null when PostHog responded.
+  posthogError: string | null;
+}
+
+export interface ConnectorStat {
+  id: string;
+  name: string;
+  category: string;
+  activeConnections: number;
+  totalConnections: number;
+  lastConnectedAt: string | null;
+  inCatalog: boolean;
 }
 
 export interface PerformancePoint {
