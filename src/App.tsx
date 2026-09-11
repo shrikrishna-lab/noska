@@ -541,9 +541,18 @@ function AppContent() {
     if (session) {
       // Supabase verifies the Clerk JWT template named `supabase` (issuer,
       // audience, and claims configured for the database/RLS policies).
-      // The default Clerk session token is not accepted by Supabase's JWT
-      // verifier and causes authenticated reads/writes to fail with 401.
-      setClerkSessionToken(() => session.getToken({ template: "supabase" }));
+      // Fall back to default Clerk token if template is not configured.
+      setClerkSessionToken(async () => {
+        try {
+          const token = await session.getToken({ template: "supabase" });
+          if (token) return token;
+        } catch {}
+        try {
+          return await session.getToken();
+        } catch {
+          return null;
+        }
+      });
     } else {
       setClerkSessionToken(() => Promise.resolve(null));
     }
@@ -642,6 +651,20 @@ function AppContent() {
       // Desktop pairing supplies its own Supabase session — no Clerk session.
       if (isSignedIn && !session && !desktopIdentity) return;
       if (!mounted) return;
+
+      if (session) {
+        setClerkSessionToken(async () => {
+          try {
+            const token = await session.getToken({ template: "supabase" });
+            if (token) return token;
+          } catch {}
+          try {
+            return await session.getToken();
+          } catch {
+            return null;
+          }
+        });
+      }
 
       const userId = isSignedIn && clerkUser ? clerkUser.id : null;
 
@@ -809,6 +832,9 @@ function AppContent() {
         setCurrentUserAvatar(profile?.avatar_url || null);
         const actualAvatar = profile?.avatar_url || u.imageUrl || '👤';
         realtimeCollab.initUser(u.id, profile?.user_name || uname, actualAvatar);
+        if (profile?.workspace_name && profile.workspace_name.trim() && profile.workspace_name !== "Noska") {
+          setWorkspaceName(profile.workspace_name);
+        }
         
         const hasExistingData = Boolean(
           profile?.onboarding_complete || (loadedPages && loadedPages.length > 0)
@@ -831,14 +857,37 @@ function AppContent() {
           // The merged state now includes any pages preserved by an
           // unverified-sync logout — recovery complete, resume autosave.
           preserveLocalPages.current = false;
-          setPages(normalized);
-          setAiChats(loadedChats);
           if (normalized.length > 0) {
+            setPages(normalized);
+            setAiChats(loadedChats);
             const deepLinkId = routeParams.pageId && normalized.some((p) => p.id === routeParams.pageId)
               ? routeParams.pageId
               : normalized[0].id;
             setActiveId(deepLinkId);
             setStackedPageIds([deepLinkId]);
+          } else {
+            const initialTimestamp = now();
+            const defaultInitialPage: Page = {
+              id: uid(),
+              title: "Getting Started",
+              icon: "🚀",
+              favorite: false,
+              trashed: false,
+              tags: [],
+              parentId: null,
+              createdAt: initialTimestamp,
+              updatedAt: initialTimestamp,
+              lineage: [{ action: "created" as const, timestamp: initialTimestamp, detail: "Default starter page" }],
+              blocks: textToBlocks("# Getting Started\n\nWelcome to your workspace!"),
+            };
+            normalized.push(defaultInitialPage);
+            setPages(normalized);
+            setAiChats(loadedChats);
+            setActiveId(defaultInitialPage.id);
+            setStackedPageIds([defaultInitialPage.id]);
+            if (u.id) {
+              savePage(defaultInitialPage, u.id).catch(() => {});
+            }
           }
           setAppFlowState("workspace");
         } else {
@@ -856,13 +905,11 @@ function AppContent() {
           preserveLocalPages.current = false;
           setPages(normalized);
           setAiChats(loadedChats);
-          if (normalized.length > 0) {
-            const deepLinkId = routeParams.pageId && normalized.some((p) => p.id === routeParams.pageId)
-              ? routeParams.pageId
-              : normalized[0].id;
-            setActiveId(deepLinkId);
-            setStackedPageIds([deepLinkId]);
-          }
+          const deepLinkId = routeParams.pageId && normalized.some((p) => p.id === routeParams.pageId)
+            ? routeParams.pageId
+            : normalized[0].id;
+          setActiveId(deepLinkId);
+          setStackedPageIds([deepLinkId]);
           setAppFlowState("workspace");
         } else {
           setPages([]);
@@ -993,7 +1040,33 @@ function AppContent() {
         // Merged state includes any pages preserved by an unverified-sync
         // logout — recovery complete, resume autosave.
         preserveLocalPages.current = false;
-        setPages(normalized);
+        if (normalized.length > 0) {
+          setPages(normalized);
+          setActiveId(normalized[0].id);
+          setStackedPageIds([normalized[0].id]);
+        } else {
+          const initialTimestamp = now();
+          const defaultInitialPage: Page = {
+            id: uid(),
+            title: "Getting Started",
+            icon: "🚀",
+            favorite: false,
+            trashed: false,
+            tags: [],
+            parentId: null,
+            createdAt: initialTimestamp,
+            updatedAt: initialTimestamp,
+            lineage: [{ action: "created" as const, timestamp: initialTimestamp, detail: "Default starter page" }],
+            blocks: textToBlocks("# Getting Started\n\nWelcome to your workspace!"),
+          };
+          normalized.push(defaultInitialPage);
+          setPages(normalized);
+          setActiveId(defaultInitialPage.id);
+          setStackedPageIds([defaultInitialPage.id]);
+          if (userData.userId) {
+            savePage(defaultInitialPage, userData.userId).catch(() => {});
+          }
+        }
         // AI chats are stored 100% locally on device / browser cache
         try {
           const localSavedChats = localStorage.getItem("noska_ai_chats");
@@ -1004,10 +1077,6 @@ function AppContent() {
             }
           }
         } catch {}
-        if (normalized.length > 0) {
-          setActiveId(normalized[0].id);
-          setStackedPageIds([normalized[0].id]);
-        }
       } catch (e) {
         console.warn("App: failed to load returning user's pages", e);
       }

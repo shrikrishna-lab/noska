@@ -199,7 +199,21 @@ export type PageInput = Partial<Page> & { id: string };
 const PAGE_COLUMNS = "id, title, icon, cover, parent_id, favorite, trashed, tags, hidden_from_recents, offline, is_encrypted, encrypted_blocks, iv, salt, is_locked, blocks, lineage, updated_at, created_at, user_id";
 
 export async function fetchPages(userId?: string | null): Promise<Page[]> {
-  let query = supabase.from("pages").select(PAGE_COLUMNS);
+  try {
+    let query = supabase.from("pages").select(PAGE_COLUMNS);
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query.order("updated_at", { ascending: false });
+    if (!error && data) {
+      return data.map(mapPageFromDb);
+    }
+    if (error) {
+      console.warn("[supabase] fetchPages PAGE_COLUMNS error, trying select(*):", error);
+    }
+  } catch (e) {
+    console.warn("[supabase] fetchPages PAGE_COLUMNS failed, falling back to select(*):", e);
+  }
+
+  let query = supabase.from("pages").select("*");
   if (userId) query = query.eq("user_id", userId);
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;
@@ -216,7 +230,27 @@ export async function fetchPagesPaginated(
   const from = page * PAGE_BATCH_SIZE;
   const to = from + PAGE_BATCH_SIZE - 1;
 
-  let query = supabase.from("pages").select(PAGE_COLUMNS, { count: "exact" });
+  try {
+    let query = supabase.from("pages").select(PAGE_COLUMNS, { count: "exact" });
+    if (userId) query = query.eq("user_id", userId);
+    
+    const { data, error, count } = await query
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+    
+    if (!error && data) {
+      const totalCount = count ?? 0;
+      const hasMore = from + PAGE_BATCH_SIZE < totalCount;
+      return {
+        pages: data.map(mapPageFromDb),
+        hasMore,
+      };
+    }
+  } catch (e) {
+    console.warn("[supabase] fetchPagesPaginated failed with PAGE_COLUMNS, falling back to select(*):", e);
+  }
+
+  let query = supabase.from("pages").select("*", { count: "exact" });
   if (userId) query = query.eq("user_id", userId);
   
   const { data, error, count } = await query

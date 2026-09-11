@@ -8,6 +8,7 @@
 //   page never renders in a half-authenticated state.
 import type { ReactNode } from "react";
 import { useAuth } from "@clerk/react";
+import { useLocation, Navigate } from "react-router-dom";
 import { isDesktop } from "../lib/desktop/platform";
 import App from "../App.jsx";
 import MarketingLayout from "../pages/marketing/MarketingLayout";
@@ -21,13 +22,17 @@ export function RouteFallbackSpinner() {
 }
 
 export default function MarketingShell({ children }: { children: ReactNode }) {
-  const { isLoaded } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
+  const location = useLocation();
 
   if (isDesktop()) {
     return <App />;
   }
   if (!isLoaded) {
     return <RouteFallbackSpinner />;
+  }
+  if (isSignedIn && location.pathname === "/") {
+    return <Navigate to="/dashboard" replace />;
   }
   return <MarketingLayout>{children}</MarketingLayout>;
 }

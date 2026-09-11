@@ -65,12 +65,11 @@ describe("MarketingShell", () => {
     expect(screen.getByText("landing-body")).toBeTruthy();
   });
 
-  it("web + signed in on '/': landing page stays accessible (no workspace bounce)", () => {
+  it("web + signed in on '/': redirects to /dashboard", () => {
     authState.isSignedIn = true;
     renderAt("/");
-    expect(screen.getByTestId("marketing-layout")).toBeTruthy();
-    expect(screen.getByText("landing-body")).toBeTruthy();
-    expect(screen.queryByTestId("probe-path")).toBeNull();
+    expect(screen.getByTestId("probe-path")).toBeTruthy();
+    expect(screen.getByText("/dashboard")).toBeTruthy();
   });
 
   it("web + signed in on inner marketing pages: content stays accessible", () => {

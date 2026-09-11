@@ -41,9 +41,10 @@ export default function MarketingLayout({ children }) {
   // onboarding from there.
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
-    if (!consumeOAuthIntent()) return;
-    navigate('/dashboard', { replace: true });
-  }, [isLoaded, isSignedIn, navigate]);
+    if (consumeOAuthIntent() || location.pathname === '/') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isLoaded, isSignedIn, location.pathname, navigate]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !wrapperRef.current || !contentRef.current) return;

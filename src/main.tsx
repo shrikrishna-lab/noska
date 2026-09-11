@@ -72,7 +72,14 @@ createRoot(document.getElementById("root")!).render(
     <DesktopShell>
     <BrowserRouter>
       <PostHogProvider client={posthog}>
-      <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/login">
+        <ClerkProvider
+          publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
+          afterSignOutUrl="/login"
+          signInFallbackRedirectUrl="/dashboard"
+          signUpFallbackRedirectUrl="/dashboard"
+          signInForceRedirectUrl="/dashboard"
+          signUpForceRedirectUrl="/dashboard"
+        >
         <Sentry.ErrorBoundary fallback={({ error }) => (
           <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] p-8">
             <div className="max-w-md text-center">
