@@ -207,7 +207,7 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
       {loadError && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-xs text-amber-800">
           <AlertCircle size={14} className="mt-0.5 shrink-0" />
-          <span>{loadError} — sign in to Noska to manage platform connections.</span>
+          <span>{loadError}</span>
         </div>
       )}
 

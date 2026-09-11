@@ -1296,19 +1296,29 @@ function AppContent() {
   }, []);
 
   // Logout handler — flushes pending page writes, verifies the DB sync
-  // completed, clears cache/state, redirects to auth
+  // completed, clears cache/state, redirects to auth immediately
   const handleLogout = useCallback(async () => {
     capture("logout");
-    // Flush queued pages/chats writes and VERIFY they reached Supabase before
-    // anything kills the auth context: signing out (clerk.signOut /
-    // desktopSignOut) invalidates the Supabase access token, so any upsert
-    // attempted afterwards fails RLS and the edits are lost.
+
+    // 1. Immediate UI transition (0ms delay for the user)
+    setAppFlowState("auth");
+    setToast("Logged out. See you next time.");
+    setCurrentUserId(null);
+    setCurrentUsername(null);
+    setCurrentUserEmail(null);
+    setPages([]);
+    setAiChats([]);
+    setActiveId(null);
+    setStackedPageIds([]);
+    setWorkspaceName('My Workspace');
+    realtimeCollab.initUser(`anon-${Math.random().toString(36).slice(2, 11)}`, 'Anonymous', '👤');
+    realtimeCollab.leaveWorkspace();
+    navigate("/login", { replace: true });
+
+    // 2. Fast background flush of queued writes before token destruction
     const flushUserId = currentUserId || (() => { try { return localStorage.getItem("noska_user_id"); } catch { return null; } })();
     let syncVerified = true;
     if (flushUserId) {
-      // Close the autosave debounce race: commit the latest page state into
-      // storage (which enqueues dirty pages) before the verified flush.
-      // Encrypted pages are skipped so the stored form stays ciphertext.
       try {
         const store = storageApi();
         const existingRaw = await store.get("pages");
@@ -1323,7 +1333,7 @@ function AppContent() {
         console.warn("[logout] final pages snapshot write failed:", e);
       }
       try {
-        syncVerified = await flushStorageSyncVerified();
+        syncVerified = await flushStorageSyncVerified(800);
       } catch (e) {
         console.warn("[logout] flush verification threw:", e);
         syncVerified = false;
@@ -1331,19 +1341,15 @@ function AppContent() {
     }
     resetIdentity();
     try {
-      await clerk.signOut();
+      void clerk.signOut();
     } catch {}
     // Desktop: drop the paired browser-handoff session + any pending
-    // sign-in transaction, otherwise the app boots straight back into
-    // the (now stale) identity instead of the login screen.
+    // sign-in transaction
     if (isDesktop()) {
       desktopSignOut();
       clearBrowserAuthState();
     }
-    // If the flush couldn't be verified (offline/failed upserts), drop the
-    // in-memory dirty queues so writes never leak into another account's
-    // session, and KEEP the page keys in localStorage — the next login's
-    // DB-first restore merges them back and re-syncs.
+    // If the flush couldn't be verified, keep local copies for recovery
     if (!syncVerified) {
       discardPendingSyncWrites();
       preserveLocalPages.current = true;
@@ -1355,17 +1361,13 @@ function AppContent() {
       "noska_share_invites", "noska_ai_profile", "noska_ghost_writer_enabled",
       "noska_api_key", "noska_ai_config", "noska_memory", "noska_user_profile",
       "noska_inbox_reminders", "noska-graph-positions",
-      // Page keys are only cleared when every write was verified in the DB;
-      // see the syncVerified guard above.
       ...(syncVerified ? ["pages", "activeId", "stackedPageIds"] : []),
       "aiChats", "workspaceName", "sidebarOpen",
       "apiKey", "themeFx", "aiProvider", "nvidiaKey", "appView",
       "activeChatId"
     ];
     keysToClear.forEach(k => { try {
-      // Clear both exact match and any namespaced variants
       localStorage.removeItem(k);
-      // Clear canvas position keys (noska-canvas-pos-*)
       if (k === "noska_user_id") {
         const toRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -1377,23 +1379,7 @@ function AppContent() {
         toRemove.forEach(key => localStorage.removeItem(key));
       }
     } catch {} });
-    setPages([]);
-    setAiChats([]);
-    setActiveId(null);
-    setStackedPageIds([]);
-    setWorkspaceName('My Workspace');
-    // Real bug fix: currentUserId/currentUsername/currentUserEmail were
-    // never reset here, so the Sidebar's account popover (and Settings'
-    // Account tab) kept showing the previous session's identity until a
-    // full page reload happened to re-run the bootstrap effect.
-    setCurrentUserId(null);
-    setCurrentUsername(null);
-    setCurrentUserEmail(null);
-    realtimeCollab.initUser(`anon-${Math.random().toString(36).slice(2, 11)}`, 'Anonymous', '👤');
-    realtimeCollab.leaveWorkspace();
-    setAppFlowState("auth");
-    setToast("Logged out. See you next time.");
-  }, [clerk, currentUserId]);
+  }, [clerk, currentUserId, navigate]);
 
   useEffect(() => {
     if (!hydrated.current) return;

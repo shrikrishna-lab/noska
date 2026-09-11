@@ -12,7 +12,8 @@
 
 import { supabase, currentAccessToken } from "./supabase";
 
-const GATEWAY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/connector-gateway`;
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "https://yxgtmzksnyarlivgxujf.supabase.co").replace(/\/$/, "");
+const GATEWAY = `${SUPABASE_URL}/functions/v1/connector-gateway`;
 
 /* ─── Types (mirrors of the gateway's sanitized rows) ─────────────────── */
 
@@ -62,18 +63,25 @@ export interface GatewayTool {
 async function authedRequest(path: string, init: RequestInit = {}): Promise<any> {
   const token = (await currentAccessToken())
     ?? (await supabase.auth.getSession().then((r) => r.data.session?.access_token));
-  if (!token) throw new Error("Sign in to manage your platform connections.");
-  const res = await fetch(`${GATEWAY}/${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(init.headers ?? {}),
-    },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(String(data?.message ?? data?.error ?? `Request failed (${res.status})`));
-  return data;
+  if (!token) throw new Error("Sign in to Noska to manage platform connections.");
+  try {
+    const res = await fetch(`${GATEWAY}/${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...(init.headers ?? {}),
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(String(data?.message ?? data?.error ?? `Request failed (${res.status})`));
+    return data;
+  } catch (err: any) {
+    if (err?.message?.includes("Failed to fetch")) {
+      throw new Error(`Connection to Integrations Gateway failed. Please check your network connection.`);
+    }
+    throw err;
+  }
 }
 
 /* ─── API surface ─────────────────────────────────────────────────────── */

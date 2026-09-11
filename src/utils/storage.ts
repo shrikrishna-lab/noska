@@ -191,12 +191,12 @@ export function discardPendingSyncWrites() {
  * verified complete before local state is destroyed. Returns true only when
  * every queued write reached Supabase within `timeoutMs`.
  */
-export async function flushStorageSyncVerified(timeoutMs = 10000): Promise<boolean> {
+export async function flushStorageSyncVerified(timeoutMs = 1200): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   do {
     await flushStorageSync();
     if (!hasPendingSyncWrites()) return true;
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 100));
   } while (Date.now() < deadline);
   return !hasPendingSyncWrites();
 }

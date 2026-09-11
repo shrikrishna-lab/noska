@@ -47,6 +47,15 @@ function fail(err: unknown): Response {
 async function requireUserJwt(req: Request): Promise<string> {
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "").trim();
   if (!token) throw errors.authRequired("Missing Authorization bearer token.");
+
+  // Web sessions are Clerk JWTs (template "supabase") whose sub is a raw
+  // Clerk id — GoTrue's auth.getUser() rejects non-UUID subjects outright
+  // ("sub claim must be a UUID"), so Clerk tokens are verified locally
+  // against the Clerk JWKS instead. Desktop paired sessions carry real
+  // GoTrue JWTs (UUID sub) and go through auth.getUser().
+  const clerkUserId = await verifyClerkJwt(token);
+  if (clerkUserId) return clerkUserId;
+
   const { data, error } = await dbClient().auth.getUser(token);
   if (error || !data?.user?.id) {
     // Surface the underlying GoTrue reason — it makes session problems
@@ -55,6 +64,87 @@ async function requireUserJwt(req: Request): Promise<string> {
     throw errors.authRequired(`Invalid or expired session${error?.message ? ` — ${error.message}` : ""}.`);
   }
   return data.user.id;
+}
+
+/* ─── Clerk JWT verification (web sessions) ───────────────────────────── */
+
+const CLERK_ISSUERS = (Deno.env.get("CLERK_JWT_ISSUERS") ?? "https://clerk.noska.me,https://ruling-ladybird-3.clerk.accounts.dev")
+  .split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
+
+const JWKS_CACHE_TTL_MS = 60 * 60_000;
+const jwksCache = new Map<string, { key: CryptoKey; expires: number }>();
+
+interface JwtHeader { alg?: string; kid?: string }
+
+/** Verify a Clerk RS256 JWT (signature via JWKS, issuer, expiry) and
+ * return its sub (the raw Clerk user id, e.g. "user_2abc…"). Returns
+ * null for anything that isn't a Clerk token so GoTrue auth stays the
+ * fallback path for desktop sessions. */
+async function verifyClerkJwt(token: string): Promise<string | null> {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  let header: JwtHeader;
+  try {
+    header = JSON.parse(atob(parts[0].replace(/-/g, "+").replace(/_/g, "/")));
+  } catch {
+    return null;
+  }
+  if (header.alg !== "RS256" || !header.kid) return null;
+
+  const key = await getClerkVerificationKey(header.kid);
+  if (!key) return null;
+
+  const payloadB64 = parts[1];
+  const signature = base64UrlToBytes(parts[2]);
+  const signed = new TextEncoder().encode(`${parts[0]}.${payloadB64}`);
+  let valid = false;
+  try {
+    valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, signed);
+  } catch {
+    return null;
+  }
+  if (!valid) return null;
+
+  let claims: { iss?: string; sub?: string; exp?: number };
+  try {
+    claims = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payloadB64)));
+  } catch {
+    return null;
+  }
+  const iss = String(claims.iss ?? "").replace(/\/$/, "");
+  if (!CLERK_ISSUERS.includes(iss)) return null;
+  if (!claims.sub || typeof claims.exp === "number" && claims.exp * 1000 < Date.now()) return null;
+  return String(claims.sub);
+}
+
+async function getClerkVerificationKey(kid: string): Promise<CryptoKey | null> {
+  const cached = jwksCache.get(kid);
+  if (cached && cached.expires > Date.now()) return cached.key;
+  for (const issuer of CLERK_ISSUERS) {
+    try {
+      const res = await fetch(`${issuer}/.well-known/jwks.json`, {
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!res.ok) continue;
+      const { keys } = await res.json() as { keys?: Array<JsonWebKey & { kid?: string; alg?: string }> };
+      const jwk = (keys ?? []).find((k) => k.kid === kid && k.alg === "RS256");
+      if (!jwk) continue;
+      const key = await crypto.subtle.importKey(
+        "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"],
+      );
+      jwksCache.set(kid, { key, expires: Date.now() + JWKS_CACHE_TTL_MS });
+      return key;
+    } catch {
+      // unreachable issuer — try the next one
+    }
+  }
+  return null;
+}
+
+function base64UrlToBytes(s: string): Uint8Array {
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
 /** Where providers must send users back after consent. Override with
