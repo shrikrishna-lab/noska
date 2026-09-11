@@ -10,6 +10,8 @@ export interface InfoCard {
   accent: string;
   platform: string;
   dismissible: boolean;
+  action_url: string | null;
+  action_label: string | null;
   starts_at: string;
   ends_at: string | null;
 }
@@ -72,7 +74,7 @@ export function useInfoCards() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const from = (supabaseAnon as unknown as { from: (t: string) => any }).from("info_cards");
           const { data, error } = await from
-            .select("id, title, body, icon, accent, platform, dismissible, starts_at, ends_at")
+            .select("id, title, body, icon, accent, platform, dismissible, action_url, action_label, starts_at, ends_at")
             .eq("is_active", true)
             .lte("starts_at", new Date().toISOString())
             .or(`platform.eq.${platform},platform.eq.both`)

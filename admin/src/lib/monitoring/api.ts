@@ -186,6 +186,8 @@ export interface WhatsNew {
   currentVersion: string | null;
   suggested: { version: string; kind: "major" | "minor" | "patch"; reason: string } | null;
   counts: { total: number; feat: number; fix: number; breaking: number; other: number };
+  totalCommits: number;
+  truncated: boolean;
   commits: WhatsNewCommit[];
   drafts: Array<{ tag: string; url: string; created_at: string }>;
   suggestions: Array<{ level: "info" | "warn"; title: string; detail: string; url?: string }>;
@@ -202,6 +204,8 @@ export const releaseApi = {
     invokeEdgeFunction<{ runs: GitHubRun[] }>("admin-trigger-release", { action: "runs" }),
   releases: () =>
     invokeEdgeFunction<{ releases: GitHubRelease[] }>("admin-trigger-release", { action: "releases" }),
+  deleteDraft: (tag: string) =>
+    invokeEdgeFunction<{ ok: boolean; tag: string }>("admin-trigger-release", { action: "delete_draft", tag }),
 };
 
 async function invokeEdgeFunction<T>(fn: string, body: Record<string, unknown>): Promise<T> {

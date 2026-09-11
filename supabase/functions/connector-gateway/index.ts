@@ -260,12 +260,14 @@ Deno.serve(async (req: Request) => {
       const body = await req.json().catch(() => ({})) as Record<string, unknown>;
       const connectorRef = String(body.connector ?? body.connector_id ?? body.slug ?? "custom-mcp");
       const token = String(body.token ?? body.api_key ?? "");
-      if (!token) throw errors.validation("token is required.");
+      const serverUrl = typeof body.server_url === "string" ? body.server_url : undefined;
+      // A token is optional when connecting an explicit (open) MCP server URL.
+      if (!token && !serverUrl?.trim()) throw errors.validation("token (or server_url for open MCP servers) is required.");
       const connector = await resolveConnector(connectorRef);
       return json(await connectWithToken(userId, connector, {
         token,
         label: typeof body.label === "string" ? body.label : undefined,
-        serverUrl: typeof body.server_url === "string" ? body.server_url : undefined,
+        serverUrl,
       }));
     }
 

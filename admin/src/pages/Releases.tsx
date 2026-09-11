@@ -15,7 +15,7 @@ import {
 import {
   Rocket, RefreshCw, ExternalLink, CheckCircle2, XCircle, Loader2, Clock,
   FileCode2, Tag, PackageOpen, AlertTriangle, ShieldCheck, Sparkles,
-  Zap, Wrench, AlertOctagon, Lightbulb,
+  Zap, Wrench, AlertOctagon, Lightbulb, Trash2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -120,17 +120,28 @@ function generateNotes(data: WhatsNew, version: string): string {
     if (items.length === 0) return;
     lines.push(`## ${emoji} ${title}`);
     lines.push("");
-    // Newest first within each section, grouped by area for readability.
+    // Group by area, then merge each area's related commits into one story
+    // bullet — several small commits for the same feature read better as a
+    // single coherent line. Subjects stay verbatim; nothing is invented.
     const byGroup = new Map<string, typeof safeCommits>();
     for (const c of items) {
       const arr = byGroup.get(c.group) ?? [];
       arr.push(c);
       byGroup.set(c.group, arr);
     }
-    for (const [group, itemsInGroup] of [...byGroup.entries()].sort((a, b) => b[1].length - a[1].length)) {
+    const ordered = [...byGroup.entries()].sort((a, b) => b[1].length - a[1].length);
+    for (const [group, itemsInGroup] of ordered) {
+      const seen = new Set<string>();
+      const parts: string[] = [];
       for (const item of itemsInGroup) {
-        lines.push(`- ${group === "General" ? "" : `**${group}** — `}${item.text}`);
+        const normalized = item.text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (seen.has(normalized)) continue; // near-duplicate rewording
+        seen.add(normalized);
+        parts.push(item.text.charAt(0).toLowerCase() + item.text.slice(1));
       }
+      const body = parts.slice(0, 4).join("; ");
+      const extra = parts.length > 4 ? ` (+${parts.length - 4} more)` : "";
+      lines.push(`- ${group === "General" ? "" : `**${group}** — `}${body}${extra}`);
     }
     lines.push("");
   };
@@ -154,7 +165,10 @@ function generateNotes(data: WhatsNew, version: string): string {
 
   if (data.baseTag) {
     lines.push("---");
-    lines.push(`_Full changelog: ${data.counts.total} commit${data.counts.total === 1 ? "" : "s"} since \`${data.baseTag}\`._`);
+    const scope = data.truncated
+      ? `${data.totalCommits} commits since \`${data.baseTag}\` (highlights from the ${data.counts.total} most recent)`
+      : `${data.counts.total} commit${data.counts.total === 1 ? "" : "s"} since \`${data.baseTag}\``;
+    lines.push(`_Full changelog: ${scope}._`);
   }
   return lines.join("\n").trim();
 }
@@ -188,7 +202,7 @@ function NextReleaseCard({ data }: { data: WhatsNew }) {
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
           {data.baseTag
-            ? `${data.counts.total} commit${data.counts.total === 1 ? "" : "s"} since ${data.baseTag} (${data.counts.breaking} breaking · ${data.counts.feat} feat · ${data.counts.fix} fix · ${data.counts.other} other)${data.suggested ? ` — ${data.suggested.reason}` : ""}`
+            ? `${data.truncated ? `${data.totalCommits} commits since ${data.baseTag} — showing the ${data.counts.total} most recent` : `${data.counts.total} commit${data.counts.total === 1 ? "" : "s"} since ${data.baseTag}`} (${data.counts.breaking} breaking · ${data.counts.feat} feat · ${data.counts.fix} fix · ${data.counts.other} other)${data.suggested ? ` — ${data.suggested.reason}` : ""}`
             : "No desktop tags yet — this will be the first tagged release."}
         </p>
 
@@ -320,15 +334,16 @@ function RunRow({ run }: { run: GitHubRun }) {
   );
 }
 
-function ReleaseRow({ release }: { release: GitHubRelease }) {
+function ReleaseRow({ release, onDeleteDraft, deleting }: { release: GitHubRelease; onDeleteDraft?: (tag: string) => void; deleting?: boolean }) {
   const installers = release.assets.filter((a) => !a.name.endsWith(".json") && !a.name.endsWith(".sig"));
   return (
-    <a
-      href={release.html_url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30"
-    >
+    <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
+      <a
+        href={release.html_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex min-w-0 flex-1 items-center gap-3"
+      >
       <PackageOpen className="h-5 w-5 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -348,8 +363,20 @@ function ReleaseRow({ release }: { release: GitHubRelease }) {
           }))].join(", ")})`}
         </p>
       </div>
-      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-    </a>
+        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      </a>
+      {release.draft && onDeleteDraft && (
+        <button
+          type="button"
+          title="Delete this draft release (staged leftovers)"
+          disabled={deleting}
+          onClick={() => onDeleteDraft(release.tag_name)}
+          className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -357,6 +384,7 @@ export function ReleasesPage() {
   const qc = useQueryClient();
   const [version, setVersion] = useState("");
   const [notes, setNotes] = useState("");
+  const [generating, setGenerating] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: status, isLoading, refetch, isRefetching, isError, error } = useQuery({
@@ -395,6 +423,15 @@ export function ReleasesPage() {
     onError: (err) => {
       toast.error(err instanceof Error ? err.message.slice(0, 300) : "Release trigger failed");
     },
+  });
+
+  const deleteDraft = useMutation({
+    mutationFn: (tag: string) => releaseApi.deleteDraft(tag),
+    onSuccess: (_r, tag) => {
+      toast.success(`Draft ${tag} deleted`);
+      qc.invalidateQueries({ queryKey: ["admin", "releases"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message.slice(0, 200) : "Delete failed"),
   });
 
   const currentVersion = status?.currentVersion ?? null;
@@ -483,7 +520,7 @@ export function ReleasesPage() {
               <div className="flex gap-2">
                 <Input
                   id="release-version"
-                  placeholder={recommended || "1.0.12"}
+                  placeholder={recommended || "x.y.z — shows the suggested version once loaded"}
                   value={version}
                   onChange={(e) => setVersion(e.target.value)}
                 />
@@ -526,11 +563,34 @@ export function ReleasesPage() {
                 <button
                   type="button"
                   className="flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-40"
-                  disabled={!whatsnew || whatsnew.counts.total === 0}
-                  onClick={() => whatsnew && setNotes(generateNotes(whatsnew, suggested || ""))}
+                  disabled={generating || !whatsnew || whatsnew.counts.total === 0}
+                  onClick={async () => {
+                    // Always pull fresh commit data from GitHub first — the
+                    // cached query can lag up to a minute behind a new push.
+                    setGenerating(true);
+                    try {
+                      const fresh = await qc.fetchQuery({
+                        queryKey: ["admin", "releases", "whatsnew"],
+                        queryFn: releaseApi.whatsnew,
+                        staleTime: 0,
+                      });
+                      if (fresh.counts.total === 0) {
+                        toast.error("No commits since the last tag — nothing to generate.");
+                        return;
+                      }
+                      setNotes(generateNotes(fresh, suggested || ""));
+                      toast.success(`Generated from ${fresh.truncated ? `all ${fresh.totalCommits} commits (highlights of latest ${fresh.counts.total})` : `${fresh.counts.total} commits`} — newest: ${fresh.commits[0]?.sha ?? "HEAD"}`);
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message.slice(0, 200) : "Refresh failed");
+                    } finally {
+                      setGenerating(false);
+                    }
+                  }}
                 >
-                  <Sparkles className="h-3 w-3" />
-                  Auto-generate from commits
+                  {generating
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <Sparkles className="h-3 w-3" />}
+                  {generating ? "Fetching latest…" : "Auto-generate from commits"}
                 </button>
               </div>
               <Textarea
@@ -546,7 +606,7 @@ export function ReleasesPage() {
                 {notes.trim()
                   ? "Your notes will be used for the draft release."
                   : whatsnew && whatsnew.counts.total > 0
-                    ? "Left empty: notes are auto-generated from the real commits since " + (whatsnew.baseTag ?? "the last tag") + "."
+                    ? `Left empty: auto-generated from commits since ${whatsnew.baseTag ?? "the last tag"} — newest included: ${whatsnew.commits[0]?.sha ?? "…"}${whatsnew.commits[0]?.date ? ` (${new Date(whatsnew.commits[0].date).toLocaleString()})` : ""}. Just pushed? Generate re-fetches GitHub first.`
                     : "Left empty: a generic default is used when there are no new commits."}
               </p>
             </div>
@@ -600,7 +660,18 @@ export function ReleasesPage() {
                 </div>
               ) : (
                 <div className="divide-y">
-                  {releases.slice(0, 8).map((release) => <ReleaseRow key={release.id} release={release} />)}
+                  {releases.slice(0, 8).map((release) => (
+                    <ReleaseRow
+                      key={release.id}
+                      release={release}
+                      deleting={deleteDraft.isPending}
+                      onDeleteDraft={(tag) => {
+                        if (window.confirm(`Delete draft release ${tag}? Its staged installers are removed from the private repo.`)) {
+                          deleteDraft.mutate(tag);
+                        }
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </CardContent>

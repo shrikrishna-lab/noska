@@ -12,7 +12,6 @@ export const supabase = hasRealCredentials
   : null;
 
 export const SUPABASE_ENABLED = hasRealCredentials;
-export const DEMO_MODE = !hasRealCredentials || String(import.meta.env.VITE_ADMIN_DEMO).toLowerCase() === "true";
 
 let _adminToken: string | null = null;
 

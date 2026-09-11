@@ -113,21 +113,94 @@ function supportsToken(connector: ConnectorRow): boolean {
   return authModes(connector).includes("token");
 }
 
-/* ─── OAuth client credentials: env vars win over the catalog row so
- *     secrets never need to touch the database. ─── */
+/* ─── OAuth client resolution ──────────────────────────────────────────
+ *     Static credentials (env vars or catalog row) win. Otherwise, if
+ *     the provider advertises a registration_endpoint, the gateway
+ *     registers itself via OAuth dynamic client registration (RFC 7591)
+ *     and persists the issued client in the connector's oauth_config so
+ *     the callback and token refresh reuse the same client. This is how
+ *     DCR-capable hosted MCP servers (Supabase, Linear, Cloudflare,
+ *     Stripe, PostHog, Zapier, …) support "connect with login" without
+ *     us pre-provisioning a client per provider. */
 
-function clientCredentials(connector: ConnectorRow): { clientId: string; clientSecret: string; cfg: Row } {
+async function resolveOAuthClient(
+  connector: ConnectorRow,
+  redirectUri: string | null,
+): Promise<{ clientId: string; clientSecret: string | null; cfg: Row }> {
   const cfg = (connector.oauth_config ?? {}) as Row;
-  const clientId = (typeof cfg.client_id_env === "string" ? Deno.env.get(cfg.client_id_env) : undefined)
+
+  const staticId = (typeof cfg.client_id_env === "string" ? Deno.env.get(cfg.client_id_env) : undefined)
     ?? (typeof cfg.client_id === "string" ? cfg.client_id : undefined);
-  const clientSecret = (typeof cfg.client_secret_env === "string" ? Deno.env.get(cfg.client_secret_env) : undefined)
+  const staticSecret = (typeof cfg.client_secret_env === "string" ? Deno.env.get(cfg.client_secret_env) : undefined)
     ?? (typeof cfg.client_secret === "string" ? cfg.client_secret : undefined);
-  if (!clientId || !clientSecret) {
+  if (staticId && staticSecret) return { clientId: staticId, clientSecret: staticSecret, cfg };
+
+  const registrationEndpoint = typeof cfg.registration_endpoint === "string" ? cfg.registration_endpoint : "";
+  if (!registrationEndpoint) {
     throw errors.internal(
-      `Connector "${connector.slug}" is missing OAuth client credentials — set ${String(cfg.client_id_env ?? "oauth_config.client_id")} / ${String(cfg.client_secret_env ?? "oauth_config.client_secret")}.`,
+      `Connector "${connector.slug}" is missing OAuth client credentials — set ${String(cfg.client_id_env ?? "oauth_config.client_id")} / ${String(cfg.client_secret_env ?? "oauth_config.client_secret")}, or oauth_config.registration_endpoint for dynamic client registration.`,
     );
   }
-  return { clientId, clientSecret, cfg };
+
+  const storedId = typeof cfg.dcr_client_id === "string" ? cfg.dcr_client_id : "";
+  const storedSecret = typeof cfg.dcr_client_secret === "string" ? cfg.dcr_client_secret : null;
+  const storedRedirects = Array.isArray(cfg.dcr_redirect_uris) ? cfg.dcr_redirect_uris.map(String) : [];
+  // Providers match the redirect_uri against the registered list exactly,
+  // so re-register whenever the callback URL isn't covered (e.g. the
+  // CONNECTOR_OAUTH_REDIRECT_BASE origin changed).
+  const needsRegistration = !storedId || (redirectUri !== null && !storedRedirects.includes(redirectUri));
+  if (!needsRegistration) {
+    return { clientId: storedId, clientSecret: storedSecret, cfg };
+  }
+
+  const requestedAuthMethod = typeof cfg.dcr_token_auth_method === "string"
+    ? cfg.dcr_token_auth_method
+    : "client_secret_post";
+  const body: Row = {
+    client_name: `Noska Connector Gateway${redirectUri ? ` (${new URL(redirectUri).origin})` : ""}`,
+    redirect_uris: redirectUri ? [redirectUri] : storedRedirects,
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: requestedAuthMethod,
+  };
+  const scopes = (connector.default_scopes ?? []).filter(Boolean);
+  if (scopes.length) body.scope = scopes.join(" ");
+
+  let reg: Row;
+  try {
+    const res = await fetch(registrationEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    reg = await res.json().catch(() => ({})) as Row;
+    if (!res.ok || !reg.client_id) {
+      throw new Error(`status ${res.status}`);
+    }
+  } catch (err) {
+    throw errors.internal(
+      `Dynamic client registration failed for "${connector.slug}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const resolvedAuthMethod = typeof reg.token_endpoint_auth_method === "string"
+    ? reg.token_endpoint_auth_method
+    : requestedAuthMethod;
+  const nextCfg: Row = {
+    ...cfg,
+    dcr_client_id: String(reg.client_id),
+    ...(reg.client_secret ? { dcr_client_secret: String(reg.client_secret) } : {}),
+    dcr_redirect_uris: redirectUri ? [redirectUri] : storedRedirects,
+    dcr_token_auth_method: resolvedAuthMethod,
+  };
+  await db().from("connectors").update({ oauth_config: nextCfg }).eq("id", connector.id);
+
+  return {
+    clientId: String(reg.client_id),
+    clientSecret: reg.client_secret ? String(reg.client_secret) : null,
+    cfg: nextCfg,
+  };
 }
 
 function requiredEndpoint(cfg: Row, key: string, slug: string): string {
@@ -158,7 +231,7 @@ export async function startConnect(
       `${connector.name} does not support OAuth connect — use the token/API-key flow instead.`,
     );
   }
-  const { clientId, cfg } = clientCredentials(connector);
+  const { clientId, cfg } = await resolveOAuthClient(connector, redirectUri);
   const authorizationEndpoint = requiredEndpoint(cfg, "authorization_endpoint", connector.slug);
 
   const verifier = Array.from(crypto.getRandomValues(new Uint8Array(32)))
@@ -171,7 +244,8 @@ export async function startConnect(
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", (connector.default_scopes ?? []).join(" "));
+  const scopes = (connector.default_scopes ?? []).filter(Boolean);
+  if (scopes.length) url.searchParams.set("scope", scopes.join(" "));
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", await pkceChallengeS256(verifier));
   url.searchParams.set("code_challenge_method", "S256");
@@ -198,7 +272,8 @@ export async function handleCallback(input: { code?: string; state?: string }): 
   const { data } = await db().from("connectors").select("*").eq("id", payload.c).maybeSingle();
   if (!data) throw errors.notFound("Connector");
   const connector = data as ConnectorRow;
-  const { clientId, clientSecret, cfg } = clientCredentials(connector);
+  // redirectUri is passed so a DCR client covering it is reused as-is.
+  const { clientId, clientSecret, cfg } = await resolveOAuthClient(connector, payload.r);
   const tokenEndpoint = requiredEndpoint(cfg, "token_endpoint", connector.slug);
 
   const tokens = await postForm(tokenEndpoint, {
@@ -310,7 +385,10 @@ export interface TokenConnectInput {
 /** Connect by pasting a token (Notion internal integration secret,
  * GitHub PAT, arbitrary bearer token for a custom MCP server). The
  * token is validated with a live initialize + tools/list probe BEFORE
- * it is persisted, so a typo never stores a dead connection. */
+ * it is persisted, so a typo never stores a dead connection.
+ *
+ * The token is OPTIONAL when an explicit server URL is provided — open
+ * MCP servers that need no auth can be connected by URL alone. */
 export async function connectWithToken(
   userId: string,
   connector: ConnectorRow,
@@ -322,7 +400,10 @@ export async function connectWithToken(
     );
   }
   const token = String(input.token ?? "").trim();
-  if (!token) throw errors.validation("token is required.");
+  const explicitUrl = Boolean(input.serverUrl?.trim());
+  if (!token && !explicitUrl) {
+    throw errors.validation("token is required — unless connecting to an open MCP server by URL.");
+  }
   const serverUrl = (input.serverUrl ?? "").trim() || connector.mcp_server_url;
   if (!/^https:\/\//i.test(serverUrl)) {
     throw errors.validation("A valid https:// MCP server URL is required.");
@@ -401,7 +482,7 @@ async function ensureFreshAccessToken(userId: string, connector: ConnectorRow, c
     await markConnectionExpired(userId, connection);
     throw new PlatformError(401, "CONNECTION_EXPIRED", `Your ${connector.name} connection expired — reconnect it.`);
   }
-  const { clientId, clientSecret, cfg } = clientCredentials(connector);
+  const { clientId, clientSecret, cfg } = await resolveOAuthClient(connector, null);
   const tokenEndpoint = requiredEndpoint(cfg, "token_endpoint", connector.slug);
   const refreshed = await postForm(tokenEndpoint, {
     grant_type: "refresh_token",
@@ -425,20 +506,25 @@ async function ensureFreshAccessToken(userId: string, connector: ConnectorRow, c
   return String(refreshed.access_token);
 }
 
-/** OAuth token requests are form-encoded; creds go in the body unless the
- * provider declares basic auth in oauth_config.token_auth_style. */
+/** OAuth token requests are form-encoded. Client authentication follows
+ * the connector's declared method: `client_secret_basic` (legacy
+ * oauth_config.token_auth_style), `client_secret_post` (DCR default), or
+ * `none` (public dynamic clients — client_id only). */
 async function postForm(
   endpoint: string,
   params: Row,
-  creds: { clientId: string; clientSecret: string; cfg: Row },
+  creds: { clientId: string; clientSecret?: string | null; cfg: Row },
 ): Promise<Row> {
   const body = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
   const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" };
-  if (creds.cfg.token_auth_style === "basic") {
-    headers["Authorization"] = `Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`;
+  const authMethod = typeof creds.cfg.dcr_token_auth_method === "string" && creds.cfg.dcr_token_auth_method
+    ? creds.cfg.dcr_token_auth_method
+    : (creds.cfg.token_auth_style === "basic" ? "client_secret_basic" : "client_secret_post");
+  if (authMethod === "client_secret_basic") {
+    headers["Authorization"] = `Basic ${btoa(`${creds.clientId}:${creds.clientSecret ?? ""}`)}`;
   } else {
     body.set("client_id", creds.clientId);
-    body.set("client_secret", creds.clientSecret);
+    if (creds.clientSecret && authMethod !== "none") body.set("client_secret", creds.clientSecret);
   }
   const res = await fetch(endpoint, { method: "POST", headers, body: body.toString() });
   const json = await res.json().catch(() => ({})) as Row;
@@ -725,7 +811,7 @@ export async function revokeConnection(userId: string, connectionId: string): Pr
   // below is the source of truth and must happen either way.
   if (connection.access_token_encrypted) {
     try {
-      const { clientId, clientSecret, cfg } = clientCredentials(connector);
+      const { clientId, clientSecret, cfg } = await resolveOAuthClient(connector, null);
       const revocationEndpoint = typeof cfg.revocation_endpoint === "string" ? cfg.revocation_endpoint : "";
       if (revocationEndpoint) {
         await postForm(revocationEndpoint, {

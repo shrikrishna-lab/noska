@@ -266,7 +266,8 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
   // Connect via Manual Token / API Key
   const handleTokenConnect = async () => {
     if (!tokenModalConnector) return;
-    if (!tokenInput.trim()) {
+    const isCustomMcp = tokenModalConnector.id === "custom-mcp";
+    if (!tokenInput.trim() && !isCustomMcp) {
       setTokenError("Please enter a valid token or key.");
       return;
     }
@@ -1204,7 +1205,7 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-medium text-[#1c1b18]">
-                      {tokenModalConnector.id === "custom-mcp" ? "Bearer Token / API Key" : "API Token / Key"}{" "}
+                      {tokenModalConnector.id === "custom-mcp" ? "Bearer Token (optional for open servers)" : "API Token / Key"}{" "}
                       <span className="text-rose-500">*</span>
                     </label>
                     {tokenModalConnector.docsUrl && (
@@ -1222,7 +1223,7 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
                     <KeyRound className="absolute left-3 h-3.5 w-3.5 text-[#a8a29e]" />
                     <input
                       type={showTokenSecret ? "text" : "password"}
-                      required
+                      required={tokenModalConnector.id !== "custom-mcp"}
                       autoFocus={tokenModalConnector.id !== "custom-mcp"}
                       value={tokenInput}
                       onChange={(e) => setTokenInput(e.target.value)}

@@ -192,6 +192,8 @@ Deno.serve(async (req: Request) => {
   try {
     if (body.action === "status" || body.action === "runs" || body.action === "releases" || body.action === "whatsnew") {
       if (!requireRole(admin, "support")) return resError("Forbidden", 403);
+    } else if (body.action === "delete_draft") {
+      if (!requireRole(admin, "admin")) return resError("Forbidden: admin role required", 403);
     } else if (body.action === "trigger") {
       if (!requireRole(admin, "admin")) return resError("Forbidden: admin role required to ship releases", 403);
     } else {
@@ -200,6 +202,26 @@ Deno.serve(async (req: Request) => {
 
     const token = Deno.env.get("GITHUB_TOKEN");
     if (!token) return resError("GitHub not configured: set the GITHUB_TOKEN secret", 503);
+
+    if (body.action === "delete_draft") {
+      // Housekeeping: delete a DRAFT release (staged build leftovers).
+      // Published releases are refused — deleting those is a job for GitHub.
+      const tag = String(body.tag ?? "").trim();
+      if (!/^desktop-v/.test(tag)) return resError("Invalid tag", 400);
+      const relR = await gh<{ id: number; draft: boolean; tag_name: string }>(
+        token,
+        `/repos/${REPO}/releases/tags/${tag}`,
+      );
+      if (relR.status === 404) return resError(`No release found for ${tag}`, 404);
+      if (!relR.ok) return resError(`GitHub API ${relR.status}: ${relR.raw}`, 502);
+      if (!relR.data!.draft) {
+        return resError(`${tag} is published — refusing to delete. Delete it on GitHub if really needed.`, 409);
+      }
+      const del = await gh(token, `/repos/${REPO}/releases/${relR.data!.id}`, { method: "DELETE" });
+      if (!del.ok) return resError(`Delete failed: ${del.status} ${del.raw}`, 502);
+      await audit(admin, "release.draft_deleted", { tag });
+      return res({ ok: true, tag });
+    }
 
     if (body.action === "status") {
       const repoInfo = await gh<{ default_branch: string }>(token, `/repos/${REPO}`);
@@ -252,12 +274,16 @@ Deno.serve(async (req: Request) => {
       const suggestions: Array<{ level: "info" | "warn"; title: string; detail: string; url?: string }> = [];
 
       let commits: CommitInfo[] = [];
+      let totalCommits = 0;
+      let truncated = false;
       if (baseTag) {
         const cmpR = await gh<{
           commits: Array<{ sha: string; commit: { message: string; author?: { name?: string }; committer?: { date?: string } } }>;
           status: string;
-        }>(token, `/repos/${REPO}/compare/${baseTag}...${branch}?per_page=100`);
+          total_commits: number;
+        }>(token, `/repos/${REPO}/compare/${baseTag}...${branch}?per_page=250`);
         if (!cmpR.ok) return resError(`GitHub compare failed: ${cmpR.status} ${cmpR.raw}`, 502);
+        totalCommits = Number(cmpR.data!.total_commits ?? 0);
         commits = (cmpR.data!.commits ?? [])
           .map((c) => analyzeCommit(
             c.sha.slice(0, 7),
@@ -265,8 +291,13 @@ Deno.serve(async (req: Request) => {
             c.commit.author?.name ?? "unknown",
             c.commit.committer?.date ?? "",
           ))
+          // GitHub's compare endpoint returns commits oldest-first; every
+          // consumer here (newest-commit indicator, notes ordering) expects
+          // newest-first.
+          .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
           // Version-bump commits made by previous releases are noise.
           .filter((c) => !/^chore\(release\):/i.test(c.message));
+        truncated = totalCommits > commits.length;
       }
 
       const counts = {
@@ -344,6 +375,8 @@ Deno.serve(async (req: Request) => {
         suggested,
         counts,
         commits: commits.slice(0, 30),
+        totalCommits,
+        truncated,
         drafts: drafts.map((d) => ({ tag: d.tag_name, url: d.html_url, created_at: d.created_at })),
         suggestions,
       });

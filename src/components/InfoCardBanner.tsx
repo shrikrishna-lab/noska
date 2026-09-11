@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Info, Sparkles, AlertTriangle, Rocket, Wrench, Gift, Star, X } from "lucide-react";
+import { Info, Sparkles, AlertTriangle, Rocket, Wrench, Gift, Star, X, ArrowUpRight } from "lucide-react";
 import { useInfoCards } from "@/hooks/useInfoCards";
+import { renderMarkdownLite } from "@/components/ui/MarkdownLite";
 import type { InfoCard } from "@/hooks/useInfoCards";
 
 const ICONS: Record<string, typeof Info> = {
@@ -24,6 +25,7 @@ const ACCENTS: Record<string, { border: string; icon: string }> = {
 function CardRow({ card, onDismiss }: { card: InfoCard; onDismiss: (id: string) => void }) {
   const Icon = ICONS[card.icon] ?? Info;
   const accent = ACCENTS[card.accent] ?? ACCENTS.blue;
+  const hasMarkdown = /(^#|^\s*- |^\s*>|\*\*|`|\[[^\]]+\]\()/.test(card.body);
   return (
     <motion.div
       layout
@@ -37,18 +39,37 @@ function CardRow({ card, onDismiss }: { card: InfoCard; onDismiss: (id: string) 
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold leading-tight">{card.title}</p>
-        <p className="mt-0.5 whitespace-pre-line text-xs leading-snug text-muted-foreground">{card.body}</p>
+        {hasMarkdown ? (
+          <div className="mt-0.5 max-h-40 space-y-1 overflow-y-auto text-xs leading-snug text-muted-foreground">
+            {renderMarkdownLite(card.body)}
+          </div>
+        ) : (
+          <p className="mt-0.5 whitespace-pre-line text-xs leading-snug text-muted-foreground">{card.body}</p>
+        )}
       </div>
-      {card.dismissible && (
-        <button
-          type="button"
-          aria-label="Dismiss"
-          onClick={() => onDismiss(card.id)}
-          className="mt-0.5 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      )}
+      <div className="flex shrink-0 items-center gap-1">
+        {card.action_url && (
+          <a
+            href={card.action_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+          >
+            {card.action_label || "Learn more"}
+            <ArrowUpRight className="ml-0.5 inline h-3 w-3" />
+          </a>
+        )}
+        {card.dismissible && (
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => onDismiss(card.id)}
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
     </motion.div>
   );
 }

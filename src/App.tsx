@@ -19,6 +19,7 @@ import { TabProvider, useTabs } from "./contexts/TabContext";
 import { WorkspaceTabBar } from "./components/tabs/WorkspaceTabBar";
 import { Confetti, Toast, VoiceFloatingIndicator } from "./components/ui";
 import { InfoCardBanner } from "./components/InfoCardBanner";
+import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
 import Sidebar from "./components/Sidebar";
 import { LineNavigationRail } from "./features/navigation/line-nav";
 import Topbar from "./components/Topbar";
@@ -2984,6 +2985,7 @@ function AppContent() {
           )}
           <main className="relative flex min-w-0 flex-1 flex-col bg-[var(--bg)]">
             <InfoCardBanner />
+            <ReleaseNotesModal />
             <WorkspaceTabBar
               pages={visiblePages}
               sharedPages={sharedPages}

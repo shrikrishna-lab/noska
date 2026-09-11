@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
 
   let query = supabase
     .from("info_cards")
-    .select("id, title, body, icon, accent, platform, dismissible, starts_at, ends_at, updated_at")
+    .select("id, title, body, icon, accent, platform, dismissible, action_url, action_label, starts_at, ends_at, updated_at")
     .eq("is_active", true)
     .lte("starts_at", new Date().toISOString())
     .or("ends_at.is.null,ends_at.gt." + new Date().toISOString())

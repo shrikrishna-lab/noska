@@ -152,6 +152,9 @@ jobs:
               gh api "repos/shrikrishna-lab/noska/releases/assets/$aid" \
                 -H "Accept: application/octet-stream" > "dist/$name"
           done
+          # Carry the admin-authored release notes to the public release —
+          # the desktop app renders these as the per-version "What's New".
+          gh api "repos/shrikrishna-lab/noska/releases/$RELEASE_ID" --jq '.body' > dist/release-notes.md
           ls -la dist
 
       - name: Point latest.json at the PUBLIC repository
@@ -177,9 +180,11 @@ jobs:
           TAG="${{ steps.ver.outputs.tag }}"
           if gh release view "$TAG" --repo shrikrishna-lab/noska-desktop-releases > /dev/null 2>&1; then
             gh release upload "$TAG" --repo shrikrishna-lab/noska-desktop-releases --clobber dist/*
+            gh release edit "$TAG" --repo shrikrishna-lab/noska-desktop-releases \
+              --notes-file dist/release-notes.md
           else
             gh release create "$TAG" dist/* \
               --repo shrikrishna-lab/noska-desktop-releases \
               --title "Noska Desktop v${{ steps.ver.outputs.version }}" \
-              --notes "Installers for Windows (.exe/.msi), macOS (.dmg, Apple Silicon + Intel) and Linux (.AppImage/.deb/.rpm). Auto-update manifest: latest.json"
+              --notes-file dist/release-notes.md
           fi

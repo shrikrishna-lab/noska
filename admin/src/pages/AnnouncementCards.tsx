@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -15,8 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Info, Sparkles, AlertTriangle, Rocket, Wrench, Gift, Star, Plus, Pencil, Trash2,
-  Globe, Monitor, Layers, EyeOff, Eye, RefreshCw, Megaphone,
+  Info, Sparkles, Copy, AlertTriangle, Rocket, Wrench, Gift, Star, Plus, Pencil, Trash2,
+  Globe, Monitor, Layers, EyeOff, Eye, RefreshCw, Megaphone, MousePointerClick,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "@/lib/supabase";
@@ -29,6 +30,8 @@ interface InfoCardRow {
   accent: string;
   platform: string;
   dismissible: boolean;
+  action_url: string | null;
+  action_label: string | null;
   starts_at: string;
   ends_at: string | null;
   is_active: boolean;
@@ -68,6 +71,8 @@ interface CardForm {
   accent: string;
   platform: string;
   dismissible: boolean;
+  action_url: string;
+  action_label: string;
   starts_at: string;
   ends_at: string;
   is_active: boolean;
@@ -80,6 +85,8 @@ const emptyForm = (): CardForm => ({
   accent: "blue",
   platform: "both",
   dismissible: true,
+  action_url: "",
+  action_label: "",
   starts_at: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
   ends_at: "",
   is_active: true,
@@ -96,6 +103,65 @@ function isActiveNow(card: InfoCardRow): boolean {
   if (new Date(card.starts_at).getTime() > Date.now()) return false;
   if (card.ends_at && new Date(card.ends_at).getTime() <= Date.now()) return false;
   return true;
+}
+
+// ── Markdown-lite preview (mirrors the in-app banner renderer) ──────────
+// Supports **bold**, *italic*, `code`, [text](url), "#" headings, "> " quotes,
+// "- " bullets. Builds React nodes — no HTML injection.
+
+function renderInlineMd(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*|`([^`]+)`|\*([^*\s][^*]*)\*/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const k = `${keyPrefix}-${i++}`;
+    if (m[1] !== undefined) {
+      nodes.push(<a key={k} href={m[2]} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{m[1]}</a>);
+    } else if (m[3] !== undefined) {
+      nodes.push(<strong key={k} className="font-semibold">{m[3]}</strong>);
+    } else if (m[4] !== undefined) {
+      nodes.push(<code key={k} className="rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]">{m[4]}</code>);
+    } else if (m[5] !== undefined) {
+      nodes.push(<em key={k}>{m[5]}</em>);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+function MarkdownBody({ body }: { body: string }) {
+  const out: ReactNode[] = [];
+  const lines = body.split("\n");
+  let bullets: string[] = [];
+  const flush = (key: string) => {
+    if (bullets.length === 0) return;
+    out.push(
+      <ul key={key} className="ml-3.5 list-disc space-y-0.5">
+        {bullets.map((b, i) => <li key={i}>{renderInlineMd(b, `${key}-${i}`)}</li>)}
+      </ul>,
+    );
+    bullets = [];
+  };
+  lines.forEach((raw, idx) => {
+    const line = raw.trimEnd();
+    if (/^\s*-\s+/.test(line)) { bullets.push(line.replace(/^\s*-\s+/, "")); return; }
+    flush(`ul-${idx}`);
+    if (/^#{1,6}\s+/.test(line)) {
+      out.push(<p key={idx} className="font-semibold text-foreground">{renderInlineMd(line.replace(/^#{1,6}\s+/, ""), `h-${idx}`)}</p>);
+    } else if (/^>\s?/.test(line)) {
+      out.push(<p key={idx} className="border-l-2 border-border pl-2 text-[11px] italic text-muted-foreground">{renderInlineMd(line.replace(/^>\s?/, ""), `q-${idx}`)}</p>);
+    } else if (line.trim() === "") {
+      // skip
+    } else {
+      out.push(<p key={idx}>{renderInlineMd(line, `p-${idx}`)}</p>);
+    }
+  });
+  flush("ul-end");
+  return <div className="mt-0.5 space-y-1 text-xs leading-snug text-muted-foreground">{out}</div>;
 }
 
 export function AnnouncementCardsPage() {
@@ -136,6 +202,8 @@ export function AnnouncementCardsPage() {
         accent: form.accent,
         platform: form.platform,
         dismissible: form.dismissible,
+        action_url: form.action_url.trim() || null,
+        action_label: form.action_label.trim() || null,
         starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : new Date().toISOString(),
         ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
         is_active: form.is_active,
@@ -175,6 +243,35 @@ export function AnnouncementCardsPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Update failed"),
   });
 
+  const duplicate = useMutation({
+    mutationFn: async (card: InfoCardRow) => {
+      if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
+      const { error } = await supabase.rpc("admin_insert", {
+        p_session_token: getAdminToken(), p_table: "info_cards",
+        p_data: {
+          title: `${card.title} (copy)`,
+          body: card.body,
+          icon: card.icon,
+          accent: card.accent,
+          platform: card.platform,
+          dismissible: card.dismissible,
+          action_url: card.action_url,
+          action_label: card.action_label,
+          starts_at: new Date().toISOString(),
+          ends_at: card.ends_at,
+          is_active: false,
+        },
+        p_min_role: "marketing",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Card duplicated as paused draft");
+      qc.invalidateQueries({ queryKey: ["admin", "announcement-cards"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Duplicate failed"),
+  });
+
   const remove = useMutation({
     mutationFn: async (card: InfoCardRow) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
@@ -207,6 +304,8 @@ export function AnnouncementCardsPage() {
       accent: card.accent,
       platform: card.platform,
       dismissible: card.dismissible,
+      action_url: card.action_url ?? "",
+      action_label: card.action_label ?? "",
       starts_at: toLocalInput(card.starts_at),
       ends_at: toLocalInput(card.ends_at),
       is_active: card.is_active,
@@ -317,6 +416,14 @@ export function AnnouncementCardsPage() {
                     <Badge variant="outline" className="gap-1">
                       {card.dismissible ? <><EyeOff className="h-3 w-3" /> Dismissible</> : <><Eye className="h-3 w-3" /> Persistent</>}
                     </Badge>
+                    {card.action_url && (
+                      <Badge variant="outline" className="gap-1">
+                        <MousePointerClick className="h-3 w-3" /> {card.action_label || "Link"}
+                      </Badge>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      updated {new Date(card.updated_at).toLocaleDateString()}
+                    </span>
                   </div>
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -324,6 +431,9 @@ export function AnnouncementCardsPage() {
                       {card.is_active ? "Active" : "Paused"}
                     </div>
                     <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" title="Duplicate" onClick={() => duplicate.mutate(card)}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => openEdit(card)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -359,7 +469,12 @@ export function AnnouncementCardsPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="card-body">Body</Label>
+              <Label htmlFor="card-body">
+                Body
+                <span className="ml-2 font-normal text-[10px] text-muted-foreground">
+                  Markdown: **bold**, *italic*, `code`, [link](url), ## heading, - bullet, &gt; quote
+                </span>
+              </Label>
               <Textarea
                 id="card-body"
                 value={form.body}
@@ -424,6 +539,26 @@ export function AnnouncementCardsPage() {
                 />
               </div>
             </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1.5">
+                <Label htmlFor="card-action-url">Action link (optional)</Label>
+                <Input
+                  id="card-action-url"
+                  value={form.action_url}
+                  onChange={(e) => setForm({ ...form, action_url: e.target.value })}
+                  placeholder="https://…"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="card-action-label">Button label</Label>
+                <Input
+                  id="card-action-label"
+                  value={form.action_label}
+                  onChange={(e) => setForm({ ...form, action_label: e.target.value })}
+                  placeholder="Learn more"
+                />
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="card-starts">Starts at</Label>
@@ -454,9 +589,20 @@ export function AnnouncementCardsPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold leading-tight">{form.title || "Card title"}</p>
-                  <p className="mt-0.5 whitespace-pre-line text-xs leading-snug text-muted-foreground">{form.body || "Card body text"}</p>
+                  {form.body && /(^#|^\s*- |^\s*>|\*\*|`|\[[^\]]+\]\()/.test(form.body) ? (
+                    <MarkdownBody body={form.body} />
+                  ) : (
+                    <p className="mt-0.5 whitespace-pre-line text-xs leading-snug text-muted-foreground">{form.body || "Card body text"}</p>
+                  )}
                 </div>
-                {form.dismissible && <span className="mt-0.5 text-xs text-muted-foreground">✕</span>}
+                <div className="flex shrink-0 items-center gap-1">
+                  {form.action_url && (
+                    <span className="rounded-lg bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
+                      {form.action_label || "Learn more"}
+                    </span>
+                  )}
+                  {form.dismissible && <span className="text-xs text-muted-foreground">✕</span>}
+                </div>
               </div>
             </div>
 

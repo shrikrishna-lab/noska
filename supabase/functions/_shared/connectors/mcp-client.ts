@@ -9,6 +9,7 @@
  *
  * Tokens are injected per-call via the Authorization header by the caller
  * (gateway.ts) — a McpClient instance never persists or returns them.
+ * An empty accessToken means the server needs no auth (header omitted).
  * ========================================================================== */
 
 import { PlatformError } from "../core/pure.ts";
@@ -160,9 +161,9 @@ export class McpClient {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
-        "Authorization": `Bearer ${this.accessToken}`,
         "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
       };
+      if (this.accessToken) headers["Authorization"] = `Bearer ${this.accessToken}`;
       if (sessionId) headers["Mcp-Session-Id"] = sessionId;
 
       const res = await fetch(this.serverUrl, {
