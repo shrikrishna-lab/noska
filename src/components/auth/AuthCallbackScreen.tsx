@@ -1,9 +1,9 @@
-import { useAuth, useUser, useClerk } from "@clerk/react";
+import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase, supabaseAnon } from "../../lib/supabase";
-import { upsertUserProfile, fetchUserProfile } from "../../lib/supabaseService";
+import { supabase, supabaseAnon, setClerkSessionToken } from "../../lib/supabase";
+import { upsertUserProfile, fetchUserProfile, fetchPages, type Page } from "../../lib/supabaseService";
 import { capture, identifyUser } from "../../lib/posthog";
 import { setSentryUser } from "../../lib/sentry";
 import { clearOAuthIntent } from "../../lib/oauthIntent";
@@ -28,6 +28,7 @@ const STAGES: Record<Stage, StageConfig> = {
 export function AuthCallbackScreen() {
   const { isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
+  const { session } = useSession();
   const clerk = useClerk();
   const [stage, setStage] = useState<Stage>("signing_in");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -35,7 +36,13 @@ export function AuthCallbackScreen() {
   const [dots, setDots] = useState("");
   const mountedRef = useRef(true);
   const processedRef = useRef(false);
-const callbackStartedRef = useRef(false);
+  const callbackStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (session) {
+      setClerkSessionToken(() => session.getToken({ template: "supabase" }));
+    }
+  }, [session]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -85,7 +92,7 @@ const callbackStartedRef = useRef(false);
       return;
     }
 
-if (timeoutRef.current) {
+    if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
@@ -99,6 +106,10 @@ if (timeoutRef.current) {
 
     (async () => {
       try {
+        if (session) {
+          setClerkSessionToken(() => session.getToken({ template: "supabase" }));
+        }
+
         const email = user.primaryEmailAddress?.emailAddress || "";
         const uname = user.fullName || email.split("@")[0] || "User";
         const avatarUrl = user.imageUrl || null;
@@ -113,6 +124,15 @@ if (timeoutRef.current) {
           existingProfile = await fetchUserProfile(user.id);
         } catch {}
 
+        let existingPages: Page[] = [];
+        try {
+          existingPages = await fetchPages(user.id);
+        } catch {}
+
+        const isReturningUser = Boolean(
+          existingProfile?.onboarding_complete || (existingPages && existingPages.length > 0)
+        );
+
         try {
           await upsertUserProfile({
             userId: user.id,
@@ -122,7 +142,7 @@ if (timeoutRef.current) {
             // Preserve existing flags — upsertUserProfile omits unknown keys,
             // so a failed profile fetch can never downgrade a completed
             // onboarding back to false (which re-shows the create page).
-            onboardingComplete: existingProfile?.onboarding_complete ?? undefined,
+            onboardingComplete: isReturningUser ? true : (existingProfile?.onboarding_complete ?? undefined),
             useCase: existingProfile?.use_case,
             workspaceName: existingProfile?.workspace_name,
           });
@@ -194,10 +214,10 @@ if (timeoutRef.current) {
         if (accessStatus === "approved") {
           // Never send a completed sign-in back to /login. Route returning
           // users directly into their workspace and new users into onboarding.
-          const workspaceSlug = existingProfile?.onboarding_complete
-            ? slugifyWorkspaceName(existingProfile.workspace_name || `${uname}'s Workspace`)
+          const workspaceSlug = isReturningUser
+            ? slugifyWorkspaceName(existingProfile?.workspace_name || `${uname}'s Workspace`)
             : null;
-          go(workspaceSlug ? `/${workspaceSlug}` : "/onboarding");
+          go(workspaceSlug ? `/${workspaceSlug}` : (isReturningUser ? "/dashboard" : "/onboarding"));
         } else if (accessStatus === "banned") {
           go("/banned");
         } else {
@@ -209,7 +229,7 @@ if (timeoutRef.current) {
         setErrorMessage(e instanceof Error ? e.message : "Authentication failed. Please try again.");
       }
     })();
-  }, [isLoaded, isSignedIn, user]);
+  }, [isLoaded, isSignedIn, user, session]);
 
   const handleRetry = useCallback(() => {
     processedRef.current = false;

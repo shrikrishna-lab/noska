@@ -809,12 +809,20 @@ function AppContent() {
         setCurrentUserAvatar(profile?.avatar_url || null);
         const actualAvatar = profile?.avatar_url || u.imageUrl || '👤';
         realtimeCollab.initUser(u.id, profile?.user_name || uname, actualAvatar);
-        if (profile?.onboarding_complete) {
+        
+        const hasExistingData = Boolean(
+          profile?.onboarding_complete || (loadedPages && loadedPages.length > 0)
+        );
+
+        if (hasExistingData) {
           // Returning user with no username yet (pre-existing account from
           // before this feature) — gate them with ClaimUsernameModal once
           // they land in the workspace, instead of forcing them back
           // through the full onboarding wizard.
-          setNeedsUsernameClaim(!profile.username);
+          if (!profile?.onboarding_complete && u.id) {
+            setOnboardingComplete(u.id, profile?.use_case || null, profile?.workspace_name || `${uname}'s Workspace`, profile?.username).catch(() => {});
+          }
+          setNeedsUsernameClaim(!profile?.username);
           // Returning user: set their data
           const normalized = normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })));
           // Register the DB/local merged state as the sync baseline so the
@@ -842,11 +850,27 @@ function AppContent() {
           setAppFlowState("onboarding");
         }
       } catch {
-        setPages([]);
-        setAiChats([]);
-        setActiveId(null);
-        setStackedPageIds([]);
-        setAppFlowState("onboarding");
+        if (loadedPages && loadedPages.length > 0) {
+          const normalized = normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })));
+          initStorageSyncBaseline(normalized, loadedChats);
+          preserveLocalPages.current = false;
+          setPages(normalized);
+          setAiChats(loadedChats);
+          if (normalized.length > 0) {
+            const deepLinkId = routeParams.pageId && normalized.some((p) => p.id === routeParams.pageId)
+              ? routeParams.pageId
+              : normalized[0].id;
+            setActiveId(deepLinkId);
+            setStackedPageIds([deepLinkId]);
+          }
+          setAppFlowState("workspace");
+        } else {
+          setPages([]);
+          setAiChats([]);
+          setActiveId(null);
+          setStackedPageIds([]);
+          setAppFlowState("onboarding");
+        }
       }
 
       try {
@@ -937,19 +961,32 @@ function AppContent() {
       console.warn("App: failed to save user profile", e);
     }
 
-    if (existingProfile?.onboarding_complete) {
+    let remotePages: Page[] = [];
+    try {
+      remotePages = await fetchPages(userData.userId);
+    } catch (e) {
+      console.warn("App: failed to fetch pages for user", e);
+    }
+
+    const hasExistingData = Boolean(
+      existingProfile?.onboarding_complete || (remotePages && remotePages.length > 0)
+    );
+
+    if (hasExistingData) {
       capture("login");
+      if (!existingProfile?.onboarding_complete) {
+        setOnboardingComplete(userData.userId, existingProfile?.use_case || null, existingProfile?.workspace_name || `${uname}'s Workspace`, existingProfile?.username).catch(() => {});
+      }
       // Same pre-existing-account gate as the initial-mount bootstrap
       // above — see its comment for why this can't just be folded into
       // the onboarding wizard for these users.
-      setNeedsUsernameClaim(!existingProfile.username);
+      setNeedsUsernameClaim(!existingProfile?.username);
       // Returning user signing in mid-session (the initial mount bootstrap
       // already ran before this sign-in completed) — load their data now.
       // DB-first: fetchPages above is awaited BEFORE any localStorage read,
       // so the workspace reflects server state and localStorage only
       // contributes offline edits / unflushed pages from the prior session.
       try {
-        const remotePages = await fetchPages(userData.userId);
         const merged = await mergeLocalStoragePages(remotePages);
         const normalized = normalizePages(merged.map(p => ({ ...p, content: p.content || [] })));
         initStorageSyncBaseline(normalized, []);
@@ -991,7 +1028,7 @@ function AppContent() {
       } catch {}
       if (wsName) {
         setWorkspaceName(wsName);
-      } else if (existingProfile.workspace_name) {
+      } else if (existingProfile?.workspace_name) {
         setWorkspaceName(existingProfile.workspace_name);
       }
       setAppFlowState("workspace");
@@ -1109,16 +1146,19 @@ function AppContent() {
     // handleFinalize's fallback above — this is the last-resort path when
     // starterPages itself is empty.
     const fallbackTimestamp = now();
-    const pages: Page[] = realStarterPages && realStarterPages.length > 0 ? realStarterPages : [{
+    const starterPagesList: Page[] = realStarterPages && realStarterPages.length > 0 ? realStarterPages : [{
       id: uid(), title: "Getting Started", icon: "🚀",
       favorite: false, trashed: false, tags: [], parentId: null,
       createdAt: fallbackTimestamp, updatedAt: fallbackTimestamp,
       lineage: [{ action: "created" as const, timestamp: fallbackTimestamp, detail: "Fallback starter page" }],
       blocks: textToBlocks("# Getting Started\n\nWelcome to Noska!")
     }];
-    setPages(pages);
-    setActiveId(pages[0].id);
-    setStackedPageIds([pages[0].id]);
+    const finalPages = pages.length > 0
+      ? [...starterPagesList, ...pages.filter(p => !starterPagesList.some(sp => sp.id === p.id))]
+      : starterPagesList;
+    setPages(finalPages);
+    setActiveId(finalPages[0].id);
+    setStackedPageIds([finalPages[0].id]);
     // Identity guard: profile writes MUST use the signed-in Clerk id.
     // realtimeCollab.getUser().userId can still be a stale anon-*/localStorage
     // UUID here (e.g. onboarding raced ahead of auth bootstrap), which would
