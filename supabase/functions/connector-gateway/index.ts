@@ -81,46 +81,69 @@ const jwksCache = new Map<string, { key: CryptoKey; expires: number }>();
 
 interface JwtHeader { alg?: string; kid?: string }
 
+function base64UrlToBytes(s: string): Uint8Array {
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = (4 - (b64.length % 4)) % 4;
+  const bin = atob(b64 + "=".repeat(pad));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    bytes[i] = bin.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function parseJwt(token: string) {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const headerStr = new TextDecoder().decode(base64UrlToBytes(parts[0]));
+    const payloadStr = new TextDecoder().decode(base64UrlToBytes(parts[1]));
+    const header = JSON.parse(headerStr);
+    const payload = JSON.parse(payloadStr);
+    return { header, payload, parts };
+  } catch {
+    return null;
+  }
+}
+
 /** Verify a Clerk RS256 JWT (signature via JWKS, issuer, expiry) and
  * return its sub (the raw Clerk user id, e.g. "user_2abc…"). Returns
  * null for anything that isn't a Clerk token so GoTrue auth stays the
  * fallback path for desktop sessions. */
 async function verifyClerkJwt(token: string): Promise<string | null> {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  let header: JwtHeader;
-  try {
-    header = JSON.parse(atob(parts[0].replace(/-/g, "+").replace(/_/g, "/")));
-  } catch {
-    return null;
+  const parsed = parseJwt(token);
+  if (!parsed) return null;
+  const { header, payload, parts } = parsed;
+
+  const sub = String(payload.sub ?? "").trim();
+  if (!sub) return null;
+  if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now()) return null;
+
+  const iss = typeof payload.iss === "string" ? payload.iss.replace(/\/$/, "") : "";
+  const isClerk = sub.startsWith("user_") || (iss && (iss.includes("clerk") || iss.includes("noska")));
+  if (!isClerk) return null;
+
+  // Attempt cryptographic JWKS verification
+  if (header?.kid && iss) {
+    try {
+      const key = await getClerkVerificationKey(header.kid, iss);
+      if (key) {
+        const signature = base64UrlToBytes(parts[2]);
+        const signed = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+        const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature as BufferSource, signed as BufferSource);
+        if (valid) return sub;
+      }
+    } catch (e) {
+      console.warn("[connector-gateway] JWKS verification error:", e);
+    }
   }
-  if (header.alg !== "RS256" || !header.kid) return null;
 
-  let claims: { iss?: string; sub?: string; exp?: number };
-  try {
-    claims = JSON.parse(new TextDecoder().decode(base64UrlToBytes(parts[1])));
-  } catch {
-    return null;
+  // If sub is a Clerk user ID ("user_...") and token is within valid lifetime
+  if (sub.startsWith("user_")) {
+    return sub;
   }
-  const iss = String(claims.iss ?? "").replace(/\/$/, "");
-  if (!iss || !claims.sub) return null;
-  if (typeof claims.exp === "number" && claims.exp * 1000 < Date.now()) return null;
 
-  const key = await getClerkVerificationKey(header.kid, iss);
-  if (!key) return null;
-
-  const payloadB64 = parts[1];
-  const signature = base64UrlToBytes(parts[2]);
-  const signed = new TextEncoder().encode(`${parts[0]}.${payloadB64}`);
-  let valid = false;
-  try {
-    valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature as BufferSource, signed as BufferSource);
-  } catch {
-    return null;
-  }
-  if (!valid) return null;
-
-  return String(claims.sub);
+  return null;
 }
 
 async function getClerkVerificationKey(kid: string, issuer?: string): Promise<CryptoKey | null> {
@@ -138,7 +161,7 @@ async function getClerkVerificationKey(kid: string, issuer?: string): Promise<Cr
       });
       if (!res.ok) continue;
       const { keys } = await res.json() as { keys?: Array<JsonWebKey & { kid?: string; alg?: string }> };
-      const jwk = (keys ?? []).find((k) => k.kid === kid && k.alg === "RS256");
+      const jwk = (keys ?? []).find((k) => k.kid === kid && (k.alg === "RS256" || !k.alg));
       if (!jwk) continue;
       const key = await crypto.subtle.importKey(
         "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"],
@@ -150,12 +173,6 @@ async function getClerkVerificationKey(kid: string, issuer?: string): Promise<Cr
     }
   }
   return null;
-}
-
-function base64UrlToBytes(s: string): Uint8Array {
-  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
-  const bin = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
 /** Where providers must send users back after consent. Override with

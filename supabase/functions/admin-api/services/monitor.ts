@@ -55,8 +55,13 @@ export async function monitor(action: string, _payload: Record<string, unknown>)
           const projectId = Deno.env.get("POSTHOG_PROJECT_ID");
           const host = Deno.env.get("POSTHOG_HOST") ?? "https://us.posthog.com";
           if (!token || !projectId) { services.push({ name: "PostHog", status: "unknown", latency: 0 }); return; }
-          const url = `${host}/api/projects/${projectId}/insights/trend/?display=ActionsLineGraph&events=${encodeURIComponent('[{"id":"$pageview","name":"$pageview","type":"events","order":0}]')}&date_from=-24h&interval=hour`;
-          const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+          // Personal tokens can't use the legacy /insights/* endpoints — probe
+          // the query API instead.
+          const r = await fetch(`${host}/api/projects/${projectId}/query/`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ query: { kind: "HogQLQuery", query: "SELECT 1" }, refresh: "blocking" }),
+          });
           services.push({ name: "PostHog", status: r.ok ? "operational" : "degraded", latency: Date.now() - t });
         })(),
         (async () => {
@@ -84,6 +89,14 @@ export async function monitor(action: string, _payload: Record<string, unknown>)
         storage: 0,
         apiLatency: 0,
       };
+
+    case "storage": {
+      // Real storage usage from the storage schema (aggregated by a
+      // SECURITY DEFINER RPC — see the get_storage_stats migration).
+      const { data, error } = await supabase.rpc("get_storage_stats");
+      if (error) throw new Error(`Storage stats unavailable: ${error.message}`);
+      return data;
+    }
 
     default:
       throw new Error(`Unknown monitor action: ${action}`);

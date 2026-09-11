@@ -12,6 +12,19 @@ interface SentryRelease {
   projects: Array<{ name: string }>;
 }
 
+async function sentryFetch(
+  base: string,
+  headers: HeadersInit,
+  path: string,
+): Promise<unknown> {
+  const r = await fetch(`${base}${path}`, { headers });
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error(`Sentry API ${r.status}: ${body.slice(0, 250)}`);
+  }
+  return r.json();
+}
+
 serve(async (req: Request) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -34,11 +47,30 @@ serve(async (req: Request) => {
   const headers = { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" };
 
   try {
+    if (path === "config-check") {
+      // Operational diagnostics: lists the orgs/projects the token can
+      // actually reach so a bad SENTRY_ORG/SENTRY_PROJECT slug is obvious.
+      const orgs = (await sentryFetch(base, headers, "/organizations/")) as Array<{ slug: string; name: string; status?: unknown }>;
+      let projects: Array<{ slug: string; name: string }> | { error: string } = [];
+      try {
+        projects = (await sentryFetch(base, headers, `/organizations/${org}/projects/`)) as Array<{ slug: string; name: string }>;
+      } catch (e) {
+        projects = { error: e instanceof Error ? e.message : "unknown" };
+      }
+      return res({
+        configuredOrg: org,
+        configuredProject: project,
+        accessibleOrgs: orgs.map((o) => ({ slug: o.slug, name: o.name })),
+        orgProjects: projects,
+      });
+    }
+
     if (path === "issues") {
-      const url = `${base}/projects/${org}/${project}/issues/?statsPeriod=${statsPeriod}&query=is:unresolved&limit=50`;
-      const r = await fetch(url, { headers });
-      if (!r.ok) throw new Error(`Sentry API ${r.status}`);
-      const issues: Array<Record<string, unknown>> = await r.json();
+      const issues = (await sentryFetch(
+        base,
+        headers,
+        `/projects/${org}/${project}/issues/?statsPeriod=${statsPeriod}&query=is:unresolved&limit=50&sort=freq`,
+      )) as Array<Record<string, unknown>>;
       return res(issues.map((i) => ({
         id: i.id, title: i.title, level: i.level, status: i.status,
         count: i.count, userCount: i.userCount, lastSeen: i.lastSeen,
@@ -48,28 +80,53 @@ serve(async (req: Request) => {
     }
 
     if (path === "issue-counts") {
-      const [unresolvedRes, newRes, resolvedRes] = await Promise.all([
-        fetch(`${base}/projects/${org}/${project}/stats/?stat=received&since=${Date.now() / 1000 - 86400}`, { headers }),
-        fetch(`${base}/projects/${org}/${project}/issues/?query=is:unresolved&statsPeriod=24h&limit=1`, { headers }),
-        fetch(`${base}/projects/${org}/${project}/issues/?query=is:resolved&statsPeriod=24h&limit=1`, { headers }),
+      const since = new Date(Date.now() - 86400000).toISOString();
+      const [unresolved, resolved] = await Promise.all([
+        sentryFetch(
+          base,
+          headers,
+          `/projects/${org}/${project}/issues/?statsPeriod=24h&query=is:unresolved&limit=100`,
+        ) as Promise<Array<Record<string, unknown>>>,
+        sentryFetch(
+          base,
+          headers,
+          `/projects/${org}/${project}/issues/?statsPeriod=24h&query=is:resolved&limit=100`,
+        ).catch(() => [] as Array<Record<string, unknown>>),
       ]);
 
-      const unresolvedStats = unresolvedRes.ok ? await unresolvedRes.json() : [];
-      const resolvedCount = resolvedRes.ok ? await resolvedRes.json() : [];
-      const newCount = resolvedRes.ok ? await newRes.json() : [];
+      const num = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
 
-      return res({
-        total: unresolvedStats.length > 0 ? (unresolvedStats as number[][]).reduce((a: number, b: number[]) => a + (b[1] ?? 0), 0) : 0,
-        resolved: Array.isArray(resolvedCount) ? resolvedCount.length : 0,
-        newCount: Array.isArray(newCount) ? newCount.length : 0,
-      });
+      let total = 0;
+      let fatal = 0;
+      let error = 0;
+      let warning = 0;
+      let info = 0;
+      let newCount = 0;
+      for (const issue of unresolved) {
+        const events = num(issue.count);
+        total += events;
+        const level = String(issue.level ?? "error").toLowerCase();
+        if (level === "fatal") fatal += events;
+        else if (level === "error" || level === "exception") error += events;
+        else if (level === "warning") warning += events;
+        else info += events;
+        const firstSeen = String(issue.firstSeen ?? "");
+        if (firstSeen && new Date(firstSeen).getTime() >= new Date(since).getTime()) newCount += 1;
+      }
+      const resolvedEvents = resolved.reduce((a: number, i) => a + num(i.count), 0);
+
+      return res({ total, fatal, error, warning, info, newCount, resolved: resolvedEvents });
     }
 
     if (path === "releases") {
-      const url = `${base}/projects/${org}/${project}/releases/?limit=${limit}`;
-      const r = await fetch(url, { headers });
-      if (!r.ok) throw new Error(`Sentry API ${r.status}`);
-      const releases: SentryRelease[] = await r.json();
+      const releases = (await sentryFetch(
+        base,
+        headers,
+        `/projects/${org}/${project}/releases/?limit=${limit}`,
+      )) as SentryRelease[];
       return res(releases.map((r) => ({
         version: r.version, dateCreated: r.dateCreated,
         projects: r.projects,
