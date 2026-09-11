@@ -44,6 +44,7 @@ import {
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
 import CustomProviders from "./settings/CustomProviders";
 import IntegrationsSettings from "./settings/IntegrationsSettings";
+import ConnectionsSettings from "./settings/ConnectionsSettings";
 import VoiceCustomizationSettings from "./settings/VoiceCustomizationSettings";
 import ShortcutsSettings from "./ShortcutsSettings";
 import { BillingPromotionalTab } from "./settings/BillingPromotionalTab";
@@ -637,17 +638,17 @@ export function SettingsModal({
             </div>
           )}
 
-          {tab === "Integrations" && (
+          {(tab === "Integrations" || tab === "Connections") && (
             <div className="max-w-2xl space-y-6 pb-16 font-sans">
               <div className="pt-1">
                 <h1 className="text-[28px] font-normal tracking-tight font-serif text-[#1c1b18] dark:text-white">
-                  Integrations
+                  Connections
                 </h1>
                 <p className="text-xs text-[#706c64] dark:text-white/60 mt-1">
-                  Connect your platforms — Notion, GitHub, Slack, Gmail, Calendar, or any MCP server. Connected tools become available to Noska AI, agents, and automations.
+                  Connect your tools and accounts — GitHub, Jira, Slack, Figma, Linear, or custom MCP servers. Link previews, mentions, and agent automations update seamlessly.
                 </p>
               </div>
-              <IntegrationsSettings onToast={(msg) => setSaveStatus(msg)} />
+              <ConnectionsSettings onToast={(msg) => setSaveStatus(msg)} />
             </div>
           )}
 

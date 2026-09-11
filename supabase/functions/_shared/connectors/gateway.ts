@@ -691,3 +691,147 @@ export async function listConnections(userId: string): Promise<{ connections: Ro
   if (error) throw errors.internal(error.message);
   return { connections: data ?? [] };
 }
+
+/* ─── External Resource Resolution & Multi-Account Selection ─────────── */
+
+import { fetchGitHubResource } from "./github-adapter.ts";
+
+export async function resolveExternalResource(
+  userId: string | null,
+  rawUrl: string,
+  preferredAccountId?: string,
+): Promise<{
+  state: string;
+  resource?: any;
+  errorMessage?: string;
+  accessibleAccounts?: Array<{ id: string; label: string; username: string }>;
+  selectedAccountId?: string;
+}> {
+  if (!rawUrl || typeof rawUrl !== "string") {
+    return { state: "malformed_url", errorMessage: "Missing or invalid URL." };
+  }
+
+  const trimmed = rawUrl.trim();
+  const ghPrMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i);
+  const ghIssueMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/issues\/(\d+)/i);
+  const ghCommitMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([0-9a-fA-F]{7,40})/i);
+  const ghReleaseMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/releases\/tag\/([^\/?#]+)/i);
+  const ghBlobMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)/i);
+  const ghRepoMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/?#]+)\/?$/i);
+
+  if (ghPrMatch || ghIssueMatch || ghCommitMatch || ghReleaseMatch || ghBlobMatch || ghRepoMatch) {
+    let resourceType: "pull_request" | "issue" | "commit" | "release" | "file" | "repository" = "repository";
+    let params: Record<string, string> = {};
+
+    if (ghPrMatch) {
+      resourceType = "pull_request";
+      params = { owner: ghPrMatch[1], repo: ghPrMatch[2], number: ghPrMatch[3] };
+    } else if (ghIssueMatch) {
+      resourceType = "issue";
+      params = { owner: ghIssueMatch[1], repo: ghIssueMatch[2], number: ghIssueMatch[3] };
+    } else if (ghCommitMatch) {
+      resourceType = "commit";
+      params = { owner: ghCommitMatch[1], repo: ghCommitMatch[2], sha: ghCommitMatch[3] };
+    } else if (ghReleaseMatch) {
+      resourceType = "release";
+      params = { owner: ghReleaseMatch[1], repo: ghReleaseMatch[2], tag: ghReleaseMatch[3] };
+    } else if (ghBlobMatch) {
+      resourceType = "file";
+      params = { owner: ghBlobMatch[1], repo: ghBlobMatch[2], ref: ghBlobMatch[3], path: ghBlobMatch[4].split(/[#?]/)[0] };
+    } else if (ghRepoMatch) {
+      resourceType = "repository";
+      params = { owner: ghRepoMatch[1], repo: ghRepoMatch[2] };
+    }
+
+    // Look up user's active GitHub connections if userId provided
+    let userConnections: ConnectionRow[] = [];
+    if (userId) {
+      const { data: conns } = await db().from("user_connections")
+        .select("*, connectors!inner(slug)")
+        .eq("user_id", userId)
+        .eq("status", "connected")
+        .eq("connectors.slug", "github");
+      userConnections = (conns ?? []) as ConnectionRow[];
+    }
+
+    const accessibleAccounts = userConnections.map((c) => ({
+      id: c.id,
+      label: c.label || c.external_account_label || "GitHub Account",
+      username: c.external_account_label || "GitHub",
+    }));
+
+    // If preferred connection ID given, sort it first
+    if (preferredAccountId) {
+      userConnections.sort((a, b) => (a.id === preferredAccountId ? -1 : b.id === preferredAccountId ? 1 : 0));
+    }
+
+    // If user has connected accounts, iterate through them
+    if (userConnections.length > 0) {
+      for (const conn of userConnections) {
+        let token: string | null = null;
+        try {
+          if (conn.access_token_encrypted) {
+            token = await decryptSecret(conn.access_token_encrypted, TOKEN_KEY_ENV);
+          }
+        } catch {
+          continue;
+        }
+        if (!token) continue;
+
+        const result = await fetchGitHubResource(token, resourceType, params);
+        if (result.resource) {
+          return {
+            state: "success",
+            resource: result.resource,
+            accessibleAccounts,
+            selectedAccountId: conn.id,
+          };
+        }
+      }
+
+      // If all connected accounts failed with 404/403, try public unauthenticated
+      const publicResult = await fetchGitHubResource(null, resourceType, params);
+      if (publicResult.resource) {
+        return {
+          state: "success",
+          resource: publicResult.resource,
+          accessibleAccounts,
+        };
+      }
+
+      return {
+        state: "access_denied",
+        errorMessage: "You are connected to GitHub, but this account cannot access this resource.",
+        accessibleAccounts,
+      };
+    }
+
+    // If no user connections, attempt public GitHub fetch
+    const publicResult = await fetchGitHubResource(null, resourceType, params);
+    if (publicResult.resource) {
+      return {
+        state: "success",
+        resource: publicResult.resource,
+        accessibleAccounts: [],
+      };
+    }
+
+    // Public request failed (404/403/rate limit)
+    if (publicResult.errorStatus === 404 || publicResult.errorStatus === 403 || publicResult.errorStatus === 401) {
+      return {
+        state: "auth_required",
+        errorMessage: "Connect to GitHub to view this resource.",
+        accessibleAccounts: [],
+      };
+    }
+
+    return {
+      state: "not_found",
+      errorMessage: publicResult.errorMessage || "Resource not found on GitHub.",
+      accessibleAccounts: [],
+    };
+  }
+
+  return { state: "unsupported_resource", errorMessage: "Unsupported external resource URL." };
+}
+

@@ -30,6 +30,7 @@ export interface BlockRegistryEntry {
 }
 
 export const BlockType: Record<string, string> = {
+  EXTERNAL_PREVIEW: "external-preview",
   AI_MEETING_NOTES: "ai-meeting-notes",
   TEXT: "text",
   H1: "h1",

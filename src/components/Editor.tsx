@@ -120,6 +120,9 @@ import VersionHistoryPanel from "./editor/VersionHistoryPanel";
 import NotionAIBar from "./editor/NotionAIBar";
 import renderBlockEditor from "./editor/renderBlockEditor";
 import FloatingFormatToolbar from "./editor/FloatingFormatToolbar";
+import { ExternalUrlResolver } from "../lib/connections/urlResolver";
+import PasteChoiceMenu from "./editor/PasteChoiceMenu";
+import type { UrlMatchResult } from "../lib/connections/types";
 
 function childIdsFor(blocks: EditorBlock[], parentId: string | null): string[] {
   const ids = new Set(blocks.map((block) => block.id));
@@ -1850,6 +1853,11 @@ const Block = memo(function Block({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [blockContextOpen, setBlockContextOpen] = useState(false);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const [pasteChoice, setPasteChoice] = useState<{
+    url: string;
+    matchResult: UrlMatchResult;
+    position: { top: number; left: number };
+  } | null>(null);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
 
@@ -1976,6 +1984,20 @@ const Block = memo(function Block({
     if (!block || !["text", "bullet", "number", "todo", "quote", "h1", "h2", "h3", "h4"].includes(block.type)) return;
     e.preventDefault();
     const url = urlMatch[0];
+    const externalMatch = ExternalUrlResolver.detectUrl(url);
+    if (externalMatch) {
+      const rect = inputRef.current?.getBoundingClientRect();
+      const pos = rect
+        ? { top: rect.bottom + 8, left: rect.left }
+        : { top: window.innerHeight / 2 - 100, left: window.innerWidth / 2 - 130 };
+      setPasteChoice({
+        url,
+        matchResult: externalMatch,
+        position: pos,
+      });
+      return;
+    }
+
     const embedType = detectEmbedType(url);
     if (embedType) {
       onPatch({
@@ -2487,6 +2509,19 @@ const Block = memo(function Block({
           page,
           onBlocks,
           (url) => {
+            const externalMatch = ExternalUrlResolver.detectUrl(url);
+            if (externalMatch) {
+              const rect = inputRef.current?.getBoundingClientRect();
+              const pos = rect
+                ? { top: rect.bottom + 8, left: rect.left }
+                : { top: window.innerHeight / 2 - 100, left: window.innerWidth / 2 - 130 };
+              setPasteChoice({
+                url,
+                matchResult: externalMatch,
+                position: pos,
+              });
+              return;
+            }
             const embedType = detectEmbedType(url);
             if (embedType) {
               onPatch({ ...blockForTreeConversion(block, embedType, url), text: url });
@@ -2496,6 +2531,41 @@ const Block = memo(function Block({
               onPatch({ ...blockForTreeConversion(block, "bookmark", url), text: url });
             }
           }
+        )}
+        {pasteChoice && createPortal(
+          <PasteChoiceMenu
+            url={pasteChoice.url}
+            matchResult={pasteChoice.matchResult}
+            position={pasteChoice.position}
+            onSelect={(action) => {
+              if (action === "preview") {
+                onPatch({
+                  ...blockForTreeConversion(block, "external-preview", pasteChoice.url),
+                  type: "external-preview",
+                  url: pasteChoice.url,
+                  text: pasteChoice.url,
+                  properties: {
+                    ...(block.properties || {}),
+                    url: pasteChoice.url,
+                    provider: pasteChoice.matchResult.provider.id,
+                  },
+                });
+              } else if (action === "mention") {
+                onPatch({
+                  ...block,
+                  text: `[${pasteChoice.matchResult.displayHint || pasteChoice.matchResult.provider.name}](${pasteChoice.url})`,
+                });
+              } else {
+                onPatch({
+                  ...block,
+                  text: pasteChoice.url,
+                });
+              }
+              setPasteChoice(null);
+            }}
+            onDismiss={() => setPasteChoice(null)}
+          />,
+          document.body
         )}
         <TypedSlashCommandMenu
           ref={slashRef}

@@ -19,6 +19,7 @@ import LazyMermaidBlock from "./LazyMermaidBlock";
 import DatabaseBlock from "../DatabaseBlock";
 import LinkedViewBlock from "./LinkedViewBlock";
 import FormsBlock from "../FormsBlock";
+import ExternalLinkPreview from "./ExternalLinkPreview";
 import { PageIcon } from "../PageIcon";
 
 
@@ -65,6 +66,10 @@ export default function renderBlockEditor(
   onBlocks?: (blocks: any[]) => void,
   onPasteUrl?: (url: string) => void
 ) {
+  if (block.type === "external-preview") {
+    return <ExternalLinkPreview block={block} onPatch={onPatch} onDelete={onDelete} />;
+  }
+
   const registryItem = BlockRegistry.find(r => r.type === block.type);
   if (registryItem?.category === "Embeds") {
     return <EmbedBlock block={block} onPatch={onPatch} onKeyDown={onKeyDown} onDelete={onDelete} />;

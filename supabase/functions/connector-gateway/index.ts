@@ -29,6 +29,7 @@ import {
   listAvailableTools, listConnectors, listConnections,
   callTool, startConnect, handleCallback, revokeConnection,
   connectWithToken, testConnection, resolveConnector, connectorSlugFromState,
+  resolveExternalResource,
 } from "../_shared/connectors/gateway.ts";
 
 const CORS = {
@@ -283,6 +284,20 @@ Deno.serve(async (req: Request) => {
       if (!tool) throw errors.validation("tool is required.");
       const args = (body.arguments ?? body.args ?? {}) as Record<string, unknown>;
       return json(await callTool(userId, connectorRef, tool, args));
+    }
+
+    if ((action === "resolve-url" || action === "resources/resolve-url") && req.method === "POST") {
+      let userId: string | null = null;
+      try {
+        userId = await requireUserJwt(req);
+      } catch {
+        // Optional auth: unauthenticated calls can still resolve public resources
+      }
+      const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+      const targetUrl = String(body.url ?? "");
+      if (!targetUrl) throw errors.validation("url is required.");
+      const preferredAccountId = typeof body.account_id === "string" ? body.account_id : undefined;
+      return json(await resolveExternalResource(userId, targetUrl, preferredAccountId));
     }
 
     /* ── Public OAuth callback: the encrypted state IS the identity ── */
