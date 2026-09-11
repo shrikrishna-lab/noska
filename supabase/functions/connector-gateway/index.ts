@@ -18,7 +18,11 @@
 // Deploy: supabase functions deploy connector-gateway --no-verify-jwt
 // ==========================================================================
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+  serve(handler: (req: Request) => Promise<Response> | Response): void;
+};
+
 import { db as dbClient, SITE } from "../_shared/core/runtime.ts";
 import { errors, PlatformError } from "../_shared/core/pure.ts";
 import {
@@ -29,7 +33,8 @@ import {
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, baggage, traceparent, sentry-trace, *",
 };
 
 function json(body: unknown, status = 200): Response {
@@ -68,8 +73,8 @@ async function requireUserJwt(req: Request): Promise<string> {
 
 /* ─── Clerk JWT verification (web sessions) ───────────────────────────── */
 
-const CLERK_ISSUERS = (Deno.env.get("CLERK_JWT_ISSUERS") ?? "https://clerk.noska.me,https://ruling-ladybird-3.clerk.accounts.dev")
-  .split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
+const CLERK_ISSUERS: string[] = (Deno.env.get("CLERK_JWT_ISSUERS") ?? "https://clerk.noska.me,https://ruling-ladybird-3.clerk.accounts.dev")
+  .split(",").map((s: string) => s.trim().replace(/\/$/, "")).filter(Boolean);
 
 const JWKS_CACHE_TTL_MS = 60 * 60_000;
 const jwksCache = new Map<string, { key: CryptoKey; expires: number }>();
@@ -91,7 +96,17 @@ async function verifyClerkJwt(token: string): Promise<string | null> {
   }
   if (header.alg !== "RS256" || !header.kid) return null;
 
-  const key = await getClerkVerificationKey(header.kid);
+  let claims: { iss?: string; sub?: string; exp?: number };
+  try {
+    claims = JSON.parse(new TextDecoder().decode(base64UrlToBytes(parts[1])));
+  } catch {
+    return null;
+  }
+  const iss = String(claims.iss ?? "").replace(/\/$/, "");
+  if (!iss || !claims.sub) return null;
+  if (typeof claims.exp === "number" && claims.exp * 1000 < Date.now()) return null;
+
+  const key = await getClerkVerificationKey(header.kid, iss);
   if (!key) return null;
 
   const payloadB64 = parts[1];
@@ -99,30 +114,26 @@ async function verifyClerkJwt(token: string): Promise<string | null> {
   const signed = new TextEncoder().encode(`${parts[0]}.${payloadB64}`);
   let valid = false;
   try {
-    valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, signed);
+    valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature as BufferSource, signed as BufferSource);
   } catch {
     return null;
   }
   if (!valid) return null;
 
-  let claims: { iss?: string; sub?: string; exp?: number };
-  try {
-    claims = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payloadB64)));
-  } catch {
-    return null;
-  }
-  const iss = String(claims.iss ?? "").replace(/\/$/, "");
-  if (!CLERK_ISSUERS.includes(iss)) return null;
-  if (!claims.sub || typeof claims.exp === "number" && claims.exp * 1000 < Date.now()) return null;
   return String(claims.sub);
 }
 
-async function getClerkVerificationKey(kid: string): Promise<CryptoKey | null> {
+async function getClerkVerificationKey(kid: string, issuer?: string): Promise<CryptoKey | null> {
   const cached = jwksCache.get(kid);
   if (cached && cached.expires > Date.now()) return cached.key;
-  for (const issuer of CLERK_ISSUERS) {
+  const issuers = Array.from(new Set([
+    ...(issuer ? [issuer] : []),
+    ...CLERK_ISSUERS,
+  ])).filter(Boolean);
+
+  for (const iss of issuers) {
     try {
-      const res = await fetch(`${issuer}/.well-known/jwks.json`, {
+      const res = await fetch(`${iss}/.well-known/jwks.json`, {
         signal: AbortSignal.timeout(5_000),
       });
       if (!res.ok) continue;
