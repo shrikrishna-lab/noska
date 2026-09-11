@@ -29,6 +29,14 @@ export interface McpCallResult {
   [key: string]: unknown;
 }
 
+export interface McpResource {
+  uri: string;
+  name?: string;
+  description?: string;
+  mimeType?: string;
+  [key: string]: unknown;
+}
+
 /** Transport-level failure (HTTP status, timeout, malformed response). */
 export class McpTransportError extends Error {
   status: number;
@@ -92,6 +100,20 @@ export class McpClient {
   async listTools(): Promise<McpTool[]> {
     const result = await this.rpc("tools/list", {}) as { tools?: unknown } | null;
     return Array.isArray(result?.tools) ? result.tools as McpTool[] : [];
+  }
+
+  /** resources/list (the MCP resources primitive). Many servers only
+   * implement tools — "method not found" is a normal "no resources"
+   * answer here, not a transport failure. */
+  async listResources(): Promise<McpResource[]> {
+    try {
+      const result = await this.rpc("resources/list", {}) as { resources?: unknown } | null;
+      return Array.isArray(result?.resources) ? result.resources as McpResource[] : [];
+    } catch (err) {
+      if (err instanceof McpRpcError && (err.code === -32601 || err.code === -32602)) return [];
+      if (err instanceof McpRpcError && /method.*not.*found|not.*implement/i.test(err.message)) return [];
+      throw err;
+    }
   }
 
   async callTool(name: string, args: Record<string, unknown>): Promise<McpCallResult> {

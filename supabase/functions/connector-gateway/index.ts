@@ -13,6 +13,7 @@
 //                                          comes from the encrypted state
 //   DELETE /connections/:id      (JWT)     → revoke (invalidates tokens)
 //   GET    /tools                (JWT)     → merged tools across connections
+//   GET    /resources            (JWT)     → MCP resources/list across connections
 //   POST   /tools/call           (JWT)     → {connector, tool, arguments}
 //
 // Deploy: supabase functions deploy connector-gateway --no-verify-jwt
@@ -26,7 +27,7 @@ declare const Deno: {
 import { db as dbClient, SITE } from "../_shared/core/runtime.ts";
 import { errors, PlatformError } from "../_shared/core/pure.ts";
 import {
-  listAvailableTools, listConnectors, listConnections,
+  listAvailableTools, listConnectors, listConnections, listConnectionResources,
   callTool, startConnect, handleCallback, revokeConnection,
   connectWithToken, testConnection, resolveConnector, connectorSlugFromState,
   resolveExternalResource,
@@ -224,6 +225,7 @@ Deno.serve(async (req: Request) => {
           callback: "/connector-gateway/callback",
           "connections/test": "/connector-gateway/connections/test",
           tools: "/connector-gateway/tools",
+          resources: "/connector-gateway/resources",
           call: "/connector-gateway/tools/call",
         },
       });
@@ -285,6 +287,15 @@ Deno.serve(async (req: Request) => {
       const connectorId = url.searchParams.get("connector_id") ?? url.searchParams.get("connector") ?? undefined;
       const force = url.searchParams.get("force") === "true" || url.searchParams.get("refresh") === "true";
       return json(await listAvailableTools(userId, { connectorId, force }));
+    }
+
+    /* MCP resources/list across live connections (60s cache). Servers
+     * without the resources primitive contribute an empty list. */
+    if (action === "resources" && req.method === "GET") {
+      const userId = await requireUserJwt(req);
+      const connectorId = url.searchParams.get("connector_id") ?? url.searchParams.get("connector") ?? undefined;
+      const force = url.searchParams.get("force") === "true" || url.searchParams.get("refresh") === "true";
+      return json(await listConnectionResources(userId, { connectorId, force }));
     }
 
     if (action === "tools/call" && req.method === "POST") {

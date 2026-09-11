@@ -313,9 +313,12 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
   const handleSyncResources = async (providerId: string) => {
     setIsSyncingResources(true);
     try {
-      const { toolCount: tools } = await ecosystemManager.syncResources(providerId);
-      await refreshIntegrationTools(true);
-      onToast?.(tools > 0 ? `Synced — ${tools} tool${tools === 1 ? "" : "s"} live on this connection.` : "Synced — connection is healthy, no tools exposed yet.");
+      const { discoveredCount } = await ecosystemManager.syncResources(providerId);
+      onToast?.(
+        discoveredCount > 0
+          ? `Synced — ${discoveredCount} resource${discoveredCount === 1 ? "" : "s"} discovered.`
+          : "Synced — connection healthy. This server doesn't expose MCP resources, so Services govern its tools."
+      );
     } catch (err: any) {
       onToast?.(`Resource sync: ${err?.message || "Using cached items"}`);
     } finally {

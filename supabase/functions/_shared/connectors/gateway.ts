@@ -60,11 +60,15 @@ type ConnectionRow = Row & {
 /* ─── In-isolate caches (per edge-runtime instance; TTL-bounded) ─── */
 
 const toolsCache = new Map<string, { tools: Row[]; unavailable: Row[]; expires: number }>();
+const resourcesCache = new Map<string, { resources: Row[]; unavailable: Row[]; expires: number }>();
 const clientCache = new Map<string, { client: McpClient; token: string; expires: number }>();
 
 function bustUserCaches(userId?: string, connectorId?: string): void {
   for (const key of toolsCache.keys()) {
     if (!userId || key === userId || key.startsWith(`${userId}:`)) toolsCache.delete(key);
+  }
+  for (const key of resourcesCache.keys()) {
+    if (!userId || key === userId || key.startsWith(`${userId}:`)) resourcesCache.delete(key);
   }
   for (const key of clientCache.keys()) {
     if (connectorId && key.startsWith(connectorId)) clientCache.delete(key);
@@ -532,6 +536,77 @@ export async function listAvailableTools(
 
   toolsCache.set(cacheKey, { tools: merged, unavailable, expires: Date.now() + TOOLS_CACHE_TTL_MS });
   return { tools: merged, unavailable };
+}
+
+/* ─── listConnectionResources ─── */
+
+export interface ListResourcesOptions { connectorId?: string; force?: boolean }
+
+/** MCP resources/list across the user's live connections. Servers that
+ * don't implement the resources primitive contribute nothing (the MCP
+ * client maps that to an empty list), and one dead server never fails
+ * the whole response — same shape as listAvailableTools. */
+export async function listConnectionResources(
+  userId: string,
+  opts: ListResourcesOptions = {},
+): Promise<{ resources: Row[]; unavailable: Row[]; cached?: boolean }> {
+  const cacheKey = opts.connectorId ? `${userId}:${opts.connectorId}` : userId;
+  if (!opts.force) {
+    const hit = resourcesCache.get(cacheKey);
+    if (hit && hit.expires > Date.now()) return { resources: hit.resources, unavailable: hit.unavailable, cached: true };
+  }
+
+  let query = db().from("user_connections").select(`
+      id, connector_id, status, token_expires_at, access_token_encrypted, refresh_token_encrypted,
+      connected_at, auth_mode, server_url_override,
+      connectors!inner(id, slug, name, mcp_server_url, is_active)
+    `)
+    .eq("user_id", userId).eq("status", "connected");
+  if (opts.connectorId) query = query.eq("connector_id", opts.connectorId);
+  const { data, error } = await query;
+  if (error) throw errors.internal(error.message);
+  const connections = (data ?? []) as Array<ConnectionRow & { connectors: Row }>;
+
+  /** Bound the payload — resource enumerations can be large. */
+  const PER_CONNECTION_CAP = 200;
+
+  const perConnection = await Promise.all(connections.map(async (connection) => {
+    const connector = connection.connectors;
+    if (!isConnectorActive(connector)) return { resources: [] as Row[], unavailable: [] as Row[] };
+    try {
+      const accessToken = await ensureFreshAccessToken(userId, connector as unknown as ConnectorRow, connection);
+      const client = await getConnectedClient(connector as unknown as ConnectorRow, accessToken, connection.server_url_override);
+      const items = (await client.listResources()).slice(0, PER_CONNECTION_CAP);
+      return {
+        resources: items.map((r) => ({
+          uri: String(r.uri ?? ""),
+          name: typeof r.name === "string" ? r.name : "",
+          description: typeof r.description === "string" ? r.description : "",
+          mime_type: typeof r.mimeType === "string" ? r.mimeType : null,
+          connector_id: connector.id,
+          connector_slug: connector.slug,
+          connector_name: connector.name,
+        })).filter((r) => r.uri),
+        unavailable: [] as Row[],
+      };
+    } catch (err) {
+      if (err instanceof McpTransportError && (err.status === 401 || err.status === 403)) {
+        await markConnectionExpired(userId, connection);
+      }
+      return {
+        resources: [] as Row[],
+        unavailable: [{
+          connector_id: connector.id, connector_slug: connector.slug,
+          error: err instanceof Error ? err.message : String(err),
+        }],
+      };
+    }
+  }));
+
+  const resources = perConnection.flatMap((r) => r.resources);
+  const unavailable = perConnection.flatMap((r) => r.unavailable);
+  resourcesCache.set(cacheKey, { resources, unavailable, expires: Date.now() + TOOLS_CACHE_TTL_MS });
+  return { resources, unavailable };
 }
 
 /* ─── callTool ─── */

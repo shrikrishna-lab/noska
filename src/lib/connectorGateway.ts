@@ -153,6 +153,28 @@ export const connectorGateway = {
     return await authedRequest(`tools${qs ? `?${qs}` : ""}`);
   },
 
+  /** Merged MCP resources/list across every live connection (server
+   * caches 60s). Servers without the resources primitive contribute
+   * nothing; a dead server degrades to `unavailable`. */
+  async listResources(opts: { connectorId?: string; force?: boolean } = {}): Promise<{
+    resources: Array<{
+      uri: string;
+      name?: string;
+      description?: string;
+      mime_type?: string | null;
+      connector_id: string;
+      connector_slug: string;
+      connector_name: string;
+    }>;
+    unavailable: Array<{ connector_slug: string; error: string }>;
+  }> {
+    const params = new URLSearchParams();
+    if (opts.connectorId) params.set("connector_id", opts.connectorId);
+    if (opts.force) params.set("force", "true");
+    const qs = params.toString();
+    return await authedRequest(`resources${qs ? `?${qs}` : ""}`);
+  },
+
   /** Invoke one tool on one connected platform. `tool` is the MCP tool's
    * own name on that server (NOT the prefixed agent-tool name). */
   async callTool(connectorSlug: string, tool: string, args: Record<string, unknown> = {}): Promise<{

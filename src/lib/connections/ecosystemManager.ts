@@ -351,46 +351,68 @@ class EcosystemManagerClass {
   }
 
   /**
-   * On-demand resource sync. Runs a live health check against the gateway
-   * and reports how many tools the connection currently exposes. There is
-   * deliberately no server-side resource-listing endpoint yet, so this
-   * never invents items — it validates connectivity and keeps any cached
-   * selections the user made earlier.
+   * On-demand resource sync. Calls the gateway's /resources endpoint,
+   * which runs MCP resources/list across every live connection and maps
+   * the items belonging to this ecosystem. Previous selection state is
+   * preserved per resource URI. There is no fabricated data here: servers
+   * that don't implement the MCP resources primitive simply stay empty —
+   * their tools remain governed by the Services toggles.
    */
-  public async syncResources(providerId: string): Promise<{ resources: ConnectionResourceItem[]; toolCount: number }> {
+  public async syncResources(providerId: string): Promise<{ resources: ConnectionResourceItem[]; discoveredCount: number }> {
     const conn = this.getConnection(providerId);
-    if (!conn) return { resources: [], toolCount: 0 };
+    if (!conn) return { resources: [], discoveredCount: 0 };
 
     conn.status = "syncing";
     this.notify();
 
     try {
-      let toolCount = 0;
-      if (conn.id && !LOCAL_ID_PREFIXES.some((p) => conn.id.startsWith(p))) {
-        const health = await connectorGateway.testConnection(conn.id);
-        toolCount = health?.tool_count ?? 0;
-      } else {
-        // Local-only connection: probe the merged tool list instead.
-        const { tools } = await connectorGateway.listTools({ force: true }).catch(() => ({ tools: [] }));
-        toolCount = tools.length;
-      }
+      const { resources: rawItems, unavailable } = await connectorGateway.listResources({ force: true });
+      const def = getEcosystemConnector(providerId);
+      const providerItems = rawItems.filter(
+        (r) => getEcosystemConnectorByGatewaySlug(r.connector_slug)?.id === providerId
+      );
 
-      const now = new Date().toISOString();
-      conn.resources = conn.resources.map((r) => ({ ...r, lastSyncedAt: now }));
-      conn.lastSyncedAt = now;
+      // Preserve per-resource selection state across syncs.
+      const previousSelection = new Map(
+        conn.resources.map((r) => [r.externalResourceId, r.selected] as const)
+      );
+
+      const mapped: ConnectionResourceItem[] = providerItems.map((r, idx) => ({
+        id: `${providerId}:${r.uri}`,
+        externalResourceId: r.uri,
+        serviceId: def?.services[0]?.id ?? "resources",
+        name: r.name?.trim() || r.uri,
+        resourceType: r.mime_type?.split("/").pop() || "resource",
+        selected: previousSelection.get(r.uri) ?? true,
+        url: r.uri.startsWith("http") ? r.uri : undefined,
+        metadata: {
+          description: r.description,
+          connectorSlug: r.connector_slug,
+          mimeType: r.mime_type ?? undefined,
+          gatewayIndex: idx,
+        },
+        lastSyncedAt: new Date().toISOString(),
+      }));
+
+      conn.resources = mapped;
+      conn.lastSyncedAt = new Date().toISOString();
+      const firstUnavailable = unavailable.find(
+        (u) => getEcosystemConnectorByGatewaySlug(u.connector_slug)?.id === providerId
+      );
+      conn.syncError = firstUnavailable ? firstUnavailable.error : null;
       conn.status = "connected";
-      conn.syncError = null;
 
+      this.resourceCache.set(providerId, mapped);
       this.saveConnectionToStorage(conn);
       this.notify();
-      return { resources: conn.resources, toolCount };
+      return { resources: mapped, discoveredCount: mapped.length };
     } catch (err: any) {
-      // Last-known-good resilience: preserve existing resources and surface the error.
-      console.warn(`Sync failed for ${providerId}:`, err);
+      // Last-known-good resilience: preserve existing selections and surface the error.
+      console.warn(`Resource sync failed for ${providerId}:`, err);
       conn.status = "connected";
-      conn.syncError = err?.message || "Sync timed out.";
+      conn.syncError = err?.message || "Resource sync timed out.";
       this.notify();
-      return { resources: conn.resources || [], toolCount: 0 };
+      return { resources: conn.resources || [], discoveredCount: 0 };
     }
   }
 
@@ -527,6 +549,7 @@ class EcosystemManagerClass {
     }
 
     this.cache.delete(providerId);
+    this.resourceCache.delete(providerId);
     this.removeConnectionFromStorage(providerId);
     this.notify();
   }

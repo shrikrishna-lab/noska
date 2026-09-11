@@ -1163,6 +1163,167 @@ export const ECOSYSTEM_CONNECTORS: EcosystemConnectorDefinition[] = [
       },
     ],
   },
+
+  // ── 30. Supabase ─────────────────────────────────────────────────
+  {
+    id: "supabase",
+    slug: "supabase",
+    name: "Supabase",
+    description: "Manage Supabase projects, tables, and edge functions, and run read-only SQL against your databases via Supabase's official hosted MCP server.",
+    tagline: "Projects · Tables · SQL · Edge Functions",
+    category: "Development",
+    secondaryCategories: ["Data"],
+    icon: "supabase",
+    brandColor: "#3FCF8E",
+    authModes: ["token"],
+    defaultScopes: [],
+    websiteUrl: "https://supabase.com",
+    docsUrl: "https://supabase.com/docs/guides/getting-started/mcp",
+    services: [
+      {
+        id: "supabase",
+        name: "Projects & Databases",
+        description: "Inspect project config, manage tables, and run read-only SQL queries.",
+        icon: "supabase",
+        defaultEnabled: true,
+        requiredScopes: [],
+        permissions: [
+          { id: "read", label: "Inspect projects & schema", description: "List projects, tables, and run read-only SQL", type: "read" },
+          { id: "write", label: "Manage tables & functions", description: "Apply schema migrations and manage edge functions", type: "write" },
+        ],
+        resourceTypes: [{ id: "project", name: "Project", pluralName: "Projects", icon: "database" }],
+        toolNames: ["supabase.listProjects", "supabase.runSql"],
+      },
+    ],
+  },
+
+  // ── 31. Cloudflare ───────────────────────────────────────────────
+  {
+    id: "cloudflare",
+    slug: "cloudflare",
+    name: "Cloudflare",
+    description: "Inspect and manage Workers, KV, R2, DNS records and account settings through Cloudflare's official hosted MCP server.",
+    tagline: "Workers · KV · R2 · DNS",
+    category: "Development",
+    icon: "cloudflare",
+    brandColor: "#F6821F",
+    authModes: ["token"],
+    defaultScopes: [],
+    websiteUrl: "https://developers.cloudflare.com",
+    docsUrl: "https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/",
+    services: [
+      {
+        id: "cloudflare",
+        name: "Workers & Account",
+        description: "Inspect and manage Workers scripts, storage bindings, and account-level settings.",
+        icon: "cloudflare",
+        defaultEnabled: true,
+        requiredScopes: [],
+        permissions: [
+          { id: "read", label: "Read account resources", description: "List Workers, KV namespaces, R2 buckets, and DNS records", type: "read" },
+          { id: "write", label: "Manage resources", description: "Update Workers settings and DNS records", type: "write" },
+        ],
+        resourceTypes: [{ id: "account", name: "Account / Zone", pluralName: "Accounts & Zones", icon: "globe" }],
+        toolNames: ["cloudflare.listWorkers"],
+      },
+    ],
+  },
+
+  // ── 32. Stripe ───────────────────────────────────────────────────
+  {
+    id: "stripe",
+    slug: "stripe",
+    name: "Stripe",
+    description: "Inspect balances, customers, payments, subscriptions and invoices through Stripe's official hosted MCP server. Use a restricted API key for least-privilege access.",
+    tagline: "Payments · Customers · Invoices",
+    category: "Data",
+    secondaryCategories: ["Development"],
+    icon: "stripe",
+    brandColor: "#635BFF",
+    authModes: ["token"],
+    defaultScopes: [],
+    websiteUrl: "https://stripe.com",
+    docsUrl: "https://docs.stripe.com/mcp",
+    services: [
+      {
+        id: "stripe",
+        name: "Payments & Customers",
+        description: "Query balances, inspect payments and refunds, and look up customers.",
+        icon: "stripe",
+        defaultEnabled: true,
+        requiredScopes: [],
+        permissions: [
+          { id: "read", label: "Read payment data", description: "Inspect balances, payments, subscriptions, and invoices", type: "read" },
+          { id: "write", label: "Create resources", description: "Create payment links, invoices, and customers", type: "write" },
+        ],
+        resourceTypes: [{ id: "account", name: "Account", pluralName: "Accounts", icon: "credit-card" }],
+        toolNames: ["stripe.listPayments"],
+      },
+    ],
+  },
+
+  // ── 33. PostHog ──────────────────────────────────────────────────
+  {
+    id: "posthog",
+    slug: "posthog",
+    name: "PostHog",
+    description: "Query product analytics, manage feature flags and experiments, and inspect session replays through PostHog's official hosted MCP server.",
+    tagline: "Analytics · Feature Flags · Replays",
+    category: "Data",
+    icon: "posthog",
+    authModes: ["token"],
+    defaultScopes: [],
+    websiteUrl: "https://posthog.com",
+    docsUrl: "https://posthog.com/docs/model-context-protocol/faq",
+    services: [
+      {
+        id: "posthog",
+        name: "Analytics & Flags",
+        description: "Run insight queries, toggle feature flags, and list session replays.",
+        icon: "posthog",
+        defaultEnabled: true,
+        requiredScopes: [],
+        permissions: [
+          { id: "read", label: "Query analytics", description: "Read insights, dashboards, experiments, and replays", type: "read" },
+          { id: "write", label: "Manage feature flags", description: "Create and update feature flags", type: "write" },
+        ],
+        resourceTypes: [{ id: "project", name: "Project", pluralName: "Projects", icon: "activity" }],
+        toolNames: ["posthog.listInsights"],
+      },
+    ],
+  },
+
+  // ── 34. Zapier ───────────────────────────────────────────────────
+  {
+    id: "zapier",
+    slug: "zapier",
+    name: "Zapier",
+    description: "Run your Zapier workflows and reach 8,000+ connected apps through Zapier's official MCP server — paste a connection token to connect.",
+    tagline: "8,000+ apps · Workflows · Agents",
+    category: "Automation",
+    icon: "zapier",
+    brandColor: "#FF4F00",
+    authModes: ["token"],
+    defaultScopes: [],
+    websiteUrl: "https://zapier.com",
+    docsUrl: "https://docs.zapier.com/mcp/overview/how-connections-work",
+    services: [
+      {
+        id: "zapier",
+        name: "Zaps & Actions",
+        description: "Execute Zapier actions and workflows exposed by your MCP connection.",
+        icon: "zapier",
+        defaultEnabled: true,
+        requiredScopes: [],
+        permissions: [
+          { id: "read", label: "List available actions", description: "Discover which Zapier actions are exposed", type: "read" },
+          { id: "write", label: "Run actions", description: "Execute Zapier workflows and app actions", type: "write" },
+        ],
+        resourceTypes: [{ id: "zap", name: "Zap", pluralName: "Zaps", icon: "zap" }],
+        toolNames: ["zapier.runAction"],
+      },
+    ],
+  },
 ];
 
 export class EcosystemRegistry {
