@@ -1352,6 +1352,20 @@ export function unregisterCustomProvider(id: string): void {
 }
 
 /**
+ * Dynamically update and register discovered models for a provider into the active registry
+ */
+export function registerDynamicProviderModels(providerId: string, models: AIModel[]): void {
+  if (!providerId || !Array.isArray(models) || models.length === 0) return;
+  const target = PROVIDERS[providerId] || customProviders.get(providerId);
+  if (target) {
+    target.models = models;
+    if (!models.some(m => m.id === target.defaultModel)) {
+      target.defaultModel = models[0].id;
+    }
+  }
+}
+
+/**
  * Get provider list metadata (without send/stream functions) for UI display
  */
 export function getProviderList() {

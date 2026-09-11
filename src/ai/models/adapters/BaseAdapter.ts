@@ -100,6 +100,20 @@ export function formatModelName(id: string): string {
     .join(" ");
 }
 
+const PROXY_MAP: Record<string, string> = {
+  "https://opencode.ai/zen/v1": "/api/proxy/opencode",
+  "https://openrouter.ai/api/v1": "/api/proxy/openrouter",
+  "https://api.anthropic.com/v1": "/api/proxy/anthropic",
+  "https://api.openai.com/v1": "/api/proxy/openai",
+  "https://generativelanguage.googleapis.com/v1beta": "/api/proxy/gemini",
+  "https://api.groq.com/openai/v1": "/api/proxy/groq",
+  "https://api.deepseek.com/v1": "/api/proxy/deepseek",
+  "https://api.mistral.ai/v1": "/api/proxy/mistral",
+  "https://api.together.xyz/v1": "/api/proxy/together",
+  "https://api.x.ai/v1": "/api/proxy/xai",
+  "https://integrate.api.nvidia.com/v1": "/api/proxy/nvidia",
+};
+
 export abstract class BaseProviderAdapter implements ProviderAdapter {
   abstract provider: string;
   abstract displayName: string;
@@ -124,8 +138,8 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
   }
 
   /**
-   * Safe fetch with bounded exponential backoff for transient errors (429, 502, 503, 504).
-   * Will NOT retry 401 (unauthorized) or 403 (forbidden).
+   * Safe fetch with bounded exponential backoff for transient errors (429, 502, 503, 504)
+   * and automatic browser CORS proxy resolution.
    */
   protected async fetchWithRetry(
     url: string,
@@ -135,6 +149,16 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
     const maxRetries = options.maxRetries ?? 2;
     const timeoutMs = options.timeoutMs ?? 15000;
     let attempt = 0;
+
+    let targetUrl = url;
+    if (typeof window !== "undefined" && !url.includes("/api/proxy/")) {
+      for (const [prefix, proxyPrefix] of Object.entries(PROXY_MAP)) {
+        if (url.startsWith(prefix)) {
+          targetUrl = url.replace(prefix, `${window.location.origin}${proxyPrefix}`);
+          break;
+        }
+      }
+    }
 
     while (attempt <= maxRetries) {
       attempt++;
@@ -146,7 +170,7 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
       }
 
       try {
-        const res = await fetch(url, {
+        const res = await fetch(targetUrl, {
           ...init,
           signal: controller.signal,
           headers: {

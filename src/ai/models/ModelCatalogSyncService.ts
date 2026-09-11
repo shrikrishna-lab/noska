@@ -10,12 +10,25 @@
 
 import { getProviderAdapter } from "./adapters";
 import { ModelRepository, modelRepository } from "./ModelRepository";
+import { registerDynamicProviderModels } from "../providers";
 import type {
   AIModelSyncRun,
   NormalizedModel,
   ProviderCredentials,
   SyncResult,
 } from "./normalizedSchema";
+
+export interface BatchSyncSummary {
+  success: boolean;
+  providersAttempted: number;
+  providersSynced: number;
+  modelsFoundTotal: number;
+  modelsAddedTotal: number;
+  modelsUpdatedTotal: number;
+  syncedProviders: string[];
+  errors: Array<{ provider: string; error: string }>;
+  completedAt: string;
+}
 
 export const MODEL_CATALOG_STALE_AFTER = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -55,6 +68,13 @@ export class ModelCatalogSyncService {
         console.error("ModelCatalogSyncService notification error:", err);
       }
     }
+  }
+
+  /**
+   * Check if any synchronization is currently in progress
+   */
+  public isSyncingAny(): boolean {
+    return this._inFlightSyncs.size > 0;
   }
 
   /**
@@ -169,6 +189,21 @@ export class ModelCatalogSyncService {
           liveModels
         );
 
+        // Dynamically register discovered models into active provider registry
+        if (diff.models.length > 0) {
+          registerDynamicProviderModels(
+            provider,
+            diff.models
+              .filter((m) => m.status !== "unavailable")
+              .map((m) => ({
+                id: m.providerModelId,
+                name: m.displayName || m.providerModelId,
+                context: m.contextWindow || 128000,
+                description: m.description,
+              }))
+          );
+        }
+
         const durationMs = Date.now() - startTime;
         const result: SyncResult = {
           success: true,
@@ -248,6 +283,55 @@ export class ModelCatalogSyncService {
 
     this._inFlightSyncs.set(lockKey, syncPromise);
     return syncPromise;
+  }
+
+  /**
+   * Synchronize all eligible / configured providers in parallel and register their models.
+   */
+  public async syncAllConfigured(
+    providersConfig: Record<string, ProviderCredentials>,
+    providerIdsToSync: string[]
+  ): Promise<BatchSyncSummary> {
+    const attempted: string[] = [];
+    const errors: Array<{ provider: string; error: string }> = [];
+    let syncedCount = 0;
+    let totalFound = 0;
+    let totalAdded = 0;
+    let totalUpdated = 0;
+    const syncedProviders: string[] = [];
+
+    const tasks = providerIdsToSync.map(async (providerId) => {
+      const creds = providersConfig[providerId] || {};
+      attempted.push(providerId);
+      try {
+        const res = await this.syncConnection(providerId, creds);
+        if (res.success) {
+          syncedCount++;
+          totalFound += res.modelsFound;
+          totalAdded += res.modelsAdded;
+          totalUpdated += res.modelsUpdated;
+          syncedProviders.push(providerId);
+        } else if (res.error) {
+          errors.push({ provider: providerId, error: res.error });
+        }
+      } catch (err: any) {
+        errors.push({ provider: providerId, error: err?.message || "Sync failed" });
+      }
+    });
+
+    await Promise.allSettled(tasks);
+
+    return {
+      success: syncedCount > 0 || errors.length === 0,
+      providersAttempted: attempted.length,
+      providersSynced: syncedCount,
+      modelsFoundTotal: totalFound,
+      modelsAddedTotal: totalAdded,
+      modelsUpdatedTotal: totalUpdated,
+      syncedProviders,
+      errors,
+      completedAt: new Date().toISOString(),
+    };
   }
 }
 

@@ -186,43 +186,48 @@ export default function NoskaAISettings({
     onToast?.(`Active model set to ${modelId}`);
   };
 
-  const handleSyncProvider = async (providerId: string) => {
-    const providerConfig = currentConfig.providers[providerId] || {};
-    try {
-      const result = await modelCatalogSyncService.syncConnection(providerId, {
-        apiKey: providerConfig.apiKey,
-        baseUrl: providerConfig.baseUrl,
-      });
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [batchSyncResult, setBatchSyncResult] = useState<string | null>(null);
 
-      if (result.success) {
-        let msg = "Synced just now";
-        if (result.modelsAdded > 0) {
-          msg = `✨ ${result.modelsAdded} new model${result.modelsAdded > 1 ? "s" : ""} found`;
-        } else if (result.modelsUnavailable > 0) {
-          msg = `⚠️ ${result.modelsUnavailable} model${result.modelsUnavailable > 1 ? "s" : ""} no longer available`;
-        } else if (result.modelsUpdated > 0) {
-          msg = `Synced ${result.modelsFound} models`;
-        } else {
-          msg = "Already up to date";
+  const handleSyncAll = async () => {
+    setIsSyncingAll(true);
+    setBatchSyncResult(null);
+    try {
+      const activeCfg = aiManager.getConfig();
+      
+      // Providers with API key entered:
+      const keyedProviders = providerList
+        .filter((p) => Boolean(activeCfg.providers[p.id]?.apiKey?.trim()))
+        .map((p) => p.id);
+
+      // Open/public and local providers:
+      const openProviders = ["openrouter", "opencode_zen", "ollama", "lmstudio"];
+      const targetList = Array.from(new Set([...keyedProviders, ...openProviders]));
+      
+      const summary = await modelCatalogSyncService.syncAllConfigured(activeCfg.providers, targetList);
+
+      if (summary.providersSynced > 0) {
+        let msg = `✨ Synced ${summary.providersSynced} provider${summary.providersSynced > 1 ? "s" : ""} · ${summary.modelsFoundTotal} models registered`;
+        if (summary.modelsAddedTotal > 0) {
+          msg += ` (${summary.modelsAddedTotal} new)`;
         }
-        setSyncFeedback((prev) => ({
-          ...prev,
-          [providerId]: { type: "success", message: msg },
-        }));
-        onToast?.(`${providerId}: ${msg}`);
+        setBatchSyncResult(msg);
+        onToast?.(msg);
+      } else if (summary.errors.length > 0) {
+        const errorSummary = `Sync notice: ${summary.errors[0]?.error || "Check credentials"}`;
+        setBatchSyncResult(errorSummary);
+        onToast?.(errorSummary);
       } else {
-        const errorMsg = "Sync failed · Showing last synced models";
-        setSyncFeedback((prev) => ({
-          ...prev,
-          [providerId]: { type: "error", message: errorMsg },
-        }));
-        onToast?.(`${providerId}: ${errorMsg}`);
+        const upToDateMsg = "All model catalogs are up to date";
+        setBatchSyncResult(upToDateMsg);
+        onToast?.(upToDateMsg);
       }
     } catch (err: any) {
-      setSyncFeedback((prev) => ({
-        ...prev,
-        [providerId]: { type: "error", message: err?.message || "Sync failed" },
-      }));
+      const errMsg = `Sync error: ${err?.message || "Unknown error"}`;
+      setBatchSyncResult(errMsg);
+      onToast?.(errMsg);
+    } finally {
+      setIsSyncingAll(false);
     }
   };
 
@@ -286,24 +291,20 @@ export default function NoskaAISettings({
             </div>
           </div>
 
-          {/* Quick Active Provider Sync */}
-          {activeProviderObj && (
-            <button
-              type="button"
-              disabled={modelCatalogSyncService.isSyncing(activeProviderObj.id)}
-              onClick={() => handleSyncProvider(activeProviderObj.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#e8e4db] dark:border-white/10 bg-white dark:bg-white/5 hover:bg-[#ede8df] text-xs font-semibold text-[#1c1b18] dark:text-white transition cursor-pointer shadow-xs shrink-0 disabled:opacity-50"
-              title="Perform on-demand sync for active provider"
-            >
-              <RotateCw
-                size={12}
-                className={modelCatalogSyncService.isSyncing(activeProviderObj.id) ? "animate-spin text-purple-600" : ""}
-              />
-              <span>
-                {modelCatalogSyncService.isSyncing(activeProviderObj.id) ? "Syncing..." : "Sync Active Catalog"}
-              </span>
-            </button>
-          )}
+          {/* Unified Sync Models Trigger */}
+          <button
+            type="button"
+            disabled={isSyncingAll || modelCatalogSyncService.isSyncingAny()}
+            onClick={handleSyncAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#e8e4db] dark:border-white/10 bg-white dark:bg-white/5 hover:bg-[#ede8df] dark:hover:bg-white/10 text-xs font-semibold text-[#1c1b18] dark:text-white transition cursor-pointer shadow-xs shrink-0 disabled:opacity-50"
+            title="Perform on-demand sync and register live models"
+          >
+            <RotateCw
+              size={12}
+              className={isSyncingAll || modelCatalogSyncService.isSyncingAny() ? "animate-spin text-purple-600" : ""}
+            />
+            <span>{isSyncingAll ? "Syncing..." : "Sync Models"}</span>
+          </button>
         </div>
 
         {/* Model switcher selector for active provider */}
@@ -334,19 +335,54 @@ export default function NoskaAISettings({
 
       {/* ── Built-in Providers & Model Catalogs ────────────────── */}
       <div className="rounded-2xl bg-[#f8f6f0] dark:bg-[#181b24] p-5 sm:p-6 border border-[#e8e4db] dark:border-white/10 shadow-sm divide-y divide-[#e8e4db] dark:divide-white/10">
-        <div className="pb-3 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-bold text-[#1c1b18] dark:text-white flex items-center gap-2">
+        <div className="pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-[#1c1b18] dark:text-white flex items-center gap-2 flex-wrap">
               <span>Cloud & Local Providers</span>
-              <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase">
-                Dynamic Sync
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold tracking-wide uppercase">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Sync
               </span>
             </div>
-            <p className="text-xs text-[#706c64] dark:text-white/60 mt-0.5">
+            <p className="text-xs text-[#706c64] dark:text-white/60 mt-0.5 leading-relaxed">
               On-demand model discovery via official provider APIs, cached snapshots, and live metadata.
             </p>
           </div>
+
+          <button
+            type="button"
+            disabled={isSyncingAll || modelCatalogSyncService.isSyncingAny()}
+            onClick={handleSyncAll}
+            className="group relative inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#1c1b18] hover:bg-[#2d2a26] text-white dark:bg-white dark:text-[#1c1b18] dark:hover:bg-white/90 text-xs font-semibold shadow-xs hover:shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50 shrink-0 select-none active:scale-[0.98] self-start sm:self-auto"
+            title="Fetch and register latest models across all configured providers"
+          >
+            <RotateCw
+              size={12}
+              className={isSyncingAll || modelCatalogSyncService.isSyncingAny() ? "animate-spin text-emerald-400 dark:text-emerald-600" : "group-hover:rotate-45 transition-transform duration-300"}
+            />
+            <span>{isSyncingAll ? "Syncing All..." : "Sync All Models"}</span>
+          </button>
         </div>
+
+        {/* Global Batch Sync Feedback Banner */}
+        {batchSyncResult && (
+          <div className="py-3">
+            <div className="rounded-xl px-3.5 py-2 text-xs font-medium bg-emerald-50/80 text-emerald-900 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 flex items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 size={14} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span className="truncate">{batchSyncResult}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchSyncResult(null)}
+                className="text-xs text-emerald-700 dark:text-emerald-400 hover:opacity-70 cursor-pointer shrink-0 p-0.5"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         {providerList.map((provider) => {
           const providerConfig = currentConfig.providers[provider.id] || {};
@@ -359,7 +395,6 @@ export default function NoskaAISettings({
 
           // Dynamic Model Discovery & Live Sync State
           const availableModels = modelCatalogSyncService.getModels(provider.id, provider.models);
-          const isSyncing = modelCatalogSyncService.isSyncing(provider.id);
           const isStale = modelCatalogSyncService.isStale(provider.id);
           const lastSyncedAt = modelCatalogSyncService.getLastSyncedAt(provider.id);
           const feedback = syncFeedback[provider.id];
@@ -402,23 +437,11 @@ export default function NoskaAISettings({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {/* On-Demand Sync Button */}
-                  <button
-                    type="button"
-                    disabled={isSyncing || (provider.requiresKey && !providerConfig.apiKey)}
-                    onClick={() => handleSyncProvider(provider.id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#e8e4db] dark:border-white/10 bg-white dark:bg-white/5 hover:bg-[#ede8df] dark:hover:bg-white/10 text-xs font-semibold text-[#1c1b18] dark:text-white transition cursor-pointer shadow-xs disabled:opacity-40"
-                    title={isSyncing ? "Sync in progress..." : "Fetch official latest models catalog"}
-                  >
-                    <RotateCw size={12} className={isSyncing ? "animate-spin text-purple-600" : ""} />
-                    <span>{isSyncing ? "Syncing..." : "Sync"}</span>
-                  </button>
-
                   {!isActive && hasKey && (
                     <button
                       type="button"
                       onClick={() => handleSetActive(provider.id)}
-                      className="px-3 py-1.5 rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] text-[#1c1b18] text-xs font-semibold transition cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] text-[#1c1b18] text-xs font-semibold transition cursor-pointer"
                     >
                       Select
                     </button>
