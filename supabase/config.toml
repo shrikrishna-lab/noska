@@ -8,3 +8,14 @@ verify_jwt = false
 # encrypted state param) with JWT-authenticated routes checked in-function.
 [functions.connector-gateway]
 verify_jwt = false
+
+# admin-trigger-release authenticates with the custom admin session token
+# (Bearer) validated in-function against validate_admin_session; the release
+# workflow itself is driven by the GitHub API, not by Supabase JWTs.
+[functions.admin-trigger-release]
+verify_jwt = false
+
+# info-cards is a public read endpoint (announcement banners rendered in the
+# web/desktop app before any user session exists).
+[functions.info-cards]
+verify_jwt = false

@@ -94,7 +94,7 @@ BEGIN
   END IF;
   RETURN FOUND;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.admin_insert(p_session_token text, p_table text, p_data jsonb, p_min_role text DEFAULT 'support'::text)
@@ -143,7 +143,7 @@ BEGIN
   END IF;
   RETURN v_new_id;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.admin_select(p_session_token text, p_table text, p_select text DEFAULT '*'::text, p_order_col text DEFAULT NULL::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT NULL::integer, p_eq_col text DEFAULT NULL::text, p_eq_val text DEFAULT NULL::text)
@@ -197,7 +197,7 @@ BEGIN
   EXECUTE v_sql INTO v_result;
   RETURN v_result;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.admin_update(p_session_token text, p_table text, p_id text, p_data jsonb, p_min_role text DEFAULT 'support'::text)
@@ -246,5 +246,5 @@ BEGIN
     || ' RETURNING row_to_json(' || quote_ident(p_table) || ')' INTO v_result;
   RETURN v_result;
 END;
-$function$
+$function$;
 

@@ -74,27 +74,27 @@ export class OpenRouterModelDiscovery implements ModelDiscoveryAdapter {
 
     const pricing = raw.pricing
       ? {
-          inputPer1M: promptCost !== undefined ? promptCost * 1000000 : undefined,
-          outputPer1M: completionCost !== undefined ? completionCost * 1000000 : undefined,
-          currency: "USD",
-        }
+        inputPer1M: promptCost !== undefined ? promptCost * 1000000 : undefined,
+        outputPer1M: completionCost !== undefined ? completionCost * 1000000 : undefined,
+        currency: "USD",
+      }
       : undefined;
 
     const isFree = (promptCost === 0 && completionCost === 0 && !requiresSub) || id.endsWith(":free") || lowerId.includes(":free");
     const freeAccess = isFree
       ? {
-          isFree: true,
-          status: "free" as const,
-          source: "catalog" as const,
-          verifiedAt: new Date().toISOString(),
-          conditions: ["OpenRouter Free Tier"],
-        }
+        isFree: true,
+        status: "free" as const,
+        source: "catalog" as const,
+        verifiedAt: new Date().toISOString(),
+        conditions: ["OpenRouter Free Tier"],
+      }
       : {
-          isFree: false,
-          status: "paid" as const,
-          source: "catalog" as const,
-          verifiedAt: new Date().toISOString(),
-        };
+        isFree: false,
+        status: "paid" as const,
+        source: "catalog" as const,
+        verifiedAt: new Date().toISOString(),
+      };
 
     // Check OpenRouter metadata fields
     const modality = String(raw.architecture?.modality || "");

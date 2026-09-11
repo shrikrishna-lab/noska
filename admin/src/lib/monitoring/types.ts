@@ -5,29 +5,28 @@ export interface SentryError {
   users: number;
   firstSeen: string;
   lastSeen: string;
+  permalink: string;
   environment: string;
   release: string;
   level: "fatal" | "error" | "warning" | "info";
   platform: string;
-  browser: string;
-  device: string;
   status: "unresolved" | "resolved" | "ignored";
 }
 
 export interface PerformanceMetric {
+  // Core Web Vitals from PostHog $web_vitals events, p75 (Google's
+  // assessment percentile) in ms — CLS is unitless.
   lcp: number;
   cls: number;
   fcp: number;
   inp: number;
   ttfb: number;
-  avgApiTime: number;
-  avgDbQuery: number;
-  slowQueries: number;
-  slowPages: number;
-  largestBundle: string;
-  memoryUsage: number;
-  cpuUsage: number;
+  vitalsSamples: number;
+  // Real traffic/activity counters — no synthetic latency derivations.
+  pageviews24h: number;
   realtimeConnections: number;
+  pageVersions24h: number;
+  largestSnapshot: string;
 }
 
 export interface PerformancePoint {
@@ -89,9 +88,12 @@ export interface EmailCampaignMetric {
 
 export interface Deployment {
   id: string;
+  name: string;
   version: string;
   commitSha: string;
   branch: string;
+  commitMessage: string;
+  author: string;
   status: "ready" | "building" | "error" | "canceled";
   deployedAt: string;
   previousDeployments: number;
@@ -129,8 +131,9 @@ export interface OverviewMetrics {
   errorsMedium: number;
   errorsLow: number;
   emailsDelivered: number;
-  avgApiResponse: number;
+  pageviews24h: number;
   storageUsed: string;
+  storageBytes: number;
   databaseStatus: "healthy" | "degraded" | "critical";
   currentVersion: string;
   environment: string;

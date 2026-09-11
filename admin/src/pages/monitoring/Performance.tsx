@@ -1,12 +1,10 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { Gauge, RefreshCw, Zap, Cpu, Globe, Activity, Database, Radio } from "lucide-react";
+import { Gauge, RefreshCw, Zap, Globe, Activity, Database, Eye, Radio, FileText } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { usePerformanceMetrics, usePerformanceHistory } from "@/lib/monitoring/hooks";
 import { formatNumber } from "@/lib/utils";
 
@@ -18,7 +16,7 @@ export function MonitoringPerformance() {
   if (isLoading) {
     return (
       <div className="p-6">
-        <PageHeader title="Performance" description="Web vitals, API latency, and resource usage" />
+        <PageHeader title="Performance" description="Core Web Vitals and app activity (p75, last 24h)" />
         <LoadingState count={8} />
       </div>
     );
@@ -38,7 +36,7 @@ export function MonitoringPerformance() {
     <div className="p-6">
       <PageHeader
         title="Performance"
-        description="Web vitals, API latency, and resource usage"
+        description={`Core Web Vitals from PostHog (p75, ${formatNumber(metrics.vitalsSamples)} samples, last 24h)`}
         actions={
           <div className="flex items-center gap-2">
             <div className="flex overflow-hidden rounded-md border">
@@ -70,76 +68,25 @@ export function MonitoringPerformance() {
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">API & Database</CardTitle>
+            <CardTitle className="text-sm font-medium">Traffic (PostHog, 24h)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
               <div className="flex items-center gap-3">
-                <Globe className="h-5 w-5 text-muted-foreground" />
+                <Eye className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Avg API Response</p>
-                  <p className="text-xs text-muted-foreground">Last 24 hours</p>
+                  <p className="text-sm font-medium">Pageviews</p>
+                  <p className="text-xs text-muted-foreground">Top pages total, last 24 hours</p>
                 </div>
               </div>
-              <span className="text-lg font-bold">{metrics.avgApiTime}ms</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <Database className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Avg DB Query</p>
-                  <p className="text-xs text-muted-foreground">Last 24 hours</p>
-                </div>
-              </div>
-              <span className="text-lg font-bold">{metrics.avgDbQuery}ms</span>
-            </div>
-            {metrics.slowQueries > 0 && (
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                <Database className="h-4 w-4" />
-                <span>{metrics.slowQueries} page versions saved in the last 24 hours</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Resource Usage</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <Cpu className="h-4 w-4" /> Memory
-                </span>
-                <span>{metrics.memoryUsage}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full rounded-full transition-all ${metrics.memoryUsage > 80 ? "bg-red-500" : metrics.memoryUsage > 60 ? "bg-yellow-500" : "bg-green-500"}`}
-                  style={{ width: `${metrics.memoryUsage}%` }}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <Cpu className="h-4 w-4" /> CPU
-                </span>
-                <span>{metrics.cpuUsage}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full rounded-full transition-all ${metrics.cpuUsage > 80 ? "bg-red-500" : metrics.cpuUsage > 60 ? "bg-yellow-500" : "bg-green-500"}`}
-                  style={{ width: `${metrics.cpuUsage}%` }}
-                />
-              </div>
+              <span className="text-lg font-bold">{formatNumber(metrics.pageviews24h)}</span>
             </div>
             <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
               <div className="flex items-center gap-3">
                 <Radio className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Realtime Connections</p>
+                  <p className="text-sm font-medium">Active Sessions</p>
+                  <p className="text-xs text-muted-foreground">Collaboration activity, last 5 min</p>
                 </div>
               </div>
               <span className="text-lg font-bold">{metrics.realtimeConnections}</span>
@@ -149,58 +96,67 @@ export function MonitoringPerformance() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Bundles & Issues</CardTitle>
+            <CardTitle className="text-sm font-medium">Editor Activity</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <p className="mb-1 text-xs text-muted-foreground">Largest Bundle</p>
-              <p className="text-sm font-medium">{metrics.largestBundle}</p>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex-1 rounded-lg border bg-muted/20 p-3 text-center">
-                <p className="text-lg font-bold text-yellow-600">{metrics.slowPages}</p>
-                <p className="text-xs text-muted-foreground">Total Pages</p>
+            <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Page Versions Saved</p>
+                  <p className="text-xs text-muted-foreground">Last 24 hours</p>
+                </div>
               </div>
-              <div className="flex-1 rounded-lg border bg-muted/20 p-3 text-center">
-                <p className="text-lg font-bold text-orange-600">{metrics.slowQueries}</p>
-                <p className="text-xs text-muted-foreground">Page Versions (24h)</p>
-              </div>
+              <span className="text-lg font-bold">{formatNumber(metrics.pageVersions24h)}</span>
             </div>
+            <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <Database className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Largest Page Snapshot</p>
+                  <p className="text-xs text-muted-foreground">Recent stored versions</p>
+                </div>
+              </div>
+              <span className="text-lg font-bold">{metrics.largestSnapshot}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Activity Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {history && history.length > 1 ? (
+              <div className="relative h-40">
+                <svg viewBox={`0 0 ${history.length} 100`} className="h-full w-full" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="perfGrad" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={`M0,${100 - (history[0].value / Math.max(...history.map((p) => p.value))) * 100} ${history.map((p, i) => `L${i},${100 - (p.value / Math.max(...history.map((q) => q.value))) * 100}`).join(" ")}`}
+                    fill="none"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                  />
+                  <path
+                    d={`M0,${100 - (history[0].value / Math.max(...history.map((p) => p.value))) * 100} ${history.map((p, i) => `L${i},${100 - (p.value / Math.max(...history.map((q) => q.value))) * 100}`).join(" ")} L${history.length - 1},100 L0,100 Z`}
+                    fill="url(#perfGrad)"
+                  />
+                </svg>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No activity recorded in this range yet.</p>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Page version saves — {range === "1h" ? "past hour" : range === "24h" ? "past 24 hours" : "past 7 days"}
+            </p>
           </CardContent>
         </Card>
       </div>
-
-      {history && history.length > 0 && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">
-              API Response Time ({range === "1h" ? "Past Hour" : range === "24h" ? "Past 24 Hours" : "Past 7 Days"})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="relative h-48">
-              <svg viewBox={`0 0 ${history.length} 100`} className="h-full w-full" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="perfGrad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <path
-                  d={`M0,${100 - (history[0].value / 800) * 100} ${history.map((p, i) => `L${i},${100 - (p.value / 800) * 100}`).join(" ")}`}
-                  fill="none"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                />
-                <path
-                  d={`M0,${100 - (history[0].value / 800) * 100} ${history.map((p, i) => `L${i},${100 - (p.value / 800) * 100}`).join(" ")} L${history.length - 1},100 L0,100 Z`}
-                  fill="url(#perfGrad)"
-                />
-              </svg>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

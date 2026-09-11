@@ -911,17 +911,9 @@ function PerformanceAnalyticsSection() {
       icon: <Server className="h-3.5 w-3.5" />, severity: perf.ttfb > 1800 ? "critical" : "warn",
       text: `TTFB is ${perf.ttfb}ms. Optimize database queries, use CDN caching, and consider edge functions for faster responses.`,
     });
-    if (perf.avgApiTime > 300) suggestions.push({
-      icon: <Activity className="h-3.5 w-3.5" />, severity: "warn",
-      text: `Avg API response ${perf.avgApiTime}ms. Implement response caching, optimize queries, and add pagination to large endpoints.`,
-    });
-    if (perf.memoryUsage > 70) suggestions.push({
-      icon: <Cpu className="h-3.5 w-3.5" />, severity: "warn",
-      text: `Memory usage at ${perf.memoryUsage}%. Review memory leaks, implement lazy loading, and archive old page versions.`,
-    });
-    if (perf.slowQueries > 50) suggestions.push({
+    if (perf.pageVersions24h > 500) suggestions.push({
       icon: <Database className="h-3.5 w-3.5" />, severity: "warn",
-      text: `${perf.slowQueries} slow queries detected. Add database indexes, optimize JOIN operations, and implement query caching.`,
+      text: `${perf.pageVersions24h} page versions saved in 24h. Consider snapshot retention limits to keep storage lean.`,
     });
   }
 
@@ -957,8 +949,7 @@ function PerformanceAnalyticsSection() {
       - (perf.cls > 0.1 ? 6 : 0) - (perf.cls > 0.25 ? 6 : 0)
       - (perf.inp > 200 ? 6 : 0) - (perf.inp > 500 ? 6 : 0)
       - (perf.ttfb > 800 ? 6 : 0) - (perf.ttfb > 1800 ? 6 : 0)
-      - (perf.memoryUsage > 70 ? 6 : 0) - (perf.memoryUsage > 85 ? 6 : 0)
-      - (perf.avgApiTime > 300 ? 4 : 0) - (perf.slowQueries > 50 ? 4 : 0)
+      - (perf.pageVersions24h > 500 ? 4 : 0)
       - (sessions?.bounceRate && sessions.bounceRate > 50 ? 6 : 0)
       - (sessions?.retention != null && sessions.retention < 30 && sessions.retention > 0 ? 4 : 0)
     )
@@ -1022,11 +1013,11 @@ function PerformanceAnalyticsSection() {
             </p>
             <div className="space-y-2.5">
               {[
-                { label: "Avg API Time", value: perf ? formatMs(perf.avgApiTime) : "—" },
-                { label: "DB Query", value: perf ? formatMs(perf.avgDbQuery) : "—" },
-                { label: "Memory", value: perf ? `${perf.memoryUsage}%` : "—" },
-                { label: "CPU", value: perf ? `${perf.cpuUsage}%` : "—" },
-                { label: "Slow Queries", value: perf ? `${perf.slowQueries}` : "—" },
+                { label: "Pageviews 24h", value: perf ? formatNumber(perf.pageviews24h) : "—" },
+                { label: "Vitals Samples", value: perf ? formatNumber(perf.vitalsSamples) : "—" },
+                { label: "Active Sessions", value: perf ? `${perf.realtimeConnections}` : "—" },
+                { label: "Page Versions", value: perf ? `${perf.pageVersions24h}` : "—" },
+                { label: "Largest Snapshot", value: perf ? perf.largestSnapshot : "—" },
               ].map((m) => (
                 <div key={m.label} className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">{m.label}</span>

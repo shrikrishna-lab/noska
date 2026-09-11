@@ -41,7 +41,7 @@ begin
         and pg_total_relation_size(c.oid) > 0
       limit 10
     ), '[]'::jsonb)
-  into result;
+  ) into result;
 
   return result;
 end;

@@ -17,6 +17,79 @@ export interface ModelDeprecationInfo {
 
 // ─── Real-World Provider Sunset & Deprecation Registry ────────────────────────
 
+// Providers completely excluded from displaying NEW badges
+export const EXCLUDED_NEW_BADGE_PROVIDERS = new Set([
+  "openrouter",
+  "ollama",
+  "nvidia",
+  "lmstudio",
+  "opencode_zen",
+  "opencode",
+]);
+
+// Single latest flagship model per direct provider that receives the NEW badge
+export const LATEST_FLAGSHIP_PER_PROVIDER: Record<string, string> = {
+  anthropic: "claude-3-7-sonnet-20250219",
+  openai: "o3-mini",
+  gemini: "gemini-2.0-flash",
+  groq: "llama-3.3-70b-versatile",
+  deepseek: "deepseek-reasoner",
+  mistral: "mistral-large-latest",
+  together: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+  xai: "grok-2-latest",
+};
+
+/**
+ * Checks if a model is the single latest release for its provider.
+ * Excludes openrouter, ollama, nvidia, lmstudio, and zen.
+ */
+export function isModelNew(
+  modelId: string,
+  providerIdOrCreated?: string | number,
+  created?: number
+): boolean {
+  if (!modelId) return false;
+  let providerId: string | undefined;
+
+  if (typeof providerIdOrCreated === "string") {
+    providerId = providerIdOrCreated;
+  }
+
+  const normalizedModel = modelId.toLowerCase().trim();
+  const normalizedProvider = (providerId || "").toLowerCase().trim();
+
+  // Exclude aggregated hubs, local daemons, and specific providers
+  if (normalizedProvider && EXCLUDED_NEW_BADGE_PROVIDERS.has(normalizedProvider)) {
+    return false;
+  }
+  if (
+    normalizedModel.startsWith("openrouter/") ||
+    normalizedModel.includes("nemotron-3.5-lightning-free") ||
+    normalizedModel.includes("local-model")
+  ) {
+    return false;
+  }
+
+  // Check if this model matches the single designated latest model for the provider
+  if (normalizedProvider && LATEST_FLAGSHIP_PER_PROVIDER[normalizedProvider]) {
+    const target = LATEST_FLAGSHIP_PER_PROVIDER[normalizedProvider].toLowerCase();
+    return (
+      normalizedModel === target ||
+      normalizedModel.endsWith("/" + target) ||
+      target.endsWith("/" + normalizedModel)
+    );
+  }
+
+  // Fallback match against single known flagship IDs across providers
+  const flagshipValues = Object.values(LATEST_FLAGSHIP_PER_PROVIDER).map((v) => v.toLowerCase());
+  return flagshipValues.some(
+    (target) =>
+      normalizedModel === target ||
+      normalizedModel === `openrouter/${target}` ||
+      normalizedModel.endsWith("/" + target)
+  );
+}
+
 export const KNOWN_DEPRECATIONS: Record<string, ModelDeprecationInfo> = {
   // OpenAI Deprecations
   "openai/gpt-3.5-turbo-0613": {
@@ -190,6 +263,7 @@ export interface LiveCatalogModel {
   status: "active" | "deprecating" | "discontinued";
   deprecation?: ModelDeprecationInfo;
   created?: number;
+  isNew?: boolean;
 }
 
 const CACHE_KEY = "noska_live_model_catalog";
@@ -241,7 +315,7 @@ export class ModelCatalogService {
       if (raw) {
         this._cachedModels = JSON.parse(raw);
       }
-    } catch {}
+    } catch { }
   }
 
   private _saveToStorage(models: LiveCatalogModel[]) {
@@ -249,7 +323,7 @@ export class ModelCatalogService {
       if (typeof window === "undefined") return;
       localStorage.setItem(CACHE_KEY, JSON.stringify(models));
       localStorage.setItem(CACHE_TIMESTAMP_KEY, String(Date.now()));
-    } catch {}
+    } catch { }
   }
 
   /**
@@ -327,7 +401,7 @@ export class ModelCatalogService {
 
         const deprecation = this.getDeprecationInfo(id);
         let status: "active" | "deprecating" | "discontinued" = "active";
-        
+
         if (deprecation) {
           if (deprecation.isDiscontinued) {
             status = "discontinued";
@@ -343,6 +417,8 @@ export class ModelCatalogService {
           }
         }
 
+        const isNew = isModelNew(id, providerId, m.created ? Number(m.created) : undefined);
+
         parsedModels.push({
           id,
           name,
@@ -353,6 +429,7 @@ export class ModelCatalogService {
           status,
           deprecation: deprecation || undefined,
           created: m.created ? Number(m.created) : undefined,
+          isNew,
         });
       }
 
@@ -373,6 +450,47 @@ export class ModelCatalogService {
 
   public getCachedModels(): LiveCatalogModel[] {
     return this._cachedModels;
+  }
+
+  /**
+   * Returns models for a given provider, respecting the caps:
+   * - ollama, nvidia, lmstudio, opencode_zen: capped at at most 3 models, strictly no NEW badge
+   * - openrouter: displays live synced models or base models, strictly no NEW badge
+   * - direct providers: displays authentic models with at most ONE single NEW badge for the latest flagship
+   */
+  public getModelsForProvider(
+    providerId: string,
+    fallbackModels: Array<{ id: string; name: string; context: number; isNew?: boolean; description?: string }> = []
+  ): Array<{ id: string; name: string; context: number; isNew?: boolean; description?: string }> {
+    const normalizedProvider = (providerId || "").toLowerCase().trim();
+
+    // 1. Hubs / Local engines capped at max 3 models, strictly NO NEW badge
+    if (["ollama", "nvidia", "lmstudio", "opencode_zen", "opencode"].includes(normalizedProvider)) {
+      return fallbackModels.slice(0, 3).map((m) => ({
+        ...m,
+        isNew: false,
+      }));
+    }
+
+    // 2. OpenRouter: if we have live synced catalog models, show them without NEW badge
+    if (normalizedProvider === "openrouter") {
+      if (this._cachedModels.length > 0) {
+        return this._cachedModels.map((m) => ({
+          id: m.id,
+          name: m.name,
+          context: m.context,
+          description: m.description,
+          isNew: false,
+        }));
+      }
+      return fallbackModels.map((m) => ({ ...m, isNew: false }));
+    }
+
+    // 3. Direct providers: dynamically ensure exactly ONE latest flagship gets isNew=true
+    return fallbackModels.map((m) => ({
+      ...m,
+      isNew: isModelNew(m.id, normalizedProvider),
+    }));
   }
 
   public isFetching(): boolean {

@@ -64,6 +64,8 @@ const ContentFiles = lazy(() => import("@/pages/ContentFiles").then((m) => ({ de
 const ContentTemplates = lazy(() => import("@/pages/ContentTemplates").then((m) => ({ default: m.ContentTemplates })));
 const Sentry = lazy(() => import("@/pages/Sentry").then((m) => ({ default: m.Sentry })));
 const PostHog = lazy(() => import("@/pages/PostHog").then((m) => ({ default: m.PostHog })));
+const AnnouncementCards = lazy(() => import("@/pages/AnnouncementCards").then((m) => ({ default: m.AnnouncementCardsPage })));
+const Releases = lazy(() => import("@/pages/Releases").then((m) => ({ default: m.ReleasesPage })));
 const MonitoringHub = lazy(() => import("@/pages/MonitoringHub").then((m) => ({ default: m.MonitoringHub })));
 
 const MonitoringOverview = lazy(() => import("@/pages/monitoring/Overview").then((m) => ({ default: m.MonitoringOverview })));
@@ -169,6 +171,7 @@ export default function App() {
                       <Route path="cta-buttons" element={<Suspense fallback={<PageLoading />}><CTAManager /></Suspense>} />
                       <Route path="announcement-bar" element={<Suspense fallback={<PageLoading />}><AnnouncementBarPage /></Suspense>} />
                       <Route path="info-cards" element={<Suspense fallback={<PageLoading />}><InfoCards /></Suspense>} />
+                      <Route path="announcement-cards" element={<Suspense fallback={<PageLoading />}><AnnouncementCards /></Suspense>} />
                       <Route path="waitlist-analytics" element={<Suspense fallback={<PageLoading />}><WaitlistAnalyticsPage /></Suspense>} />
                       <Route path="waitlist-settings" element={<Suspense fallback={<PageLoading />}><WaitlistSettingsPage /></Suspense>} />
                       <Route path="demo-requests" element={<Suspense fallback={<PageLoading />}><DemoRequests /></Suspense>} />
@@ -222,6 +225,7 @@ export default function App() {
                       <Route path="monitoring/logs" element={<Suspense fallback={<PageLoading />}><MonitoringLogs /></Suspense>} />
                       <Route path="monitoring/integrations" element={<Suspense fallback={<PageLoading />}><MonitoringIntegrations /></Suspense>} />
                       <Route path="perf" element={<Suspense fallback={<PageLoading />}><PerfDashboard /></Suspense>} />
+                      <Route path="releases" element={<Suspense fallback={<PageLoading />}><Releases /></Suspense>} />
                     </Route>
                   </Route>
                   <Route path="*" element={<Forbidden />} />

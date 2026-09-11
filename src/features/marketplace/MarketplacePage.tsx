@@ -765,7 +765,7 @@ export default function MarketplacePage({ pages, onDuplicate, onToast }: Marketp
             <div className="w-12 h-12 rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)] grid place-items-center text-xl">🔌</div>
             <h3 className="text-lg font-extrabold text-[var(--text)]">Connect your platforms</h3>
             <p className="text-xs text-[var(--text-secondary)] max-w-sm leading-relaxed">
-              Notion, GitHub, Slack, Gmail, Calendar — or any MCP server. Connected tools become available to Noska AI, agents, and automations.
+              Connect external tools and MCP servers to empower your AI and automations.
             </p>
             <button
               onClick={() => { setSettingsInitialTab("Integrations"); setSettingsOpen(true); }}

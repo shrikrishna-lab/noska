@@ -659,8 +659,8 @@ export function AdminCommandCenter() {
                 <span className="text-lg font-bold text-zinc-200 font-mono">{formatNumber(kpis?.aiEventsToday ?? 0)}</span>
               </div>
               <div className="p-3 bg-white/[0.03] border border-white/[0.04] rounded-2xl text-center">
-                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider mb-1">Avg API</span>
-                <span className="text-lg font-bold text-blue-400 font-mono">{overview?.avgApiResponse ? `${overview.avgApiResponse}ms` : "—"}</span>
+                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider mb-1">Pageviews</span>
+                <span className="text-lg font-bold text-blue-400 font-mono">{formatNumber(overview?.pageviews24h ?? 0)}</span>
               </div>
             </div>
             <button onClick={close} className="w-full py-2 text-xs font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white transition-colors">

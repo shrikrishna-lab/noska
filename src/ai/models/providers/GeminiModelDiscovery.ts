@@ -86,18 +86,18 @@ export class GeminiModelDiscovery implements ModelDiscoveryAdapter {
 
     const freeAccess = isFlash
       ? {
-          isFree: true,
-          status: "free_limited" as const,
-          source: "provider" as const,
-          verifiedAt: new Date().toISOString(),
-          conditions: ["Google AI Studio Free Tier (15 RPM)"],
-        }
+        isFree: true,
+        status: "free_limited" as const,
+        source: "provider" as const,
+        verifiedAt: new Date().toISOString(),
+        conditions: ["Google AI Studio Free Tier (15 RPM)"],
+      }
       : {
-          isFree: false,
-          status: "paid" as const,
-          source: "provider" as const,
-          verifiedAt: new Date().toISOString(),
-        };
+        isFree: false,
+        status: "paid" as const,
+        source: "provider" as const,
+        verifiedAt: new Date().toISOString(),
+      };
 
     return {
       apiModelId: modelId,

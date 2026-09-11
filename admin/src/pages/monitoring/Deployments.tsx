@@ -105,14 +105,18 @@ export function MonitoringDeployments() {
                   <StatusIcon className={`h-5 w-5 ${dep.status === "ready" ? "text-green-500" : dep.status === "building" ? "animate-spin text-blue-500" : "text-red-500"}`} />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">v{dep.version}</span>
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{dep.commitSha}</code>
+                      <span className="text-sm font-medium">{dep.name}</span>
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{dep.commitSha || dep.version}</code>
                       <Badge className={STATUS_BADGE[dep.status]}>{dep.status}</Badge>
                     </div>
+                    {dep.commitMessage && (
+                      <p className="mt-0.5 max-w-xl truncate text-xs text-foreground/80">{dep.commitMessage}</p>
+                    )}
                     <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <GitBranch className="h-3 w-3" /> {dep.branch}
                       </span>
+                      {dep.author && <span>by {dep.author}</span>}
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" /> {new Date(dep.deployedAt).toLocaleString()}
                       </span>

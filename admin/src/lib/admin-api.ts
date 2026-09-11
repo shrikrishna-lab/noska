@@ -17,6 +17,13 @@ class AdminApi {
   monitor = {
     health: () => this.request<{ services: Array<{ name: string; status: string; latency: number }>; elapsed: number }>("monitor", "health"),
     overview: () => this.request<{ usersOnline: number; todayUsers: number; workspaces: number; pages: number; errors: number; storage: number; apiLatency: number }>("monitor", "overview"),
+    storage: () => this.request<{
+      dbSizeBytes: number;
+      storageObjects: number;
+      storageBytes: number;
+      buckets: Array<{ name: string; objects: number; bytes: number }>;
+      topTables: Array<{ table: string; bytes: number }>;
+    }>("monitor", "storage"),
   };
 
   users = {

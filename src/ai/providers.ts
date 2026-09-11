@@ -34,6 +34,8 @@ export interface AIModel {
   id: string;
   name: string;
   context: number;
+  isNew?: boolean;
+  description?: string;
 }
 
 export interface AIMessage {
@@ -869,13 +871,6 @@ const PROVIDERS: Record<string, AIProvider> = {
     models: [
       { id: "nvidia/nemotron-3.5-lightning-30b-a3b", name: "Nemotron 3.5 Lightning (Thinking)", context: 131072 },
       { id: "deepseek-ai/deepseek-v4-pro-0813", name: "DeepSeek V4 Pro", context: 131072 },
-      { id: "minimaxai/minimax-m3", name: "MiniMax M3", context: 1000000 },
-      { id: "moonshotai/kimi-k3", name: "Kimi K3", context: 131072 },
-      { id: "openai/gpt-oss-120b", name: "GPT OSS 120B", context: 131072 },
-      { id: "google/gemma-4-31b-it", name: "Gemma 4 31B", context: 131072 },
-      { id: "nvidia/nemotron-3-ultra-550b-a55b", name: "Nemotron 3 Ultra 550B", context: 131072 },
-      { id: "poolside/laguna-xs-2.1", name: "Laguna XS 2.1", context: 131072 },
-      { id: "mistralai/mistral-nemotron", name: "Mistral Nemotron", context: 131072 },
       { id: "meta/llama-3.2-90b-vision-instruct", name: "Llama 3.2 90B Vision", context: 131072 }
     ],
     defaultModel: "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -950,19 +945,8 @@ const PROVIDERS: Record<string, AIProvider> = {
     keyPlaceholder: "sk-...",
     models: [
       { id: "nemotron-3.5-lightning-free", name: "Nemotron 3.5 Lightning [Free ⚡]", context: 131072 },
-      { id: "nemotron-3-ultra-free", name: "Nemotron 3 Ultra [Free ⚡]", context: 131072 },
-      { id: "laguna-s-2.1-free", name: "Laguna S 2.1 [Free ⚡]", context: 65536 },
-      { id: "mimo-v2.5-free", name: "Mimo v2.5 [Free ⚡]", context: 65536 },
       { id: "claude-sonnet-5", name: "Claude Sonnet 5 (Zen)", context: 200000 },
-      { id: "claude-opus-5", name: "Claude Opus 5 (Zen)", context: 200000 },
-      { id: "claude-opus-4-8", name: "Claude Opus 4.8 (Zen)", context: 200000 },
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Zen)", context: 200000 },
-      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5 (Zen)", context: 200000 },
-      { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Zen)", context: 200000 },
-      { id: "gpt-5.5-pro", name: "GPT-5.5 Pro (Zen)", context: 200000 },
-      { id: "grok-4.6", name: "Grok 4.6 (Zen)", context: 131072 },
-      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash (Zen)", context: 1000000 },
-      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro (Zen)", context: 65536 }
+      { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Zen)", context: 200000 }
     ],
     defaultModel: "nemotron-3.5-lightning-free",
     async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
@@ -992,20 +976,20 @@ const PROVIDERS: Record<string, AIProvider> = {
 
         const body = isAnthropic
           ? JSON.stringify({
-              model: modelId,
-              max_tokens: maxTokens,
-              ...(system ? { system } : {}),
-              messages: messages.map(m => ({ role: m.role, content: m.content }))
-            })
+            model: modelId,
+            max_tokens: maxTokens,
+            ...(system ? { system } : {}),
+            messages: messages.map(m => ({ role: m.role, content: m.content }))
+          })
           : JSON.stringify({
-              model: modelId,
-              max_tokens: maxTokens,
-              temperature: resolveTemperature(temperature, effort),
-              messages: [
-                ...(system ? [{ role: "system", content: system }] : []),
-                ...messages
-              ]
-            });
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: resolveTemperature(temperature, effort),
+            messages: [
+              ...(system ? [{ role: "system", content: system }] : []),
+              ...messages
+            ]
+          });
 
         const res = await fetchWithTimeout(endpoint, {
           method: "POST",
@@ -1053,22 +1037,22 @@ const PROVIDERS: Record<string, AIProvider> = {
 
         const body = isAnthropic
           ? JSON.stringify({
-              model: modelId,
-              max_tokens: maxTokens,
-              stream: true,
-              ...(system ? { system } : {}),
-              messages: messages.map(m => ({ role: m.role, content: m.content }))
-            })
+            model: modelId,
+            max_tokens: maxTokens,
+            stream: true,
+            ...(system ? { system } : {}),
+            messages: messages.map(m => ({ role: m.role, content: m.content }))
+          })
           : JSON.stringify({
-              model: modelId,
-              max_tokens: maxTokens,
-              temperature: resolveTemperature(temperature, effort),
-              stream: true,
-              messages: [
-                ...(system ? [{ role: "system", content: system }] : []),
-                ...messages
-              ]
-            });
+            model: modelId,
+            max_tokens: maxTokens,
+            temperature: resolveTemperature(temperature, effort),
+            stream: true,
+            messages: [
+              ...(system ? [{ role: "system", content: system }] : []),
+              ...messages
+            ]
+          });
 
         const res = await fetchWithTimeout(endpoint, {
           method: "POST",
@@ -1099,12 +1083,7 @@ const PROVIDERS: Record<string, AIProvider> = {
     models: [
       { id: "llama3.3:latest", name: "Llama 3.3 70B (Local)", context: 131072 },
       { id: "deepseek-r1:latest", name: "DeepSeek R1 (Local)", context: 65536 },
-      { id: "qwen2.5-coder:latest", name: "Qwen 2.5 Coder (Local)", context: 32768 },
-      { id: "mistral:latest", name: "Mistral 7B (Local)", context: 32768 },
-      { id: "phi4:latest", name: "Phi-4 (Local)", context: 16384 },
-      { id: "gemma2:latest", name: "Gemma 2 (Local)", context: 8192 },
-      { id: "codellama:latest", name: "CodeLlama (Local)", context: 16384 },
-      { id: "starcoder2:latest", name: "StarCoder 2 (Local)", context: 16384 }
+      { id: "qwen2.5-coder:latest", name: "Qwen 2.5 Coder (Local)", context: 32768 }
     ],
     defaultModel: "llama3.3:latest",
     async discoverModels(baseUrl) {
@@ -1185,12 +1164,7 @@ const PROVIDERS: Record<string, AIProvider> = {
     models: [
       { id: "local-model", name: "LM Studio Active Model", context: 32768 },
       { id: "llama-3.3-70b-instruct", name: "Llama 3.3 70B", context: 131072 },
-      { id: "deepseek-r1-distill-qwen-32b", name: "DeepSeek R1 Qwen 32B", context: 65536 },
-      { id: "qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B", context: 32768 },
-      { id: "mistral-small-instruct", name: "Mistral Small", context: 128000 },
-      { id: "phi-4-instruct", name: "Phi-4 Instruct", context: 16384 },
-      { id: "gemma-2-27b-it", name: "Gemma 2 27B", context: 8192 },
-      { id: "hermes-3-llama-3.1-8b", name: "Hermes 3 8B", context: 131072 }
+      { id: "deepseek-r1-distill-qwen-32b", name: "DeepSeek R1 Qwen 32B", context: 65536 }
     ],
     defaultModel: "local-model",
     async discoverModels(baseUrl) {

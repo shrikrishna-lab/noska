@@ -95,26 +95,26 @@ export class OpencodeZenModelDiscovery implements ModelDiscoveryAdapter {
 
     const pricing = raw.pricing
       ? {
-          inputPer1M: promptCost !== undefined ? promptCost * 1000000 : undefined,
-          outputPer1M: completionCost !== undefined ? completionCost * 1000000 : undefined,
-          currency: "USD",
-        }
+        inputPer1M: promptCost !== undefined ? promptCost * 1000000 : undefined,
+        outputPer1M: completionCost !== undefined ? completionCost * 1000000 : undefined,
+        currency: "USD",
+      }
       : undefined;
 
     const freeAccess = isFree
       ? {
-          isFree: true,
-          status: "free" as const,
-          source: "zen_catalog" as const,
-          verifiedAt: new Date().toISOString(),
-          conditions: isFreeTag ? ["OpenCode Zen Free Tier"] : undefined,
-        }
+        isFree: true,
+        status: "free" as const,
+        source: "zen_catalog" as const,
+        verifiedAt: new Date().toISOString(),
+        conditions: isFreeTag ? ["OpenCode Zen Free Tier"] : undefined,
+      }
       : {
-          isFree: false,
-          status: "paid" as const,
-          source: "zen_catalog" as const,
-          verifiedAt: new Date().toISOString(),
-        };
+        isFree: false,
+        status: "paid" as const,
+        source: "zen_catalog" as const,
+        verifiedAt: new Date().toISOString(),
+      };
 
     // Capabilities Detection
     const isReasoning = Boolean(

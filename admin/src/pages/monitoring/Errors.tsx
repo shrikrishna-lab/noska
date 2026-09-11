@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, RefreshCw, Globe, Monitor } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -95,8 +95,6 @@ export function MonitoringErrors() {
     { key: "environment", label: "Env", sortable: true },
     { key: "lastSeen", label: "Last Seen", sortable: true, render: (row) => <span className="text-xs text-muted-foreground">{new Date(row.lastSeen).toLocaleString()}</span> },
     { key: "status", label: "Status", sortable: true, render: (row) => <Badge className={STATUS_BADGE[row.status]}>{row.status}</Badge> },
-    { key: "browser", label: "Browser", render: (row) => <span className="flex items-center gap-1 text-xs"><Globe className="h-3 w-3" /> {row.browser}</span> },
-    { key: "device", label: "Device", render: (row) => <span className="flex items-center gap-1 text-xs"><Monitor className="h-3 w-3" /> {row.device}</span> },
   ];
 
   return (
@@ -137,7 +135,7 @@ export function MonitoringErrors() {
             columns={columns}
             data={filtered ?? []}
             onRowClick={(row) => {
-              window.open(`https://sentry.io/organizations/notion-by-me/issues/?query=is:unresolved+${encodeURIComponent(row.title)}`, "_blank");
+              if (row.permalink) window.open(row.permalink, "_blank");
             }}
           />
         </CardContent>

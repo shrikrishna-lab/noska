@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Shield, Users, Building2, FileText, Bot, AlertTriangle, Mail, Clock, HardDrive, Database, Radio, Globe, Activity, ExternalLink } from "lucide-react";
+import { Shield, Users, Building2, FileText, Bot, AlertTriangle, Mail, Eye, HardDrive, Database, Radio, Globe, Activity, ExternalLink } from "lucide-react";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -58,7 +58,7 @@ export function MonitoringOverview() {
     { title: "AI Requests", value: formatNumber(metrics.aiRequests), icon: Bot },
     { title: "Errors Today", value: formatNumber(metrics.errorsToday), icon: AlertTriangle },
     { title: "Emails Delivered", value: formatNumber(metrics.emailsDelivered), icon: Mail },
-    { title: "Avg API Response", value: `${metrics.avgApiResponse}ms`, icon: Clock },
+    { title: "Pageviews (24h)", value: formatNumber(metrics.pageviews24h), icon: Eye },
     { title: "Storage Used", value: metrics.storageUsed, icon: HardDrive },
   ];
 

@@ -46,6 +46,7 @@ import CustomProviders from "./settings/CustomProviders";
 import IntegrationsSettings from "./settings/IntegrationsSettings";
 import ConnectionsSettings from "./settings/ConnectionsSettings";
 import VoiceCustomizationSettings from "./settings/VoiceCustomizationSettings";
+import NoskaAISettings from "./settings/NoskaAISettings";
 import ShortcutsSettings from "./ShortcutsSettings";
 import { BillingPromotionalTab } from "./settings/BillingPromotionalTab";
 import SidebarCustomizer from "./customization/SidebarCustomizer";
@@ -642,13 +643,13 @@ export function SettingsModal({
             <div className="max-w-2xl space-y-6 pb-16 font-sans">
               <div className="pt-1">
                 <h1 className="text-[28px] font-normal tracking-tight font-serif text-[#1c1b18] dark:text-white">
-                  Connections
+                  Integrations
                 </h1>
                 <p className="text-xs text-[#706c64] dark:text-white/60 mt-1">
-                  Connect your tools and accounts — GitHub, Jira, Slack, Figma, Linear, or custom MCP servers. Link previews, mentions, and agent automations update seamlessly.
+                  Connect your platforms and tools to power AI agents and automations.
                 </p>
               </div>
-              <ConnectionsSettings onToast={(msg) => setSaveStatus(msg)} />
+              <IntegrationsSettings onToast={(msg) => setSaveStatus(msg)} />
             </div>
           )}
 
@@ -659,7 +660,7 @@ export function SettingsModal({
                   Developer & API Keys
                 </h1>
                 <p className="text-xs text-[#706c64] dark:text-white/60 mt-1">
-                  Build custom scripts and integrations with the Noska REST API — access pages, databases, tasks, AI agents, and automations.
+                  Manage API keys and developer access for custom scripts and integrations.
                 </p>
               </div>
               <ApiKeysManager userId={currentUserId} onToast={(msg) => setSaveStatus(msg)} />
@@ -972,77 +973,142 @@ export function SettingsModal({
               actual sign-out call), then reloads so the UI reflects the
               real post-clear state instead of just showing a toast. */}
           {tab === "Offline" && (
-            <div className="max-w-2xl space-y-6 text-[#1c1b18] pb-16 font-sans">
+            <div className="max-w-2xl space-y-6 text-[#1c1b18] dark:text-white pb-16 font-sans">
               {/* Title */}
               <div className="pt-1">
-                <h1 className="text-[32px] font-normal tracking-tight font-serif text-[#1c1b18]">
+                <h1 className="text-[28px] font-normal tracking-tight font-serif text-[#1c1b18] dark:text-white">
                   Offline & Storage
                 </h1>
-                <p className="text-xs text-[#706c64] mt-1">
-                  Pages, chats, and settings are cached locally for instantaneous offline performance and background cloud sync.
+                <p className="text-xs text-[#706c64] dark:text-white/60 mt-1">
+                  Manage local storage cache, offline sync status, and storage limits.
                 </p>
               </div>
 
-              {/* Main Storage Card */}
-              <div className="rounded-2xl bg-[#f8f6f0] p-6 shadow-sm divide-y divide-[#e8e4db]">
-                {/* Storage usage */}
-                <div className="py-4 first:pt-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-[#1c1b18]">Local Storage Footprint</div>
-                      <div className="text-xs text-[#706c64] mt-0.5">
-                        {storageBytes < 1024 ? `${storageBytes} B` : storageBytes < 1024 * 1024 ? `${(storageBytes / 1024).toFixed(1)} KB` : `${(storageBytes / (1024 * 1024)).toFixed(2)} MB`} used across workspace databases.
-                      </div>
+              {/* ── Storage Gauge & Footprint Card ─────────────────── */}
+              <div className="rounded-2xl bg-[#f8f6f0] dark:bg-[#181b24] p-5 border border-[#e8e4db] dark:border-white/10 shadow-sm space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                      <HardDrive size={17} />
                     </div>
-                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl">
-                      Synced
-                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#1c1b18] dark:text-white">Local Storage Footprint</span>
+                        <span className="flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200/80 dark:border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Synced & Ready
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#706c64] dark:text-white/60 mt-0.5">
+                        {storageBytes < 1024
+                          ? `${storageBytes} B`
+                          : storageBytes < 1024 * 1024
+                          ? `${(storageBytes / 1024).toFixed(1)} KB`
+                          : `${(storageBytes / (1024 * 1024)).toFixed(2)} MB`}{" "}
+                        cached across workspace databases and local states.
+                      </p>
+                    </div>
                   </div>
+
+                  <span className="text-[11px] font-mono font-semibold px-2.5 py-1 rounded-xl bg-white dark:bg-white/5 border border-[#e8e4db] dark:border-white/10 text-[#706c64] dark:text-white/70 shrink-0">
+                    Quota: 50 MB
+                  </span>
                 </div>
 
-                {/* Offline Cache Status */}
-                <div className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-[#1c1b18]">Offline Mode</div>
-                      <div className="text-xs text-[#706c64] mt-0.5">
-                        Seamlessly continue editing and typing when disconnected from the internet.
-                      </div>
-                    </div>
-                    <span className="text-xs font-semibold text-[#1c1b18]">Active</span>
-                  </div>
-                </div>
-
-                {/* Clear Cache */}
-                <div className="py-4 last:pb-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-rose-700">Clear Local Cache</div>
-                      <div className="text-xs text-[#706c64] mt-0.5">
-                        Flushes local device copies without affecting cloud-synced documents.
-                      </div>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!(await window.noskaConfirm?.("Clear locally cached pages, chats, and settings? Anything already synced to your account is safe."))) return;
-                        const keysToClear = [
-                          "noska_workspace_joined", "noska_sidebar_data",
-                          "noska_share_invites", "noska_ai_profile", "noska_ghost_writer_enabled",
-                          "noska_api_key", "noska_ai_config", "noska_memory", "noska_user_profile",
-                          "noska_inbox_reminders", "noska-graph-positions",
-                          "pages", "aiChats", "activeChatId", "stackedPageIds"
-                        ];
-                        keysToClear.forEach((k) => { try { localStorage.removeItem(k); } catch {} });
-                        computeStorageBytes();
-                        setSaveStatus("Local cache cleared. Reloading...");
-                        setTimeout(() => window.location.reload(), 800);
+                {/* Progress Bar */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-[#ede8df] dark:bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                      style={{
+                        width: `${Math.max(1, Math.min(100, (storageBytes / (50 * 1024 * 1024)) * 100))}%`,
                       }}
-                      className="px-4 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition cursor-pointer border border-rose-200"
-                    >
-                      Clear cache
-                    </button>
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-[#8c887f] dark:text-white/50 font-medium">
+                    <span>{((storageBytes / (50 * 1024 * 1024)) * 100).toFixed(2)}% of browser quota used</span>
+                    <span>{(50 - storageBytes / (1024 * 1024)).toFixed(1)} MB available</span>
                   </div>
                 </div>
+              </div>
+
+              {/* ── Offline Architecture Card ──────────────────────── */}
+              <div className="rounded-2xl bg-[#f8f6f0] dark:bg-[#181b24] p-5 border border-[#e8e4db] dark:border-white/10 shadow-sm flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/20 text-sky-600 dark:text-sky-400">
+                    <Cloud size={17} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-[#1c1b18] dark:text-white">Offline-First Engine</span>
+                      <span className="rounded-full bg-white dark:bg-white/5 border border-[#e8e4db] dark:border-white/10 px-2 py-0.5 text-[10px] font-medium text-[#706c64] dark:text-white/60">
+                        Zero-Latency
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#706c64] dark:text-white/60 mt-0.5">
+                      Edits persist locally in real-time and automatically synchronize when connected.
+                    </p>
+                  </div>
+                </div>
+
+                <span className="flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200/80 dark:border-emerald-500/30 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 shrink-0">
+                  <CheckCircle2 size={12} /> Active
+                </span>
+              </div>
+
+              {/* ── Cache Flush Card ──────────────────────────────── */}
+              <div className="rounded-2xl bg-[#f8f6f0] dark:bg-[#181b24] p-5 border border-[#e8e4db] dark:border-white/10 shadow-sm flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-rose-500/10 dark:bg-rose-500/15 border border-rose-500/20 text-rose-600 dark:text-rose-400">
+                    <Trash2 size={17} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-rose-700 dark:text-rose-400">Clear Local Cache</div>
+                    <p className="text-[11px] text-[#706c64] dark:text-white/60 mt-0.5">
+                      Flushes local device copies without affecting cloud-synced documents.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (
+                      !(await window.noskaConfirm?.(
+                        "Clear locally cached pages, chats, and settings? Anything already synced to your account is safe."
+                      ))
+                    )
+                      return;
+                    const keysToClear = [
+                      "noska_workspace_joined",
+                      "noska_sidebar_data",
+                      "noska_share_invites",
+                      "noska_ai_profile",
+                      "noska_ghost_writer_enabled",
+                      "noska_api_key",
+                      "noska_ai_config",
+                      "noska_memory",
+                      "noska_user_profile",
+                      "noska_inbox_reminders",
+                      "noska-graph-positions",
+                      "pages",
+                      "aiChats",
+                      "activeChatId",
+                      "stackedPageIds",
+                    ];
+                    keysToClear.forEach((k) => {
+                      try {
+                        localStorage.removeItem(k);
+                      } catch {}
+                    });
+                    computeStorageBytes();
+                    setSaveStatus("Local cache cleared. Reloading...");
+                    setTimeout(() => window.location.reload(), 800);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-400 text-xs font-semibold transition active:scale-[0.98] cursor-pointer border border-rose-200 dark:border-rose-500/25 shrink-0 shadow-xs"
+                >
+                  Clear Cache
+                </button>
               </div>
             </div>
           )}
@@ -1207,108 +1273,6 @@ export function SettingsModal({
             </div>
           )}
 
-          {tab === "Developer" && (
-            <div className="max-w-2xl space-y-6 text-[#1c1b18] pb-16 font-sans">
-              {/* Title */}
-              <div className="pt-1">
-                <h1 className="text-[32px] font-normal tracking-tight font-serif text-[#1c1b18]">
-                  Developer & Diagnostics
-                </h1>
-                <p className="text-xs text-[#706c64] mt-1">
-                  Developer tools, runtime inspection, local storage status, and debug logging.
-                </p>
-              </div>
-
-              {/* Developer Main Card */}
-              <div className="rounded-2xl bg-[#f8f6f0] p-6 shadow-sm divide-y divide-[#e8e4db]">
-                {/* 1. Developer Mode Toggle */}
-                <div className="py-4 first:pt-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-[#1c1b18]">Developer Mode</div>
-                      <div className="text-xs text-[#706c64] mt-0.5">Enables detailed console logging and experimental AI routes.</div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      defaultChecked={process.env.NODE_ENV === "development"}
-                      className="h-4 w-4 rounded accent-[#1c1b18] cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* 2. Local Storage Inspector */}
-                <div className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-[#1c1b18]">Local Storage Footprint</div>
-                      <div className="text-xs text-[#706c64] mt-0.5">
-                        {storageBytes < 1024 ? `${storageBytes} B` : storageBytes < 1024 * 1024 ? `${(storageBytes / 1024).toFixed(1)} KB` : `${(storageBytes / (1024 * 1024)).toFixed(2)} MB`} cached locally on this device.
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        computeStorageBytes();
-                        alert(`Total LocalStorage: ${(storageBytes / 1024).toFixed(1)} KB across workspace stores.`);
-                      }}
-                      className="px-4 py-1.5 rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] text-[#1c1b18] text-xs font-semibold transition cursor-pointer"
-                    >
-                      Inspect
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3. Export Diagnostics Report */}
-                <div className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-[#1c1b18]">System Diagnostics</div>
-                      <div className="text-xs text-[#706c64] mt-0.5">Generate a JSON diagnostic bundle of active extensions and adapters.</div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const report = {
-                          timestamp: new Date().toISOString(),
-                          userAgent: navigator.userAgent,
-                          storageBytes,
-                          aiProvider,
-                          speechSupported: typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window),
-                        };
-                        const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `noska-diagnostics-${Date.now()}.json`;
-                        a.click();
-                      }}
-                      className="px-4 py-1.5 rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] text-[#1c1b18] text-xs font-semibold transition cursor-pointer"
-                    >
-                      Export
-                    </button>
-                  </div>
-                </div>
-
-                {/* 4. Clear Diagnostic Cache */}
-                <div className="py-4 last:pb-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-rose-700">Clear Cache & Reset</div>
-                      <div className="text-xs text-[#706c64] mt-0.5">Flushes local cache and forces client state re-initialization.</div>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!(await window.noskaConfirm?.("Clear locally cached diagnostic logs and reset runtime session?"))) return;
-                        localStorage.removeItem("noska_voice_flow_settings");
-                        window.location.reload();
-                      }}
-                      className="px-4 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition cursor-pointer border border-rose-200"
-                    >
-                      Reset Cache
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {(tab === "Customization" || tab === "Sidebar") && (
             <ProfileCardCustomization
@@ -1328,11 +1292,12 @@ export function SettingsModal({
               setNvidiaKey={setNvidiaKey}
               ghostWriterEnabled={ghostWriterEnabled}
               setGhostWriterEnabled={setGhostWriterEnabled}
+              onToast={(msg) => setSaveStatus(msg)}
             />
           )}
-              {tab === "Voice & Dictation" && (
-                <VoiceCustomizationSettings />
-              )}
+          {tab === "Voice & Dictation" && (
+            <VoiceCustomizationSettings />
+          )}
             </motion.div>
           </AnimatePresence>
         </main>
@@ -1372,325 +1337,6 @@ function SettingsNavItem({ icon: Icon, label, active, onClick }: SettingsNavItem
         <span className="truncate">{label}</span>
       </span>
     </motion.button>
-  );
-}
-
-interface OptionChipsProps {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-}
-
-function OptionChips({ label, value, options, onChange }: OptionChipsProps) {
-  return (
-    <div className="mb-2 flex items-start justify-between gap-3 text-sm">
-      <div className="w-20 shrink-0 pt-1 text-[var(--muted)]">{label}</div>
-      <div className="flex flex-wrap justify-end gap-1">
-        {options.map((option) => (
-          <button
-            key={option}
-            onClick={() => onChange(option)}
-            className={`rounded px-2 py-1 text-xs transition ${
-              value === option ? "bg-[var(--accent)] text-white" : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-            }`}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Noska AI Settings Component ────────────────────────────────────────────
-
-interface NoskaAISettingsProps {
-  apiKey: string;
-  setApiKey: (key: string) => void;
-  aiProvider: string;
-  setAIProvider: (provider: string) => void;
-  nvidiaKey: string;
-  setNvidiaKey: (key: string) => void;
-  ghostWriterEnabled: boolean;
-  setGhostWriterEnabled: (enabled: boolean) => void;
-}
-
-interface ProviderTestResult {
-  ok: boolean;
-  error?: string;
-  response?: string;
-}
-
-function NoskaAISettings({
-  apiKey, setApiKey,
-  aiProvider, setAIProvider,
-  nvidiaKey, setNvidiaKey,
-  ghostWriterEnabled, setGhostWriterEnabled
-}: NoskaAISettingsProps) {
-  const [providerTests, setProviderTests] = React.useState<Record<string, ProviderTestResult>>({});
-  const [testingId, setTestingId] = React.useState<string | null>(null);
-  const providerList = getProviderList();
-  const agentList = getAgentList();
-  const config = aiManager.getConfig();
-  const [, forceUpdate] = React.useState(0);
-
-  // Subscribe to AIManager config changes
-  React.useEffect(() => {
-    // aiManager.subscribe returns `() => this._listeners.delete(listener)`
-    // (AIManager.ts), i.e. a `() => boolean`, not the `() => void` React's
-    // effect cleanup type expects — wrap rather than touch AIManager.ts,
-    // which is outside this migration's scope.
-    const unsubscribe = aiManager.subscribe(() => forceUpdate(n => n + 1));
-    return () => { unsubscribe(); };
-  }, []);
-
-  // Sync legacy states → AIManager when they change
-  React.useEffect(() => {
-    if (apiKey) aiManager.setProviderConfig("anthropic", { apiKey, enabled: true });
-  }, [apiKey]);
-
-  React.useEffect(() => {
-    if (nvidiaKey) aiManager.setProviderConfig("nvidia", { apiKey: nvidiaKey, enabled: true });
-  }, [nvidiaKey]);
-
-  const handleKeyChange = (providerId: string, key: string) => {
-    aiManager.setProviderConfig(providerId, { apiKey: key, enabled: true });
-    // Also sync to legacy states for backward compat
-    if (providerId === "anthropic") setApiKey(key);
-    if (providerId === "nvidia") setNvidiaKey(key);
-  };
-
-  const handleSetActive = (providerId: string) => {
-    const provider = providerList.find(p => p.id === providerId);
-    aiManager.setActiveProvider(providerId, provider?.defaultModel);
-    // Sync to legacy
-    setAIProvider(providerId);
-  };
-
-  const handleTestConnection = async (providerId: string) => {
-    setTestingId(providerId);
-    const providerConfig = config.providers[providerId] || {};
-    const result = await testProviderConnection(providerId, providerConfig);
-    setProviderTests(prev => ({ ...prev, [providerId]: result }));
-    setTestingId(null);
-  };
-
-  const currentConfig = aiManager.getConfig();
-
-  return (
-    <div className="max-w-2xl space-y-6 text-[#1c1b18] pb-16 font-sans">
-      {/* Title */}
-      <div className="pt-1">
-        <h1 className="text-[32px] font-normal tracking-tight font-serif text-[#1c1b18]">
-          Noska AI
-        </h1>
-        <p className="text-xs text-[#706c64] mt-1">
-          Configure intelligence models, providers, context injection, and writing assistants.
-        </p>
-      </div>
-
-      {/* ─── Active Model Status Card ─────────────────────────────────────────── */}
-      <div className="rounded-2xl bg-[#f8f6f0] p-5 shadow-sm flex items-center justify-between">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-[#a8824b] mb-0.5">Active Intelligence Model</div>
-          <div className="text-lg font-semibold text-[#1c1b18]">{aiManager.getActiveModelName()}</div>
-          <div className="text-xs text-[#706c64] mt-0.5">Connected via {aiManager.getActiveProviderName()}</div>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#ede8df] text-xs font-semibold text-[#1c1b18]">
-          <div className={`h-2 w-2 rounded-full ${aiManager.isConfigured() ? "bg-emerald-500" : "bg-amber-400"}`} />
-          <span>{aiManager.isConfigured() ? "Ready" : "Needs Key"}</span>
-        </div>
-      </div>
-
-      {/* ─── Providers Card ───────────────────────────────────────── */}
-      <div className="rounded-2xl bg-[#f8f6f0] p-5 sm:p-6 shadow-sm divide-y divide-[#e8e4db] max-w-full overflow-hidden">
-        <div className="flex items-center justify-between pb-3 gap-2 flex-wrap">
-          <div>
-            <div className="text-sm font-semibold text-[#1c1b18] flex items-center gap-2">
-              <span>AI Providers</span>
-              <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Auto-Sync
-              </span>
-            </div>
-            <div className="text-xs text-[#706c64] mt-0.5">
-              Connect cloud API keys or local daemons. Models auto-sync in real time.
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={async () => {
-              setTestingId("syncing");
-              try {
-                await modelCatalogService.fetchRealtimeCatalog(true);
-              } catch (err) {
-                console.warn(err);
-              } finally {
-                setTestingId(null);
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#e8e4db] bg-white hover:bg-[#ede8df] text-xs font-semibold text-[#1c1b18] transition cursor-pointer shadow-xs shrink-0"
-            title="Force refresh models and live providers"
-          >
-            <RotateCw size={12} className={testingId === "syncing" ? "animate-spin text-purple-600" : ""} />
-            <span>Sync Models</span>
-          </button>
-        </div>
-
-        {providerList.map((provider) => {
-          const providerConfig = currentConfig.providers[provider.id] || {};
-          const isActive = currentConfig.activeProvider === provider.id;
-          const hasKey = !provider.requiresKey || Boolean(providerConfig.apiKey);
-          const testResult = providerTests[provider.id];
-          const isTesting = testingId === provider.id;
-
-          return (
-            <div key={provider.id} className="py-4 first:pt-4 max-w-full overflow-hidden">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                  <div className={`h-2 w-2 rounded-full flex-shrink-0 mt-1.5 ${hasKey ? "bg-emerald-500" : "bg-[#b0aca3]"}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-[#1c1b18]">{provider.name}</span>
-                      <span className="rounded-full bg-[#ede8df] px-2 py-0.5 text-[10px] text-[#706c64] font-semibold uppercase">
-                        {provider.type}
-                      </span>
-                      {isActive && (
-                        <span className="rounded-full bg-[#1c1b18] px-2 py-0.5 text-[10px] text-white font-semibold">
-                          ACTIVE
-                        </span>
-                      )}
-                    </div>
-                    {/* Wrapped model catalog text with responsive line wrapping */}
-                    <div className="text-[11.5px] text-[#706c64] mt-1 leading-relaxed break-words line-clamp-2 max-w-full">
-                      {provider.models.length > 0
-                        ? provider.models.map(m => m.name).join(", ")
-                        : provider.hasDiscover ? "Auto-discover local models (Ollama / LM Studio)" : "No models configured"}
-                    </div>
-                  </div>
-                </div>
-
-                {!isActive && hasKey && (
-                  <button
-                    onClick={() => handleSetActive(provider.id)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] text-[#1c1b18] text-xs font-semibold transition cursor-pointer shrink-0"
-                  >
-                    Select
-                  </button>
-                )}
-              </div>
-
-              {/* API Key input */}
-              {provider.requiresKey && (
-                <div className="mt-3 flex gap-2">
-                  <input
-                    type="password"
-                    value={providerConfig.apiKey || ""}
-                    onChange={(e) => handleKeyChange(provider.id, e.target.value)}
-                    placeholder={provider.keyPlaceholder || "Paste API key..."}
-                    className="flex-1 rounded-xl border border-[#e8e4db] bg-white px-3.5 py-1.5 text-xs text-[#1c1b18] outline-none placeholder:text-[#a09c94] focus:border-[#1c1b18] transition"
-                  />
-                  <button
-                    onClick={() => handleTestConnection(provider.id)}
-                    disabled={!providerConfig.apiKey || isTesting}
-                    className="rounded-xl bg-[#ede8df] hover:bg-[#e4ded3] px-3.5 py-1.5 text-xs font-semibold text-[#1c1b18] transition disabled:opacity-40 cursor-pointer"
-                  >
-                    {isTesting ? "Testing..." : "Test"}
-                  </button>
-                </div>
-              )}
-
-              {/* Local provider URL */}
-              {!provider.requiresKey && (
-                <div className="mt-3">
-                  <input
-                    type="text"
-                    value={providerConfig.baseUrl || ""}
-                    onChange={(e) => aiManager.setProviderConfig(provider.id, { baseUrl: e.target.value })}
-                    placeholder={`Endpoint URL (default: ${provider.id === "ollama" ? "http://localhost:11434" : "http://localhost:1234/v1"})`}
-                    className="w-full rounded-xl border border-[#e8e4db] bg-white px-3.5 py-1.5 text-xs text-[#1c1b18] outline-none placeholder:text-[#a09c94] focus:border-[#1c1b18] transition"
-                  />
-                </div>
-              )}
-
-              {/* Test result feedback */}
-              {testResult && (
-                <div className={`mt-2 rounded-xl px-3 py-1.5 text-xs font-medium ${
-                  testResult.ok
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    : "bg-rose-50 text-rose-700 border border-rose-200"
-                }`}>
-                  {testResult.ok ? "✓ Connection verified" : `✗ ${testResult.error || "Connection failed"}`}
-                </div>
-              )}
-
-              {/* Model selector for active provider */}
-              {isActive && provider.models.length > 1 && (
-                <div className="mt-3">
-                  <select
-                    value={currentConfig.activeModel || provider.defaultModel}
-                    onChange={(e) => aiManager.setActiveProvider(provider.id, e.target.value)}
-                    className="w-full rounded-xl border border-[#e8e4db] bg-white px-3.5 py-1.5 text-xs text-[#1c1b18] font-medium outline-none cursor-pointer"
-                  >
-                    {provider.models.map(model => (
-                      <option key={model.id} value={model.id}>
-                        {model.name} ({Math.round(model.context / 1000)}k context)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ─── Custom Providers (bring your own endpoint) ─────────────── */}
-      <CustomProviders />
-
-      {/* ─── Context Settings Card ─────────────────────────────────────── */}
-      <div className="rounded-2xl bg-[#f8f6f0] p-6 shadow-sm divide-y divide-[#e8e4db]">
-        <div className="pb-3">
-          <div className="text-sm font-semibold text-[#1c1b18]">Context Injection</div>
-          <div className="text-xs text-[#706c64] mt-0.5">Control workspace data sent with AI requests.</div>
-        </div>
-        {[
-          { key: "includeCurrentPage", label: "Current page content", desc: "Send the active page's blocks and notes" },
-          { key: "includeRecentPages", label: "Recent pages", desc: "Include summaries of recently edited pages" },
-          { key: "includeConnections", label: "Graph connections", desc: "Include backlinks and connected notes" },
-          { key: "includeTags", label: "Workspace tags", desc: "Send workspace tags for broader context" }
-        ].map(({ key, label, desc }) => (
-          <div key={key} className="py-3 flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold text-[#1c1b18]">{label}</div>
-              <div className="text-xs text-[#706c64] mt-0.5">{desc}</div>
-            </div>
-            <input
-              type="checkbox"
-              checked={(currentConfig.context as unknown as Record<string, boolean>)?.[key] !== false}
-              onChange={(e) => aiManager.configure({ context: { ...currentConfig.context, [key]: e.target.checked } })}
-              className="h-4 w-4 rounded accent-[#1c1b18] cursor-pointer"
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* ─── Ghost Writer Card ─────────────────────────────────────────── */}
-      <div className="rounded-2xl bg-[#f8f6f0] p-6 shadow-sm flex items-center justify-between">
-        <div>
-          <div className="text-sm font-semibold text-[#1c1b18]">AI Ghost Writer</div>
-          <div className="text-xs text-[#706c64] mt-0.5">Predict and suggest completions inline as you pause typing.</div>
-        </div>
-        <input
-          type="checkbox"
-          checked={!!ghostWriterEnabled}
-          onChange={(e) => setGhostWriterEnabled(e.target.checked)}
-          className="h-4 w-4 rounded accent-[#1c1b18] cursor-pointer"
-        />
-      </div>
-    </div>
   );
 }
 
