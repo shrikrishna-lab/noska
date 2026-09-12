@@ -192,7 +192,7 @@ Deno.serve(async (req: Request) => {
   try {
     if (body.action === "status" || body.action === "runs" || body.action === "releases" || body.action === "whatsnew") {
       if (!requireRole(admin, "support")) return resError("Forbidden", 403);
-    } else if (body.action === "delete_draft") {
+    } else if (body.action === "delete_draft" || body.action === "retry") {
       if (!requireRole(admin, "admin")) return resError("Forbidden: admin role required", 403);
     } else if (body.action === "trigger") {
       if (!requireRole(admin, "admin")) return resError("Forbidden: admin role required to ship releases", 403);
@@ -202,6 +202,58 @@ Deno.serve(async (req: Request) => {
 
     const token = Deno.env.get("GITHUB_TOKEN");
     if (!token) return resError("GitHub not configured: set the GITHUB_TOKEN secret", 503);
+
+    if (body.action === "retry") {
+      // Re-release an existing version: move its tag to the current branch
+      // HEAD (picking up any post-release fixes) — the tag push re-triggers
+      // the release workflow. Intended for failed builds or republishing.
+      const tag = String(body.tag ?? "").trim();
+      if (!/^desktop-v\d+\.\d+\.\d+/.test(tag)) return resError("Invalid tag", 400);
+
+      const repoInfo = await gh<{ default_branch: string }>(token, `/repos/${REPO}`);
+      if (!repoInfo.ok) return resError(`GitHub API ${repoInfo.status}: ${repoInfo.raw}`, 502);
+      const branch = repoInfo.data!.default_branch;
+
+      const tagRef = await gh<GitHubRef>(token, `/repos/${REPO}/git/ref/tags/${tag}`);
+      if (tagRef.status === 404) return resError(`Tag ${tag} does not exist — use action "trigger" for a new version`, 404);
+      if (!tagRef.ok) return resError(`GitHub API ${tagRef.status}: ${tagRef.raw}`, 502);
+
+      const headRef = await gh<GitHubRef>(token, `/repos/${REPO}/git/ref/heads/${branch}`);
+      if (!headRef.ok) return resError(`Cannot resolve branch ${branch}`, 502);
+      const headSha = headRef.data!.object.sha;
+      const currentTaggedSha = tagRef.data!.object.sha;
+
+      if (currentTaggedSha === headSha && !body.force) {
+        return resError(`Tag ${tag} already points at the current ${branch} HEAD. Send force:true to rebuild anyway.`, 409);
+      }
+
+      const del = await gh(token, `/repos/${REPO}/git/refs/tags/${tag}`, { method: "DELETE" });
+      if (!del.ok) return resError(`Tag move failed (delete): ${del.status} ${del.raw}`, 502);
+      const create = await gh(token, `/repos/${REPO}/git/refs`, {
+        method: "POST",
+        body: { ref: `refs/tags/${tag}`, sha: headSha },
+      });
+      if (!create.ok) return resError(`Tag move failed (recreate): ${create.status} ${create.raw}`, 502);
+
+      // Keep the notes: if the staging draft was deleted, recreate it with the
+      // last known body so the published release doesn't lose them.
+      const relR = await gh<{ id: number; draft: boolean }>(token, `/repos/${REPO}/releases/tags/${tag}`);
+      if (relR.status === 404 && typeof body.notes === "string" && body.notes.trim()) {
+        await gh(token, `/repos/${REPO}/releases`, {
+          method: "POST",
+          body: { tag_name: tag, name: `Noska Desktop v${tag.slice("desktop-v".length)}`, body: body.notes, draft: true, prerelease: false },
+        });
+      }
+
+      await audit(admin, "release.retry", { tag, headSha, previousSha: currentTaggedSha });
+      return res({
+        ok: true,
+        tag,
+        headSha: headSha.slice(0, 7),
+        previousSha: currentTaggedSha.slice(0, 7),
+        runUrl: `https://github.com/${REPO}/actions/workflows/${WORKFLOW_FILE}`,
+      });
+    }
 
     if (body.action === "delete_draft") {
       // Housekeeping: delete a DRAFT release (staged build leftovers).

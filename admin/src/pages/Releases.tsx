@@ -15,7 +15,7 @@ import {
 import {
   Rocket, RefreshCw, ExternalLink, CheckCircle2, XCircle, Loader2, Clock,
   FileCode2, Tag, PackageOpen, AlertTriangle, ShieldCheck, Sparkles,
-  Zap, Wrench, AlertOctagon, Lightbulb, Trash2,
+  Zap, Wrench, AlertOctagon, Lightbulb, Trash2, RotateCcw,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -334,7 +334,7 @@ function RunRow({ run }: { run: GitHubRun }) {
   );
 }
 
-function ReleaseRow({ release, onDeleteDraft, deleting }: { release: GitHubRelease; onDeleteDraft?: (tag: string) => void; deleting?: boolean }) {
+function ReleaseRow({ release, onDeleteDraft, deleting, onRetry, retrying }: { release: GitHubRelease; onDeleteDraft?: (tag: string) => void; deleting?: boolean; onRetry?: (tag: string, notes?: string) => void; retrying?: boolean }) {
   const installers = release.assets.filter((a) => !a.name.endsWith(".json") && !a.name.endsWith(".sig"));
   return (
     <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
@@ -365,17 +365,30 @@ function ReleaseRow({ release, onDeleteDraft, deleting }: { release: GitHubRelea
       </div>
         <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </a>
-      {release.draft && onDeleteDraft && (
-        <button
-          type="button"
-          title="Delete this draft release (staged leftovers)"
-          disabled={deleting}
-          onClick={() => onDeleteDraft(release.tag_name)}
-          className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      )}
+      <div className="flex shrink-0 items-center gap-0.5">
+        {onRetry && (
+          <button
+            type="button"
+            title="Rebuild & re-release: move this tag to the current master (picking up fixes) and re-run the build"
+            disabled={retrying}
+            onClick={() => onRetry(release.tag_name, release.body ?? undefined)}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-blue-500/10 hover:text-blue-500 disabled:opacity-40"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+        )}
+        {release.draft && onDeleteDraft && (
+          <button
+            type="button"
+            title="Delete this draft release (staged leftovers)"
+            disabled={deleting}
+            onClick={() => onDeleteDraft(release.tag_name)}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -432,6 +445,15 @@ export function ReleasesPage() {
     onError: (err) => {
       toast.error(err instanceof Error ? err.message.slice(0, 300) : "Release trigger failed");
     },
+  });
+
+  const retryRelease = useMutation({
+    mutationFn: (input: { tag: string; notes?: string }) => releaseApi.retry(input.tag, input.notes),
+    onSuccess: (r) => {
+      toast.success(`${r.tag} rebuild started from ${r.headSha} (was ${r.previousSha}) — watch the run below`);
+      qc.invalidateQueries({ queryKey: ["admin", "releases"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message.slice(0, 200) : "Rebuild failed to start"),
   });
 
   const deleteDraft = useMutation({
@@ -674,6 +696,17 @@ export function ReleasesPage() {
                       key={release.id}
                       release={release}
                       deleting={deleteDraft.isPending}
+                      retrying={retryRelease.isPending}
+                      onRetry={(tag, notes) => {
+                        const published = !release.draft;
+                        if (window.confirm(
+                          published
+                            ? `Rebuild & re-release ${tag}? The tag moves to current master and the PUBLIC installers for this version are overwritten once the build completes.`
+                            : `Rebuild ${tag}? The tag moves to current master and the build runs again.`,
+                        )) {
+                          retryRelease.mutate({ tag, notes });
+                        }
+                      }}
                       onDeleteDraft={(tag) => {
                         if (window.confirm(`Delete draft release ${tag}? Its staged installers are removed from the private repo.`)) {
                           deleteDraft.mutate(tag);

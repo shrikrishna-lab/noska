@@ -145,6 +145,7 @@ export interface GitHubRelease {
   tag_name: string;
   name: string | null;
   draft: boolean;
+  body?: string | null;
   prerelease: boolean;
   created_at: string;
   published_at: string | null;
@@ -206,6 +207,10 @@ export const releaseApi = {
     invokeEdgeFunction<{ releases: GitHubRelease[] }>("admin-trigger-release", { action: "releases" }),
   deleteDraft: (tag: string) =>
     invokeEdgeFunction<{ ok: boolean; tag: string }>("admin-trigger-release", { action: "delete_draft", tag }),
+  retry: (tag: string, notes?: string) =>
+    invokeEdgeFunction<{ ok: boolean; tag: string; headSha: string; previousSha: string }>(
+      "admin-trigger-release", { action: "retry", tag, notes },
+    ),
 };
 
 async function invokeEdgeFunction<T>(fn: string, body: Record<string, unknown>): Promise<T> {
