@@ -59,6 +59,78 @@ async function fetchNotesFor(version: string): Promise<ReleaseNotes | null> {
   }
 }
 
+function compareVersions(a: string, b: string): number {
+  const pa = a.replace(/^[^\d]*/, "").split("-")[0].split(".").map(Number);
+  const pb = b.replace(/^[^\d]*/, "").split("-")[0].split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  }
+  return 0;
+}
+
+// Users can skip versions (the updater always jumps to latest), so the
+// What's New covers EVERY published release between the last-seen version
+// and the current one — not just the current version's notes.
+async function fetchNotesBetween(
+  seenVersion: string,
+  currentVersion: string,
+): Promise<ReleaseNotes | null> {
+  try {
+    const res = await fetch(
+      "https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases?per_page=30",
+      { headers: { Accept: "application/vnd.github+json" } },
+    );
+    if (!res.ok) return null;
+    const releases = (await res.json()) as Array<{
+      name?: string;
+      body?: string;
+      html_url?: string;
+      tag_name?: string;
+      created_at?: string;
+      draft?: boolean;
+      prerelease?: boolean;
+    }>;
+
+    const inRange = releases
+      .filter((r) => !r.draft && !r.prerelease && r.body && r.body.trim() && r.tag_name)
+      .map((r) => ({ ...r, version: (r.tag_name ?? "").replace(/^desktop-v/, "v") }))
+      .filter((r) => {
+        const v = compareVersions(r.version, seenVersion);
+        return v > 0 && compareVersions(r.version, currentVersion) <= 0;
+      })
+      .sort((a, b) => compareVersions(a.version, b.version)); // oldest first
+
+    if (inRange.length === 0) return null;
+
+    if (inRange.length === 1) {
+      const r = inRange[0];
+      return {
+        version: r.version,
+        title: r.name || `What's new in ${r.version}`,
+        body: r.body!,
+        url: r.html_url ?? `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/${r.tag_name}`,
+      };
+    }
+
+    // Multiple versions skipped — compose one body with a section per release
+    // (oldest first, each entry's own "# title" line dropped to avoid
+    // duplicate titles; the modal chrome shows the current version).
+    const sections = inRange.map((r) => {
+      const date = r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+      const bodyLines = (r.body ?? "").split("\n").filter((l) => !/^#\s/.test(l));
+      return [`### ${r.version}${date ? ` — ${date}` : ""}`, ...bodyLines].join("\n");
+    });
+    return {
+      version: currentVersion.startsWith("v") ? currentVersion : `v${currentVersion.replace(/^desktop-v/, "")}`,
+      title: `What's new in ${currentVersion.startsWith("v") ? currentVersion : `v${currentVersion.replace(/^desktop-v/, "")}`}`,
+      body: sections.join("\n\n"),
+      url: `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/desktop-v${currentVersion.replace(/^v/, "")}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function useReleaseNotes() {
   const [notes, setNotes] = useState<ReleaseNotes | null>(null);
   const [ready, setReady] = useState(false);
@@ -82,9 +154,19 @@ export function useReleaseNotes() {
     }
 
     // Version changed since we last saw notes → this is an update. Show the
-    // notes for the new version.
+    // notes for every version between the last-seen one and now.
     let cancelled = false;
-    fetchNotesFor(current).then((n) => {
+    fetchNotesBetween(seen, current).then((n) => {
+      if (cancelled) return;
+      if (n) {
+        setNotes(n);
+        markSeen(current);
+        setReady(true);
+        return;
+      }
+      // Range unavailable — fall back to the current version's notes alone.
+      return fetchNotesFor(current);
+    }).then((n) => {
       if (cancelled) return;
       if (n) setNotes(n);
       // No notes published for this version — mark seen so we don't retry
