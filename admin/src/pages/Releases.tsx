@@ -56,11 +56,17 @@ const REDACT_PATTERNS: RegExp[] = [
   /\bhttps?:\/\/\S+/g,                                              // URLs
   /\b[\w.-]+(?:\/[\w.-]+)+\.(?:ts|tsx|js|jsx|json|toml|sql|ya?ml|py|md)\b/g, // repo paths
   /\bshrikrishna[\w-]*\b|\bnot-krrish\b|\bkrishnahandibag\w*\b/gi,  // private identities
+  /\b(?:edge function|gateway|admin panel|admin api|oauth config)\b/gi, // internal plumbing terms
 ];
 
-// A commit that is ABOUT secrets/credentials/internal ops has no place in
-// public notes even after redaction — drop it entirely.
-const INTERNAL_MESSAGE = /\b(secret|credential|password|api[\s-]?key|token|env var|environment variable|\.env|service role|signing key|webhook secret)\b/i;
+// A commit is excluded from public notes when it is about internals:
+// secrets/credentials, the admin panel, release/build engineering, CI/CD,
+// backend infrastructure, or vendor tooling. Users don't act on these and
+// they leak how the product is operated.
+const INTERNAL_COMMIT =
+  /\b(?:secret|credential|password|api[\s-]?key|token|env var|environment variable|\.env|service role|signing|webhook secret|admin|tauri(?:-action)?|workflow|github actions?|pipeline|infra(?:structure)?|deploy(?:ment|ed|ing|s)?|edge function|gateway|backend|server-?side|monitoring|sentry|posthog|supabase|vercel|notariz\w*|draft release|staging|jwt)\b/i;
+// Infra scopes (e.g. "fix(release):", "chore(ci):") are internal by definition.
+const INTERNAL_SCOPE = /^\w+\((?:release|ci|cd|build|infra|deploy|ops|admin|internal)\)/i;
 
 function sanitizeLine(text: string): string {
   let s = text;
@@ -94,7 +100,7 @@ function generateNotes(data: WhatsNew, version: string): string {
   // Public-safe bullets: internal-topic commits are dropped, the rest are
   // redacted (emails/tokens/paths/URLs/identities) before display.
   const safeCommits = data.commits
-    .filter((c) => !INTERNAL_MESSAGE.test(c.message))
+    .filter((c) => !INTERNAL_COMMIT.test(c.message) && !INTERNAL_SCOPE.test(c.message))
     .map((c) => ({ ...c, ...humanizeCommit(c.message) }))
     .map((c) => ({ ...c, text: sanitizeLine(c.text) }))
     .filter((c) => c.text.replace(/[^a-zA-Z0-9]/g, "").length >= 4);
