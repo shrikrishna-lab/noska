@@ -50,7 +50,7 @@ export function ReleaseNotesModal() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 text-sm text-foreground">
-              <MarkdownBody body={notes.body} />
+              <MarkdownBody body={notes.body} opts={{ skipTitle: true }} className="space-y-2.5" />
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3.5">
