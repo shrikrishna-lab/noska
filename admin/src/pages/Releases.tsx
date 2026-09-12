@@ -15,11 +15,12 @@ import {
 import {
   Rocket, RefreshCw, ExternalLink, CheckCircle2, XCircle, Loader2, Clock,
   FileCode2, Tag, PackageOpen, AlertTriangle, ShieldCheck, Sparkles,
-  Zap, Wrench, AlertOctagon, Lightbulb, Trash2, RotateCcw,
+  Zap, Wrench, AlertOctagon, Lightbulb, Trash2, RotateCcw, Eye, X,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { releaseApi } from "@/lib/monitoring/api";
+import { MarkdownBody } from "@/components/ui/MarkdownLite";
 import type { GitHubRun, GitHubRelease, WhatsNew } from "@/lib/monitoring/api";
 
 const RUN_STATUS: Record<string, { label: string; badge: string; icon: typeof Clock }> = {
@@ -398,6 +399,7 @@ export function ReleasesPage() {
   const [version, setVersion] = useState("");
   const [notes, setNotes] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: status, isLoading, refetch, isRefetching, isError, error } = useQuery({
@@ -472,6 +474,13 @@ export function ReleasesPage() {
     ?? (currentVersion ? bumpVersion(currentVersion, "patch") : "");
   const recommendedReason = whatsnew?.suggested?.reason ?? null;
   const suggested = version.trim() || recommended;
+  // The exact notes that would ship right now — same logic as the trigger.
+  const shipNotes = (() => {
+    let n = notes.trim();
+    if (n && suggested) n = n.replace(/# Noska Desktop v[^\s]+/, `# Noska Desktop v${suggested}`);
+    if (!n && whatsnew && whatsnew.counts.total > 0) n = generateNotes(whatsnew, suggested);
+    return n;
+  })();
 
   if (isError) {
     const msg = error instanceof Error ? error.message : "Unknown error";
@@ -650,6 +659,15 @@ export function ReleasesPage() {
               <Rocket className="mr-2 h-4 w-4" />
               Build &amp; Publish {suggested ? `desktop-v${suggested}` : ""}
             </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={!suggested || !shipNotes}
+              onClick={() => setPreviewOpen(true)}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              Preview what users see after updating
+            </Button>
             <p className="text-xs leading-relaxed text-muted-foreground">
               Bumps the version files on <span className="font-mono">{status.branch}</span>, pushes tag{" "}
               <span className="font-mono">desktop-v{version || "…"}</span> and pre-creates a draft release with
@@ -720,6 +738,43 @@ export function ReleasesPage() {
           </Card>
         </div>
       </div>
+
+      {/* ── User-view preview: the post-update What's New modal ── */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-xs text-muted-foreground">
+            <Eye className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+            Preview — this exact modal appears once for every user after they update to desktop-v{suggested}. Dismissal is remembered per version.
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Rocket className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold leading-tight">Noska Desktop v{suggested}</p>
+                  <p className="text-[11px] text-muted-foreground">Release notes · v{suggested}</p>
+                </div>
+              </div>
+              <X className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="max-h-[45vh] overflow-y-auto px-4 py-3 text-sm text-foreground">
+              {shipNotes
+                ? <MarkdownBody body={shipNotes} className="space-y-2 text-[13px] leading-relaxed" />
+                : <p className="text-xs text-muted-foreground">No notes yet — generate or write them to see the preview.</p>}
+            </div>
+            <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                Full release on GitHub <ExternalLink className="h-3 w-3" />
+              </span>
+              <span className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground">
+                <Sparkles className="h-3 w-3" /> Got it
+              </span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-md">
