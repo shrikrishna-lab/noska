@@ -1,19 +1,47 @@
-﻿//! Noska desktop shell (Tauri 2).
+//! Noska native shell (Tauri 2) — desktop AND mobile.
 //!
 //! Rust is ONLY the native layer: window, tray, deep links, notifications,
 //! single-instance, auto-update. All Noska application logic stays in the
 //! React + TypeScript frontend under `src/`.
+//!
+//! Platform split:
+//! - Desktop (Windows/macOS/Linux): window menu, tray, single-instance,
+//!   window-state, updater, local Whisper transcription, text injection.
+//! - Mobile (iOS/Android): deep links + notifications; the desktop-only
+//!   commands above resolve to graceful stubs (`mobile_stubs.rs`).
 
-use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    tray::TrayIconBuilder,
-    Emitter, Manager,
-};
-mod local_transcription;
-mod text_injector;
-mod voice_dictionary;
+use tauri::{Emitter, Manager};
+
 #[cfg(desktop)]
+mod local_transcription;
+#[cfg(desktop)]
+mod text_injector;
+#[cfg(desktop)]
+mod voice_dictionary;
+#[cfg(mobile)]
+mod mobile_stubs;
+
 use tauri_plugin_deep_link::DeepLinkExt;
+
+// Desktop implementations of the shared command surface…
+#[cfg(desktop)]
+use local_transcription::{
+    capability_check, install_local_model, local_model_status, start_local_transcription,
+    stop_local_transcription,
+};
+#[cfg(desktop)]
+use text_injector::inject_text;
+#[cfg(desktop)]
+use voice_dictionary::{load_voice_dictionary, save_voice_dictionary};
+
+// …and the mobile stubs under the same names, so `generate_handler!` is
+// identical on every platform.
+#[cfg(mobile)]
+use mobile_stubs::{
+    capability_check, inject_text, install_local_model, load_voice_dictionary,
+    local_model_status, save_voice_dictionary, start_local_transcription,
+    stop_local_transcription,
+};
 
 /// Event emitted to the webview when a tray menu item is clicked.
 /// Payload is the raw action id ("new-page" | "new-task" | "open-ai").
@@ -24,6 +52,7 @@ const DEEP_LINK_EVENT: &str = "deep-link://open-url";
 /// Requests the Voice preferences surface from the native app menu.
 const VOICE_SETTINGS_EVENT: &str = "voice://open-settings";
 
+#[cfg(desktop)]
 fn focus_main_window(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
@@ -36,15 +65,18 @@ fn emit_deep_links(app: &tauri::AppHandle, urls: Vec<String>) {
     if urls.is_empty() {
         return;
     }
-    // Ensure the window is visible when launched via a deep link.
+    // Ensure the window is visible when launched via a deep link (desktop).
+    #[cfg(desktop)]
     focus_main_window(app);
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.emit(DEEP_LINK_EVENT, urls);
-    }
+    // App-level broadcast — reaches the webview on every platform.
+    let _ = app.emit(DEEP_LINK_EVENT, urls);
 }
 
 #[cfg(desktop)]
 fn setup_app_menu(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::{
+        menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    };
     let settings = MenuItem::with_id(app, "voice-settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
     let quit = MenuItem::with_id(app, "quit-app", "Quit Noska", true, Some("CmdOrCtrl+Q"))?;
     let separator = PredefinedMenuItem::separator(app)?;
@@ -66,6 +98,10 @@ fn setup_app_menu(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg(desktop)]
 fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::{
+        menu::{Menu, MenuItem, PredefinedMenuItem},
+        tray::TrayIconBuilder,
+    };
     let open = MenuItem::with_id(app, "open", "Open Noska", true, None::<&str>)?;
     let new_page = MenuItem::with_id(app, "new-page", "New Page", true, None::<&str>)?;
     let new_task = MenuItem::with_id(app, "new-task", "New Task", true, None::<&str>)?;
@@ -98,17 +134,20 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-#[cfg(desktop)]
 fn setup_deep_links(app: &tauri::App) {
     let deep_link = app.deep_link();
 
-    // Register the noska:// scheme at runtime. macOS has no installer hook,
-    // so without this the browser cannot hand back to the app (auth flow);
-    // on Windows/Linux it also self-heals dev builds and registry drift.
+    // Desktop: register the noska:// scheme at runtime. macOS has no
+    // installer hook, so without this the browser cannot hand back to the
+    // app (auth flow); on Windows/Linux it also self-heals dev builds and
+    // registry drift. On iOS/Android schemes are declared statically in
+    // Info.plist / AndroidManifest.xml (see scripts/patch-mobile-manifests.mjs).
+    #[cfg(desktop)]
     let _ = deep_link.register_all();
 
     // Deep links received while this process was the launching process
-    // (cold start via `noska://...` on Windows/Linux argv or macOS open event).
+    // (cold start: desktop argv/open event, or the mobile app being launched
+    // via a link).
     if let Ok(Some(urls)) = deep_link.get_current() {
         let urls: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
         if !urls.is_empty() {
@@ -158,35 +197,37 @@ pub fn run() {
                 )
                 .build()
         )
-            .plugin(tauri_plugin_deep_link::init())
             .plugin(tauri_plugin_updater::Builder::new().build())
             .plugin(tauri_plugin_process::init());
 
         builder
     };
 
-    #[cfg(not(desktop))]
+    #[cfg(mobile)]
     let builder = tauri::Builder::default();
 
     builder
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init())
         .invoke_handler(tauri::generate_handler![
-            local_transcription::capability_check,
-            local_transcription::local_model_status,
-            local_transcription::install_local_model,
-            local_transcription::start_local_transcription,
-            local_transcription::stop_local_transcription,
-            text_injector::inject_text,
-            voice_dictionary::load_voice_dictionary,
-            voice_dictionary::save_voice_dictionary,
+            capability_check,
+            local_model_status,
+            install_local_model,
+            start_local_transcription,
+            stop_local_transcription,
+            inject_text,
+            load_voice_dictionary,
+            save_voice_dictionary,
         ])
         .setup(|app| {
+            // Deep links work on every platform.
+            setup_deep_links(app);
+
             #[cfg(desktop)]
             {
                 setup_app_menu(app)?;
                 setup_tray(app)?;
-                setup_deep_links(app);
 
                 // Self-heal degenerate window-state restores (tiny/offscreen
                 // window = corrupted or pre-borderless state file).

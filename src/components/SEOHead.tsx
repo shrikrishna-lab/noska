@@ -1,22 +1,34 @@
 import { useEffect, useRef } from "react";
 import { useSEOSettings } from "../hooks/useLaunchSettings";
 
-export default function SEOHead({ path }: { path: string }) {
+export default function SEOHead({ 
+  path, 
+  title, 
+  description 
+}: { 
+  path: string; 
+  title?: string; 
+  description?: string; 
+}) {
   const { seo, loading } = useSEOSettings(path);
   const appliedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const activeTitle = seo?.title || title;
+    const activeDesc = seo?.description || description;
+
+    if (activeTitle) document.title = activeTitle;
+    if (activeDesc) setMeta("description", activeDesc);
+
     if (loading || !seo) return;
     const key = `seo-${path}`;
     if (appliedRef.current === key) return;
     appliedRef.current = key;
 
-    if (seo.title) document.title = seo.title;
-    if (seo.description) setMeta("description", seo.description);
     if (seo.keywords) setMeta("keywords", seo.keywords);
     if (seo.robots) setMeta("robots", seo.robots);
-    if (seo.og_title ?? seo.title) setMeta("og:title", seo.og_title ?? seo.title!);
-    if (seo.og_description ?? seo.description) setMeta("og:description", seo.og_description ?? seo.description!);
+    if (seo.og_title ?? activeTitle) setMeta("og:title", seo.og_title ?? activeTitle!);
+    if (seo.og_description ?? activeDesc) setMeta("og:description", seo.og_description ?? activeDesc!);
     if (seo.og_image) setMeta("og:image", seo.og_image);
     setMeta("og:url", window.location.href);
     if (seo.twitter_card) setMeta("twitter:card", seo.twitter_card);

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring, useInView,
 } from 'framer-motion';
-import { ArrowUpRight, Check, Menu, Zap } from 'lucide-react';
+import { ArrowUpRight, Bell, Check, Menu, Smartphone, Zap } from 'lucide-react';
 import SEOHead from '../../components/SEOHead';
 import { FaqAccordion } from './components/FaqAccordion';
 import { WindowsIcon, AppleIcon, LinuxIcon } from './components/PlatformIcons';
@@ -140,10 +140,10 @@ const LINUX_FORMATS = [
 ] as const;
 
 const MARQUEE_WORDS = [
-  'Windows', 'macOS', 'Linux', 'offline', 'auto-updates', 'noska:// links', 'native speed', 'one account',
+  'Windows', 'macOS', 'Linux', 'iOS', 'Android', 'offline', 'auto-updates', 'noska:// links', 'native speed', 'one account',
 ];
 
-const FORMAT_WORDS = ['.exe', '.msi', '.dmg', '.AppImage', '.deb', '.rpm', 'SHA-256 signed', 'auto-update'];
+const FORMAT_WORDS = ['.exe', '.msi', '.dmg', '.apk', '.AppImage', '.deb', '.rpm', 'TestFlight', 'SHA-256 signed', 'auto-update'];
 
 const FEATURES = [
   { glyph: '⌁', title: 'Offline-ready', desc: 'Pages and drafts stay usable with no connection. Everything syncs the moment you are back.' },
@@ -160,6 +160,7 @@ const STEPS = [
 
 const FAQS = [
   { q: 'Is the desktop app free?', a: 'Yes — free to download and use on all three platforms, including the Free plan. Paid plans only add team features and higher limits.' },
+  { q: 'Is there a mobile app?', a: 'Yes — Noska for iOS and Android is in final beta with the same workspace, editor and AI as the desktop app. Drop your email in the mobile section above and you will get the TestFlight or beta APK link the moment it is your turn.' },
   { q: 'Does it work exactly like Noska Web?', a: 'It is the same Noska: same editor, same pages, same account. The desktop shell adds offline support, deep links, global shortcuts and native menus on top.' },
   { q: 'How do updates work?', a: 'Noska checks in the background and installs updates automatically. Every update is cryptographically signed — a bad signature never installs.' },
   { q: 'Which macOS build should I get?', a: 'The macOS download is a Universal build that runs natively on both Apple Silicon (M1/M2/M3/M4) and Intel Macs.' },
@@ -172,6 +173,18 @@ function detectOs(): OsKey {
   if (/Mac|iPhone|iPad/i.test(ua)) return 'macos';
   if (/Linux|X11/i.test(ua) && !/Android/i.test(ua)) return 'linux';
   return 'windows';
+}
+
+type MobileOsKey = 'ios' | 'android';
+
+/** Detects an actual phone/tablet for the mobile section ("your device").
+ *  Desktop-class UAs (including iPad-as-Mac) resolve via maxTouchPoints. */
+function detectMobileOs(): MobileOsKey | null {
+  if (typeof navigator === 'undefined') return null;
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  if (/Android/i.test(ua)) return 'android';
+  return null;
 }
 
 function OsSticker({ os, size = 30 }: { os: OsKey; size?: number }) {
@@ -223,6 +236,45 @@ export default function Download() {
   const [macArch, setMacArch] = useState<(typeof MAC_ARCHES)[number]['key']>('universal');
   const [linuxFormat, setLinuxFormat] = useState<(typeof LINUX_FORMATS)[number]['key']>('appimage');
   const [liveVersion, setLiveVersion] = useState<string>(CURRENT_VERSION);
+  const mobileOs = useMemo(detectMobileOs, []);
+
+  // "Notify me" — reuses the public waitlist-signup edge function so mobile
+  // interest lands in the same list the launch funnel uses.
+  const [notifyEmail, setNotifyEmail] = useState('');
+  const [notifyState, setNotifyState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const [notifyError, setNotifyError] = useState('');
+
+  const handleNotifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = notifyEmail.trim().toLowerCase();
+    if (!email) return;
+    setNotifyState('sending');
+    setNotifyError('');
+    try {
+      const BASE = import.meta.env.VITE_SUPABASE_URL;
+      const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${BASE}/functions/v1/waitlist-signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        // "Already registered" still counts as success for a notify box.
+        if ((err as { error?: string }).error?.toLowerCase().includes('already')) {
+          setNotifyState('done');
+          return;
+        }
+        setNotifyError((err as { error?: string }).error || `HTTP ${res.status}`);
+        setNotifyState('error');
+        return;
+      }
+      setNotifyState('done');
+    } catch (err) {
+      setNotifyError(err instanceof Error ? err.message : 'Something went wrong');
+      setNotifyState('error');
+    }
+  };
 
   const handleVersion = useCallback((v: string) => setLiveVersion(v), []);
   const { assets, version, manifestUrls } = useReleaseAssets(handleVersion);
@@ -390,7 +442,8 @@ export default function Download() {
             </h1>
             <p className="dlp-hero-sub">
               The full Noska — pages, tasks, AI agents — installed native on
-              Windows, macOS and Linux. Same account as the web.
+              Windows, macOS and Linux, with iOS and Android right behind
+              them. Same account as the web.
             </p>
           </div>
 
@@ -483,8 +536,8 @@ export default function Download() {
       {/* ── Stats strip ─────────────────────────────────── */}
       <section className="dlp-stats">
         <div className="dlp-stats-row">
-          <div className="dlp-stat"><strong><CountUp to={3} /></strong><span>platforms</span></div>
-          <div className="dlp-stat"><strong><CountUp to={6} /></strong><span>package formats</span></div>
+          <div className="dlp-stat"><strong><CountUp to={5} /></strong><span>platforms</span></div>
+          <div className="dlp-stat"><strong><CountUp to={8} /></strong><span>package formats</span></div>
           <div className="dlp-stat"><strong>&lt;<CountUp to={60} />s</strong><span>to first page</span></div>
           <div className="dlp-stat"><strong><CountUp to={100} />%</strong><span>same account as web</span></div>
         </div>
@@ -660,6 +713,102 @@ export default function Download() {
           Betas and older builds live on{' '}
           <a href={RELEASES_URL} target="_blank" rel="noreferrer">GitHub Releases <ArrowUpRight size={12} /></a>
         </p>
+      </section>
+
+      {/* ── Mobile (iOS + Android) ──────────────────────── */}
+      <section className="dlp-get" id="mobile">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.9, ease: EASE }}
+          className="dlp-get-head"
+        >
+          <p className="dlp-mono-label center">Also in your pocket</p>
+          <h2 className="dlp-h2">
+            Noska mobile, <em className="dlp-script green">almost here</em>
+          </h2>
+          <p className="dlp-mobile-sub">
+            The real workspace — pages, tasks, AI — rebuilt for thumbs with
+            bottom navigation, offline edits and push notifications. Same
+            account, same sync as everything else.
+          </p>
+        </motion.div>
+
+        <div className="dlp-cards two">
+          {/* iOS Card */}
+          <GlowCard className={`dlp-card ${mobileOs === 'ios' ? 'is-yours' : ''}`}>
+            {mobileOs === 'ios' && <span className="dlp-yours">your device</span>}
+            <header>
+              <span className="dlp-card-glyph mac"><AppleIcon size={30} /></span>
+              <div>
+                <h3>iOS</h3>
+                <p>iPhone &amp; iPad · iOS 14 or later</p>
+              </div>
+            </header>
+
+            <span className="dlp-soon-pill">TestFlight · coming soon</span>
+
+            <ul className="dlp-mobile-list">
+              <li><Check size={13} /> Same workspace as desktop &amp; web</li>
+              <li><Check size={13} /> Offline edits with verified sync</li>
+              <li><Check size={13} /> noska:// links open straight into a page</li>
+            </ul>
+          </GlowCard>
+
+          {/* Android Card */}
+          <GlowCard className={`dlp-card ${mobileOs === 'android' ? 'is-yours' : ''}`}>
+            {mobileOs === 'android' && <span className="dlp-yours">your device</span>}
+            <header>
+              <span className="dlp-card-glyph linux"><Smartphone size={28} /></span>
+              <div>
+                <h3>Android</h3>
+                <p>Android 7.0 (Nougat) or later</p>
+              </div>
+            </header>
+
+            <span className="dlp-soon-pill green">Beta APK · testing now</span>
+
+            <ul className="dlp-mobile-list">
+              <li><Check size={13} /> Google Play &amp; direct APK at launch</li>
+              <li><Check size={13} /> Push notifications for invites &amp; mentions</li>
+              <li><Check size={13} /> Bottom-nav UI built for thumbs, not shrunk</li>
+            </ul>
+          </GlowCard>
+        </div>
+
+        <div className="dlp-notify">
+          {notifyState === 'done' ? (
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="dlp-notify-done"
+            >
+              <Check size={15} /> You're on the list — we'll email you when mobile ships.
+            </motion.p>
+          ) : (
+            <form className="dlp-notify-form" onSubmit={handleNotifySubmit}>
+              <input
+                type="email"
+                required
+                value={notifyEmail}
+                onChange={(e) => setNotifyEmail(e.target.value)}
+                placeholder="you@company.com"
+                aria-label="Email for the mobile launch"
+                autoComplete="email"
+              />
+              <button type="submit" className="dlp-pill-btn dark" disabled={notifyState === 'sending'}>
+                <Bell size={15} />
+                {notifyState === 'sending' ? 'Adding you…' : 'Notify me at launch'}
+              </button>
+            </form>
+          )}
+          {notifyState === 'error' && (
+            <p className="dlp-notify-err">
+              {notifyError} — or join via the <Link to="/launch">launch page</Link>.
+            </p>
+          )}
+        </div>
       </section>
 
       {/* ── Why desktop ─────────────────────────────────── */}

@@ -1,15 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Least-privilege capabilities for the Noska main window. See docs/desktop/SECURITY-AUDIT.md before adding permissions.",
+  "description": "Least-privilege capabilities for the Noska main window on ALL platforms (web-facing plugins: notifications, deep links, opener). See docs/desktop/SECURITY-AUDIT.md before adding permissions.",
   "local": true,
   "windows": ["main"],
   "permissions": [
     "core:default",
     "notification:default",
     "deep-link:default",
-    "updater:default",
-    "process:allow-restart",
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "https://*" }]

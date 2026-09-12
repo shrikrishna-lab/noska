@@ -75,7 +75,7 @@ const STORY_SECTIONS = [
 ];
 
 const CAPABILITIES = [
-  { id: 'canvas', icon: LayoutGrid, title: 'Infinite Canvas', tint: 'blue', desc: 'Every page can drop into a zoomable, pannable spatial canvas — blocks become draggable cards with a live mini-map and persisted positions.' },
+  { id: 'canvas', icon: LayoutGrid, title: 'Spatial Canvas & AI Whiteboard', tint: 'blue', desc: 'Every page drops into an infinite whiteboard with AI clustering, smart magnetic connectors, presentation mode, and a 2D Kanban switcher.' },
   { id: 'graph', icon: GitBranch, title: 'Thought Graph', tint: 'purple', desc: 'See your whole workspace as a force-directed node graph, built from real parent/child and tag relationships.' },
   { id: 'voice', icon: Mic, title: 'Voice → structure', tint: 'red', desc: 'Speak your thoughts and Noska transcribes them live, then turns the raw transcript into a structured outline.' },
   { id: 'encryption', icon: Lock, title: 'Real encryption', tint: 'sage', desc: 'Lock any page with the Web Crypto API — PBKDF2 + AES-GCM 256-bit, entirely client-side. Plaintext never touches the network.' },

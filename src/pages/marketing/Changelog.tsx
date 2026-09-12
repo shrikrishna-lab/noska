@@ -19,6 +19,22 @@ interface ChangelogEntry {
 
 const DEFAULT_CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    id: "release-v1-2-1",
+    title: "Spatial Canvas 2.0: AI Spatial Synthesis, Smart Connectors, 2D Kanban Dual-View & Interactive Presentation Mode",
+    tag: "Major Release",
+    version: "v1.2.1",
+    published_at: "2026-09-12T00:00:00Z",
+    created_at: "2026-09-12T00:00:00Z",
+    description: `### 🗺️ Infinite Spatial Canvas & Whiteboards Suite
+- **AI Spatial Synthesis & Auto-Clustering**: Natural language prompt-driven card generation, 1-click thematic card clustering, and visual executive summaries across any canvas region.
+- **Dynamic Magnetic Connectors**: Smooth curved (Bezier), orthogonal, and straight smart connectors with magnetic snap ports, directional arrows, and relationship labels.
+- **Interactive Presentation Mode**: Turn canvas nodes and sections into a smooth step-by-step presentation deck with fluid camera panning, zooming, and full-screen presenter controls.
+- **2D Canvas ⇄ Kanban Dual View Switcher**: Effortlessly switch between non-linear 2D spatial arrangement and structured Kanban columns by category or status.
+- **Multiplayer Real-time Collaboration**: Live multiplayer cursors, presence tags, simultaneous card dragging, and instant cross-client synchronization.
+- **Rich Media Cards & Attachments**: Sticky notes, markdown blocks, checklists, images, and audio voice dictations attached directly to canvas nodes.
+- **Pre-built Templates Library**: 1-click templates for System Architecture, Brainstorming, Retrospectives, SWOT Analysis, User Journey Maps, and Flowcharts.`
+  },
+  {
     id: "release-v1-2-0",
     title: "Dynamic Island Fluid Voice, Visual Settings Studio & Developer API Keys Suite",
     tag: "Major Release",

@@ -30,6 +30,9 @@ const Payments = lazy(() => import("@/pages/Payments").then((m) => ({ default: m
 const AiUsage = lazy(() => import("@/pages/AiUsage").then((m) => ({ default: m.AiUsage })));
 const Models = lazy(() => import("@/pages/Models").then((m) => ({ default: m.Models })));
 const FeatureFlags = lazy(() => import("@/pages/FeatureFlags").then((m) => ({ default: m.FeatureFlags })));
+const Widgets = lazy(() => import("@/pages/Widgets").then((m) => ({ default: m.Widgets })));
+const UserNotifications = lazy(() => import("@/pages/UserNotifications").then((m) => ({ default: m.UserNotifications })));
+const WidgetDetail = lazy(() => import("@/pages/WidgetDetail").then((m) => ({ default: m.WidgetDetail })));
 const EmailCampaigns = lazy(() => import("@/pages/EmailCampaigns").then((m) => ({ default: m.EmailCampaigns })));
 const Referrals = lazy(() => import("@/pages/Referrals").then((m) => ({ default: m.Referrals })));
 const LaunchControl = lazy(() => import("@/pages/LaunchControl").then((m) => ({ default: m.LaunchControl })));
@@ -181,6 +184,9 @@ export default function App() {
                       <Route path="files" element={<Suspense fallback={<PageLoading />}><ContentFiles /></Suspense>} />
                       <Route path="templates" element={<Suspense fallback={<PageLoading />}><ContentTemplates /></Suspense>} />
                       <Route path="feature-flags" element={<Suspense fallback={<PageLoading />}><FeatureFlags /></Suspense>} />
+                      <Route path="widgets" element={<Suspense fallback={<PageLoading />}><Widgets /></Suspense>} />
+                      <Route path="widgets/:widgetId" element={<Suspense fallback={<PageLoading />}><WidgetDetail /></Suspense>} />
+                      <Route path="user-notifications" element={<Suspense fallback={<PageLoading />}><UserNotifications /></Suspense>} />
                       <Route path="email-dashboard" element={<Suspense fallback={<PageLoading />}><EmailDashboard /></Suspense>} />
                       <Route path="email-templates" element={<Suspense fallback={<PageLoading />}><EmailTemplates /></Suspense>} />
                       <Route path="email-templates/:id/edit" element={<Suspense fallback={<PageLoading />}><EmailTemplateEditor /></Suspense>} />

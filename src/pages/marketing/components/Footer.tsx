@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Globe, ArrowRight, Check } from 'lucide-react';
+import { Globe, ArrowRight, Check, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSocialLinks, useLaunchSettings } from '../../../hooks/useLaunchSettings';
+import { useLanguage, type LanguageCode } from '../../../contexts/LanguageContext';
 import './Footer.css';
 
 const SOCIAL_ICONS: Record<string, React.ReactNode> = {
@@ -38,10 +39,13 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
 export default function Footer() {
   const { links } = useSocialLinks();
   const { settings } = useLaunchSettings();
+  const { language, setLanguage, t, supportedLanguages } = useLanguage();
   const showSocial = settings.show_social_links ?? true;
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const currentLanguageOption = supportedLanguages.find((l) => l.code === language) || supportedLanguages[0];
 
   const fallbackSocialLinks = [
     { platform: 'x', url: 'https://x.com/noska_app', label: 'X (Twitter)', active: true },
@@ -91,7 +95,7 @@ export default function Footer() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Your email address…"
+                      placeholder={t('footer.emailPlaceholder', 'Your email address…')}
                       className="liquid-glass-email-input"
                       required
                       disabled={subscribed || loading}
@@ -106,13 +110,13 @@ export default function Footer() {
                       {subscribed ? (
                         <>
                           <Check size={13} className="shrink-0" />
-                          <span>Joined</span>
+                          <span>{t('footer.subscribed', 'Joined')}</span>
                         </>
                       ) : loading ? (
                         <span>…</span>
                       ) : (
                         <>
-                          <span>Subscribe</span>
+                          <span>{t('footer.subscribe', 'Subscribe')}</span>
                           <ArrowRight size={12} className="shrink-0" />
                         </>
                       )}
@@ -120,16 +124,23 @@ export default function Footer() {
                   </div>
                 </form>
 
-                {/* Language Selector Pill */}
+                {/* Language Selector Pill with Live Language Change */}
                 <div className="liquid-glass-pills-row">
-                  <div className="liquid-glass-lang-pill">
-                    <Globe size={13} className="text-muted-icon" />
-                    <select aria-label="Select Language" defaultValue="en">
-                      <option value="en">English (US)</option>
-                      <option value="ja">日本語</option>
-                      <option value="es">Español</option>
-                      <option value="fr">Français</option>
-                      <option value="de">Deutsch</option>
+                  <div className="liquid-glass-lang-pill" title="Select language">
+                    <Globe size={13} className="liquid-glass-lang-icon shrink-0" />
+                    <span className="liquid-glass-lang-name">{currentLanguageOption.label}</span>
+                    <ChevronDown size={12} className="liquid-glass-lang-chevron shrink-0" />
+                    <select
+                      aria-label="Select Language"
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value as LanguageCode)}
+                      className="liquid-glass-lang-select-hidden"
+                    >
+                      {supportedLanguages.map((lang) => (
+                        <option key={lang.code} value={lang.code}>
+                          {lang.nativeLabel} {lang.nativeLabel !== lang.label ? `(${lang.label})` : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -139,18 +150,15 @@ export default function Footer() {
               <div className="liquid-glass-links-grid">
                 {/* Column 1: Product */}
                 <div className="liquid-glass-link-col">
-                  <p className="liquid-glass-col-header">Product</p>
+                  <p className="liquid-glass-col-header">{t('footer.product', 'Product')}</p>
                   <ul className="liquid-glass-link-list">
-                    <li><Link to="/product" className="liquid-link-item">Noska AI</Link></li>
-                    <li><Link to="/flow" className="liquid-link-item">Noska Flow</Link></li>
-                    <li><Link to="/docs" className="liquid-link-item">Docs & Notes</Link></li>
-                    <li><Link to="/docs?section=databases" className="liquid-link-item">Databases</Link></li>
-                    <li><Link to="/resources" className="liquid-link-item">Templates</Link></li>
-                    <li><Link to="/download" className="liquid-link-item">Desktop app</Link></li>
+                    <li><Link to="/product" className="liquid-link-item">{t('footer.noskaAI', 'Noska AI & Docs')}</Link></li>
+                    <li><Link to="/flow" className="liquid-link-item">{t('footer.noskaFlow', 'Noska Flow')}</Link></li>
+                    <li><Link to="/download" className="liquid-link-item">{t('footer.desktopApp', 'Desktop app')}</Link></li>
                     <li>
                       <Link to="/new-updated" className="liquid-link-item with-badge">
-                        <span>What's new</span>
-                        <span className="liquid-glass-mini-tag">v2.4</span>
+                        <span>{t('footer.whatsNew', "What's new")}</span>
+                        <span className="liquid-glass-mini-tag">NEW</span>
                       </Link>
                     </li>
                   </ul>
@@ -158,53 +166,58 @@ export default function Footer() {
 
                 {/* Column 2: Solutions */}
                 <div className="liquid-glass-link-col">
-                  <p className="liquid-glass-col-header">Solutions</p>
+                  <p className="liquid-glass-col-header">{t('footer.solutions', 'Solutions')}</p>
                   <ul className="liquid-glass-link-list">
-                    <li><Link to="/solutions" className="liquid-link-item">Personal use</Link></li>
-                    <li><Link to="/solutions" className="liquid-link-item">Students & teams</Link></li>
-                    <li><Link to="/enterprise" className="liquid-link-item">Enterprise</Link></li>
-                    <li><Link to="/solutions" className="liquid-link-item">Startups</Link></li>
+                    <li><Link to="/solutions" className="liquid-link-item">{t('footer.personalUse', 'Personal use')}</Link></li>
+                    <li><Link to="/solutions" className="liquid-link-item">{t('footer.studentsTeams', 'Students & teams')}</Link></li>
+                    <li><Link to="/solutions" className="liquid-link-item">{t('footer.startups', 'Startups')}</Link></li>
+                    <li><Link to="/enterprise" className="liquid-link-item">{t('footer.enterprise', 'Enterprise')}</Link></li>
                   </ul>
                 </div>
 
                 {/* Column 3: Resources */}
                 <div className="liquid-glass-link-col">
-                  <p className="liquid-glass-col-header">Resources</p>
+                  <p className="liquid-glass-col-header">{t('footer.resources', 'Resources')}</p>
                   <ul className="liquid-glass-link-list">
-                    <li><Link to="/docs" className="liquid-link-item">Documentation</Link></li>
-                    <li><Link to="/docs?section=integrations-overview" className="liquid-link-item">Integrations</Link></li>
-                    <li><Link to="/ticket" className="liquid-link-item">Submit Ticket</Link></li>
-                    <li><Link to="/docs?section=contact-support" className="liquid-link-item">Help & Support</Link></li>
-                    <li><Link to="/changelog" className="liquid-link-item">Changelog</Link></li>
-                    <li><Link to="/roadmap" className="liquid-link-item">Roadmap</Link></li>
-                    <li><Link to="/resources" className="liquid-link-item">Guides & shortcuts</Link></li>
-                    <li><Link to="/blog" className="liquid-link-item">Blog</Link></li>
+                    <li><Link to="/docs" className="liquid-link-item">{t('footer.documentation', 'Documentation')}</Link></li>
+                    <li><Link to="/resources" className="liquid-link-item">{t('footer.templatesGuides', 'Templates & Guides')}</Link></li>
+                    <li><Link to="/changelog" className="liquid-link-item">{t('footer.changelog', 'Changelog')}</Link></li>
+                    <li><Link to="/roadmap" className="liquid-link-item">{t('footer.roadmap', 'Roadmap')}</Link></li>
+                    <li><Link to="/blog" className="liquid-link-item">{t('footer.blog', 'Blog')}</Link></li>
+                    <li><Link to="/referrals" className="liquid-link-item">{t('footer.referrals', 'Referrals')}</Link></li>
                   </ul>
                 </div>
 
-                {/* Column 4: Company */}
+                {/* Column 4: Help & Support */}
                 <div className="liquid-glass-link-col">
-                  <p className="liquid-glass-col-header">Company</p>
+                  <p className="liquid-glass-col-header">{t('footer.helpSupport', 'Help & Support')}</p>
                   <ul className="liquid-glass-link-list">
-                    <li><Link to="/pricing" className="liquid-link-item">Pricing</Link></li>
-                    <li><Link to="/enterprise" className="liquid-link-item">Enterprise</Link></li>
-                    <li><Link to="/support" className="liquid-link-item">Support & Tickets</Link></li>
-                    <li><Link to="/new-updated" className="liquid-link-item">What's Updated</Link></li>
-                    <li><Link to="/launch" className="liquid-link-item">About Noska</Link></li>
-                    <li><Link to="/resources" className="liquid-link-item">Brand assets</Link></li>
-                    <li><Link to="/launch" className="liquid-link-item">Join Waitlist</Link></li>
+                    <li><Link to="/ticket" className="liquid-link-item">{t('footer.submitTicket', 'Submit Ticket')}</Link></li>
+                    <li><Link to="/support" className="liquid-link-item">{t('footer.supportCenter', 'Support Center')}</Link></li>
+                    <li><a href="mailto:support@noska.app" className="liquid-link-item">{t('footer.emailSupport', 'Email Support')}</a></li>
+                    <li><a href="https://discord.gg/noska" target="_blank" rel="noopener noreferrer" className="liquid-link-item">{t('footer.communityDiscord', 'Community Discord')}</a></li>
                   </ul>
                 </div>
 
-                {/* Column 5: Developers */}
+                {/* Column 5: Company */}
                 <div className="liquid-glass-link-col">
-                  <p className="liquid-glass-col-header">Developers</p>
+                  <p className="liquid-glass-col-header">{t('footer.company', 'Company')}</p>
                   <ul className="liquid-glass-link-list">
-                    <li><Link to="/api-keys" className="liquid-link-item">API Keys</Link></li>
-                    <li><Link to="/mcp" className="liquid-link-item">MCP</Link></li>
-                    <li><Link to="/plugins" className="liquid-link-item">Plugins</Link></li>
-                    <li><Link to="/docs?section=api-reference" className="liquid-link-item">API Reference</Link></li>
-                    <li><Link to="/docs/mcp" className="liquid-link-item">Webhooks & MCP docs</Link></li>
+                    <li><Link to="/pricing" className="liquid-link-item">{t('footer.pricing', 'Pricing')}</Link></li>
+                    <li><Link to="/enterprise" className="liquid-link-item">{t('footer.enterprise', 'Enterprise')}</Link></li>
+                    <li><Link to="/launch" className="liquid-link-item">{t('footer.aboutNoska', 'About Noska')}</Link></li>
+                    <li><Link to="/privacy" className="liquid-link-item">{t('footer.securityPrivacy', 'Security & Privacy')}</Link></li>
+                  </ul>
+                </div>
+
+                {/* Column 6: Developers */}
+                <div className="liquid-glass-link-col">
+                  <p className="liquid-glass-col-header">{t('footer.developers', 'Developers')}</p>
+                  <ul className="liquid-glass-link-list">
+                    <li><Link to="/api-keys" className="liquid-link-item">{t('footer.apiKeys', 'API Keys')}</Link></li>
+                    <li><Link to="/mcp" className="liquid-link-item">{t('footer.mcpServer', 'MCP Server')}</Link></li>
+                    <li><Link to="/plugins" className="liquid-link-item">{t('footer.plugins', 'Plugins')}</Link></li>
+                    <li><Link to="/docs/mcp" className="liquid-link-item">{t('footer.mcpDocs', 'MCP Documentation')}</Link></li>
                   </ul>
                 </div>
               </div>
@@ -217,16 +230,16 @@ export default function Footer() {
             <div className="liquid-glass-bottom-row">
               <div className="liquid-glass-legal-side">
                 <p className="liquid-glass-copyright">
-                  © {new Date().getFullYear()} Noska Inc. All rights reserved.
+                  {t('footer.copyright', '© {year} Noska Inc. All rights reserved.').replace('{year}', String(new Date().getFullYear()))}
                 </p>
                 <div className="liquid-glass-legal-links">
-                  <Link to="/privacy">Privacy</Link>
+                  <Link to="/privacy">{t('footer.privacy', 'Privacy')}</Link>
                   <span className="liquid-legal-sep">•</span>
-                  <Link to="/terms">Terms</Link>
+                  <Link to="/terms">{t('footer.terms', 'Terms')}</Link>
                   <span className="liquid-legal-sep">•</span>
-                  <Link to="/policy">Cookies</Link>
+                  <Link to="/policy">{t('footer.cookies', 'Cookies')}</Link>
                   <span className="liquid-legal-sep">•</span>
-                  <Link to="/refund">Refunds</Link>
+                  <Link to="/refund">{t('footer.refunds', 'Refunds')}</Link>
                 </div>
               </div>
 

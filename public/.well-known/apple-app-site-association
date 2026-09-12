@@ -1,0 +1,35 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "TEAMID.dev.noska.app"
+        ],
+        "components": [
+          {
+            "/": "/link/workspace/*",
+            "comment": "Workspace deep links (app opens noska://workspace/<id>)"
+          },
+          {
+            "/": "/link/page/*",
+            "comment": "Page deep links (app opens noska://page/<id>)"
+          },
+          {
+            "/": "/link/task/*",
+            "comment": "Task deep links (app opens noska://task/<id>)"
+          },
+          {
+            "/": "/link/project/*",
+            "comment": "Project deep links (app opens noska://project/<id>)"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAMID.dev.noska.app"
+    ]
+  }
+}

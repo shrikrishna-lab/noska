@@ -1,6 +1,7 @@
 // Runtime-aware shell for marketing routes.
-// - Desktop: always hands over to <App /> (loading -> auth -> workspace/login);
-//   the installed app never shows the public marketing site.
+// - Desktop + mobile (native shells): always hand over to <App /> (loading ->
+//   auth -> workspace/login); the installed app never shows the public
+//   marketing site.
 // - Web: the marketing site (including "/") is browsable signed in or out —
 //   a signed-in visitor typing the bare domain sees the landing page instead
 //   of being bounced to their workspace. The navbar's "Open app" CTA is the
@@ -10,6 +11,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "@clerk/react";
 import { useLocation, Navigate } from "react-router-dom";
 import { isDesktop } from "../lib/desktop/platform";
+import { isMobile } from "../platform";
 import App from "../App.jsx";
 import MarketingLayout from "../pages/marketing/MarketingLayout";
 
@@ -25,7 +27,9 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn } = useAuth();
   const location = useLocation();
 
-  if (isDesktop()) {
+  if (isDesktop() || isMobile()) {
+    // Native shells: the product IS the app — deep-link a marketing URL
+    // straight into the workspace.
     return <App />;
   }
   if (!isLoaded) {

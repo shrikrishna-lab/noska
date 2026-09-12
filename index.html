@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: lets the native mobile shells (iOS notch / Android
+         gesture bar) draw edge-to-edge; safe areas are consumed via
+         env(safe-area-inset-*) in src/platform/mobile/mobile.css. Inert on
+         desktop browsers. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- CSP: connect-src includes loopback ports so the local TEST_MODE stack
          (supabase-js against 127.0.0.1:51999) works during development.
          `ipc:` / `http://ipc.localhost` are required by the Tauri desktop shell

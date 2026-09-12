@@ -95,6 +95,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/ai-usage", label: "User AI Dashboard", icon: Bot, group: "platform", capability: "users" },
   { to: "/models", label: "Models", icon: Workflow, group: "platform", capability: "users" },
   { to: "/feature-flags", label: "Feature Flags", icon: Flag, group: "platform", capability: "monitoring" },
+  { to: "/widgets", label: "Widgets", icon: LayoutGrid, group: "platform", capability: "monitoring" },
+  { to: "/user-notifications", label: "User Notifications", icon: Send, group: "platform", capability: "monitoring" },
   { to: "/email-dashboard", label: "Email Dashboard", icon: BarChart3, group: "marketing", capability: "marketing" },
   { to: "/email-templates", label: "Email Templates", icon: LayoutTemplate, group: "marketing", capability: "marketing" },
   { to: "/email-campaigns", label: "Email Campaigns", icon: Send, group: "marketing", capability: "marketing" },

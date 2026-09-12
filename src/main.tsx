@@ -1,7 +1,7 @@
 import { ClerkProvider } from "@clerk/react";
 import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import posthog from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
@@ -10,6 +10,8 @@ import { initPosthog } from "./lib/posthog";
 import { initSentry, Sentry } from "./lib/sentry";
 import DesktopBridge from "./lib/desktop/DesktopBridge";
 import { isDesktop } from "./lib/desktop/platform";
+import { isMobile } from "./platform";
+import MobileBridge from "./platform/mobile/MobileBridge";
 import MarketingShell from "./components/MarketingShell";
 import LoginRoute from "./components/LoginRoute";
 import DesktopShell from "./components/desktop/DesktopShell";
@@ -18,6 +20,18 @@ import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import ControlCenter from "./ControlCenter";
 import "./index.css";
+
+function ScrollToTop() {
+  const { pathname, search } = useLocation();
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const mkt = document.querySelector('.marketing');
+    if (mkt) {
+      mkt.scrollTop = 0;
+    }
+  }, [pathname, search]);
+  return null;
+}
 
 const MarketingHome = lazy(() => import("./pages/marketing/Home"));
 const MarketingPricing = lazy(() => import("./pages/marketing/Pricing"));
@@ -46,6 +60,12 @@ const DesktopAuthPage = lazy(() => import("./pages/DesktopAuthPage"));
 const InfoCardDemo = lazy(() => import("./components/ui/info-card-demo"));
 const NoskaWispr = lazy(() => import("./pages/marketing/NoskaWispr"));
 const SupportTicket = lazy(() => import("./pages/marketing/SupportTicket"));
+const MobileLinkRedirect = lazy(() => import("./platform/mobile/MobileLinkRedirect"));
+
+// /launch is a marketing funnel page — never render it inside the native app.
+function LaunchRouteGate() {
+  return isMobile() ? <Navigate to="/dashboard" replace /> : <Launch />;
+}
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-white">
@@ -95,9 +115,11 @@ createRoot(document.getElementById("root")!).render(
             </div>
           </div>
         )}>
-        {!isDesktop() && <SpeedInsights />}
-        {!isDesktop() && <Analytics />}
+        {!isDesktop() && !isMobile() && <SpeedInsights />}
+        {!isDesktop() && !isMobile() && <Analytics />}
         <DesktopBridge />
+        <MobileBridge />
+        <ScrollToTop />
         <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<MarketingShell><MarketingHome /></MarketingShell>} />
@@ -118,7 +140,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/referrals" element={<MarketingShell><Referrals /></MarketingShell>} />
           <Route path="/roadmap" element={<MarketingShell><Roadmap /></MarketingShell>} />
           <Route path="/new-updated" element={<MarketingShell><NewUpdated /></MarketingShell>} />
-          <Route path="/launch" element={<Launch />} />
+          <Route path="/launch" element={<LaunchRouteGate />} />
           <Route path="/download" element={<MarketingShell><Download /></MarketingShell>} />
           <Route path="/ticket" element={<MarketingShell><SupportTicket /></MarketingShell>} />
           <Route path="/support" element={<MarketingShell><SupportTicket /></MarketingShell>} />
@@ -137,6 +159,23 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/flow" element={<NoskaWispr />} />
           <Route path="/noska-flow" element={<NoskaWispr />} />
           <Route path="/login" element={<LoginRoute />} />
+          {/* ── Mobile app routes (native iOS/Android shell) ─────────────
+              The authenticated product surfaces. MarketingShell redirects
+              mobile users here, so the marketing site is unreachable in
+              the app. On web/desktop these simply render the product. */}
+          <Route path="/app/home" element={<App />} />
+          <Route path="/app/search" element={<App />} />
+          <Route path="/app/inbox" element={<App />} />
+          <Route path="/app/ai" element={<App />} />
+          <Route path="/app/profile" element={<App />} />
+          <Route path="/app/page/:pageId" element={<App />} />
+          {/* Web fallback for noska:// deep links (Universal Links / App
+              Links point here when the app is NOT installed). */}
+          <Route path="/link/workspace/:id/page/:pageId" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
+          <Route path="/link/workspace/:id" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
+          <Route path="/link/page/:pageId" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
+          <Route path="/link/task/:taskId" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
+          <Route path="/link/project/:projectId" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
           <Route path="/dashboard" element={<App />} />
           <Route path="/onboarding" element={<App />} />
           <Route path="/waitlist" element={<App />} />

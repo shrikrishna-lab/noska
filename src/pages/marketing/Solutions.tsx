@@ -55,7 +55,7 @@ const USE_CASES = [
     desc: 'Long-form drafts, project specs, and a canvas mode for when a linear document stops being the right shape for the idea.',
     points: [
       '33 block types including code, embeds, and callouts',
-      'Infinite Canvas for spatial brainstorming and moodboards',
+      'Spatial Canvas with AI clustering, smart connectors & presentation mode',
       'Export to Markdown, HTML, or plain text anytime',
     ],
   },

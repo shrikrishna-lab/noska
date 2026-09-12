@@ -15,12 +15,36 @@ interface State {
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false, error: null, showDetails: false, copied: false };
 
+  componentDidMount() {
+    // Re-arm the one-shot self-heal only after the app has been healthy for
+    // a while — clearing it on boot would loop: reload → boot → clear →
+    // chunk fails again → reload … (the flicker).
+    setTimeout(() => {
+      try { sessionStorage.removeItem("admin_chunk_reload_done"); } catch { /* ignore */ }
+    }, 10_000);
+  }
+
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("Uncaught admin error boundary exception:", error, errorInfo);
+
+    // Self-heal stale lazy-chunk failures: after a new deploy (or a file that
+    // briefly didn't exist), the dev server / CDN can 404 an old dynamic
+    // import. Reload once — the flag prevents an infinite loop if the error
+    // is a real code failure.
+    if (
+      /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
+        error?.message ?? "",
+      ) &&
+      !sessionStorage.getItem("admin_chunk_reload_done")
+    ) {
+      sessionStorage.setItem("admin_chunk_reload_done", "1");
+      window.location.reload();
+      return;
+    }
   }
 
   handleCopyError = () => {

@@ -189,12 +189,33 @@ export interface WhatsNew {
   counts: { total: number; feat: number; fix: number; breaking: number; other: number };
   totalCommits: number;
   truncated: boolean;
+  branch: string;
+  upcoming: Array<{
+    name: string;
+    ahead: number;
+    tip: { sha: string; message: string; author: string; date: string };
+  }>;
   commits: WhatsNewCommit[];
   drafts: Array<{ tag: string; url: string; created_at: string }>;
   suggestions: Array<{ level: "info" | "warn"; title: string; detail: string; url?: string }>;
 }
 
+export type PreflightStatus = "pass" | "warn" | "fail" | "unknown";
+export interface PreflightCheck {
+  id: string;
+  label: string;
+  status: PreflightStatus;
+  detail: string;
+}
+export interface PreflightReport {
+  branch: string;
+  checks: PreflightCheck[];
+  summary: { pass: number; warn: number; fail: number; unknown: number };
+}
+
 export const releaseApi = {
+  preflight: () =>
+    invokeEdgeFunction<PreflightReport>("admin-trigger-release", { action: "preflight" }),
   status: () =>
     invokeEdgeFunction<ReleaseStatus>("admin-trigger-release", { action: "status" }),
   whatsnew: () =>
@@ -211,7 +232,37 @@ export const releaseApi = {
     invokeEdgeFunction<{ ok: boolean; tag: string; headSha: string; previousSha: string }>(
       "admin-trigger-release", { action: "retry", tag, notes },
     ),
+  // ── Mobile (iOS/Android) builds ──
+  mobileStatus: () =>
+    invokeEdgeFunction<MobileStatus>("admin-trigger-release", { action: "mobile_status" }),
+  mobileTrigger: (version: string, notes?: string) =>
+    invokeEdgeFunction<MobileTriggerResult>("admin-trigger-release", { action: "mobile_trigger", version, notes }),
 };
+
+/** One polled read covering the whole mobile pipeline. */
+export interface MobileStatus {
+  branch: string;
+  workflowOnBranch: boolean;
+  androidProject: "committed" | "missing";
+  iosProject: "committed" | "missing";
+  /** noska:// scheme registered in the committed AndroidManifest (null = manifest missing). */
+  schemeRegistered: boolean | null;
+  currentVersion: string | null;
+  storeLinks: { appStore: string | null; googlePlay: string | null };
+  runs: GitHubRun[];
+  /** Only releases tagged mobile-v*. */
+  releases: GitHubRelease[];
+  runsError: string | null;
+}
+
+export interface MobileTriggerResult {
+  ok: boolean;
+  tag: string;
+  version: string;
+  commitSha: string;
+  runUrl: string;
+  warning: string | null;
+}
 
 async function invokeEdgeFunction<T>(fn: string, body: Record<string, unknown>): Promise<T> {
   const token = getAdminToken();

@@ -85,6 +85,7 @@ import type { Tables } from "../../types/supabase";
 import { CompanyHome } from "./company/CompanyHome";
 import { CompanySettings } from "./company/CompanySettings";
 import { CompanyWorkspace } from "./company/CompanyWorkspace";
+import { WidgetDashboard } from "../platform/widgets";
 
 // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
 // (deliberately, to avoid a circular type dependency — see that file's
@@ -478,250 +479,25 @@ function HomeDashboardRoute({
           onViewMore={() => onView?.("tasks")}
         />
 
+        {/* Widget Platform — the primary widget surface. Personalization,
+            availability and notification wiring live in
+            src/platform/widgets (see WidgetDashboard). */}
         {view === "home" && (
-          <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
-            {/* Left Pane - Main Content & Context */}
-            <div className="space-y-6">
-              {/* Daily Brief — deterministic workspace summary, no AI required */}
-              <DailyBrief
-                pages={pages}
-                openTasks={tasks.filter(t => !t.checked).length}
-                dueReviews={dueReviewsCount}
-                onStartReview={onReview}
-                onSelect={onSelect}
-              />
-
-              {/* Core Metrics Grid */}
-              <div className="grid grid-cols-4 gap-3 stagger-reveal">
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 metric-card">
-                  <div className="text-[10px] uppercase font-semibold text-[var(--muted)]">Total Pages</div>
-                  <div className="text-xl font-bold text-[var(--text)] mt-1">{pages.filter(p => !p.trashed).length}</div>
-                </div>
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 metric-card">
-                  <div className="text-[10px] uppercase font-semibold text-[var(--muted)]">Open Tasks</div>
-                  <div className="text-xl font-bold text-[var(--text)] mt-1">{tasks.filter(t => !t.checked).length}</div>
-                </div>
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 metric-card">
-                  <div className="text-[10px] uppercase font-semibold text-[var(--muted)]">Reviews Due</div>
-                  <div className="text-xl font-bold text-[var(--danger)] mt-1">{dueReviewsCount}</div>
-                </div>
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 metric-card">
-                  <div className="text-[10px] uppercase font-semibold text-[var(--muted)]">Favorites</div>
-                  <div className="text-xl font-bold text-[var(--accent)] mt-1">{pages.filter(p => p.favorite && !p.trashed).length}</div>
-                </div>
-              </div>
-
-              {/* Continue Working Pages Grid */}
-              <Panel title="Continue Working">
-                <div className="grid gap-3 sm:grid-cols-2 mt-2">
-                  {recent.length === 0 && (
-                    <div className="col-span-2 py-6 text-center text-xs text-[var(--muted)] italic">
-                      No recent pages yet. Start writing to see them here.
-                    </div>
-                  )}
-                  {recent.slice(0, 4).map((page) => (
-                    <motion.button
-                      key={page.id}
-                      whileHover={{ scale: 1.015, y: -1 }}
-                      whileTap={{ scale: 0.985 }}
-                      transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                      onClick={() => onSelect(page.id)}
-                      className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-left hover:border-[var(--accent)] hover:shadow-md transition-all duration-150 w-full relative"
-                    >
-                      <div className="flex items-center gap-2">
-                        <PageIcon icon={page.icon} size={18} fallback="📝" />
-                        <span className="truncate text-sm font-semibold text-[var(--text)]">{page.title || "Untitled"}</span>
-                        {page.isEncrypted && <Lock size={11} className="text-[var(--danger)] shrink-0" />}
-                      </div>
-                      <div className="mt-2 text-xs leading-5 text-[var(--secondary)] line-clamp-2 min-h-[40px]">
-                        {plainText(page) || <span className="italic text-[var(--muted)]">Empty document page</span>}
-                      </div>
-                      <div className="mt-3 flex items-center justify-between border-t border-[var(--border)]/65 pt-2 text-[10px] text-[var(--muted)]">
-                        <span>{page.blocks?.length || 0} blocks</span>
-                        <span>{timeAgo(page.updatedAt)}</span>
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-              </Panel>
-
-              {/* Suggested Connections Recommendation */}
-              {suggestedConnections.length > 0 && (
-                <Panel title="Suggested Connections">
-                  <div className="space-y-2 mt-2">
-                    {suggestedConnections.map((conn, idx) => (
-                      <div key={idx} className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <button onClick={() => onSelect(conn.p1Id)} className="flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline truncate">
-                            <PageIcon icon={conn.p1Icon} size={13} fallback="📄" />
-                            <span>{conn.p1Title}</span>
-                          </button>
-                          <span className="text-[var(--muted)]">and</span>
-                          <button onClick={() => onSelect(conn.p2Id)} className="flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline truncate">
-                            <PageIcon icon={conn.p2Icon} size={13} fallback="📄" />
-                            <span>{conn.p2Title}</span>
-                          </button>
-                        </div>
-                        <span className="text-[var(--muted)] italic hidden md:inline">{conn.reason}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Panel>
-              )}
-
-              {/* Activity Timeline */}
-              <Panel title="Workspace Activity">
-                <div className="space-y-4 mt-3">
-                  {recentActivities.length === 0 && (
-                    <div className="text-xs text-[var(--muted)] italic py-2">No page operations registered yet. Build pages to track activity.</div>
-                  )}
-                  {recentActivities.map((act, i) => (
-                    <div key={i} className="flex items-start gap-3 text-xs relative">
-                      {i < recentActivities.length - 1 && (
-                        <div className="absolute left-1.5 top-5 bottom-[-16px] w-[1px] bg-[var(--border)]" />
-                      )}
-                      <div className="grid h-3.5 w-3.5 place-items-center rounded-full bg-[var(--accent)]/15 border border-[var(--accent)] shrink-0 mt-0.5" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-[var(--text)]">
-                            {act.detail}
-                          </span>
-                          <span className="text-[10px] text-[var(--muted)] whitespace-nowrap">{timeAgo(act.timestamp)}</span>
-                        </div>
-                        <button onClick={() => onSelect(act.pageId)} className="mt-1 flex items-center gap-1 text-[var(--secondary)] hover:text-[var(--text)] font-medium">
-                          <PageIcon icon={act.pageIcon} size={13} fallback="📄" />
-                          <span className="truncate">{act.pageTitle}</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-            </div>
-
-            {/* Right Pane - Priorities & Scheduling */}
-            <div className="space-y-6">
-              {/* Today's Priorities Checklist */}
-              <Panel title="Today's Priorities">
-                <div className="space-y-1.5 mt-2 max-h-[300px] overflow-y-auto scrollbar-thin">
-                  {tasks.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-[var(--muted)] italic">
-                      No checklist tasks created in notes. Checkboxes created in your documents will appear here.
-                    </div>
-                  ) : (
-                    tasks.map((task) => (
-                      <div
-                        key={`${task.pageId}-${task.id}`}
-                        className="flex items-center gap-2 group rounded-lg p-1.5 hover:bg-[var(--hover)] transition-colors duration-100"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!!task.checked}
-                          onChange={() => {
-                            if (onBlockPatch) {
-                              onBlockPatch(task.pageId, task.id, { checked: !task.checked });
-                            }
-                          }}
-                          className="h-3.5 w-3.5 accent-[var(--accent)] cursor-pointer"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className={`block truncate text-xs font-medium cursor-pointer ${task.checked ? "text-[var(--muted)] line-through" : "text-[var(--text)]"}`} onClick={() => onSelect(task.pageId)}>
-                            {task.text || "Untitled task"}
-                          </span>
-                          <span className="block text-[9px] text-[var(--muted)] truncate mt-0.5 flex items-center gap-1"><PageIcon icon={task.pageIcon} size={10} fallback="📄" /> {task.pageTitle}</span>
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </Panel>
-
-              {/* Spaced Repetition Due Card Indicator */}
-              <Panel title="Recall & Spaced Repetition">
-                <div className="mt-2 p-3 rounded-xl bg-[var(--surface)] border border-[var(--border-strong)]">
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-10 w-10 place-items-center rounded-lg bg-[var(--danger)]/10 border border-[var(--danger)]/20 text-[var(--danger)]">
-                      <Brain size={20} />
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-[var(--text)]">Spaced Review Cards</div>
-                      <div className="text-[10px] text-[var(--secondary)] mt-0.5">
-                        {dueReviewsCount > 0 ? `${dueReviewsCount} cards are currently due for review` : "All card reviews completed!"}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (onReview) onReview();
-                    }}
-                    className="mt-3 w-full rounded-lg bg-[var(--active)] border border-[var(--border-strong)] py-2 text-center text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition"
-                  >
-                    {dueReviewsCount > 0 ? "Review Due Cards" : "Open Review Dashboard"}
-                  </button>
-                </div>
-              </Panel>
-
-              {/* Knowledge Insights Statistics Card */}
-              <Panel title="Knowledge Insights">
-                <div className="mt-2 space-y-2 text-xs">
-                  <div className="flex items-center justify-between rounded-lg bg-[var(--surface)] p-2.5">
-                    <span className="text-[var(--secondary)] font-medium">Task Mastery</span>
-                    <span className="font-bold text-[var(--text)]">
-                      {tasks.length > 0 ? `${Math.round((tasks.filter(t => t.checked).length / tasks.length) * 100)}%` : "0%"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg bg-[var(--surface)] p-2.5">
-                    <span className="text-[var(--secondary)] font-medium">Security (Encrypted Pages)</span>
-                    <span className="font-bold text-[var(--danger)]">
-                      {pages.filter(p => !p.trashed).length > 0 ? `${Math.round((pages.filter(p => p.isEncrypted && !p.trashed).length / pages.filter(p => !p.trashed).length) * 100)}%` : "0%"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg bg-[var(--surface)] p-2.5">
-                    <span className="text-[var(--secondary)] font-medium">Canvas Mode Notes</span>
-                    <span className="font-bold text-[var(--text)]">
-                      {pages.filter(p => p.blocks?.some(b => b.type === "database") && !p.trashed).length}
-                    </span>
-                  </div>
-                </div>
-              </Panel>
-              {/* Workspace Health — deterministic knowledge curation */}
-              <Panel title="Workspace Health">
-                <WorkspaceHealthPanel pages={pages} onSelect={onSelect} />
-              </Panel>
-
-              {/* Recent AI Chats */}
-              <Panel title="Recent AI Chats">
-                <div className="mt-2 space-y-2 max-h-[220px] overflow-y-auto scrollbar-thin">
-                  {aiChats.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-[var(--muted)] italic">
-                      No recent AI conversations.
-                    </div>
-                  ) : (
-                    aiChats.slice(0, 3).map((chat) => (
-                      <button
-                        key={chat.id}
-                        onClick={() => onOpenChat?.(chat.id)}
-                        className="w-full flex items-center justify-between rounded-lg bg-[var(--surface)] hover:bg-[var(--hover)] p-2 text-left transition duration-100 border border-[var(--border)] cursor-pointer"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text)]">
-                            <MessageSquare size={12} className="text-[var(--accent)]" />
-                            <span className="truncate">{(chat as ChatDisplay).title || "AI chat"}</span>
-                          </div>
-                          <span className="block text-[10px] text-[var(--secondary)] truncate mt-0.5">
-                            {(chat.messages as Array<{ text?: string }>).slice(-1)[0]?.text || "No messages yet"}
-                          </span>
-                        </div>
-                        <span className="text-[9px] text-[var(--muted)] whitespace-nowrap ml-2">
-                          {timeAgo(chat.updatedAt)}
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </Panel>
-            </div>
-          </div>
+          <WidgetDashboard
+            pages={pages}
+            sharedPages={sharedPages}
+            pendingInvites={pendingInvites as unknown as Record<string, unknown>[]}
+            currentUserId={currentUserId}
+            currentUserName={(window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName}
+            workspaceName={workspaceName}
+            onSelect={onSelect}
+            onNew={onNew}
+            onAI={onAI}
+            onOpenChat={onOpenChat}
+            onBlockPatch={onBlockPatch}
+            onView={onView}
+            onToast={onToast}
+          />
         )}
 
         {view === "chats" && (

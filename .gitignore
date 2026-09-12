@@ -54,6 +54,7 @@ scripts/noska-*.mjs
 admin/src/lib/more_hooks.txt
 console-after-typing.txt
 /*.png
+mobile-e2e-out/
 sess*.json
 minted*.json
 jt*.json
@@ -78,6 +79,17 @@ supabase/.temp/
 src-tauri/target/
 # Generated Tauri schemas/capability snapshots
 src-tauri/gen/schemas/
+# Mobile build output + machine-local Gradle state (the generated native
+# projects under src-tauri/gen/android and gen/apple ARE meant to be committed
+# once created — the noska:// scheme patch and signing config live there)
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/build/
+src-tauri/gen/apple/build/
+# packaged native libs are build artifacts (copied/symlinked in by the CLI)
+src-tauri/gen/android/app/src/main/jniLibs/
+dist-mobile/
 # Updater signing keys — the private key must NEVER be committed
 .tauri/
 

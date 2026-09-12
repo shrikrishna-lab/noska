@@ -11,7 +11,7 @@
 // Identity is exposed as a Clerk-user-shaped object so the rest of the app
 // (App.tsx bootstrap) treats paired desktop users exactly like web users.
 
-import { isDesktop } from "./platform";
+import { isDesktop, isNativeApp } from "./platform";
 
 export interface DesktopIdentity {
   /** Supabase auth user id (UUID) â€” what RLS / auth.uid() resolves to. */
@@ -74,7 +74,9 @@ export interface StoredSession {
 let cachedIdentity: DesktopIdentity | null | undefined;
 
 export function loadSession(): StoredSession | null {
-  if (!isDesktop()) return null;
+  // Native shells only (desktop webview + iOS/Android). The browser keeps
+  // Clerk-owned sessions and must never see a native session blob.
+  if (!isNativeApp()) return null;
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;

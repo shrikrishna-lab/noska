@@ -17,8 +17,8 @@
 .marketing .liquid-glass-footer-wrap {
   position: relative;
   width: 100%;
-  max-width: 1200px;
-  padding: 0 20px;
+  max-width: 1380px;
+  padding: 0 24px;
   box-sizing: border-box;
 }
 
@@ -85,7 +85,7 @@
   );
   backdrop-filter: blur(36px) saturate(200%);
   -webkit-backdrop-filter: blur(36px) saturate(200%);
-  padding: 46px 48px 34px 48px;
+  padding: 48px 52px 34px 52px;
   box-shadow:
     inset 0px 2px 2.5px 0px rgba(255, 255, 255, 1),
     inset 0px -2px 3px 0px rgba(0, 0, 0, 0.05),
@@ -103,7 +103,7 @@
   flex-direction: row;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 52px;
+  gap: 48px;
   width: 100%;
 }
 
@@ -111,8 +111,8 @@
 .marketing .liquid-glass-brand-col {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  max-width: 310px;
+  gap: 20px;
+  max-width: 250px;
   flex-shrink: 0;
 }
 
@@ -243,40 +243,74 @@
 }
 
 .marketing .liquid-glass-lang-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 6px 12px;
+  width: fit-content;
+  max-width: max-content;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(220, 222, 230, 0.75);
   box-shadow:
-    inset 0 1px 1.5px rgba(255, 255, 255, 0.9),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.95),
     0 2px 6px rgba(0, 0, 0, 0.02);
   transition: all var(--mkt-transition-fast);
+  cursor: pointer;
+  user-select: none;
 }
 
 .marketing .liquid-glass-lang-pill:hover {
-  background: rgba(255, 255, 255, 0.75);
-  border-color: rgba(255, 255, 255, 1);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(180, 185, 200, 0.85);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 1),
+    0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-.marketing .liquid-glass-lang-pill select {
-  border: none;
-  background: transparent;
+.marketing .liquid-glass-lang-icon {
+  color: var(--mkt-text-muted);
+}
+
+.marketing .liquid-glass-lang-name {
   font-family: var(--mkt-font-sans);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--mkt-text-secondary);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.marketing .liquid-glass-lang-chevron {
+  color: var(--mkt-text-muted);
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .liquid-glass-lang-select-hidden {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
   cursor: pointer;
-  outline: none;
+  border-radius: 999px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.marketing .liquid-glass-lang-select-hidden option {
+  background: #ffffff;
+  color: #17161b;
+  font-size: 13px;
+  padding: 6px;
 }
 
 /* Link Columns Grid */
 .marketing .liquid-glass-links-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(100px, 1fr));
-  gap: 32px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 24px;
   flex: 1;
 }
 
@@ -284,16 +318,21 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .marketing .liquid-glass-col-header {
   font-family: var(--mkt-font-sans);
   font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--mkt-text-muted);
   margin: 0;
+  white-space: nowrap !important;
+  word-break: keep-all;
+  overflow: visible;
+  line-height: 1.3;
 }
 
 .marketing .liquid-glass-link-list {
@@ -302,18 +341,18 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 11px;
 }
 
 .marketing .liquid-link-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--mkt-text-secondary);
   text-decoration: none;
   transition: all var(--mkt-transition-fast);
-  width: max-content;
+  white-space: nowrap;
 }
 
 .marketing .liquid-link-item:hover {
@@ -328,13 +367,19 @@
 }
 
 .marketing .liquid-glass-mini-tag {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
-  padding: 1.5px 6px;
-  border-radius: 6px;
-  background: rgba(23, 22, 27, 0.08);
-  color: var(--mkt-text-primary);
-  letter-spacing: 0.02em;
+  padding: 1.5px 6.5px;
+  border-radius: 999px;
+  background: #17161B;
+  color: #FFFFFF;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
 }
 
 /* Liquid Hairline Divider */
@@ -433,7 +478,7 @@
    RESPONSIVE DESIGN (Desktop -> Tablet -> Mobile)
    ========================================================================== */
 
-@media (max-width: 1024px) {
+@media (max-width: 1120px) {
   .marketing .liquid-glass-top-row {
     flex-direction: column;
     gap: 38px;

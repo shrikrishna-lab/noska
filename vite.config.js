@@ -40,6 +40,9 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Mobile dev (`tauri android/ios dev`) sets TAURI_DEV_HOST so the device
+    // or emulator can reach this dev server over the network.
+    host: process.env.TAURI_DEV_HOST || undefined,
     allowedHosts: ["app.noska.me", "localhost", "127.0.0.1", "app.localhost"],
     https: httpsConfig,
     proxy: {
@@ -118,10 +121,14 @@ export default defineConfig({
   },
   build: {
     // Match the bundled system webviews when targeting Tauri (WebView2 /
-    // WKWebView / WebKitGTK); leave the default target untouched for web.
+    // WKWebView / WebKitGTK / Android WebView); leave the default target
+    // untouched for web.
     ...(isTauri && {
       target:
-        process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
+        process.env.TAURI_ENV_PLATFORM === "windows" ||
+        process.env.TAURI_ENV_PLATFORM === "android"
+          ? "chrome105"
+          : "safari13",
     }),
     sourcemap: process.env.SENTRY_AUTH_TOKEN ? true : false,
     chunkSizeWarningLimit: 1000,

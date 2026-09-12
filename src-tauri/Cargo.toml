@@ -15,24 +15,28 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Universal plugins — desktop AND mobile (iOS/Android)
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-deep-link = "2"
+
+# Desktop-only native dependencies (tray, voice dictation, text injection,
+# clipboard). Kept out of the iOS/Android builds so the mobile shells stay
+# lean and compile cleanly on their targets.
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
 whisper-rs = "0.16"
 cpal = "0.15"
 crossbeam-channel = "0.5"
 reqwest = { version = "0.13", features = ["blocking"] }
 arboard = "3.6"
 enigo = "0.2"
-
-tauri-plugin-notification = "2"
-tauri-plugin-opener = "2"
-
-# Desktop-only plugins
-[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
-tauri-plugin-deep-link = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 

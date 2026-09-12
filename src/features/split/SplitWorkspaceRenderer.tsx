@@ -5,7 +5,7 @@ import { useTabs } from "../../contexts/TabContext";
 import PaneContainer from "./PaneContainer";
 import type { Page } from "../../lib/supabaseService";
 
-interface SplitWorkspaceRendererProps {
+export interface SplitWorkspaceRendererProps {
   pages: Page[];
   sharedPages?: Page[];
   currentUserId?: string | null;

@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { isDesktop } from "./platform";
+import { isMobile } from "../../platform";
 import {
   DEEP_LINK_EVENT,
   TRAY_ACTION_EVENT,
@@ -46,6 +47,13 @@ function handleDeepLink(raw: string, navigate: (path: string) => void) {
   const parsed = parseDeepLink(raw);
   if (!parsed) return;
   if (parsed.entity === "workspace") {
+    if (parsed.child) {
+      // workspace/<id>/page|task|project/<childId> — the `/:slug/:pageId`
+      // route resolves by page id (the slug segment is cosmetic and gets
+      // re-synced to the real workspace name).
+      navigate(`/${encodeURIComponent(parsed.id)}/${encodeURIComponent(parsed.child.id)}`);
+      return;
+    }
     navigate(`/${encodeURIComponent(parsed.id)}`);
     return;
   }
@@ -59,7 +67,9 @@ export default function DesktopBridge() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isDesktop()) return;
+    // Desktop-only: the mobile shell (MobileBridge) owns deep links on
+    // iOS/Android — handling them here too would double-navigate.
+    if (!isDesktop() || isMobile()) return;
     let disposed = false;
     const unlisteners: Array<() => void> = [];
 

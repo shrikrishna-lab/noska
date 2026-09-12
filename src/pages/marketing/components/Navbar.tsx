@@ -4,6 +4,7 @@ import { ChevronDown, Menu, X, ArrowRight, Sparkles, FileText, Database, CheckSq
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@clerk/react';
 import { useCTAButtons, useLaunchSettings } from '../../../hooks/useLaunchSettings';
+import { useLanguage } from '../../../contexts/LanguageContext';
 import './Navbar.css';
 
 const drawerMotion = {
@@ -27,6 +28,7 @@ export default function Navbar() {
   const { isSignedIn } = useAuth();
   const { getButton } = useCTAButtons();
   const { settings } = useLaunchSettings();
+  const { t } = useLanguage();
 
   const navLoginBtn = getButton('navbar_login');
   const navCtaBtn = getButton('navbar_cta');
@@ -65,7 +67,7 @@ export default function Navbar() {
                   onMouseLeave={() => setActiveDropdown(null)}
                 >
                   <button className={`liquid-nav-btn ${activeDropdown === 'product' ? 'active' : ''}`}>
-                    <span>Product</span>
+                    <span>{t('nav.product', 'Product')}</span>
                     <ChevronDown size={13} className={`liquid-chevron ${activeDropdown === 'product' ? 'rotate' : ''}`} />
                   </button>
                   <AnimatePresence>
@@ -139,7 +141,7 @@ export default function Navbar() {
                   onMouseLeave={() => setActiveDropdown(null)}
                 >
                   <button className={`liquid-nav-btn ${activeDropdown === 'solutions' ? 'active' : ''}`}>
-                    <span>Solutions</span>
+                    <span>{t('nav.solutions', 'Solutions')}</span>
                     <ChevronDown size={13} className={`liquid-chevron ${activeDropdown === 'solutions' ? 'rotate' : ''}`} />
                   </button>
                   <AnimatePresence>
@@ -186,7 +188,7 @@ export default function Navbar() {
                   onMouseLeave={() => setActiveDropdown(null)}
                 >
                   <button className={`liquid-nav-btn ${activeDropdown === 'resources' ? 'active' : ''}`}>
-                    <span>Resources</span>
+                    <span>{t('nav.resources', 'Resources')}</span>
                     <ChevronDown size={13} className={`liquid-chevron ${activeDropdown === 'resources' ? 'rotate' : ''}`} />
                   </button>
                   <AnimatePresence>
@@ -255,7 +257,7 @@ export default function Navbar() {
                   onMouseLeave={() => setActiveDropdown(null)}
                 >
                   <button className={`liquid-nav-btn ${activeDropdown === 'developers' ? 'active' : ''}`}>
-                    <span>Developers</span>
+                    <span>{t('nav.developers', 'Developers')}</span>
                     <ChevronDown size={13} className={`liquid-chevron ${activeDropdown === 'developers' ? 'rotate' : ''}`} />
                   </button>
                   <AnimatePresence>
@@ -297,12 +299,12 @@ export default function Navbar() {
 
                 {settings.show_pricing && (
                   <Link to="/pricing" className={`liquid-nav-link ${location.pathname === '/pricing' ? 'active' : ''}`}>
-                    Pricing
+                    {t('nav.pricing', 'Pricing')}
                   </Link>
                 )}
                 {settings.show_changelog && (
                   <Link to="/changelog" className={`liquid-nav-link ${location.pathname === '/changelog' ? 'active' : ''}`}>
-                    What's New
+                    {t('nav.whatsNew', "What's New")}
                   </Link>
                 )}
               </div>
@@ -315,7 +317,7 @@ export default function Navbar() {
                    path back into the product, no login/signup funnel. */
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                   <Link to="/dashboard" className="liquid-glass-nav-cta-btn hide-mobile">
-                    <span>Open app</span>
+                    <span>{t('nav.openApp', 'Open app')}</span>
                     <ArrowRight size={13} className="shrink-0" />
                   </Link>
                 </motion.div>
@@ -359,7 +361,11 @@ export default function Navbar() {
         {/* Mobile Glass Drawer Menu */}
         <AnimatePresence>
           {mobileMenuOpen && (
-            <motion.div className="liquid-glass-mobile-drawer" {...drawerMotion}>
+            <motion.div
+              className="liquid-glass-mobile-drawer"
+              data-lenis-prevent
+              {...drawerMotion}
+            >
               <div className="liquid-mobile-links-container">
                 <div className="liquid-mobile-group">
                   <p className="liquid-mobile-group-header">Product</p>
@@ -368,6 +374,7 @@ export default function Navbar() {
                   <Link to="/docs" className="liquid-mobile-item">Docs & Notes</Link>
                   <Link to="/docs?section=databases" className="liquid-mobile-item">Databases</Link>
                   <Link to="/product" className="liquid-mobile-item">Projects</Link>
+                  <Link to="/docs?section=canvas" className="liquid-mobile-item">Canvas &amp; Whiteboard</Link>
                 </div>
 
                 <div className="liquid-mobile-group">

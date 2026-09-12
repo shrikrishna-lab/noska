@@ -1,755 +1,738 @@
-/* Hanzo Design System — Scoped under .marketing */
+/* ==========================================================================
+   MINIMALIST & CLEAN CHANGELOG (NewUpdated.css)
+   Linear / Apple / Stripe Caliber Clean Design System
+   ========================================================================== */
 
-.marketing .hanzo-wrapper {
+.marketing .new-updated-page {
   position: relative;
-  background-color: #e5e5e5;
-  color: #17161b;
-  font-family: var(--mkt-font-sans);
+  width: 100%;
   min-height: 100vh;
-  padding-bottom: 120px;
-  background-image: 
-    radial-gradient(ellipse 800px 500px at 50% 0%, #ffffff 0%, transparent 80%),
-    linear-gradient(180deg, #ececec 0%, #e0e0e0 100%);
-}
-
-/* Navbar */
-.marketing .hanzo-nav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 24px 0 24px;
-  max-width: var(--mkt-max-width);
-  margin: 0 auto;
-}
-
-.marketing .nav-brand-pill {
-  background-color: #ffffff;
+  padding-bottom: 96px;
   color: #17161b;
-  font-family: var(--mkt-font-heading);
-  font-weight: 700;
-  font-size: 15px;
-  padding: 8px 20px;
-  border-radius: 9999px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background-color: #fafafc;
+  background-image: radial-gradient(circle at 50% 0%, rgba(240, 242, 248, 0.8) 0%, transparent 60%);
 }
 
-.marketing .nav-menu-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background-color: #ffffff;
+/* ==========================================================================
+   MINIMALIST HEADER
+   ========================================================================== */
+
+.marketing .nu-minimal-header {
+  position: relative;
+  padding: 80px 24px 40px 24px;
+  display: flex;
+  justify-content: center;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.marketing .nu-header-inner {
+  width: 100%;
+  max-width: 960px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: transform 0.15s;
-}
-
-.marketing .nav-menu-btn:hover {
-  transform: scale(1.05);
-}
-
-.marketing .menu-bar {
-  width: 16px;
-  height: 2px;
-  background-color: #17161b;
-  border-radius: 2px;
-}
-
-/* Hero Section */
-.marketing .hanzo-hero {
   text-align: center;
-  padding: 90px 24px 60px 24px;
-  max-width: 1100px;
-  margin: 0 auto;
 }
 
-.marketing .hero-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.marketing .hero-status-pill {
+.marketing .nu-header-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  font-size: 12px;
   font-weight: 600;
-  color: #3f3f46;
-  background-color: #ffffff;
-  padding: 6px 18px;
-  border-radius: 9999px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-  margin-bottom: 36px;
+  color: #52525b;
+  margin-bottom: 18px;
 }
 
-.marketing .status-dot {
-  width: 8px;
-  height: 8px;
+.marketing .nu-live-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background-color: #10b981;
+  background: #10b981;
 }
 
-/* Hanzo Split Typography Headline */
-.marketing .hanzo-hero-title {
-  font-size: 72px;
-  line-height: 1.12;
-  letter-spacing: -0.04em;
-  margin-bottom: 24px;
-  color: #17161b;
-  display: inline-block;
-}
-
-.marketing .title-bold {
+.marketing .nu-page-title {
   font-family: var(--mkt-font-heading);
+  font-size: clamp(36px, 5vw, 56px);
   font-weight: 800;
+  letter-spacing: -0.035em;
   color: #17161b;
+  margin: 0 0 12px 0;
+  line-height: 1.1;
 }
 
-.marketing .title-muted {
-  font-family: var(--mkt-font-heading);
-  font-weight: 400;
-  color: #8e8e93;
-}
-
-.marketing .title-serif-italic {
-  font-family: var(--mkt-font-serif);
-  font-style: italic;
-  font-weight: 400;
-  color: #63605a;
-  margin: 0 12px;
-}
-
-.marketing .inline-badge-preview {
-  display: inline-block;
-  vertical-align: middle;
-  width: 72px;
-  height: 52px;
-  border-radius: 14px;
-  overflow: hidden;
-  margin: 0 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-  transform: rotate(-3deg);
-}
-
-.marketing .inline-badge-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.marketing .inline-dark-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: middle;
-  background-color: #17161b;
-  color: #ffffff;
-  padding: 8px 22px;
-  border-radius: 18px;
-  margin: 0 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-}
-
-.marketing .dark-badge-text {
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
-
-.marketing .hanzo-hero-sub {
-  font-size: 18px;
-  color: #63605a;
-  line-height: 1.6;
+.marketing .nu-page-subtitle {
+  font-size: clamp(15px, 1.8vw, 17px);
+  color: #71717a;
+  line-height: 1.55;
   max-width: 580px;
-  margin-bottom: 36px;
+  margin: 0 0 32px 0;
 }
 
-.marketing .hero-action-row {
+/* Minimalist Filter Nav */
+.marketing .nu-minimal-nav {
   display: flex;
   align-items: center;
-  gap: 20px;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
   flex-wrap: wrap;
-  justify-content: center;
-}
-
-.marketing .pill-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background-color: #17161b;
-  color: #ffffff;
-  padding: 14px 28px;
-  border-radius: 9999px;
-  font-size: 15px;
-  font-weight: 700;
-  text-decoration: none;
-  box-shadow: 0 8px 24px rgba(23, 22, 27, 0.2);
-  transition: transform 0.2s, background-color 0.2s;
-}
-
-.marketing .pill-action-btn:hover {
-  background-color: #322f38;
-  transform: translateY(-2px);
-}
-
-.marketing .social-proof-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.marketing .avatar-stack {
-  display: flex;
-  align-items: center;
-}
-
-.marketing .avatar-stack img {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 2px solid #e5e5e5;
-  margin-left: -12px;
-  object-fit: cover;
-}
-
-.marketing .avatar-stack img:first-child {
-  margin-left: 0;
-}
-
-.marketing .proof-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #63605a;
-}
-
-/* Embedded Dark Container: Recent Work Showcase */
-.marketing .hanzo-work-container {
-  max-width: var(--mkt-max-width);
-  margin: 0 auto 100px auto;
-  padding: 0 24px;
-}
-
-.marketing .dark-work-box {
-  position: relative;
-  background-color: #111113;
-  color: #ffffff;
-  border-radius: 32px;
-  padding: 60px 48px;
-  box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.3);
-}
-
-.marketing .work-floating-badge {
-  position: absolute;
-  top: -24px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background-color: #1f1f23;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 6px 18px 6px 8px;
-  border-radius: 9999px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-}
-
-.marketing .folder-circle {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: #ffffff;
-  color: #111113;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.marketing .badge-text {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.marketing .work-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-  margin-top: 20px;
-}
-
-.marketing .work-card {
-  background-color: #1a1a1e;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s;
-}
-
-.marketing .work-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.marketing .work-card-img-wrap {
-  position: relative;
-  width: 100%;
-  height: 240px;
-  overflow: hidden;
-}
-
-.marketing .work-card-img-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.marketing .work-card:hover .work-card-img-wrap img {
-  transform: scale(1.05);
-}
-
-.marketing .work-metric {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  background-color: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 20px;
-}
-
-.marketing .work-card-body {
-  padding: 24px;
-}
-
-.marketing .work-cat {
-  font-size: 11.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #8e8e93;
-  margin-bottom: 6px;
-  display: block;
-}
-
-.marketing .work-title {
-  font-size: 22px;
-  font-weight: 800;
-  color: #ffffff;
-  margin: 0;
-}
-
-/* About & Timeline Section */
-.marketing .hanzo-about-section {
-  max-width: var(--mkt-max-width);
-  margin: 0 auto 100px auto;
-  padding: 0 24px;
-}
-
-.marketing .about-grid {
-  display: grid;
-  grid-template-columns: 1fr 1.3fr;
-  gap: 48px;
-  align-items: start;
-}
-
-.marketing .founder-card {
-  background-color: #ffffff;
-  border-radius: 24px;
-  padding: 20px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
-}
-
-.marketing .founder-image-wrap {
-  width: 100%;
-  height: 320px;
-  border-radius: 16px;
-  overflow: hidden;
-  margin-bottom: 16px;
-}
-
-.marketing .founder-image-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.marketing .founder-info h3 {
-  font-size: 20px;
-  font-weight: 800;
-  margin-bottom: 2px;
-}
-
-.marketing .founder-role {
-  font-size: 13px;
-  color: #63605a;
-  display: block;
-  margin-bottom: 12px;
-}
-
-.marketing .social-icons {
-  display: flex;
-  gap: 12px;
-
-}
-
-.marketing .social-icons a {
-  color: #63605a;
-  transition: color 0.15s;
-}
-
-.marketing .social-icons a:hover {
-  color: #17161b;
-}
-
-.marketing .about-content {
   padding-top: 10px;
 }
 
-.marketing .bio-paragraph {
-  font-size: 24px;
-  line-height: 1.45;
-  letter-spacing: -0.02em;
-  color: #17161b;
-  margin-bottom: 44px;
-  font-weight: 500;
-}
-
-.marketing .timeline-table {
+.marketing .nu-filter-pills {
   display: flex;
-  flex-direction: column;
-  border-top: 1px solid #d4d4d8;
-}
-
-.marketing .timeline-row {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
   align-items: center;
-  padding: 18px 0;
-  border-bottom: 1px solid #d4d4d8;
-  font-size: 14.5px;
-}
-
-.marketing .row-role {
-  font-weight: 700;
-  color: #17161b;
-}
-
-.marketing .row-company {
-  color: #63605a;
-}
-
-.marketing .row-period {
-  text-align: right;
-  color: #8e8e93;
-  font-weight: 500;
-}
-
-/* Pricing Section */
-.marketing .hanzo-pricing-section {
-  max-width: var(--mkt-max-width);
-  margin: 0 auto 100px auto;
-  padding: 0 24px;
-}
-
-.marketing .pricing-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 36px;
+  gap: 6px;
   flex-wrap: wrap;
-  gap: 20px;
 }
 
-.marketing .pricing-header h2 {
-  font-size: 38px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  margin: 0;
-}
-
-.marketing .pricing-switch {
-  display: flex;
-  background-color: #ffffff;
-  padding: 4px;
-  border-radius: 9999px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.marketing .switch-tab {
-  background: none;
-  border: none;
-  font-size: 13.5px;
+.marketing .nu-pill-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  font-family: var(--mkt-font-sans);
+  font-size: 12.5px;
   font-weight: 600;
-  color: #63605a;
-  padding: 8px 18px;
-  border-radius: 9999px;
+  color: #71717a;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--mkt-transition-fast);
 }
 
-.marketing .switch-tab.active {
-  background-color: #17161b;
+.marketing .nu-pill-btn:hover {
+  color: #17161b;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.marketing .nu-pill-btn.active {
+  background: #17161b;
+  border-color: #17161b;
   color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
-.marketing .pricing-cards-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-}
-
-.marketing .price-card {
-  background-color: #ffffff;
-  border-radius: 24px;
-  padding: 40px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-}
-
-.marketing .price-card h3 {
-  font-size: 24px;
-  font-weight: 800;
-  margin-bottom: 6px;
-}
-
-.marketing .card-sub {
-  font-size: 14px;
-  color: #63605a;
-  margin-bottom: 24px;
-}
-
-.marketing .price-num {
-  font-size: 14px;
-  color: #8e8e93;
-  margin-bottom: 24px;
-}
-
-.marketing .price-num span {
-  font-size: 44px;
-  font-weight: 800;
-  color: #17161b;
-  letter-spacing: -0.03em;
-}
-
-.marketing .price-btn {
-  display: block;
-  width: 100%;
-  text-align: center;
-  padding: 12px;
-  border-radius: 12px;
-  font-size: 14.5px;
-  font-weight: 700;
-  text-decoration: none;
-  margin-bottom: 32px;
-  transition: background-color 0.15s;
-}
-
-.marketing .price-btn.primary {
-  background-color: #17161b;
-  color: #ffffff;
-}
-
-.marketing .price-btn.primary:hover {
-  background-color: #322f38;
-}
-
-.marketing .price-btn.secondary {
-  background-color: #f4f4f5;
-  color: #17161b;
-}
-
-.marketing .price-btn.secondary:hover {
-  background-color: #e4e4e7;
-}
-
-.marketing .feature-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.marketing .feature-list li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14.5px;
-  color: #3f3f46;
-}
-
-/* FAQ Section */
-.marketing .hanzo-faq-section {
-  max-width: var(--mkt-max-width);
-  margin: 0 auto 100px auto;
-  padding: 0 24px;
-}
-
-.marketing .hanzo-faq-section h2 {
-  font-size: 38px;
-  font-weight: 800;
-  margin-bottom: 32px;
-}
-
-.marketing .faq-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.marketing .faq-row {
-  background-color: #ffffff;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.marketing .faq-btn {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  background: none;
-  border: none;
-  font-size: 16.5px;
-  font-weight: 700;
-  color: #17161b;
-  text-align: left;
-  cursor: pointer;
-}
-
-.marketing .faq-ans p {
-  padding: 0 24px 20px 24px;
-  font-size: 15px;
-  color: #63605a;
-  line-height: 1.6;
-
-}
-
-/* Modal Styling */
-.marketing .modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.marketing .modal-box {
+.marketing .nu-minimal-search {
   position: relative;
-  background-color: #ffffff;
-  border-radius: 24px;
-  padding: 32px;
-  width: 100%;
-  max-width: 540px;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  padding: 5px 12px;
+  width: 220px;
+  transition: all var(--mkt-transition-fast);
 }
 
-.marketing .modal-close-btn {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: none;
+.marketing .nu-minimal-search:focus-within {
+  border-color: #17161b;
+  box-shadow: 0 0 0 3px rgba(23, 22, 27, 0.05);
+  width: 260px;
+}
+
+.marketing .nu-search-ico {
+  color: #a1a1aa;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.marketing .nu-search-inp {
   border: none;
-  font-size: 24px;
-  color: #8e8e93;
+  background: transparent;
+  outline: none;
+  font-family: var(--mkt-font-sans);
+  font-size: 12.5px;
+  color: #17161b;
+  width: 100%;
+}
+
+.marketing .nu-search-inp::placeholder {
+  color: #a1a1aa;
+}
+
+.marketing .nu-search-clr {
+  border: none;
+  background: none;
+  color: #a1a1aa;
+  font-size: 14px;
   cursor: pointer;
 }
 
-.marketing .modal-img {
-  width: 100%;
-  height: 220px;
-  border-radius: 16px;
-  overflow: hidden;
-  margin-bottom: 20px;
+/* ==========================================================================
+   STREAM MAIN & TIMELINE FLOW
+   ========================================================================== */
+
+.marketing .nu-stream-main {
+  position: relative;
+  padding: 56px 24px;
+  display: flex;
+  justify-content: center;
 }
 
-.marketing .modal-img img {
+.marketing .nu-stream-container {
+  width: 100%;
+  max-width: 960px;
+}
+
+.marketing .nu-timeline-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
+}
+
+/* Article Row */
+.marketing .nu-stream-article {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 36px;
+  align-items: start;
+}
+
+/* Left Rail Sticky Date & Badge */
+.marketing .nu-rail-col {
+  position: relative;
+}
+
+.marketing .nu-rail-sticky {
+  position: sticky;
+  top: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.marketing .nu-rail-date {
+  font-size: 13px;
+  font-weight: 500;
+  color: #71717a;
+}
+
+.marketing .nu-rail-ver-badge {
+  font-family: var(--mkt-font-sans);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #17161b;
+  background: #f4f4f5;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* Right Content Post Card */
+.marketing .nu-content-col {
+  min-width: 0;
+}
+
+.marketing .nu-post-card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.02),
+    0 8px 24px rgba(0, 0, 0, 0.03);
+  padding: 36px 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: all var(--mkt-transition-normal);
+}
+
+.marketing .nu-post-card:hover {
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.02),
+    0 12px 32px rgba(0, 0, 0, 0.05);
+}
+
+/* Post Top Header */
+.marketing .nu-post-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.marketing .nu-post-title {
+  font-family: var(--mkt-font-heading);
+  font-size: clamp(20px, 2.5vw, 24px);
+  font-weight: 800;
+  color: #17161b;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.marketing .nu-minimal-like {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f4f4f5;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #71717a;
+  cursor: pointer;
+  transition: all var(--mkt-transition-fast);
+  flex-shrink: 0;
+}
+
+.marketing .nu-minimal-like:hover {
+  color: #17161b;
+  background: #e4e4e7;
+}
+
+.marketing .nu-minimal-like.liked {
+  background: #ede9fe;
+  border-color: #ddd6fe;
+  color: #7c3aed;
+}
+
+.marketing .nu-post-lead {
+  font-size: 15px;
+  color: #52525b;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Media Frame */
+.marketing .nu-media-frame {
+  width: 100%;
+  height: 240px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.marketing .nu-media-frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.marketing .modal-box h2 {
-  font-size: 24px;
+/* Minimalist Stats Strip */
+.marketing .nu-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #f8f8fa;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.marketing .nu-stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.marketing .nu-stat-value {
+  font-family: var(--mkt-font-heading);
+  font-size: 13.5px;
   font-weight: 800;
-  margin-bottom: 4px;
+  color: #17161b;
 }
 
-.marketing .modal-category-text {
-  font-size: 13px;
-  color: #63605a;
-  margin-bottom: 24px;
+.marketing .nu-stat-label {
+  font-size: 11px;
+  color: #a1a1aa;
 }
 
-.marketing .modal-action-bar {
+/* Mini Simulators */
+.marketing .nu-mini-simulator {
+  border-radius: 12px;
+  background: #18181b;
+  color: #ffffff;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.marketing .nu-sim-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.marketing .nu-sim-title {
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.marketing .nu-sim-val {
+  font-family: monospace;
+  font-weight: 700;
+  color: #c4b5fd;
+}
+
+.marketing .nu-range-slider {
+  width: 100%;
+  accent-color: #8b5cf6;
+  cursor: pointer;
+}
+
+.marketing .nu-sim-note {
+  font-size: 11.5px;
+  color: #a1a1aa;
+  line-height: 1.4;
+}
+
+.marketing .nu-sim-play-btn {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.marketing .nu-sim-play-btn.active {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.marketing .nu-audio-bars {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+}
+
+.marketing .nu-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.marketing .nu-audio-bars.playing .nu-bar {
+  background: #10b981;
+  animation: cleanWave 0.8s infinite alternate ease-in-out;
+}
+
+@keyframes cleanWave {
+  0% { height: 4px; }
+  100% { height: 20px; }
+}
+
+.marketing .nu-audio-text {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin: 0;
+}
+
+.marketing .nu-mcp-switch {
+  display: flex;
+  gap: 4px;
+}
+
+.marketing .nu-mcp-switch button {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: #a1a1aa;
+  cursor: pointer;
+}
+
+.marketing .nu-mcp-switch button.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.marketing .nu-mcp-snippet {
+  margin: 0;
+  font-family: 'Fira Code', monospace;
+  font-size: 11.5px;
+  color: #fde047;
+  overflow-x: auto;
+}
+
+/* Changes Sublist */
+.marketing .nu-changes-sublist {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.marketing .nu-change-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.marketing .nu-change-badge-cell {
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.marketing .nu-pill-type {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.marketing .nu-pill-type.new { background: #ede9fe; color: #6d28d9; }
+.marketing .nu-pill-type.improved { background: #dcfce7; color: #15803d; }
+.marketing .nu-pill-type.fixed { background: #fef3c7; color: #b45309; }
+
+.marketing .nu-change-content-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.marketing .nu-change-heading {
+  font-family: var(--mkt-font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  color: #17161b;
+  margin: 0;
+}
+
+.marketing .nu-change-paragraph {
+  font-size: 13.5px;
+  color: #52525b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Code Accordion */
+.marketing .nu-code-accordion {
+  margin-top: 4px;
+}
+
+.marketing .nu-code-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--mkt-font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #71717a;
+  cursor: pointer;
+}
+
+.marketing .nu-code-toggle:hover {
+  color: #17161b;
+}
+
+.marketing .nu-clean-code-block {
+  margin-top: 6px;
+  border-radius: 8px;
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.marketing .nu-code-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10.5px;
+  color: #a1a1aa;
+}
+
+.marketing .nu-copy-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.marketing .nu-clean-code-block pre {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #c4b5fd;
+  overflow-x: auto;
+}
+
+/* Card Foot */
+.marketing .nu-card-foot {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.marketing .btn-close-modal {
-  background-color: #f4f4f5;
+.marketing .nu-open-app-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #17161b;
+  text-decoration: none;
+  transition: transform var(--mkt-transition-fast);
+}
+
+.marketing .nu-open-app-link:hover {
+  transform: translateX(2px);
+}
+
+/* Clean Empty State */
+.marketing .nu-clean-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: #71717a;
+  font-size: 14px;
+}
+
+.marketing .nu-clean-reset-btn {
+  margin-top: 8px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: #17161b;
+  color: #ffffff;
   border: none;
-  padding: 10px 20px;
-  border-radius: 10px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.marketing .btn-launch-modal {
-  background-color: #17161b;
+/* ==========================================================================
+   MINIMALIST SUBSCRIBE FOOTER
+   ========================================================================== */
+
+.marketing .nu-minimal-subscribe {
+  padding: 40px 24px 0 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.marketing .nu-sub-inner {
+  width: 100%;
+  max-width: 960px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  padding: 32px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.marketing .nu-sub-text h3 {
+  font-family: var(--mkt-font-heading);
+  font-size: 18px;
+  font-weight: 800;
+  color: #17161b;
+  margin: 0 0 4px 0;
+}
+
+.marketing .nu-sub-text p {
+  font-size: 13.5px;
+  color: #71717a;
+  margin: 0;
+}
+
+.marketing .nu-clean-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketing .nu-clean-input {
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 8px 16px;
+  font-family: var(--mkt-font-sans);
+  font-size: 13px;
+  color: #17161b;
+  outline: none;
+  width: 220px;
+  transition: all var(--mkt-transition-fast);
+}
+
+.marketing .nu-clean-input:focus {
+  border-color: #17161b;
+  box-shadow: 0 0 0 3px rgba(23, 22, 27, 0.05);
+}
+
+.marketing .nu-clean-btn {
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: #17161b;
   color: #ffffff;
-  text-decoration: none;
-  padding: 10px 20px;
-  border-radius: 10px;
+  border: none;
+  font-family: var(--mkt-font-sans);
+  font-size: 13px;
   font-weight: 700;
+  cursor: pointer;
+  transition: all var(--mkt-transition-fast);
 }
 
-/* Responsive Rules */
-@media (max-width: 992px) {
-  .marketing .hanzo-hero-title {
-    font-size: 48px;
-  }
-  
-  .marketing .work-cards-grid,
-  .marketing .about-grid,
-  .marketing .pricing-cards-row {
-    grid-template-columns: 1fr;
-  }
-
-  .marketing .inline-badge-preview {
-    width: 54px;
-    height: 40px;
-  }
+.marketing .nu-clean-btn:hover {
+  background: #3f3f46;
 }
 
-@media (max-width: 640px) {
-  .marketing .hanzo-hero-title {
-    font-size: 34px;
-  }
-  
-  .marketing .timeline-row {
+.marketing .nu-clean-btn.done {
+  background: #10b981;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN
+   ========================================================================== */
+
+@media (max-width: 840px) {
+  .marketing .nu-stream-article {
     grid-template-columns: 1fr;
-    gap: 4px;
+    gap: 12px;
   }
 
-  .marketing .row-period {
-    text-align: left;
+  .marketing .nu-rail-sticky {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .marketing .nu-post-card {
+    padding: 24px 20px;
+  }
+
+  .marketing .nu-sub-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .marketing .nu-clean-form {
+    width: 100%;
+  }
+
+  .marketing .nu-clean-input {
+    flex: 1;
+    width: auto;
   }
 }

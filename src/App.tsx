@@ -1478,6 +1478,20 @@ function AppContent() {
       // external entries (e.g. /dashboard at cold start) and stale page ids
       // (active page trashed → fallback selection).
       if (isMobile()) {
+        // A deep link /app/page/<id> for a page that exists is authoritative —
+        // sync STATE to it instead of forcing the URL back to the last-active
+        // page (otherwise a cold-start deep link would be silently discarded).
+        const routePageId = location.pathname.match(/^\/app\/page\/([^/]+)/)?.[1];
+        if (routePageId) {
+          const decoded = decodeURIComponent(routePageId);
+          if (pages.some((p) => p.id === decoded)) {
+            if (activeId !== decoded) {
+              setActiveId(decoded);
+              setAppView("page");
+            }
+            return;
+          }
+        }
         const expected = activeId ? `/app/page/${activeId}` : "/app/home";
         const matches =
           location.pathname === expected ||

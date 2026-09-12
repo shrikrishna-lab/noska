@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeDevCommand": "npm run dev:mobile",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build:mobile",
+    "frontendDist": "../dist-mobile"
+  },
+  "app": {
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]
+    }
+  },  "bundle": {
+    "android": {
+      "minSdkVersion": 24
+    }
+  }
+}

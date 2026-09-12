@@ -1,0 +1,849 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Noska Mobile — native-feeling layer for the iOS/Android shells.
+
+   Scoped under .noska-mobile (mounted on <html> by MobileWorkspaceApp's
+   platform bootstrap) so web + desktop are never affected. Provides:
+   safe-area padding, touch-target sizing, bottom navigation, bottom
+   sheets, compact headers, keyboard-aware insets, and mobile overrides
+   for reused desktop surfaces (AI panel, settings modal, editor menus).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.noska-mobile {
+  --mobile-nav-h: 60px;
+  --mobile-header-h: 52px;
+  --mobile-sat: env(safe-area-inset-top, 0px);
+  --mobile-sab: env(safe-area-inset-bottom, 0px);
+  --mobile-sal: env(safe-area-inset-left, 0px);
+  --mobile-sar: env(safe-area-inset-right, 0px);
+  /* Set from the visualViewport resize listener (keyboard tracking). */
+  --mobile-kb: 0px;
+
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+.noska-mobile body,
+.noska-mobile #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+.noska-mobile #root {
+  position: fixed;
+  inset: 0;
+}
+
+/* ── generic primitives ─────────────────────────────────────────────── */
+
+.mobile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  transition: transform 0.12s ease, opacity 0.15s ease, background 0.15s ease;
+}
+.mobile-btn:active {
+  transform: scale(0.97);
+}
+.mobile-btn--primary {
+  background: #1a1a1e;
+  color: #fff;
+}
+.noska-mobile.dark .mobile-btn--primary,
+.dark .mobile-btn--primary {
+  background: #ececf1;
+  color: #17171a;
+}
+.mobile-btn--secondary {
+  background: rgba(120, 120, 128, 0.14);
+  color: inherit;
+}
+.mobile-btn--ghost {
+  background: transparent;
+  color: inherit;
+  opacity: 0.75;
+}
+.mobile-btn:disabled {
+  opacity: 0.4;
+}
+
+.mobile-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.8;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.mobile-icon-btn:active {
+  background: rgba(120, 120, 128, 0.16);
+  transform: scale(0.94);
+}
+
+.mobile-spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(128, 128, 140, 0.3);
+  border-top-color: currentColor;
+  animation: mobile-spin 0.9s linear infinite;
+}
+@keyframes mobile-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── shell layout ───────────────────────────────────────────────────── */
+
+.mobile-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg, #fcfbf9);
+  color: var(--text, #1c1c1f);
+  padding-top: var(--mobile-sat);
+}
+
+.mobile-shell__header {
+  flex: none;
+  height: calc(var(--mobile-header-h) + 6px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px calc(8px + var(--mobile-sar)) 3px calc(8px + var(--mobile-sal));
+  border-bottom: 1px solid rgba(128, 128, 140, 0.14);
+  background: var(--bg, #fcfbf9);
+}
+
+.mobile-shell__header-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+}
+.mobile-shell__header-title .mobile-ws-name {
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-shell__header-sub {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted, #8a8a93);
+}
+.mobile-shell__content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── offline banner ─────────────────────────────────────────────────── */
+
+.mobile-offline-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #fef3c7;
+  color: #92400e;
+}
+.noska-mobile.dark .mobile-offline-banner {
+  background: #3a2c07;
+  color: #fbbf24;
+}
+
+/* ── bottom navigation ──────────────────────────────────────────────── */
+
+.mobile-bottom-nav {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  height: calc(var(--mobile-nav-h) + var(--mobile-sab));
+  padding-bottom: var(--mobile-sab);
+  border-top: 1px solid rgba(128, 128, 140, 0.16);
+  background: color-mix(in srgb, var(--bg, #fcfbf9) 94%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  z-index: 40;
+}
+
+.mobile-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  color: var(--muted, #8a8a93);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  padding: 6px 0 4px;
+  transition: color 0.15s ease, transform 0.12s ease;
+}
+.mobile-nav-item:active {
+  transform: scale(0.94);
+}
+.mobile-nav-item.is-active {
+  color: var(--text, #1c1c1f);
+}
+.mobile-nav-item svg {
+  width: 23px;
+  height: 23px;
+}
+
+.mobile-nav-create {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 6px 0;
+}
+.mobile-nav-create-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  box-shadow: 0 6px 18px -6px rgba(99, 102, 241, 0.55);
+  transition: transform 0.12s ease;
+}
+.mobile-nav-create-btn:active {
+  transform: scale(0.92);
+}
+.mobile-nav-create-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* ── screens ────────────────────────────────────────────────────────── */
+
+.mobile-screen {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px calc(16px + var(--mobile-sar)) calc(24px + var(--mobile-sab)) calc(16px + var(--mobile-sal));
+}
+
+.mobile-screen--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.mobile-section-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted, #8a8a93);
+  margin: 22px 2px 8px;
+}
+.mobile-section-label:first-child {
+  margin-top: 4px;
+}
+
+.mobile-page-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  transition: background 0.13s ease;
+}
+.mobile-page-row:active {
+  background: rgba(120, 120, 128, 0.12);
+}
+.mobile-page-row__icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  background: rgba(120, 120, 128, 0.12);
+}
+.mobile-page-row__body {
+  flex: 1;
+  min-width: 0;
+}
+.mobile-page-row__title,
+.mobile-page-row__meta {
+  display: block;
+}
+.mobile-page-row__title {
+  font-size: 15px;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-page-row__meta {
+  font-size: 12px;
+  color: var(--muted, #8a8a93);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-page-row__star {
+  flex: none;
+  color: #f59e0b;
+}
+
+.mobile-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 24px;
+  color: var(--muted, #8a8a93);
+}
+.mobile-empty__art {
+  font-size: 42px;
+  margin-bottom: 12px;
+}
+.mobile-empty__title {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text, #1c1c1f);
+  margin-bottom: 4px;
+}
+.mobile-empty__body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.mobile-greeting {
+  padding: 10px 2px 2px;
+}
+.mobile-greeting h1 {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+.mobile-greeting p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--muted, #8a8a93);
+}
+
+.mobile-quickrow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 16px 0 4px;
+}
+.mobile-quickcard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 4px 11px;
+  border: 1px solid rgba(128, 128, 140, 0.16);
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 0.13s ease, transform 0.12s ease;
+}
+.mobile-quickcard:active {
+  background: rgba(120, 120, 128, 0.12);
+  transform: scale(0.97);
+}
+.mobile-quickcard span[aria-hidden] {
+  font-size: 20px;
+}
+
+/* search */
+.mobile-search-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 46px;
+  padding: 0 13px;
+  border-radius: 13px;
+  background: rgba(120, 120, 128, 0.12);
+  margin-bottom: 6px;
+}
+.mobile-search-field input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font-size: 15.5px;
+}
+.mobile-search-field svg {
+  color: var(--muted, #8a8a93);
+}
+
+/* inbox */
+.mobile-invite-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(128, 128, 140, 0.18);
+  margin-bottom: 10px;
+}
+.mobile-invite-card__title {
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.mobile-invite-card__meta {
+  font-size: 12.5px;
+  color: var(--muted, #8a8a93);
+}
+.mobile-invite-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* profile / settings list */
+.mobile-list {
+  border: 1px solid rgba(128, 128, 140, 0.16);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+.mobile-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 14px;
+  border: none;
+  border-bottom: 1px solid rgba(128, 128, 140, 0.12);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font-size: 15px;
+  transition: background 0.13s ease;
+}
+.mobile-list-row:last-child {
+  border-bottom: none;
+}
+.mobile-list-row:active {
+  background: rgba(120, 120, 128, 0.1);
+}
+.mobile-list-row__icon {
+  color: var(--muted, #8a8a93);
+  display: flex;
+}
+.mobile-list-row__label {
+  flex: 1;
+  font-weight: 520;
+}
+.mobile-list-row__value {
+  color: var(--muted, #8a8a93);
+  font-size: 13px;
+  max-width: 45%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-list-row--danger {
+  color: #dc2626;
+}
+.noska-mobile.dark .mobile-list-row--danger {
+  color: #f87171;
+}
+
+.mobile-profile-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 22px 0 20px;
+}
+.mobile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(120, 120, 128, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.mobile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mobile-profile-head .name {
+  font-size: 18px;
+  font-weight: 700;
+}
+.mobile-profile-head .email {
+  font-size: 13px;
+  color: var(--muted, #8a8a93);
+}
+
+/* segmented theme picker */
+.mobile-segmented {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(120, 120, 128, 0.12);
+}
+.mobile-segmented button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted, #8a8a93);
+  font-size: 13px;
+  font-weight: 600;
+}
+.mobile-segmented button.is-active {
+  background: var(--bg, #fcfbf9);
+  color: var(--text, #1c1c1f);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* ── bottom sheet ───────────────────────────────────────────────────── */
+
+.mobile-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 20, 0.42);
+  z-index: 90;
+}
+
+.mobile-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 95;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px 20px 0 0;
+  background: var(--bg, #fcfbf9);
+  color: var(--text, #1c1c1f);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.22);
+  padding-bottom: var(--mobile-sab);
+}
+.mobile-sheet__grabber {
+  flex: none;
+  width: 38px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(128, 128, 140, 0.35);
+  margin: 9px auto 2px;
+}
+.mobile-sheet__title {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.mobile-sheet__body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px 16px 18px;
+}
+
+/* create sheet grid */
+.mobile-create-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.mobile-create-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 6px 13px;
+  border: 1px solid rgba(128, 128, 140, 0.16);
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  transition: background 0.13s ease, transform 0.12s ease;
+}
+.mobile-create-card:active {
+  background: rgba(120, 120, 128, 0.12);
+  transform: scale(0.96);
+}
+.mobile-create-card span[aria-hidden] {
+  font-size: 24px;
+}
+
+/* ── page (editor) screen ───────────────────────────────────────────── */
+
+.mobile-page {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg, #fcfbf9);
+}
+.mobile-page__editor {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  /* make room for the toolbar above the keyboard */
+  padding-bottom: calc(52px + var(--mobile-kb));
+}
+
+/* editor toolbar above the keyboard */
+.mobile-editor-toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  height: 52px;
+  padding-bottom: var(--mobile-sab);
+  border-top: 1px solid rgba(128, 128, 140, 0.16);
+  background: color-mix(in srgb, var(--bg, #fcfbf9) 92%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 30;
+}
+.mobile-editor-toolbar .mobile-icon-btn {
+  width: 46px;
+  height: 46px;
+}
+
+/* block-type picker inside the sheet */
+.mobile-blockgrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+}
+.mobile-blockgrid .mobile-create-card {
+  padding: 12px 4px 10px;
+  font-size: 11px;
+}
+
+/* ── auth ───────────────────────────────────────────────────────────── */
+
+.mobile-auth-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--mobile-sat) + 24px) 28px calc(var(--mobile-sab) + 28px);
+  background: #f8fafc;
+  color: #0f172a;
+  overflow-y: auto;
+}
+.noska-mobile.dark .mobile-auth-screen {
+  background: #0b0c10;
+  color: #f4f4f6;
+}
+.mobile-auth-screen--center {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.mobile-auth-logo-wrap {
+  width: 74px;
+  height: 74px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  margin-bottom: 18px;
+}
+.noska-mobile.dark .mobile-auth-logo-wrap {
+  background: #16171c;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.mobile-auth-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.mobile-auth-screen--center > .mobile-auth-logo {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 14px;
+}
+.mobile-auth-title {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin: 0 0 8px;
+}
+.mobile-auth-subtitle {
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.65;
+  max-width: 300px;
+  margin: 0;
+}
+.mobile-auth-cta {
+  width: 100%;
+  max-width: 330px;
+  margin-top: 26px;
+}
+.mobile-auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 330px;
+  margin-top: 24px;
+}
+.mobile-auth-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  font-size: 13.5px;
+  opacity: 0.75;
+}
+.mobile-auth-error {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #ef4444;
+}
+.mobile-auth-legal {
+  display: flex;
+  gap: 14px;
+  margin-top: 30px;
+  font-size: 12.5px;
+  opacity: 0.55;
+}
+.mobile-auth-legal a {
+  color: inherit;
+}
+
+/* ── mobile overrides for reused desktop surfaces ───────────────────── */
+
+/* AI panel is already a fullscreen fixed overlay — refine spacing. */
+.noska-mobile .fixed.inset-0.z-50 {
+  padding-bottom: var(--mobile-sab);
+}
+.noska-mobile .fixed.inset-0.z-50 input,
+.noska-mobile .fixed.inset-0.z-50 textarea {
+  font-size: 16px; /* prevents iOS focus zoom */
+}
+
+/* Settings modal on a phone */
+.noska-mobile .mobile-modal-override > div {
+  max-width: 100vw !important;
+  max-height: 100dvh !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  border-radius: 0 !important;
+}
+
+/* Editor floating menus: larger touch targets, no hover dependency. */
+.noska-mobile [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+.noska-mobile .mobile-touch-targets button,
+.noska-mobile .mobile-touch-targets [role="button"] {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+/* Radix-based desktop dialogs (share, trash) become full-width sheets */
+.noska-mobile [data-radix-popper-content-wrapper] {
+  z-index: 120 !important;
+}
+
+/* scrollbars are noise on touch devices */
+.noska-mobile ::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* onboarding wizard host (reuses the shared OnboardingPage) */
+.mobile-onboarding-host {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg, #fcfbf9);
+  padding-top: var(--mobile-sat);
+  padding-bottom: var(--mobile-sab);
+}
+
+/* reduced-motion respect */
+@media (prefers-reduced-motion: reduce) {
+  .noska-mobile * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

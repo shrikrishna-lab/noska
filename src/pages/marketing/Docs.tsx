@@ -1,14 +1,74 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, BookOpen, ChevronRight, Terminal, Shield, Users, Key, Database, Brain, Layout, Share2, Keyboard, FileText, HelpCircle, ExternalLink, Menu, X, Plug, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { 
+  Search, BookOpen, ChevronRight, Terminal, Shield, Users, Key, Database, 
+  Layout, HelpCircle, ExternalLink, Menu, X, Plug, Copy, Check, ThumbsUp, ThumbsDown,
+  Monitor, Mic, GraduationCap, KeyRound, Sparkles
+} from 'lucide-react';
 import './Docs.css';
+
+export type BadgeTheme = 
+  | 'violet' 
+  | 'emerald' 
+  | 'cyan' 
+  | 'amber' 
+  | 'rose' 
+  | 'sage' 
+  | 'indigo' 
+  | 'sky' 
+  | 'fuchsia' 
+  | 'teal' 
+  | 'coral' 
+  | 'pink' 
+  | 'lime' 
+  | 'purple';
+
+export interface DocItem {
+  id: string;
+  title: string;
+  isNew?: boolean;
+  theme?: BadgeTheme;
+  badgeLabel?: string;
+}
+
+export const THEME_PALETTE: BadgeTheme[] = [
+  'violet', 
+  'emerald', 
+  'cyan', 
+  'amber', 
+  'rose', 
+  'sage', 
+  'indigo', 
+  'sky', 
+  'fuchsia', 
+  'teal', 
+  'coral', 
+  'pink', 
+  'lime', 
+  'purple'
+];
+
+/**
+ * Dynamic registry of active NEW documentation features.
+ * - Add any doc ID here to activate a dynamic badge.
+ * - When multiple new items exist, each gets a DIFFERENT unique soft color automatically.
+ * - When shifting to new docs, simply update this map and older badges disappear automatically.
+ */
+export const ACTIVE_NEW_DOCS: Record<string, { theme?: BadgeTheme; label?: string }> = {
+  'canvas': { theme: 'violet', label: 'NEW' },
+  'voice-hub': { theme: 'emerald', label: 'NEW' },
+  'ai-assistant': { theme: 'cyan', label: 'NEW' },
+  'desktop-tabs': { theme: 'rose', label: 'NEW' },
+  'mcp-server': { theme: 'amber', label: 'NEW' },
+  'all-ecosystems-catalog': { theme: 'sage', label: 'NEW' },
+};
 
 interface DocSection {
   id: string;
   icon: typeof BookOpen;
   title: string;
-  items: { id: string; title: string; }[];
+  items: DocItem[];
 }
 
 interface DocContent {
@@ -27,6 +87,7 @@ const sections: DocSection[] = [
       { id: 'introduction', title: 'Introduction' },
       { id: 'quickstart', title: 'Quick Start' },
       { id: 'core-concepts', title: 'Core Concepts' },
+      { id: 'desktop-tabs', title: 'Desktop & Multi-Tab Navigation', isNew: true },
     ],
   },
   {
@@ -38,11 +99,11 @@ const sections: DocSection[] = [
       { id: 'google-workspace-integration', title: 'Google Workspace' },
       { id: 'microsoft-365-integration', title: 'Microsoft 365' },
       { id: 'atlassian-integration', title: 'Atlassian (Jira & Confluence)' },
-      { id: 'github-integration', title: 'GitHub' },
+      { id: 'github-integration', title: 'GitHub & DevOps' },
       { id: 'slack-discord-integration', title: 'Slack & Discord' },
       { id: 'notion-linear-integration', title: 'Notion, Linear & Tasks' },
       { id: 'developer-cloud-integrations', title: 'Databases & Cloud Storage' },
-      { id: 'all-ecosystems-catalog', title: 'All 28 Connected Apps' },
+      { id: 'all-ecosystems-catalog', title: 'All 28 Connected Apps', isNew: true },
     ],
   },
   {
@@ -52,9 +113,11 @@ const sections: DocSection[] = [
     items: [
       { id: 'pages-blocks', title: 'Pages & Blocks' },
       { id: 'databases', title: 'Databases' },
-      { id: 'canvas', title: 'Canvas' },
+      { id: 'canvas', title: 'Spatial Canvas', isNew: true },
+      { id: 'voice-hub', title: 'Voice & Dynamic Island', isNew: true },
       { id: 'thought-graph', title: 'Thought Graph' },
-      { id: 'ai-assistant', title: 'AI Assistant' },
+      { id: 'spaced-repetition', title: 'Spaced Repetition & Study' },
+      { id: 'ai-assistant', title: 'AI Assistant & 13 Live Models', isNew: true },
     ],
   },
   {
@@ -62,9 +125,9 @@ const sections: DocSection[] = [
     icon: Users,
     title: 'Workspace',
     items: [
-      { id: 'collaboration', title: 'Collaboration' },
+      { id: 'collaboration', title: 'Collaboration & Company Workspaces' },
       { id: 'sharing', title: 'Sharing & Permissions' },
-      { id: 'keyboard-shortcuts', title: 'Keyboard Shortcuts' },
+      { id: 'keyboard-shortcuts', title: 'Keyboard Shortcuts Studio' },
     ],
   },
   {
@@ -82,7 +145,8 @@ const sections: DocSection[] = [
     icon: Terminal,
     title: 'Developers',
     items: [
-      { id: 'mcp-server', title: 'MCP Server' },
+      { id: 'mcp-server', title: 'MCP Server', isNew: true },
+      { id: 'api-keys', title: 'API Keys & Scopes' },
       { id: 'api-reference', title: 'API Reference' },
     ],
   },
@@ -110,7 +174,7 @@ const sections: DocSection[] = [
 const docs: DocContent = {
   'introduction': {
     title: 'Introduction',
-    body: `Noska is a modern knowledge workspace that combines documents, databases, AI assistance, and spatial canvases into a single, quiet interface. Think of it as a second brain — a place where your ideas can start as quick notes, grow into structured documents, and eventually become an interconnected knowledge base.
+    body: `Noska is a modern knowledge workspace that combines documents, databases, multi-provider AI assistance, voice capture, and spatial canvases into a single, quiet interface. Think of it as a second brain — a place where your ideas start as quick voice notes or bullet points, grow into structured documents, and become an interconnected knowledge base.
 
 **Why Noska?**
 
@@ -119,9 +183,11 @@ Most tools force you to decide how to structure information before you've even f
 **Key principles:**
 
 - **Start blank, stay flexible** — Every page begins as a simple document. Type \`/\` to insert any block type, or just write.
+- **Spatial Thinking** — Toggle between linear documents and 2D Whiteboard Canvases with AI clustering and magnetic connectors.
+- **Voice-Native Input** — Capture thoughts through the Apple-grade Dynamic Island voice capsule with real-time Wispr Flow transcription.
 - **Structure emerges** — The same content can be viewed as a document, a table, a board, a calendar, or a spatial canvas.
 - **Connections are automatic** — Link pages and the Thought Graph draws a living map of your relationships.
-- **AI works where you do** — Bring your own key from any of 8 providers and ask questions about your workspace content.`,
+- **Universal Multi-Provider AI** — Bring your own API key from 13 providers (Claude 3.7, GPT-4.5, Gemini 2.0, DeepSeek R1, Groq, Ollama) with dynamic catalog discovery.`,
   },
   'quickstart': {
     title: 'Quick Start',
@@ -140,7 +206,7 @@ Click **+ New Page** in the sidebar or press \`Ctrl + N\`. A blank page opens. S
 Type \`/\` anywhere on the page to open the block picker. Choose from 33 block types:
 
 | Block Type | Shortcut | Description |
-|-----------|---------|-------------|
+|---|---|---|
 | Text | just type | Plain paragraph |
 | Heading 1 | \`#\` | Large section heading |
 | Heading 2 | \`##\` | Medium section heading |
@@ -149,14 +215,20 @@ Type \`/\` anywhere on the page to open the block picker. Choose from 33 block t
 | To-do | \`[]\` | Checkable task |
 | Code block | \`\`\` | Code with syntax highlighting |
 | Table | \`table\` | Rich data table |
-| Image | \`image\` | Embed an image |
+| Flashcard | \`/flashcard\` | Spaced repetition study card |
+| Canvas Board | \`/canvas\` | Embedded spatial canvas |
+| Image / Media | \`image\` | Embed images, audio, or video |
 | Callout | \`>\` | Highlighted block |
 
-**4. Invite your team**
+**4. Capture thoughts with Voice**
+
+Click the microphone button in the bottom capsule or press \`Option + Space\` to open the Dynamic Island Voice Capsule for instant real-time voice-to-text dictation.
+
+**5. Invite your team**
 
 Click **Share** in the top-right corner and enter an email address. Your teammate gets real-time editing access immediately.
 
-**5. Press \`Ctrl + K\`**
+**6. Press \`Ctrl + K\`**
 
 Open the command palette from anywhere. Search pages, run commands, trigger AI actions — all without touching the mouse.`,
   },
@@ -168,18 +240,19 @@ Open the command palette from anywhere. Search pages, run commands, trigger AI a
 
 A page is the fundamental unit in Noska. Every page is a canvas that can contain any combination of blocks. Pages can be nested inside each other (parent-child), linked together, and organized across workspaces.
 
-Pages have three viewing modes:
+Pages have four viewing modes:
 - **Document** — Linear, scrollable view
-- **Canvas** — Spatial, zoomable view where blocks become draggable
+- **Canvas** — Spatial, zoomable view where blocks become draggable cards
 - **Graph** — Network view showing connections between pages
+- **Database** — Tabular or Kanban structured view
 
 **Blocks**
 
-Blocks are the building blocks of content. Everything on a page is a block — text, images, tables, code, embeds, databases, and more. Each block has its own identity, which means blocks can be:
-- Dragged and reordered
-- Converted between types
-- Turned into flashcards
-- Linked to from other pages
+Blocks are the building blocks of content. Everything on a page is a block — text, images, tables, code, embeds, flashcards, databases, and more. Each block has its own identity, which means blocks can be:
+- Dragged and reordered freely
+- Converted between block types
+- Turned into spaced-repetition study flashcards
+- Linked to from other pages with bi-directional references
 
 **Databases**
 
@@ -190,13 +263,58 @@ Databases are pages that hold structured records. Each row is a page itself, mea
 - **Timeline** — Gantt-style project view
 - **Graph** — Relationship network
 
-**Connections**
+**Dynamic Island Voice Hub**
 
-Linking pages creates a web of knowledge. The Thought Graph visualizes these connections as a force-directed network, making it easy to discover relationships you might have missed.
+Capture spoken thoughts effortlessly with fluid droplet physics, live speech transcription, and instant AI voice agent interactions.
 
-**AI Workspace**
+**Universal AI Engine**
 
-Bring your own AI key (OpenAI, Anthropic, Google, Groq, and more) to query your workspace. Ask questions, summarize pages, generate content, and get suggestions — all scoped to your own data.`,
+Bring your own AI key across 13 providers (OpenAI, Anthropic, Google, DeepSeek, Groq, Mistral, Ollama, OpenRouter). Ask questions, summarize pages, generate content, and execute tool calls scoped strictly to your data.`,
+  },
+  'desktop-tabs': {
+    title: 'Desktop & Multi-Tab Navigation',
+    body: `Noska Desktop is engineered as a native, local-first application designed for multi-tasking workflows, fluid tab switching, and 0ms offline latency.
+
+---
+
+### 🖥️ Native Desktop Architecture
+
+- **Local-First SQLite Engine** — All your notes, databases, and canvases are cached locally on your device. Search and write at 0ms latency even without internet connectivity.
+- **Native Windowing** — Integrated macOS traffic lights and Windows 11 Snap layouts with borderless edge-to-edge frame design.
+- **Cryptographic Session Pairing** — Secure pairing between Clerk auth and desktop local store with background token refresh.
+- **Silent Background Updates** — Seamless auto-updater via GitHub releases and NSIS binary packages with live release check banners.
+
+---
+
+### 📑 Fluid Multi-Tab Experience
+
+Work on multiple documents simultaneously just like in a high-performance web browser:
+
+- **Open in New Tab** — \`Ctrl / Cmd + Click\` any page link, backlink, or Thought Graph node to open it in a new tab.
+- **Fluid Spring Animations** — Smooth Framer Motion spring curves when reordering, opening, or closing tabs.
+- **Live Hover Previews** — Hover over any background tab to see a live visual snapshot of its content without switching away.
+- **Tab Context Menu** — Right-click any tab to access:
+  - *Close Tab* (\`Ctrl / Cmd + W\`)
+  - *Close Other Tabs*
+  - *Close Tabs to the Right*
+  - *Close All Tabs*
+  - *Duplicate Tab*
+  - *Pin Tab to Left*
+- **Split View Workspaces** — Drag any tab to the left or right screen edge to work side-by-side on two documents simultaneously.
+
+---
+
+### ⌨️ Tab Keyboard Shortcuts
+
+| Action | Shortcut |
+|---|---|
+| **New Tab** | \`Ctrl / Cmd + T\` |
+| **Close Current Tab** | \`Ctrl / Cmd + W\` |
+| **Close All Tabs** | \`Ctrl / Cmd + Shift + W\` |
+| **Next Tab** | \`Ctrl + Tab\` or \`Cmd + Option + →\` |
+| **Previous Tab** | \`Ctrl + Shift + Tab\` or \`Cmd + Option + ←\` |
+| **Switch to Tab 1-9** | \`Ctrl / Cmd + 1..9\` |
+| **Reopen Last Closed Tab** | \`Ctrl / Cmd + Shift + T\` |`,
   },
   'pages-blocks': {
     title: 'Pages & Blocks',
@@ -220,13 +338,14 @@ You can switch between these modes at any time using the tabs at the top of the 
 **Block types (33 total)**
 
 | Category | Blocks |
-|----------|--------|
-| Text | Paragraph, Heading 1-3, Bullet list, Numbered list, To-do, Toggle, Callout, Quote |
-| Media | Image, Video, Audio, File, Embed, Bookmark, Divider |
-| Code | Code block (with syntax highlighting for 40+ languages), Inline code |
-| Data | Table, Database view, Chart, Kanban board |
-| Advanced | Math (KaTeX), Diagram (Mermaid), Timeline, Map, Link preview |
-| Layout | Columns, Spacer, Section divider |
+|---|---|
+| **Text** | Paragraph, Heading 1-3, Bullet list, Numbered list, To-do, Toggle, Callout, Quote |
+| **Media** | Image, Video, Audio, File, Embed, Bookmark, Divider |
+| **Code** | Code block (with syntax highlighting for 40+ languages), Inline code |
+| **Data** | Table, Database view, Chart, Kanban board |
+| **Learning** | Spaced repetition flashcards (SM-2), Quiz blocks |
+| **Advanced** | Math (KaTeX), Diagram (Mermaid), Timeline, Map, Link preview |
+| **Layout** | Columns, Spacer, Section divider |
 
 **Organizing pages**
 
@@ -248,14 +367,14 @@ Type \`/\` and select **Database** from the block picker, or create a new page a
 Databases support multiple visualization modes:
 
 \`\`\`
-Table view    | Name    | Status    | Due date     |
-              |---------|-----------|-------------|
+Table view    | Name    | Status      | Due date   |
+              |---------|-------------|------------|
               | Task A  | In progress | 2026-07-20 |
-              | Task B  | Done       | 2026-07-15 |
+              | Task B  | Done        | 2026-07-15 |
 
-Board view    | To Do      | In Progress | Done    |
-              |------------|-------------|---------|
-              |            | Task A      | Task B  |
+Board view    | To Do   | In Progress | Done       |
+              |---------|-------------|------------|
+              |         | Task A      | Task B     |
 
 Calendar view | July 2026
               | Mon | Tue | Wed | Thu | Fri
@@ -286,34 +405,160 @@ Sort by any property ascending or descending. Save filtered views as named prese
 Link databases together using the Relation property type. For example, link your "Projects" database to your "Tasks" database so each task belongs to a project.`,
   },
   'canvas': {
-    title: 'Canvas',
-    body: `The Canvas transforms any page into a spatial, zoomable workspace. Blocks become draggable cards that you can position freely — great for brainstorming, whiteboarding, and visual organization.
+    title: 'Spatial Canvas & Whiteboards',
+    body: `The Spatial Canvas transforms any document into an infinite 2D thinking canvas. Arrange blocks, sticky notes, visual cards, and diagrams freely across infinite space — complete with AI synthesis, smart connectors, interactive presentation mode, and a 2D Kanban switcher.
 
-**Entering Canvas mode**
+---
 
-Click the **Canvas** tab at the top of any page. The page content is preserved — it just becomes freely positionable.
+### 🌟 What's New in Canvas
 
-**Canvas features**
+- **Canvas AI Spatial Assistant** — Brainstorm, cluster cards by theme, summarize complex diagrams, and generate new cards directly on the canvas using natural language.
+- **Dynamic Smart Connectors** — Draw curved, straight, or orthogonal relationship lines with directional arrowheads, connection ports, and labeled tags.
+- **Interactive Presentation Mode** — Transform canvas cards and sections into a step-by-step presentation slide deck with smooth camera transitions.
+- **2D Canvas ⇄ Kanban Dual View** — Toggle between freeform 2D spatial arrangement and structured Kanban columns in 1 click.
+- **Multiplayer Realtime Collaboration** — See live collaborator cursors, presence tags, simultaneous dragging, and collaborative card edits.
+- **Rich Media Cards & Voice Attachments** — Embed Markdown notes, checklists, code blocks, images, and audio voice dictations into cards.
+- **Template Library** — 1-click starters for System Architecture, Brainstorming, Retrospectives, SWOT Analysis, User Journey Maps, and Flowcharts.
 
-- **Pan** — Click and drag on empty space to move around
-- **Zoom** — Scroll to zoom in and out, or use \`Ctrl + +\` / \`Ctrl + -\`
-- **Mini-map** — A small overview in the corner shows your position
-- **Drag blocks** — Pick up any block and place it anywhere
-- **Snap to grid** — Blocks align to an invisible grid for tidy layouts
+---
 
-**Use cases**
+### 🚀 Entering Canvas Mode
 
-- **Brainstorming** — Scatter ideas across the canvas and group them as you go
-- **Architecture diagrams** — Arrange system components spatially and link them
-- **Mood boards** — Collect images, notes, and links in a visual layout
-- **Sprint planning** — Move sticky-note style cards between columns
+To switch to Canvas view:
+1. Open any page in your workspace.
+2. Click the **Canvas** tab in the top navigation bar, or press \`Ctrl / Cmd + Option + C\`.
+3. Your page blocks instantly become movable spatial cards without losing any text or formatting.
 
-**Tips**
+> All card coordinates and visual arrangements are automatically synced and persisted per page.
 
-- Double-click empty space to create a new text block at that position
-- Use the mini-map to navigate large canvases quickly
-- Press \`Shift + drag\` to select multiple blocks
-- Canvas blocks maintain their positions when you switch back to Document view`,
+---
+
+### 🧠 Canvas AI Assistant
+
+The built-in Canvas AI helps you organize, brainstorm, and structure visual ideas:
+
+- **AI Brainstorming** — Type a prompt (e.g., *"Brainstorm 6 growth marketing channels"*) and AI will scatter color-coded sticky cards across your canvas.
+- **Auto-Clustering** — Select multiple scattered cards and choose **Cluster by Theme**. AI groups related ideas into spatial clusters with category titles.
+- **Summarize Canvas** — Generate an executive summary or markdown report from any selected area or the entire canvas.
+- **Auto-Layout Synthesis** — Automatically align and distribute messy brainstorms into clean grids, flowcharts, or radial maps.
+
+---
+
+### 🔗 Smart Connectors & Relationship Diagrams
+
+Link concepts together visually with intelligent connectors:
+
+- **Connector Tools** — Choose between **Curved (Bezier)**, **Orthogonal (Grid-aligned)**, and **Straight** connector lines.
+- **Magnetic Ports** — Hover near any card edge to snap connectors to top, right, bottom, or left anchor ports.
+- **Arrowheads & Styles** — Configure unidirectional, bidirectional, solid, dashed, or highlighted edges.
+- **Relationship Labels** — Double-click any connector line to add descriptive text (e.g., *"depends on"*, *"calls API"*, *"relates to"*).
+
+---
+
+### 🎬 Interactive Presentation Mode
+
+Present your canvas directly without exporting to Google Slides or Keynote:
+
+1. Click the **Present** button in the canvas toolbar.
+2. Canvas highlights cards or sections sequentially in presentation order.
+3. Use \`Space\` or \`Arrow Keys\` to advance slides with smooth camera panning and zooming.
+4. Includes a full-screen presenter HUD with slide overview and timer.
+
+---
+
+### 📊 2D Canvas ⇄ Kanban View Switcher
+
+Switch your mental model with zero data friction:
+
+- **Spatial Mode** — Position cards freely in 2D space for non-linear brainstorming and mind mapping.
+- **Kanban Mode** — Group canvas cards into status columns (*To Do*, *In Progress*, *Done*) or custom categories.
+- Dragging a card between Kanban columns automatically updates its category tags on the 2D canvas.
+
+---
+
+### 👥 Multiplayer Live Collaboration
+
+Work together in real-time on the same infinite board:
+- **Live Cursors** — See teammates' color-coded cursors and names moving across the canvas.
+- **Live Dragging & Selection** — Cards highlight when a team member is actively moving or editing them.
+- **Audio Feedback** — Subtle spatial sound effects provide tactile feedback during card creation and connection snapping.
+
+---
+
+### 🎨 Pre-built Template Library
+
+Open the **Templates** panel in the canvas toolbar to insert pre-designed frameworks:
+
+| Template | Purpose | Key Elements |
+|---|---|---|
+| **Brainstorming & Affinity Map** | Ideation sessions | Color-coded sticky notes, category clusters |
+| **System Architecture** | Cloud & software design | Server nodes, database boxes, API arrows |
+| **User Journey Map** | UX research & personas | Stages, user thoughts, pain points, opportunities |
+| **Sprint Retrospective** | Team review | *What went well*, *What to improve*, *Action items* |
+| **SWOT Analysis** | Strategic planning | Strengths, Weaknesses, Opportunities, Threats |
+| **Mind Map & Graph** | Thought structuring | Central topic node with branching sub-nodes |
+
+---
+
+### ⌨️ Canvas Shortcuts & Gestures
+
+| Action | Shortcut | Touch / Trackpad Gesture |
+|---|---|---|
+| **Pan Canvas** | \`Space + Drag\` or Middle Click | Two-finger drag |
+| **Zoom In / Out** | \`Ctrl / Cmd + \` / \`Ctrl / Cmd - \` | Pinch to zoom |
+| **Fit to Viewport** | \`Ctrl / Cmd + 0\` | Double-tap mini-map |
+| **Multi-Select** | \`Shift + Drag\` marquee | Drag bounding box |
+| **New Sticky Note** | Double-click empty space | Double-tap |
+| **Draw Connector** | \`C\` or drag from anchor dot | Drag connection port |
+| **Enter Presentation Mode** | \`Ctrl / Cmd + Option + P\` | Present button |
+| **Export Canvas** | \`Ctrl / Cmd + Shift + E\` | Toolbar export menu (PNG / SVG / PDF) |`,
+  },
+  'voice-hub': {
+    title: 'Voice & Dynamic Island Capsule',
+    body: `Capture, transcribe, and interact with your workspace using the Apple-grade **Dynamic Island Voice Capsule** and Wispr Flow speech synthesis.
+
+---
+
+### 🌊 Dynamic Island Capsule Design
+
+Engineered with organic liquid spring curves (\`stiffness: 420, damping: 25, mass: 0.85\`):
+
+- **3-Piece Droplet Detachment** — The Language Selector \`[ ⌃ | 🌐 ]\`, Center Recording Capsule, and AI Agent Button \`[ ☺️ ]\` glide apart seamlessly like dividing mercury droplets.
+- **Specular Liquid Glass Gloss** — Curved glass sheen gradient across all capsule surfaces with ambient breathing aura during active dictation.
+- **Tactile Squircle Elasticity** — Real-time micro-interactions with gentle rotational spring recoil on the stop trigger.
+
+---
+
+### 🎙️ Speech-to-Text & Wispr Flow Dictation
+
+- **Real-Time Whisper Transcription** — Convert spoken words into clean Markdown paragraphs at sub-second latency.
+- **Language Detection & Multilingual Support** — Switch between 30+ languages on the fly using the Language Island trigger.
+- **Voice Agent Conversation Mode** — Click the AI Agent button to speak naturally with your workspace assistant and receive instant streaming spoken audio answers.
+- **Audio Voice Attachments** — Spoken notes can be inserted as inline audio blocks or attached directly to spatial canvas nodes.
+
+---
+
+### 🎨 Voice Customization Studio
+
+Configure your capsule aesthetics in **Settings → Voice & Dictation**:
+
+- **Capsule Themes** — Choose between *Apple Vision Glass*, *Siri Hologram Aura*, *Frosted Pearl*, *Cyber Azure*, and *Dynamic Island Pro*.
+- **Real-Time Equalizer Waveforms** — Select from 4 visualizer styles:
+  - *12 Dynamic Dots*
+  - *13-Bar Formant Wave*
+  - *24-Bar Studio Spectrum*
+  - *3-Orb Siri Pulse*
+- **Live Interactive Sandbox** — Test your microphone live inside settings to preview animations, squircle glows, and timer badges before writing notes.
+
+---
+
+### ⌨️ Voice Shortcuts
+
+| Action | Shortcut |
+|---|---|
+| **Toggle Voice Recording** | \`Option + Space\` (Mac) / \`Alt + Space\` (Win) |
+| **Cancel Voice Capture** | \`Escape\` |
+| **Toggle Voice Agent Mode** | \`Option + A\` / \`Alt + A\` |`,
   },
   'thought-graph': {
     title: 'Thought Graph',
@@ -349,75 +594,114 @@ Use the filter panel to show only:
 
 **Pro tip:** The graph is built from real links you create — not from a static sitemap. The more you link, the more useful the graph becomes.`,
   },
+  'spaced-repetition': {
+    title: 'Spaced Repetition & Study System',
+    body: `Turn your knowledge base into an active memory recall engine with built-in **SuperMemo SM-2 spaced repetition flashcards**.
+
+---
+
+### 🧠 How Spaced Repetition Works
+
+Spaced repetition predicts the optimal moment to review information just before you forget it, cementing facts into long-term memory with minimal review time:
+
+1. Highlight any text or type \`/flashcard\` on any page.
+2. Enter the **Front (Prompt)** and **Back (Answer)** of the card.
+3. Cards are automatically scheduled into your daily review queue.
+4. During review sessions, rate your recall quality from **0 (Forgot)** to **5 (Perfect Recall)**.
+5. The SM-2 algorithm recalculates ease factors and schedules the next optimal interval (1 day, 6 days, 16 days, etc.).
+
+---
+
+### 📚 Study Hub & Analytics
+
+- **Daily Review Queue** — Access all due cards across your entire workspace from the Study Hub in the sidebar.
+- **Knowledge Retention Curves** — Track memory retention percentage, daily review streaks, and card difficulty distributions.
+- **Workspace Flashcard Filtering** — Review cards by workspace, subject tag, or individual document.
+- **AI Card Generation** — Select any document section and choose **Generate Flashcards with AI** to create question-and-answer pairs instantly.`,
+  },
   'ai-assistant': {
-    title: 'AI Assistant',
-    body: `Noska AI brings large language models directly into your workspace. Bring your own API key — your data and queries never touch our servers.
+    title: 'AI Assistant & Live Dynamic Model Sync',
+    body: `Noska AI connects 13 industry-leading LLM providers directly into your knowledge base. Instead of locking you into hardcoded, outdated model lists, Noska implements an **authenticated live sync discovery engine** that queries provider endpoints in real time.
 
-**Supported providers**
+---
 
-| Provider | Models |
-|----------|--------|
-| OpenAI | GPT-4o, GPT-4o-mini, GPT-4-turbo |
-| Anthropic | Claude 3.5 Sonnet, Claude 3 Opus |
-| Google | Gemini 1.5 Pro, Gemini 1.5 Flash |
-| Groq | Llama 3, Mixtral, Gemma |
-| AWS Bedrock | Claude, Llama, Mistral |
-| Azure OpenAI | GPT-4o, GPT-4 |
-| Together AI | Mixtral, Llama, DeepSeek |
-| OpenRouter | 200+ models across providers |
+### 🔄 Real-Time Dynamic Model Sync Architecture
 
-**What AI can do**
-
-- **Answer questions** — Ask about your workspace content ("What did we decide about the Q3 roadmap?")
-- **Generate content** — Draft emails, blog posts, meeting notes
-- **Summarize pages** — Get a tl;dr of any page
-- **Rewrite & edit** — Change tone, fix grammar, expand or condense
-- **Brainstorm** — Generate ideas, outlines, or alternatives
-
-**How it works**
+Traditional note-taking apps rely on static, hardcoded lists that quickly become obsolete as AI providers release new flagships or sunset older models. Noska solves this with an **intelligent live model catalog system** (\`ModelCatalogService.ts\`):
 
 \`\`\`
-1. Open the AI panel (click the AI icon in the toolbar)
-2. Select your provider and model
-3. Type your question or instruction
-4. AI searches your workspace for relevant context
-5. Response appears inline, with citations to source pages
+User API Key (Stored Locally)
+  └── On-Demand Live API Sync
+        ├── Live Endpoint Query (e.g. OpenAI /v1/models, Anthropic, Gemini, Groq)
+        ├── Dynamic Flagship Auto-Registration (Auto-assigns NEW badges)
+        ├── Deprecation & Sunset Warning Engine (Sunset dates & modern replacements)
+        └── Local Offline Storage Cache (0ms instant startup without network wait)
 \`\`\`
 
-**Privacy**
+---
 
-Your API key is stored in your browser's local storage. All AI requests go directly from your browser to the provider — Noska never proxies your queries or sees your key.`,
+### ⚡ How the Dynamic Sync Technique Works
+
+1. **Authenticated Live Discovery** — When you enter an API key or click **Sync Live Models** in settings, Noska queries the provider's official catalog endpoint directly from your client using your credentials.
+2. **Instant Flagship & New Model Detection** — When a provider launches a new model (e.g. *Claude 3.7 Sonnet*, *GPT-4.5*, *Gemini 2.0 Flash*, *DeepSeek R1*), Noska automatically discovers it, registers its context limits and tool-calling capabilities, and assigns an active **NEW** badge without requiring an application update.
+3. **Deprecation & Sunset Engine** — Noska continuously tracks official provider sunset dates (e.g. OpenAI legacy shutdowns, Anthropic older model retirements). Deprecating models are flagged with exact cutoff dates, reasons, and 1-click suggested modern replacements.
+4. **Resilient Local Caching** — Discovered catalogs are persisted in encrypted local browser storage so model pickers open with 0ms latency even when offline.
+5. **Zero Centralized Proxying** — Requests and API keys never touch Noska servers. Queries stream directly between your device and the AI provider.
+
+---
+
+### 🤖 Supported Providers & Latest Flagships
+
+| Provider | Latest Flagship & Active Models | Key Capabilities & Sync Architecture |
+|---|---|---|
+| **Anthropic** | \`claude-3-7-sonnet-20250219\`, \`claude-3-5-sonnet-latest\`, \`claude-3-5-haiku\` | Hybrid reasoning traces, adjustable thinking budgets (up to 64k reasoning tokens) |
+| **OpenAI** | \`o3-mini\`, \`o1\`, \`gpt-4.5-preview\`, \`gpt-4o\`, \`gpt-4o-mini\` | High-order reasoning, structured JSON outputs, multi-modal vision |
+| **Google** | \`gemini-2.0-flash\`, \`gemini-2.0-pro-exp\`, \`gemini-1.5-pro\` | 2M+ token context window, native multimodal audio/video processing |
+| **DeepSeek** | \`deepseek-reasoner\` (R1), \`deepseek-chat\` (V3) | Open-weights mathematical reasoning with live chain-of-thought traces |
+| **Groq** | \`llama-3.3-70b-versatile\`, \`deepseek-r1-distill-llama-70b\`, \`mixtral-8x7b-32768\` | LPUs delivering ultra-fast inference (500+ tokens/sec) |
+| **Mistral AI** | \`mistral-large-latest\`, \`codestral-latest\`, \`pixtral-large-latest\` | Multilingual enterprise reasoning and specialized coding models |
+| **Together AI** | \`meta-llama/Llama-3.3-70B-Instruct-Turbo\`, \`deepseek-ai/DeepSeek-R1\` | Serverless open-source scaling with instant dynamic catalog sync |
+| **xAI** | \`grok-2-latest\`, \`grok-beta\` | Real-time world knowledge synthesis and deep coding reasoning |
+| **AWS Bedrock** | \`anthropic.claude-3-7-sonnet\`, \`amazon.nova-pro\`, \`meta.llama3-3-70b\` | Enterprise AWS IAM role-based execution and VPC compliance |
+| **Azure OpenAI** | Custom Enterprise Deployments, \`gpt-4o\`, \`o3-mini\` | Microsoft Entra ID compliance with custom private deployments |
+| **OpenRouter** | 300+ models across all global AI providers | Universal gateway with live catalog search and automatic failover |
+| **Ollama & LM Studio** | \`llama3.3\`, \`deepseek-r1\`, \`qwen2.5-coder\`, \`mistral\` | 100% Private, offline on-device local models on \`localhost:11434\` / \`localhost:1234\` |
+| **OpenCode Zen** | Specialized code analysis and AST models | Deep code refactoring, AST parsing, and workspace transformations |
+
+---
+
+### 💡 Advanced AI Capabilities
+
+- **Workspace Grounding & Citations** — Ground AI answers in your documents, database rows, and connected ecosystems (Google Drive, GitHub, Notion) with clickable source citations.
+- **Thinking Budget & Reasoning Traces** — For reasoning models (*Claude 3.7 Sonnet*, *DeepSeek R1*, *o3-mini*), inspect live step-by-step thinking tokens before the final response is generated.
+- **Dynamic Ecosystem Tools** — Models automatically inherit function-calling capabilities for connected integrations (e.g. \`github_search_issues\`, \`google_calendar_create_event\`).
+- **Inline Ghostwriter** — Trigger AI inline anywhere by pressing \`Space\` or \`/\` on an empty block to draft outlines, rewrite paragraphs, or translate content.`,
   },
   'collaboration': {
-    title: 'Collaboration',
-    body: `Noska supports real-time collaborative editing, so your team can work together on the same page simultaneously.
+    title: 'Collaboration & Company Workspaces',
+    body: `Collaborate with teammates in real-time across documents, whiteboards, and organizational teamspaces.
 
-**Inviting collaborators**
+---
 
-Click the **Share** button in the top-right corner of any page. Enter the email address of the person you want to invite. They'll receive a notification and can access the page immediately.
+### 🏢 Company Workspaces & Team Management
 
-**Permission levels**
+- **Organization Domains** — Group team members under company domains with automated SSO provisioning.
+- **Instant User Search & Invite** — Search teammates by name or email and assign roles with 1 click.
+- **Role-Based Access Control (RBAC)**:
+  - **Owner / Admin** — Manage workspace settings, billing, integrations, and member permissions.
+  - **Member** — Create, edit, and share documents across teamspaces.
+  - **Viewer** — Read-only access to published team documents.
+  - **Guest** — Scoped access to specific designated pages.
+- **Workspace Ownership Transfer** — Seamlessly transfer workspace administrative ownership between team accounts.
 
-| Role | Access |
-|------|--------|
-| Viewer | Read-only access |
-| Editor | Can create, edit, and delete blocks |
-| Admin | Can manage sharing and page settings |
+---
 
-**Real-time features**
+### 👥 Real-Time Multiplayer Presence
 
-- **Presence cursors** — See where others are typing, with their name
-- **Live sync** — Changes appear instantly for all connected users
-- **Conflict resolution** — Noska handles concurrent edits gracefully
-- **Activity log** — See who changed what and when
-
-**Workspace sharing**
-
-You can also share entire workspaces with teams. When a workspace is shared, all pages inside it inherit the workspace's permissions automatically, unless individual pages have custom sharing settings.
-
-**Comments & discussions**
-
-Select any block and click the comment icon (or press \`Ctrl + Shift + M\`) to start a discussion thread. Comments are anchored to specific content and persist even if the block moves.`,
+- **Live Remote Cursors** — See teammates' color-coded cursors and names moving smoothly across pages and canvases.
+- **Block Selection Highlights** — Visual rings appear around blocks being edited by collaborators to prevent edit collisions.
+- **CRDT Conflict Resolution** — Microsecond-timestamped state merges guarantee zero lost paragraphs during concurrent editing.
+- **Threaded Block Comments** — Anchor discussions directly to text paragraphs, table cells, or canvas cards with \`@mentions\`.`,
   },
   'sharing': {
     title: 'Sharing & Permissions',
@@ -450,65 +734,53 @@ Export any page or database as:
 - JSON`,
   },
   'keyboard-shortcuts': {
-    title: 'Keyboard Shortcuts',
-    body: `Master Noska with keyboard shortcuts. Everything you can do with a mouse, you can do faster from the keyboard.
+    title: 'Keyboard Shortcuts Studio',
+    body: `Master Noska with keyboard shortcuts. Customize keybindings in the interactive **Shortcuts Studio** under **Settings → Shortcuts**.
 
-**Global shortcuts**
+---
 
-\`\`\`
-Ctrl + K       Open command palette
-Ctrl + N       New page
-Ctrl + P       Quick search pages
-Ctrl + /       Show all shortcuts
-Ctrl + Shift + M   Toggle comments
-Ctrl + Shift + L   Toggle AI panel
-\`\`\`
+### ⌨️ Global Shortcuts
 
-**Page editing**
+| Shortcut | Action |
+|---|---|
+| \`Ctrl / Cmd + K\` | Open Command Palette |
+| \`Ctrl / Cmd + N\` | Create New Page |
+| \`Ctrl / Cmd + P\` | Quick Search Pages |
+| \`Ctrl / Cmd + T\` | Open New Tab |
+| \`Ctrl / Cmd + W\` | Close Active Tab |
+| \`Ctrl / Cmd + Shift + W\` | Close All Tabs |
+| \`Ctrl / Cmd + /\` | Toggle Shortcuts Studio |
+| \`Ctrl / Cmd + Shift + L\` | Toggle AI Assistant Panel |
+| \`Option / Alt + Space\` | Toggle Voice Dynamic Island Capsule |
 
-\`\`\`
-/             Open block picker
-Ctrl + B      Bold
-Ctrl + I      Italic
-Ctrl + U      Underline
-Ctrl + Shift + S  Strikethrough
-Ctrl + E      Inline code
-Ctrl + Z      Undo
-Ctrl + Shift + Z  Redo
-Ctrl + D      Duplicate block
-Ctrl + Shift + Up/Down   Move block up/down
-\`\`\`
+---
 
-**Navigation**
+### 📝 Page Editing & Formatting
 
-\`\`\`
-Ctrl + 1-6    Heading 1-6
-Ctrl + ]      Indent
-Ctrl + [      Outdent
-Tab / Shift + Tab   Navigate table cells
-Enter         Split block / new row
-Shift + Enter New line (in same block)
-\`\`\`
+| Shortcut | Action |
+|---|---|
+| \`/\` | Open Block Picker |
+| \`Ctrl / Cmd + B\` | Bold Text |
+| \`Ctrl / Cmd + I\` | Italic Text |
+| \`Ctrl / Cmd + U\` | Underline Text |
+| \`Ctrl / Cmd + E\` | Inline Code |
+| \`Ctrl / Cmd + D\` | Duplicate Selected Block |
+| \`Ctrl / Cmd + Shift + Up/Down\` | Move Block Up / Down |
+| \`Ctrl / Cmd + 1..6\` | Convert to Heading 1..6 |
+| \`Tab / Shift + Tab\` | Indent / Outdent Block or Table Cell |
 
-**Database views**
+---
 
-\`\`\`
-Ctrl + Shift + T   Switch to Table view
-Ctrl + Shift + B   Switch to Board view
-Ctrl + Shift + C   Switch to Calendar view
-Ctrl + Shift + G   Switch to Graph view
-Ctrl + Shift + Enter   New row
-\`\`\`
+### 🗺️ Canvas & Whiteboard Shortcuts
 
-**Canvas mode**
-
-\`\`\`
-Space + drag    Pan canvas
-Ctrl + + / -    Zoom in/out
-Ctrl + 0        Reset zoom
-Shift + drag    Select multiple blocks
-Delete/Backspace   Remove selected blocks
-\`\`\``,
+| Shortcut | Action |
+|---|---|
+| \`Ctrl / Cmd + Option + C\` | Switch to Canvas Mode |
+| \`Space + Drag\` | Pan Canvas Viewport |
+| \`Ctrl / Cmd + \` / \`Ctrl / Cmd - \` | Zoom Canvas In / Out |
+| \`Ctrl / Cmd + 0\` | Fit Canvas to Screen |
+| \`C\` | Start Magnetic Connector Line |
+| \`Ctrl / Cmd + Option + P\` | Enter Presentation Mode |`,
   },
   'encryption': {
     title: 'Encryption',
@@ -656,7 +928,7 @@ Everything in Pro, plus:
 Noska supports importing from:
 
 | Source | Format |
-|--------|--------|
+|---|---|
 | Markdown | .md files |
 | HTML | .html files |
 | CSV | .csv (imports as database) |
@@ -704,6 +976,39 @@ Highlights:
 
 Full setup guides, Claude Desktop and Cursor configuration, the complete tool reference, the local development stack and troubleshooting live on the dedicated MCP page.`,
   },
+  'api-keys': {
+    title: 'Developer API Keys & Scopes',
+    body: `Manage programmatic access to your Noska workspace with granular, cryptographically hashed API keys.
+
+---
+
+### 🔑 Managing API Keys
+
+Open **Settings → Developer & API Keys** to create and inspect API keys:
+
+1. Click **+ Generate New Key**.
+2. Give your key a descriptive name (e.g. \`Claude Desktop MCP\`, \`CI Documentation Pipeline\`).
+3. Select an expiration duration or choose *Never Expires*.
+4. Choose permission scopes manually or use a 1-click scope preset.
+5. Copy your secret key — it is shown only once and stored using SHA-256 cryptographic hashing.
+
+---
+
+### 🎯 1-Click Permission Presets
+
+| Preset | Scopes Included | Best For |
+|---|---|---|
+| **Full Access** | All 24 read and write scopes | Administrative tooling & private scripts |
+| **Read-Only** | \`pages:read\`, \`databases:read\`, \`graph:read\`, \`tasks:read\` | Search assistants & indexers |
+| **Agents & Tasks** | \`pages:read\`, \`tasks:read\`, \`tasks:write\`, \`ai:execute\` | Background AI task runners |
+| **Pages & DB** | \`pages:*\`, \`databases:*\`, \`media:upload\` | Document import & content sync |
+
+---
+
+### 🛡️ Read-Only Safety Mode
+
+When testing automated AI agents or external MCP clients, toggle **Enforce Read-Only Safety Mode** to block all state-mutating requests at the gateway level regardless of token permissions.`,
+  },
   'api-reference': {
     title: 'API Reference',
     body: `Noska provides a built-in API console and REST API for programmatic access.
@@ -725,7 +1030,7 @@ Authorization: Bearer <your_api_token>
 Content-Type: application/json
 \`\`\`
 
-Generate an API token from **Settings → API Keys**.
+Generate an API token from **Settings → Developer & API Keys**.
 
 **Core endpoints**
 
@@ -796,7 +1101,7 @@ Open **Settings → Integrations** to view all available ecosystems. You can fil
 **Granular Permissions & Scopes**
 
 | Service | OAuth Scope | Access Level |
-|---------|-------------|--------------|
+|---|---|---|
 | Gmail | \`gmail.readonly\` / \`gmail.send\` | Read messages, draft emails |
 | Google Drive | \`drive.file\` / \`drive.readonly\` | Access selected folders & files |
 | Google Calendar | \`calendar.events\` | Read and create schedule events |
@@ -867,7 +1172,7 @@ Atlassian Connection (Site: noska-workspace.atlassian.net)
 - *"Find the Confluence architecture guide for our authentication service"* → Executes \`confluence_search_pages\``,
   },
   'github-integration': {
-    title: 'GitHub Integration',
+    title: 'GitHub & DevOps Integration',
     body: `The GitHub connector provides deep source code, issue tracking, pull request, and DevOps visibility inside Noska.
 
 **Included Services**
@@ -909,7 +1214,7 @@ Noska supports selecting specific repositories during GitHub App / OAuth authori
 - Personal direct messages remain completely private unless granted under explicit user OAuth tokens.`,
   },
   'notion-linear-integration': {
-    title: 'Notion, Linear & Task Suites',
+    title: 'Notion, Linear & Tasks Suites',
     body: `Unify your external issue trackers, product roadmaps, and document silos into Noska's central knowledge canvas.
 
 **Notion Integration**
@@ -952,7 +1257,7 @@ Noska supports selecting specific repositories during GitHub App / OAuth authori
 **Complete Ecosystem Catalog**
 
 | Ecosystem | Category | Included Child Services | Primary Resource Types |
-|-----------|----------|-------------------------|------------------------|
+|---|---|---|---|
 | **Google Workspace** | Productivity | Gmail, Drive, Calendar, Docs, Sheets | Folders, Files, Calendars |
 | **Microsoft 365** | Productivity | Outlook, OneDrive, SharePoint, Teams, Calendar | Libraries, Channels, Folders |
 | **Atlassian** | Engineering | Jira Software, Confluence | Projects, Boards, Spaces |
@@ -1045,7 +1350,7 @@ Yes. On desktop, all your documents, databases, and canvases are stored in a loc
 
 **How does Bring-Your-Own-Key (BYOK) work?**
 
-Noska lets you bring your own API keys for OpenAI, Anthropic, Google Gemini, Groq, Ollama, DeepSeek, Mistral, and OpenRouter. Keys are encrypted on your device and sent directly to provider APIs. We never proxy or store your keys on centralized servers.
+Noska lets you bring your own API keys for OpenAI, Anthropic, Google Gemini, Groq, Ollama, DeepSeek, Mistral, Together AI, and OpenRouter. Keys are encrypted on your device and sent directly to provider APIs. We never proxy or store your keys on centralized servers.
 
 **Can I export all my data if I decide to leave?**
 
@@ -1257,19 +1562,35 @@ function parseMarkdownBlocks(body: string): React.ReactNode[] {
       continue;
     }
 
-    if (line.startsWith('| ')) {
+    if (/^(\*{3,}|-{3,}|_{3,})$/.test(line.trim())) {
+      blocks.push(<hr key={`hr-${i}`} className="docs-hr" />);
+      i++;
+      continue;
+    }
+
+    if (line.trim().startsWith('|') && line.includes('|')) {
       const headerLine = line;
       const headerCells = headerLine.split('|').map(c => c.trim()).filter(Boolean);
-      i++; // separator line
-      if (i < lines.length && lines[i].startsWith('| ') && lines[i].includes('---')) {
-        i++;
+      i++; // Move past header
+
+      // Check if next line is separator line (e.g. |---|---|---| or |:---:|)
+      if (i < lines.length && lines[i].trim().startsWith('|') && /^\|[\s\-:|]+\|?$/.test(lines[i].trim())) {
+        i++; // Skip separator
       }
+
       const rows: string[][] = [];
-      while (i < lines.length && lines[i].startsWith('| ')) {
-        const cells = lines[i].split('|').map(c => c.trim()).filter(Boolean);
-        rows.push(cells);
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        const trimmedRow = lines[i].trim();
+        if (!/^\|[\s\-:|]+\|?$/.test(trimmedRow)) {
+          const raw = trimmedRow.split('|').map(c => c.trim());
+          const cells = trimmedRow.startsWith('|') && trimmedRow.endsWith('|')
+            ? raw.slice(1, -1)
+            : raw.filter(Boolean);
+          rows.push(cells);
+        }
         i++;
       }
+
       blocks.push(
         <div key={`table-wrap-${i}`} className="docs-table-container">
           <table className="docs-table">
@@ -1317,6 +1638,15 @@ export default function Docs() {
     }
   }, [searchParams]);
 
+  // Reset viewport and marketing container scroll to top on doc section change
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const marketingEl = document.querySelector('.marketing');
+    if (marketingEl) {
+      marketingEl.scrollTop = 0;
+    }
+  }, [activeSection]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && search) {
@@ -1329,13 +1659,51 @@ export default function Docs() {
 
   const currentDoc = docs[activeSection] ?? docs.introduction;
 
+  // Dynamically compute active new metadata and unique color theme per item
+  const newItemsMap = useMemo(() => {
+    const map = new Map<string, { isNew: boolean; theme: BadgeTheme; label: string }>();
+    let colorIndex = 0;
+
+    for (const section of sections) {
+      for (const item of section.items) {
+        const config = ACTIVE_NEW_DOCS[item.id];
+        const isMarkedNew = Boolean(config || item.isNew);
+        if (isMarkedNew) {
+          const theme = config?.theme || item.theme || THEME_PALETTE[colorIndex % THEME_PALETTE.length];
+          const label = config?.label || item.badgeLabel || 'NEW';
+          map.set(item.id, { isNew: true, theme, label });
+          colorIndex++;
+        }
+      }
+    }
+    return map;
+  }, []);
+
   const currentSectionMeta = useMemo(() => {
     for (const sec of sections) {
       const item = sec.items.find((i) => i.id === activeSection);
-      if (item) return { category: sec.title, title: item.title, icon: sec.icon };
+      if (item) {
+        const newMeta = newItemsMap.get(item.id);
+        return { 
+          category: sec.title, 
+          title: item.title, 
+          isNew: Boolean(newMeta?.isNew),
+          theme: newMeta?.theme || 'violet',
+          label: newMeta?.label || 'NEW',
+          icon: sec.icon 
+        };
+      }
     }
-    return { category: 'Getting Started', title: currentDoc.title, icon: BookOpen };
-  }, [activeSection, currentDoc.title]);
+    const rootMeta = newItemsMap.get('introduction');
+    return { 
+      category: 'Getting Started', 
+      title: currentDoc.title, 
+      isNew: Boolean(rootMeta?.isNew), 
+      theme: rootMeta?.theme || 'violet',
+      label: rootMeta?.label || 'NEW',
+      icon: BookOpen 
+    };
+  }, [activeSection, currentDoc.title, newItemsMap]);
 
   const readTimeEstimate = useMemo(() => {
     const words = (currentDoc.body || '').split(/\s+/).length;
@@ -1346,17 +1714,25 @@ export default function Docs() {
   const searchResults = useMemo(() => {
     if (!search.trim()) return null;
     const q = search.toLowerCase();
-    const results: { id: string; title: string; section: string; }[] = [];
+    const results: { id: string; title: string; section: string; isNew?: boolean; theme?: BadgeTheme; label?: string; }[] = [];
     for (const section of sections) {
       for (const item of section.items) {
         const doc = docs[item.id];
         if (doc && (doc.title.toLowerCase().includes(q) || doc.body.toLowerCase().includes(q))) {
-          results.push({ id: item.id, title: doc.title, section: section.title });
+          const newMeta = newItemsMap.get(item.id);
+          results.push({ 
+            id: item.id, 
+            title: doc.title, 
+            section: section.title, 
+            isNew: newMeta?.isNew, 
+            theme: newMeta?.theme,
+            label: newMeta?.label 
+          });
         }
       }
     }
     return results;
-  }, [search]);
+  }, [search, newItemsMap]);
 
   const handleSearchSelect = (id: string) => {
     setActiveSection(id);
@@ -1383,7 +1759,14 @@ export default function Docs() {
               <div className="docs-search-results-list">
                 {searchResults.map((r) => (
                   <button key={r.id} className="docs-search-result" onClick={() => handleSearchSelect(r.id)}>
-                    <span className="docs-search-result-title">{r.title}</span>
+                    <div className="docs-search-result-left">
+                      <span className="docs-search-result-title">{r.title}</span>
+                      {r.isNew && (
+                        <span className={`docs-sidebar-badge-new theme-${r.theme || 'violet'}`}>
+                          <span>{r.label || 'NEW'}</span>
+                        </span>
+                      )}
+                    </div>
                     <span className="docs-search-result-section">{r.section}</span>
                   </button>
                 ))}
@@ -1429,15 +1812,23 @@ export default function Docs() {
               return (
                 <div key={section.id} className="docs-nav-group">
                   <p className="docs-nav-group-title"><Icon size={14} /> {section.title}</p>
-                  {section.items.map((item) => (
-                    <button
-                      key={item.id}
-                      className={`docs-nav-item ${activeSection === item.id ? 'active' : ''}`}
-                      onClick={() => handleSearchSelect(item.id)}
-                    >
-                      {item.title}
-                    </button>
-                  ))}
+                  {section.items.map((item) => {
+                    const itemMeta = newItemsMap.get(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        className={`docs-nav-item ${activeSection === item.id ? 'active' : ''} ${itemMeta?.isNew ? 'has-new' : ''}`}
+                        onClick={() => handleSearchSelect(item.id)}
+                      >
+                        <span className="docs-nav-item-text">{item.title}</span>
+                        {itemMeta?.isNew && (
+                          <span className={`docs-sidebar-badge-new theme-${itemMeta.theme}`}>
+                            <span>{itemMeta.label}</span>
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -1468,7 +1859,19 @@ export default function Docs() {
               </div>
             </div>
 
-            <h1 className="docs-content-title">{currentDoc.title}</h1>
+            <div className="docs-title-row">
+              <h1 className="docs-content-title">{currentDoc.title}</h1>
+              {currentSectionMeta.isNew && (
+                <motion.div 
+                  className={`docs-title-badge-new theme-${currentSectionMeta.theme}`}
+                  initial={{ opacity: 0, scale: 0.85, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <span>{currentSectionMeta.label}</span>
+                </motion.div>
+              )}
+            </div>
             
             <div className="docs-content-body">
               {parseMarkdownBlocks(currentDoc.body)}

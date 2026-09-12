@@ -17,7 +17,7 @@
 // URL carries only the transaction id + CSRF state; the transaction is
 // single-use, expires in 10 minutes, and is rejected after consumption.
 
-import { isDesktop } from "./platform";
+import { isNativeApp } from "./platform";
 import { openExternal } from "./links";
 import { codeChallenge, createCodeVerifier, createStateToken } from "./pkce";
 import { saveSession, toIdentity, type StoredSession } from "./pairing";
@@ -260,7 +260,7 @@ export function authPageUrl(provider: BrowserAuthProvider, transactionId: string
 
 /** Starts a browser-first sign-in: creates the transaction, opens the browser. */
 export async function startBrowserAuth(provider: BrowserAuthProvider): Promise<void> {
-  if (!isDesktop()) return;
+  if (!isNativeApp()) return;
   if (state.status === "starting" || state.status === "waiting" || state.status === "exchanging") return;
 
   setState({ status: "starting", provider, error: null, pollError: null });
@@ -404,7 +404,7 @@ export function parseAuthCallback(raw: string): ParsedAuthCallback | null {
 
 /* ── startup detection ─────────────────────────────────────────────────── */
 
-if (isDesktop() && readPendingTx()) {
+if (isNativeApp() && readPendingTx()) {
   const pending = readPendingTx()!;
   state = { ...state, status: "resumable", provider: pending.provider, authUrl: pending.authUrl };
 }

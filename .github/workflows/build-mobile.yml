@@ -1,0 +1,206 @@
+# Noska Mobile — iOS + Android build workflow.
+#
+# Triggered by pushing a tag like `mobile-v1.0.0` or manually. Produces:
+#   - Android: unsigned APK + AAB artifacts (upload to Play Console; sign with
+#     your release key before distribution)
+#   - iOS: an .xcarchive + unsigned IPA build (needs signing via secrets below
+#     to run on a device / TestFlight)
+#
+# The native projects (src-tauri/gen/android, src-tauri/gen/apple) are
+# generated fresh on each run with `tauri android/ios init` and then patched
+# by scripts/patch-mobile-manifests.mjs to register the noska:// URL scheme.
+#
+# Required repository secrets (same as the desktop workflow):
+#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_CLERK_PUBLISHABLE_KEY,
+#   VITE_POSTHOG_KEY, VITE_POSTHOG_HOST, VITE_SENTRY_DSN, SENTRY_AUTH_TOKEN
+# iOS signing (optional — unsigned archive builds without them):
+#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+
+name: Mobile Build
+
+on:
+  push:
+    tags:
+      - "mobile-v*"
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust stable (Android targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Install Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Set up Java 17 (Android Gradle build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: sdkmanager --install "ndk;27.0.12077973"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Generate the Android project
+        run: npm run tauri android init
+
+      - name: Register the noska:// deep-link scheme
+        run: npm run mobile:patch
+
+      - name: Build Android APK + AAB
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_APP_VERSION: ${{ github.ref_name }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        with:
+          projectPath: .
+          args: android build --apk --aab
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: noska-android
+          path: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust stable (iOS targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Install Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Generate the iOS project
+        run: npm run tauri ios init
+
+      - name: Register the noska:// deep-link scheme
+        run: npm run mobile:patch
+
+      - name: Build iOS archive
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_APP_VERSION: ${{ github.ref_name }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          # Optional signing — without these the job still produces an
+          # unsigned archive; with them it produces a signed IPA.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: .
+          args: ios build --export-method app-store-connect
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: noska-ios
+          path: |
+            src-tauri/gen/apple/build/**/*.xcarchive
+            src-tauri/gen/apple/build/**/*.ipa
+
+  # Tag builds (mobile-v*) are gathered into a DRAFT pre-release so the
+  # admin Releases page can list, download and publish them — mirroring the
+  # desktop flow (draft first, publish is a deliberate human step).
+  publish-draft:
+    needs: [build-android, build-ios]
+    if: startsWith(github.ref, 'refs/tags/mobile-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: noska-android
+          path: dist/android
+
+      - name: Download iOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: noska-ios
+          path: dist/ios
+
+      - name: Stage mobile build files
+        run: |
+          mkdir -p stage
+          find dist/android -name "*.apk" -exec cp {} stage/ \;
+          find dist/android -name "*.aab" -exec cp {} stage/ \;
+          find dist/ios -name "*.ipa" -exec cp {} stage/ \;
+          ls -la stage/
+
+      - name: Create draft pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Noska Mobile ${{ github.ref_name }}"
+          body: |
+            Mobile builds for `${{ github.ref_name }}`.
+
+            - **Android** — APK (sideload / internal testing) and AAB (Play Console upload)
+            - **iOS** — unsigned IPA / archive (sign with your distribution certificate before TestFlight)
+
+            _Draft on purpose — review the builds, then publish to make them visible._
+          draft: true
+          prerelease: true
+          fail_on_unmatched_files: false
+          files: |
+            stage/*.apk
+            stage/*.aab
+            stage/*.ipa

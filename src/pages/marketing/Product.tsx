@@ -73,13 +73,13 @@ export default function Product() {
       ]
     },
     canvas: {
-      title: 'Canvas: Spread ideas out spatially.',
-      subtitle: 'When a linear page stops being the right shape.',
-      desc: 'Any page can drop into a zoomable, pannable infinite canvas — blocks become draggable cards with a live mini-map, and positions persist between visits.',
+      title: 'Spatial Canvas: Infinite 2D ideation.',
+      subtitle: 'Brainstorm, connect concepts, and present seamlessly.',
+      desc: 'Transform any page into an infinite zoomable whiteboard. Cluster cards with AI synthesis, draw smart magnetic connectors, switch to Kanban columns, or present slides in 1 click.',
       points: [
-        'Zoom & pan: 25%–200% zoom range with a fit-to-screen button.',
-        'Mini-map: A live thumbnail of the whole canvas in the corner.',
-        'Persisted layout: Card positions are saved per page, not reset on reload.'
+        'AI Spatial Assistant: Auto-cluster themes, synthesize summaries, and generate ideas.',
+        'Smart Connectors: Curved, orthogonal, and straight arrows with magnetic snapping.',
+        'Presentation Mode & Kanban: Step-by-step camera slides and 2D-to-Kanban column toggle.'
       ]
     }
   };
@@ -213,12 +213,12 @@ export default function Product() {
               )}
               {selectedFeature === 'canvas' && (
                 <div className="product-mini-mockup canvas-card">
-                  <div className="mock-title">🗺️ Infinite Canvas</div>
+                  <div className="mock-title">🗺️ Spatial Canvas &amp; AI Whiteboard</div>
                   <hr />
                   <div className="canvas-mockup-stage">
-                    <span className="canvas-card-chip c1">📄 Notes</span>
-                    <span className="canvas-card-chip c2">📊 Roadmap</span>
-                    <span className="canvas-card-chip c3">✅ Tasks</span>
+                    <span className="canvas-card-chip c1">✨ AI Cluster</span>
+                    <span className="canvas-card-chip c2">🔗 Smart Connector</span>
+                    <span className="canvas-card-chip c3">🎬 Present Mode</span>
                     <span className="canvas-minimap" />
                   </div>
                 </div>

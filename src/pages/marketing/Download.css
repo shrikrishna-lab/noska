@@ -1199,6 +1199,147 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* ── Mobile (iOS + Android) section ──────────────── */
+
+.marketing .dlp-mobile-sub {
+  margin: 14px auto 0;
+  max-width: 520px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--dlp-ink-soft);
+}
+
+.marketing .dlp-cards.two {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 780px;
+}
+
+.marketing .dlp-soon-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 6px 13px;
+  margin-bottom: 16px;
+  border: 1px solid var(--dlp-line);
+  background: #fff;
+  color: var(--dlp-ink-soft);
+}
+
+.marketing .dlp-soon-pill.green {
+  color: var(--dlp-green-deep);
+  border-color: rgba(46, 125, 70, 0.35);
+  background: var(--dlp-green-tint);
+}
+
+.marketing .dlp-mobile-list {
+  list-style: none;
+  margin: 2px 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.marketing .dlp-mobile-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--dlp-ink);
+}
+
+.marketing .dlp-mobile-list svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--dlp-green);
+}
+
+.marketing .dlp-notify {
+  max-width: 780px;
+  margin: 28px auto 0;
+  text-align: center;
+}
+
+.marketing .dlp-notify-form {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.marketing .dlp-notify-form input {
+  flex: 1 1 260px;
+  max-width: 360px;
+  height: 54px;
+  border: 1px solid var(--dlp-line);
+  border-radius: 999px;
+  background: #fff;
+  padding: 0 22px;
+  font-size: 14px;
+  color: var(--dlp-ink);
+  outline: none;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.marketing .dlp-notify-form input::placeholder {
+  color: rgba(107, 107, 107, 0.6);
+}
+
+.marketing .dlp-notify-form input:focus {
+  border-color: rgba(46, 125, 70, 0.5);
+  box-shadow: 0 0 0 3px var(--dlp-green-tint);
+}
+
+.marketing .dlp-notify-form .dlp-pill-btn {
+  width: auto;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.marketing .dlp-notify-form .dlp-pill-btn:disabled {
+  opacity: 0.6;
+  transform: none;
+}
+
+.marketing .dlp-notify-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dlp-green-deep);
+  background: var(--dlp-green-tint);
+  border: 1px dashed rgba(46, 125, 70, 0.4);
+  border-radius: 999px;
+  padding: 13px 24px;
+}
+
+.marketing .dlp-notify-err {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #B3402A;
+}
+
+.marketing .dlp-notify-err a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+@media (max-width: 1024px) {
+  .marketing .dlp-cards.two {
+    grid-template-columns: 1fr;
+    max-width: 460px;
+  }
+}
+
 /* ── Responsive ───────────────────────────────────── */
 
 @media (max-width: 1024px) {

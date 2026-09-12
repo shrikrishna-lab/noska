@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop",
+  "description": "Desktop-only capabilities (auto-updater, process control). Filtered out automatically on iOS/Android builds via the platforms field.",
+  "local": true,
+  "windows": ["main"],
+  "platforms": ["macOS", "windows", "linux"],
+  "permissions": [
+    "updater:default",
+    "process:allow-restart"
+  ]
+}

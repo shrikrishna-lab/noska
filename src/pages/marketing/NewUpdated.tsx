@@ -1,341 +1,665 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { 
+  Sparkles, 
+  Mic, 
+  Layers, 
+  Cpu, 
+  ShieldCheck, 
+  Terminal, 
   ArrowRight, 
   Check, 
-  Plus, 
-  Minus, 
+  Zap, 
+  Search, 
+  Clock, 
+  ChevronDown, 
   ExternalLink,
-  Folder,
-  Globe,
+  Code2,
+  Copy,
+  ThumbsUp,
+  GitBranch,
+  Calendar,
+  BellRing,
+  Sliders,
+  Volume2,
+  Play,
   Share2,
-  MessageSquare
+  Tag
 } from 'lucide-react';
-import { Reveal, Stagger, staggerItem } from './components/Reveal';
+import SEOHead from '../../components/SEOHead';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './NewUpdated.css';
 
-interface WorkItem {
+interface ChangelogItem {
   id: string;
-  title: string;
-  category: string;
-  image: string;
-  metrics: string;
+  version: string;
+  releaseName: string;
+  date: string;
+  badge: string;
+  badgeType: 'major' | 'feature' | 'patch';
+  summary: string;
+  heroImage?: string;
+  interactiveType?: 'reasoning' | 'voice' | 'mcp';
+  categories: ('ai' | 'voice' | 'canvas' | 'mcp' | 'security' | 'infra')[];
+  changes: {
+    type: 'new' | 'improved' | 'fixed';
+    title: string;
+    description: string;
+    affectedFiles?: string[];
+    codeSnippet?: string;
+  }[];
+  metricsSummary: { label: string; value: string }[];
+  reactionsCount: number;
 }
 
-const workItems: WorkItem[] = [
+const CHANGELOG_DATA: ChangelogItem[] = [
   {
-    id: 'w1',
-    title: 'Spatial Canvas Engine 2.0',
-    category: 'Infinite Canvas UI',
-    image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1000&q=80',
-    metrics: '120 FPS Rendering'
+    id: 'v2-5-2',
+    version: 'v2.5.2',
+    releaseName: 'Claude 3.7 Hybrid Reasoning & Live Model Catalog',
+    date: 'March 13, 2026',
+    badge: 'LATEST RELEASE',
+    badgeType: 'major',
+    interactiveType: 'reasoning',
+    summary: 'Introducing Claude 3.7 Sonnet hybrid reasoning with dynamic thinking budget controls, automated OpenRouter & provider catalog discovery, and reactive 17-language internationalization.',
+    heroImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80',
+    categories: ['ai', 'infra'],
+    metricsSummary: [
+      { label: 'Reasoning Budget', value: '1K - 64K Tokens' },
+      { label: 'Catalog Discovery', value: '<50ms' },
+      { label: 'Supported Locales', value: '17 Languages' }
+    ],
+    reactionsCount: 142,
+    changes: [
+      {
+        type: 'new',
+        title: 'Claude 3.7 Sonnet with Reasoning Budget Control',
+        description: 'Dial from zero-delay instant responses to deep step-by-step thinking graphs with visible reasoning blocks and token limits.',
+        affectedFiles: ['src/services/ModelCatalogService.ts', 'src/components/AIRightPanel.tsx'],
+        codeSnippet: `// Dynamic Thinking Budget Configuration
+export const REASONING_MODELS = {
+  'anthropic/claude-3.7-sonnet:thinking': {
+    maxThinkingTokens: 32768,
+    supportsStreaming: true,
+    supportsArtifacts: true,
+  }
+};`
+      },
+      {
+        type: 'new',
+        title: 'Reactive 17-Language Multilingual System',
+        description: 'Engineered a client-side reactive i18n system supporting 17 world languages with instant navbar and footer translation.',
+        affectedFiles: ['src/contexts/LanguageContext.tsx', 'src/pages/marketing/components/Footer.tsx']
+      },
+      {
+        type: 'improved',
+        title: 'Liquid Glass Footer Geometry & Column Alignment',
+        description: 'Broadened marketing footer container to 1380px with balanced 6-column grid spacing and zero header wrapping.',
+        affectedFiles: ['src/pages/marketing/components/Footer.css']
+      },
+      {
+        type: 'fixed',
+        title: 'Language Selector Sizing & Scroll Reset',
+        description: 'Refined compact language pill geometry and restored smooth top-scroll reset on route transitions.',
+        affectedFiles: ['src/pages/marketing/MarketingLayout.tsx']
+      }
+    ]
   },
   {
-    id: 'w2',
-    title: 'Local-First Sync Engine',
-    category: 'Sync Infrastructure',
-    image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1000&q=80',
-    metrics: '<15ms Latency'
+    id: 'v2-5-0',
+    version: 'v2.5.0',
+    releaseName: 'Noska Flow: Continuous Voice Dictation & Audio Rewind',
+    date: 'February 28, 2026',
+    badge: 'FEATURE',
+    badgeType: 'feature',
+    interactiveType: 'voice',
+    summary: 'Fluid voice-to-text dictation engine powered by WebAudio worklet streams, natural voice commands, and intelligent auto-punctuation.',
+    heroImage: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=1200&q=80',
+    categories: ['voice', 'ai'],
+    metricsSummary: [
+      { label: 'Stream Latency', value: '<220ms' },
+      { label: 'Voice Parsers', value: '45+ Commands' },
+      { label: 'Acoustic Accuracy', value: '99.4%' }
+    ],
+    reactionsCount: 98,
+    changes: [
+      {
+        type: 'new',
+        title: 'Low-Latency Streaming Audio Worklet',
+        description: 'Streams voice input directly to acoustic transcription models with background noise filtering and zero dropped chunks.',
+        affectedFiles: ['src/lib/voice/voice-controller.ts', 'src/components/ui/voice-input.tsx'],
+        codeSnippet: `const controller = new VoiceController({
+  vadThreshold: 0.85,
+  sampleRate: 16000,
+  enableAutoPunctuation: true
+});`
+      },
+      {
+        type: 'new',
+        title: 'Voice-Driven Markdown Formatting',
+        description: 'Speak commands like "make heading two", "add bullet", or "create table" to format documentation hands-free.',
+        affectedFiles: ['src/lib/voice/rewind-engine.ts']
+      },
+      {
+        type: 'improved',
+        title: 'Neural Energy Voice Activity Detection (VAD)',
+        description: 'Tuned energy thresholding to reject ambient keyboard clicks and mouse movements.',
+        affectedFiles: ['src/lib/voice/voice-controller.ts']
+      },
+      {
+        type: 'fixed',
+        title: 'Background Tab Audio Buffer Synchronization',
+        description: 'Resolved desync issues when browser tabs are backgrounded using SharedWorker audio ring buffers.',
+        affectedFiles: ['src/lib/voice/active-input.ts']
+      }
+    ]
   },
   {
-    id: 'w3',
-    title: 'AI Co-Thinking Node Matrix',
-    category: 'Visual AI Reasoning',
-    image: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=1000&q=80',
-    metrics: '3x Faster Synthesis'
+    id: 'v2-4-8',
+    version: 'v2.4.8',
+    releaseName: 'Spatial Canvas Engine 2.0 & 120 FPS WebGL Rendering',
+    date: 'February 14, 2026',
+    badge: 'PERFORMANCE',
+    badgeType: 'patch',
+    summary: 'Complete architectural rewrite of the 2D infinite spatial canvas with hardware-accelerated WebGL 2.0 and quadtree spatial partitioning.',
+    heroImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
+    categories: ['canvas'],
+    metricsSummary: [
+      { label: 'Frame Rate', value: '120 FPS' },
+      { label: 'Viewport Capacity', value: '10,000+ Cards' },
+      { label: 'Memory Usage', value: '-42% RAM' }
+    ],
+    reactionsCount: 115,
+    changes: [
+      {
+        type: 'new',
+        title: 'Quadtree Spatial Partitioning Viewport',
+        description: 'Only visible canvas nodes are drawn, allowing massive whiteboards with 10,000+ nodes to pan and zoom at 120 FPS.',
+        affectedFiles: ['src/features/canvas/CanvasView.tsx'],
+        codeSnippet: `const visibleNodes = quadtree.query(camera.viewportBounds);
+renderWebGLPass(visibleNodes, camera.transformMatrix);`
+      },
+      {
+        type: 'improved',
+        title: 'Bi-Directional Thought Graph Bezier Routing',
+        description: 'Interactive connection lines with smart collision avoidance and relationship tags.',
+        affectedFiles: ['src/features/canvas/CanvasLinks.tsx']
+      },
+      {
+        type: 'fixed',
+        title: 'Precision Touchpad Zoom Scaling Factor',
+        description: 'Smoothed logarithmic zoom curves on macOS and Windows 11 precision touchpads.',
+        affectedFiles: ['src/features/canvas/CanvasView.tsx']
+      }
+    ]
   },
   {
-    id: 'w4',
-    title: 'End-to-End Encrypted Vaults',
-    category: 'Zero-Trust Security',
-    image: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1000&q=80',
-    metrics: 'AES-256 Bit'
+    id: 'v2-4-4',
+    version: 'v2.4.4',
+    releaseName: 'Model Context Protocol (MCP) Server Architecture',
+    date: 'January 26, 2026',
+    badge: 'DEVELOPER',
+    badgeType: 'feature',
+    interactiveType: 'mcp',
+    summary: 'Standardized Model Context Protocol (MCP) server endpoints allowing Cursor, Claude Desktop, and CLI tools to query and edit Noska notes.',
+    heroImage: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=1200&q=80',
+    categories: ['mcp', 'security'],
+    metricsSummary: [
+      { label: 'Protocol', value: 'MCP 1.0 JSON-RPC' },
+      { label: 'IDE Support', value: 'Cursor, Claude, Windsurf' },
+      { label: 'Security', value: 'Scoped API Keys' }
+    ],
+    reactionsCount: 84,
+    changes: [
+      {
+        type: 'new',
+        title: 'Native MCP Server Daemon',
+        description: 'Exposes tools (search_notes, read_document, append_content) to external AI clients over SSE and stdio transport.',
+        affectedFiles: ['src/platform/mcp/server.ts', 'src/pages/marketing/McpDocs.tsx'],
+        codeSnippet: `{
+  "mcpServers": {
+    "noska": {
+      "command": "noska-mcp",
+      "args": ["--vault", "primary"],
+      "env": { "NOSKA_API_KEY": "nsk_live_..." }
+    }
+  }
+}`
+      },
+      {
+        type: 'improved',
+        title: 'Scoped Token Least-Privilege Permissions',
+        description: 'Create restricted API keys limited to specific workspaces or read-only access.',
+        affectedFiles: ['src/pages/marketing/ApiKeys.tsx']
+      },
+      {
+        type: 'fixed',
+        title: 'Persistent SSE Heartbeat Auto-Reconnect',
+        description: 'Added exponential backoff heartbeats to maintain persistent streams during long agent workflows.',
+        affectedFiles: ['src/platform/mcp/transport.ts']
+      }
+    ]
+  },
+  {
+    id: 'v2-4-0',
+    version: 'v2.4.0',
+    releaseName: 'Zero-Knowledge Encrypted Vaults & Local SQLite Sync',
+    date: 'January 10, 2026',
+    badge: 'SECURITY',
+    badgeType: 'patch',
+    summary: 'Client-side hardware AES-256-GCM encryption with Argon2id key derivation and sub-15ms offline SQLite synchronization.',
+    heroImage: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80',
+    categories: ['security', 'infra'],
+    metricsSummary: [
+      { label: 'Cipher', value: 'AES-256-GCM' },
+      { label: 'KDF Hardening', value: 'Argon2id' },
+      { label: 'Write Latency', value: '<2ms Local SQLite' }
+    ],
+    reactionsCount: 167,
+    changes: [
+      {
+        type: 'new',
+        title: 'Zero-Knowledge WebCrypto Vaults',
+        description: 'All notes and canvas diagrams are encrypted client-side before sync. Master keys are never transmitted.',
+        affectedFiles: ['src/features/encryption/Encryption.tsx', 'src/lib/crypto/vault.ts']
+      },
+      {
+        type: 'new',
+        title: 'Local-First SQLite Persistence',
+        description: 'Sub-2ms local writes to on-device SQLite storage with automatic background CRDT delta streaming.',
+        affectedFiles: ['src/lib/sync/sqlite-engine.ts']
+      },
+      {
+        type: 'improved',
+        title: '64MB Memory Hardened Key Derivation',
+        description: 'Upgraded passphrase derivation to high-security Argon2id parameters in a dedicated WebWorker.',
+        affectedFiles: ['src/lib/crypto/kdf.ts']
+      },
+      {
+        type: 'fixed',
+        title: 'Multi-Device Timestamp Conflict Resolution',
+        description: 'Integrated Lamport logical clocks to resolve multi-device sync collisions.',
+        affectedFiles: ['src/lib/sync/crdt.ts']
+      }
+    ]
   }
 ];
 
-interface TimelineRow {
-  role: string;
-  company: string;
-  period: string;
-}
-
-const timelineRows: TimelineRow[] = [
-  { role: 'Noska 2.5 Release', company: 'Noska Core Lab', period: '2026 → Now' },
-  { role: 'Local-First Sync Engine', company: 'Infrastructure Team', period: '2024 → 2026' },
-  { role: 'Encrypted Vault Security', company: 'Security Lab', period: '2022 → 2024' },
-  { role: 'Initial Block Architecture', company: 'Founding Team', period: '2021 → 2022' }
-];
-
-interface FaqItem {
-  question: string;
-  answer: string;
-}
-
-const faqs: FaqItem[] = [
-  {
-    question: 'What makes Noska different from standard note tools?',
-    answer: 'Noska combines local-first speed with infinite 2D spatial canvas boards, automated AI co-thinking nodes, and end-to-end zero-knowledge encryption.'
-  },
-  {
-    question: 'How does Local-First Sync work when offline?',
-    answer: 'All changes are written to an on-device SQLite database in under 2ms. When internet connectivity is restored, Noska streams encrypted CRDT deltas automatically.'
-  },
-  {
-    question: 'Can I import my existing Markdown or Notion notes?',
-    answer: 'Yes! Noska includes full one-click import utilities for Markdown files, CSV database tables, and HTML packages while preserving backlinks.'
-  },
-  {
-    question: 'Is my data encrypted on cloud servers?',
-    answer: 'Yes. Encrypted Vaults use WebCrypto AES-256 encryption. Master keys are derived locally from your passphrase—not even Noska can access your data.'
-  }
+const FILTER_TAGS = [
+  { id: 'all', label: 'All' },
+  { id: 'ai', label: 'AI & Models' },
+  { id: 'voice', label: 'Voice Flow' },
+  { id: 'canvas', label: 'Canvas' },
+  { id: 'mcp', label: 'MCP & Dev' },
+  { id: 'security', label: 'Security' },
 ];
 
 export default function NewUpdated() {
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [activeWorkItem, setActiveWorkItem] = useState<WorkItem | null>(null);
+  const { t } = useLanguage();
+  const [selectedTag, setSelectedTag] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [expandedSnippets, setExpandedSnippets] = useState<Record<string, boolean>>({});
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [likedReleases, setLikedReleases] = useState<Record<string, boolean>>({});
+  const [subscribedEmail, setSubscribedEmail] = useState('');
+  const [subscribedSuccess, setSubscribedSuccess] = useState(false);
+
+  // Minimalist Simulator States
+  const [thinkingBudget, setThinkingBudget] = useState<number>(16384);
+  const [isPlayingVoice, setIsPlayingVoice] = useState(false);
+  const [mcpProtocolTab, setMcpProtocolTab] = useState<'claude' | 'cursor'>('claude');
+
+  const filteredChangelogs = useMemo(() => {
+    return CHANGELOG_DATA.filter((item) => {
+      const matchesCategory = selectedTag === 'all' || item.categories.includes(selectedTag as any);
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = searchQuery === '' ||
+        item.version.toLowerCase().includes(searchLower) ||
+        item.releaseName.toLowerCase().includes(searchLower) ||
+        item.summary.toLowerCase().includes(searchLower) ||
+        item.changes.some(c => 
+          c.title.toLowerCase().includes(searchLower) || 
+          c.description.toLowerCase().includes(searchLower)
+        );
+
+      return matchesCategory && matchesSearch;
+    });
+  }, [selectedTag, searchQuery]);
+
+  const handleCopyCode = (code: string, id: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(id);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const handleToggleLike = (id: string) => {
+    setLikedReleases(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleSubscribe = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subscribedEmail || !subscribedEmail.includes('@')) return;
+    setSubscribedSuccess(true);
+    setTimeout(() => {
+      setSubscribedEmail('');
+      setSubscribedSuccess(false);
+    }, 4000);
+  };
 
   return (
-    <div className="hanzo-wrapper">
-      {/* Top Navbar */}
-      <header className="hanzo-nav mkt-container">
-        <div className="nav-brand-pill">
-          <img src="/logo.png" alt="Noska Logo" style={{ width: 18, height: 18, display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />
-          <span>Noska</span>
-        </div>
-        <div className="nav-menu-btn">
-          <span className="menu-bar" />
-          <span className="menu-bar" />
+    <div className="new-updated-page">
+      <SEOHead 
+        path="/new-updated" 
+        title="What's New in Noska | Product Updates & Changelog"
+        description="Explore the latest features, releases, AI models (Claude 3.7 Sonnet, GPT-4.5), spatial canvas improvements, and MCP integrations in Noska."
+      />
+
+      {/* Header Container */}
+      <header className="nu-minimal-header">
+        <div className="nu-header-inner">
+          <div className="nu-header-badge">
+            <span className="nu-live-dot" />
+            <span>Noska Release Stream</span>
+          </div>
+          <h1 className="nu-page-title">What's New</h1>
+          <p className="nu-page-subtitle">
+            A continuous log of updates, architectural improvements, and new capabilities in Noska.
+          </p>
+
+          {/* Minimalist Filter Navigation */}
+          <div className="nu-minimal-nav">
+            <div className="nu-filter-pills">
+              {FILTER_TAGS.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => setSelectedTag(tag.id)}
+                  className={`nu-pill-btn ${selectedTag === tag.id ? 'active' : ''}`}
+                >
+                  {tag.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="nu-minimal-search">
+              <Search size={14} className="nu-search-ico" />
+              <input
+                type="text"
+                placeholder="Search updates…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="nu-search-inp"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="nu-search-clr">
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="hanzo-hero mkt-container">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="hero-inner"
-        >
-          {/* Status Badge */}
-          <div className="hero-status-pill">
-            <span className="status-dot" />
-            <span>Noska v2.5 Released — 2 Spots Left</span>
-          </div>
-
-          {/* Hanzo Split Typography Headline */}
-          <h1 className="hanzo-hero-title">
-            <span className="title-bold">Unlimited</span>
-            <span className="inline-badge-preview">
-              <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80" alt="Preview Badge" loading="lazy" />
-            </span>
-            <span className="title-muted">Power</span>
-            <br />
-            <span className="title-serif-italic">for</span>
-            <span className="inline-dark-badge">
-              <span className="dark-badge-text">NOSKA</span>
-            </span>
-            <span className="title-bold">Solid Teams</span>
-          </h1>
-
-          <p className="hanzo-hero-sub">
-            We help teams and creators build structured knowledge, brainstorm visually, and organize workspaces — fast, encrypted, and hassle-free.
-          </p>
-
-          {/* Action Button & Avatar Stack */}
-          <div className="hero-action-row">
-            <a href="/login" className="pill-action-btn">
-              Choose your plan <ArrowRight size={16} />
-            </a>
-            <div className="social-proof-wrap">
-              <div className="avatar-stack">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="User 1" loading="lazy" />
-                <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80" alt="User 2" loading="lazy" />
-                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" alt="User 3" loading="lazy" />
-                <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80" alt="User 4" loading="lazy" />
-              </div>
-              <span className="proof-label">Trusted by Leaders</span>
+      {/* Main Stream Feed */}
+      <main className="nu-stream-main">
+        <div className="nu-stream-container">
+          {filteredChangelogs.length === 0 ? (
+            <div className="nu-clean-empty">
+              <p>No updates found matching your search.</p>
+              <button 
+                onClick={() => { setSelectedTag('all'); setSearchQuery(''); }}
+                className="nu-clean-reset-btn"
+              >
+                Clear filter
+              </button>
             </div>
-          </div>
-        </motion.div>
-      </section>
+          ) : (
+            <div className="nu-timeline-flow">
+              {filteredChangelogs.map((item) => {
+                const isLiked = likedReleases[item.id];
 
-      {/* Embedded Dark Container: Recent Work Showcase */}
-      <section className="hanzo-work-container mkt-container">
-        <div className="dark-work-box">
-          <div className="work-floating-badge">
-            <div className="folder-circle">
-              <Folder size={18} />
+                return (
+                  <article key={item.id} className="nu-stream-article">
+                    {/* Left Timeline Rail (Date & Version) */}
+                    <div className="nu-rail-col">
+                      <div className="nu-rail-sticky">
+                        <span className="nu-rail-date">{item.date}</span>
+                        <span className="nu-rail-ver-badge">{item.version}</span>
+                      </div>
+                    </div>
+
+                    {/* Right Content Body */}
+                    <div className="nu-content-col">
+                      <div className="nu-post-card">
+                        {/* Title Header */}
+                        <div className="nu-post-top">
+                          <h2 className="nu-post-title">{item.releaseName}</h2>
+                          <button 
+                            onClick={() => handleToggleLike(item.id)}
+                            className={`nu-minimal-like ${isLiked ? 'liked' : ''}`}
+                            aria-label="Like this release"
+                          >
+                            <ThumbsUp size={13} />
+                            <span>{item.reactionsCount + (isLiked ? 1 : 0)}</span>
+                          </button>
+                        </div>
+
+                        <p className="nu-post-lead">{item.summary}</p>
+
+                        {/* Optional Hero Media */}
+                        {item.heroImage && (
+                          <div className="nu-media-frame">
+                            <img src={item.heroImage} alt={item.releaseName} loading="lazy" />
+                          </div>
+                        )}
+
+                        {/* Minimalist Metrics Strip */}
+                        <div className="nu-stats-strip">
+                          {item.metricsSummary.map((metric, idx) => (
+                            <div key={idx} className="nu-stat-item">
+                              <span className="nu-stat-value">{metric.value}</span>
+                              <span className="nu-stat-label">{metric.label}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Interactive Reasoning Budget Slider Demo (v2.5.2) */}
+                        {item.interactiveType === 'reasoning' && (
+                          <div className="nu-mini-simulator">
+                            <div className="nu-sim-top">
+                              <span className="nu-sim-title">
+                                <Sliders size={13} className="text-purple-500 inline mr-1.5" />
+                                Reasoning Tokens Controller
+                              </span>
+                              <span className="nu-sim-val">{thinkingBudget.toLocaleString()} tokens</span>
+                            </div>
+                            <input 
+                              type="range" 
+                              min="1024" 
+                              max="65536" 
+                              step="1024"
+                              value={thinkingBudget} 
+                              onChange={(e) => setThinkingBudget(Number(e.target.value))}
+                              className="nu-range-slider"
+                            />
+                            <div className="nu-sim-note">
+                              {thinkingBudget < 8000 
+                                ? 'Fast mode: zero extra latency, instant streaming output.' 
+                                : 'Deep reasoning: generates formal step-by-step logic and verification graphs.'
+                              }
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Interactive Voice Stream Demo (v2.5.0) */}
+                        {item.interactiveType === 'voice' && (
+                          <div className="nu-mini-simulator">
+                            <div className="nu-sim-top">
+                              <span className="nu-sim-title">
+                                <Volume2 size={13} className="text-emerald-500 inline mr-1.5" />
+                                Continuous Audio Stream
+                              </span>
+                              <button 
+                                onClick={() => setIsPlayingVoice(!isPlayingVoice)} 
+                                className={`nu-sim-play-btn ${isPlayingVoice ? 'active' : ''}`}
+                              >
+                                {isPlayingVoice ? 'Pause' : 'Play Demo'}
+                              </button>
+                            </div>
+                            <div className={`nu-audio-bars ${isPlayingVoice ? 'playing' : ''}`}>
+                              {[...Array(24)].map((_, i) => (
+                                <span key={i} className="nu-bar" style={{ animationDelay: `${(i % 6) * 0.1}s` }} />
+                              ))}
+                            </div>
+                            <p className="nu-audio-text">
+                              {isPlayingVoice 
+                                ? '"Create a high-level sprint architecture plan with Claude 3.7 and link database records..."'
+                                : 'Real-time WebAudio worklet transcription with background noise rejection.'
+                              }
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Interactive MCP Config Demo (v2.4.4) */}
+                        {item.interactiveType === 'mcp' && (
+                          <div className="nu-mini-simulator">
+                            <div className="nu-sim-top">
+                              <span className="nu-sim-title">
+                                <Terminal size={13} className="text-amber-500 inline mr-1.5" />
+                                Model Context Protocol Config
+                              </span>
+                              <div className="nu-mcp-switch">
+                                <button 
+                                  className={mcpProtocolTab === 'claude' ? 'active' : ''} 
+                                  onClick={() => setMcpProtocolTab('claude')}
+                                >
+                                  Claude
+                                </button>
+                                <button 
+                                  className={mcpProtocolTab === 'cursor' ? 'active' : ''} 
+                                  onClick={() => setMcpProtocolTab('cursor')}
+                                >
+                                  Cursor
+                                </button>
+                              </div>
+                            </div>
+                            <pre className="nu-mcp-snippet">
+                              <code>
+                                {mcpProtocolTab === 'claude' && `// claude_desktop_config.json
+{
+  "mcpServers": {
+    "noska": {
+      "command": "npx",
+      "args": ["-y", "@noska/mcp-server"],
+      "env": { "NOSKA_API_KEY": "nsk_live_..." }
+    }
+  }
+}`}
+                                {mcpProtocolTab === 'cursor' && `// .cursor/settings.json
+{
+  "cursor.mcp.servers": {
+    "noska": {
+      "type": "stdio",
+      "command": "noska-mcp"
+    }
+  }
+}`}
+                              </code>
+                            </pre>
+                          </div>
+                        )}
+
+                        {/* Granular Changes List */}
+                        <div className="nu-changes-sublist">
+                          {item.changes.map((change, changeIdx) => {
+                            const snippetKey = `${item.id}-${changeIdx}`;
+                            const isSnippetOpen = expandedSnippets[snippetKey];
+
+                            return (
+                              <div key={changeIdx} className="nu-change-row">
+                                <div className="nu-change-badge-cell">
+                                  <span className={`nu-pill-type ${change.type}`}>
+                                    {change.type === 'new' && 'New'}
+                                    {change.type === 'improved' && 'Improved'}
+                                    {change.type === 'fixed' && 'Fix'}
+                                  </span>
+                                </div>
+                                <div className="nu-change-content-cell">
+                                  <h3 className="nu-change-heading">{change.title}</h3>
+                                  <p className="nu-change-paragraph">{change.description}</p>
+
+                                  {/* Code implementation accordion */}
+                                  {change.codeSnippet && (
+                                    <div className="nu-code-accordion">
+                                      <button 
+                                        onClick={() => setExpandedSnippets(prev => ({ ...prev, [snippetKey]: !prev[snippetKey] }))}
+                                        className="nu-code-toggle"
+                                      >
+                                        <Code2 size={12} />
+                                        <span>{isSnippetOpen ? 'Hide code' : 'View code'}</span>
+                                      </button>
+                                      {isSnippetOpen && (
+                                        <div className="nu-clean-code-block">
+                                          <div className="nu-code-topbar">
+                                            <span>Implementation</span>
+                                            <button 
+                                              onClick={() => handleCopyCode(change.codeSnippet!, snippetKey)}
+                                              className="nu-copy-btn"
+                                            >
+                                              {copiedCode === snippetKey ? 'Copied' : 'Copy'}
+                                            </button>
+                                          </div>
+                                          <pre><code>{change.codeSnippet}</code></pre>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Footer Action */}
+                        <div className="nu-card-foot">
+                          <Link to="/dashboard" className="nu-open-app-link">
+                            <span>Open in Noska</span>
+                            <ArrowRight size={12} />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
-            <span className="badge-text">See Recent Work</span>
-          </div>
-
-          <Stagger className="work-cards-grid">
-            {workItems.map((item) => (
-              <motion.div key={item.id} variants={staggerItem}>
-                <div className="work-card" onClick={() => setActiveWorkItem(item)}>
-                  <div className="work-card-img-wrap">
-                    <img src={item.image} alt={item.title} loading="lazy" />
-                    <span className="work-metric">{item.metrics}</span>
-                  </div>
-                  <div className="work-card-body">
-                    <span className="work-cat">{item.category}</span>
-                    <h3 className="work-title">{item.title}</h3>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </Stagger>
+          )}
         </div>
-      </section>
+      </main>
 
-      {/* About & Timeline Section */}
-      <section className="hanzo-about-section mkt-container">
-        <div className="about-grid">
-          {/* Left Founder Profile Card */}
-          <Reveal delay={0.1}>
-            <div className="founder-card">
-              <div className="founder-image-wrap">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80" alt="Founder Portrait" loading="lazy" />
-              </div>
-              <div className="founder-info">
-                <h3>Krishna H.</h3>
-                <span className="founder-role">Noska Lab, Founder</span>
-                <div className="social-icons">
-                  <a href="#website" aria-label="Website"><Globe size={15} /></a>
-                  <a href="#share" aria-label="Share"><Share2 size={15} /></a>
-                  <a href="#contact" aria-label="Contact"><MessageSquare size={15} /></a>
-                </div>
-              </div>
-            </div>
-          </Reveal>
-
-          {/* Right Bio & Experience Rows */}
-          <Reveal delay={0.2}>
-            <div className="about-content">
-              <p className="bio-paragraph">
-                Pushing boundaries in digital tools since 2021. We help startups and studios create clean, spatial note architectures. Based in Utrecht, we blend function with emotion — creating software that feels natural and fast.
-              </p>
-
-              <div className="timeline-table">
-                {timelineRows.map((row, idx) => (
-                  <div key={idx} className="timeline-row">
-                    <span className="row-role">{row.role}</span>
-                    <span className="row-company">{row.company}</span>
-                    <span className="row-period">{row.period}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section className="hanzo-pricing-section mkt-container">
-        <div className="pricing-header">
-          <h2>Pricing & Plans</h2>
-          <div className="pricing-switch">
-            <button 
-              className={`switch-tab ${billingCycle === 'monthly' ? 'active' : ''}`}
-              onClick={() => setBillingCycle('monthly')}
-            >
-              Monthly
+      {/* Minimalist Newsletter Subscribe Footer */}
+      <section className="nu-minimal-subscribe">
+        <div className="nu-sub-inner">
+          <div className="nu-sub-text">
+            <h3>Stay updated on new releases</h3>
+            <p>Get notified when new AI models, voice capabilities, or spatial features land.</p>
+          </div>
+          <form onSubmit={handleSubscribe} className="nu-clean-form">
+            <input
+              type="email"
+              placeholder="Your email address…"
+              value={subscribedEmail}
+              onChange={(e) => setSubscribedEmail(e.target.value)}
+              required
+              disabled={subscribedSuccess}
+              className="nu-clean-input"
+            />
+            <button type="submit" className={`nu-clean-btn ${subscribedSuccess ? 'done' : ''}`}>
+              {subscribedSuccess ? 'Subscribed!' : 'Subscribe'}
             </button>
-            <button 
-              className={`switch-tab ${billingCycle === 'annual' ? 'active' : ''}`}
-              onClick={() => setBillingCycle('annual')}
-            >
-              Annual (Save 20%)
-            </button>
-          </div>
-        </div>
-
-        <div className="pricing-cards-row">
-          <div className="price-card">
-            <h3>Pro Workspace</h3>
-            <p className="card-sub">For creators and small teams needing full power.</p>
-            <div className="price-num">
-              <span>{billingCycle === 'annual' ? '$12' : '$15'}</span> / month
-            </div>
-            <a href="/login" className="price-btn primary">Choose Pro Plan</a>
-            <ul className="feature-list">
-              <li><Check size={16} /> Unlimited spatial canvas boards</li>
-              <li><Check size={16} /> Local-first SQLite offline caching</li>
-              <li><Check size={16} /> End-to-end WebCrypto encryption</li>
-            </ul>
-          </div>
-
-          <div className="price-card">
-            <h3>Enterprise Team</h3>
-            <p className="card-sub">Dedicated cloud instances, SSO, and custom SLAs.</p>
-            <div className="price-num">
-              <span>{billingCycle === 'annual' ? '$29' : '$35'}</span> / month
-            </div>
-            <a href="/enterprise" className="price-btn secondary">Contact Sales</a>
-            <ul className="feature-list">
-              <li><Check size={16} /> SAML Single Sign-On (Clerk SSO)</li>
-              <li><Check size={16} /> Dedicated database instance</li>
-              <li><Check size={16} /> Priority 24/7 dedicated support</li>
-            </ul>
-          </div>
+          </form>
         </div>
       </section>
-
-      {/* Accordion FAQ Section */}
-      <section className="hanzo-faq-section mkt-container">
-        <h2>Frequently Asked Questions</h2>
-        <div className="faq-list">
-          {faqs.map((faq, idx) => {
-            const isOpen = openFaq === idx;
-            return (
-              <div key={idx} className={`faq-row ${isOpen ? 'open' : ''}`}>
-                <button className="faq-btn" onClick={() => setOpenFaq(isOpen ? null : idx)}>
-                  <span>{faq.question}</span>
-                  <span className="faq-icon">{isOpen ? <Minus size={16} /> : <Plus size={16} />}</span>
-                </button>
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div 
-                      className="faq-ans"
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                    >
-                      <p>{faq.answer}</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Modal Detail View */}
-      <AnimatePresence>
-        {activeWorkItem && (
-          <div className="modal-backdrop" onClick={() => setActiveWorkItem(null)}>
-            <motion.div 
-              className="modal-box"
-              onClick={(e) => e.stopPropagation()}
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-            >
-              <button className="modal-close-btn" onClick={() => setActiveWorkItem(null)}>×</button>
-              <div className="modal-img"><img src={activeWorkItem.image} alt={activeWorkItem.title} /></div>
-              <h2>{activeWorkItem.title}</h2>
-              <p className="modal-category-text">{activeWorkItem.category} • {activeWorkItem.metrics}</p>
-              <div className="modal-action-bar">
-                <button className="btn-close-modal" onClick={() => setActiveWorkItem(null)}>Close</button>
-                <a href="/login" className="btn-launch-modal">Open Workspace</a>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

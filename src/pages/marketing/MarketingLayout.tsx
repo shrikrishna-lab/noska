@@ -9,6 +9,7 @@ import { useLaunchSettings } from '../../hooks/useLaunchSettings';
 import SEOHead from '../../components/SEOHead';
 import { ShieldAlert } from 'lucide-react';
 import { consumeOAuthIntent } from '../../lib/oauthIntent';
+import { LanguageProvider } from '../../contexts/LanguageContext';
 import './marketing-theme.css';
 
 /**
@@ -46,6 +47,8 @@ export default function MarketingLayout({ children }) {
     }
   }, [isLoaded, isSignedIn, location.pathname, navigate]);
 
+  const lenisRef = useRef<Lenis | null>(null);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !wrapperRef.current || !contentRef.current) return;
 
@@ -58,9 +61,10 @@ export default function MarketingLayout({ children }) {
       wheelMultiplier: 1.0,
       touchMultiplier: 1.5,
     });
+    lenisRef.current = lenis;
 
-    let rafId;
-    function raf(time) {
+    let rafId: number;
+    function raf(time: number) {
       lenis.raf(time);
       rafId = requestAnimationFrame(raf);
     }
@@ -69,13 +73,25 @@ export default function MarketingLayout({ children }) {
     return () => {
       cancelAnimationFrame(rafId);
       lenis.destroy();
+      lenisRef.current = null;
     };
   }, []);
+
+  // Reset scroll position to top whenever route or search parameters change
+  useEffect(() => {
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { immediate: true });
+    }
+    if (wrapperRef.current) {
+      (wrapperRef.current as HTMLElement).scrollTop = 0;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname, location.search]);
 
 
 
   return (
-    <>
+    <LanguageProvider>
       <SEOHead path={location.pathname} />
       {settings.launch_mode === 'maintenance' ? (
         <div className="marketing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center' }}>
@@ -96,6 +112,6 @@ export default function MarketingLayout({ children }) {
           </div>
         </div>
       )}
-    </>
+    </LanguageProvider>
   );
 }

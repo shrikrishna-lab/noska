@@ -2175,6 +2175,66 @@ export type Database = {
         }
         Relationships: []
       }
+      user_notifications: {
+        Row: {
+          body: string
+          category: string
+          created_at: string
+          created_by: string | null
+          created_by_email: string | null
+          id: string
+          is_test: boolean
+          page_id: string | null
+          severity: string
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          body?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_email?: string | null
+          id?: string
+          is_test?: boolean
+          page_id?: string | null
+          severity?: string
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          body?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_email?: string | null
+          id?: string
+          is_test?: boolean
+          page_id?: string | null
+          severity?: string
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_notification_reads: {
+        Row: {
+          notification_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          notification_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          notification_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           action_url: string | null
@@ -4008,6 +4068,45 @@ export type Database = {
       admin_count: {
         Args: { p_session_token: string; p_table: string }
         Returns: number
+      }
+      get_widget_catalog: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      get_widget_layout: {
+        Args: { p_workspace_id?: string }
+        Returns: Json
+      }
+      save_widget_layout: {
+        Args: { p_layout: Json; p_workspace_id: string }
+        Returns: boolean
+      }
+      record_widget_events: {
+        Args: { p_events: Json }
+        Returns: number
+      }
+      admin_user_notification_send: {
+        Args: {
+          p_body?: string
+          p_broadcast?: boolean
+          p_category?: string
+          p_is_test?: boolean
+          p_min_role?: string
+          p_page_id?: string
+          p_severity?: string
+          p_session_token: string
+          p_title: string
+          p_user_ids?: Json
+        }
+        Returns: Json
+      }
+      admin_user_notification_overview: {
+        Args: { p_session_token: string }
+        Returns: Json
+      }
+      admin_user_notification_delete: {
+        Args: { p_min_role?: string; p_notification_id: string; p_session_token: string }
+        Returns: boolean
       }
       admin_delete: {
         Args: {

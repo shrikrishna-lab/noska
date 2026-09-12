@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -15,13 +15,15 @@ import {
 import {
   Rocket, RefreshCw, ExternalLink, CheckCircle2, XCircle, Loader2, Clock,
   FileCode2, Tag, PackageOpen, AlertTriangle, ShieldCheck, Sparkles,
-  Zap, Wrench, AlertOctagon, Lightbulb, Trash2, RotateCcw, Eye, X,
+  Zap, Wrench, AlertOctagon, Lightbulb, Trash2, RotateCcw, Globe, Eye, X, CheckCircle2 as PassIcon, AlertTriangle as WarnIcon, XCircle as FailIcon, HelpCircle as UnknownIcon, ShieldCheck as PreIcon,
+  GitBranch as GitBranchIcon,
+  Smartphone, Copy, Link2,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { releaseApi } from "@/lib/monitoring/api";
 import { MarkdownBody } from "@/components/ui/MarkdownLite";
-import type { GitHubRun, GitHubRelease, WhatsNew } from "@/lib/monitoring/api";
+import type { GitHubRun, GitHubRelease, WhatsNew, PreflightCheck } from "@/lib/monitoring/api";
 
 const RUN_STATUS: Record<string, { label: string; badge: string; icon: typeof Clock }> = {
   queued: { label: "Queued", badge: "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300", icon: Clock },
@@ -260,6 +262,38 @@ function NextReleaseCard({ data }: { data: WhatsNew }) {
           </div>
         )}
 
+        {data.upcoming && data.upcoming.length > 0 && (
+          <div className="space-y-1.5 border-t pt-3">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <GitBranchIcon className="h-3 w-3" /> Upcoming work — not in this release
+            </p>
+            {data.upcoming.map((b) => (
+              <div key={b.name} className="flex items-start gap-2.5 rounded-lg border border-border border-l-4 border-l-blue-400/60 bg-muted/30 px-3 py-2">
+                <GitBranchIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-foreground">
+                    {b.name}
+                    <span className="ml-1.5 font-normal text-muted-foreground">{b.ahead} commit{b.ahead === 1 ? "" : "s"} ahead of {data.branch}</span>
+                  </p>
+                  {b.tip.message && (
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {b.tip.message} <span className="text-[10px]">· {b.tip.author}</span>
+                    </p>
+                  )}
+                </div>
+                <a
+                  href={`https://github.com/shrikrishna-lab/noska/compare/${data.branch}...${encodeURIComponent(b.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-[11px] font-medium text-primary hover:underline"
+                >
+                  compare
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+
         {data.suggestions.length > 0 && (
           <div className="space-y-1.5 border-t pt-3">
             <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -298,6 +332,171 @@ function NextReleaseCard({ data }: { data: WhatsNew }) {
     </Card>
   );
 }
+
+const CHECK_STYLE: Record<string, { icon: typeof PassIcon; cls: string }> = {
+  pass: { icon: PassIcon, cls: "text-emerald-500" },
+  warn: { icon: WarnIcon, cls: "text-amber-500" },
+  fail: { icon: FailIcon, cls: "text-red-500" },
+  unknown: { icon: UnknownIcon, cls: "text-muted-foreground" },
+};
+
+// Character-by-character spring text (idle → cycling steps → results).
+function AnimatedText({ text, className }: { text: string; className?: string }) {
+  return (
+    <span className={className} style={{ display: "inline-flex" }}>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span key={text} style={{ display: "inline-flex", willChange: "transform" }}>
+          {text.split("").map((char, i) => (
+            <motion.span
+              key={`${text}-${i}`}
+              initial={{ y: 8, opacity: 0, scale: 0.6, filter: "blur(2px)" }}
+              animate={{ y: 0, opacity: 1, scale: 1, filter: "blur(0px)" }}
+              exit={{ y: -8, opacity: 0, scale: 0.6, filter: "blur(2px)" }}
+              transition={{ type: "spring", stiffness: 240, damping: 16, delay: i * 0.012 }}
+              style={{ display: "inline-block", whiteSpace: char === " " ? "pre" : undefined }}
+            >
+              {char}
+            </motion.span>
+          ))}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
+const PREFLIGHT_STEPS = [
+  { label: "Validating version files", icon: FileCode2 },
+  { label: "Inspecting Tauri config", icon: PreIcon },
+  { label: "Checking dependencies & lockfiles", icon: PackageOpen },
+  { label: "Verifying icon assets", icon: Sparkles },
+  { label: "Probing updater manifest", icon: RefreshCw },
+  { label: "Scanning mobile platform", icon: Zap },
+  { label: "Pinging web deployment", icon: Globe },
+  { label: "Reading GitHub state", icon: GitBranchIcon },
+  { label: "Deep-checking dependency versions", icon: PackageOpen },
+  { label: "Verifying updater signatures", icon: PreIcon },
+];
+
+function PreflightCard({
+  report, isLoading, isError, onRerun, rerunning,
+}: {
+  report?: PreflightReportLike;
+  isLoading: boolean;
+  isError: boolean;
+  onRerun: () => void;
+  rerunning: boolean;
+}) {
+  // Full running animation only for the initial load — background
+  // auto-refresh keeps results on screen (spinner lives on the button).
+  const running = isLoading || (!report && !isError && !rerunning) || (rerunning && !report);
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    if (!running) return;
+    const interval = setInterval(() => setStep((prev) => (prev + 1) % PREFLIGHT_STEPS.length), 1100);
+    return () => clearInterval(interval);
+  }, [running]);
+
+  const summary = report?.summary;
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <PreIcon className="h-4 w-4" />
+          <AnimatedText text={running ? "Pre-flight running" : "Pre-flight checks"} />
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          {summary && !running && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 260, damping: 20 }}
+              className="flex items-center gap-1.5 text-[10px] font-semibold"
+            >
+              {summary.fail > 0 && <span className="flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 font-bold text-white shadow-sm"><FailIcon className="h-3 w-3" /> {summary.fail} failing</span>}
+              {summary.warn > 0 && <span className="flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 font-bold text-white shadow-sm"><WarnIcon className="h-3 w-3" /> {summary.warn} warnings</span>}
+              {summary.unknown > 0 && <span className="flex items-center gap-1 rounded-full bg-zinc-500 px-2.5 py-1 font-semibold text-white shadow-sm"><UnknownIcon className="h-3 w-3" /> {summary.unknown}</span>}
+              {summary.fail === 0 && summary.warn === 0 && (
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-1 font-bold text-white shadow-sm"><PassIcon className="h-3 w-3" /> all clear</span>
+              )}
+            </motion.div>
+          )}
+          <Button variant="ghost" size="sm" onClick={onRerun} disabled={running}>
+            <RefreshCw className={`h-3.5 w-3.5 ${running ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <AnimatePresence mode="wait" initial={false}>
+          {running || isError || !report ? (
+            <motion.div
+              key="running"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="flex items-center justify-between gap-3 rounded-xl border-2 border-dashed border-border px-4 py-3.5"
+            >
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                <AnimatePresence mode="popLayout">
+                  <motion.div
+                    key={step}
+                    initial={{ opacity: 0, scale: 0, rotate: -30, filter: "blur(3px)" }}
+                    animate={{ opacity: 1, scale: 1, rotate: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, scale: 0, rotate: 30, filter: "blur(3px)" }}
+                    transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                  >
+                    {React.createElement(PREFLIGHT_STEPS[step].icon, { className: "h-5 w-5 text-primary" })}
+                  </motion.div>
+                </AnimatePresence>
+                <AnimatedText
+                  text={isError ? "Pre-flight checks unavailable" : `${PREFLIGHT_STEPS[step].label}…`}
+                  className="text-sm font-semibold text-foreground"
+                />
+              </div>
+              <span className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
+                {isError ? "error" : "live"}
+              </span>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="space-y-2"
+            >
+              {report.checks.map((c, i) => {
+                const meta = CHECK_STYLE[c.status] ?? CHECK_STYLE.unknown;
+                return (
+                  <motion.div
+                    key={c.id}
+                    initial={{ opacity: 0, x: -14, filter: "blur(2px)" }}
+                    animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                    transition={{ type: "spring", stiffness: 240, damping: 22, delay: i * 0.045 }}
+                    className="flex items-start gap-2.5"
+                  >
+                    <meta.icon className={`mt-0.5 h-4 w-4 shrink-0 ${meta.cls}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold leading-snug text-foreground">{c.label}</p>
+                      <p className="text-[11px] leading-snug text-muted-foreground">{c.detail}</p>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </CardContent>
+    </Card>
+  );
+}
+
+type PreflightReportLike = {
+  branch: string;
+  checks: PreflightCheck[];
+  summary: { pass: number; warn: number; fail: number; unknown: number };
+};
 
 function RunRow({ run }: { run: GitHubRun }) {
   const statusMeta = RUN_STATUS[run.status ?? "queued"];
@@ -402,6 +601,7 @@ function ReleaseRow({ release, onDeleteDraft, deleting, onRetry, retrying }: { r
 
 export function ReleasesPage() {
   const qc = useQueryClient();
+  const [platform, setPlatform] = useState<"desktop" | "mobile">("desktop");
   const [version, setVersion] = useState("");
   const [notes, setNotes] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -426,6 +626,19 @@ export function ReleasesPage() {
     queryKey: ["admin", "releases", "whatsnew"],
     queryFn: releaseApi.whatsnew,
     refetchInterval: 60000,
+    retry: 1,
+  });
+
+  const {
+    data: preflight,
+    isLoading: preflightLoading,
+    isError: preflightError,
+    refetch: refetchPreflight,
+    isRefetching: preflightRefetching,
+  } = useQuery({
+    queryKey: ["admin", "releases", "preflight"],
+    queryFn: releaseApi.preflight,
+    refetchInterval: 120000,
     retry: 1,
   });
 
@@ -535,6 +748,32 @@ export function ReleasesPage() {
         }
       />
 
+      {/* Platform tabs — desktop releases vs native mobile builds */}
+      <div className="mb-6 inline-flex rounded-lg border bg-muted/30 p-1" role="tablist" aria-label="Release platform">
+        {([
+          ["desktop", Rocket, "Desktop"],
+          ["mobile", Smartphone, "Mobile"],
+        ] as const).map(([key, Icon, label]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={platform === key}
+            onClick={() => setPlatform(key)}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors ${
+              platform === key
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {platform === "mobile" ? (
+        <MobileReleasesPanel />
+      ) : (
+      <>
       {activeRun && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
@@ -685,6 +924,13 @@ export function ReleasesPage() {
 
         {/* Runs + releases */}
         <div className="space-y-6 lg:col-span-3">
+          <PreflightCard
+            report={preflight}
+            isLoading={preflightLoading}
+            isError={preflightError}
+            onRerun={() => refetchPreflight()}
+            rerunning={preflightRefetching}
+          />
           {whatsnew && <NextReleaseCard data={whatsnew} />}
 
           <Card>
@@ -800,6 +1046,390 @@ export function ReleasesPage() {
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
             <Button onClick={() => trigger.mutate()} disabled={trigger.isPending}>
               {trigger.isPending ? "Triggering…" : "Confirm release"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </>
+      )}
+    </div>
+  );
+}
+
+/* ── Mobile (iOS/Android) builds panel ─────────────────────────────────── */
+
+function MobileAssetRow({ asset }: { asset: { name: string; size: number; browser_download_url: string } }) {
+  const mb = asset.size > 0 ? `${(asset.size / (1024 * 1024)).toFixed(1)} MB` : null;
+  const kind = /\.apk$/i.test(asset.name)
+    ? { label: "APK", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400" }
+    : /\.aab$/i.test(asset.name)
+      ? { label: "AAB", cls: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400" }
+      : /\.ipa$/i.test(asset.name)
+        ? { label: "IPA", cls: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400" }
+        : { label: "File", cls: "" };
+  return (
+    <a
+      href={asset.browser_download_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs transition-colors hover:bg-muted/50"
+    >
+      <Badge className={kind.cls}>{kind.label}</Badge>
+      <span className="min-w-0 flex-1 truncate font-mono" title={asset.name}>{asset.name}</span>
+      {mb && <span className="shrink-0 text-muted-foreground">{mb}</span>}
+      <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+    </a>
+  );
+}
+
+/** Build + QA utility: composes noska:// deep links and their web fallbacks. */
+function DeepLinkBuilder() {
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [pageId, setPageId] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const deepLink = pageId.trim()
+    ? `noska://workspace/${workspaceId.trim() || "WORKSPACE_ID"}/page/${pageId.trim()}`
+    : workspaceId.trim()
+      ? `noska://workspace/${workspaceId.trim()}`
+      : "";
+  const webFallback = pageId.trim()
+    ? `https://www.noska.me/link/workspace/${workspaceId.trim() || "WORKSPACE_ID"}/page/${pageId.trim()}`
+    : workspaceId.trim()
+      ? `https://www.noska.me/link/workspace/${workspaceId.trim()}`
+      : "";
+
+  const copy = async (label: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+      setTimeout(() => setCopied(null), 1500);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Copy failed — select the text manually");
+    }
+  };
+
+  const input = "w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs outline-none focus:ring-1 focus:ring-primary";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <Link2 className="h-4 w-4" /> Deep-link builder
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Compose <span className="font-mono">noska://</span> links for mobile QA — the installed app opens
+          straight to the content; the web fallback works when it isn't installed.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input
+            className={input}
+            placeholder="workspace id (UUID)"
+            value={workspaceId}
+            onChange={(e) => setWorkspaceId(e.target.value)}
+          />
+          <Input
+            className={input}
+            placeholder="page id (optional)"
+            value={pageId}
+            onChange={(e) => setPageId(e.target.value)}
+          />
+        </div>
+        {deepLink && (
+          <div className="space-y-1.5">
+            {[
+              ["App link", deepLink],
+              ["Web fallback", webFallback],
+            ].map(([label, url]) => (
+              <div key={label} className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+                <span className="w-20 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+                <code className="min-w-0 flex-1 truncate text-xs">{url}</code>
+                <Button variant="ghost" size="sm" className="h-7 shrink-0 px-2" onClick={() => void copy(label, url)}>
+                  {copied === label ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MobileReleasesPanel() {
+  const qc = useQueryClient();
+  const [version, setVersion] = useState("");
+  const [notes, setNotes] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const { data: mobile, isLoading, isError, error, refetch, isRefetching } = useQuery({
+    queryKey: ["admin", "releases", "mobile-status"],
+    queryFn: releaseApi.mobileStatus,
+    refetchInterval: 10000,
+    retry: 1,
+  });
+
+  const trigger = useMutation({
+    mutationFn: () => releaseApi.mobileTrigger(version.trim(), notes.trim() || undefined),
+    onSuccess: (result) => {
+      toast.success(`Mobile build ${result.tag} triggered — iOS + Android builds started`);
+      setConfirmOpen(false);
+      setNotes("");
+      qc.invalidateQueries({ queryKey: ["admin", "releases", "mobile-status"] });
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message.slice(0, 300) : "Mobile build trigger failed");
+    },
+  });
+
+  if (isError) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return (
+      <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-6 text-center dark:border-yellow-700 dark:bg-yellow-900/20">
+        <AlertTriangle className="mx-auto h-8 w-8 text-yellow-600" />
+        <h3 className="mt-2 text-sm font-semibold">Mobile builds unavailable</h3>
+        <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">{msg.slice(0, 250)}</p>
+      </div>
+    );
+  }
+
+  if (isLoading || !mobile) {
+    return <LoadingState count={5} />;
+  }
+
+  const activeRun = mobile.runs.find((r) => r.status === "in_progress" || r.status === "queued");
+  const pipelineReady = mobile.workflowOnBranch && mobile.androidProject === "committed";
+  const canTrigger = Boolean(mobile.currentVersion) && pipelineReady;
+
+  return (
+    <div className="space-y-6">
+      {activeRun && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-3"
+        >
+          <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Mobile build in progress — {activeRun.head_branch ?? "manual"}</p>
+            <p className="text-xs text-muted-foreground">
+              Started {new Date(activeRun.created_at).toLocaleString()} · Android (APK/AAB) + iOS build in one workflow
+            </p>
+          </div>
+          <a href={activeRun.html_url} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm">Watch run <ExternalLink className="ml-2 h-3 w-3" /></Button>
+          </a>
+        </motion.div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-5">
+        {/* Trigger + pipeline status */}
+        <div className="space-y-6 lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Smartphone className="h-4 w-4" /> Trigger a mobile build
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="mobile-version">Version</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="mobile-version"
+                    placeholder={mobile.currentVersion ?? "x.y.z"}
+                    value={version}
+                    onChange={(e) => setVersion(e.target.value)}
+                  />
+                  {mobile.currentVersion && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => setVersion(mobile.currentVersion!)}
+                    >
+                      {mobile.currentVersion}
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Mobile builds ship the repo <span className="font-medium">as-is</span> — the version must equal the
+                  current repo version ({mobile.currentVersion ?? "?"}). Bump versions with a Desktop release first.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="mobile-notes">Tag message (optional)</Label>
+                <Textarea
+                  id="mobile-notes"
+                  rows={3}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="What this mobile build is for…"
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                disabled={!canTrigger || trigger.isPending}
+                onClick={() => setConfirmOpen(true)}
+              >
+                {trigger.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
+                {trigger.isPending ? "Triggering…" : `Build mobile-v${version.trim() || mobile.currentVersion || "…"}`}
+              </Button>
+              {!pipelineReady && (
+                <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {mobile.workflowOnBranch
+                    ? "The native projects (src-tauri/gen) aren't committed to the branch yet — commit gen/android (and gen/apple once initialized) first."
+                    : "build-mobile.yml isn't on the default branch yet."}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Tagging <span className="font-mono">mobile-v…</span> starts one workflow that builds Android
+                (APK + AAB) and iOS, then stages a <span className="font-medium">draft pre-release</span> with the
+                artifacts — publish it after review.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <ShieldCheck className="h-4 w-4" /> Mobile pipeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {([
+                ["Workflow on branch", mobile.workflowOnBranch ? "build-mobile.yml found" : "build-mobile.yml missing", mobile.workflowOnBranch],
+                ["Android project", mobile.androidProject === "committed" ? "gen/android committed" : "gen/android not committed", mobile.androidProject === "committed"],
+                ["iOS project", mobile.iosProject === "committed" ? "gen/apple committed" : "gen/apple not committed (builds generate it; commit after first macOS init)", mobile.iosProject === "committed"],
+                ["noska:// scheme", mobile.schemeRegistered === null ? "manifest not found" : mobile.schemeRegistered ? "registered in AndroidManifest" : "missing — run mobile:patch", mobile.schemeRegistered === true],
+              ] as const).map(([label, detail, ok]) => (
+                <div key={label} className="flex items-start gap-2.5 rounded-lg border bg-muted/20 px-3 py-2">
+                  {ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold">{label}</p>
+                    <p className="text-[11px] text-muted-foreground">{detail}</p>
+                  </div>
+                </div>
+              ))}
+              {(mobile.storeLinks.appStore || mobile.storeLinks.googlePlay) && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {mobile.storeLinks.appStore && (
+                    <a href={mobile.storeLinks.appStore} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="sm"><Smartphone className="h-3.5 w-3.5" /> App Store <ExternalLink className="ml-1.5 h-3 w-3" /></Button>
+                    </a>
+                  )}
+                  {mobile.storeLinks.googlePlay && (
+                    <a href={mobile.storeLinks.googlePlay} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="sm">Google Play <ExternalLink className="ml-1.5 h-3 w-3" /></Button>
+                    </a>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <DeepLinkBuilder />
+        </div>
+
+        {/* Runs + releases */}
+        <div className="space-y-6 lg:col-span-3">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm font-medium">Mobile Workflow Runs (live)</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefetching ? "animate-spin" : ""}`} />
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {mobile.runs.length === 0 ? (
+                <div className="px-4 pb-4">
+                  <EmptyState
+                    title={mobile.runsError ? "Runs unavailable" : "No mobile builds yet"}
+                    description={mobile.runsError ?? "Trigger a mobile build to see runs here."}
+                  />
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {mobile.runs.slice(0, 8).map((run) => <RunRow key={run.id} run={run} />)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Mobile Releases</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {mobile.releases.length === 0 ? (
+                <div className="px-4 pb-4">
+                  <EmptyState
+                    title="No mobile releases"
+                    description="Draft mobile pre-releases (APK/AAB/IPA) appear here after a tagged build completes."
+                  />
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {mobile.releases.slice(0, 8).map((release) => (
+                    <div key={release.id} className="px-4 py-3 transition-colors hover:bg-muted/30">
+                      <a
+                        href={release.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3"
+                      >
+                        <PackageOpen className="h-5 w-5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{release.name ?? release.tag_name}</span>
+                            {release.draft && <Badge variant="secondary">Draft</Badge>}
+                            {release.prerelease && <Badge variant="secondary">Pre-release</Badge>}
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {new Date(release.published_at ?? release.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      </a>
+                      {release.assets.length > 0 && (
+                        <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                          {release.assets.map((a) => <MobileAssetRow key={a.name} asset={a} />)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Build mobile-v{version.trim() || mobile.currentVersion}?</DialogTitle>
+            <DialogDescription>
+              This tags <span className="font-mono">mobile-v{version.trim() || mobile.currentVersion}</span> on{" "}
+              <span className="font-mono">{mobile.branch}</span> and starts the iOS + Android build workflow.
+              Artifacts land in a draft pre-release for review.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            Desktop releases are unaffected — mobile builds share the app version but are shipped independently.
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            <Button onClick={() => trigger.mutate()} disabled={trigger.isPending}>
+              {trigger.isPending ? "Triggering…" : "Confirm mobile build"}
             </Button>
           </DialogFooter>
         </DialogContent>
