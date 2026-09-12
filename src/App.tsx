@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense, useSyncExternalStore } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { isDesktop } from "./lib/desktop/platform";
+import { isMobile, isNativeApp } from "./platform";
+import MobileWorkspaceApp from "./platform/mobile/MobileWorkspaceApp";
+import MobileAuthScreen from "./platform/mobile/MobileAuthScreen";
+import { MobileControllerContext, type MobileAppController } from "./platform/mobile/MobileAppController";
 import { VOICE_SETTINGS_EVENT } from "./lib/desktop/DesktopBridge";
 import { globalVoiceController } from "./lib/voice/voice-controller";
 import { parseVoiceAgentCommand, scorePageName } from "./lib/voice/agent-commands";
@@ -20,6 +24,7 @@ import { WorkspaceTabBar } from "./components/tabs/WorkspaceTabBar";
 import { Confetti, Toast, VoiceFloatingIndicator } from "./components/ui";
 import { InfoCardBanner } from "./components/InfoCardBanner";
 import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
+import { useReleaseNotes } from "./hooks/useReleaseNotes";
 import Sidebar from "./components/Sidebar";
 import { LineNavigationRail } from "./features/navigation/line-nav";
 import Topbar from "./components/Topbar";
@@ -190,6 +195,7 @@ function AppContent() {
   const routeParams = useParams();
   const [appFlowState, setAppFlowState] = useState<"loading" | "auth" | "onboarding" | "workspace">("loading");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const { notes: releaseNotes, dismiss: dismissReleaseNotes } = useReleaseNotes();
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
@@ -272,7 +278,7 @@ function AppContent() {
     () => (isDesktop() ? getDesktopIdentity() : null),
     [desktopAuthVersion]
   );
-  const clerkLoaded = clerkLoadedRaw || !!desktopIdentity;
+  const clerkLoaded = clerkLoadedRaw || !!desktopIdentity || isMobile();
   const isSignedIn = clerkSignedIn || !!desktopIdentity;
   const clerkUser = desktopIdentity ?? clerkUserRaw;
   const { session } = useSession();
@@ -285,7 +291,7 @@ function AppContent() {
   // failure visible only in the devtools console — surface it in-app.
   const [clerkStallSecs, setClerkStallSecs] = useState(0);
   useEffect(() => {
-    if (clerkLoadedRaw || isDesktop() || !loading) return;
+    if (clerkLoadedRaw || isDesktop() || isMobile() || !loading) return;
     const t = setInterval(() => setClerkStallSecs((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, [clerkLoadedRaw, loading]);
@@ -335,9 +341,9 @@ function AppContent() {
 
   // Launch settings — used to decide whether the waitlist gate should apply.
   const { settings: launchSettings, loading: launchSettingsLoading } = useLaunchSettings();
-  // Desktop shows only the core surfaces (login/onboarding/workspace) —
+  // Desktop + mobile show only the core surfaces (login/onboarding/workspace) —
   // waitlist and launch-mode gates are web-only marketing funnels.
-  const waitlistActive = !isDesktop && !launchSettingsLoading
+  const waitlistActive = !isDesktop() && !isMobile() && !launchSettingsLoading
     && (launchSettings.launch_mode === "waitlist" || launchSettings.login_mode === "waitlist");
 
   useEffect(() => {
@@ -1345,9 +1351,9 @@ function AppContent() {
     try {
       void clerk.signOut();
     } catch {}
-    // Desktop: drop the paired browser-handoff session + any pending
-    // sign-in transaction
-    if (isDesktop()) {
+    // Native shells (desktop AND mobile): drop the paired browser-handoff
+    // session + any pending sign-in transaction
+    if (isNativeApp()) {
       desktopSignOut();
       clearBrowserAuthState();
     }
@@ -1467,6 +1473,18 @@ function AppContent() {
       return;
     }
     if (appFlowState === "workspace") {
+      // Mobile: the product lives under /app/* — the router drives state
+      // there (push navigations for system back), this effect only corrects
+      // external entries (e.g. /dashboard at cold start) and stale page ids
+      // (active page trashed → fallback selection).
+      if (isMobile()) {
+        const expected = activeId ? `/app/page/${activeId}` : "/app/home";
+        const matches =
+          location.pathname === expected ||
+          (location.pathname.startsWith("/app/") && !location.pathname.startsWith("/app/page/"));
+        if (!matches) navigate(expected, { replace: true });
+        return;
+      }
       const slug = slugifyWorkspaceName(workspaceName);
       const nextPath = activeId ? `/${slug}/${activeId}` : `/${slug}`;
       if (location.pathname !== nextPath) navigate(nextPath, { replace: true });
@@ -2811,7 +2829,7 @@ function AppContent() {
         <div className="flex flex-col items-center gap-3">
           <RingLoader size={32} />
           <span className="text-sm">Loading Noska...</span>
-          {clerkStallSecs >= 25 && !clerkLoadedRaw && !isDesktop() && (
+          {clerkStallSecs >= 25 && !clerkLoadedRaw && !isDesktop() && !isMobile() && (
             <span className="max-w-xs text-center text-xs leading-relaxed opacity-80">
               Still loading — the sign-in service isn't responding. Local dev
               must run via https://app.noska.me:5173: the production sign-in
@@ -2822,7 +2840,7 @@ function AppContent() {
       </div>
     );
   }
-  if (appFlowState === "workspace" && !activePage) {
+  if (appFlowState === "workspace" && !activePage && !isMobile()) {
     // Real dead-end bug, fixed: `activePage` falls back through
     // `pages.find(!trashed) || pages[0]`, so it's only ever falsy when
     // `pages` is genuinely empty (not merely "all trashed" — a trashed
@@ -2892,6 +2910,219 @@ function AppContent() {
     setSettingsInitialTab(tab || "General");
     setSettingsOpen(true);
   };
+
+  // ── Mobile (iOS/Android native shell) ────────────────────────────────────
+  // The mobile app renders a dedicated touch-first UI (bottom navigation,
+  // sheets, safe areas) while sharing EVERY piece of state and every handler
+  // defined above — one business layer across web, desktop and mobile.
+  // Platform specifics (auth handoff, deep links, notifications, storage)
+  // resolve through src/platform adapters, not duplicated logic.
+  if (isMobile()) {
+    const mobileController: MobileAppController = {
+      visiblePages,
+      trashPages,
+      sharedPages,
+      pendingInvites,
+      activeId,
+      activePage,
+      workspaceName,
+      saveState,
+      theme,
+      dark,
+      currentUserId,
+      currentUsername,
+      currentUserEmail,
+      currentUserAvatar,
+      ghostWriterEnabled,
+      renameFocusId,
+      appView,
+      stackedPageIds,
+      selectPage: (id) => handlePageSelect(id),
+      selectView: (view) => handleViewSelect(view),
+      newPage: addPage,
+      updatePage,
+      trashPage: handleTrashPage,
+      restorePage: restorePageSubtree,
+      deleteForever: deletePageSubtreeForever,
+      duplicatePage,
+      toggleOffline,
+      copyPageLink: (id) => { void copyPageLink(id); },
+      renameFocus: renamePage,
+      removeRecent: removeFromRecents,
+      unlockPage: handleUnlockPage,
+      patchBlockByPage: (pageId, blockId, patch) => handleBlockPatchByPage(pageId, blockId, patch),
+      createSubpage: createSubpageAtBlock,
+      addInside: addPageInside,
+      acceptInvite: handleAcceptInvite,
+      declineInvite: handleDeclineInvite,
+      logout: () => { void handleLogout(); },
+      setTheme: setThemeWithTransition,
+      updateWorkspaceName: (name) => {
+        setWorkspaceName(name);
+        if (currentUserId) {
+          saveSetting("workspaceName", name).catch(() => {});
+        }
+      },
+      showToast,
+      openSettings: (tab) => {
+        setSettingsInitialTab(tab || "General");
+        setSettingsOpen(true);
+      },
+      toolContext,
+      editorProps: {
+        pages: visiblePages,
+        sharedPages,
+        currentUserId,
+        renameFocusId,
+        onRenameFocusDone: () => setRenameFocusId(null),
+        onPagePatch: (pId, patch) => updatePage(pId, patch),
+        onUpdatePage: updatePage,
+        onAddBlock: (pId, blockId, type, text) => {
+          const p = pages.find((page) => page.id === pId);
+          if (!p?.blocks) return;
+          const index = p.blocks.findIndex((b) => b.id === blockId);
+          if (index < 0) return;
+          const block = blockFor(type, text);
+          updatePage(pId, {
+            blocks: [...p.blocks.slice(0, index + 1), block, ...p.blocks.slice(index + 1)]
+          });
+        },
+        onDeleteBlock: (pId, blockId) => {
+          const p = pages.find((page) => page.id === pId);
+          if (!p?.blocks) return;
+          updatePage(pId, { blocks: p.blocks.filter((b) => b.id !== blockId) });
+        },
+        onDuplicateBlock: (pId, blockId) => {
+          const p = pages.find((page) => page.id === pId);
+          if (!p?.blocks) return;
+          const index = p.blocks.findIndex((b) => b.id === blockId);
+          if (index < 0) return;
+          const copy = JSON.parse(JSON.stringify(p.blocks[index]));
+          copy.id = uid();
+          updatePage(pId, {
+            blocks: [...p.blocks.slice(0, index + 1), copy, ...p.blocks.slice(index + 1)]
+          });
+        },
+        onMoveBlock: (pId, blockId, dir) => {
+          const p = pages.find((page) => page.id === pId);
+          if (!p?.blocks) return;
+          const blocks = [...p.blocks];
+          const i = blocks.findIndex((b) => b.id === blockId);
+          const j = i + dir;
+          if (i < 0 || j < 0 || j >= blocks.length) return;
+          [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
+          updatePage(pId, { blocks });
+        },
+        onBlocks: (pId, blocks) => updatePage(pId, { blocks }),
+        onAskAI: openRightPanel,
+        onFocusBlock: (block) => setFocusedBlock(block),
+        onReadingModePage: (p) => setReadingPage(p),
+        onUnlockPage: handleUnlockPage,
+        onDeletePage: (id) => { commitPages(pages.filter((p) => p.id !== id)); },
+        onToast: showToast,
+        onVoiceCapture: () => setVoiceOpen(true),
+        ghostWriterEnabled,
+        apiKey,
+        aiProvider,
+        nvidiaKey,
+        onCreateSubpage: createSubpageAtBlock,
+        onTrashPage: handleTrashPage,
+        onNewPage: (template) => addPage(template),
+      },
+      needsUsernameClaim,
+      claimUsername: (username) => {
+        setCurrentUsername(username);
+        setNeedsUsernameClaim(false);
+      },
+    };
+
+    return (
+      <CompanyProvider>
+        <TeamProvider>
+          <MobileControllerContext.Provider value={mobileController}>
+            {loading ? (
+              isSignedIn ? (
+                <div className="mobile-auth-screen mobile-auth-screen--center" data-testid="mobile-loading">
+                  <img src="/logo.png" alt="Noska" className="mobile-auth-logo" style={{ width: 52, height: 52 }} />
+                  <div className="mobile-auth-loading">
+                    <span className="mobile-spinner" aria-hidden />
+                    <p>Loading your workspace…</p>
+                  </div>
+                </div>
+              ) : (
+                <LoadingScreen key="mobile-loader" onComplete={() => { if (!ticketPending) setAppFlowState("auth"); }} />
+              )
+            ) : appFlowState === "auth" ? (
+              <LoginGate>
+                <MobileAuthScreen key="mobile-auth" />
+              </LoginGate>
+            ) : appFlowState === "onboarding" || onboardingOpen ? (
+              <div className="mobile-onboarding-host" data-testid="mobile-onboarding">
+                <OnboardingPage
+                  key={onboardingOpen ? "mobile-onboarding-overlay" : "mobile-onboarding"}
+                  overlay={onboardingOpen || undefined}
+                  initialWorkspaceName={workspaceName}
+                  initialUsername={currentUsername ?? undefined}
+                  currentUserId={currentUserId ?? undefined}
+                  onFinalize={handleFinalize}
+                  onComplete={(data, starterPages) => {
+                    if (onboardingOpen) setOnboardingOpen(false);
+                    void handleOnboardingComplete(data, starterPages);
+                  }}
+                />
+              </div>
+            ) : location.pathname === "/banned" ? (
+              <div className="mobile-auth-screen mobile-auth-screen--center">
+                <h1 className="mobile-auth-title">Access revoked</h1>
+                <p className="mobile-auth-subtitle">Your account has been suspended. Contact the workspace administrator if you believe this is a mistake.</p>
+                <div className="mobile-auth-actions">
+                  <button type="button" className="mobile-btn mobile-btn--secondary" onClick={() => clerk.signOut()}>Sign out</button>
+                </div>
+              </div>
+            ) : (
+              <MobileWorkspaceApp />
+            )}
+            {settingsOpen && (
+              <SettingsModal
+                key="mobile-settings"
+                initialTab={settingsInitialTab}
+                workspaceName={workspaceName}
+                setWorkspaceName={setWorkspaceName}
+                theme={theme}
+                setTheme={setThemeWithTransition}
+                themeFx={themeFx}
+                setThemeFx={setThemeFx}
+                apiKey={apiKey}
+                setApiKey={setApiKey}
+                aiProvider={aiProvider}
+                setAIProvider={setAiProvider}
+                nvidiaKey={nvidiaKey}
+                setNvidiaKey={setNvidiaKey}
+                onReplayOnboarding={handleReplayOnboarding}
+                onLogout={handleLogout}
+                onProfileNameChanged={(name) => {
+                  const avatar = realtimeCollab.getUser()?.userAvatar || "👤";
+                  realtimeCollab.initUser(currentUserId || "", name, avatar);
+                }}
+                onProfileAvatarChanged={(avatarUrl) => {
+                  setCurrentUserAvatar(avatarUrl);
+                  const name = realtimeCollab.getUser()?.userName || "Workspace User";
+                  realtimeCollab.initUser(currentUserId || "", name, avatarUrl || "👤");
+                }}
+                onClose={() => setSettingsOpen(false)}
+                ghostWriterEnabled={ghostWriterEnabled}
+                setGhostWriterEnabled={setGhostWriterEnabled}
+                currentUserId={currentUserId}
+                currentUsername={currentUsername}
+                currentUserEmail={currentUserEmail}
+                onUsernameChanged={setCurrentUsername}
+              />
+            )}
+          </MobileControllerContext.Provider>
+        </TeamProvider>
+      </CompanyProvider>
+    );
+  }
 
   return (
     <CompanyProvider>
@@ -3018,8 +3249,8 @@ function AppContent() {
             />
           )}
           <main className="relative flex min-w-0 flex-1 flex-col bg-[var(--bg)]">
-            <InfoCardBanner />
-            <ReleaseNotesModal />
+            <InfoCardBanner hidden={!!releaseNotes} />
+            <ReleaseNotesModal notes={releaseNotes} dismiss={dismissReleaseNotes} />
             <WorkspaceTabBar
               pages={visiblePages}
               sharedPages={sharedPages}

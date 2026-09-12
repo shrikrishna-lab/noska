@@ -1,14 +1,22 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles, X, ExternalLink, Rocket } from "lucide-react";
-import { useReleaseNotes } from "@/hooks/useReleaseNotes";
+import { useReleaseNotes, type ReleaseNotes } from "@/hooks/useReleaseNotes";
 import { MarkdownBody } from "@/components/ui/MarkdownLite";
 import { Button } from "@/components/ui/button";
 
 // "What's New" modal — appears once after the desktop app updates to a new
 // version, rendering the release notes published to the public releases repo.
 // Dismissal persists per version: never shown again until the next update.
-export function ReleaseNotesModal() {
-  const { notes, dismiss } = useReleaseNotes();
+export function ReleaseNotesModal({
+  notes: controlledNotes,
+  dismiss: controlledDismiss,
+}: {
+  notes?: ReleaseNotes | null;
+  dismiss?: () => void;
+} = {}) {
+  const internal = useReleaseNotes();
+  const notes = controlledNotes !== undefined ? controlledNotes : internal.notes;
+  const dismiss = controlledDismiss ?? internal.dismiss;
 
   return (
     <AnimatePresence>

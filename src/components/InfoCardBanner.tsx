@@ -76,9 +76,9 @@ function CardRow({ card, onDismiss }: { card: InfoCard; onDismiss: (id: string) 
 
 // Announcement banners managed from the admin panel (info_cards table).
 // Renders nothing when there are no active, non-dismissed cards.
-export function InfoCardBanner() {
+export function InfoCardBanner({ hidden }: { hidden?: boolean }) {
   const { cards, dismiss } = useInfoCards();
-  if (cards.length === 0) return null;
+  if (hidden || cards.length === 0) return null;
   return (
     <div className="pointer-events-none absolute inset-x-0 top-2 z-40 flex flex-col items-center gap-2 px-4">
       <AnimatePresence initial={false}>
