@@ -239,10 +239,17 @@ Deno.serve(async (req: Request) => {
       // last known body so the published release doesn't lose them.
       const relR = await gh<{ id: number; draft: boolean }>(token, `/repos/${REPO}/releases/tags/${tag}`);
       if (relR.status === 404 && typeof body.notes === "string" && body.notes.trim()) {
-        await gh(token, `/repos/${REPO}/releases`, {
+        const newDraft = await gh<{ id: number }>(token, `/repos/${REPO}/releases`, {
           method: "POST",
           body: { tag_name: tag, name: `Noska Desktop v${tag.slice("desktop-v".length)}`, body: body.notes, draft: true, prerelease: false },
         });
+        if (newDraft.ok) {
+          await fetch(`https://uploads.github.com/repos/${REPO}/releases/${newDraft.data!.id}/assets?name=release-notes.md`, {
+            method: "POST",
+            headers: { ...ghHeaders(token), "Content-Type": "text/markdown" },
+            body: body.notes,
+          });
+        }
       }
 
       await audit(admin, "release.retry", { tag, headSha, previousSha: currentTaggedSha });
@@ -554,17 +561,34 @@ Deno.serve(async (req: Request) => {
     // Pre-create the draft release so the admin's notes survive —
     // tauri-action attaches build artifacts to this release.
     let releaseUrl: string | null = null;
-    const draft = await gh<{ html_url: string }>(token, `/repos/${REPO}/releases`, {
+    const draftBodyText = notes || "Installers for Windows (.exe/.msi), macOS (.dmg) and Linux (.AppImage/.deb/.rpm). Auto-update manifest: latest.json";
+    const draft = await gh<{ html_url: string; id: number }>(token, `/repos/${REPO}/releases`, {
       method: "POST",
       body: {
         tag_name: tag,
         name: `Noska Desktop v${version}`,
-        body: notes || "Installers for Windows (.exe/.msi), macOS (.dmg) and Linux (.AppImage/.deb/.rpm). Auto-update manifest: latest.json",
+        body: draftBodyText,
         draft: true,
         prerelease: false,
       },
     });
-    if (draft.ok) releaseUrl = draft.data!.html_url;
+    if (draft.ok) {
+      releaseUrl = draft.data!.html_url;
+      // tauri-action resets the draft BODY to its generic releaseBody when it
+      // attaches artifacts — so the real notes are also stored as an asset,
+      // which tauri-action leaves untouched. The publish job prefers it.
+      const notesAsset = await fetch(
+        `https://uploads.github.com/repos/${REPO}/releases/${draft.data!.id}/assets?name=release-notes.md`,
+        {
+          method: "POST",
+          headers: { ...ghHeaders(token), "Content-Type": "text/markdown" },
+          body: draftBodyText,
+        },
+      );
+      if (!notesAsset.ok) {
+        console.error("[admin-trigger-release] notes asset upload failed:", notesAsset.status, (await notesAsset.text()).slice(0, 200));
+      }
+    }
 
     await audit(admin, "release.trigger", { tag, version, commitSha, releaseUrl });
 

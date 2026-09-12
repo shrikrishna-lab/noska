@@ -146,15 +146,18 @@ jobs:
             echo "staging release $TAG not found" >&2
             exit 1
           fi
+          # Fetch the staging draft's body first — tauri-action resets the draft
+          # body to its generic default when attaching artifacts, so this is
+          # only a fallback. The trigger uploads the real notes as a
+          # release-notes.md ASSET (downloaded in the loop below), which
+          # overwrites this with the admin-authored notes.
+          gh api "repos/shrikrishna-lab/noska/releases/$RELEASE_ID" --jq '.body' > dist/release-notes.md
           gh api "repos/shrikrishna-lab/noska/releases/$RELEASE_ID/assets?per_page=100" \
             --jq '.[] | "\(.id)\t\(.name)"' | while IFS=$'\t' read -r aid name; do
               echo "downloading $name"
               gh api "repos/shrikrishna-lab/noska/releases/assets/$aid" \
                 -H "Accept: application/octet-stream" > "dist/$name"
           done
-          # Carry the admin-authored release notes to the public release —
-          # the desktop app renders these as the per-version "What's New".
-          gh api "repos/shrikrishna-lab/noska/releases/$RELEASE_ID" --jq '.body' > dist/release-notes.md
           ls -la dist
 
       - name: Point latest.json at the PUBLIC repository
