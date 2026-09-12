@@ -53,8 +53,8 @@
       "nsis": {
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico",
-        "sidebar": "icons/nsis-sidebar.png",
-        "header": "icons/nsis-header.png",
+        "sidebarImage": "icons/nsis-sidebar.png",
+        "headerImage": "icons/nsis-header.png",
         "displayLanguageSelector": false
       }
     },
