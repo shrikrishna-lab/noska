@@ -178,13 +178,16 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
         run: |
           TAG="${{ steps.ver.outputs.tag }}"
+          # The notes file is consumed via --notes-file below — keep it out of
+          # the uploaded assets.
+          mv dist/release-notes.md dist/RELEASE-NOTES.md.keep
           if gh release view "$TAG" --repo shrikrishna-lab/noska-desktop-releases > /dev/null 2>&1; then
             gh release upload "$TAG" --repo shrikrishna-lab/noska-desktop-releases --clobber dist/*
             gh release edit "$TAG" --repo shrikrishna-lab/noska-desktop-releases \
-              --notes-file dist/release-notes.md
+              --notes-file dist/RELEASE-NOTES.md.keep
           else
             gh release create "$TAG" dist/* \
               --repo shrikrishna-lab/noska-desktop-releases \
               --title "Noska Desktop v${{ steps.ver.outputs.version }}" \
-              --notes-file dist/release-notes.md
+              --notes-file dist/RELEASE-NOTES.md.keep
           fi

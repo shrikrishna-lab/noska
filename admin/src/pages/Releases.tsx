@@ -409,11 +409,20 @@ export function ReleasesPage() {
   });
 
   const trigger = useMutation({
-    mutationFn: () => releaseApi.trigger(
-      version.trim(),
+    mutationFn: () => {
+      // If auto-generated notes carry a version header that no longer matches
+      // the version being shipped (user edited the version after generating),
+      // correct the header so the published release is never mislabeled.
+      let finalNotes = notes.trim();
+      if (finalNotes && suggested) {
+        finalNotes = finalNotes.replace(/# Noska Desktop v[^\s]+/, `# Noska Desktop v${suggested}`);
+      }
       // Real generated notes beat the function's generic fallback.
-      notes.trim() || (whatsnew && whatsnew.counts.total > 0 ? generateNotes(whatsnew, suggested) : ""),
-    ),
+      if (!finalNotes && whatsnew && whatsnew.counts.total > 0) {
+        finalNotes = generateNotes(whatsnew, suggested);
+      }
+      return releaseApi.trigger(version.trim(), finalNotes);
+    },
     onSuccess: (result) => {
       toast.success(`Release ${result.tag} triggered — build started`);
       setConfirmOpen(false);
