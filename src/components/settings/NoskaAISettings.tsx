@@ -28,6 +28,7 @@ import { modelCatalogSyncService } from "../../ai/models/ModelCatalogSyncService
 import { modelRepository } from "../../ai/models/ModelRepository";
 import type { NormalizedModel, SyncResult } from "../../ai/models/normalizedSchema";
 import CustomProviders from "./CustomProviders";
+import { InlineAction } from "../ui/inline-action";
 
 interface NoskaAISettingsProps {
   apiKey?: string;
@@ -349,19 +350,16 @@ export default function NoskaAISettings({
             </p>
           </div>
 
-          <button
-            type="button"
-            disabled={isSyncingAll || modelCatalogSyncService.isSyncingAny()}
-            onClick={handleSyncAll}
-            className="group relative inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#1c1b18] hover:bg-[#2d2a26] text-white dark:bg-white dark:text-[#1c1b18] dark:hover:bg-white/90 text-xs font-semibold shadow-xs hover:shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50 shrink-0 select-none active:scale-[0.98] self-start sm:self-auto"
-            title="Fetch and register latest models across all configured providers"
-          >
-            <RotateCw
-              size={12}
-              className={isSyncingAll || modelCatalogSyncService.isSyncingAny() ? "animate-spin text-emerald-400 dark:text-emerald-600" : "group-hover:rotate-45 transition-transform duration-300"}
+          <div className="shrink-0 self-start sm:self-auto">
+            <InlineAction
+              size="sm"
+              label="Live Catalog"
+              icon={<RotateCw size={13} className={isSyncingAll ? "animate-spin text-purple-600" : ""} />}
+              actionText="Sync All"
+              onAction={handleSyncAll}
+              className="px-0 w-auto"
             />
-            <span>{isSyncingAll ? "Syncing All..." : "Sync All Models"}</span>
-          </button>
+          </div>
         </div>
 
         {/* Global Batch Sync Feedback Banner */}

@@ -374,3 +374,15 @@ export { LineNavigationRail, default as LineNavigationRailDefault } from "../../
 export * from "../../features/navigation/line-nav/types";
 export * from "../../features/navigation/line-nav/previewExtractor";
 export * from "../../features/navigation/line-nav/PagePreviewCard";
+export { AdaptiveSlider, AdaptiveReasoningSlider, default as AdaptiveSliderDefault } from "./adaptive-slider";
+export type { AdaptiveSliderProps, AdaptiveReasoningSliderProps, ColorSettings } from "./adaptive-slider";
+export { InlineAction, default as InlineActionDefault } from "./inline-action";
+export type { InlineActionProps } from "./inline-action";
+export { InlineActionBase, default as InlineActionBaseDefault } from "./inline-action-base";
+export type { InlineActionBaseProps } from "./inline-action-base";
+export { OptionPicker, default as OptionPickerDefault } from "./quick-option-picker";
+export type { OptionPickerProps, Option } from "./quick-option-picker";
+export { OptionPickerBase, default as OptionPickerBaseDefault } from "./quick-option-picker-base";
+export type { OptionPickerBaseProps } from "./quick-option-picker-base";
+export { AiPromptInput, ReasoningEffortButton } from "./ai-prompt-input";
+export { LiquidMetalButton } from "./liquid-metal-button";

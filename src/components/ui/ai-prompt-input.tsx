@@ -29,6 +29,7 @@ import {
   Check,
   RotateCw,
   AlertTriangle,
+  Brain,
 } from "lucide-react"
 import {
   AnimatePresence,
@@ -46,21 +47,24 @@ import { modelRegistry } from "../../ai/models/ModelRegistry"
 import { formatDefaultDisplayName } from "../../ai/models/ModelMetadataOverrides"
 import { VoiceInput } from "./voice-input"
 import { globalVoiceController } from "../../lib/voice/voice-controller"
+import { AdaptiveSlider, AdaptiveReasoningSlider } from "./adaptive-slider"
+import { liquidMetalFragmentShader, ShaderMount } from "@paper-design/shaders"
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-const EASE = [0.2, 0, 0, 1] as const
+const EASE = [0.16, 1, 0.3, 1] as const
+const SPRING_APPLE = { type: "spring" as const, stiffness: 440, damping: 30, mass: 0.8 }
 const SPRING_SOFT = { type: "spring" as const, stiffness: 420, damping: 32 }
 const SPRING_HEIGHT = { type: "spring" as const, stiffness: 380, damping: 34 }
 const SPRING_PRESS = { type: "spring" as const, stiffness: 500, damping: 28 }
-const SPRING_ICON = { type: "spring" as const, duration: 0.3, bounce: 0 }
+const SPRING_ICON = { type: "spring" as const, duration: 0.28, bounce: 0 }
 
 const MENU_PANEL_CLASS = cn(
-  "bg-[#fcfbf9] dark:bg-[#18181a] text-[#1c1b18] dark:text-[#ececec] origin-bottom-left overflow-hidden rounded-2xl border border-[#e8e4db] dark:border-[#2e2e33] p-1",
-  "shadow-[0_16px_36px_rgba(0,0,0,0.12)] dark:shadow-[0_20px_48px_rgba(0,0,0,0.7)]",
-  "backdrop-blur-xl"
+  "bg-[#fdfcfb]/95 dark:bg-[#16171a]/95 text-[#1c1b18] dark:text-[#ececec] origin-bottom-left overflow-hidden rounded-2xl border border-black/[0.08] dark:border-white/[0.09] p-1",
+  "shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18),0_0_1px_1px_rgba(0,0,0,0.04),inset_0_1px_0_0_rgba(255,255,255,0.8)] dark:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_1px_1px_rgba(255,255,255,0.06),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+  "backdrop-blur-2xl backdrop-saturate-150"
 )
 
 const CHIP_SURFACE_CLASS = cn(
@@ -70,7 +74,7 @@ const CHIP_SURFACE_CLASS = cn(
 
 const TOOLBAR_BTN_CLASS = cn(
   "relative flex size-9 cursor-pointer items-center justify-center rounded-xl",
-  "transition-[background-color,color,box-shadow,opacity,transform] duration-200 ease-[cubic-bezier(0.2,0,0,1)]",
+  "transition-[background-color,color,box-shadow,opacity,transform] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
   "hover:bg-muted hover:text-foreground",
   "focus-visible:ring-0 focus-visible:outline-none focus:outline-none",
   "disabled:pointer-events-none disabled:opacity-40"
@@ -107,10 +111,16 @@ function scaleBlurPresence(reduceMotion: boolean): PresenceProps {
 function menuPresence(reduceMotion: boolean): PresenceProps {
   if (reduceMotion) return FADE_ONLY
   return {
-    initial: { opacity: 0, y: 6, scale: 0.96, filter: "blur(4px)" },
-    animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" },
-    exit: { opacity: 0, y: 4, scale: 0.98, filter: "blur(2px)" },
-    transition: { duration: 0.2, ease: EASE },
+    initial: { opacity: 0, scale: 0.88, y: 8, filter: "blur(10px)" },
+    animate: { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" },
+    exit: {
+      opacity: 0,
+      scale: 0.88,
+      y: 6,
+      filter: "blur(6px)",
+      transition: { duration: 0.15, ease: [0.32, 0, 0.67, 0] },
+    },
+    transition: SPRING_APPLE,
   }
 }
 
@@ -141,10 +151,16 @@ function statusPresence(reduceMotion: boolean): PresenceProps {
 function flyoutPresence(reduceMotion: boolean): PresenceProps {
   if (reduceMotion) return FADE_ONLY
   return {
-    initial: { opacity: 0, x: -6, scale: 0.98, filter: "blur(4px)" },
+    initial: { opacity: 0, x: -10, scale: 0.92, filter: "blur(8px)" },
     animate: { opacity: 1, x: 0, scale: 1, filter: "blur(0px)" },
-    exit: { opacity: 0, x: -4, scale: 0.98, filter: "blur(2px)" },
-    transition: { duration: 0.18, ease: EASE },
+    exit: {
+      opacity: 0,
+      x: -6,
+      scale: 0.94,
+      filter: "blur(4px)",
+      transition: { duration: 0.14, ease: [0.32, 0, 0.67, 0] },
+    },
+    transition: SPRING_APPLE,
   }
 }
 
@@ -649,7 +665,6 @@ function ModelLabelParts({
   }
 
   const mods: string[] = []
-  if (selection.effort) mods.push(EFFORT_LABEL[selection.effort])
   if (selection.fast && !selection.thinking) mods.push("Fast")
   if (selection.thinking) mods.push("Thinking")
 
@@ -1097,11 +1112,34 @@ const ModelSelectorContent = React.forwardRef<
     selection,
   } = useModelSelectorContext("ModelSelectorContent")
 
+  const computeCoords = React.useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger) return null
+    const rect = trigger.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+
+    // Anchor right above the trigger button to always open upward
+    const popupWidth = Math.min(340, viewportWidth - 24)
+    const left = Math.max(12, Math.min(rect.left, viewportWidth - popupWidth - 12))
+    const bottom = Math.max(12, viewportHeight - rect.top + 8)
+    const maxH = Math.min(500, Math.max(260, rect.top - 16))
+    const originX = Math.max(16, Math.min(rect.left - left + rect.width / 2, popupWidth - 16))
+
+    return {
+      bottom,
+      left,
+      maxHeight: maxH,
+      originX: `${originX}px`,
+    }
+  }, [triggerRef])
+
   const [mounted, setMounted] = React.useState(false)
   const [coords, setCoords] = React.useState<{
     bottom: number
     left: number
     maxHeight?: number
+    originX?: string
   } | null>(null)
 
   React.useEffect(() => {
@@ -1116,23 +1154,8 @@ const ModelSelectorContent = React.forwardRef<
     if (!open) return
 
     const update = () => {
-      const trigger = triggerRef.current
-      if (!trigger) return
-      const rect = trigger.getBoundingClientRect()
-      const viewportWidth = window.innerWidth
-      const viewportHeight = window.innerHeight
-
-      // Anchor right above the trigger button to always open upward
-      const popupWidth = Math.min(340, viewportWidth - 24)
-      const left = Math.max(12, Math.min(rect.left, viewportWidth - popupWidth - 12))
-      const bottom = Math.max(12, viewportHeight - rect.top + 8)
-      const maxH = Math.min(500, Math.max(260, rect.top - 16))
-
-      setCoords({
-        bottom,
-        left,
-        maxHeight: maxH,
-      })
+      const calculated = computeCoords()
+      if (calculated) setCoords(calculated)
     }
 
     update()
@@ -1142,10 +1165,11 @@ const ModelSelectorContent = React.forwardRef<
       window.removeEventListener("resize", update)
       window.removeEventListener("scroll", update, true)
     }
-  }, [open, triggerRef, sideProp])
+  }, [open, computeCoords])
 
   if (!mounted) return null
 
+  const activeCoords = coords ?? (open ? computeCoords() : null)
   const list = children ?? <ModelSelectorDefaultItems />
   const editingModel = models.find((m) => m.id === editingId)
   const previewModel = models.find((m) => m.id === previewId)
@@ -1158,7 +1182,7 @@ const ModelSelectorContent = React.forwardRef<
 
   return createPortal(
     <AnimatePresence>
-      {open && coords ? (
+      {open && activeCoords ? (
         <motion.div
           key={contentId}
           ref={(node) => assignRef(node, ref, contentRef)}
@@ -1167,13 +1191,14 @@ const ModelSelectorContent = React.forwardRef<
           {...menuPresence(reduceMotion)}
           style={{
             position: "fixed",
-            bottom: `${coords.bottom}px`,
-            left: `${coords.left}px`,
-            maxHeight: `${coords.maxHeight}px`,
+            bottom: `${activeCoords.bottom}px`,
+            left: `${activeCoords.left}px`,
+            maxHeight: `${activeCoords.maxHeight}px`,
+            transformOrigin: `${activeCoords.originX || '24px'} bottom`,
             zIndex: 50,
             ...style,
           }}
-          className={cn("flex origin-bottom-left items-end gap-1.5", className)}
+          className={cn("flex items-end gap-1.5", className)}
           {...props}
         >
           <div
@@ -1277,6 +1302,10 @@ function ModelSelectorDefaultItems() {
   const [modelCategory, setModelCategory] = React.useState<"all" | "ready" | "flagship" | "reasoning" | "local" | "connect" | "sunset">("all")
   const [selectedProviderId, setSelectedProviderId] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
+
+  const handleCategoryClick = (catId: string) => {
+    setModelCategory(catId as any)
+  }
   const [isRefreshing, setIsRefreshing] = React.useState(false)
 
   // Listen for live background catalog updates
@@ -1363,16 +1392,12 @@ function ModelSelectorDefaultItems() {
   }, [selectedProvider, search])
 
   return (
-    <LayoutGroup id={layoutGroupId}>
-      <motion.div
-        variants={listVariants}
-        initial={reduceMotion ? false : "hidden"}
-        animate="show"
-        className={cn(
-          MENU_PANEL_CLASS,
-          "flex w-[310px] sm:w-[335px] flex-col overflow-hidden shadow-2xl border border-[#e8e4db] dark:border-[#2e2e33]"
-        )}
-      >
+    <div
+      className={cn(
+        MENU_PANEL_CLASS,
+        "flex w-[310px] sm:w-[335px] flex-col overflow-hidden shadow-2xl border border-[#e8e4db] dark:border-[#2e2e33]"
+      )}
+    >
         {/* Streamlined Noska Header */}
         <div className="p-2 space-y-2 border-b border-[#e8e4db] dark:border-[#2e2e33] bg-[#fcfbf9] dark:bg-[#18181a]">
           <div className="flex items-center justify-between gap-1.5">
@@ -1458,12 +1483,12 @@ function ModelSelectorDefaultItems() {
                 { id: "reasoning", label: "🧠 Reasoning" },
                 { id: "local", label: "💻 Local" },
                 { id: "connect", label: "🔌 Connect" },
-                { id: "sunset", label: "⚠️ Sunset / Retired" },
+                { id: "sunset", label: "⚠️ Sunset" },
               ].map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
-                  onClick={() => setModelCategory(cat.id as any)}
+                  onClick={() => handleCategoryClick(cat.id)}
                   className={cn(
                     "px-2 py-0.5 rounded-md whitespace-nowrap transition-all cursor-pointer font-medium",
                     modelCategory === cat.id
@@ -1538,11 +1563,10 @@ function ModelSelectorDefaultItems() {
 
                 return (
                   <li key={provider.id} role="none">
-                    <motion.div
-                      variants={reduceMotion ? itemVariantsReduced : itemVariants}
+                    <div
                       onClick={() => setSelectedProviderId(provider.id)}
                       className={cn(
-                        "group/item relative flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 cursor-pointer text-xs transition-colors",
+                        "group/item relative flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 cursor-pointer text-xs transition-colors duration-100",
                         hasSelectedModel
                           ? "bg-[#ede8df] dark:bg-white/10 text-[#1c1b18] dark:text-white font-semibold border border-[#ded8cb] dark:border-white/15"
                           : "text-[#1c1b18] dark:text-[#ececec] hover:bg-[#ede8df]/60 dark:hover:bg-white/5"
@@ -1574,7 +1598,7 @@ function ModelSelectorDefaultItems() {
                         )}
                         <ChevronRightIcon size={12} className="text-[#706c64] dark:text-[#a09c94] opacity-70 group-hover/item:opacity-100 transition-opacity" />
                       </div>
-                    </motion.div>
+                    </div>
                   </li>
                 )
               })
@@ -1619,8 +1643,7 @@ function ModelSelectorDefaultItems() {
             </button>
           </div>
         )}
-      </motion.div>
-    </LayoutGroup>
+      </div>
   )
 }
 
@@ -1687,10 +1710,9 @@ function ModelSelectorItem({ model }: { model: AiModel }) {
       }}
       onMouseLeave={() => setShowEffortMenu(false)}
     >
-      <motion.div
-        variants={reduceMotion ? itemVariantsReduced : itemVariants}
+      <div
         className={cn(
-          "group/item relative flex w-full items-center justify-between gap-1.5 rounded-xl px-2 py-1.5 cursor-pointer text-[11px] transition-colors",
+          "group/item relative flex w-full items-center justify-between gap-1.5 rounded-xl px-2 py-1.5 cursor-pointer text-[11px] transition-colors duration-100",
           isActive
             ? "bg-[#ede8df] dark:bg-white/10 text-[#1c1b18] dark:text-white font-semibold border border-[#ded8cb] dark:border-white/15"
             : "text-[#1c1b18] dark:text-[#ececec] hover:bg-[#ede8df]/60 dark:hover:bg-white/5"
@@ -1784,7 +1806,7 @@ function ModelSelectorItem({ model }: { model: AiModel }) {
             <ChevronRightIcon size={12} />
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   )
 }
@@ -1817,34 +1839,24 @@ function ModelSidePanel({
 }
 
 function ModelSidePanelContent({ model }: { model: AiModel }) {
-  const { onOpenKeySetup, setOpen, selection, selectModel, patchSelection, getConfigFor } =
+  const { onOpenKeySetup, setOpen } =
     useModelSelectorContext("ModelSidePanelContent")
 
-  const config = getConfigFor(model)
   const isLocal = model.providerType === "local"
   const isReady = model.configured || isLocal
-  const contexts = model.contexts?.map((c) => formatContext(c)).filter(Boolean).join(" · ")
-  const isSelectedModel = selection.id === model.id
-  const currentEffort = isSelectedModel ? (selection.effort || "medium") : (model.defaultEffort || "medium")
-
-  const handleSelectEffort = (effort: AiModelEffort, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    selectModel(model.id)
-    patchSelection({ ...config, id: model.id, effort })
-    setOpen(false)
-  }
+  const contexts = model.contexts?.map((c) => formatContext(c)).filter(Boolean).join(" · ") || model.defaultContext || "128K"
 
   return (
-    <div className="flex flex-col gap-2 text-left">
-      {/* Model Name Header */}
-      <div className="flex items-start justify-between gap-1.5 pb-1.5 border-b border-[#e8e4db] dark:border-[#2e2e33]">
+    <div className="flex flex-col gap-2.5 text-left">
+      {/* Model Name & Status Header */}
+      <div className="flex items-start justify-between gap-1.5 pb-2 border-b border-[#e8e4db] dark:border-[#2e2e33]">
         <div className="min-w-0 flex-1">
-          <div className="text-[11.5px] font-semibold text-[#1c1b18] dark:text-white leading-tight truncate">
+          <div className="text-[12px] font-semibold text-[#1c1b18] dark:text-white leading-tight truncate">
             {model.label}
           </div>
           <div className="text-[10px] text-[#706c64] dark:text-[#a09c94] flex items-center gap-1 mt-0.5">
-            {isLocal ? <Laptop size={10} /> : <Cloud size={10} />}
-            <span className="truncate">{model.providerName}</span>
+            {isLocal ? <Laptop size={11} /> : <Cloud size={11} />}
+            <span className="truncate font-medium">{model.providerName}</span>
           </div>
         </div>
         {model.status === "discontinued" ? (
@@ -1868,37 +1880,42 @@ function ModelSidePanelContent({ model }: { model: AiModel }) {
 
       {/* Model Info Description */}
       {model.description && (
-        <p className="text-[10px] text-[#706c64] dark:text-[#a09c94] leading-relaxed line-clamp-2">
+        <p className="text-[10px] text-[#706c64] dark:text-[#a09c94] leading-relaxed line-clamp-3">
           {model.description}
         </p>
       )}
 
-      {/* Antigravity-Grade Reasoning Effort Segmented Box */}
-      <div className="space-y-1">
-        <div className="text-[9px] font-semibold uppercase tracking-wider text-[#706c64] dark:text-[#a09c94] px-0.5">
-          Reasoning Effort
+      {/* Capabilities & Provider Specs */}
+      <div className="flex flex-col gap-1.5 p-2 rounded-xl bg-black/[0.025] dark:bg-white/[0.035] border border-black/[0.05] dark:border-white/[0.06] text-[10px]">
+        <div className="flex items-center justify-between text-[#706c64] dark:text-[#a09c94]">
+          <span>Execution</span>
+          <span className="font-medium text-[#1c1b18] dark:text-white">
+            {isLocal ? "Local Device (GGUF)" : "Cloud API"}
+          </span>
         </div>
-        <div className="p-0.5 bg-[#ede8df]/40 dark:bg-white/5 rounded-lg border border-[#e8e4db] dark:border-white/10 flex flex-col gap-0.5">
-          {(["low", "medium", "high"] as const).map((eff) => {
-            const isEffortActive = isSelectedModel && currentEffort === eff
-            return (
-              <button
-                key={eff}
-                type="button"
-                onClick={(e) => handleSelectEffort(eff, e)}
-                className={cn(
-                  "w-full flex items-center justify-between px-2 py-1 rounded-md text-[10.5px] transition cursor-pointer text-left font-medium",
-                  isEffortActive
-                    ? "bg-white dark:bg-[#2f2f36] text-[#1c1b18] dark:text-white font-semibold shadow-xs"
-                    : "text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df]/60 dark:hover:bg-white/5"
-                )}
-              >
-                <span>{eff === "low" ? "Low" : eff === "medium" ? "Medium" : "High"}</span>
-                {isEffortActive && <Check size={11} className="text-[#1c1b18] dark:text-white" />}
-              </button>
-            )
-          })}
+        <div className="flex items-center justify-between text-[#706c64] dark:text-[#a09c94]">
+          <span>Context Window</span>
+          <span className="font-mono font-medium text-[#1c1b18] dark:text-white">
+            {contexts}
+          </span>
         </div>
+        {model.supportsThinking && (
+          <div className="flex items-center justify-between text-[#706c64] dark:text-[#a09c94]">
+            <span>Reasoning</span>
+            <span className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <Brain size={10} />
+              <span>Supported</span>
+            </span>
+          </div>
+        )}
+        {model.supportsFast && (
+          <div className="flex items-center justify-between text-[#706c64] dark:text-[#a09c94]">
+            <span>Fast Mode</span>
+            <span className="font-medium text-amber-600 dark:text-amber-400">
+              ⚡ Available
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Deprecation / Sunset Callout Alert */}
@@ -1927,14 +1944,6 @@ function ModelSidePanelContent({ model }: { model: AiModel }) {
         </div>
       )}
 
-      {/* Context info */}
-      {contexts && (
-        <div className="flex items-center justify-between text-[10px] px-1 text-[#706c64] dark:text-[#a09c94] pt-0.5 border-t border-[#e8e4db]/60 dark:border-white/5">
-          <span>Context limit</span>
-          <span className="font-mono font-medium text-[#1c1b18] dark:text-white">{contexts}</span>
-        </div>
-      )}
-
       {/* Connect API Key button if not configured */}
       {!isReady && onOpenKeySetup && (
         <button
@@ -1944,7 +1953,7 @@ function ModelSidePanelContent({ model }: { model: AiModel }) {
             setOpen(false)
             onOpenKeySetup(model.providerId)
           }}
-          className="mt-1 w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-[#1c1b18] hover:bg-black dark:bg-white/10 dark:hover:bg-white/15 text-white text-[10.5px] font-medium transition-colors whitespace-nowrap cursor-pointer shadow-xs"
+          className="mt-0.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-[#1c1b18] hover:bg-black dark:bg-white/10 dark:hover:bg-white/15 text-white text-[10.5px] font-medium transition-colors whitespace-nowrap cursor-pointer shadow-xs"
         >
           <Key size={11} className="text-purple-400 shrink-0" />
           <span className="truncate">Connect {model.providerName} Key</span>
@@ -1959,29 +1968,9 @@ function ModelEditPanelContent({ model }: { model: AiModel }) {
     useModelSelectorContext("ModelEditPanelContent")
 
   const config = getConfigFor(model)
-  const efforts = model.efforts ?? []
 
   return (
     <>
-      {efforts.length > 0 ? (
-        <div className="flex flex-col gap-1">
-          <div className="text-[var(--muted)] px-0.5 text-[9px] font-semibold uppercase">
-            Reasoning Effort
-          </div>
-          <div className="flex flex-col gap-0.5">
-            {efforts.map((effort) => (
-              <OptionChip
-                key={effort}
-                selected={config.effort === effort}
-                reduceMotion={reduceMotion}
-                onClick={() => patchSelection({ id: model.id, effort })}
-              >
-                {EFFORT_LABEL[effort]}
-              </OptionChip>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       {(model.supportsFast || model.supportsThinking) && (
         <div className="flex flex-col gap-1 mt-1">
@@ -2125,15 +2114,33 @@ function useControllableState<T>({
   return [current, setValue]
 }
 
-type MenuCoords = { top: number; left: number }
+type MenuCoords = { bottom: number; left: number; originX?: string }
 
 function useAnchoredMenu(disabled = false) {
   const [open, setOpen] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
-  const [coords, setCoords] = React.useState<MenuCoords | null>(null)
   const triggerRef = React.useRef<HTMLButtonElement>(null)
   const contentRef = React.useRef<HTMLDivElement>(null)
   const menuId = React.useId()
+
+  const computeCoords = React.useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger) return null
+    const rect = trigger.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const popupWidth = 288
+    const left = Math.max(12, Math.min(rect.left, viewportWidth - popupWidth - 12))
+    const bottom = Math.max(12, viewportHeight - rect.top + 8)
+    const originX = Math.max(16, Math.min(rect.left - left + rect.width / 2, popupWidth - 16))
+    return {
+      bottom,
+      left,
+      originX: `${originX}px`,
+    }
+  }, [])
+
+  const [coords, setCoords] = React.useState<MenuCoords | null>(null)
 
   React.useEffect(() => {
     setMounted(true)
@@ -2143,13 +2150,8 @@ function useAnchoredMenu(disabled = false) {
     if (!open) return
 
     const update = () => {
-      const trigger = triggerRef.current
-      if (!trigger) return
-      const rect = trigger.getBoundingClientRect()
-      setCoords({
-        top: rect.top + window.scrollY - 8,
-        left: rect.left + window.scrollX,
-      })
+      const calculated = computeCoords()
+      if (calculated) setCoords(calculated)
     }
 
     update()
@@ -2159,7 +2161,7 @@ function useAnchoredMenu(disabled = false) {
       window.removeEventListener("resize", update)
       window.removeEventListener("scroll", update, true)
     }
-  }, [open])
+  }, [open, computeCoords])
 
   React.useEffect(() => {
     if (!open) return
@@ -2189,7 +2191,8 @@ function useAnchoredMenu(disabled = false) {
     }
   }, [open])
 
-  return { open, setOpen, mounted, coords, triggerRef, contentRef, menuId }
+  const activeCoords = coords ?? (open ? computeCoords() : null)
+  return { open, setOpen, mounted, coords: activeCoords, triggerRef, contentRef, menuId }
 }
 
 function AnchoredMenuPortal({
@@ -2228,10 +2231,10 @@ function AnchoredMenuPortal({
           aria-label={ariaLabel}
           {...menuPresence(reduceMotion)}
           style={{
-            position: "absolute",
-            top: coords.top,
-            left: coords.left,
-            transform: "translateY(-100%)",
+            position: "fixed",
+            bottom: `${coords.bottom}px`,
+            left: `${coords.left}px`,
+            transformOrigin: `${coords.originX || '24px'} bottom`,
             zIndex: 50,
           }}
           className={cn(MENU_PANEL_CLASS, className)}
@@ -2498,6 +2501,127 @@ function PlusActionsMenu({
   )
 }
 
+function ReasoningEffortButton({
+  effort = "medium",
+  onEffortChange,
+  disabled = false,
+  className,
+}: {
+  effort?: AiModelEffort
+  onEffortChange?: (effort: AiModelEffort) => void
+  disabled?: boolean
+  className?: string
+}) {
+  const reduceMotion = usePrefersReducedMotion()
+  const { open, setOpen, mounted, coords, triggerRef, contentRef, menuId } =
+    useAnchoredMenu(disabled)
+
+  const effortDotConfig: Record<AiModelEffort, { dot: string; glow: string; text: string }> = {
+    low: {
+      dot: "bg-emerald-500",
+      glow: "shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+      text: "text-emerald-700 dark:text-emerald-300",
+    },
+    medium: {
+      dot: "bg-amber-500",
+      glow: "shadow-[0_0_8px_rgba(245,158,11,0.5)]",
+      text: "text-amber-700 dark:text-amber-300",
+    },
+    high: {
+      dot: "bg-violet-500",
+      glow: "shadow-[0_0_8px_rgba(139,92,246,0.5)]",
+      text: "text-violet-700 dark:text-violet-300",
+    },
+  }
+
+  const currentConfig = effortDotConfig[effort] || effortDotConfig.medium
+
+  return (
+    <div className="relative inline-flex items-center">
+      <motion.button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        aria-label={`Reasoning effort is ${effort}. Click to adjust slider.`}
+        onClick={() => setOpen((v) => !v)}
+        whileHover={disabled ? undefined : { scale: 1.02 }}
+        whileTap={disabled ? undefined : { scale: 0.97 }}
+        transition={SPRING_PRESS}
+        className={cn(
+          "inline-flex h-8 items-center gap-1.5 px-2.5 rounded-xl text-xs font-medium cursor-pointer transition-all duration-150 select-none",
+          "border border-black/[0.08] dark:border-white/[0.08]",
+          "bg-black/[0.025] hover:bg-black/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.07]",
+          "text-foreground/90 hover:text-foreground",
+          open && "bg-black/[0.06] dark:bg-white/[0.10] border-black/[0.14] dark:border-white/[0.16] shadow-xs text-foreground",
+          disabled && "pointer-events-none opacity-40",
+          className
+        )}
+        title="AI Reasoning Effort (Click to adjust)"
+      >
+        <span
+          className={cn(
+            "size-1.5 rounded-full shrink-0 transition-all duration-300",
+            currentConfig.dot,
+            currentConfig.glow
+          )}
+        />
+        <Brain size={12.5} className="shrink-0 text-muted-foreground opacity-75" aria-hidden />
+        <span className="capitalize font-medium text-[11.5px] tracking-tight">{effort}</span>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.2, ease: EASE }}
+          className="flex shrink-0 opacity-50"
+        >
+          <ChevronDownIcon size={11} aria-hidden />
+        </motion.span>
+      </motion.button>
+
+      <AnchoredMenuPortal
+        mounted={mounted}
+        open={open}
+        coords={coords}
+        contentRef={contentRef}
+        id={menuId}
+        role="menu"
+        aria-label="Reasoning Effort Slider"
+        reduceMotion={reduceMotion}
+        className="w-72 p-3 shadow-[0_20px_45px_-10px_rgba(0,0,0,0.25)] dark:shadow-[0_24px_50px_-10px_rgba(0,0,0,0.65)] rounded-2xl border border-[#e8e4db] dark:border-[#2e2e33] bg-[#fcfbf9]/95 dark:bg-[#18181a]/95 backdrop-blur-2xl"
+      >
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center justify-between px-0.5">
+            <div className="flex items-center gap-1.5">
+              <div className="size-5 rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Brain size={12} />
+              </div>
+              <span className="text-xs font-semibold text-foreground tracking-tight">Reasoning Effort</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="size-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 rounded-md cursor-pointer transition-colors"
+              title="Close"
+            >
+              <XIcon size={12} />
+            </button>
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-tight px-0.5">
+            Adjust the AI's step-by-step thinking depth and compute budget for complex problem solving.
+          </p>
+          <AdaptiveReasoningSlider
+            effort={effort}
+            onEffortChange={(nextEffort) => {
+              onEffortChange?.(nextEffort)
+            }}
+          />
+        </div>
+      </AnchoredMenuPortal>
+    </div>
+  )
+}
+
 const WAVE_BARS = [0.35, 0.7, 0.45, 0.9, 0.55, 0.8, 0.4] as const
 
 function DictationWaveform({
@@ -2629,83 +2753,299 @@ function MicButton({
   )
 }
 
-function ActionButton({
-  disabled,
-  status,
-  hasText,
+function SubmitButton({
   talking,
-  onSend,
+  isLoading,
+  isSuccess,
+  showSend,
+  disabled,
+  hasText,
+  status,
   onTalkToggle,
+  onSend,
   reduceMotion,
 }: {
-  disabled?: boolean
-  status: AiPromptSendStatus
-  hasText: boolean
   talking: boolean
-  onSend: () => void
+  isLoading: boolean
+  isSuccess: boolean
+  showSend: boolean
+  disabled: boolean
+  hasText: boolean
+  status?: AiPromptSendStatus | string
   onTalkToggle: () => void
+  onSend: () => void
   reduceMotion: boolean
 }) {
-  const isLoading = status === "loading"
-  const isSuccess = status === "success"
-  const showSend = !talking && (hasText || isLoading || isSuccess)
-  const isDisabled = talking ? false : disabled || isLoading
+  const [isHovered, setIsHovered] = React.useState(false)
+  const [isPressed, setIsPressed] = React.useState(false)
+  const shaderRef = React.useRef<HTMLDivElement>(null)
+  const shaderMount = React.useRef<any>(null)
+
+  const isLoadingState = status === "loading" || isLoading
+  const isSuccessState = status === "success" || isSuccess
+  const showSendBtn = !talking && (hasText || isLoadingState || isSuccessState)
+  const isDisabled = talking ? false : disabled || isLoadingState
 
   const label = talking
     ? "Stop voice conversation"
-    : isLoading
+    : isLoadingState
       ? "Sending"
-      : isSuccess
+      : isSuccessState
         ? "Sent"
-        : showSend
+        : showSendBtn
           ? "Send message"
           : "Talk with AI"
 
+  React.useEffect(() => {
+    const styleId = "shader-canvas-style-exploded"
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style")
+      style.id = styleId
+      style.textContent = `
+        .shader-container-exploded canvas {
+          width: 100% !important;
+          height: 100% !important;
+          display: block !important;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          border-radius: 100px !important;
+        }
+      `
+      document.head.appendChild(style)
+    }
+
+    if (reduceMotion) return
+
+    const loadShader = async () => {
+      try {
+        if (shaderRef.current) {
+          if (shaderMount.current?.dispose) {
+            shaderMount.current.dispose()
+          }
+
+          shaderMount.current = new ShaderMount(
+            shaderRef.current,
+            liquidMetalFragmentShader,
+            {
+              u_repetition: 4,
+              u_softness: 0.5,
+              u_shiftRed: 0.3,
+              u_shiftBlue: 0.3,
+              u_distortion: 0,
+              u_contour: 0,
+              u_angle: 45,
+              u_scale: 8,
+              u_shape: 1,
+              u_offsetX: 0.1,
+              u_offsetY: -0.1,
+            },
+            undefined,
+            0.6
+          )
+        }
+      } catch (error) {
+        console.error("[LiquidMetal] Shader mount error:", error)
+      }
+    }
+
+    loadShader()
+
+    return () => {
+      if (shaderMount.current?.dispose) {
+        shaderMount.current.dispose()
+        shaderMount.current = null
+      }
+    }
+
+  }, [reduceMotion])
+
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+    shaderMount.current?.setSpeed?.(1.4)
+  }
+
+  const handleMouseLeave = () => {
+    setIsHovered(false)
+    setIsPressed(false)
+    shaderMount.current?.setSpeed?.(0.6)
+  }
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (shaderMount.current?.setSpeed) {
+      shaderMount.current.setSpeed(2.6)
+      setTimeout(() => {
+        if (isHovered) {
+          shaderMount.current?.setSpeed?.(1.4)
+        } else {
+          shaderMount.current?.setSpeed?.(0.6)
+        }
+      }, 350)
+    }
+
+    if (talking || !showSendBtn) onTalkToggle()
+    else onSend()
+  }
+
   return (
-    <motion.button
-      type="button"
-      aria-label={label}
-      disabled={isDisabled}
-      onClick={() => {
-        if (talking || !showSend) onTalkToggle()
-        else onSend()
-      }}
-      whileHover={isDisabled ? undefined : { scale: 1.05 }}
-      whileTap={isDisabled ? undefined : { scale: 0.94 }}
-      transition={SPRING_PRESS}
-      className={cn(
-        "relative flex size-9 cursor-pointer items-center justify-center overflow-hidden rounded-full transition-all duration-200",
-        "focus:outline-none focus-visible:outline-none",
-        "disabled:pointer-events-none",
-        showSend || talking
-          ? "bg-foreground text-background shadow-sm hover:opacity-90"
-          : "bg-muted text-muted-foreground hover:text-foreground"
-      )}
-    >
-      <AnimatePresence mode="wait" initial={false}>
-        {talking ? (
-          <IconSwapFrame swapKey="stop" reduceMotion={reduceMotion}>
-            <SquareIcon className="size-3.5 fill-current" aria-hidden />
-          </IconSwapFrame>
-        ) : isLoading ? (
-          <IconSwapFrame swapKey="loader" reduceMotion={reduceMotion}>
-            <Loader2Icon className="size-4 animate-spin" aria-hidden />
-          </IconSwapFrame>
-        ) : isSuccess ? (
-          <IconSwapFrame swapKey="check" reduceMotion={reduceMotion}>
-            <CheckIcon className="size-4" aria-hidden />
-          </IconSwapFrame>
-        ) : showSend ? (
-          <IconSwapFrame swapKey="arrow" reduceMotion={reduceMotion}>
-            <ArrowUpIcon className="size-4" aria-hidden />
-          </IconSwapFrame>
-        ) : (
-          <IconSwapFrame swapKey="waves" reduceMotion={reduceMotion}>
-            <AudioLinesIcon className="size-4" aria-hidden />
-          </IconSwapFrame>
-        )}
-      </AnimatePresence>
-    </motion.button>
+    <div className="relative inline-flex items-center justify-center shrink-0">
+      <div
+        style={{
+          perspective: "1000px",
+          perspectiveOrigin: "50% 50%",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: "38px",
+            height: "38px",
+            transformStyle: "preserve-3d",
+            transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          }}
+        >
+          {/* Layer 1: Foreground Icon Content */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "38px",
+              height: "38px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transformStyle: "preserve-3d",
+              transform: "translateZ(20px)",
+              zIndex: 30,
+              pointerEvents: "none",
+            }}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {talking ? (
+                <IconSwapFrame swapKey="stop" reduceMotion={reduceMotion}>
+                  <SquareIcon className="size-3.5 fill-current text-white" aria-hidden />
+                </IconSwapFrame>
+              ) : isLoadingState ? (
+                <IconSwapFrame swapKey="loader" reduceMotion={reduceMotion}>
+                  <Loader2Icon className="size-4 animate-spin text-purple-300" aria-hidden />
+                </IconSwapFrame>
+              ) : isSuccessState ? (
+                <IconSwapFrame swapKey="check" reduceMotion={reduceMotion}>
+                  <CheckIcon className="size-4 text-emerald-400" aria-hidden />
+                </IconSwapFrame>
+              ) : showSendBtn ? (
+                <IconSwapFrame swapKey="arrow" reduceMotion={reduceMotion}>
+                  <ArrowUpIcon className="size-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" strokeWidth={2.5} aria-hidden />
+                </IconSwapFrame>
+              ) : (
+                <IconSwapFrame swapKey="waves" reduceMotion={reduceMotion}>
+                  <AudioLinesIcon className="size-4 text-white/90" aria-hidden />
+                </IconSwapFrame>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Layer 2: Dark Metallic Core */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "38px",
+              height: "38px",
+              transformStyle: "preserve-3d",
+              transform: `translateZ(10px) ${isPressed ? "translateY(1px) scale(0.96)" : "translateY(0) scale(1)"}`,
+              zIndex: 20,
+              transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }}
+          >
+            <div
+              style={{
+                width: "34px",
+                height: "34px",
+                margin: "2px",
+                borderRadius: "100px",
+                background: "linear-gradient(180deg, #24252a 0%, #000000 100%)",
+                boxShadow: isPressed
+                  ? "inset 0px 2px 4px rgba(0, 0, 0, 0.6)"
+                  : "inset 0px 1px 1.5px rgba(255, 255, 255, 0.4)",
+              }}
+            />
+          </div>
+
+          {/* Layer 3: WebGL Liquid Metal Shader Ring */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "38px",
+              height: "38px",
+              transformStyle: "preserve-3d",
+              transform: `translateZ(0px) ${isPressed ? "translateY(1px) scale(0.96)" : "translateY(0) scale(1)"}`,
+              zIndex: 10,
+              transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }}
+          >
+            <div
+              style={{
+                height: "38px",
+                width: "38px",
+                borderRadius: "100px",
+                boxShadow: isPressed
+                  ? "0px 0px 0px 1px rgba(0, 0, 0, 0.5)"
+                  : isHovered
+                    ? "0px 0px 0px 1px rgba(255, 255, 255, 0.3), 0px 8px 16px rgba(0, 0, 0, 0.4)"
+                    : "0px 0px 0px 1px rgba(255, 255, 255, 0.15), 0px 4px 10px rgba(0, 0, 0, 0.3)",
+                background: "rgb(0 0 0 / 0)",
+              }}
+            >
+              <div
+                ref={shaderRef}
+                className="shader-container-exploded"
+                style={{
+                  borderRadius: "100px",
+                  overflow: "hidden",
+                  position: "relative",
+                  width: "38px",
+                  height: "38px",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Layer 4: Interactive Click Surface */}
+          <button
+            type="button"
+            disabled={isDisabled}
+            onClick={handleClick}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onMouseDown={() => setIsPressed(true)}
+            onMouseUp={() => setIsPressed(false)}
+            aria-label={label}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "38px",
+              height: "38px",
+              background: "transparent",
+              border: "none",
+              cursor: isDisabled ? "default" : "pointer",
+              outline: "none",
+              zIndex: 40,
+              transformStyle: "preserve-3d",
+              transform: "translateZ(25px)",
+              borderRadius: "100px",
+              opacity: isDisabled ? 0.45 : 1,
+            }}
+          />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -2997,18 +3337,31 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
                 ) : null}
 
                 {showModelSelector && models.length > 0 ? (
-                  <ModelSelector
-                    models={models}
-                    value={modelSelection}
-                    onValueChange={setModelSelection}
-                    onOpenKeySetup={onOpenKeySetup}
-                    disabled={disabled || sessionLocked}
-                  >
-                    <ModelSelectorTrigger className="h-8">
-                      <ModelSelectorValue className="max-w-[280px] sm:max-w-[420px]" />
-                    </ModelSelectorTrigger>
-                    <ModelSelectorContent side="top" />
-                  </ModelSelector>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <ModelSelector
+                      models={models}
+                      value={modelSelection}
+                      onValueChange={setModelSelection}
+                      onOpenKeySetup={onOpenKeySetup}
+                      disabled={disabled || sessionLocked}
+                    >
+                      <ModelSelectorTrigger className="h-8">
+                        <ModelSelectorValue className="max-w-[200px] sm:max-w-[320px]" />
+                      </ModelSelectorTrigger>
+                      <ModelSelectorContent side="top" />
+                    </ModelSelector>
+
+                    {/* Interactive Reasoning Effort Button directly on this bar */}
+                    <ReasoningEffortButton
+                      effort={modelSelection.effort || "medium"}
+                      onEffortChange={(effort) => {
+                        const updated = { ...modelSelection, effort }
+                        setModelSelection(updated)
+                        onModelSelectionChange?.(updated)
+                      }}
+                      disabled={disabled || sessionLocked}
+                    />
+                  </div>
                 ) : null}
               </div>
 
@@ -3045,8 +3398,9 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
                       globalVoiceController.start({
                         onTranscript: (transcript) => {
                           const base = dictationBaseValueRef.current;
-                          const next = base ? `${base} ${transcript}` : transcript;
-                          setValue(next);
+                          const separator = base && !base.endsWith(" ") ? " " : "";
+                          const combined = `${base}${separator}${transcript}`.slice(0, maxLength);
+                          setValue(combined);
                         },
                         onError: () => {
                           setDictationPhase("idle");
@@ -3057,16 +3411,20 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
                   }}
                   reduceMotion={reduceMotion}
                 />
-                <ActionButton
+                <SubmitButton
                   disabled={disabled}
                   status={status}
                   hasText={hasText}
                   talking={talking}
+                  isLoading={status === "loading"}
+                  isSuccess={status === "success"}
+                  showSend={!talking && (hasText || status === "loading" || status === "success")}
                   onSend={submit}
                   onTalkToggle={toggleTalk}
                   reduceMotion={reduceMotion}
                 />
               </div>
+
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -3077,5 +3435,5 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
 
 AiPromptInput.displayName = "AiPromptInput"
 
-export { AiPromptInput }
+export { AiPromptInput, ReasoningEffortButton, AdaptiveSlider, AdaptiveReasoningSlider }
 export default AiPromptInput

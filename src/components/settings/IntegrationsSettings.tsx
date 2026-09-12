@@ -34,6 +34,7 @@ import { BrandIcon, hasBrandIcon } from "../../components/BrandIcon";
 import { IntegrationRegistry } from "../../lib/connections/registry";
 import { openExternal } from "../../lib/desktop/links";
 import { ecosystemManager } from "../../lib/connections/ecosystemManager";
+import { InlineAction } from "../ui/inline-action";
 import {
   ECOSYSTEM_REGISTRY,
   getEcosystemConnector,
@@ -422,21 +423,19 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={async () => {
+          <InlineAction
+            size="sm"
+            label="Ecosystems"
+            icon={<RefreshCw size={13} className={isRefreshing ? "animate-spin text-purple-600" : ""} />}
+            actionText="Sync"
+            onAction={async () => {
               setIsRefreshing(true);
               await reloadData();
               setIsRefreshing(false);
               onToast?.("Refreshed connections and tool catalog.");
             }}
-            disabled={isRefreshing}
-            className="flex items-center gap-1.5 rounded-2xl border border-[#e8e4db] bg-white px-3 py-1.5 text-[11px] font-medium text-[#1c1b18] shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:bg-[#f4efe6] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
-            title="Refresh connections"
-          >
-            <RefreshCw className={`h-3 w-3 text-[#78716c] ${isRefreshing ? "animate-spin" : ""}`} />
-            <span>Sync</span>
-          </button>
+            className="px-0 w-auto shrink-0"
+          />
         </div>
       </div>
 
@@ -946,15 +945,14 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
                         >
                           Deselect All
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSyncResources(selectedConnectorForManage.id)}
-                          disabled={isSyncingResources}
-                          className="flex items-center gap-1 rounded-xl bg-[#1c1b18] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#33312e] disabled:opacity-50 cursor-pointer"
-                        >
-                          <RefreshCw className={`h-3 w-3 ${isSyncingResources ? "animate-spin" : ""}`} />
-                          <span>Sync Now</span>
-                        </button>
+                        <InlineAction
+                          size="sm"
+                          label="Resources"
+                          icon={<RefreshCw size={13} className={isSyncingResources ? "animate-spin text-purple-600" : ""} />}
+                          actionText="Sync Now"
+                          onAction={() => handleSyncResources(selectedConnectorForManage.id)}
+                          className="px-0 w-auto shrink-0"
+                        />
                       </div>
                     </div>
 

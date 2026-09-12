@@ -32,6 +32,9 @@ import { useActivityState } from "./ai/useActivityState";
 import { useChatScroll } from "./ai/useChatScroll";
 import { useStreamBuffer } from "./ai/useStreamBuffer";
 import { ProviderIcon, type AiModelSelection } from "./ui/ai-prompt-input";
+import { cn } from "../lib/utils";
+
+const SPRING_APPLE = { type: "spring" as const, stiffness: 440, damping: 30, mass: 0.8 };
 
 export function getSafePageIcon(icon?: string | null) {
   if (!icon) return <span className="text-xs">📄</span>;
@@ -757,41 +760,46 @@ export default function AIPanel({
       {/* Main Clean Canvas */}
       <div className="flex-1 flex flex-col min-w-0 bg-[var(--bg)] relative overflow-hidden">
         {/* Minimal Transparent Top Bar */}
-        <header className="flex items-center justify-between gap-2 px-4 sm:px-6 py-3 shrink-0 z-20">
+        <header className="flex items-center justify-between gap-3 px-3.5 sm:px-5 py-2.5 shrink-0 z-20 border-b border-black/[0.06] dark:border-white/[0.08] bg-white/70 dark:bg-[#121316]/70 backdrop-blur-2xl">
           <div className="flex items-center gap-2">
-            <button
+            <motion.button
               type="button"
               onClick={() => setShowSidebar(!showSidebar)}
-              className="p-2 rounded-xl text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.94 }}
+              className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
               title={showSidebar ? "Close history" : "Conversation history"}
             >
-              {showSidebar ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
-            </button>
+              {showSidebar ? <PanelLeftClose size={17} /> : <PanelLeft size={17} />}
+            </motion.button>
 
             {/* Agent Switcher Button */}
             <div className="relative">
-              <button
+              <motion.button
                 type="button"
                 onClick={() => setAgentMenuOpen(!agentMenuOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--surface-1)] hover:bg-[var(--surface-2)] border border-[var(--border)] text-xs font-medium text-[var(--text)] transition-all shadow-2xs"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/[0.035] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-black/[0.07] dark:border-white/[0.08] text-xs font-semibold text-foreground transition-all shadow-2xs cursor-pointer select-none"
               >
                 <span
-                  className="w-4 h-4 rounded-full flex items-center justify-center text-[10px]"
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[10.5px] shrink-0"
                   style={{ backgroundColor: `${currentAgent.color}25`, color: currentAgent.color }}
                 >
                   {currentAgent.icon || "✦"}
                 </span>
-                <span>{currentAgent.name}</span>
-                <span className="text-[9px] text-[var(--muted)]">▼</span>
-              </button>
+                <span className="text-[12px] font-semibold tracking-tight">{currentAgent.name}</span>
+                <ChevronDown size={11} className={`text-muted-foreground opacity-60 transition-transform duration-200 ${agentMenuOpen ? "rotate-180" : ""}`} />
+              </motion.button>
 
               <AnimatePresence>
                 {agentMenuOpen && (
                   <motion.div
-                    initial={{ opacity: 0, y: 4, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                    className="absolute left-0 top-full mt-2 w-56 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-1.5 shadow-xl backdrop-blur-xl z-50"
+                    initial={{ opacity: 0, scale: 0.9, y: 6, filter: "blur(8px)" }}
+                    animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, scale: 0.9, y: 6, filter: "blur(6px)" }}
+                    transition={SPRING_APPLE}
+                    className="absolute left-0 top-full mt-2 w-56 origin-top-left rounded-2xl border border-black/[0.08] dark:border-white/[0.09] bg-[#fdfcfb]/95 dark:bg-[#16171a]/95 p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18),0_0_1px_1px_rgba(0,0,0,0.04)] dark:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_1px_1px_rgba(255,255,255,0.06)] backdrop-blur-2xl z-50 space-y-0.5"
                   >
                     {agents.map((a) => (
                       <button
@@ -801,9 +809,9 @@ export default function AIPanel({
                           setActiveAgent(a.id);
                           setAgentMenuOpen(false);
                         }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left rounded-xl transition-colors ${activeAgent === a.id
-                            ? "bg-[var(--accent)]/15 text-[var(--text)] font-semibold"
-                            : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                        className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left rounded-xl transition-all cursor-pointer ${activeAgent === a.id
+                            ? "bg-black/[0.06] dark:bg-white/[0.10] text-foreground font-semibold shadow-2xs"
+                            : "text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
                           }`}
                       >
                         <span
@@ -812,7 +820,7 @@ export default function AIPanel({
                         >
                           {a.icon}
                         </span>
-                        <div className="text-xs">{a.name}</div>
+                        <div className="text-xs font-medium">{a.name}</div>
                       </button>
                     ))}
                   </motion.div>
@@ -823,36 +831,39 @@ export default function AIPanel({
             {/* Interactive Document Page Switcher Pill */}
             {page && (
               <div className="relative">
-                <button
+                <motion.button
                   type="button"
                   onClick={() => setPageMenuOpen(!pageMenuOpen)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface-1)] hover:bg-[var(--surface-2)] border border-[var(--border)] hover:border-[var(--border-strong)] text-xs text-[var(--text)] transition cursor-pointer shadow-2xs group"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/[0.035] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-black/[0.07] dark:border-white/[0.08] text-xs font-medium text-foreground transition-all shadow-2xs cursor-pointer select-none group"
                   title="Click to switch active document context"
                 >
                   <span className="flex items-center shrink-0">{getSafePageIcon(page.icon)}</span>
-                  <span className="truncate max-w-[140px] font-medium">{getSafePageTitle(page.title)}</span>
-                  <ChevronDown size={12} className={`text-[var(--muted)] transition-transform duration-200 ${pageMenuOpen ? "rotate-180" : ""}`} />
-                </button>
+                  <span className="truncate max-w-[130px] sm:max-w-[160px] font-medium text-[12px]">{getSafePageTitle(page.title)}</span>
+                  <ChevronDown size={11} className={`text-muted-foreground opacity-60 transition-transform duration-200 ${pageMenuOpen ? "rotate-180" : ""}`} />
+                </motion.button>
 
                 <AnimatePresence>
                   {pageMenuOpen && (
                     <motion.div
-                      initial={{ opacity: 0, y: 4, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                      initial={{ opacity: 0, scale: 0.9, y: 6, filter: "blur(8px)" }}
+                      animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+                      exit={{ opacity: 0, scale: 0.9, y: 6, filter: "blur(6px)" }}
+                      transition={SPRING_APPLE}
                       onMouseLeave={() => setHoveredPage(null)}
-                      className="absolute left-0 top-full mt-2 w-72 sm:w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-2 shadow-2xl backdrop-blur-xl z-50 space-y-1.5"
+                      className="absolute left-0 top-full mt-2 w-72 sm:w-80 origin-top-left rounded-2xl border border-black/[0.08] dark:border-white/[0.09] bg-[#fdfcfb]/95 dark:bg-[#16171a]/95 p-2 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18),0_0_1px_1px_rgba(0,0,0,0.04)] dark:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_1px_1px_rgba(255,255,255,0.06)] backdrop-blur-2xl z-50 space-y-1.5"
                     >
                       {/* Search Bar */}
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]">
-                        <Search size={12} className="text-[var(--muted)] shrink-0" />
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08]">
+                        <Search size={12} className="text-muted-foreground shrink-0" />
                         <input
                           type="text"
                           autoFocus
                           value={pageSearch}
                           onChange={(e) => setPageSearch(e.target.value)}
                           placeholder="Search pages..."
-                          className="w-full bg-transparent text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+                          className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
                         />
                       </div>
 
@@ -885,26 +896,26 @@ export default function AIPanel({
                               }}
                               className={`w-full flex items-start gap-2.5 p-2 rounded-xl text-left transition cursor-pointer ${
                                 p.id === page.id
-                                  ? "bg-[var(--accent)]/15 border border-[var(--accent)]/25 shadow-2xs"
+                                  ? "bg-black/[0.06] dark:bg-white/[0.10] border border-black/[0.08] dark:border-white/[0.12] shadow-2xs"
                                   : isHovered
-                                  ? "bg-[var(--surface-2)] text-[var(--text)] border border-[var(--border)]"
-                                  : "text-[var(--text-secondary)] hover:text-[var(--text)] border border-transparent"
+                                  ? "bg-black/[0.04] dark:bg-white/[0.06] text-foreground border border-black/[0.05] dark:border-white/[0.07]"
+                                  : "text-muted-foreground hover:text-foreground border border-transparent"
                               }`}
                             >
                               {/* Icon / Thumbnail */}
-                              <div className="w-5 h-5 rounded-md bg-[var(--surface-2)] flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
+                              <div className="w-5 h-5 rounded-md bg-black/[0.04] dark:bg-white/[0.08] flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
                                 {getSafePageIcon(p.icon)}
                               </div>
 
                               {/* Title & Inside Live Snippet Preview */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-1">
-                                  <span className={`text-xs truncate font-medium ${p.id === page.id ? "text-[var(--text)] font-semibold" : ""}`}>
+                                  <span className={`text-xs truncate font-medium ${p.id === page.id ? "text-foreground font-semibold" : ""}`}>
                                     {displayTitle}
                                   </span>
-                                  {p.id === page.id && <Check size={12} className="text-[var(--accent)] shrink-0" />}
+                                  {p.id === page.id && <Check size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />}
                                 </div>
-                                <p className="text-[10px] text-[var(--muted)] line-clamp-1 mt-0.5 leading-snug">
+                                <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5 leading-snug">
                                   {snippet || "No content inside yet"}
                                 </p>
                               </div>
@@ -912,7 +923,7 @@ export default function AIPanel({
                           );
                         })}
                         {filteredPages.length === 0 && (
-                          <div className="text-center py-4 text-[11px] text-[var(--muted)]">
+                          <div className="text-center py-4 text-[11px] text-muted-foreground">
                             No matching pages found
                           </div>
                         )}
@@ -926,19 +937,19 @@ export default function AIPanel({
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             exit={{ opacity: 0, x: 8, scale: 0.97 }}
                             transition={{ duration: 0.15 }}
-                            className="hidden md:block absolute left-[calc(100%+8px)] top-0 w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-2xl backdrop-blur-2xl z-50 text-left space-y-3"
+                            className="hidden md:block absolute left-[calc(100%+8px)] top-0 w-80 rounded-2xl border border-black/[0.08] dark:border-white/[0.09] bg-[#fdfcfb]/95 dark:bg-[#16171a]/95 p-4 shadow-2xl backdrop-blur-2xl z-50 text-left space-y-3"
                           >
                             {/* Header / Cover */}
-                            <div className="space-y-1.5 pb-2 border-b border-[var(--border)]">
+                            <div className="space-y-1.5 pb-2 border-b border-black/[0.06] dark:border-white/[0.08]">
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-sm shrink-0">
+                                <div className="w-6 h-6 rounded-lg bg-black/[0.04] dark:bg-white/[0.08] flex items-center justify-center text-sm shrink-0">
                                   {getSafePageIcon(hoveredPage.icon)}
                                 </div>
-                                <h4 className="text-xs font-bold text-[var(--text)] truncate">
+                                <h4 className="text-xs font-bold text-foreground truncate">
                                   {getSafePageTitle(hoveredPage.title)}
                                 </h4>
                               </div>
-                              <div className="flex items-center gap-2 text-[10px] text-[var(--muted)]">
+                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                                 <span>{(hoveredPage.blocks || []).length} blocks</span>
                                 <span>•</span>
                                 <span>Active Workspace Document</span>
@@ -954,42 +965,42 @@ export default function AIPanel({
 
                                   if (b.type === "heading_1" || b.type === "heading_2") {
                                     return (
-                                      <p key={b.id || idx} className="font-bold text-[var(--text)] text-xs pt-1">
+                                      <p key={b.id || idx} className="font-bold text-foreground text-xs pt-1">
                                         {text}
                                       </p>
                                     );
                                   }
                                   if (b.type === "bullet_list" || b.type === "todo") {
                                     return (
-                                      <div key={b.id || idx} className="flex items-start gap-1.5 text-[11px] text-[var(--text-secondary)]">
-                                        <span className="text-[var(--accent)]">•</span>
+                                      <div key={b.id || idx} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                                        <span className="text-purple-600 dark:text-purple-400">•</span>
                                         <span className="line-clamp-2 leading-relaxed">{text}</span>
                                       </div>
                                     );
                                   }
                                   if (b.type === "callout") {
                                     return (
-                                      <div key={b.id || idx} className="p-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[11px] text-[var(--text)]">
+                                      <div key={b.id || idx} className="p-2 rounded-lg bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08] text-[11px] text-foreground">
                                         {text}
                                       </div>
                                     );
                                   }
                                   return (
-                                    <p key={b.id || idx} className="text-[11px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
+                                    <p key={b.id || idx} className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
                                       {text}
                                     </p>
                                   );
                                 })
                               ) : (
-                                <div className="py-6 text-center text-xs text-[var(--muted)] italic">
+                                <div className="py-6 text-center text-xs text-muted-foreground italic">
                                   Empty page — no text content yet
                                 </div>
                               )}
                             </div>
 
                             {/* Footer Tag */}
-                            <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[10px] text-[var(--muted)] font-medium">
-                              <span className="text-[var(--accent)]">✦ Click to select</span>
+                            <div className="pt-2 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+                              <span className="text-purple-600 dark:text-purple-400 font-semibold">✦ Click to select</span>
                               <span>Live Preview</span>
                             </div>
                           </motion.div>
@@ -1004,51 +1015,72 @@ export default function AIPanel({
 
           <div className="flex items-center gap-1.5">
             {hasMessages && (
-              <button
+              <motion.button
                 type="button"
                 onClick={handleNewChat}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[var(--surface-1)] hover:bg-[var(--surface-2)] border border-[var(--border)] text-xs text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/[0.035] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-black/[0.07] dark:border-white/[0.08] text-xs font-medium text-foreground/80 hover:text-foreground transition-all shadow-2xs cursor-pointer select-none"
               >
-                <MessageSquarePlus size={13} />
-                <span>New chat</span>
-              </button>
+                <MessageSquarePlus size={13} className="text-muted-foreground opacity-75" />
+                <span className="text-[11.5px] font-medium tracking-tight">New chat</span>
+              </motion.button>
             )}
 
             {/* API Key Setup Trigger Button */}
-            <button
+            <motion.button
               type="button"
               onClick={() => setShowKeyModal(true)}
-              className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors border ${isConfigured
-                  ? "bg-[var(--surface-1)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border)]"
-                  : "bg-[var(--accent)]/15 hover:bg-[var(--accent)]/25 text-[var(--text)] border-[var(--accent)]/30 font-medium"
-                }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              className={cn(
+                "text-xs px-3 py-1 rounded-full flex items-center gap-1.5 transition-all border shadow-2xs cursor-pointer select-none font-medium",
+                isConfigured
+                  ? "bg-black/[0.035] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.08] text-foreground/90 hover:text-foreground border-black/[0.07] dark:border-white/[0.08]"
+                  : "bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/30 font-semibold"
+              )}
             >
-              <Key size={12} className={isConfigured ? "text-[var(--success)]" : "text-[var(--accent)]"} />
-              <span>{isConfigured ? (modelName || providerName) : "Setup API Key"}</span>
-            </button>
+              {isConfigured ? (
+                <>
+                  <span className="size-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)] shrink-0" />
+                  <span className="truncate max-w-[140px] sm:max-w-[200px] text-[11.5px] tracking-tight">{modelName || providerName}</span>
+                </>
+              ) : (
+                <>
+                  <Key size={12} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span className="text-[11.5px] tracking-tight">Setup API Key</span>
+                </>
+              )}
+            </motion.button>
 
             <CollabAura users={presenceUsers} />
 
-            <button
+            <motion.button
               type="button"
               onClick={() => setShowContext(!showContext)}
-              className={`p-2 rounded-xl transition-colors ${showContext
-                  ? "text-[var(--accent)] bg-[var(--accent)]/15"
-                  : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
-                }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.94 }}
+              className={cn(
+                "p-1.5 rounded-xl transition-all cursor-pointer",
+                showContext
+                  ? "text-purple-600 dark:text-purple-400 bg-purple-500/15 border border-purple-500/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"
+              )}
               title="Page Context"
             >
-              {showContext ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
-            </button>
+              {showContext ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
+            </motion.button>
 
-            <button
+            <motion.button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.94 }}
+              className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-all cursor-pointer"
               title="Close"
             >
-              <X size={18} />
-            </button>
+              <X size={17} />
+            </motion.button>
           </div>
         </header>
 

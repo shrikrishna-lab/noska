@@ -880,61 +880,115 @@ const Sidebar = memo(function Sidebar({
               {customConfig.showQuickNav !== false && filteredQuickNavItems.length > 0 && (
                 <div className="px-0.5 pb-2.5">
                   <LayoutGroup id="quickCapsuleNav">
-                    <div className="relative flex items-center gap-0.5 p-1 rounded-full bg-black/[0.04] dark:bg-[#1B1C21] border border-black/[0.05] dark:border-white/[0.09] shadow-[inset_0_1px_1px_rgba(0,0,0,0.03),0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-xl select-none">
+                    <div className="relative flex items-center justify-between p-1 w-full rounded-full bg-black/[0.04] dark:bg-[#16171C]/90 border border-black/[0.06] dark:border-white/[0.08] shadow-[inset_0_1px_2px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.35)] backdrop-blur-2xl select-none">
                       {filteredQuickNavItems.map((item) => {
                         const isHovered = hoveredQuickTab === item.id;
                         const isExpanded = hoveredQuickTab ? isHovered : item.active;
                         const IconComponent = item.icon;
+
+                        const itemColors: Record<string, { activeText: string; activeIcon: string; hoverIcon: string }> = {
+                          home: {
+                            activeText: "text-sky-600 dark:text-sky-400 font-semibold",
+                            activeIcon: "text-sky-600 dark:text-sky-400",
+                            hoverIcon: "hover:text-sky-600 dark:hover:text-sky-400"
+                          },
+                          chats: {
+                            activeText: "text-violet-600 dark:text-violet-400 font-semibold",
+                            activeIcon: "text-violet-600 dark:text-violet-400",
+                            hoverIcon: "hover:text-violet-600 dark:hover:text-violet-400"
+                          },
+                          meetings: {
+                            activeText: "text-emerald-600 dark:text-emerald-400 font-semibold",
+                            activeIcon: "text-emerald-600 dark:text-emerald-400",
+                            hoverIcon: "hover:text-emerald-600 dark:hover:text-emerald-400"
+                          },
+                          library: {
+                            activeText: "text-amber-600 dark:text-amber-400 font-semibold",
+                            activeIcon: "text-amber-600 dark:text-amber-400",
+                            hoverIcon: "hover:text-amber-600 dark:hover:text-amber-400"
+                          },
+                          inbox: {
+                            activeText: "text-rose-600 dark:text-rose-400 font-semibold",
+                            activeIcon: "text-rose-600 dark:text-rose-400",
+                            hoverIcon: "hover:text-rose-600 dark:hover:text-rose-400"
+                          }
+                        };
+
+                        const themeColors = itemColors[item.id] || {
+                          activeText: "text-neutral-900 dark:text-white font-semibold",
+                          activeIcon: "text-neutral-900 dark:text-white",
+                          hoverIcon: "hover:text-neutral-900 dark:hover:text-white"
+                        };
 
                         return (
                           <motion.button
                             key={item.id}
                             type="button"
                             layout
-                            whileTap={{ scale: 0.95 }}
+                            whileTap={{ scale: 0.9 }}
                             onMouseEnter={() => setHoveredQuickTab(item.id)}
                             onMouseLeave={() => setHoveredQuickTab(null)}
                             onClick={item.onClick}
-                            transition={{ type: "spring", stiffness: 420, damping: 30, mass: 0.7 }}
-                            className={`relative flex items-center justify-center h-7 rounded-full cursor-pointer outline-none select-none transition-colors duration-200 z-10 ${
-                              isExpanded ? "px-3" : "w-7"
+                            transition={{ type: "spring", stiffness: 460, damping: 30, mass: 0.6 }}
+                            className={`group relative flex items-center justify-center h-7 rounded-full cursor-pointer outline-none select-none transition-colors duration-150 z-10 ${
+                              isExpanded ? "flex-[1.6] px-2.5" : "flex-1 min-w-[28px]"
                             } ${
-                              isExpanded
-                                ? "text-neutral-950 dark:text-white"
+                              item.active
+                                ? themeColors.activeText
+                                : isHovered
+                                ? `text-neutral-900 dark:text-white ${themeColors.hoverIcon}`
                                 : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
                             }`}
                             title={item.label}
                           >
-                            {/* Apple-style floating pill background */}
-                            {isExpanded && (
+                            {/* Apple-style floating active pill */}
+                            {item.active && (
                               <motion.div
-                                layoutId="quickNavCapsulePill"
-                                className="absolute inset-0 rounded-full bg-white dark:bg-[#2C2D33] border border-black/[0.06] dark:border-white/[0.12] shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_1px_rgba(0,0,0,0.04)] -z-10"
-                                transition={{ type: "spring", stiffness: 420, damping: 30, mass: 0.7 }}
+                                layoutId="quickNavActiveCapsule"
+                                className="absolute inset-0 rounded-full bg-white dark:bg-[#282930] border border-black/[0.06] dark:border-white/[0.12] shadow-[0_2px_6px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.12)] -z-10"
+                                transition={{ type: "spring", stiffness: 460, damping: 30, mass: 0.6 }}
                               />
                             )}
 
-                            <div className="relative flex items-center justify-center shrink-0">
-                              <IconComponent size={13.5} className="shrink-0" />
+                            {/* Hover ghost backdrop for non-active items */}
+                            {!item.active && isHovered && (
+                              <motion.div
+                                layoutId="quickNavHoverGhost"
+                                className="absolute inset-0 rounded-full bg-black/[0.05] dark:bg-white/[0.08] -z-10"
+                                transition={{ type: "spring", stiffness: 460, damping: 30, mass: 0.6 }}
+                              />
+                            )}
+
+                            <motion.div
+                              whileHover={{ scale: 1.15, y: -0.5 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                              className={`relative flex items-center justify-center shrink-0 ${
+                                item.active ? themeColors.activeIcon : ""
+                              }`}
+                            >
+                              <IconComponent size={14} className="shrink-0" />
                               {Boolean(item.badge) && !isExpanded && (
-                                <span className="absolute -top-1 -right-1 h-1.5 w-1.5 rounded-full bg-amber-500 ring-2 ring-white dark:ring-black" />
+                                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 ring-1 ring-white dark:ring-[#16171C]" />
+                                </span>
                               )}
-                            </div>
+                            </motion.div>
 
                             {/* Fluid Animated Label Reveal */}
                             <AnimatePresence mode="popLayout" initial={false}>
                               {isExpanded && (
                                 <motion.span
                                   key="label"
-                                  initial={{ opacity: 0, scale: 0.92, filter: "blur(2px)" }}
-                                  animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                                  exit={{ opacity: 0, scale: 0.92, filter: "blur(2px)" }}
-                                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                                  className="whitespace-nowrap text-[11.5px] font-semibold tracking-tight leading-none ml-1.5 flex items-center gap-1 select-none"
+                                  initial={{ opacity: 0, scale: 0.9, x: -3 }}
+                                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                                  exit={{ opacity: 0, scale: 0.9, x: -3 }}
+                                  transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+                                  className="whitespace-nowrap text-[11px] font-medium tracking-tight leading-none ml-1.5 flex items-center gap-1 select-none truncate"
                                 >
-                                  <span>{item.label}</span>
+                                  <span className="truncate">{item.label}</span>
                                   {Boolean(item.badge) && (
-                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 shadow-xs" />
+                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0 shadow-xs" />
                                   )}
                                 </motion.span>
                               )}

@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, CalendarDays } from "lucide-react";
 import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
+import { InlineAction } from "@/components/ui/inline-action";
+import { flushStorageSync } from "@/utils/storage";
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -72,7 +74,16 @@ export default function CalendarView({ rows, properties, onAddRow, onRowClick }:
             Today
           </button>
         </div>
-        <button onClick={onAddRow} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--secondary)] transition cursor-pointer"><Plus size={13} /><span>New</span></button>
+        <div className="flex items-center gap-2">
+          <InlineAction
+            label="Database"
+            icon={<CalendarDays size={16} />}
+            actionText="Sync"
+            onAction={async () => { await flushStorageSync(); }}
+            className="px-0 w-auto"
+          />
+          <button onClick={onAddRow} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--secondary)] transition cursor-pointer"><Plus size={13} /><span>New</span></button>
+        </div>
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] font-semibold uppercase tracking-wider text-[var(--secondary)] border-b border-[var(--border)]">
         {DAY_NAMES.map(d => <div key={d} className="py-2">{d}</div>)}

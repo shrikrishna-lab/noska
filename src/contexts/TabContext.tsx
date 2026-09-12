@@ -63,6 +63,8 @@ interface TabContextValue {
   closeTab: (tabId: string) => void;
   closeOtherTabs: (tabId: string) => void;
   closeTabsToRight: (tabId: string) => void;
+  closeAllTabs: () => void;
+  closeAllPaneTabs: (paneId: string) => void;
   togglePinTab: (tabId: string) => void;
   reorderTabs: (newTabs: WorkspaceTab[]) => void;
   duplicateTab: (tabId: string) => void;
@@ -88,7 +90,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
           return parsed;
         }
       }
-    } catch {}
+    } catch { }
 
     const initialTargetId = appView && appView !== "page" ? appView : (activeId || "initial");
     const initialType = appView && appView !== "page" ? "view" : "page";
@@ -108,7 +110,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_SPLIT_STATE_KEY, JSON.stringify(engineState));
-    } catch {}
+    } catch { }
   }, [engineState]);
 
   // Synchronize active workspace state when external activeId / appView changes
@@ -541,6 +543,40 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const closeAllPaneTabs = useCallback(
+    (paneId: string) => {
+      const fallbackTabId = generateId("tab");
+      const fallbackTab: WorkspaceTab = {
+        id: fallbackTabId,
+        type: pages[0] ? "page" : "view",
+        targetId: pages[0]?.id || "home"
+      };
+      if (stateRef.current.activePaneId === paneId) {
+        onNavigatePane(fallbackTab.type, fallbackTab.targetId);
+      }
+      setEngineState((prev) => {
+        const pane = prev.panes[paneId];
+        if (!pane) return prev;
+        return {
+          ...prev,
+          panes: {
+            ...prev.panes,
+            [paneId]: {
+              ...pane,
+              tabs: [fallbackTab],
+              activeTabId: fallbackTabId
+            }
+          }
+        };
+      });
+    },
+    [pages, onNavigatePane]
+  );
+
+  const closeAllTabs = useCallback(() => {
+    closeAllPaneTabs(stateRef.current.activePaneId);
+  }, [closeAllPaneTabs]);
+
   const togglePinTab = useCallback(
     (tabId: string) => {
       const activeId = stateRef.current.activePaneId;
@@ -614,6 +650,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       closeTab,
       closeOtherTabs,
       closeTabsToRight,
+      closeAllTabs,
+      closeAllPaneTabs,
       togglePinTab,
       reorderTabs,
       duplicateTab
@@ -637,6 +675,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       closeTab,
       closeOtherTabs,
       closeTabsToRight,
+      closeAllTabs,
+      closeAllPaneTabs,
       togglePinTab,
       reorderTabs,
       duplicateTab

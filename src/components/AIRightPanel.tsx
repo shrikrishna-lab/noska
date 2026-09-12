@@ -40,6 +40,7 @@ import { useStreamBuffer } from "./ai/useStreamBuffer";
 import { capture } from "../lib/posthog";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
+import { LiquidMetalButton } from "./ui/liquid-metal-button";
 
 const SPRING = { type: "spring", stiffness: 400, damping: 28 } as const;
 const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 } as const;
@@ -1044,28 +1045,28 @@ export default function AIRightPanel({
                   />
 
                   {loading ? (
-                    <button
-                      type="button"
+                    <LiquidMetalButton
+                      viewMode="icon"
+                      size="sm"
                       onClick={handleStop}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--hover)] transition cursor-pointer shrink-0"
+                      icon={<Square size={9} fill="currentColor" className="text-white" />}
                       title="Stop generating"
-                    >
-                      <Square size={10} fill="currentColor" />
-                    </button>
+                    />
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleSend(prompt)}
+                    <LiquidMetalButton
+                      viewMode="icon"
+                      size="sm"
                       disabled={!prompt.trim()}
-                      className={`flex h-7 w-7 items-center justify-center rounded-full transition-all cursor-pointer shrink-0 ${
-                        prompt.trim()
-                          ? 'bg-[var(--text)] text-[var(--panel)] hover:opacity-90 shadow-sm scale-100'
-                          : 'bg-[var(--surface-2)] text-[var(--muted)] opacity-50 cursor-not-allowed'
-                      }`}
+                      onClick={() => handleSend(prompt)}
+                      icon={
+                        <ArrowUp
+                          size={13}
+                          strokeWidth={2.5}
+                          className={prompt.trim() ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" : "text-white/40"}
+                        />
+                      }
                       title="Send prompt (Enter)"
-                    >
-                      <ArrowUp size={13} strokeWidth={2.5} />
-                    </button>
+                    />
                   )}
                 </div>
               </div>

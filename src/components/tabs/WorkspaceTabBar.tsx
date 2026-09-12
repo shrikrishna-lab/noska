@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
-import { Plus, X, Pin, Copy, ArrowRight, Layers, Sparkles, ChevronDown, Search, Columns, ExternalLink } from "lucide-react";
+import { Plus, X, Pin, Copy, ArrowRight, Layers, Sparkles, ChevronDown, Search, Columns, ExternalLink, Trash2 } from "lucide-react";
 import { useTabs, type WorkspaceTab, VIEW_META } from "../../contexts/TabContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import type { Page } from "../../lib/supabaseService";
@@ -53,6 +53,7 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
     closeTab,
     closeOtherTabs,
     closeTabsToRight,
+    closeAllTabs,
     togglePinTab,
     reorderTabs,
     duplicateTab,
@@ -300,92 +301,147 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
           onReorder={reorderTabs}
           className="flex flex-row flex-nowrap items-end gap-1 shrink-0"
         >
-          {tabs.map((tab, idx) => {
-            const isActive = tab.id === activeTabId;
-            const meta = resolveTabMeta(tab);
+          <AnimatePresence mode="popLayout" initial={false}>
+            {tabs.map((tab, idx) => {
+              const isActive = tab.id === activeTabId;
+              const meta = resolveTabMeta(tab);
+              const isPinned = Boolean(tab.pinned && meta.title !== "Untitled");
 
-            return (
-              <Reorder.Item
-                key={tab.id || `tab-${idx}`}
-                value={tab}
-                dragListener={!tab.pinned}
-                dragElastic={0.12}
-                whileDrag={{
-                  scale: 1.03,
-                  zIndex: 50,
-                  opacity: 0.95,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-                  cursor: "grabbing"
-                }}
-                whileHover={{ y: 0 }}
-                transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                onContextMenu={(e) => handleContextMenu(e, tab)}
-                onAuxClick={(e) => handleAuxClick(e, tab.id)}
-                onMouseEnter={(e) => schedulePreview(e, tab)}
-                onMouseLeave={cancelPreview}
-                title={meta.breadcrumb || meta.title}
-                className={`group/tab relative flex flex-row flex-nowrap shrink-0 h-[29px] items-center gap-2 rounded-t-md px-3 transition-all cursor-grab active:cursor-grabbing select-none outline-none ${
-                  isActive
-                    ? "bg-[var(--bg)] text-[var(--text)] font-semibold border-t border-x border-[var(--border)] shadow-[0_-2px_6px_rgba(0,0,0,0.04)] z-10"
-                    : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] border-t border-x border-transparent"
-                } ${tab.pinned && meta.title !== "Untitled" ? "max-w-[42px] justify-center px-2" : "max-w-[200px] min-w-[115px]"}`}
-                onClick={() => {
-                  if (!isActive) {
-                    setPaneActiveTab(activePaneId, tab.id);
-                  }
-                }}
-              >
-                {/* Active tab bottom cover to merge seamlessly with topbar */}
-                {isActive && (
-                  <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] bg-[var(--bg)] z-20" />
-                )}
-
-                {/* Tab Icon */}
-                <span className="shrink-0 flex items-center justify-center text-[13px] leading-none">
-                  {tab.type === "page" ? (
-                    <PageIcon icon={meta.icon} size={13} fallback={<span>📄</span>} />
-                  ) : (
-                    <span>{meta.icon}</span>
+              return (
+                <Reorder.Item
+                  key={tab.id || `tab-${idx}`}
+                  value={tab}
+                  layout
+                  initial={{
+                    opacity: 0,
+                    scale: 0.84,
+                    maxWidth: 0,
+                    paddingLeft: 0,
+                    paddingRight: 0,
+                    y: 8,
+                    filter: "blur(3px)"
+                  }}
+                  animate={{
+                    opacity: 1,
+                    scale: 1,
+                    maxWidth: isPinned ? 44 : 200,
+                    paddingLeft: isPinned ? 8 : 12,
+                    paddingRight: isPinned ? 8 : 12,
+                    y: 0,
+                    filter: "blur(0px)",
+                    transition: {
+                      opacity: { duration: 0.22 },
+                      scale: { type: "spring", stiffness: 420, damping: 26 },
+                      maxWidth: { type: "spring", stiffness: 360, damping: 28 },
+                      paddingLeft: { duration: 0.2 },
+                      paddingRight: { duration: 0.2 },
+                      y: { type: "spring", stiffness: 420, damping: 26 }
+                    }
+                  }}
+                  exit={{
+                    opacity: 0,
+                    scale: 0.72,
+                    maxWidth: 0,
+                    paddingLeft: 0,
+                    paddingRight: 0,
+                    marginLeft: 0,
+                    marginRight: 0,
+                    borderWidth: 0,
+                    y: -8,
+                    filter: "blur(3px)",
+                    transition: {
+                      opacity: { duration: 0.18, ease: "easeOut" },
+                      scale: { duration: 0.22, ease: [0.32, 0, 0.67, 0] },
+                      maxWidth: { duration: 0.28, ease: [0.32, 0.72, 0, 1] },
+                      paddingLeft: { duration: 0.24 },
+                      paddingRight: { duration: 0.24 },
+                      y: { duration: 0.22 }
+                    }
+                  }}
+                  dragListener={!tab.pinned}
+                  dragElastic={0.12}
+                  whileDrag={{
+                    scale: 1.03,
+                    zIndex: 50,
+                    opacity: 0.95,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+                    cursor: "grabbing"
+                  }}
+                  whileHover={{ y: -1 }}
+                  transition={{
+                    layout: { type: "spring", stiffness: 400, damping: 30, mass: 0.8 }
+                  }}
+                  onContextMenu={(e) => handleContextMenu(e, tab)}
+                  onAuxClick={(e) => handleAuxClick(e, tab.id)}
+                  onMouseEnter={(e) => schedulePreview(e, tab)}
+                  onMouseLeave={cancelPreview}
+                  title={meta.breadcrumb || meta.title}
+                  className={`group/tab relative flex flex-row flex-nowrap shrink-0 h-[29px] items-center gap-2 rounded-t-md transition-all cursor-grab active:cursor-grabbing select-none outline-none overflow-hidden ${
+                    isActive
+                      ? "bg-[var(--bg)] text-[var(--text)] font-semibold border-t border-x border-[var(--border)] shadow-[0_-2px_6px_rgba(0,0,0,0.04)] z-10"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] border-t border-x border-transparent"
+                  } ${isPinned ? "justify-center" : "min-w-[100px]"}`}
+                  onClick={() => {
+                    if (!isActive) {
+                      setPaneActiveTab(activePaneId, tab.id);
+                    }
+                  }}
+                >
+                  {/* Active tab bottom cover to merge seamlessly with topbar */}
+                  {isActive && (
+                    <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] bg-[var(--bg)] z-20" />
                   )}
-                </span>
 
-                {/* Tab Title (hidden if pinned) */}
-                {(!tab.pinned || meta.title === "Untitled") && (
-                  <span className="truncate flex-1 text-[12px] leading-tight font-medium pr-0.5">
-                    {meta.title}
-                  </span>
-                )}
-
-                {/* Pinned Icon indicator */}
-                {tab.pinned && <span className="sr-only">{meta.title}</span>}
-
-                {/* Tab Actions (Split & Close buttons on Hover or Active) */}
-                {!tab.pinned && (
-                  <div className="flex items-center gap-0.5 ml-auto shrink-0 opacity-0 group-hover/tab:opacity-100 transition-opacity duration-150">
-                    {tab.type === "page" && (
-                      <button
-                        onClick={(e) => handleSplitIconClick(e, tab)}
-                        title="Split view (open page beside)"
-                        className="grid h-4 w-4 place-items-center rounded-sm transition cursor-pointer text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 hover:text-slate-800 dark:hover:text-white"
-                      >
-                        <Columns size={10} strokeWidth={2.2} />
-                      </button>
+                  {/* Tab Icon */}
+                  <span className="shrink-0 flex items-center justify-center text-[13px] leading-none">
+                    {tab.type === "page" ? (
+                      <PageIcon icon={meta.icon} size={13} fallback={<span>📄</span>} />
+                    ) : (
+                      <span>{meta.icon}</span>
                     )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeTab(tab.id);
-                      }}
-                      title="Close tab"
-                      className="grid h-4 w-4 place-items-center rounded-sm text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 hover:text-slate-800 dark:hover:text-white transition cursor-pointer"
-                    >
-                      <X size={11} strokeWidth={2.2} />
-                    </button>
-                  </div>
-                )}
-              </Reorder.Item>
-            );
-          })}
+                  </span>
+
+                  {/* Tab Title (hidden if pinned) */}
+                  {(!tab.pinned || meta.title === "Untitled") && (
+                    <span className="truncate flex-1 text-[12px] leading-tight font-medium pr-0.5">
+                      {meta.title}
+                    </span>
+                  )}
+
+                  {/* Pinned Icon indicator */}
+                  {tab.pinned && <span className="sr-only">{meta.title}</span>}
+
+                  {/* Tab Actions (Split & Close buttons on Hover or Active) */}
+                  {!tab.pinned && (
+                    <div className="flex items-center gap-0.5 ml-auto shrink-0 opacity-0 group-hover/tab:opacity-100 transition-opacity duration-150">
+                      {tab.type === "page" && (
+                        <button
+                          onClick={(e) => handleSplitIconClick(e, tab)}
+                          title="Split view (open page beside)"
+                          className="grid h-4 w-4 place-items-center rounded-sm transition cursor-pointer text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 hover:text-slate-800 dark:hover:text-white"
+                        >
+                          <Columns size={10} strokeWidth={2.2} />
+                        </button>
+                      )}
+                      <motion.button
+                        whileHover={{ scale: 1.25, rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closeTab(tab.id);
+                        }}
+                        title="Close tab"
+                        className="grid h-4 w-4 place-items-center rounded-sm text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 hover:text-rose-500 dark:hover:text-rose-400 transition cursor-pointer"
+                      >
+                        <X size={11} strokeWidth={2.2} />
+                      </motion.button>
+                    </div>
+                  )}
+                </Reorder.Item>
+              );
+            })}
+          </AnimatePresence>
         </Reorder.Group>
 
         {/* Plus / New Tab Button */}
@@ -519,6 +575,20 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
                 </button>
               );
             })}
+            {tabs.length > 0 && (
+              <div className="mt-1 pt-1 border-t border-[var(--border)]">
+                <button
+                  onClick={() => {
+                    closeAllTabs();
+                    setOverflowOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-[11.5px]"
+                >
+                  <Trash2 size={12} className="text-rose-500" />
+                  Close All Tabs
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -626,6 +696,19 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
             >
               <ArrowRight size={13} className="text-[var(--text-secondary)]" />
               Close Tabs to the Right
+            </button>
+
+            <div className="my-1 border-t border-[var(--border)]" />
+
+            <button
+              onClick={() => {
+                closeAllTabs();
+                setContextMenu((prev) => ({ ...prev, open: false }));
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
+            >
+              <Trash2 size={13} className="text-rose-500" />
+              Close All Tabs
             </button>
           </motion.div>
         )}

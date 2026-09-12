@@ -1,12 +1,17 @@
 import React, { memo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import {
   ChevronDown,
   Link2,
   Sparkles,
   Globe,
+  FileText,
+  LayoutGrid,
+  Network,
+  Bookmark,
   type LucideIcon
 } from "lucide-react";
+
 import {
   AnimatedMenu,
   AnimatedLock,
@@ -20,6 +25,8 @@ import {
   AnimatedSearch
 } from "./ui/icons";
 import { IconButton, PearlButton } from "./ui";
+import { OptionPicker } from "./ui/quick-option-picker";
+import { TbLockFilled } from "react-icons/tb";
 import WorkspaceJoinBar from "./collab/WorkspaceJoinBar";
 import type { Page } from "../lib/supabaseService";
 import { PageIcon } from "./PageIcon";
@@ -53,9 +60,23 @@ interface TopbarProps {
   onLockPage?: () => void;
   onRemoveEncryption?: (pageId: string) => void;
   onVisibilityChange?: (visibility: "private" | "team" | "company" | "public") => void;
+  onToast?: (msg: string) => void;
 }
 
 const asLucideIcon = (icon: unknown) => icon as LucideIcon;
+
+const SPRING_TRANSITION = {
+  type: "spring" as const,
+  stiffness: 460,
+  damping: 32,
+  mass: 0.8,
+};
+
+const PAGE_MODES = [
+  { id: "doc", label: "Document", icon: FileText },
+  { id: "canvas", label: "Canvas", icon: LayoutGrid },
+  { id: "graph", label: "Graph", icon: Network },
+] as const;
 
 const Topbar = memo(function Topbar({
   page,
@@ -84,18 +105,16 @@ const Topbar = memo(function Topbar({
   onCollab,
   onLockPage,
   onRemoveEncryption,
-  onVisibilityChange
+  onVisibilityChange,
+  onToast,
 }: TopbarProps) {
-  // Click-to-set page visibility: the Private/Public badge opens a picker.
-  // Only the owner can change it (shared-page viewers see the state but
-  // can't flip it).
   const [visOpen, setVisOpen] = useState(false);
+  const [hoveredMode, setHoveredMode] = useState<string | null>(null);
   const visibility = page.visibility || "private";
   const isOwner = !page.sharedRole;
-  // Context for the Collab pill: shared pages (owner-invited or public) get
-  // live state; invitees get an access-level pill instead.
   const sharedViaPerms = usePageIsShared(page?.id ?? null);
   const pageIsShared = isOwner ? (sharedViaPerms || visibility === "public") : true;
+  const isPrivate = visibility === "private" && isOwner && !sharedViaPerms;
 
   const VIS_OPTIONS: { value: "private" | "public"; label: string; description: string; Icon: LucideIcon }[] = [
     { value: "private", label: "Private", description: "Only you and people you invite", Icon: AnimatedLock as unknown as LucideIcon },
@@ -108,118 +127,173 @@ const Topbar = memo(function Topbar({
       <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] text-[var(--text-secondary)]">
         <PageIcon icon={page.icon} size={15} fallback={<span className="text-[13px] leading-none">📄</span>} />
         <span className="truncate text-[var(--text)] font-medium">{page.title || "Untitled"}</span>
-        <div className="relative">
-          <button
-            onClick={() => isOwner && setVisOpen((v) => !v)}
-            disabled={!isOwner}
-            title={isOwner ? "Change page visibility" : "Only the page owner can change visibility"}
-            className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${
-              isOwner
-                ? "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
-                : "text-[var(--text-muted)] cursor-default"
-            }`}
-          >
-            <CurrentVisIcon size={10} />
-            {visibility === "public" ? "Public" : "Private"}
-            {isOwner && <ChevronDown size={9} className={`transition-transform ${visOpen ? "rotate-180" : ""}`} />}
-          </button>
-
-          <AnimatePresence>
-            {visOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setVisOpen(false)} />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                  className="absolute top-full left-0 mt-1.5 z-50 w-[240px] bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden"
-                >
-                  <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                    Page visibility
-                  </div>
-                  <div className="p-1">
-                    {VIS_OPTIONS.map(({ value, label, description, Icon }) => {
-                      const active = visibility === value || (value === "private" && visibility !== "public");
-                      return (
-                        <button
-                          key={value}
-                          onClick={() => {
-                            onVisibilityChange?.(value);
-                            setVisOpen(false);
-                          }}
-                          className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-lg hover:bg-[var(--hover)] transition-colors cursor-pointer text-left"
-                        >
-                          <Icon size={14} className="text-[var(--muted)] mt-0.5 shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[12px] font-medium text-[var(--text)]">{label}</div>
-                            <div className="text-[10px] text-[var(--muted)] leading-tight mt-0.5">{description}</div>
-                          </div>
-                          {active && <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] mt-1.5 shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="border-t border-[var(--border)] px-2.5 py-1.5 text-[10px] text-[var(--muted)]">
-                    To share with specific people, use the Share button or the Collab panel.
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
+        <OptionPicker
+          options={[
+            { id: "private", label: "Private", icon: TbLockFilled },
+            { id: "public", label: "Public", icon: Globe },
+          ]}
+          value={visibility === "public" ? "public" : "private"}
+          onChange={(newVal) => onVisibilityChange?.(newVal as "private" | "public")}
+          disabled={!isOwner}
+          size="xs"
+          dropdownPlacement="bottom"
+        />
       </div>
 
-      {appView === "page" && (
-        <div className="flex items-center gap-0.5 rounded-lg bg-[var(--hover)] p-0.5 border border-[var(--border)] mr-3 select-none relative h-7 shrink-0">
-          {["doc", "canvas", "graph"].map((mode) => {
-            const label = mode === "doc" ? "Document" : mode === "canvas" ? "Canvas" : "Graph";
-            const active = pageMode === mode;
-            return (
-              <button
-                key={mode}
-                onClick={() => onPageModeChange?.(mode)}
-                className={`px-3 py-1 text-[11px] h-full flex items-center rounded-md relative z-10 transition-colors duration-150 outline-none ${
-                  active ? "text-[var(--text)] font-semibold" : "text-[var(--text-secondary)] hover:text-[var(--text)]"
-                }`}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="topbar-mode-pill"
-                    transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                    className="absolute inset-0 bg-[var(--surface-2)] border border-[var(--border-hover)] rounded-md z-0 shadow-sm"
-                  />
-                )}
-                <span className="relative z-10">{label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <LayoutGroup id="topbar-mode-collab-group">
+        {appView === "page" && (
+          <motion.div
+            layout
+            transition={SPRING_TRANSITION}
+            className="flex items-center gap-2 mr-3"
+          >
+            {/* Apple-grade Segmented Mode Switcher */}
+            <motion.div
+              layout
+              transition={SPRING_TRANSITION}
+              className="flex items-center gap-0.5 rounded-xl bg-[var(--surface-2)]/60 dark:bg-white/[0.04] p-0.5 border border-black/[0.06] dark:border-white/[0.08] select-none relative h-7 shrink-0 shadow-2xs backdrop-blur-xs"
+            >
+              {PAGE_MODES.map(({ id, label, icon: Icon }) => {
+                const active = pageMode === id;
+                return (
+                  <motion.button
+                    key={id}
+                    layout
+                    transition={SPRING_TRANSITION}
+                    onClick={() => onPageModeChange?.(id)}
+                    onMouseEnter={() => setHoveredMode(id)}
+                    onMouseLeave={() => setHoveredMode(null)}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`relative px-2.5 py-1 text-[11.5px] h-full flex items-center gap-1.5 rounded-lg select-none transition-colors duration-150 outline-none cursor-pointer ${
+                      active
+                        ? "text-[var(--text)] font-semibold"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {active && (
+                      <motion.div
+                        layoutId="topbar-mode-pill"
+                        transition={SPRING_TRANSITION}
+                        className="absolute inset-0 bg-white dark:bg-[#282724] border border-black/[0.06] dark:border-white/10 rounded-lg z-0 shadow-xs"
+                      />
+                    )}
+                    {!active && hoveredMode === id && (
+                      <motion.div
+                        layoutId="topbar-mode-hover"
+                        transition={SPRING_TRANSITION}
+                        className="absolute inset-0 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg z-0"
+                      />
+                    )}
+                    <Icon size={12} className={`relative z-10 shrink-0 transition-opacity duration-150 ${active ? "opacity-90" : "opacity-55"}`} />
+                    <span className="relative z-10 tracking-tight">{label}</span>
+                  </motion.button>
+                );
+              })}
+            </motion.div>
 
-      {/* Workspace Collaboration — role-aware: owner shows shared/live
-          state, invitees see their access level */}
-      {appView === "page" && (
-        <div className="mr-2">
-          <WorkspaceJoinBar
-            onOpenSettings={() => {}}
-            pageId={page?.id ?? null}
-            sharedRole={page.sharedRole}
-            isPageShared={pageIsShared}
-          />
-        </div>
-      )}
+            {/* Workspace Collaboration Pill */}
+            <motion.div
+              layout
+              transition={SPRING_TRANSITION}
+            >
+              <WorkspaceJoinBar
+                onOpenSettings={() => {}}
+                pageId={page?.id ?? null}
+                sharedRole={page.sharedRole}
+                isPageShared={pageIsShared}
+                isPrivate={isPrivate}
+                onToast={onToast}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </LayoutGroup>
 
-      <button
+
+
+      <motion.button
+        type="button"
         onClick={onShare}
-        className="flex h-7 items-center gap-1 rounded-md px-2 text-[13px] text-[var(--text-secondary)] hover:bg-[var(--hover)] shrink-0"
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.95 }}
+        transition={SPRING_TRANSITION}
+        className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--hover)] border border-transparent hover:border-[var(--border)] transition-colors shrink-0 cursor-pointer shadow-2xs select-none"
       >
-        <AnimatedLock size={14} />
-        Share
-        <ChevronDown size={12} />
-      </button>
-      <IconButton icon={Link2} label="Copy link" onClick={onCopyLink} />
-      <IconButton icon={asLucideIcon(AnimatedBookmark)} label="Favorite" onClick={onFavorite} />
+        <AnimatedLock size={13} />
+        <span>Share</span>
+        <ChevronDown size={11} className="opacity-60" />
+      </motion.button>
+
+      <motion.button
+        type="button"
+        onClick={onCopyLink}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.88 }}
+        transition={SPRING_TRANSITION}
+        className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-150 cursor-pointer select-none ${
+          visibility === "public"
+            ? "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+            : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+        }`}
+        title={visibility === "public" ? "Copy public link" : "Copy link (Page is Private)"}
+        aria-label={visibility === "public" ? "Copy public link" : "Copy link (Page is Private)"}
+      >
+        <Link2 size={15} />
+      </motion.button>
+
+      <motion.button
+        type="button"
+        onClick={onFavorite}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.88 }}
+        className={`relative grid h-7 w-7 place-items-center rounded-md transition-colors duration-150 cursor-pointer select-none ${
+          page.favorite
+            ? "text-amber-500 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-400/10 hover:bg-amber-500/15"
+            : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+        }`}
+        title={page.favorite ? "Favorited · Click to remove" : "Add to favorites"}
+        aria-label={page.favorite ? "Remove from favorites" : "Add to favorites"}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {page.favorite ? (
+            <motion.div
+              key="favorited"
+              initial={{ scale: 0.4, rotate: -20, opacity: 0 }}
+              animate={{
+                scale: [0.4, 1.35, 0.92, 1.06, 1],
+                rotate: [-20, 8, -4, 2, 0],
+                opacity: 1,
+              }}
+              exit={{ scale: 0.4, opacity: 0 }}
+              transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
+              className="relative flex items-center justify-center"
+            >
+              <Bookmark
+                size={16}
+                className="fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400 drop-shadow-[0_2px_8px_rgba(245,158,11,0.45)]"
+              />
+              <motion.span
+                initial={{ scale: 0.2, opacity: 0.8 }}
+                animate={{ scale: 2.2, opacity: 0 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                className="absolute inset-0 rounded-full bg-amber-400/35 pointer-events-none"
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="unfavorited"
+              initial={{ scale: 0.75, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.75, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="flex items-center justify-center"
+            >
+              <Bookmark size={16} strokeWidth={2} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.button>
 
       <PearlButton
         onClick={onAI}
@@ -234,15 +308,20 @@ const Topbar = memo(function Topbar({
       <IconButton icon={asLucideIcon(AnimatedUndo)} label="Undo" disabled={!canUndo} onClick={onUndo} />
       <IconButton icon={asLucideIcon(AnimatedRedo)} label="Redo" disabled={!canRedo} onClick={onRedo} />
       <IconButton icon={asLucideIcon(AnimatedCanvas)} label="Reading Mode" onClick={onReadingModeToggle} />
-      <button
+      <motion.button
+        type="button"
         onClick={() => onThemeChange(dark ? "light" : "dark")}
-        className="grid h-7 w-7 place-items-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition duration-200"
+        whileHover={{ scale: 1.1, rotate: 15 }}
+        whileTap={{ scale: 0.88, rotate: -25 }}
+        transition={SPRING_TRANSITION}
+        className="grid h-7 w-7 place-items-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors cursor-pointer select-none"
         title="Toggle theme"
       >
         <AnimatedTheme size={16} active={dark} />
-      </button>
+      </motion.button>
     </header>
   );
 });
+
 
 export default Topbar;

@@ -2720,16 +2720,50 @@ function AppContent() {
     });
   }, [activeId, pages]);
 
-  const copyPageLink = async (pageId) => {
+  const copyPageLink = async (pageId: string) => {
+    const targetPage = pages.find((p) => p.id === pageId) || (activePage?.id === pageId ? activePage : null);
+    const isPublic = targetPage?.visibility === "public";
     const slug = slugifyWorkspaceName(workspaceName);
     const url = `${window.location.origin}/${slug}/${pageId}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast("Link copied");
-    } catch {
+
+    if (!isPublic) {
+      console.warn(`[Page Access] Cannot copy link: Page "${targetPage?.title || 'Untitled'}" (${pageId}) is Private (not in Public).`);
+      showToast("This page is Private. Set page to Public to copy and share link.");
+      return;
+    }
+
+    console.log(`[Page Access] Public page link copied for "${targetPage?.title || 'Untitled'}": ${url}`);
+
+    let copied = false;
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch {}
+    }
+
+    if (!copied) {
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = url;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        copied = document.execCommand("copy");
+        document.body.removeChild(textArea);
+      } catch {}
+    }
+
+    if (copied) {
+      showToast("Public link copied to clipboard");
+    } else {
       showToast("Could not copy link");
     }
   };
+
+
 
   const addBlockAfter = (blockId: string, type: string = "text", text: string = "") => {
     if (!activePage?.blocks) return;
@@ -3022,7 +3056,9 @@ function AppContent() {
               onLockPage={() => setEncryptOpen(true)}
               onRemoveEncryption={handleRemoveEncryption}
               onVisibilityChange={(visibility) => updatePage(activePage.id, { visibility })}
+              onToast={showToast}
             />
+
             <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
               <AnimatePresence mode="wait">
                 <motion.div

@@ -7,9 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Grid3x3, List, Search, Filter, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, CalendarDays, Clock, Grid3x3, List, Search, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { InlineAction } from "@/components/ui/inline-action";
+import { flushStorageSync } from "@/utils/storage";
 
 export interface Event {
   id: string; title: string; description?: string;
@@ -22,6 +24,7 @@ export interface EventManagerProps {
   onEventCreate?: (event: Omit<Event, "id">) => void;
   onEventUpdate?: (id: string, event: Partial<Event>) => void;
   onEventDelete?: (id: string) => void;
+  onSyncEvents?: () => Promise<void>;
   categories?: string[];
   colors?: { name: string; value: string; bg: string; text: string }[];
   defaultView?: "month" | "week" | "day" | "list";
@@ -179,7 +182,7 @@ function ListView({ events, onEventClick, getColorClasses }: { events: Event[]; 
 }
 
 export function EventManager({
-  events: initialEvents = [], onEventCreate, onEventUpdate, onEventDelete,
+  events: initialEvents = [], onEventCreate, onEventUpdate, onEventDelete, onSyncEvents,
   categories = ["Meeting", "Task", "Reminder", "Personal"],
   colors = defaultColors, defaultView = "month", className,
   availableTags = ["Important", "Urgent", "Work", "Personal", "Team", "Client"],
@@ -208,6 +211,14 @@ export function EventManager({
   const hasFilters = selectedColors.length > 0 || selectedTags.length > 0 || selectedCategories.length > 0;
   const clearFilters = () => { setSelectedColors([]); setSelectedTags([]); setSelectedCategories([]); setSearchQuery(""); };
   const getColorClasses = useCallback((v: string) => colors.find(c => c.value === v) || colors[0], [colors]);
+
+  const handleSync = useCallback(async () => {
+    if (onSyncEvents) {
+      await onSyncEvents();
+    } else {
+      await flushStorageSync();
+    }
+  }, [onSyncEvents]);
 
   const handleCreateEvent = useCallback(() => {
     if (!newEvent.title || !newEvent.startTime || !newEvent.endTime) return;
@@ -271,7 +282,16 @@ export function EventManager({
               </Button>
             ))}
           </div>
-          <Button onClick={() => { setIsCreating(true); setIsDialogOpen(true); }} className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />New Event</Button>
+          <div className="flex items-center gap-2">
+            <InlineAction
+              label="Calendar"
+              icon={<CalendarDays size={18} />}
+              actionText="Sync Events"
+              onAction={handleSync}
+              className="px-0 w-auto"
+            />
+            <Button onClick={() => { setIsCreating(true); setIsDialogOpen(true); }} className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />New Event</Button>
+          </div>
         </div>
       </div>
 
