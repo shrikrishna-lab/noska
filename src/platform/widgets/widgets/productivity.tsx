@@ -99,22 +99,21 @@ export const MY_TASKS_CONFIG_SCHEMA: WidgetConfigField[] = [
 
 export function MyTasksWidget({ config, size, ctx }: WidgetProps) {
   const showOverdue = config.showOverdue !== false;
-  const sortBy = (config.sortBy as "priority" | "due") ?? "priority";
 
   const allTasks = useMemo(() => collectTasks(ctx.pages), [ctx.pages]);
 
   const { todayTasks, overdueTasks, doneCount } = useMemo(() => {
     const today = allTasks.filter(
-      (t) => !t.completed && t.dueDate && t.dueDate >= startOfToday() && t.dueDate <= endOfToday()
+      (t) => !t.checked && t.due && new Date(t.due) >= startOfToday() && new Date(t.due) <= endOfToday()
     );
-    const overdue = allTasks.filter((t) => !t.completed && t.dueDate && t.dueDate < startOfToday());
-    const done = allTasks.filter((t) => t.completed).length;
+    const overdue = allTasks.filter((t) => !t.checked && t.due && new Date(t.due) < startOfToday());
+    const done = allTasks.filter((t) => t.checked).length;
     return {
-      todayTasks: sortTasks(today, sortBy),
-      overdueTasks: sortTasks(overdue, sortBy),
+      todayTasks: sortTasks(today),
+      overdueTasks: sortTasks(overdue),
       doneCount: done,
     };
-  }, [allTasks, sortBy]);
+  }, [allTasks]);
 
   const visibleTasks = useMemo(() => {
     const combined = showOverdue ? [...overdueTasks, ...todayTasks] : todayTasks;
@@ -123,8 +122,8 @@ export function MyTasksWidget({ config, size, ctx }: WidgetProps) {
   }, [showOverdue, overdueTasks, todayTasks, size]);
 
   const toggleTask = (task: TaskLite) => {
-    ctx.actions.onBlockPatch?.(task.pageId, task.id, { completed: !task.completed });
-    ctx.actions.onToast?.(task.completed ? "Task reopened" : "Task completed! 🎉");
+    ctx.actions.onBlockPatch?.(task.pageId, task.blockId, { checked: !task.checked });
+    ctx.actions.onToast?.(task.checked ? "Task reopened" : "Task completed! 🎉");
   };
 
   if (visibleTasks.length === 0 && overdueTasks.length === 0) {
@@ -149,7 +148,7 @@ export function MyTasksWidget({ config, size, ctx }: WidgetProps) {
       <div className="space-y-1.5 my-auto">
         {visibleTasks.map((t) => (
           <motion.div
-            key={t.id}
+            key={t.key}
             whileHover={{ scale: 1.01 }}
             className="flex items-center justify-between p-2 rounded-xl border border-black/[0.05] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-all cursor-pointer"
             onClick={() => toggleTask(t)}
@@ -158,15 +157,15 @@ export function MyTasksWidget({ config, size, ctx }: WidgetProps) {
               <button
                 type="button"
                 className={`h-4.5 w-4.5 rounded-md flex items-center justify-center border transition-all ${
-                  t.completed
+                  t.checked
                     ? "bg-emerald-500 border-emerald-500 text-white shadow-2xs"
                     : "border-black/25 dark:border-white/25 bg-transparent"
                 }`}
               >
-                {t.completed && <Check size={11} strokeWidth={3} />}
+                {t.checked && <Check size={11} strokeWidth={3} />}
               </button>
-              <span className={`text-xs font-semibold truncate ${t.completed ? "line-through text-neutral-400" : "text-neutral-800 dark:text-neutral-200"}`}>
-                {t.title}
+              <span className={`text-xs font-semibold truncate ${t.checked ? "line-through text-neutral-400" : "text-neutral-800 dark:text-neutral-200"}`}>
+                {t.text}
               </span>
             </div>
 
@@ -193,7 +192,7 @@ export function UpcomingTasksWidget({ ctx, size }: WidgetProps) {
 
   const upcoming = useMemo(() => {
     return allTasks
-      .filter((t) => !t.completed && t.dueDate && t.dueDate > endOfToday())
+      .filter((t) => !t.checked && t.due && new Date(t.due) > endOfToday())
       .slice(0, size === "small" ? 2 : 4);
   }, [allTasks, size]);
 
@@ -212,19 +211,19 @@ export function UpcomingTasksWidget({ ctx, size }: WidgetProps) {
       <div className="space-y-1.5 my-auto">
         {upcoming.map((t) => (
           <div
-            key={t.id}
+            key={t.key}
             onClick={() => ctx.actions.onSelect(t.pageId)}
             className="flex items-center justify-between p-2 rounded-xl border border-black/[0.05] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-all cursor-pointer"
           >
             <div className="flex items-center gap-2 min-w-0">
               <Calendar size={13} className="text-indigo-500 shrink-0" />
               <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate">
-                {t.title}
+                {t.text}
               </span>
             </div>
-            {t.dueDate && (
+            {t.due && (
               <span className="text-[10px] font-medium text-neutral-400 dark:text-neutral-500 shrink-0">
-                {new Date(t.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                {new Date(t.due).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </span>
             )}
           </div>
@@ -267,7 +266,7 @@ export function RecentPagesWidget({ ctx, size }: WidgetProps) {
               </span>
             </div>
             <span className="text-[10px] text-neutral-400 dark:text-neutral-500 shrink-0">
-              {timeAgo(p.updated_at || p.created_at || "")}
+              {timeAgo(p.updatedAt || p.createdAt || "")}
             </span>
           </motion.button>
         ))}

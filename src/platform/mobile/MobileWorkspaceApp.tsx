@@ -53,11 +53,10 @@ import { ensureNotificationPermission } from "../../lib/desktop/notify";
 import { openExternal } from "../../lib/desktop/links";
 import { hapticFeedback } from "../index";
 import { useMobileController } from "./MobileAppController";
+import { MobileFloatingNavbar, type MobileTab } from "./MobileFloatingNavbar";
 import "./mobile.css";
 
 const AIPanel = lazy(() => import("../../components/AIPanel"));
-
-type MobileTab = "home" | "search" | "inbox" | "profile";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -858,58 +857,14 @@ export default function MobileWorkspaceApp() {
         </AnimatePresence>
       </div>
 
-      {/* Bottom navigation */}
-      <nav className="mobile-bottom-nav" aria-label="Primary">
-        <button
-          type="button"
-          className={`mobile-nav-item ${tab === "home" && !isPageRoute ? "is-active" : ""}`}
-          onClick={() => goTab("home")}
-        >
-          <HomeIcon /> Home
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-item ${tab === "search" && !isPageRoute ? "is-active" : ""}`}
-          onClick={() => goTab("search")}
-        >
-          <SearchIcon /> Search
-        </button>
-        <div className="mobile-nav-create">
-          <button
-            type="button"
-            className="mobile-nav-create-btn"
-            aria-label="Create"
-            onClick={() => { hapticFeedback("medium"); setCreateOpen(true); }}
-          >
-            <Plus />
-          </button>
-        </div>
-        <button
-          type="button"
-          className={`mobile-nav-item ${tab === "inbox" && !isPageRoute ? "is-active" : ""}`}
-          onClick={() => goTab("inbox")}
-          style={{ position: "relative" }}
-        >
-          <InboxIcon />
-          {controller.pendingInvites.length > 0 && (
-            <span
-              aria-hidden
-              style={{
-                position: "absolute", top: 7, right: "calc(50% - 16px)",
-                width: 8, height: 8, borderRadius: 999, background: "#ef4444",
-              }}
-            />
-          )}
-          Inbox
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-item ${tab === "profile" && !isPageRoute ? "is-active" : ""}`}
-          onClick={() => goTab("profile")}
-        >
-          <UserIcon /> Profile
-        </button>
-      </nav>
+      {/* Minimal Hover / Floating Bottom Navigation (Framer Style) */}
+      <MobileFloatingNavbar
+        activeTab={tab}
+        isPageRoute={isPageRoute}
+        pendingInvitesCount={controller.pendingInvites.length}
+        onSelectTab={goTab}
+        onCreate={() => setCreateOpen(true)}
+      />
 
       {/* Overlays */}
       <AnimatePresence>

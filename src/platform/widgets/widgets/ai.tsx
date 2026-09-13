@@ -50,7 +50,7 @@ async function loadAiJobs(): Promise<AiJob[]> {
   return jobs;
 }
 
-// ── 1. AI Neural Hub Widget (Apple Neural Orb + Voice Waveform) ───────────────
+// ── 1. AI Neural Hub Widget (Noska Neural Orb + Voice Waveform) ───────────────
 
 const NEURAL_SUGGESTIONS = [
   "Summarize workspace",

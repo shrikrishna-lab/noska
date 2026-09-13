@@ -1,9 +1,9 @@
 /**
- * Gamified Widgets — Apple-grade styling & Duolingo-style dynamic graphics.
+ * Gamified Widgets — Noska Dynamic Visuals & Interactive Graphics.
  * - StreakTrackerWidget: Animated 3D flame, ember sparks, particle burst celebration, weekly shield rings
  * - FocusTimerWidget: Liquid dual-gradient progress ring, breathing aura, sprint/deep work modes
  * - ActivityGraphWidget: Glowing 7-day velocity chart with day indicators
- * - ProgressRingsWidget: 3-ring Apple Watch style activity rings with shimmers
+ * - ProgressRingsWidget: 3-ring dynamic activity rings with shimmers
  * - VitalityBatteryWidget: Dynamic cognitive stamina battery with smart status moods
  * - HabitMatrixWidget: Daily micro-habit tracker with spring bounce check celebrations
  */
@@ -66,7 +66,7 @@ function writeJson<T>(key: string, value: T): void {
   }
 }
 
-// ── 1. Streak Tracker (Duolingo-style 3D Flame & Confetti) ─────────────────────
+// ── 1. Streak Tracker (Noska 3D Flame & Confetti) ─────────────────────────────
 
 export function StreakTrackerWidget({ size }: WidgetProps) {
   const [streak, setStreak] = useState(() => readNum("noska_streak_days", 5));
@@ -573,7 +573,7 @@ export function ActivityGraphWidget({ size }: WidgetProps) {
   );
 }
 
-// ── 6. Progress Rings Widget (Apple Watch Style) ─────────────────────────────
+// ── 6. Progress Rings Widget (Noska Activity Rings) ─────────────────────────
 
 export function ProgressRingsWidget({ size }: WidgetProps) {
   const goals = [

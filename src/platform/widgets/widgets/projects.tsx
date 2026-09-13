@@ -64,7 +64,7 @@ export function MilestonesWidget({ ctx }: WidgetProps) {
   const allTasks = useMemo(() => collectTasks(ctx.pages), [ctx.pages]);
   const milestones = useMemo(() => {
     return allTasks
-      .filter((t) => t.priority === "high" && !t.completed)
+      .filter((t) => t.priority === "high" && !t.checked)
       .slice(0, 4);
   }, [allTasks]);
 
@@ -82,14 +82,14 @@ export function MilestonesWidget({ ctx }: WidgetProps) {
     <div className="space-y-1.5 p-1 select-none">
       {milestones.map((m) => (
         <div
-          key={m.id}
+          key={m.key}
           onClick={() => ctx.actions.onSelect(m.pageId)}
           className="flex items-center justify-between p-2 rounded-xl border border-black/[0.05] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-all cursor-pointer"
         >
           <div className="flex items-center gap-2 min-w-0">
             <Flag size={13} className="text-rose-500 shrink-0" />
             <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate">
-              {m.title}
+              {m.text}
             </span>
           </div>
           <ChevronRight size={13} className="text-neutral-400 shrink-0" />
@@ -104,7 +104,7 @@ export function MilestonesWidget({ ctx }: WidgetProps) {
 export function SprintVelocityWidget({ ctx }: WidgetProps) {
   const allTasks = useMemo(() => collectTasks(ctx.pages), [ctx.pages]);
   const total = allTasks.length || 18;
-  const done = allTasks.filter((t) => t.completed).length || 12;
+  const done = allTasks.filter((t) => t.checked).length || 12;
   const percent = Math.round((done / total) * 100);
 
   return (

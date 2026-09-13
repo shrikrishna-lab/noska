@@ -419,6 +419,17 @@ export function NotificationProvider({
 
 export function useNotifications(): NotificationEngineValue {
   const value = useContext(NotificationEngineContext);
-  if (!value) throw new Error("useNotifications must be used inside <NotificationProvider>");
+  if (!value) {
+    return {
+      notifications: [],
+      unreadCount: 0,
+      markRead: () => {},
+      markAllRead: () => {},
+      dismiss: () => {},
+      clearAll: () => {},
+      push: () => {},
+    };
+  }
   return value;
 }
+

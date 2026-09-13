@@ -193,7 +193,7 @@ export function WidgetFrame({
   dragHandleProps,
   dragging,
 }: {
-  definition: WidgetDefinition;
+  definition?: WidgetDefinition;
   instance: WidgetInstance;
   ctx: WidgetRuntimeContext;
   onRemove: () => void;
@@ -202,6 +202,14 @@ export function WidgetFrame({
   dragHandleProps?: Record<string, unknown>;
   dragging?: boolean;
 }) {
+  if (!definition) {
+    return (
+      <div className="flex h-32 items-center justify-center rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] text-xs text-neutral-400">
+        Widget unavailable
+      </div>
+    );
+  }
+
   const Icon = WIDGET_CATEGORY_ICONS[definition.category] ?? FileText;
   const sizeIndex = definition.supportedSizes.indexOf(instance.size);
   const nextSize =

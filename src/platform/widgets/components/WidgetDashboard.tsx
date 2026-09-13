@@ -14,6 +14,7 @@ import { WidgetPicker } from "./WidgetPicker";
 import { WidgetConfigSheet } from "./WidgetConfigSheet";
 import { getWidgetDefinition } from "../registry";
 import type { WidgetRuntimeContext } from "../types";
+import type { Page } from "../../../lib/supabaseService";
 
 function getGreeting(name?: string): string {
   const hour = new Date().getHours();
@@ -48,7 +49,7 @@ function DashboardBody({ ctx }: { ctx: WidgetRuntimeContext }) {
 
   return (
     <div className="space-y-5 pb-8 select-none">
-      {/* Apple-grade Header & Greeting Banner */}
+      {/* Noska Header & Greeting Banner */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -140,11 +141,11 @@ function DashboardBody({ ctx }: { ctx: WidgetRuntimeContext }) {
 
       {/* Overlays */}
       <WidgetPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
-      <NotificationCenter open={centerOpen} onClose={() => setCenterOpen(false)} onSelectPage={ctx.actions.onSelect} />
+      <NotificationCenter open={centerOpen} onClose={() => setCenterOpen(false)} ctx={ctx} />
       {configuring && configuringDef && (
         <WidgetConfigSheet
           definition={configuringDef}
-          config={configuring.config}
+          initialConfig={configuring.config}
           onSave={(newConfig) => {
             configureWidget(configuring.instanceId, newConfig);
             setConfiguring(null);
@@ -156,12 +157,54 @@ function DashboardBody({ ctx }: { ctx: WidgetRuntimeContext }) {
   );
 }
 
-export function WidgetDashboard({ ctx }: { ctx: WidgetRuntimeContext }) {
+export type WidgetDashboardProps =
+  | { ctx: WidgetRuntimeContext; [key: string]: unknown }
+  | {
+      ctx?: undefined;
+      pages: Page[];
+      sharedPages?: Page[];
+      pendingInvites?: Record<string, unknown>[];
+      currentUserId?: string;
+      currentUserName?: string;
+      workspaceName?: string;
+      onSelect: (pageId: string) => void;
+      onNew: (template: string) => void;
+      onAI: () => void;
+      onOpenChat?: (chatId: string) => void;
+      onBlockPatch?: (pageId: string, blockId: string, patch: Record<string, unknown>) => void;
+      onView?: (view: string) => void;
+      onToast?: (message: string) => void;
+    };
+
+export function WidgetDashboard(props: WidgetDashboardProps) {
+  const runtimeCtx: WidgetRuntimeContext = useMemo(() => {
+    if ("ctx" in props && props.ctx) return props.ctx;
+    const flat = props as Extract<WidgetDashboardProps, { pages: Page[] }>;
+    return {
+      pages: flat.pages || [],
+      sharedPages: flat.sharedPages || [],
+      pendingInvites: flat.pendingInvites || [],
+      currentUserId: flat.currentUserId,
+      currentUserName: flat.currentUserName,
+      workspaceName: flat.workspaceName,
+      actions: {
+        onSelect: flat.onSelect,
+        onNew: flat.onNew,
+        onAI: flat.onAI,
+        onOpenChat: flat.onOpenChat,
+        onBlockPatch: flat.onBlockPatch,
+        onView: flat.onView,
+        onToast: flat.onToast,
+      },
+    };
+  }, [props]);
+
   return (
-    <WidgetEngineProvider>
-      <NotificationProvider>
-        <DashboardBody ctx={ctx} />
+    <WidgetEngineProvider ctx={runtimeCtx}>
+      <NotificationProvider ctx={runtimeCtx}>
+        <DashboardBody ctx={runtimeCtx} />
       </NotificationProvider>
     </WidgetEngineProvider>
   );
 }
+

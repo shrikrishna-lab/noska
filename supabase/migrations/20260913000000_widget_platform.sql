@@ -147,7 +147,7 @@ CREATE TRIGGER widget_catalog_updated_at
 CREATE OR REPLACE FUNCTION public.get_widget_catalog()
 RETURNS jsonb
 LANGUAGE sql
-STABLE
+
 SECURITY INVOKER
 SET search_path = 'public'
 AS $$
@@ -180,7 +180,7 @@ GRANT EXECUTE ON FUNCTION public.get_widget_catalog() TO authenticated;
 CREATE OR REPLACE FUNCTION public.get_widget_layout(p_workspace_id text DEFAULT 'personal')
 RETURNS jsonb
 LANGUAGE sql
-STABLE
+
 SECURITY INVOKER
 SET search_path = 'public'
 AS $$
@@ -328,7 +328,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.admin_widget_overview(p_session_token text)
 RETURNS jsonb
 LANGUAGE plpgsql
-STABLE
+
 SECURITY DEFINER
 SET search_path = 'public'
 AS $$
@@ -388,7 +388,7 @@ CREATE OR REPLACE FUNCTION public.admin_widget_analytics(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-STABLE
+
 SECURITY DEFINER
 SET search_path = 'public'
 AS $$
@@ -465,7 +465,7 @@ CREATE OR REPLACE FUNCTION public.admin_widget_errors(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-STABLE
+
 SECURITY DEFINER
 SET search_path = 'public'
 AS $$
@@ -503,7 +503,7 @@ CREATE OR REPLACE FUNCTION public.admin_widget_audit(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-STABLE
+
 SECURITY DEFINER
 SET search_path = 'public'
 AS $$

@@ -257,6 +257,23 @@ export function WidgetEngineProvider({
 
 export function useWidgetEngine(): WidgetEngineValue {
   const value = useContext(WidgetEngineContext);
-  if (!value) throw new Error("useWidgetEngine must be used inside <WidgetEngineProvider>");
+  if (!value) {
+    return {
+      ready: true,
+      online: true,
+      catalog: [],
+      layout: { version: 1, widgets: [] },
+      isAvailable: () => true,
+      isBeta: () => false,
+      addWidget: () => {},
+      removeWidget: () => {},
+      reorderWidgets: () => {},
+      resizeWidget: () => {},
+      configureWidget: () => {},
+      resetLayout: () => {},
+      trackEvent: trackWidgetEvent,
+    };
+  }
   return value;
 }
+

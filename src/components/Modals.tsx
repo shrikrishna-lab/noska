@@ -39,6 +39,7 @@ import {
   CreditCard,
   Plug,
   Layout,
+  LayoutGrid,
   type LucideIcon
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
@@ -49,6 +50,7 @@ import VoiceCustomizationSettings from "./settings/VoiceCustomizationSettings";
 import NoskaAISettings from "./settings/NoskaAISettings";
 import ShortcutsSettings from "./ShortcutsSettings";
 import { BillingPromotionalTab } from "./settings/BillingPromotionalTab";
+import WidgetsSettings from "./settings/WidgetsSettings";
 import SidebarCustomizer from "./customization/SidebarCustomizer";
 import { PageIcon } from "./PageIcon";
 import ApiKeysManager from "../features/api/ApiKeysManager";
@@ -461,7 +463,7 @@ export function SettingsModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 10 }}
         transition={SPRING_PRESETS.soft}
-        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" || tab === "Billing" || tab === "Sidebar" || tab === "Customization" || tab === "Integrations" || tab === "Connections" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[#e8e4db] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
+        className={`flex h-[min(calc(100vh-40px),720px)] ${tab === "Profile" || tab === "Billing" || tab === "Sidebar" || tab === "Customization" || tab === "Integrations" || tab === "Connections" || tab === "Widgets" ? "w-[1200px]" : "w-[980px]"} max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[#e8e4db] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Left Wispr Flow Clean Sidebar */}
@@ -474,6 +476,7 @@ export function SettingsModal({
               <div className="space-y-0.5">
                 {[
                   { id: "General", label: "General", icon: Settings },
+                  { id: "Widgets", label: "Widgets & Home Screen", icon: LayoutGrid },
                   { id: "Shortcuts", label: "Shortcuts", icon: Keyboard },
                   { id: "Voice & Dictation", label: "Voice & Dictation", icon: Mic },
                   { id: "Noska AI", label: "Noska AI", icon: Sparkles },
@@ -561,6 +564,10 @@ export function SettingsModal({
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               className="min-h-full"
             >
+              {tab === "Widgets" && (
+                <WidgetsSettings onToast={(msg) => setSaveStatus(msg)} />
+              )}
+
               {tab === "Billing" && (
                 <BillingPromotionalTab
                   currentUsername={currentUsername}

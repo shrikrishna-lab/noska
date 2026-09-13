@@ -1,5 +1,5 @@
 /**
- * System widgets — Sync Status, Connection Status, Apple World Clock & Timezones,
+ * System widgets — Sync Status, Connection Status, Noska World Clock & Timezones,
  * and Ambient Soundscapes Player.
  */
 import React, { useEffect, useMemo, useState } from "react";
@@ -106,7 +106,7 @@ export function ConnectionStatusWidget({}: WidgetProps) {
   );
 }
 
-// ── 3. Apple World Clock & Timezones ─────────────────────────────────────────
+// ── 3. Noska World Clock & Timezones ─────────────────────────────────────────
 
 const CITIES = [
   { city: "San Francisco", zone: "America/Los_Angeles", label: "PST", offset: -7 },

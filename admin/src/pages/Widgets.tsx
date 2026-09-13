@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LayoutGrid, Search, Sparkles } from "lucide-react";
@@ -18,6 +19,41 @@ const STATUS_BADGE: Record<string, "default" | "secondary" | "success" | "warnin
   disabled: "destructive",
 };
 
+// Animated preview tile — a live miniature of each widget family so admins
+// can see the vibe of a widget without opening its detail page.
+const CATEGORY_PREVIEW: Record<string, { gradient: string; glyph: string }> = {
+  productivity: { gradient: "from-violet-500 to-indigo-500", glyph: "✓" },
+  ai: { gradient: "from-fuchsia-500 to-purple-600", glyph: "✦" },
+  workspace: { gradient: "from-sky-500 to-blue-600", glyph: "▦" },
+  project: { gradient: "from-emerald-500 to-teal-600", glyph: "◉" },
+  notifications: { gradient: "from-amber-500 to-orange-600", glyph: "!" },
+  integrations: { gradient: "from-cyan-500 to-sky-600", glyph: "⇄" },
+  system: { gradient: "from-zinc-500 to-slate-600", glyph: "⚙" },
+  gamified: { gradient: "from-orange-500 via-rose-500 to-violet-500", glyph: "🔥" },
+};
+
+function WidgetPreviewTile({ category }: { category: string }) {
+  const meta = CATEGORY_PREVIEW[category] ?? { gradient: "from-zinc-500 to-slate-600", glyph: "▦" };
+  return (
+    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl">
+      <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+        animate={{ x: ["-120%", "140%"] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", repeatDelay: 1.4 }}
+      />
+      <div className="absolute inset-0 grid place-items-center text-base font-bold text-white drop-shadow">
+        {meta.glyph}
+      </div>
+      <motion.span
+        className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full bg-white/90"
+        animate={{ opacity: [0.3, 1, 0.3] }}
+        transition={{ duration: 1.8, repeat: Infinity }}
+      />
+    </div>
+  );
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   productivity: "Productivity",
   ai: "AI",
@@ -26,6 +62,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   notifications: "Notifications",
   integrations: "Integrations",
   system: "System",
+  gamified: "Gamified",
 };
 
 function Kpi({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
@@ -158,8 +195,13 @@ export function Widgets() {
                           className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/50"
                         >
                           <td className="px-4 py-2.5">
-                            <p className="font-medium">{row.name}</p>
-                            <p className="max-w-[260px] truncate text-xs text-muted-foreground">{row.description}</p>
+                            <div className="flex items-center gap-3">
+                              <WidgetPreviewTile category={row.category} />
+                              <div className="min-w-0">
+                                <p className="font-medium">{row.name}</p>
+                                <p className="max-w-[260px] truncate text-xs text-muted-foreground">{row.description}</p>
+                              </div>
+                            </div>
                           </td>
                           <td className="px-4 py-2.5 text-muted-foreground">{CATEGORY_LABELS[row.category] ?? row.category}</td>
                           <td className="px-4 py-2.5"><Badge variant={STATUS_BADGE[row.status] ?? "default"}>{row.status}</Badge></td>

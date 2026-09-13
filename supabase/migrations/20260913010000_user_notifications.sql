@@ -187,7 +187,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.admin_user_notification_overview(p_session_token text)
 RETURNS jsonb
 LANGUAGE plpgsql
-STABLE
+
 SECURITY DEFINER
 SET search_path = 'public'
 AS $$
