@@ -100,6 +100,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: noska-desktop-${{ matrix.platform }}
+          retention-days: 1
           path: |
             src-tauri/target/release/bundle/nsis/*
             src-tauri/target/release/bundle/msi/*

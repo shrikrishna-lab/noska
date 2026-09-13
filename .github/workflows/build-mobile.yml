@@ -91,6 +91,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: noska-android
+          retention-days: 1
           path: |
             src-tauri/gen/android/app/build/outputs/apk/**/*.apk
             src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
