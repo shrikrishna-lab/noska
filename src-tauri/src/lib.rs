@@ -72,7 +72,7 @@ fn emit_deep_links(app: &tauri::AppHandle, urls: Vec<String>) {
     let _ = app.emit(DEEP_LINK_EVENT, urls);
 }
 
-#[cfg(desktop)]
+#[cfg(target_os = "macos")]
 fn setup_app_menu(app: &tauri::App) -> tauri::Result<()> {
     use tauri::{
         menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
@@ -230,6 +230,7 @@ pub fn run() {
 
             #[cfg(desktop)]
             {
+                #[cfg(target_os = "macos")]
                 setup_app_menu(app)?;
                 setup_tray(app)?;
 
