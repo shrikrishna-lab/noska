@@ -73,25 +73,24 @@ export function DesktopTitleBar() {
     <header
       data-tauri-drag-region
       onDoubleClick={handleToggleMaximize}
-      className="sticky top-0 z-[99999] flex h-8 w-full select-none items-center justify-between border-b border-border/40 bg-background/85 px-3 backdrop-blur-xl transition-colors dark:bg-[#12141A]/90 dark:border-white/[0.06]"
+      className="sticky top-0 z-[99999] flex h-7.5 w-full select-none items-center justify-between border-b border-black/[0.04] dark:border-white/[0.05] bg-[#F0FAFF] dark:bg-[#0F1117] px-3 transition-colors"
     >
       {/* Left: Brand logo & name */}
       <div
         data-tauri-drag-region
         className="flex items-center gap-2 pointer-events-none"
       >
-        <div className="flex size-4.5 items-center justify-center rounded-md bg-neutral-900 dark:bg-neutral-800 p-0.5 shadow-xs ring-1 ring-white/10">
+        <div className="flex size-4 items-center justify-center rounded-md bg-black/[0.04] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.08] p-0.5 shadow-2xs">
           <img
             src="/logo.png"
             alt="Noska"
-            className="size-3.5 object-contain"
+            className="size-3 object-contain"
             onError={(e) => {
-              // Fallback if logo fails
               (e.target as HTMLElement).style.display = "none";
             }}
           />
         </div>
-        <span className="text-[12px] font-medium tracking-tight text-neutral-600 dark:text-neutral-400">
+        <span className="text-[11.5px] font-medium tracking-tight text-neutral-500 dark:text-neutral-400">
           Noska
         </span>
       </div>
@@ -109,21 +108,21 @@ export function DesktopTitleBar() {
             type="button"
             aria-label="Minimize"
             onClick={handleMinimize}
-            className="flex h-full w-11 items-center justify-center text-neutral-500 transition-colors hover:bg-neutral-200/60 hover:text-neutral-900 active:bg-neutral-300/60 dark:text-neutral-400 dark:hover:bg-neutral-800/70 dark:hover:text-white"
+            className="flex h-full w-10 items-center justify-center text-neutral-400 hover:text-neutral-800 dark:text-neutral-500 dark:hover:text-neutral-200 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06] active:bg-black/[0.08] dark:active:bg-white/[0.1]"
           >
-            <Minus className="size-3.5 stroke-[1.75]" />
+            <Minus className="size-3 stroke-[1.75]" />
           </button>
 
           <button
             type="button"
             aria-label={isMaximized ? "Restore" : "Maximize"}
             onClick={handleToggleMaximize}
-            className="flex h-full w-11 items-center justify-center text-neutral-500 transition-colors hover:bg-neutral-200/60 hover:text-neutral-900 active:bg-neutral-300/60 dark:text-neutral-400 dark:hover:bg-neutral-800/70 dark:hover:text-white"
+            className="flex h-full w-10 items-center justify-center text-neutral-400 hover:text-neutral-800 dark:text-neutral-500 dark:hover:text-neutral-200 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06] active:bg-black/[0.08] dark:active:bg-white/[0.1]"
           >
             {isMaximized ? (
-              <Copy className="size-3 stroke-[1.75]" />
+              <Copy className="size-2.5 stroke-[1.75]" />
             ) : (
-              <Square className="size-3 stroke-[1.75]" />
+              <Square className="size-2.5 stroke-[1.75]" />
             )}
           </button>
 
@@ -131,9 +130,9 @@ export function DesktopTitleBar() {
             type="button"
             aria-label="Close"
             onClick={handleClose}
-            className="flex h-full w-11 items-center justify-center text-neutral-500 transition-colors hover:bg-red-500 hover:text-white active:bg-red-600 dark:text-neutral-400 dark:hover:bg-red-600 dark:hover:text-white"
+            className="flex h-full w-10 items-center justify-center text-neutral-400 hover:text-white dark:text-neutral-500 dark:hover:text-white transition-colors hover:bg-[#E5484D] dark:hover:bg-[#E5484D] active:bg-[#D9383E]"
           >
-            <X className="size-3.5 stroke-[1.75]" />
+            <X className="size-3 stroke-[1.75]" />
           </button>
         </div>
       )}
