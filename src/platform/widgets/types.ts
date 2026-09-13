@@ -14,6 +14,7 @@ export type WidgetSize = "small" | "medium" | "large" | "wide";
 
 export type WidgetCategory =
   | "productivity"
+  | "gamified"
   | "ai"
   | "workspace"
   | "project"

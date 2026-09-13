@@ -1,9 +1,9 @@
 /**
- * Productivity widgets — Quick Create, My Tasks, Upcoming Tasks,
- * Recent Pages.
+ * Productivity widgets — Quick Create 2.0, My Tasks, Upcoming Tasks,
+ * Recent Pages, and Sticky Note / Quick Brain Dump.
  */
-import React, { useMemo } from "react";
-import { motion } from "framer-motion";
+import React, { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
   Check,
@@ -13,6 +13,13 @@ import {
   Lock,
   Sparkles,
   Table2,
+  Plus,
+  StickyNote,
+  Palette,
+  CheckSquare,
+  Square,
+  ArrowUpRight,
+  Zap,
 } from "lucide-react";
 import { timeAgo } from "../../../utils/helpers";
 import type { Page } from "../../../lib/supabaseService";
@@ -21,7 +28,7 @@ import {
   WidgetEmpty,
   WidgetStat,
 } from "../components/WidgetFrame";
-import type { WidgetProps } from "../types";
+import type { WidgetConfigField, WidgetProps } from "../types";
 import {
   collectTasks,
   endOfToday,
@@ -32,285 +39,310 @@ import {
   type TaskLite,
 } from "../shared";
 
-// ── Quick Create ────────────────────────────────────────────────────────────
+// ── 1. Quick Create 2.0 ─────────────────────────────────────────────────────
 
-const CREATE_ACTIONS: Array<{ template: string; label: string; icon: React.ReactNode }> = [
-  { template: "blank", label: "New page", icon: <FileText size={14} /> },
-  { template: "prd", label: "New task", icon: <Check size={14} /> },
-  { template: "standup", label: "New doc", icon: <FileText size={14} /> },
-  { template: "database", label: "New database", icon: <Table2 size={14} /> },
-  { template: "ai", label: "AI generate", icon: <Sparkles size={14} /> },
+const CREATE_ACTIONS: Array<{ template: string; label: string; icon: React.ReactNode; color: string }> = [
+  { template: "blank", label: "New Document", icon: <FileText size={14} />, color: "from-blue-500/20 to-indigo-500/10 text-blue-600 dark:text-blue-400" },
+  { template: "prd", label: "Project Task", icon: <Check size={14} />, color: "from-emerald-500/20 to-teal-500/10 text-emerald-600 dark:text-emerald-400" },
+  { template: "database", label: "New Database", icon: <Table2 size={14} />, color: "from-amber-500/20 to-yellow-500/10 text-amber-600 dark:text-amber-400" },
+  { template: "ai", label: "AI Generator", icon: <Sparkles size={14} />, color: "from-purple-500/20 to-pink-500/10 text-purple-600 dark:text-purple-400" },
 ];
 
 export function QuickCreateWidget({ ctx }: WidgetProps) {
   return (
-    <div className="flex h-full flex-col justify-center gap-1.5">
+    <div className="flex h-full flex-col justify-center gap-1.5 p-1 select-none">
       {CREATE_ACTIONS.map((action, i) => (
         <motion.button
           key={action.template}
           initial={{ opacity: 0, x: -6 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: i * 0.04 }}
+          whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           onClick={() =>
             action.template === "ai"
               ? ctx.actions.onAI()
               : ctx.actions.onNew(action.template)
           }
-          className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] transition-colors hover:border-[var(--accent)] cursor-pointer"
+          className="flex items-center gap-2.5 rounded-xl border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] px-3 py-2 text-left text-[11.5px] font-semibold text-neutral-800 dark:text-neutral-200 transition-all cursor-pointer shadow-2xs"
         >
-          <span className="text-[var(--accent)]">{action.icon}</span>
-          {action.label}
-          <ChevronRight size={12} className="ml-auto text-[var(--muted)]" />
+          <span className={`flex size-6 items-center justify-center rounded-lg bg-gradient-to-br ${action.color} border border-black/[0.04] dark:border-white/[0.06] shadow-2xs`}>
+            {action.icon}
+          </span>
+          <span className="flex-1 truncate">{action.label}</span>
+          <ChevronRight size={13} className="text-neutral-400 dark:text-neutral-500 opacity-60" />
         </motion.button>
       ))}
     </div>
   );
 }
 
-// ── My Tasks ────────────────────────────────────────────────────────────────
+// ── 2. My Tasks Widget ──────────────────────────────────────────────────────
 
-function TaskRow({
-  task,
-  onToggle,
-  onOpen,
-}: {
-  task: TaskLite;
-  onToggle: () => void;
-  onOpen: () => void;
-}) {
-  const priorityColor =
-    task.priority === "high"
-      ? "bg-rose-500"
-      : task.priority === "medium"
-        ? "bg-amber-500"
-        : task.priority === "low"
-          ? "bg-blue-400"
-          : null;
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: 12 }}
-      className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-[var(--surface)]"
-    >
-      <button
-        onClick={onToggle}
-        aria-label={task.checked ? "Mark incomplete" : "Mark complete"}
-        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all cursor-pointer ${
-          task.checked
-            ? "border-emerald-500 bg-emerald-500 text-white"
-            : "border-[var(--border)] hover:border-emerald-500"
-        }`}
-      >
-        {task.checked && <Check size={10} strokeWidth={3.5} />}
-      </button>
-      <button onClick={onOpen} className="min-w-0 flex-1 text-left cursor-pointer">
-        <p className={`truncate text-[11.5px] font-medium text-[var(--text)] ${task.checked ? "line-through opacity-50" : ""}`}>
-          {task.text}
-        </p>
-        <p className="truncate text-[10px] text-[var(--muted)]">
-          {task.pageTitle}
-          {task.due && !task.checked && new Date(task.due) < new Date() && " · overdue"}
-        </p>
-      </button>
-      {priorityColor && !task.checked && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${priorityColor}`} />}
-    </motion.div>
-  );
-}
-
-interface MyTasksConfig {
-  showOverdue?: boolean;
-  sortBy?: "priority" | "due" | "created";
-}
-
-export function MyTasksWidget({ config, size, ctx }: WidgetProps) {
-  const cfg = config as MyTasksConfig;
-  const tasks = useMemo(() => collectTasks(ctx.pages), [ctx.pages]);
-  const now = new Date();
-
-  const visible = useMemo(() => {
-    const todayEnd = endOfToday();
-    const list = tasks.filter((t) => {
-      if (t.checked) return false;
-      if (!t.due) return true; // undated tasks are "today's focus"
-      return cfg.showOverdue !== false ? true : new Date(t.due) <= todayEnd;
-    });
-    const sorted = sortTasks(list);
-    if (cfg.sortBy === "due") {
-      return sorted.sort((a, b) => {
-        const da = a.due ? new Date(a.due).getTime() : Infinity;
-        const db = b.due ? new Date(b.due).getTime() : Infinity;
-        return da - db;
-      });
-    }
-    return sorted;
-  }, [tasks, cfg]);
-
-  const overdueCount = tasks.filter((t) => !t.checked && t.due && new Date(t.due) < now).length;
-  const doneToday = tasks.filter(
-    (t) => t.checked && new Date(t.updatedAt) >= startOfToday(),
-  ).length;
-  const shown = size === "small" ? 3 : size === "large" ? 8 : 5;
-
-  const toggle = (task: TaskLite) => {
-    ctx.actions.onBlockPatch?.(task.pageId, task.blockId, { checked: !task.checked });
-  };
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="mb-2.5 grid grid-cols-3 gap-2">
-        <WidgetStat label="Open" value={<AnimatedCount value={tasks.filter((t) => !t.checked).length} />} />
-        <WidgetStat label="Overdue" value={<AnimatedCount value={overdueCount} />} tone={overdueCount > 0 ? "danger" : "default"} />
-        <WidgetStat label="Done today" value={<AnimatedCount value={doneToday} />} tone="success" />
-      </div>
-      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto scrollbar-thin">
-        {visible.length === 0 ? (
-          <WidgetEmpty
-            icon={<Check size={18} className="text-emerald-500" />}
-            title="No tasks today"
-            hint="You're all caught up. New tasks from any page will appear here."
-            action={
-              <button
-                onClick={() => ctx.actions.onView?.("tasks")}
-                className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text)] hover:border-[var(--accent)] cursor-pointer"
-              >
-                Open tasks
-              </button>
-            }
-          />
-        ) : (
-          visible.slice(0, shown).map((task) => (
-            <TaskRow
-              key={task.key}
-              task={task}
-              onToggle={() => toggle(task)}
-              onOpen={() => ctx.actions.onSelect(task.pageId)}
-            />
-          ))
-        )}
-      </div>
-      {visible.length > shown && (
-        <button
-          onClick={() => ctx.actions.onView?.("tasks")}
-          className="mt-1.5 flex items-center justify-center gap-1 rounded-lg py-1.5 text-[10.5px] font-semibold text-[var(--accent)] hover:bg-[var(--surface)] cursor-pointer"
-        >
-          View all {visible.length} tasks <ChevronRight size={11} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-export const MY_TASKS_CONFIG_SCHEMA = [
-  { key: "showOverdue", label: "Show overdue tasks", type: "toggle" as const, description: "Include tasks past their due date" },
+export const MY_TASKS_CONFIG_SCHEMA: WidgetConfigField[] = [
+  {
+    key: "showOverdue",
+    label: "Show overdue tasks",
+    type: "toggle",
+    description: "Keep past due items visible at the top of the list.",
+  },
   {
     key: "sortBy",
-    label: "Sort by",
-    type: "select" as const,
+    label: "Sort tasks by",
+    type: "select",
     options: [
-      { value: "priority", label: "Priority" },
+      { value: "priority", label: "Priority (high first)" },
       { value: "due", label: "Due date" },
-      { value: "created", label: "Recently updated" },
     ],
   },
 ];
 
-// ── Upcoming Tasks ──────────────────────────────────────────────────────────
+export function MyTasksWidget({ config, size, ctx }: WidgetProps) {
+  const showOverdue = config.showOverdue !== false;
+  const sortBy = (config.sortBy as "priority" | "due") ?? "priority";
 
-export function UpcomingTasksWidget({ size, ctx }: WidgetProps) {
-  const tasks = useMemo(() => collectTasks(ctx.pages).filter((t) => !t.checked && t.due), [ctx.pages]);
-  const todayEnd = endOfToday();
-  const tomorrowEnd = endOfTomorrow();
+  const allTasks = useMemo(() => collectTasks(ctx.pages), [ctx.pages]);
 
-  const groups: Array<{ label: string; items: TaskLite[] }> = [
-    { label: "Today", items: [] },
-    { label: "Tomorrow", items: [] },
-    { label: "Upcoming", items: [] },
-  ];
-  for (const task of sortTasks(tasks)) {
-    const due = new Date(task.due!).getTime();
-    if (due <= todayEnd.getTime()) groups[0].items.push(task);
-    else if (due <= tomorrowEnd.getTime()) groups[1].items.push(task);
-    else groups[2].items.push(task);
-  }
+  const { todayTasks, overdueTasks, doneCount } = useMemo(() => {
+    const today = allTasks.filter(
+      (t) => !t.completed && t.dueDate && t.dueDate >= startOfToday() && t.dueDate <= endOfToday()
+    );
+    const overdue = allTasks.filter((t) => !t.completed && t.dueDate && t.dueDate < startOfToday());
+    const done = allTasks.filter((t) => t.completed).length;
+    return {
+      todayTasks: sortTasks(today, sortBy),
+      overdueTasks: sortTasks(overdue, sortBy),
+      doneCount: done,
+    };
+  }, [allTasks, sortBy]);
 
-  const total = tasks.length;
-  if (total === 0) {
+  const visibleTasks = useMemo(() => {
+    const combined = showOverdue ? [...overdueTasks, ...todayTasks] : todayTasks;
+    const limit = size === "small" ? 2 : size === "medium" ? 4 : 8;
+    return combined.slice(0, limit);
+  }, [showOverdue, overdueTasks, todayTasks, size]);
+
+  const toggleTask = (task: TaskLite) => {
+    ctx.actions.onBlockPatch?.(task.pageId, task.id, { completed: !task.completed });
+    ctx.actions.onToast?.(task.completed ? "Task reopened" : "Task completed! 🎉");
+  };
+
+  if (visibleTasks.length === 0 && overdueTasks.length === 0) {
     return (
       <WidgetEmpty
-        icon={<Calendar size={18} className="text-[var(--muted)]" />}
-        title="Nothing scheduled"
-        hint="Tasks with due dates will show up here, grouped by day."
+        icon={<Check size={20} className="text-emerald-500" />}
+        title="All clear for today"
+        hint="No tasks due today. Add a checklist to any page or kick off a new task."
       />
     );
   }
 
   return (
-    <div className="h-full space-y-2.5 overflow-y-auto scrollbar-thin">
-      {groups.map((group) =>
-        group.items.length === 0 ? null : (
-          <div key={group.label}>
-            <p className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
-              <Clock size={10} /> {group.label}
-              <span className="font-semibold normal-case text-[var(--muted)]">· {group.items.length}</span>
-            </p>
-            <div className="space-y-0.5">
-              {group.items.slice(0, size === "small" ? 3 : 4).map((task) => (
-                <TaskRow
-                  key={task.key}
-                  task={task}
-                  onToggle={() => ctx.actions.onBlockPatch?.(task.pageId, task.blockId, { checked: !task.checked })}
-                  onOpen={() => ctx.actions.onSelect(task.pageId)}
-                />
-              ))}
+    <div className="flex h-full flex-col justify-between p-1 select-none">
+      <div className="flex items-center justify-between pb-1 text-xs">
+        <span className="font-bold text-neutral-900 dark:text-white">Today's Focus</span>
+        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">
+          {doneCount} Completed
+        </span>
+      </div>
+
+      <div className="space-y-1.5 my-auto">
+        {visibleTasks.map((t) => (
+          <motion.div
+            key={t.id}
+            whileHover={{ scale: 1.01 }}
+            className="flex items-center justify-between p-2 rounded-xl border border-black/[0.05] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-all cursor-pointer"
+            onClick={() => toggleTask(t)}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                className={`h-4.5 w-4.5 rounded-md flex items-center justify-center border transition-all ${
+                  t.completed
+                    ? "bg-emerald-500 border-emerald-500 text-white shadow-2xs"
+                    : "border-black/25 dark:border-white/25 bg-transparent"
+                }`}
+              >
+                {t.completed && <Check size={11} strokeWidth={3} />}
+              </button>
+              <span className={`text-xs font-semibold truncate ${t.completed ? "line-through text-neutral-400" : "text-neutral-800 dark:text-neutral-200"}`}>
+                {t.title}
+              </span>
             </div>
-          </div>
-        ),
-      )}
+
+            {t.priority && (
+              <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                t.priority === "high"
+                  ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25"
+                  : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+              }`}>
+                {t.priority}
+              </span>
+            )}
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 }
 
-// ── Recent Pages ────────────────────────────────────────────────────────────
+// ── 3. Upcoming Tasks Widget ────────────────────────────────────────────────
 
-export function RecentPagesWidget({ size, ctx }: WidgetProps) {
-  const pages = useMemo(() => recentPages(ctx.pages, size === "small" ? 4 : 6), [ctx.pages, size]);
+export function UpcomingTasksWidget({ ctx, size }: WidgetProps) {
+  const allTasks = useMemo(() => collectTasks(ctx.pages), [ctx.pages]);
 
-  if (pages.length === 0) {
+  const upcoming = useMemo(() => {
+    return allTasks
+      .filter((t) => !t.completed && t.dueDate && t.dueDate > endOfToday())
+      .slice(0, size === "small" ? 2 : 4);
+  }, [allTasks, size]);
+
+  if (upcoming.length === 0) {
     return (
       <WidgetEmpty
-        icon={<FileText size={18} className="text-[var(--muted)]" />}
-        title="No recent pages"
-        hint="Pages you open or edit will appear here for one-click access."
+        icon={<Calendar size={20} className="text-neutral-400" />}
+        title="No upcoming tasks"
+        hint="Schedule due dates on your document tasks to see your roadmap here."
       />
     );
   }
 
   return (
-    <div className="h-full space-y-1 overflow-y-auto scrollbar-thin">
-      {pages.map((page: Page) => (
-        <motion.button
-          key={page.id}
-          layout
-          whileTap={{ scale: 0.985 }}
-          onClick={() => ctx.actions.onSelect(page.id)}
-          className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface)] cursor-pointer"
-        >
-          <span className="text-sm">{page.icon || "📝"}</span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1">
-              <span className="truncate text-[11.5px] font-semibold text-[var(--text)]">
-                {page.title || "Untitled"}
+    <div className="flex h-full flex-col justify-between p-1 select-none">
+      <div className="space-y-1.5 my-auto">
+        {upcoming.map((t) => (
+          <div
+            key={t.id}
+            onClick={() => ctx.actions.onSelect(t.pageId)}
+            className="flex items-center justify-between p-2 rounded-xl border border-black/[0.05] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Calendar size={13} className="text-indigo-500 shrink-0" />
+              <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate">
+                {t.title}
               </span>
-              {page.isEncrypted && <Lock size={10} className="shrink-0 text-[var(--danger)]" />}
+            </div>
+            {t.dueDate && (
+              <span className="text-[10px] font-medium text-neutral-400 dark:text-neutral-500 shrink-0">
+                {new Date(t.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 4. Recent Pages Widget ──────────────────────────────────────────────────
+
+export function RecentPagesWidget({ ctx, size }: WidgetProps) {
+  const pages = useMemo(() => recentPages(ctx.pages, size === "small" ? 3 : 5), [ctx.pages, size]);
+
+  if (pages.length === 0) {
+    return (
+      <WidgetEmpty
+        icon={<FileText size={20} className="text-neutral-400" />}
+        title="No recent pages"
+        hint="Pages you edit or open will appear here for fast one-click access."
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col justify-between p-1 select-none">
+      <div className="space-y-1.5 my-auto">
+        {pages.map((p) => (
+          <motion.button
+            key={p.id}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => ctx.actions.onSelect(p.id)}
+            className="w-full flex items-center justify-between p-2 rounded-xl border border-black/[0.05] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm shrink-0">{p.icon || "📄"}</span>
+              <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate">
+                {p.title || "Untitled Page"}
+              </span>
+            </div>
+            <span className="text-[10px] text-neutral-400 dark:text-neutral-500 shrink-0">
+              {timeAgo(p.updated_at || p.created_at || "")}
             </span>
-            <span className="text-[10px] text-[var(--muted)]">Edited {timeAgo(page.updatedAt)}</span>
-          </span>
-          <ChevronRight size={12} className="shrink-0 text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100" />
-        </motion.button>
-      ))}
+          </motion.button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 5. Sticky Note & Quick Brain Dump ────────────────────────────────────────
+
+const NOTE_COLORS = [
+  { id: "amber", name: "Honey Amber", bg: "bg-amber-100 dark:bg-amber-950/40", border: "border-amber-300 dark:border-amber-700/50", text: "text-amber-950 dark:text-amber-100" },
+  { id: "emerald", name: "Matcha Mint", bg: "bg-emerald-100 dark:bg-emerald-950/40", border: "border-emerald-300 dark:border-emerald-700/50", text: "text-emerald-950 dark:text-emerald-100" },
+  { id: "sky", name: "Sky Mist", bg: "bg-sky-100 dark:bg-sky-950/40", border: "border-sky-300 dark:border-sky-700/50", text: "text-sky-950 dark:text-sky-100" },
+  { id: "purple", name: "Lavender Silk", bg: "bg-purple-100 dark:bg-purple-950/40", border: "border-purple-300 dark:border-purple-700/50", text: "text-purple-950 dark:text-purple-100" },
+];
+
+export function StickyNoteWidget({ ctx }: WidgetProps) {
+  const [colorIndex, setColorIndex] = useState(0);
+  const [noteText, setNoteText] = useState(() => {
+    try {
+      return localStorage.getItem("noska_quick_sticky_note") || "💡 Brain dump: Architecting new visual widgets with spring physics & ambient lighting.";
+    } catch {
+      return "";
+    }
+  });
+
+  const currentColor = NOTE_COLORS[colorIndex % NOTE_COLORS.length];
+
+  const handleSave = (val: string) => {
+    setNoteText(val);
+    try {
+      localStorage.setItem("noska_quick_sticky_note", val);
+    } catch {}
+  };
+
+  const handleConvertToPage = () => {
+    if (!noteText.trim()) return;
+    ctx.actions.onNew("blank");
+    ctx.actions.onToast?.("Note converted to new page! 📝");
+  };
+
+  return (
+    <div className={`flex h-full flex-col justify-between p-2.5 rounded-xl border ${currentColor.bg} ${currentColor.border} transition-colors select-none`}>
+      <div className="flex items-center justify-between pb-1">
+        <div className="flex items-center gap-1.5">
+          <StickyNote size={13} className="text-neutral-500 dark:text-neutral-400" />
+          <span className="text-[11px] font-bold text-neutral-800 dark:text-neutral-200">Sticky Note</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setColorIndex((c) => c + 1)}
+            title="Change color"
+            className="rounded p-1 hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
+          >
+            <Palette size={12} className="text-neutral-600 dark:text-neutral-400" />
+          </button>
+          <button
+            type="button"
+            onClick={handleConvertToPage}
+            title="Convert to page"
+            className="rounded p-1 hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
+          >
+            <ArrowUpRight size={12} className="text-neutral-600 dark:text-neutral-400" />
+          </button>
+        </div>
+      </div>
+
+      <textarea
+        value={noteText}
+        onChange={(e) => handleSave(e.target.value)}
+        placeholder="Type a quick brain dump..."
+        className={`w-full flex-1 bg-transparent resize-none outline-none text-xs font-medium leading-relaxed ${currentColor.text} placeholder:text-neutral-400/70 scrollbar-none`}
+      />
     </div>
   );
 }

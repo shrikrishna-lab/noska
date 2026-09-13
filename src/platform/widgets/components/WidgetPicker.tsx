@@ -12,6 +12,7 @@ import type { WidgetCategory } from "../types";
 
 const CATEGORY_LABELS: Record<WidgetCategory, string> = {
   productivity: "Productivity",
+  gamified: "Gamified",
   ai: "AI",
   workspace: "Workspace",
   project: "Projects",

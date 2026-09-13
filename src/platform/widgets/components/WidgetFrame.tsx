@@ -25,12 +25,14 @@ import {
   Trash2,
   Wifi,
   X,
+  Flame,
 } from "lucide-react";
 import { trackWidgetEvent } from "../analytics";
 import type { WidgetCategory, WidgetDefinition, WidgetInstance, WidgetRuntimeContext, WidgetSize } from "../types";
 
 export const WIDGET_CATEGORY_ICONS: Record<WidgetCategory, React.ComponentType<{ size?: number; className?: string }>> = {
   productivity: CheckCircle2,
+    gamified: Flame,
   ai: Sparkles,
   workspace: LayoutGrid,
   project: Target,
@@ -210,33 +212,38 @@ export function WidgetFrame({
   return (
     <motion.section
       layout
-      initial={{ opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ type: "spring", stiffness: 420, damping: 34 }}
-      className={`group relative flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--panel)] shadow-xs transition-shadow hover:shadow-md ${
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.94, y: 4 }}
+      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+      className={`group relative flex flex-col overflow-hidden rounded-[22px] border border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#151820]/80 backdrop-blur-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_28px_-4px_rgba(0,0,0,0.35)] transition-all duration-300 hover:shadow-[0_12px_32px_-6px_rgba(0,0,0,0.1)] dark:hover:shadow-[0_12px_36px_-6px_rgba(0,0,0,0.5)] hover:border-black/[0.12] dark:hover:border-white/[0.16] ${
         SIZE_CLASS[instance.size]
-      } ${dragging ? "opacity-60 ring-2 ring-blue-500/40" : ""}`}
+      } ${dragging ? "opacity-60 ring-2 ring-indigo-500/50 scale-[0.98]" : ""}`}
       aria-label={definition.name}
     >
-      <header className="flex items-center gap-2 px-4 pb-1.5 pt-3.5">
+      {/* Specular glass top reflection line */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/40 dark:via-white/20 to-transparent" />
+
+      <header className="flex items-center gap-2.5 px-4 pb-1 pt-3.5 select-none">
         <button
           {...dragHandleProps}
           title="Drag to reorder"
-          className="-ml-1 cursor-grab touch-none rounded-md p-1 text-[var(--muted)] opacity-0 transition-opacity hover:bg-[var(--surface)] group-hover:opacity-100 active:cursor-grabbing"
+          className="-ml-1.5 cursor-grab touch-none rounded-lg p-1 text-neutral-400 dark:text-neutral-500 opacity-0 transition-all hover:bg-black/[0.05] dark:hover:bg-white/[0.08] hover:text-neutral-700 dark:hover:text-neutral-200 group-hover:opacity-100 active:cursor-grabbing active:scale-95"
         >
           <GripVertical size={13} />
         </button>
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--accent)]">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] text-neutral-700 dark:text-neutral-300 shadow-2xs">
           <Icon size={13} />
         </span>
-        <h3 className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-[var(--text)]">{definition.name}</h3>
-        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <h3 className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
+          {definition.name}
+        </h3>
+        <div className="flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           {onConfigure && (
             <button
               onClick={() => onConfigure({ ...definition.defaultConfig, ...instance.config })}
               title="Configure"
-              className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="rounded-lg p-1 text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-all active:scale-90 cursor-pointer"
             >
               <Settings2 size={13} />
             </button>
@@ -245,7 +252,7 @@ export function WidgetFrame({
             <button
               onClick={() => onResize(nextSize)}
               title={`Resize to ${nextSize}`}
-              className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="rounded-lg p-1 text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-all active:scale-90 cursor-pointer"
             >
               <LayoutGrid size={13} />
             </button>
@@ -253,13 +260,13 @@ export function WidgetFrame({
           <button
             onClick={onRemove}
             title="Remove widget"
-            className="rounded-md p-1 text-[var(--muted)] hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
+            className="rounded-lg p-1 text-neutral-400 hover:bg-rose-500/15 hover:text-rose-500 transition-all active:scale-90 cursor-pointer"
           >
             <X size={13} />
           </button>
         </div>
       </header>
-      <div className="min-h-0 flex-1 px-4 pb-3.5">
+      <div className="min-h-0 flex-1 px-4 pb-3.5 pt-1">
         <WidgetErrorBoundary widgetId={definition.id} key={`${instance.id}:${instance.size}`}>
           <definition.component config={instance.config ?? {}} size={instance.size} ctx={ctx} />
         </WidgetErrorBoundary>

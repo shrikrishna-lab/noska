@@ -1,8 +1,7 @@
 /**
  * Widget registry — the single source of truth for what this build can
  * render. Powers the picker, the layout normalizer, the config sheets and
- * availability resolution. Server-side catalog entries (widget_catalog
- * table) control availability/rollout; the registry controls capability.
+ * availability resolution.
  */
 import type { WidgetCategory, WidgetDefinition } from "./types";
 import {
@@ -11,6 +10,7 @@ import {
   QuickCreateWidget,
   RecentPagesWidget,
   UpcomingTasksWidget,
+  StickyNoteWidget,
 } from "./widgets/productivity";
 import {
   FavoritesWidget,
@@ -18,14 +18,41 @@ import {
   RecentActivityWidget,
   WorkspaceOverviewWidget,
 } from "./widgets/workspace";
-import { AiActivityWidget, AiQuickAskWidget, AiUsageWidget } from "./widgets/ai";
-import { AttentionRequiredWidget, MentionsWidget, UnreadNotificationsWidget } from "./widgets/notifications";
-import { MilestonesWidget, ProjectProgressWidget } from "./widgets/projects";
-import { ConnectionStatusWidget, SyncStatusWidget } from "./widgets/system";
+import {
+  AiActivityWidget,
+  AiQuickAskWidget,
+  AiUsageWidget,
+  AiNeuralHubWidget,
+} from "./widgets/ai";
+import {
+  AttentionRequiredWidget,
+  MentionsWidget,
+  UnreadNotificationsWidget,
+} from "./widgets/notifications";
+import {
+  MilestonesWidget,
+  ProjectProgressWidget,
+  SprintVelocityWidget,
+} from "./widgets/projects";
+import {
+  ConnectionStatusWidget,
+  SyncStatusWidget,
+  WorldClockWidget,
+  AmbientSoundscapesWidget,
+} from "./widgets/system";
 import { IntegrationsHubWidget } from "./widgets/integrations";
+import {
+  StreakTrackerWidget,
+  FocusTimerWidget,
+  ActivityGraphWidget,
+  ProgressRingsWidget,
+  VitalityBatteryWidget,
+  HabitMatrixWidget,
+} from "./widgets/gamified";
 
 export const WIDGET_CATEGORIES: WidgetCategory[] = [
   "productivity",
+  "gamified",
   "ai",
   "workspace",
   "project",
@@ -35,7 +62,7 @@ export const WIDGET_CATEGORIES: WidgetCategory[] = [
 ];
 
 const DEFINITIONS: WidgetDefinition[] = [
-  // Productivity
+  // ── Productivity ──
   {
     id: "quick-create",
     name: "Quick Create",
@@ -78,7 +105,122 @@ const DEFINITIONS: WidgetDefinition[] = [
     enabledByDefault: true,
     component: RecentPagesWidget,
   },
-  // Workspace
+  {
+    id: "sticky-note",
+    name: "Sticky Note",
+    description: "Tactile pastel notepad for quick brain dumps with one-click page conversion.",
+    category: "productivity",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "small",
+    enabledByDefault: true,
+    component: StickyNoteWidget,
+  },
+
+  // ── Gamified & Dynamic Visuals ──
+  {
+    id: "streak-tracker",
+    name: "Streak Tracker",
+    description: "Duolingo-style daily streak with animated 3D flame, weekly shields & celebration particles.",
+    category: "gamified",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "small",
+    enabledByDefault: true,
+    component: StreakTrackerWidget,
+  },
+  {
+    id: "focus-timer",
+    name: "Liquid Focus Timer",
+    description: "Liquid glowing focus ring with 15m Sprint, 25m Deep Work, and 50m Flow modes.",
+    category: "gamified",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "small",
+    enabledByDefault: true,
+    component: FocusTimerWidget,
+  },
+  {
+    id: "vitality-battery",
+    name: "Vitality Battery",
+    description: "Dynamic cognitive energy meter paced by focus sprints and break rhythms.",
+    category: "gamified",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "small",
+    enabledByDefault: true,
+    component: VitalityBatteryWidget,
+  },
+  {
+    id: "habit-matrix",
+    name: "Daily Habits",
+    description: "Track essential daily micro-habits with spring bounce checkmarks.",
+    category: "gamified",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "medium",
+    enabledByDefault: true,
+    component: HabitMatrixWidget,
+  },
+  {
+    id: "activity-graph",
+    name: "Activity Graph",
+    description: "Animated bar graph of your pages and tasks touched each day this week.",
+    category: "gamified",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "small",
+    enabledByDefault: true,
+    component: ActivityGraphWidget,
+  },
+  {
+    id: "progress-rings",
+    name: "Progress Rings",
+    description: "Apple Watch style triple progress rings for pages, tasks, and focus.",
+    category: "gamified",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "medium",
+    enabledByDefault: false,
+    component: ProgressRingsWidget,
+  },
+
+  // ── AI ──
+  {
+    id: "ai-neural-hub",
+    name: "AI Neural Co-Pilot",
+    description: "Pulsing 3D neural sphere with soundwave equalizer and quick prompt runner.",
+    category: "ai",
+    supportedSizes: ["medium", "large"],
+    defaultSize: "medium",
+    enabledByDefault: true,
+    component: AiNeuralHubWidget,
+  },
+  {
+    id: "ai-activity",
+    name: "AI Activity",
+    description: "Running, completed and failing agents and automations.",
+    category: "ai",
+    supportedSizes: ["small", "medium", "large"],
+    defaultSize: "medium",
+    enabledByDefault: false,
+    component: AiActivityWidget,
+  },
+  {
+    id: "ai-quick-ask",
+    name: "AI Quick Ask",
+    description: "Compact AI prompt entry point for the workspace.",
+    category: "ai",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "small",
+    enabledByDefault: false,
+    component: AiQuickAskWidget,
+  },
+  {
+    id: "ai-usage",
+    name: "AI Usage",
+    description: "Your requests, tokens and latency at a glance.",
+    category: "ai",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "small",
+    enabledByDefault: false,
+    component: AiUsageWidget,
+  },
+
+  // ── Workspace ──
   {
     id: "workspace-overview",
     name: "Workspace Overview",
@@ -96,7 +238,7 @@ const DEFINITIONS: WidgetDefinition[] = [
     category: "workspace",
     supportedSizes: ["medium", "large", "wide"],
     defaultSize: "wide",
-    enabledByDefault: true,
+    enabledByDefault: false,
     component: RecentActivityWidget,
   },
   {
@@ -119,38 +261,8 @@ const DEFINITIONS: WidgetDefinition[] = [
     enabledByDefault: false,
     component: PinnedItemsWidget,
   },
-  // AI
-  {
-    id: "ai-activity",
-    name: "AI Activity",
-    description: "Running, completed and failing agents and automations.",
-    category: "ai",
-    supportedSizes: ["small", "medium", "large"],
-    defaultSize: "medium",
-    enabledByDefault: true,
-    component: AiActivityWidget,
-  },
-  {
-    id: "ai-quick-ask",
-    name: "AI Quick Ask",
-    description: "Compact AI prompt entry point for the workspace.",
-    category: "ai",
-    supportedSizes: ["small", "medium"],
-    defaultSize: "small",
-    enabledByDefault: true,
-    component: AiQuickAskWidget,
-  },
-  {
-    id: "ai-usage",
-    name: "AI Usage",
-    description: "Your requests, tokens and latency at a glance.",
-    category: "ai",
-    supportedSizes: ["small", "medium"],
-    defaultSize: "small",
-    enabledByDefault: false,
-    component: AiUsageWidget,
-  },
-  // Notifications
+
+  // ── Notifications ──
   {
     id: "unread-notifications",
     name: "Notifications",
@@ -158,7 +270,7 @@ const DEFINITIONS: WidgetDefinition[] = [
     category: "notifications",
     supportedSizes: ["small", "medium"],
     defaultSize: "small",
-    enabledByDefault: true,
+    enabledByDefault: false,
     component: UnreadNotificationsWidget,
   },
   {
@@ -168,7 +280,7 @@ const DEFINITIONS: WidgetDefinition[] = [
     category: "notifications",
     supportedSizes: ["small", "medium"],
     defaultSize: "medium",
-    enabledByDefault: true,
+    enabledByDefault: false,
     component: MentionsWidget,
   },
   {
@@ -178,10 +290,21 @@ const DEFINITIONS: WidgetDefinition[] = [
     category: "notifications",
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
-    enabledByDefault: true,
+    enabledByDefault: false,
     component: AttentionRequiredWidget,
   },
-  // Projects
+
+  // ── Projects ──
+  {
+    id: "sprint-velocity",
+    name: "Sprint Velocity",
+    description: "Sprint completion progress bar and velocity points tracker.",
+    category: "project",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "medium",
+    enabledByDefault: true,
+    component: SprintVelocityWidget,
+  },
   {
     id: "project-progress",
     name: "Project Progress",
@@ -202,18 +325,28 @@ const DEFINITIONS: WidgetDefinition[] = [
     enabledByDefault: false,
     component: MilestonesWidget,
   },
-  // Integrations
+
+  // ── System & Ambient ──
   {
-    id: "integrations-hub",
-    name: "Integrations",
-    description: "Status of your connected integrations.",
-    category: "integrations",
+    id: "world-clock",
+    name: "Apple World Clock",
+    description: "Analog chronometer with rotating sweep hand and multi-timezone cities.",
+    category: "system",
     supportedSizes: ["small", "medium"],
-    defaultSize: "small",
-    enabledByDefault: false,
-    component: IntegrationsHubWidget,
+    defaultSize: "medium",
+    enabledByDefault: true,
+    component: WorldClockWidget,
   },
-  // System
+  {
+    id: "ambient-soundscapes",
+    name: "Ambient Soundscapes",
+    description: "Lofi rain, deep forest, cozy cafe, and ocean wave sound generator.",
+    category: "system",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "medium",
+    enabledByDefault: true,
+    component: AmbientSoundscapesWidget,
+  },
   {
     id: "sync-status",
     name: "Sync Status",
@@ -221,7 +354,7 @@ const DEFINITIONS: WidgetDefinition[] = [
     category: "system",
     supportedSizes: ["small"],
     defaultSize: "small",
-    enabledByDefault: true,
+    enabledByDefault: false,
     component: SyncStatusWidget,
   },
   {
@@ -231,8 +364,18 @@ const DEFINITIONS: WidgetDefinition[] = [
     category: "system",
     supportedSizes: ["small"],
     defaultSize: "small",
-    enabledByDefault: true,
+    enabledByDefault: false,
     component: ConnectionStatusWidget,
+  },
+  {
+    id: "integrations-hub",
+    name: "Integrations",
+    description: "Status of your connected integrations.",
+    category: "integrations",
+    supportedSizes: ["small", "medium"],
+    defaultSize: "small",
+    enabledByDefault: false,
+    component: IntegrationsHubWidget,
   },
 ];
 
