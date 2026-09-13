@@ -26,6 +26,7 @@ import {
 } from "./ui/icons";
 import { IconButton, PearlButton } from "./ui";
 import { OptionPicker } from "./ui/quick-option-picker";
+import { HoverMarqueeText } from "./ui/HoverMarqueeText";
 import { TbLockFilled } from "react-icons/tb";
 import WorkspaceJoinBar from "./collab/WorkspaceJoinBar";
 import type { Page } from "../lib/supabaseService";
@@ -126,7 +127,12 @@ const Topbar = memo(function Topbar({
     <header className="flex h-11 shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg)] px-3">
       <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] text-[var(--text-secondary)]">
         <PageIcon icon={page.icon} size={15} fallback={<span className="text-[13px] leading-none">📄</span>} />
-        <span className="truncate text-[var(--text)] font-medium">{page.title || "Untitled"}</span>
+        <div className="min-w-0 max-w-[200px] xs:max-w-[280px] sm:max-w-[380px] md:max-w-[500px]">
+          <HoverMarqueeText
+            text={page.title || "Untitled"}
+            className="text-[13px] text-[var(--text)] font-medium"
+          />
+        </div>
         <OptionPicker
           options={[
             { id: "private", label: "Private", icon: TbLockFilled },

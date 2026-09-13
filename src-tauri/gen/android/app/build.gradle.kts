@@ -13,6 +13,16 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val testSigning = signingConfigs.create("noskaTest") {
+    val ksFile = rootProject.file("../noska-test.keystore")
+    if (ksFile.exists()) {
+        storeFile = ksFile
+        storePassword = "noska-test-pass"
+        keyAlias = "noska"
+        keyPassword = "noska-test-pass"
+    }
+}
+
 android {
     compileSdk = 36
     namespace = "dev.noska.app"
@@ -37,6 +47,9 @@ android {
             }
         }
         getByName("release") {
+            if (rootProject.file("../noska-test.keystore").exists()) {
+                signingConfig = testSigning
+            }
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }

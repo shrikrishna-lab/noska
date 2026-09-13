@@ -10,6 +10,7 @@ import { useCompany } from "../../contexts/CompanyContext"
 import {
   getOrgPages, type OrgPage
 } from "../../lib/company"
+import { HoverMarqueeText } from "../ui/HoverMarqueeText"
 
 interface PageNode extends OrgPage {
   children: PageNode[]
@@ -28,6 +29,7 @@ export function CompanyPageTree({ onNavigateToPage, onStarPage, starredPages }: 
   const [tree, setTree] = useState<PageNode[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
 
   const fetchPages = useCallback(async () => {
     if (!currentCompany) return
@@ -90,6 +92,8 @@ export function CompanyPageTree({ onNavigateToPage, onStarPage, starredPages }: 
     return (
       <div key={node.id}>
         <div
+          onMouseEnter={() => setHoveredNodeId(node.id)}
+          onMouseLeave={() => setHoveredNodeId(null)}
           className="group flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--surface-2)] transition-all cursor-pointer"
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
         >
@@ -112,12 +116,16 @@ export function CompanyPageTree({ onNavigateToPage, onStarPage, starredPages }: 
           <span className="text-[13px] shrink-0">{node.icon || "📄"}</span>
 
           {/* Title */}
-          <span
-            className="flex-1 text-[12px] font-medium text-[var(--text)] truncate group-hover:text-[var(--accent)]"
+          <div
+            className="flex-1 min-w-0"
             onClick={() => onNavigateToPage?.(node.id)}
           >
-            {node.title || "Untitled"}
-          </span>
+            <HoverMarqueeText
+              text={node.title || "Untitled"}
+              isHovered={hoveredNodeId === node.id}
+              className="text-[12px] font-medium text-[var(--text)] group-hover:text-[var(--accent)]"
+            />
+          </div>
 
           {/* Visibility */}
           <span className="opacity-0 group-hover:opacity-100 transition-opacity">

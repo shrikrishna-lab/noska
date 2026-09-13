@@ -155,7 +155,7 @@ export function JoinCompanyModal({ onClose, onJoined }: JoinCompanyModalProps) {
                               {company.name}
                             </span>
                             {isNoskaHub && (
-                              <span className="text-[9.5px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-500/15 px-1.5 py-0.5 rounded-md border border-indigo-500/20">
+                              <span className="text-[9.5px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded-md border border-amber-500/25">
                                 Official
                               </span>
                             )}

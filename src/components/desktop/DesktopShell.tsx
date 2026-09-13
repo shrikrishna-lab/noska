@@ -1,22 +1,16 @@
-// Desktop window shell: keeps the window completely borderless and
-// edge-to-edge. The only chrome is an INVISIBLE 4px drag strip along the top
-// edge (no visible bar, no controls — quit lives in the tray; snap/Alt+F4
-// work natively). Inert on the web.
-
 import type { ReactNode } from "react";
-import { isDesktop } from "../../lib/desktop/platform";
+import { isDesktop, isMobile } from "../../platform";
+import { DesktopTitleBar } from "./DesktopTitleBar";
 
 export default function DesktopShell({ children }: { children: ReactNode }) {
-  if (!isDesktop()) return <>{children}</>;
+  if (!isDesktop() || isMobile()) return <>{children}</>;
   return (
-    <>
-      {children}
-      <div
-        data-tauri-drag-region
-        aria-hidden
-        className="fixed top-0 left-0 right-0 z-[10000]"
-        style={{ height: 4 }}
-      />
-    </>
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
+      <DesktopTitleBar />
+      <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
+        {children}
+      </div>
+    </div>
   );
 }
+

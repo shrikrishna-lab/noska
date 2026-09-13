@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { FloatingMenu } from './ui';
+import { HoverMarqueeText } from './ui/HoverMarqueeText';
 import { useTabs } from '../contexts/TabContext';
 import {
   AnimatedBookmark, AnimatedTrash,
@@ -197,6 +198,7 @@ function PremiumPageItemBase({
   const { splitPage } = useTabs();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [actionsExpanded, setActionsExpanded] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const isAncestor = ancestors?.includes(page.id);
@@ -204,7 +206,10 @@ function PremiumPageItemBase({
   return (
     <div
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        if (!menuOpen) setActionsExpanded(false);
+      }}
       className="relative select-none"
     >
       <div
@@ -213,13 +218,13 @@ function PremiumPageItemBase({
         aria-expanded={hasChildren ? expanded : undefined}
         aria-level={depth + 1}
         aria-selected={active}
-        className={`group relative flex items-center justify-between min-h-[26px] h-[26px] rounded-lg transition-all duration-150 cursor-pointer select-none ${active
+        className={`group relative flex items-center justify-between min-h-[34px] h-[34px] py-1.5 rounded-lg transition-all duration-150 cursor-pointer select-none ${active
           ? 'text-neutral-900 dark:text-white font-medium bg-black/[0.055] dark:bg-white/[0.08] border border-black/[0.03] dark:border-white/[0.06] shadow-2xs'
           : 'text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-black/[0.035] dark:hover:bg-white/[0.05]'
           }`}
         style={{
-          paddingLeft: depth === 0 ? 6 : depth * 12 + 6,
-          paddingRight: 4,
+          paddingLeft: depth === 0 ? 8 : depth * 12 + 8,
+          paddingRight: 8,
         }}
         onClick={(e) => {
           onSelect(page.id, selectOptionsFromEvent(e));
@@ -246,7 +251,7 @@ function PremiumPageItemBase({
         />
 
         {/* Left Content: Icon + Title */}
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 z-10 mr-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2 z-10 mr-1">
           {/* Page Icon button */}
           <motion.button
             type="button"
@@ -260,13 +265,15 @@ function PremiumPageItemBase({
             }}
             title="Change icon"
           >
-            <PageIcon icon={page.icon} size={13.5} fallback={<span className="text-[11px] leading-none">📄</span>} />
+            <PageIcon icon={page.icon} size={13.5} fallback={<span className="text-[11.5px] leading-none">📄</span>} />
           </motion.button>
 
           {/* Title */}
-          <span className={`truncate text-[11.5px] leading-tight ${active ? 'font-medium text-neutral-900 dark:text-white' : 'font-normal text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white'}`}>
-            {page.title || 'Untitled'}
-          </span>
+          <HoverMarqueeText
+            text={page.title || 'Untitled'}
+            isHovered={isHovered}
+            className={`text-[11.5px] leading-tight ${active ? 'font-medium text-neutral-900 dark:text-white' : 'font-normal text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white'}`}
+          />
           {page.favorite && <Star size={8} className="text-amber-500 shrink-0 inline fill-amber-500 ml-0.5" />}
           {page.isEncrypted && <Lock size={8} className="text-neutral-400 shrink-0 inline ml-0.5" />}
         </div>
@@ -292,50 +299,76 @@ function PremiumPageItemBase({
           )}
         </div>
 
-        {/* Floating Hover Action Toolbar (Overlays right edge without squeezing title width) */}
+        {/* Floating Hover Action Toolbar — shows single icon on hover, expands to full action pill on click */}
         <AnimatePresence>
-          {(isHovered || menuOpen) && (
+          {(isHovered || menuOpen || actionsExpanded) && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.92 }}
+              layout
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.92 }}
-              transition={{ duration: 0.12 }}
-              className="absolute right-1 top-1/2 -translate-y-1/2 z-20 flex items-center gap-0.5 rounded-lg bg-neutral-100/95 dark:bg-neutral-800/95 border border-black/5 dark:border-white/10 px-1 py-0.5 shadow-sm backdrop-blur-sm"
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 480, damping: 28 }}
+              className="absolute right-1 top-1/2 -translate-y-1/2 z-20 flex items-center"
               onClick={(e) => e.stopPropagation()}
             >
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onAddInside?.(page.id); }}
-                className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
-                title="Add page inside"
-              >
-                <Plus size={12} />
-              </button>
-              <button
-                ref={menuButtonRef}
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
-                className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
-                title="Page options"
-              >
-                <MoreHorizontal size={12} />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onPatchPage(page.id, { favorite: !page.favorite }); }}
-                className={`grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer ${page.favorite ? 'text-amber-500' : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'}`}
-                title={page.favorite ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                <Star size={12} className={page.favorite ? 'fill-amber-500' : ''} />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onSelect(page.id, { sidePeek: true }); }}
-                className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
-                title="Side peek"
-              >
-                <Eye size={12} />
-              </button>
+              {!actionsExpanded && !menuOpen ? (
+                /* 1. Single Clean Action Trigger Icon */
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActionsExpanded(true);
+                  }}
+                  className="grid h-5 w-5 place-items-center rounded-md bg-neutral-100/90 dark:bg-neutral-800/90 border border-black/5 dark:border-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white shadow-xs backdrop-blur-sm transition-all cursor-pointer hover:scale-105"
+                  title="Page actions (+, options, favorite, peek)"
+                >
+                  <MoreHorizontal size={12} />
+                </button>
+              ) : (
+                /* 2. Expanded Multi-Action Toolbar */
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, scale: 0.92, x: 4 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.92, x: 4 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 26 }}
+                  className="flex items-center gap-0.5 rounded-lg bg-neutral-100/95 dark:bg-neutral-800/95 border border-black/5 dark:border-white/10 px-1 py-0.5 shadow-sm backdrop-blur-sm"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onAddInside?.(page.id); }}
+                    className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                    title="Add page inside"
+                  >
+                    <Plus size={12} />
+                  </button>
+                  <button
+                    ref={menuButtonRef}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
+                    className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                    title="Page options"
+                  >
+                    <MoreHorizontal size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onPatchPage(page.id, { favorite: !page.favorite }); }}
+                    className={`grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer ${page.favorite ? 'text-amber-500' : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'}`}
+                    title={page.favorite ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Star size={12} className={page.favorite ? 'fill-amber-500' : ''} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onSelect(page.id, { sidePeek: true }); }}
+                    className="grid h-5 w-5 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                    title="Side peek"
+                  >
+                    <Eye size={12} />
+                  </button>
+                </motion.div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

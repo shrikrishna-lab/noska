@@ -62,6 +62,7 @@ import PageTree from "./PageTree";
 import { selectOptionsFromEvent } from "./PageTree";
 import type { PageSelectOptions } from "./PageTree";
 import { PageIcon } from "./PageIcon";
+import { HoverMarqueeText } from "./ui/HoverMarqueeText";
 
 import type { Page } from "../lib/supabaseService";
 import TeamSwitcher from "./teams/TeamSwitcher";
@@ -662,11 +663,10 @@ const Sidebar = memo(function Sidebar({
     >
       {/* Outer Specular Precision Shell */}
       <div
-        className={`relative flex h-full w-full flex-col ${radiusOuterClass} ${
-          customConfig.specularBezel !== false
+        className={`relative flex h-full w-full flex-col ${radiusOuterClass} ${customConfig.specularBezel !== false
             ? "p-[2px] bg-gradient-to-br from-white/95 via-[#E6EAF5]/80 via-30% to-white/95 dark:from-white/20 dark:via-white/5 dark:to-white/15 shadow-[0_2px_6px_-1px_rgba(18,18,26,0.04),0_10px_24px_-4px_rgba(18,18,26,0.06),0_24px_48px_-8px_rgba(18,18,26,0.08)] dark:shadow-[0_4px_20px_-2px_rgba(0,0,0,0.4),0_12px_36px_-6px_rgba(0,0,0,0.5)]"
             : "p-[1px] border shadow-lg"
-        } transition-all duration-200`}
+          } transition-all duration-200`}
         style={{
           boxShadow: customConfig.glowEffect ? `0 0 30px ${customConfig.accentColor}28` : undefined
         }}
@@ -674,9 +674,8 @@ const Sidebar = memo(function Sidebar({
 
         {/* Inner Liquid Glass Body with Dynamic Theme Background & Texture Overlay */}
         <div
-          className={`relative flex h-full w-full flex-col justify-between ${radiusInnerClass} ${blurClass} shadow-[inset_0px_1.5px_2px_0px_rgba(255,255,255,0.95),inset_0px_-1px_1.5px_0px_rgba(0,0,0,0.05)] dark:shadow-[inset_0px_1px_1.5px_0px_rgba(255,255,255,0.12),inset_0px_-1px_1.5px_0px_rgba(0,0,0,0.4)] text-[var(--text)] overflow-hidden transition-all duration-200 ${
-            open ? "p-3" : "p-2 items-center"
-          }`}
+          className={`relative flex h-full w-full flex-col justify-between ${radiusInnerClass} ${blurClass} shadow-[inset_0px_1.5px_2px_0px_rgba(255,255,255,0.95),inset_0px_-1px_1.5px_0px_rgba(0,0,0,0.05)] dark:shadow-[inset_0px_1px_1.5px_0px_rgba(255,255,255,0.12),inset_0px_-1px_1.5px_0px_rgba(0,0,0,0.4)] text-[var(--text)] overflow-hidden transition-all duration-200 ${open ? "p-3" : "p-2 items-center"
+            }`}
           style={{
             background: (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches))
               ? (customConfig.customBgDark || "linear-gradient(135deg, rgba(24, 25, 30, 0.94), rgba(19, 20, 24, 0.98))")
@@ -930,15 +929,13 @@ const Sidebar = memo(function Sidebar({
                             onMouseLeave={() => setHoveredQuickTab(null)}
                             onClick={item.onClick}
                             transition={{ type: "spring", stiffness: 460, damping: 30, mass: 0.6 }}
-                            className={`group relative flex items-center justify-center h-7 rounded-full cursor-pointer outline-none select-none transition-colors duration-150 z-10 ${
-                              isExpanded ? "flex-[1.6] px-2.5" : "flex-1 min-w-[28px]"
-                            } ${
-                              item.active
+                            className={`group relative flex items-center justify-center h-7 rounded-full cursor-pointer outline-none select-none transition-colors duration-150 z-10 ${isExpanded ? "flex-[1.6] px-2.5" : "flex-1 min-w-[28px]"
+                              } ${item.active
                                 ? themeColors.activeText
                                 : isHovered
-                                ? `text-neutral-900 dark:text-white ${themeColors.hoverIcon}`
-                                : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
-                            }`}
+                                  ? `text-neutral-900 dark:text-white ${themeColors.hoverIcon}`
+                                  : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+                              }`}
                             title={item.label}
                           >
                             {/* Apple-style floating active pill */}
@@ -962,9 +959,8 @@ const Sidebar = memo(function Sidebar({
                             <motion.div
                               whileHover={{ scale: 1.15, y: -0.5 }}
                               transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                              className={`relative flex items-center justify-center shrink-0 ${
-                                item.active ? themeColors.activeIcon : ""
-                              }`}
+                              className={`relative flex items-center justify-center shrink-0 ${item.active ? themeColors.activeIcon : ""
+                                }`}
                             >
                               <IconComponent size={14} className="shrink-0" />
                               {Boolean(item.badge) && !isExpanded && (
@@ -1243,10 +1239,11 @@ function RecentsPageItemBase({ page, active, onSelect, onRemove }: RecentsPageIt
         className="flex min-w-0 flex-1 items-center gap-2 px-2 text-left z-10 outline-none cursor-pointer"
       >
         <PageIcon icon={page.icon} size={13.5} fallback={<span className="text-[11.5px] leading-none">📄</span>} />
-        <div className="min-w-0 flex-1">
-          <div className={`truncate text-[11.5px] leading-tight ${active ? "text-neutral-900 dark:text-white font-medium" : "font-normal text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white"}`}>
-            {page.title || "Untitled"}
-          </div>
+        <div className="min-w-0 flex-1 pr-1">
+          <HoverMarqueeText
+            text={page.title || "Untitled"}
+            className={`text-[11.5px] leading-tight ${active ? "text-neutral-900 dark:text-white font-medium" : "font-normal text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white"}`}
+          />
           <div className="text-[9px] text-neutral-400 dark:text-neutral-500 truncate leading-none mt-0.5 font-normal">
             {wordCount}w · {timeAgo(page.updatedAt)}
           </div>

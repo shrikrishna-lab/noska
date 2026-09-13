@@ -48,6 +48,8 @@ test-page.cjs
 *.pem
 *.cer
 *.pfx
+*.keystore
+*.jks
 dist-buildtest/
 nuls
 scripts/noska-*.mjs

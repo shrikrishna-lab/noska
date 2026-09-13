@@ -9,9 +9,12 @@
   "app": {
     "security": {
       "csp": null,
-      "capabilities": ["default"]
+      "capabilities": [
+        "default"
+      ]
     }
-  },  "bundle": {
+  },
+  "bundle": {
     "android": {
       "minSdkVersion": 24
     }

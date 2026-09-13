@@ -169,6 +169,10 @@ fn setup_deep_links(app: &tauri::App) {
     });
 }
 
+/// Mobile entry point: generates the JNI exports (Rust.create/start) the
+/// generated Android shell calls after System.loadLibrary — without this the
+/// APK crashes with UnsatisfiedLinkError on launch.
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(desktop)]
     let builder = {

@@ -10,6 +10,7 @@ import TabHoverPreview from "./TabHoverPreview";
 import PagePickerPopover from "./PagePickerPopover";
 import { usePresence } from "../../hooks/usePresence";
 import CollabPresenceBar from "../collab/CollabPresenceBar";
+import { HoverMarqueeText } from "../ui/HoverMarqueeText";
 
 interface WorkspaceTabBarProps {
   pages: Page[];
@@ -100,6 +101,7 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
   });
 
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const previewOpenTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const previewCloseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -373,8 +375,14 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
                   }}
                   onContextMenu={(e) => handleContextMenu(e, tab)}
                   onAuxClick={(e) => handleAuxClick(e, tab.id)}
-                  onMouseEnter={(e) => schedulePreview(e, tab)}
-                  onMouseLeave={cancelPreview}
+                  onMouseEnter={(e) => {
+                    setHoveredTabId(tab.id);
+                    schedulePreview(e, tab);
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredTabId(null);
+                    cancelPreview();
+                  }}
                   title={meta.breadcrumb || meta.title}
                   className={`group/tab relative flex flex-row flex-nowrap shrink-0 h-[29px] items-center gap-2 rounded-t-md transition-all cursor-grab active:cursor-grabbing select-none outline-none overflow-hidden ${
                     isActive
@@ -403,9 +411,11 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
 
                   {/* Tab Title (hidden if pinned) */}
                   {(!tab.pinned || meta.title === "Untitled") && (
-                    <span className="truncate flex-1 text-[12px] leading-tight font-medium pr-0.5">
-                      {meta.title}
-                    </span>
+                    <HoverMarqueeText
+                      text={meta.title}
+                      isHovered={hoveredTabId === tab.id}
+                      className="flex-1 text-[12px] leading-tight font-medium pr-0.5"
+                    />
                   )}
 
                   {/* Pinned Icon indicator */}

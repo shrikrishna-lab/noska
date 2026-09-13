@@ -21,5 +21,9 @@ export default defineConfig({
       "@clerk/react": path.resolve(__dirname, "./src/dev-clerk-stub.tsx"),
     },
   },
-  server: { port: Number(process.env.PORT) || 5188, strictPort: true },
+  server: {
+    port: Number(process.env.PORT) || 5188,
+    strictPort: true,
+    watch: { ignored: ["**/src-tauri/**", "**/dist*/**", "**/node_modules/**"] },
+  },
 });
