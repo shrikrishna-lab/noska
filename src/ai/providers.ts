@@ -55,6 +55,12 @@ export interface ProviderSendOpts {
   /** Explicit per-request sampling temperature — overrides the effort curve. */
   temperature?: number;
   signal?: AbortSignal;
+  /**
+   * Native function-calling schemas. Providers that support tools send them
+   * in the request and serialize native tool_calls back into the text marker
+   * protocol; unsupported providers ignore the field (text-protocol fallback).
+   */
+  tools?: NativeToolSpec[];
 }
 
 export interface AIProvider {
@@ -92,6 +98,19 @@ const PROXY_MAP: Record<string, string> = {
 };
 
 /**
+ * Server-side relay (supabase/functions/ai-proxy) for providers that
+ * block direct browser calls — NVIDIA NIM sends no CORS headers at all
+ * (and it is Noska's default provider), so its direct calls always fail
+ * in the webview and need the relay. Bring-your-own-key: the user's key
+ * rides in x-noska-provider-key; nothing is stored server-side.
+ */
+const AI_PROXY_BASE: string | null = (() => {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  return supabaseUrl ? `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/ai-proxy` : null;
+})();
+const AI_PROXY_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || "";
+
+/**
  * Fetch wrapper that adds:
  * 1. Connection timeout (configurable per request)
  * 2. AbortSignal composition
@@ -123,15 +142,33 @@ async function fetchWithTimeout(
     return res;
   } catch (err: unknown) {
     clearTimeout(timer);
-    // Automatic browser CORS proxy fallback for all providers
-    if (typeof window !== "undefined" && !url.includes("/api/proxy/")) {
+    // CORS/network fallback: relay through the ai-proxy edge function.
+    // A browser CORS failure always surfaces as a network TypeError, so
+    // this path is only taken when the direct call never completed.
+    if (AI_PROXY_BASE && !composedSignal.aborted) {
       for (const [targetUrl, proxyPrefix] of Object.entries(PROXY_MAP)) {
         if (url.startsWith(targetUrl)) {
-          const proxyUrl = url.replace(targetUrl, `${window.location.origin}${proxyPrefix}`);
+          const name = proxyPrefix.replace("/api/proxy/", "");
+          const rest = url.slice(targetUrl.length); // "/chat/completions" (+query)
+          const headers = new Headers(init.headers);
+          const providerKey =
+            headers.get("Authorization") ||
+            headers.get("x-api-key") ||
+            headers.get("x-goog-api-key") ||
+            "";
+          if (providerKey) {
+            headers.set("x-noska-provider-key", providerKey.replace(/^Bearer\s+/i, ""));
+            headers.delete("Authorization");
+          }
+          if (AI_PROXY_ANON_KEY) headers.set("Authorization", `Bearer ${AI_PROXY_ANON_KEY}`);
           try {
-            return await fetch(proxyUrl, { ...init, signal: composedSignal });
+            return await fetch(`${AI_PROXY_BASE}/${name}${rest}`, {
+              ...init,
+              headers,
+              signal: composedSignal,
+            });
           } catch {
-            break;
+            break; // relay unreachable too — surface the original error
           }
         }
       }
@@ -140,11 +177,18 @@ async function fetchWithTimeout(
   }
 }
 
-/** Check response status and throw AIError if not ok */
-async function checkResponse(res: Response, provider: string, model: string): Promise<void> {
+/** Check response status and throw AIError if not ok. Also guards against
+ * non-JSON 2xx responses (a misrouted proxy returning index.html used to
+ * surface as a confusing "Unexpected token '<'" parse error). */async function checkResponse(res: Response, provider: string, model: string): Promise<void> {
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw classifyProviderError(provider, model, res.status, body, res);
+  }
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("text/html")) {
+    throw classifyProviderError(provider, model, 502, JSON.stringify({
+      error: { message: "Endpoint returned HTML instead of JSON — request was misrouted or intercepted." },
+    }));
   }
 }
 
@@ -160,6 +204,91 @@ function resolveTemperature(temperature?: number, effort?: "low" | "medium" | "h
   if (effort === "low") return 0.2;
   if (effort === "high") return 0.6;
   return fallback;
+}
+
+// ─── Native Tool Calling (serialized back into the text protocol) ──────────
+
+/**
+ * Provider-neutral tool schema (JSON Schema parameters). Providers that
+ * support native function calling convert these to their wire format;
+ * native tool_calls in the response are serialized back into Noska's
+ * `<<TOOL:name>>{...}<</TOOL>>` text protocol, so every downstream parser
+ * (AgentRuntime, chat panels) stays unchanged. Providers that ignore the
+ * field simply fall back to the text protocol injected in the prompt.
+ */
+export interface NativeToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+function toolMarker(name: string, args: string): string {
+  return `<<TOOL:${name}>>${args}<</TOOL>>`;
+}
+
+export function openAiToolsPayload(tools?: NativeToolSpec[]): Record<string, any> | null {
+  if (!tools?.length) return null;
+  return {
+    tools: tools.map((t) => ({
+      type: "function",
+      function: { name: t.name, description: t.description, parameters: t.parameters },
+    })),
+    tool_choice: "auto",
+  };
+}
+
+export function extractOpenAiToolCalls(data: any): string {
+  const calls = data?.choices?.[0]?.message?.tool_calls;
+  if (!Array.isArray(calls) || calls.length === 0) return "";
+  return calls.map((c: any) => {
+    const name = String(c?.function?.name || "");
+    const args = typeof c?.function?.arguments === "string" && c.function.arguments.trim()
+      ? c.function.arguments
+      : JSON.stringify(c?.function?.arguments ?? {});
+    return toolMarker(name, args);
+  }).join("");
+}
+
+export function anthropicToolsPayload(tools?: NativeToolSpec[]): Record<string, any> | null {
+  if (!tools?.length) return null;
+  return {
+    tools: tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.parameters,
+    })),
+  };
+}
+
+export function extractAnthropicToolCalls(data: any): string {
+  const blocks = data?.content;
+  if (!Array.isArray(blocks)) return "";
+  return blocks
+    .filter((c: any) => c?.type === "tool_use")
+    .map((c: any) => toolMarker(String(c.name || ""), JSON.stringify(c.input ?? {})))
+    .join("");
+}
+
+export function geminiToolsPayload(tools?: NativeToolSpec[]): Record<string, any> | null {
+  if (!tools?.length) return null;
+  return {
+    tools: [{
+      functionDeclarations: tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      })),
+    }],
+  };
+}
+
+export function extractGeminiToolCalls(data: any): string {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .filter((p: any) => p?.functionCall)
+    .map((p: any) => toolMarker(String(p.functionCall.name || ""), JSON.stringify(p.functionCall.args ?? {})))
+    .join("");
 }
 
 // ─── Provider Definitions ───────────────────────────────────────────────────
@@ -193,7 +322,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "mistralai/mistral-large-2407", name: "Mistral Large 2", context: 128000 }
     ],
     defaultModel: "anthropic/claude-opus-4.6",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
       if (!apiKey) throw configError("OpenRouter");
       const modelId = model || this.defaultModel;
       const payload: Record<string, any> = {
@@ -206,6 +335,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         ]
       };
       if (effort) payload.reasoning = { effort };
+      Object.assign(payload, openAiToolsPayload(tools) || {});
       try {
         const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
@@ -219,7 +349,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "OpenRouter", modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("OpenRouter", modelId, err as Error);
@@ -277,7 +407,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", context: 1048576 }
     ],
     defaultModel: "gemini-2.5-flash",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
       if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
@@ -295,6 +425,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         if (system) {
           body.systemInstruction = { parts: [{ text: system }] };
         }
+        Object.assign(body, geminiToolsPayload(tools) || {});
         const res = await fetchWithTimeout(
           `${this.baseUrl}/models/${modelId}:generateContent`,
           {
@@ -309,7 +440,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         );
         await checkResponse(res, "Gemini", modelId);
         const data = await res.json();
-        return data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "";
+        return (data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "") + extractGeminiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Gemini", modelId, err as Error);
@@ -372,7 +503,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "chatgpt-4o-latest", name: "ChatGPT 4o Latest", context: 128000 }
     ],
     defaultModel: "gpt-5.6-sol",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
       if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
       const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.includes("gpt-5") || Boolean(thinking);
@@ -390,6 +521,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         } else {
           payload.reasoning_effort = effort || "medium";
         }
+        Object.assign(payload, openAiToolsPayload(tools) || {});
         const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
@@ -400,7 +532,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "OpenAI", modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("OpenAI", modelId, err as Error);
@@ -459,7 +591,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 }
     ],
     defaultModel: "claude-opus-5",
-    async send({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, tools, signal }) {
       if (!apiKey) throw configError("Anthropic");
       const modelId = model || this.defaultModel;
       const isAdaptiveThinking = modelId.includes("claude-3-7") || modelId.includes("5") || Boolean(thinking);
@@ -479,6 +611,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           // Extended-thinking payloads must not carry temperature (API 400s).
           payload.temperature = Math.min(Math.max(temperature, 0), 1);
         }
+        Object.assign(payload, anthropicToolsPayload(tools) || {});
         const res = await fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
           headers: {
@@ -491,7 +624,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "Anthropic", modelId);
         const data = await res.json();
-        return data.content?.map((c: any) => c.text).join("\n") || "";
+        return (data.content?.map((c: any) => c.text).join("\n") || "") + extractAnthropicToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Anthropic", modelId, err as Error);
@@ -554,7 +687,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "llama-3.2-90b-vision-preview", name: "Llama 3.2 90B Vision", context: 128000 }
     ],
     defaultModel: "llama-3.3-70b-versatile",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("Groq");
       const modelId = model || this.defaultModel;
       try {
@@ -565,6 +698,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             "Authorization": `Bearer ${apiKey}`
           },
           body: JSON.stringify({
+            ...openAiToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
@@ -576,7 +710,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "Groq", modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Groq", modelId, err as Error);
@@ -626,7 +760,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "deepseek-vl2", name: "DeepSeek Vision Language 2", context: 64000 }
     ],
     defaultModel: "deepseek-chat",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("DeepSeek");
       const modelId = model || this.defaultModel;
       try {
@@ -634,6 +768,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
+            ...openAiToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
@@ -642,7 +777,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "DeepSeek", modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("DeepSeek", modelId, err as Error);
@@ -690,7 +825,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "mistral-embed", name: "Mistral Embed", context: 8192 }
     ],
     defaultModel: "mistral-large-latest",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("Mistral");
       const modelId = model || this.defaultModel;
       try {
@@ -698,6 +833,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
+            ...openAiToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
@@ -706,7 +842,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "Mistral", modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Mistral", modelId, err as Error);
@@ -754,7 +890,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF", name: "Nemotron 70B Turbo", context: 131072 }
     ],
     defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("Together");
       const modelId = model || this.defaultModel;
       try {
@@ -762,6 +898,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
+            ...openAiToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
@@ -770,7 +907,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "Together", modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Together", modelId, err as Error);
@@ -815,7 +952,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "grok-beta", name: "Grok Beta Preview", context: 131072 }
     ],
     defaultModel: "grok-2-latest",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("xAI");
       const modelId = model || this.defaultModel;
       try {
@@ -823,6 +960,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
+            ...openAiToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
@@ -831,7 +969,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "xAI", modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("xAI", modelId, err as Error);
@@ -874,7 +1012,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "meta/llama-3.2-90b-vision-instruct", name: "Llama 3.2 90B Vision", context: 131072 }
     ],
     defaultModel: "nvidia/nemotron-3.5-lightning-30b-a3b",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("NVIDIA");
       const modelId = model || this.defaultModel;
       try {
@@ -886,6 +1024,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             "Authorization": `Bearer ${apiKey.trim()}`
           },
           body: JSON.stringify({
+            ...openAiToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort, 0.5),
@@ -898,7 +1037,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal, 45000);
         await checkResponse(res, "NVIDIA", modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("NVIDIA", modelId, err as Error);
@@ -949,7 +1088,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Zen)", context: 200000 }
     ],
     defaultModel: "nemotron-3.5-lightning-free",
-    async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
       const modelId = model || this.defaultModel;
       if (!modelId) {
@@ -976,12 +1115,14 @@ const PROVIDERS: Record<string, AIProvider> = {
 
         const body = isAnthropic
           ? JSON.stringify({
+            ...anthropicToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
             ...(system ? { system } : {}),
             messages: messages.map(m => ({ role: m.role, content: m.content }))
           })
           : JSON.stringify({
+            ...openAiToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
@@ -1000,10 +1141,10 @@ const PROVIDERS: Record<string, AIProvider> = {
         await checkResponse(res, "OpenCode Zen", modelId);
         const data = await res.json();
         if (isAnthropic) {
-          return data.content?.[0]?.text || "";
+          return (data.content?.[0]?.text || "") + extractAnthropicToolCalls(data);
         }
         const choice = data.choices?.[0];
-        return choice?.message?.content || choice?.message?.reasoning || "";
+        return (choice?.message?.content || choice?.message?.reasoning || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("OpenCode Zen", modelId, err as Error);
@@ -1288,7 +1429,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
     keyPlaceholder: "sk-… / API key",
     models: cfg.models.map((m) => ({ id: m.id, name: m.name || m.id, context: 128000 })),
     defaultModel: cfg.defaultModel || cfg.models[0]?.id || "",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError(cfg.name);
       const modelId = model || this.defaultModel;
       try {
@@ -1299,6 +1440,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
+            ...openAiToolsPayload(tools),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages,
@@ -1307,7 +1449,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
         }, signal);
         await checkResponse(res, cfg.name, modelId);
         const data = await res.json();
-        return data.choices?.[0]?.message?.content || "";
+        return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError(cfg.name, modelId, err as Error);

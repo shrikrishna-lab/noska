@@ -19,7 +19,7 @@
  *   // To cancel: controller.abort();
  */
 
-import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, type AIProvider, type ProviderSendOpts } from './providers.js';
+import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, type AIProvider, type ProviderSendOpts, type NativeToolSpec } from './providers.js';
 import { buildContext, buildMinimalContext } from './ContextBuilder.js';
 import { buildAgentPrompt, getAgent } from './agents.js';
 import { initializeMemory, getMemory } from './memory.js';
@@ -141,6 +141,15 @@ function looksLikeMockFailure(text: string): boolean {
 function extractMockError(text: string): string {
   const m = (text || "").match(/Error:\s*([\s\S]{0,240})/);
   return m ? m[1].replace(/_/g, "").trim() : "provider returned an error";
+}
+
+/** Detect a provider rejecting the native tools field (HTTP 400 tool errors)
+ * so sendRaw can retry the same call without it (text-protocol fallback). */
+function isNativeToolsRejection(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  if (status === 400) return true;
+  const msg = String((err as Error)?.message || "");
+  return /tool(s)?/i.test(msg) && /invalid|unknown|not support|unsupported|unexpected/i.test(msg);
 }
 
 /**
@@ -598,8 +607,12 @@ class AIManager {
   /**
    * Raw provider call used by the shared agent runtime.
    * Now throws AIError instead of returning mockResponse().
+   * When `tools` is provided, providers with native function calling receive
+   * the schemas in the request; native tool_calls come back serialized into
+   * the <<TOOL:name>> text protocol. If a provider rejects the tools field
+   * (HTTP 400), the call retries once without it (text-protocol fallback).
    */
-  async sendRaw({ system, messages, maxTokens, effort, temperature, providerId, modelId, signal }: {
+  async sendRaw({ system, messages, maxTokens, effort, temperature, providerId, modelId, signal, tools }: {
     system?: string;
     messages: Array<{ role: string; content: string }>;
     maxTokens?: number;
@@ -608,6 +621,7 @@ class AIManager {
     providerId?: string | null;
     modelId?: string | null;
     signal?: AbortSignal;
+    tools?: NativeToolSpec[];
   }): Promise<string> {
     const primaryPid = providerId || this.config.activeProvider;
     if (!primaryPid) throw configError("Noska AI");
@@ -631,6 +645,22 @@ class AIManager {
           effort,
           temperature,
           signal,
+          tools,
+        }).catch((err: unknown) => {
+          if (tools?.length && isNativeToolsRejection(err)) {
+            return provider.send({
+              apiKey: config.apiKey,
+              baseUrl: config.baseUrl || provider.baseUrl,
+              model,
+              system,
+              messages,
+              maxTokens: maxTokens || this.config.maxTokens,
+              effort,
+              temperature,
+              signal,
+            });
+          }
+          throw err;
         }), signal);
 
         if (looksLikeMockFailure(result)) {
@@ -896,6 +926,17 @@ class AIManager {
         // Update conversation state with response
         this._conversationState.updateFromAIResponse(full);
         this._healthCache.set(this.config.activeProvider!, { status: "online", timestamp: Date.now() });
+        // Empty-stream guard: a "successful" run with no content looks like
+        // a silent failure to the user — make it an explicit, retryable one.
+        if (!full.trim()) {
+          throw new AIError({
+            type: "server",
+            provider: provider.name,
+            model: resolvedModel,
+            retryable: true,
+            userMessage: "The model returned an empty response. Try again, or switch models in Settings → AI.",
+          });
+        }
         diagnostics.finish("completed", full.length);
         return full;
       } catch (err: unknown) {

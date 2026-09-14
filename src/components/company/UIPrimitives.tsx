@@ -1,5 +1,5 @@
 import React from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { Check } from "lucide-react"
 
 interface ProgressProps {
@@ -138,6 +138,5 @@ export function Accordion({ items, multiple = false }: AccordionProps) {
 }
 
 function AnimatePresenceWrapper({ open, children }: { open: boolean; children: React.ReactNode }) {
-  const { AnimatePresence } = require("framer-motion")
   return <AnimatePresence>{open && children}</AnimatePresence>
 }

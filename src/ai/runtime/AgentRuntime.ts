@@ -17,13 +17,13 @@
 
 import { aiManager, buildReasoningDirective } from "../AIManager";
 import { getAgent } from "../agents";
-import { getToolInstructions, parseToolCalls, stripToolCalls, runTool } from "../tools";
+import { getToolInstructions, getToolSchemas, parseToolCalls, stripToolCalls, runTool } from "../tools";
 import { buildContext } from "../ContextBuilder";
 import { uid, now } from "../../utils/blockModel";
 import { classifyIntent, classifyIntentSmart, isAgenticIntent } from "./intent";
 import { buildPlan } from "./planner";
 import { evaluatePermission } from "./permissions";
-import { requestApproval } from "./approvals";
+import { requestApproval, requestClarification } from "./approvals";
 import { verifyToolCall, collectAffectedResources } from "./verifier";
 import { selectModel, classifyModelNeed } from "./modelRouter";
 import { recallContext as recallAgentMemory, rememberFact } from "./agentMemory";
@@ -50,6 +50,11 @@ const MAX_MODEL_ROUNDS_PER_STEP = 5;
 /** Multi-agent guard: an agent may delegate to another agent, but chains
  * cannot nest deeper than this (A→B→C is the practical ceiling). */
 const MAX_DELEGATION_DEPTH = 1;
+/** Conversation history injected into interactive runs: last N turns, each
+ * truncated, so follow-ups like "add a todo to that page" resolve correctly
+ * without ballooning the context. */
+const HISTORY_TURNS = 8;
+const HISTORY_MESSAGE_CAP = 1600;
 
 interface WorkspaceSnapshot {
   pages: Array<{ id: string; blocks?: Array<Record<string, unknown>> }>;
@@ -267,9 +272,11 @@ export class AgentRuntime {
           if (result.detail) progress.detail = result.detail;
           if (result.isText && result.text) finalText = result.text;
           track(result.ok ? "TOOL_COMPLETED" : "TOOL_FAILED", `${step.label}: ${result.detail || "ok"}`, step.label, Date.now() - stepStart);
-          if (!result.ok && result.fatal) {
-            run.errors.push(result.detail || step.label);
-            break;
+          if (!result.ok) {
+            // Failed steps must surface in the run record — a run whose steps
+            // failed is not "completed" even when later steps succeed.
+            run.errors.push(`${step.label}: ${result.detail || "step failed"}`);
+            if (result.fatal) break;
           }
         } catch (err) {
           progress.status = "failed";
@@ -359,6 +366,9 @@ export class AgentRuntime {
 
   private buildUserPrompt(instruction: string, options: RuntimeJobOptions): string {
     const sections: string[] = [];
+    // The agent must know "today" to act on relative time ("remind me
+    // tomorrow at 9", "this week's tasks").
+    sections.push(`---\n\n## Now\n${new Date().toString()}`);
     // Memory is honored per agent: "off" = none, "run"/undefined = recall only,
     // "persistent" = recall here + run summaries are written after completion.
     if (options.sourceKind === "agent" && options.memoryMode !== "off") {
@@ -411,24 +421,62 @@ export class AgentRuntime {
     // model's own previous outputs/results, so it can self-correct across
     // rounds instead of re-deriving everything from a fresh single message.
     const transcript: Array<{ role: string; content: string }> = [];
+    // Interactive runs replay the recent conversation so follow-up requests
+    // ("now add a todo to that page") resolve against prior turns.
+    const history = (options.history || [])
+      .slice(-HISTORY_TURNS)
+      .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content || "").slice(0, HISTORY_MESSAGE_CAP) }))
+      .filter((m) => m.content.trim());
+    // One repair round is allowed per step: when the model clearly TRIED to
+    // call a tool but the parse came up empty, we re-ask with the exact format.
+    let repairUsed = false;
+    // Repetition circuit-breaker: stuck models re-emit the SAME tool call
+    // every round (succeeding harmlessly or failing identically). After one
+    // nudge, a full round of repeats ends the step.
+    const attemptedSigs = new Set<string>();
+    let loopNudgeUsed = false;
+    let anyToolSucceeded = false;
+    // Native function calling: providers that support it get the schemas in
+    // the request; unsupported ones ignore the field and follow the text
+    // protocol already present in the system prompt.
+    const toolSchemas = getToolSchemas();
+    // Interactive runs stream the model's text live while the step runs.
+    // Tool calls still parse from the final text via the marker protocol;
+    // background runs keep non-streaming sendRaw (native tool calling).
+    const useStream = typeof options.onLiveText === "function" && options.sourceKind === "ai";
 
     for (let round = 0; round < MAX_MODEL_ROUNDS_PER_STEP; round++) {
       if (context.abort.aborted) return { ok: false, detail: "Aborted" };
       if (transcript.length === 0) {
+        transcript.push(...history);
         transcript.push({ role: "user", content: this.buildUserPrompt(step.instruction || options.goal, options) });
       }
       const roundStart = Date.now();
       track("MODEL_REQUEST", `round ${round + 1}`, step.label);
       let response: string;
       try {
-        response = await aiManager.sendRaw({
-          system: this.buildSystemPrompt(options, true, context.effort),
-          messages: transcript,
-          maxTokens: 2048,
-          effort: context.effort,
-          providerId: selection.providerId,
-          modelId: selection.modelId,
-        });
+        if (useStream) {
+          // Invariant at call time: transcript ends with the current user
+          // message (the task on round 0, tool results afterwards).
+          response = await aiManager.stream({
+            system: this.buildSystemPrompt(options, true, undefined),
+            messages: transcript.slice(0, -1),
+            prompt: transcript[transcript.length - 1].content,
+            maxTokens: 2048,
+            effort: context.effort,
+            onChunk: (partial) => options.onLiveText?.(stripToolCalls(partial), step.id),
+          });
+        } else {
+          response = await aiManager.sendRaw({
+            system: this.buildSystemPrompt(options, true, context.effort),
+            messages: transcript,
+            maxTokens: 2048,
+            effort: context.effort,
+            providerId: selection.providerId,
+            modelId: selection.modelId,
+            tools: toolSchemas,
+          });
+        }
       } catch (err) {
         track("MODEL_RESPONSE", `failed: ${err instanceof Error ? err.message : "error"}`, step.label, Date.now() - roundStart);
         // If the model is unreachable, remaining steps can't run meaningfully —
@@ -441,7 +489,45 @@ export class AgentRuntime {
       const visible = stripToolCalls(response);
       if (visible) accumulatedText = visible;
 
+      if (calls.length > 0) {
+        // Repetition check: every call in this round already succeeded
+        // identically earlier in this step.
+        const sigs = calls.map((c) => `${c.name}:${JSON.stringify(c.params)}`);
+        if (sigs.every((s) => attemptedSigs.has(s))) {
+          if (!loopNudgeUsed) {
+            loopNudgeUsed = true;
+            track("MODEL_REQUEST", "repetition guard", step.label);
+            transcript.push({ role: "assistant", content: visible || `(repeated: ${calls.map((c) => c.name).join(", ")})` });
+            transcript.push({
+              role: "user",
+              content: "You already executed these exact tool calls successfully — the results are above. Do NOT repeat them. Write your final short summary now with no tool blocks.",
+            });
+            continue;
+          }
+          context.vars["ai.response"] = accumulatedText;
+          return {
+            ok: anyToolSucceeded,
+            text: accumulatedText || undefined,
+            isText: accumulatedText.length > 0,
+            detail: anyToolSucceeded ? "Stopped: repeated identical tool calls" : "Repeated identical tool calls without success",
+          };
+        }
+        sigs.forEach((s) => attemptedSigs.add(s));
+      }
+
       if (calls.length === 0) {
+        // Repair: the output looks like a mangled/blocked tool call — give the
+        // model exactly one nudge with the format before accepting the text.
+        if (!repairUsed && round < MAX_MODEL_ROUNDS_PER_STEP - 1 && looksLikeBrokenToolCall(response)) {
+          repairUsed = true;
+          track("MODEL_REQUEST", "tool-format repair", step.label);
+          transcript.push({ role: "assistant", content: visible || response.slice(0, 500) });
+          transcript.push({
+            role: "user",
+            content: "Your tool call could not be parsed. Emit it EXACTLY like:\n<<TOOL:tool_name>>{\"param\":\"value\"}<</TOOL>>\nThen continue. If no tool is needed, reply in plain text only.",
+          });
+          continue;
+        }
         context.vars["ai.response"] = visible;
         return { ok: true, text: visible || undefined, isText: visible.length > 0 };
       }
@@ -455,6 +541,7 @@ export class AgentRuntime {
         track("TOOL_REQUESTED", undefined, call.name);
         const record = await this.gatedExecute(call.name, call.params, options, context);
         context.run.toolCalls.push(record);
+        if (record.ok) anyToolSucceeded = true;
         roundRecords.push({ record, params: call.params, result: (record as ToolCallRecord & { rawResult?: unknown }).rawResult });
         track(
           record.ok ? "TOOL_COMPLETED" : "TOOL_FAILED",
@@ -496,7 +583,14 @@ export class AgentRuntime {
     }
 
     context.vars["ai.response"] = accumulatedText;
-    return { ok: true, text: accumulatedText || undefined, isText: accumulatedText.length > 0, detail: "Reached max tool rounds" };
+    // Honest exhaustion: if every round's tool calls failed, the step failed —
+    // never let the run report success for work that never happened.
+    return {
+      ok: anyToolSucceeded,
+      text: accumulatedText || undefined,
+      isText: accumulatedText.length > 0,
+      detail: anyToolSucceeded ? "Reached max tool rounds" : "Tools kept failing — step abandoned",
+    };
   }
 
   private async runDirectToolStep(step: PlanStep, options: RuntimeJobOptions, context: ExecutionContext): Promise<{ ok: boolean; detail?: string }> {
@@ -544,6 +638,9 @@ export class AgentRuntime {
     if (toolName === "run_agent") {
       return this.executeDelegation(params, options, context);
     }
+    if (toolName === "ask_user") {
+      return this.askUser(params, context);
+    }
 
     const decision = evaluatePermission(toolName, options.permissions);
     if (!decision.allowed) {
@@ -581,6 +678,40 @@ export class AgentRuntime {
       // Honest failure — no fabricated success.
       return { name: toolName, ok: false, error: message };
     }
+  }
+
+  /**
+   * Clarify-when-unsure: pause the run on a question the user answers in the
+   * UI. The answer is fed back as the tool result; declining/timeout yields
+   * an honest "no answer" result the model must work around.
+   */
+  private async askUser(params: Record<string, unknown>, context: ExecutionContext): Promise<ToolCallRecord & { resultSummary?: string; rawResult?: unknown }> {
+    const question = String(params.question || "").trim();
+    if (!question) {
+      return { name: "ask_user", ok: false, error: "ask_user needs a question" };
+    }
+    const decision = await requestClarification({
+      executionId: context.run.id,
+      question,
+    });
+    context.run.approvals.push({
+      id: `apr_${uid().slice(0, 8)}`,
+      executionId: context.run.id,
+      category: "clarify",
+      action: question,
+      reason: decision.answer != null ? "Answered by user" : "No answer provided",
+      resolvedAt: new Date().toISOString(),
+      approved: decision.answer != null,
+    });
+    if (decision.answer == null) {
+      return { name: "ask_user", ok: false, error: "The user did not answer — proceed with your best judgment and state your assumption." };
+    }
+    return {
+      name: "ask_user",
+      ok: true,
+      resultSummary: `User answered: ${decision.answer.slice(0, 200)}`,
+      rawResult: { answer: decision.answer },
+    } as ToolCallRecord & { resultSummary: string; rawResult: unknown };
   }
 
   /**
@@ -690,6 +821,14 @@ export class AgentRuntime {
 }
 
 // Helper kept outside the class so gatedExecute stays readable.
+
+/** Heuristic for a tool attempt that failed to parse (marker fragments,
+ * truncated JSON, stray function-call syntax) — gates the repair round. */
+function looksLikeBrokenToolCall(response: string): boolean {
+  if (!response) return false;
+  return /<<\s*TOOL|TOOL\s*:|<\s*\/TOOL|\btool_calls?\b|"name"\s*:\s*"[a-z_]+"/i.test(response);
+}
+
 function summarizeToolResult(result: unknown): string {
   if (result == null) return "ok";
   if (typeof result === "string") return result.slice(0, 200);

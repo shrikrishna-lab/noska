@@ -2175,7 +2175,75 @@ const Block = memo(function Block({
         10
       );
     }
-    if (e.key === "Backspace" && !block.text) onDelete();
+    if (e.key === "Backspace") {
+      const textVal = (block.text || "").trim();
+      const domText = (inputRef.current?.textContent || "").trim();
+      const isBlockEmpty = !textVal && !domText;
+
+      const sel = window.getSelection();
+      let isAtStart = isBlockEmpty;
+      if (!isAtStart && sel && sel.rangeCount > 0 && inputRef.current) {
+        const range = sel.getRangeAt(0);
+        if (range.collapsed) {
+          const preRange = range.cloneRange();
+          preRange.selectNodeContents(inputRef.current);
+          preRange.setEnd(range.endContainer, range.endOffset);
+          if (preRange.toString().length === 0) {
+            isAtStart = true;
+          }
+        }
+      }
+
+      if (isAtStart) {
+        e.preventDefault();
+        // 1. If non-text block (heading, bullet, todo, quote, callout, etc.), convert to paragraph text block first
+        if (block.type !== "text" && block.type !== "divider" && block.type !== "image") {
+          onPatch(blockForTreeConversion(block, "text", block.text || ""));
+          return;
+        }
+
+        // 2. If it's a text block (or empty block):
+        const flat = flattenEditorBlocks(page.blocks || []);
+        const currentIdx = flat.findIndex((b) => b.id === block.id);
+        const prevBlock = currentIdx > 0 ? flat[currentIdx - 1] : null;
+
+        if (isBlockEmpty) {
+          onDelete();
+        } else if (prevBlock && prevBlock.type === "text") {
+          const prevText = prevBlock.text || "";
+          const currText = block.text || "";
+          onDelete();
+          onPatch({ ...prevBlock, text: prevText + currText });
+        }
+
+        // 3. Focus upper block immediately and move caret to end
+        if (prevBlock) {
+          setTimeout(() => {
+            const prevEl = document.querySelector(`[data-block-id="${prevBlock.id}"]`);
+            const focusable =
+              prevEl?.querySelector<HTMLElement>("[contenteditable='true']") ||
+              prevEl?.querySelector<HTMLElement>("textarea, input");
+            if (focusable) {
+              focusable.focus();
+              if (focusable.getAttribute("contenteditable") === "true") {
+                const s = window.getSelection();
+                if (s) {
+                  const range = document.createRange();
+                  range.selectNodeContents(focusable);
+                  range.collapse(false); // Move caret to the END of upper block
+                  s.removeAllRanges();
+                  s.addRange(range);
+                }
+              } else if (focusable instanceof HTMLTextAreaElement || focusable instanceof HTMLInputElement) {
+                const len = focusable.value.length;
+                focusable.setSelectionRange(len, len);
+              }
+            }
+          }, 15);
+        }
+        return;
+      }
+    }
     if (e.key === "Tab") {
       e.preventDefault();
       if (!page?.blocks) return;

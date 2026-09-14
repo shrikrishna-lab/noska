@@ -9,6 +9,7 @@ import { devSignInLocal, isDevBypassAvailable } from "./lib/devAuth";
 import { VOICE_SETTINGS_EVENT } from "./lib/desktop/DesktopBridge";
 import { globalVoiceController } from "./lib/voice/voice-controller";
 import { parseVoiceAgentCommand, scorePageName } from "./lib/voice/agent-commands";
+import { viewLabel } from "./lib/viewTargets";
 import { blankAgent, saveAgent } from "./features/agents/agentStore";
 import { blankAutomation, saveAutomation } from "./features/automations/automationStore";
 import { refreshDefinitions } from "./intelligence/triggerService";
@@ -204,6 +205,8 @@ function AppContent() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [voiceSettingsRequested, setVoiceSettingsRequested] = useState(false);
   const [voiceAgentPrompt, setVoiceAgentPrompt] = useState<{ providerId: string; providerName: string } | null>(null);
+  /** Spoken voice-agent command handed to the AI panel's agentic pipeline. */
+  const [aiSeedPrompt, setAiSeedPrompt] = useState<string | null>(null);
   const [showDesktopSetup, setShowDesktopSetup] = useState(() => {
     if (typeof window === "undefined") return false;
     const urlParams = new URLSearchParams(window.location.search);
@@ -465,6 +468,11 @@ function AppContent() {
         setRenameFocusId(id);
         return id;
       },
+      // Agent navigation (open_view / open_page tools + AI-panel fast path).
+      // Routed through a ref because the navigation handlers are declared
+      // later in this component; calls always happen post-render.
+      openView: (view: string) => navigationRef.current.openView(view),
+      openPage: (pageId: string) => navigationRef.current.openPage(pageId),
       renamePage: (title: string) => updatePage(activePage.id, { title }),
       appendBlocks: (blocks: Block[]) => {
         auditEngine.log({ pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'ai', userName: 'AI', action: 'ai_generated', aiProvider: aiManager.getActiveProviderName(), aiModel: aiManager.getActiveModelName(), contentBefore: { blockCount: activePage.blocks.length }, contentAfter: { blockCount: activePage.blocks.length + blocks.length }, detail: `AI appended ${blocks.length} blocks` });
@@ -1849,6 +1857,29 @@ function AppContent() {
     setAppView(view);
   }, [setAppView, openTab, splitPage]);
 
+  // ── Agent navigation bridge ─────────────────────────────────────────
+  // The agent tool context (open_view / open_page tools) and the AI panel's
+  // deterministic navigation fast-path navigate through this ref, so they
+  // reuse the exact same code paths as sidebar clicks (tab state included).
+  const navigationRef = useRef<{ openView: (view: string) => string; openPage: (pageId: string) => string }>({
+    openView: () => "",
+    openPage: () => "",
+  });
+
+  const openViewTarget = useCallback((view: string): string => {
+    if (view === "trash") { setTrashOpen(true); return "trash"; }
+    if (view === "settings") { setSettingsOpen(true); return "settings"; }
+    handleViewSelect(view);
+    return view;
+  }, [handleViewSelect, setTrashOpen, setSettingsOpen]);
+
+  useEffect(() => {
+    navigationRef.current = {
+      openView: openViewTarget,
+      openPage: (pageId: string) => { handlePageSelect(pageId); return pageId; },
+    };
+  }, [openViewTarget, handlePageSelect]);
+
   const handleTabNavigate = useCallback((type: "page" | "view", targetId: string) => {
     if (type === "page") {
       setAppView("page");
@@ -2203,6 +2234,11 @@ function AppContent() {
 
   const runVoiceAgentCommand = useCallback((spoken: string) => {
     const command = parseVoiceAgentCommand(spoken);
+    if (command.kind === "open-view") {
+      navigationRef.current.openView(command.view);
+      showToast(`Opened ${viewLabel(command.view)}`);
+      return;
+    }
     if (command.kind === "open-page") {
       const page = pages
         .filter((candidate) => !candidate.trashed)
@@ -2304,11 +2340,13 @@ function AppContent() {
       showToast("Bug report queued locally. It contains no keys, tokens, or page content.");
       return;
     }
-    // Keep unknown speech visible to the user instead of handing it to a
-    // potentially destructive automation. The AI panel can then help plan it.
-    setAiOpen(true);
-    showToast("I can open, write, create, and search pages. More actions will ask before changing data.");
-  }, [activeId, addPage, commitPages, handlePageSelect, openTab, pages, setAiOpen, setAppView, setPaletteOpen, setQuery, setSettingsInitialTab, setSettingsOpen, showToast]);
+    // Unknown speech hands off to the full agentic pipeline in the AI panel
+    // (auto-sent via seedPrompt), so voice requests aren't limited to the
+    // deterministic command list. Guarded by permissions + approvals there.
+    setAiRightOpen(true);
+    setAiSeedPrompt(spoken);
+    showToast("Working on it — the AI panel is running your request.");
+  }, [activeId, addPage, commitPages, handlePageSelect, openTab, pages, setAiRightOpen, setAppView, setPaletteOpen, setQuery, setSettingsInitialTab, setSettingsOpen, showToast]);
 
   useEffect(() => globalVoiceController.onAgentCommand(runVoiceAgentCommand), [runVoiceAgentCommand]);
 
@@ -3567,6 +3605,8 @@ function AppContent() {
             onReplaceText={(text) => updateBlocks([{ id: uid(), type: "callout", text, meta: { tone: "tip", icon: "✦" } }, ...activePage.blocks])}
             onToast={showToast}
             toolContext={toolContext}
+            seedPrompt={aiSeedPrompt}
+            onSeedConsumed={() => setAiSeedPrompt(null)}
           /></Suspense>
           <AnimatePresence>
             {paletteOpen && (

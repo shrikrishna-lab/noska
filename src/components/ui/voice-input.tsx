@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Mic, Globe, ChevronUp, ChevronDown, Sparkles, ArrowRight, Check, X, AlertCircle, RefreshCw, Clock, Settings, ChevronRight, Clipboard, ClipboardPaste, Plus, ListChecks } from "lucide-react";
+import { Mic, Globe, ChevronUp, ChevronDown, Sparkles, ArrowRight, Check, X, AlertCircle, RefreshCw, Clock, Settings, ChevronRight, Clipboard, ClipboardPaste, Plus, ListChecks, Languages, Square, Bot, Activity } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { cn } from "../../lib/utils";
@@ -18,6 +18,7 @@ import {
   SquircleStyle,
   AccessoryStyle,
 } from "../../lib/voice/voice-settings";
+import { SiriWave } from "./siri-wave";
 
 export interface VoiceInputProps {
   onStart?: () => void;
@@ -48,6 +49,31 @@ export const SUPPORTED_LANGUAGES = [
 ];
 
 const THEME_CLASSES: Record<PillTheme, { bg: string; border: string; glow: string }> = {
+  apple_intelligence_orb: {
+    bg: "bg-[#09090d]/98 backdrop-blur-3xl",
+    border: "border-white/25",
+    glow: "shadow-[0_20px_60px_rgba(0,0,0,0.95),inset_0_1.5px_2px_rgba(255,255,255,0.55),inset_0_-1.5px_2px_rgba(0,0,0,0.8)] ring-1 ring-white/15",
+  },
+  siri_glow_orb: {
+    bg: "bg-[#050508]/98 backdrop-blur-3xl",
+    border: "border-fuchsia-400/35",
+    glow: "shadow-[0_0_35px_rgba(236,72,153,0.35),0_16px_50px_rgba(0,0,0,0.95),inset_0_1.5px_2px_rgba(255,255,255,0.6)] ring-1 ring-fuchsia-400/25",
+  },
+  vision_spatial_glass: {
+    bg: "bg-white/[0.08] backdrop-blur-3xl",
+    border: "border-white/40",
+    glow: "shadow-[0_20px_60px_rgba(0,0,0,0.5),inset_0_2px_3px_rgba(255,255,255,0.7),inset_0_-2px_3px_rgba(255,255,255,0.15)] ring-1 ring-white/20",
+  },
+  solar_ember_orb: {
+    bg: "bg-[#140b08]/98 backdrop-blur-3xl",
+    border: "border-amber-500/35",
+    glow: "shadow-[0_0_35px_rgba(245,158,11,0.35),0_16px_50px_rgba(0,0,0,0.95),inset_0_1.5px_2px_rgba(255,255,255,0.55)] ring-1 ring-amber-500/25",
+  },
+  cyber_matrix_orb: {
+    bg: "bg-[#060e1c]/98 backdrop-blur-3xl",
+    border: "border-sky-400/35",
+    glow: "shadow-[0_0_35px_rgba(14,165,233,0.4),0_16px_50px_rgba(0,0,0,0.95),inset_0_1.5px_2px_rgba(255,255,255,0.55)] ring-1 ring-sky-400/25",
+  },
   dynamic_island: {
     bg: "bg-[#09090b]/98 backdrop-blur-3xl",
     border: "border-white/[0.18]",
@@ -241,6 +267,281 @@ export function ActivityRing({
 }
 
 /**
+ * Apple Intelligence Liquid Glass Sphere / Siri Iridescent Orb
+ * Real-time voice frequency reactive liquid glass visualizer with obsidian dome,
+ * chromatic fluid Bezier wave flares modulated by microphone FFT bands,
+ * and dual embedded control pods (Deep Navy + Glossy White with live reactive audio arcs).
+ */
+export function AppleIntelligenceOrb({
+  isListening,
+  onToggle,
+  onStop,
+  onClose,
+  agentMode,
+  onToggleAgentMode,
+  onToggleTranslate,
+  isTranslationMode,
+  langLabel,
+  variant = "aurora",
+  size = "md",
+  className,
+}: {
+  isListening: boolean;
+  onToggle?: () => void;
+  onStop?: () => void;
+  onClose?: () => void;
+  agentMode?: boolean;
+  onToggleAgentMode?: () => void;
+  onToggleTranslate?: () => void;
+  isTranslationMode?: boolean;
+  langLabel?: string;
+  variant?: "aurora" | "siri_glow" | "vision_spatial" | "solar_ember" | "cyber_matrix";
+  size?: "sm" | "md" | "lg";
+  className?: string;
+}) {
+  const orbDimensions =
+    size === "sm"
+      ? "w-[84px] h-[58px] rounded-[28px]"
+      : size === "lg"
+        ? "w-[140px] h-[98px] rounded-[46px]"
+        : "w-[110px] h-[78px] rounded-[38px]";
+
+  // Real-time audio frequency animation references
+  const podBar1Ref = useRef<HTMLSpanElement | null>(null);
+  const podBar2Ref = useRef<HTMLSpanElement | null>(null);
+  const podBar3Ref = useRef<HTMLSpanElement | null>(null);
+
+  // Smooth smoothed values for physics
+  const smoothedAudio = useRef({
+    bass: 0.05,
+    mid: 0.05,
+    treble: 0.05,
+    peak: 0.05,
+  });
+
+  useEffect(() => {
+    let animId: number;
+
+    const updateWave = () => {
+      const freqs = globalVoiceController.getLiveFrequencyBands(16);
+
+      // Extract frequency band energies
+      let rawBass = (freqs[0] + freqs[1] + freqs[2]) / 3;
+      let rawMid = (freqs[3] + freqs[4] + freqs[5] + freqs[6]) / 4;
+      let rawTreble = (freqs[7] + freqs[8] + freqs[9] + freqs[10]) / 4;
+      let rawPeak = Math.max(...freqs);
+
+      if (!isListening) {
+        rawBass = 0.04;
+        rawMid = 0.04;
+        rawTreble = 0.04;
+        rawPeak = 0.04;
+      }
+
+      // Smooth interpolation for fluid liquid physics
+      const s = smoothedAudio.current;
+      s.bass += (rawBass - s.bass) * 0.35;
+      s.mid += (rawMid - s.mid) * 0.35;
+      s.treble += (rawTreble - s.treble) * 0.35;
+      s.peak += (rawPeak - s.peak) * 0.4;
+
+      // Reactive Audio Wave Arcs inside Right White Control Pod
+      if (podBar1Ref.current) {
+        const h1 = isListening ? Math.min(12, Math.max(4, s.bass * 16 + 4)) : 5;
+        podBar1Ref.current.style.height = `${h1.toFixed(1)}px`;
+      }
+      if (podBar2Ref.current) {
+        const h2 = isListening ? Math.min(15, Math.max(7, s.peak * 20 + 7)) : 9;
+        podBar2Ref.current.style.height = `${h2.toFixed(1)}px`;
+      }
+      if (podBar3Ref.current) {
+        const h3 = isListening ? Math.min(11, Math.max(3.5, s.treble * 15 + 3.5)) : 4.5;
+        podBar3Ref.current.style.height = `${h3.toFixed(1)}px`;
+      }
+
+      animId = requestAnimationFrame(updateWave);
+    };
+
+    animId = requestAnimationFrame(updateWave);
+    return () => cancelAnimationFrame(animId);
+  }, [isListening]);
+
+  // Ambient outer glow halo
+  const glowGradient =
+    variant === "siri_glow"
+      ? "from-fuchsia-500/50 via-purple-500/40 to-sky-400/50"
+      : variant === "vision_spatial"
+        ? "from-sky-300/40 via-teal-300/30 to-white/40"
+        : variant === "solar_ember"
+          ? "from-amber-500/50 via-orange-500/40 to-rose-500/50"
+          : variant === "cyber_matrix"
+            ? "from-cyan-500/50 via-blue-500/40 to-indigo-500/50"
+            : "from-cyan-500/45 via-fuchsia-500/40 to-sky-500/45";
+
+  return (
+    <div className={cn("relative flex flex-col items-center justify-center select-none group", className)}>
+      {/* Outer Ambient Glow Reflection */}
+      <motion.div
+        animate={{
+          scale: isListening ? [1, 1.15, 0.98, 1.12, 1] : [1, 1.05, 1],
+          opacity: isListening ? [0.7, 0.95, 0.75, 0.9, 0.7] : [0.35, 0.55, 0.35],
+        }}
+        transition={{
+          duration: isListening ? 2.2 : 4.0,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className={cn("absolute -inset-3 rounded-[38px] bg-gradient-to-tr blur-lg pointer-events-none", glowGradient)}
+      />
+
+      {/* Main 3D Liquid Glass Sphere / Dome Container */}
+      <div
+        className={cn(
+          "relative overflow-hidden backdrop-blur-3xl transition-transform border select-none",
+          variant === "vision_spatial"
+            ? "border-white/50 shadow-[0_20px_48px_rgba(0,0,0,0.6),inset_0_2px_4px_rgba(255,255,255,0.9),inset_0_-2px_4px_rgba(255,255,255,0.25)]"
+            : variant === "siri_glow"
+              ? "border-fuchsia-400/45 shadow-[0_20px_48px_rgba(0,0,0,0.95),inset_0_2px_4px_rgba(255,255,255,0.85),inset_0_-2px_4px_rgba(0,0,0,0.9)] ring-1 ring-fuchsia-400/35"
+              : "border-white/40 shadow-[0_20px_48px_rgba(0,0,0,0.95),inset_0_2px_4px_rgba(255,255,255,0.8),inset_0_-2px_4px_rgba(0,0,0,0.9)] ring-1 ring-white/15",
+          orbDimensions
+        )}
+        style={{
+          background:
+            variant === "vision_spatial"
+              ? "radial-gradient(ellipse at 50% 25%, rgba(255,255,255,0.22) 0%, rgba(230,240,255,0.1) 45%, rgba(8,12,22,0.92) 100%)"
+              : variant === "solar_ember"
+                ? "radial-gradient(ellipse at 50% 25%, #2a140a 0%, #150804 45%, #050201 100%)"
+                : variant === "cyber_matrix"
+                  ? "radial-gradient(ellipse at 50% 25%, #0c213d 0%, #06101f 45%, #01040a 100%)"
+                  : "radial-gradient(ellipse at 50% 20%, #1a1a24 0%, #0d0d14 45%, #030306 100%)",
+        }}
+      >
+        {/* Subtle Upper-Right Ambient Lens Glint */}
+        <div className="pointer-events-none absolute top-1.5 right-3 w-3 h-3 rounded-full bg-blue-500/25 blur-[2px]" />
+
+        {/* Top Liquid Lens Specular Sheen (Fresnel curvature highlight) */}
+        <div className="pointer-events-none absolute inset-x-2 top-0.5 h-[36%] rounded-t-[34px] bg-gradient-to-b from-white/80 via-white/15 to-transparent blur-[0.2px] z-10" />
+
+        {/* Middle Siri Chromatic Flare Horizon (Authentic GLSL WebGL Siri Wave) */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-x-0 top-0 bottom-[16%] flex items-center justify-center mix-blend-screen scale-105">
+            <SiriWave
+              variant="wave"
+              renderScale={1.0}
+              className="bg-transparent rounded-none pointer-events-none w-full h-full object-cover"
+            />
+          </div>
+        </div>
+
+        {/* 3 Circular Ergonomic Bottom Action Buttons: Translate | AI Mode | Mic / Stop */}
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-2 z-40 pointer-events-auto"
+        >
+          {/* 1. Left Circle: Translate / Language Glass Droplet */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onToggleTranslate?.();
+            }}
+            className={cn(
+              "w-5 h-5 rounded-full border backdrop-blur-2xl flex items-center justify-center shadow-inner overflow-hidden relative cursor-pointer transition-all duration-150 hover:scale-110 active:scale-90 appearance-none outline-none group/btn z-40",
+              isTranslationMode
+                ? "bg-sky-500/35 border-sky-400/70 shadow-[0_0_12px_rgba(56,189,248,0.5)]"
+                : variant === "solar_ember"
+                  ? "bg-amber-950/85 border-amber-400/40 hover:bg-amber-900/95"
+                  : variant === "cyber_matrix"
+                    ? "bg-[#061830]/90 border-sky-400/45 hover:bg-[#0a2345]/95"
+                    : variant === "vision_spatial"
+                      ? "bg-white/25 border-white/60 hover:bg-white/35"
+                      : "bg-[#08223f]/90 border-sky-400/40 hover:bg-[#0c2e56]/95 shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]"
+            )}
+            title={isTranslationMode ? "Translate Mode: ON (Translating into English)" : `Language / Translate (${langLabel || "Auto"})`}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white/30 to-transparent" />
+            <Languages size={8.5} className={isTranslationMode ? "text-cyan-300 animate-pulse" : "text-sky-300 group-hover/btn:text-white"} />
+          </button>
+
+          {/* 2. Middle Circle: AI Mode Obsidian Glass Droplet */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onToggleAgentMode?.();
+            }}
+            className={cn(
+              "w-5 h-5 rounded-full border backdrop-blur-2xl flex items-center justify-center shadow-inner overflow-hidden relative cursor-pointer transition-all duration-150 hover:scale-110 active:scale-90 appearance-none outline-none group/btn z-40",
+              agentMode
+                ? "bg-emerald-950/95 border-emerald-400/70 shadow-[0_0_14px_rgba(16,185,129,0.5)]"
+                : "bg-black/65 border-white/25 text-white/80 hover:bg-white/20"
+            )}
+            title={agentMode ? "AI Agent Mode: ON (Spoken commands execute AI actions)" : "Switch to AI Agent Mode"}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white/25 to-transparent" />
+            <Sparkles size={8.5} className={agentMode ? "text-emerald-400 fill-emerald-400/40 animate-pulse" : "text-white/75 group-hover/btn:text-white"} />
+          </button>
+
+          {/* 3. Right Circle: Glossy Ceramic White Record / Stop Button */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (isListening) {
+                try { onStop?.(); } catch { }
+                try { onClose?.(); } catch { }
+                try { onToggle?.(); } catch { }
+                globalVoiceController.stop();
+              } else {
+                try { onToggle?.(); } catch { }
+              }
+            }}
+            className="w-6 h-6 rounded-full bg-white border border-white/95 shadow-[0_3px_10px_rgba(0,0,0,0.5),0_2px_6px_rgba(255,255,255,0.4),inset_0_-1px_1.5px_rgba(0,0,0,0.12)] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-90 transition-all duration-150 overflow-hidden relative group/rec appearance-none outline-none z-40"
+            title={isListening ? "Stop Voice Recording" : "Start Voice Recording"}
+            aria-label={isListening ? "Stop Voice Recording" : "Start Voice Recording"}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white via-white/80 to-transparent" />
+
+            {isListening ? (
+              /* High-Visibility Red Stop Square */
+              <div className="flex items-center justify-center relative z-10 text-[#ff3b30]">
+                <Square size={7.5} className="fill-[#ff3b30] text-[#ff3b30] rounded-[1px] drop-shadow-[0_1px_2px_rgba(255,59,48,0.35)]" />
+              </div>
+            ) : (
+              /* Standby / Mic State Audio Indicator */
+              <div className="flex items-center gap-[1.4px] relative z-10 text-[#ff3b30] h-3 justify-center">
+                <span
+                  ref={podBar1Ref}
+                  className="w-[1.4px] h-[3px] rounded-full bg-[#ff3b30] transition-[height] duration-75"
+                />
+                <span
+                  ref={podBar2Ref}
+                  className="w-[1.6px] h-[6.5px] rounded-full bg-[#ff3b30] transition-[height] duration-75"
+                />
+                <span
+                  ref={podBar3Ref}
+                  className="w-[1.4px] h-[3px] rounded-full bg-[#ff3b30] transition-[height] duration-75"
+                />
+              </div>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Compact Smooth Real-Time Equalizer Waveform & Dynamic Dots
  */
 export function RealtimeEqualizer({
@@ -258,9 +559,9 @@ export function RealtimeEqualizer({
   const activeColor = barColor || settings.barColor || "white";
   const activeStyle = styleOverride || settings.waveformStyle || "dynamic_dots";
 
-  const barCount = activeStyle === "dense_24" ? 20 : activeStyle === "minimal_pulse" ? 3 : activeStyle === "dynamic_dots" ? 11 : 11;
+  const barCount = activeStyle === "dense_24" ? 12 : activeStyle === "minimal_pulse" ? 3 : 6;
   const barsRef = useRef<(HTMLSpanElement | null)[]>([]);
-  const currentHeightsRef = useRef<number[]>(new Array(24).fill(2.5));
+  const currentHeightsRef = useRef<number[]>(new Array(16).fill(2));
 
   useEffect(() => {
     let animId: number;
@@ -273,27 +574,33 @@ export function RealtimeEqualizer({
         const barEl = barsRef.current[i];
         if (!barEl) continue;
 
-        let targetH = 2.5;
+        let targetH = 2;
 
         if (activeStyle === "minimal_pulse") {
-          const minD = 3;
-          const maxD = 10;
+          const minD = 2.5;
+          const maxD = 8;
           const raw = freqs[i] || 0.08;
-          const pulse = (Math.sin(time * 4 + i * 1.2) * 0.5 + 0.5) * 3;
-          targetH = Math.max(minD, Math.min(maxD, isListening ? raw * 14 + minD : minD + pulse));
+          const pulse = (Math.sin(time * 4 + i * 1.2) * 0.5 + 0.5) * 2.5;
+          targetH = Math.max(minD, Math.min(maxD, isListening ? raw * 12 + minD : minD + pulse));
         } else if (activeStyle === "dynamic_dots") {
-          const minD = 2.2;
-          const maxD = 4.2;
+          const minD = 2;
+          const maxD = 3.5;
           const raw = freqs[i] || 0.05;
-          const pulse = (Math.sin(time * 5 + i * 0.8) * 0.5 + 0.5) * 1.2;
-          targetH = Math.max(minD, Math.min(maxD, isListening ? raw * 3.5 + minD + pulse : minD));
-        } else {
+          const pulse = (Math.sin(time * 5 + i * 0.8) * 0.5 + 0.5) * 1;
+          targetH = Math.max(minD, Math.min(maxD, isListening ? raw * 3 + minD + pulse : minD));
+        } else if (activeStyle === "siri_aurora_ribbon" || activeStyle === "chromatic_vortex" || activeStyle === "siri_ios18_glow") {
           const minH = 2.5;
-          const maxH = 12;
+          const maxH = 9.5;
+          const raw = freqs[i] || 0.06;
+          const wave = Math.sin(time * 6 + i * 0.9) * 0.5 + 0.5;
+          targetH = Math.max(minH, Math.min(maxH, isListening ? raw * 11 + minH + wave * 2.5 : minH + wave));
+        } else {
+          const minH = 2;
+          const maxH = 10;
 
           if (isListening) {
             const rawFreq = freqs[i] || 0.04;
-            const ambient = (Math.sin(time * 4.0 + i * 0.6) * 0.5 + 0.5) * 1.5;
+            const ambient = (Math.sin(time * 4.0 + i * 0.6) * 0.5 + 0.5) * 1.2;
             const voiceH = minH + rawFreq * (maxH - minH) * 1.3 * (settings.sensitivityBoost / 2.5);
             targetH = Math.max(minH, Math.min(maxH, rawFreq > 0.08 ? voiceH : minH + ambient));
           } else {
@@ -301,7 +608,7 @@ export function RealtimeEqualizer({
           }
         }
 
-        const prev = currentHeightsRef.current[i] || 2.5;
+        const prev = currentHeightsRef.current[i] || 2;
         let next: number;
         if (targetH > prev) {
           next = prev + (targetH - prev) * 0.75;
@@ -314,7 +621,7 @@ export function RealtimeEqualizer({
           barEl.style.width = `${next.toFixed(1)}px`;
           barEl.style.height = `${next.toFixed(1)}px`;
           if (activeStyle === "dynamic_dots") {
-            barEl.style.opacity = `${Math.min(1, 0.45 + (next / 4.2) * 0.55)}`;
+            barEl.style.opacity = `${Math.min(1, 0.5 + (next / 3.5) * 0.5)}`;
           }
         } else {
           barEl.style.height = `${next.toFixed(1)}px`;
@@ -328,10 +635,56 @@ export function RealtimeEqualizer({
     return () => cancelAnimationFrame(animId);
   }, [isListening, barCount, activeStyle, settings.sensitivityBoost]);
 
+  if (activeStyle === "siri_aurora_ribbon" || activeStyle === "chromatic_vortex") {
+    return (
+      <div className={cn("flex items-center gap-[2px] h-3.5 px-0.5", className)}>
+        {[...Array(6)].map((_, i) => (
+          <span
+            key={i}
+            ref={(el) => {
+              barsRef.current[i] = el;
+            }}
+            className={cn(
+              "rounded-full flex-shrink-0 transition-all shadow-[0_0_6px_rgba(0,240,255,0.6)]",
+              i % 3 === 0
+                ? "bg-gradient-to-t from-cyan-400 to-sky-200"
+                : i % 3 === 1
+                  ? "bg-gradient-to-t from-fuchsia-400 to-pink-200"
+                  : "bg-gradient-to-t from-purple-400 to-indigo-200"
+            )}
+            style={{ width: "2px", height: "2.5px" }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (activeStyle === "siri_ios18_glow") {
+    return (
+      <div className={cn("flex items-center gap-[2.5px] h-3.5 px-0.5", className)}>
+        {[...Array(6)].map((_, i) => (
+          <span
+            key={i}
+            ref={(el) => {
+              barsRef.current[i] = el;
+            }}
+            className={cn(
+              "rounded-full flex-shrink-0 transition-all",
+              i % 2 === 0
+                ? "bg-gradient-to-t from-cyan-400 via-white to-sky-300 shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+                : "bg-gradient-to-t from-fuchsia-500 via-white to-purple-300 shadow-[0_0_8px_rgba(217,70,239,0.8)]"
+            )}
+            style={{ width: "2px", height: "2.5px" }}
+          />
+        ))}
+      </div>
+    );
+  }
+
   if (activeStyle === "dynamic_dots") {
     return (
-      <div className={cn("flex items-center gap-[2.5px] h-4 px-1", className)}>
-        {[...Array(11)].map((_, i) => (
+      <div className={cn("flex items-center gap-[2px] h-3.5 px-0.5", className)}>
+        {[...Array(6)].map((_, i) => (
           <span
             key={i}
             ref={(el) => {
@@ -341,7 +694,7 @@ export function RealtimeEqualizer({
               "rounded-full flex-shrink-0 transition-all",
               BAR_COLOR_CLASSES[activeColor] || "bg-white"
             )}
-            style={{ width: "2.5px", height: "2.5px" }}
+            style={{ width: "2px", height: "2px" }}
           />
         ))}
       </div>
@@ -350,7 +703,7 @@ export function RealtimeEqualizer({
 
   if (activeStyle === "minimal_pulse") {
     return (
-      <div className={cn("flex items-center gap-1 h-4 px-0.5", className)}>
+      <div className={cn("flex items-center gap-1 h-3.5 px-0.5", className)}>
         {[...Array(3)].map((_, i) => (
           <span
             key={i}
@@ -358,7 +711,7 @@ export function RealtimeEqualizer({
               barsRef.current[i] = el;
             }}
             className={cn("rounded-full flex-shrink-0 transition-all duration-100", BAR_COLOR_CLASSES[activeColor] || "bg-white")}
-            style={{ width: "3.5px", height: "3.5px" }}
+            style={{ width: "3px", height: "3px" }}
           />
         ))}
       </div>
@@ -366,7 +719,7 @@ export function RealtimeEqualizer({
   }
 
   return (
-    <div className={cn("flex items-center gap-[2px] h-4 px-0.5", className)}>
+    <div className={cn("flex items-center gap-[1.5px] h-3.5 px-0.5", className)}>
       {[...Array(barCount)].map((_, i) => (
         <span
           key={i}
@@ -376,7 +729,7 @@ export function RealtimeEqualizer({
           className={cn(
             "rounded-full flex-shrink-0 transition-opacity duration-150",
             BAR_COLOR_CLASSES[activeColor] || "bg-white",
-            activeStyle === "dense_24" ? "w-[1.2px]" : "w-[2px]"
+            activeStyle === "dense_24" ? "w-[1.2px]" : "w-[1.8px]"
           )}
           style={{ height: "2px" }}
         />
@@ -388,7 +741,7 @@ export function RealtimeEqualizer({
 function TimerDisplay({ mins, secs, timerTheme }: { mins: string; secs: string; timerTheme: TimerTheme }) {
   if (timerTheme === "cyan_gold") {
     return (
-      <div className="flex items-center font-mono text-[11px] font-bold tracking-wider select-none leading-none">
+      <div className="flex items-center font-mono text-[10.5px] font-bold tracking-tight select-none leading-none">
         <span className="text-sky-300">{mins}</span>
         <span className="text-white/30 px-[1px]">:</span>
         <span className="text-amber-300">{secs}</span>
@@ -397,14 +750,14 @@ function TimerDisplay({ mins, secs, timerTheme }: { mins: string; secs: string; 
   }
   if (timerTheme === "monochrome") {
     return (
-      <div className="flex items-center font-mono text-[11px] font-bold tracking-wider select-none leading-none text-white">
+      <div className="flex items-center font-mono text-[10.5px] font-bold tracking-tight select-none leading-none text-white">
         {mins}:{secs}
       </div>
     );
   }
   if (timerTheme === "sunset") {
     return (
-      <div className="flex items-center font-mono text-[11px] font-bold tracking-wider select-none leading-none">
+      <div className="flex items-center font-mono text-[10.5px] font-bold tracking-tight select-none leading-none">
         <span className="text-rose-400">{mins}</span>
         <span className="text-white/30 px-[1px]">:</span>
         <span className="text-orange-300">{secs}</span>
@@ -413,7 +766,7 @@ function TimerDisplay({ mins, secs, timerTheme }: { mins: string; secs: string; 
   }
   if (timerTheme === "neon_green") {
     return (
-      <div className="flex items-center font-mono text-[11px] font-bold tracking-wider select-none leading-none">
+      <div className="flex items-center font-mono text-[10.5px] font-bold tracking-tight select-none leading-none">
         <span className="text-emerald-400">{mins}</span>
         <span className="text-white/30 px-[1px]">:</span>
         <span className="text-emerald-300">{secs}</span>
@@ -423,7 +776,7 @@ function TimerDisplay({ mins, secs, timerTheme }: { mins: string; secs: string; 
 
   // Dual tone clean Apple font
   return (
-    <div className="flex items-center font-mono text-[11.5px] font-bold tracking-wider select-none leading-none text-white/95">
+    <div className="flex items-center font-mono text-[10.5px] font-bold tracking-tight select-none leading-none text-white/95">
       <span>{mins}</span>
       <span className="text-white/40 px-[1px]">:</span>
       <span>{secs}</span>
@@ -505,7 +858,7 @@ function VoiceContextMenu({
         navigator.mediaDevices.enumerateDevices().then((devices) => {
           const audioInputs = devices.filter((d) => d.kind === "audioinput");
           setMicrophones(audioInputs);
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -654,7 +1007,7 @@ function VoiceContextMenu({
         <button
           onClick={() => {
             if (lastTranscript) {
-              navigator.clipboard?.writeText(lastTranscript).catch(() => {});
+              navigator.clipboard?.writeText(lastTranscript).catch(() => { });
             }
             onClose();
           }}
@@ -681,7 +1034,8 @@ function VoiceContextMenu({
 }
 
 /**
- * Apple Clean Minimal Language Selector (Inspired by Reference Screenshot 2)
+ * Apple Circular Rotary Arc Dial Language Selector
+ * Features a circular arc wheel with tangent rotating numbers/languages responsive to scrolling & touch gestures
  */
 function LanguageSwitcherPopover({
   isOpen,
@@ -694,8 +1048,18 @@ function LanguageSwitcherPopover({
   const [isTranslationActive, setIsTranslationActive] = useState(
     settings.languageMode === "translation"
   );
-  const [showAllLanguages, setShowAllLanguages] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Initialize selected index based on saved settings
+  const languages = SUPPORTED_LANGUAGES;
+  const initialIndex = Math.max(
+    0,
+    languages.findIndex((l) => l.code === (settings.language || "en-US"))
+  );
+  const [scrollIndex, setScrollIndex] = useState(initialIndex >= 0 ? initialIndex : 1);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+  const dragStartIndex = useRef(0);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -711,89 +1075,265 @@ function LanguageSwitcherPopover({
 
   if (!isOpen) return null;
 
-  const currentLang = settings.language || "en-US";
+  const activeLang = languages[Math.round(scrollIndex)] || languages[0];
 
-  // Primary languages (Matching Reference Screenshot 2)
-  const primaryLanguages = SUPPORTED_LANGUAGES.slice(0, showAllLanguages ? SUPPORTED_LANGUAGES.length : 6);
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaY;
+    setScrollIndex((prev) => {
+      const next = prev + (delta > 0 ? 0.4 : -0.4);
+      return Math.max(0, Math.min(languages.length - 1, next));
+    });
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true);
+    dragStartY.current = e.clientY;
+    dragStartIndex.current = scrollIndex;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+    const dy = e.clientY - dragStartY.current;
+    const indexDelta = -dy * 0.025;
+    const next = Math.max(0, Math.min(languages.length - 1, dragStartIndex.current + indexDelta));
+    setScrollIndex(next);
+  };
+
+  const handlePointerUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    // Snap cleanly to nearest integer
+    setScrollIndex((prev) => Math.round(prev));
+  };
+
+  const selectLanguage = (idx: number) => {
+    setScrollIndex(idx);
+    const target = languages[idx];
+    if (target) {
+      update({
+        language: target.code,
+        languageMode: isTranslationActive ? "translation" : "direct",
+      });
+    }
+  };
+
+  const applyAndClose = () => {
+    const target = languages[Math.round(scrollIndex)] || languages[0];
+    update({
+      language: target.code,
+      languageMode: isTranslationActive ? "translation" : "direct",
+    });
+    onClose();
+  };
+
+  // Radial Geometry parameters:
+  const R = 145;
+  const cx = -35;
+  const cy = 95;
+  const stepAngleDeg = 24;
 
   return (
     <AnimatePresence>
       <motion.div
         ref={popoverRef}
-        initial={{ opacity: 0, y: 10, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 6, scale: 0.96 }}
-        transition={{ type: "spring", stiffness: 520, damping: 30 }}
+        initial={{
+          opacity: 0,
+          scale: 0.3,
+          y: 20,
+          filter: "blur(14px)",
+          borderRadius: "36px",
+        }}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          filter: "blur(0px)",
+          borderRadius: "26px",
+        }}
+        exit={{
+          opacity: 0,
+          scale: 0.35,
+          y: 16,
+          filter: "blur(12px)",
+          borderRadius: "36px",
+        }}
+        transition={{
+          type: "spring",
+          stiffness: 480,
+          damping: 28,
+          mass: 0.85,
+        }}
+        onWheel={handleWheel}
         style={{
           fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", system-ui, -apple-system-headline, sans-serif',
           WebkitFontSmoothing: "antialiased",
           MozOsxFontSmoothing: "grayscale",
           textRendering: "optimizeLegibility",
-          background: "linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 248, 251, 0.94) 100%)",
-          boxShadow: "0 22px 55px -10px rgba(0, 0, 0, 0.26), inset 0 1px 0.5px rgba(255, 255, 255, 0.85), inset 0 -0.5px 0.5px rgba(0, 0, 0, 0.06)",
+          transformOrigin: "bottom center",
         }}
-        className="dark:!bg-[#151722]/95 fixed bottom-14 left-1/2 -translate-x-1/2 z-[10001] w-64 rounded-[18px] p-1.5 text-zinc-800 dark:text-zinc-100 border border-black/[0.09] dark:border-white/[0.14] backdrop-blur-2xl select-none"
+        className={cn(
+          "fixed bottom-14 left-1/2 -translate-x-1/2 z-[10001] w-[325px] h-[305px] rounded-[26px] p-3 text-zinc-800 dark:text-zinc-100 select-none overflow-hidden backdrop-blur-3xl border transition-all flex flex-col justify-between",
+          "bg-[#faf8f5]/95 dark:bg-[#12141c]/95 border-black/[0.08] dark:border-white/[0.12]",
+          "shadow-[0_24px_65px_-10px_rgba(0,0,0,0.25),0_1px_1.5px_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_28px_70px_-10px_rgba(0,0,0,0.8),0_1px_1.5px_rgba(255,255,255,0.18)_inset,0_0_0_1px_rgba(255,255,255,0.08)]"
+        )}
       >
-        {/* Language Options List */}
-        <div className="space-y-0.5 max-h-64 overflow-y-auto pr-0.5 custom-scrollbar">
-          {primaryLanguages.map((lang) => {
-            const isSelected = currentLang === lang.code;
+        {/* Top Header: Title & Hint */}
+        <div className="flex items-center justify-between px-2 pt-0.5 z-20">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
+            <span className="text-[11px] font-[650] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Rotary Dial
+            </span>
+          </div>
+          <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+            Scroll or drag to rotate
+          </span>
+        </div>
+
+        {/* Circular Wheel Dial Area */}
+        <div
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          className="relative flex-1 w-full h-[185px] overflow-hidden cursor-grab active:cursor-grabbing select-none"
+        >
+          {/* Circular SVG Arc Guide Line */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+            <circle
+              cx={cx}
+              cy={cy}
+              r={R}
+              fill="none"
+              stroke="currentColor"
+              className="text-black/[0.14] dark:text-white/[0.16]"
+              strokeWidth="1.2"
+              strokeDasharray="3 3"
+            />
+          </svg>
+
+          {/* Tangential Items Positioned Along the Circular Arc */}
+          {languages.map((lang, idx) => {
+            const diff = idx - scrollIndex;
+            // Only render items within visible angular arc window
+            if (Math.abs(diff) > 3.2) return null;
+
+            const angleDeg = diff * stepAngleDeg;
+            const angleRad = (angleDeg * Math.PI) / 180;
+            const x = cx + Math.cos(angleRad) * R;
+            const y = cy + Math.sin(angleRad) * R;
+            const absDiff = Math.abs(diff);
+            const isCenter = absDiff < 0.45;
+            const opacity = Math.max(0.15, 1 - absDiff * 0.32);
+            const scale = Math.max(0.72, 1.08 - absDiff * 0.12);
+            const numStr = String(idx).padStart(2, "0");
+
             return (
-              <button
+              <motion.div
                 key={lang.code}
-                onClick={() => {
-                  update({ language: lang.code, languageMode: isTranslationActive ? "translation" : "direct" });
-                  onClose();
+                onClick={() => selectLanguage(idx)}
+                style={{
+                  position: "absolute",
+                  left: `${x}px`,
+                  top: `${y}px`,
+                  transform: `translate(0, -50%) rotate(${angleDeg * 0.75}deg) scale(${scale})`,
+                  transformOrigin: "left center",
+                  opacity,
                 }}
-                className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13.5px] font-[450] tracking-[-0.012em] flex items-center justify-between hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100 group"
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <span className="text-[13px] shrink-0 opacity-80">{lang.flag}</span>
-                  <span className={`truncate leading-snug ${isSelected ? "font-[520] text-zinc-950 dark:text-white" : "font-[450]"}`}>
-                    {lang.name}
-                  </span>
-                </div>
-                {isSelected && (
-                  <Check size={14} strokeWidth={2.2} className="text-zinc-950 dark:text-white shrink-0 ml-2" />
+                className={cn(
+                  "flex items-center gap-2.5 transition-opacity duration-150 cursor-pointer pointer-events-auto",
+                  isCenter ? "z-20" : "z-10"
                 )}
-              </button>
+              >
+                {/* Tick Dot on Arc (Matching Image 1) */}
+                <span
+                  className={cn(
+                    "w-2 h-2 rounded-full -ml-1 shrink-0 transition-all duration-200",
+                    isCenter
+                      ? "bg-zinc-950 dark:bg-white ring-4 ring-sky-500/30 scale-125 shadow-[0_0_8px_rgba(56,189,248,0.6)]"
+                      : "bg-zinc-400/50 dark:bg-zinc-600/60"
+                  )}
+                />
+
+                {/* Big Number Label (Matching Reference: 00, 01, 02...) */}
+                <span
+                  className={cn(
+                    "font-mono text-2xl tracking-tighter leading-none transition-colors",
+                    isCenter
+                      ? "font-[850] text-[#111216] dark:text-[#f8f9fa] text-3xl"
+                      : "font-[600] text-zinc-400/70 dark:text-zinc-600/70"
+                  )}
+                >
+                  {numStr}
+                </span>
+
+                {/* Language Info Block */}
+                {isCenter ? (
+                  <motion.div
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex flex-col ml-1 min-w-[135px]"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px]">{lang.flag}</span>
+                      <span className="text-[13.5px] font-[700] text-[#111216] dark:text-[#f8f9fa] tracking-tight leading-tight">
+                        {lang.name.split(" ")[0]}
+                      </span>
+                      {settings.language === lang.code && (
+                        <Check size={12} strokeWidth={2.6} className="text-sky-500 shrink-0 ml-auto" />
+                      )}
+                    </div>
+                    <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 tracking-tight leading-tight mt-0.5 truncate max-w-[130px]">
+                      {lang.code === "auto" ? "Intelligent Voice Detection" : lang.name}
+                    </span>
+                  </motion.div>
+                ) : (
+                  <span className="text-[11px] font-[550] text-zinc-400 dark:text-zinc-500 tracking-tight truncate max-w-[90px]">
+                    {lang.name.split(" ")[0]}
+                  </span>
+                )}
+              </motion.div>
             );
           })}
         </div>
 
-        {/* Hairline Divider (Matching Screenshot 2) */}
-        <div className="h-[0.5px] bg-black/[0.08] dark:bg-white/[0.1] my-1 mx-1" />
+        {/* Bottom Actions Bar */}
+        <div className="pt-1.5 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between gap-2 z-20">
+          {/* Live Translation Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              const nextMode = isTranslationActive ? "direct" : "translation";
+              setIsTranslationActive(!isTranslationActive);
+              update({ languageMode: nextMode });
+            }}
+            className="px-2.5 py-1 rounded-[10px] text-[11.5px] font-[500] flex items-center gap-1.5 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors cursor-pointer text-zinc-700 dark:text-zinc-300"
+          >
+            <ListChecks size={13} strokeWidth={2} className="text-zinc-500" />
+            <span>Translate</span>
+            <span
+              className={cn(
+                "text-[8.5px] font-bold px-1.5 py-0.2 rounded-full",
+                isTranslationActive
+                  ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                  : "bg-black/[0.05] dark:bg-white/[0.08] text-zinc-400"
+              )}
+            >
+              {isTranslationActive ? "ON" : "OFF"}
+            </span>
+          </button>
 
-        {/* Action 1: Live Translation Toggle (Matching Screenshot 2 "Enable all") */}
-        <button
-          onClick={() => {
-            const nextMode = isTranslationActive ? "direct" : "translation";
-            setIsTranslationActive(!isTranslationActive);
-            update({ languageMode: nextMode });
-          }}
-          className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center justify-between hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
-        >
-          <div className="flex items-center gap-2.5">
-            <ListChecks size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90" />
-            <span className="leading-snug">Live translation</span>
-          </div>
-          <span className={`text-[9.5px] font-semibold tracking-wide px-1.5 py-0.5 rounded-full ${
-            isTranslationActive
-              ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
-              : "bg-black/[0.05] dark:bg-white/[0.08] text-zinc-500 dark:text-zinc-400"
-          }`}>
-            {isTranslationActive ? "ON" : "OFF"}
-          </span>
-        </button>
-
-        {/* Action 2: Add more / Expand languages (Matching Screenshot 2 "+ Add more") */}
-        <button
-          onClick={() => setShowAllLanguages((v) => !v)}
-          className="w-full px-3 py-1.5 rounded-[12px] text-left text-[13px] font-[450] tracking-[-0.011em] flex items-center gap-2.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.12] active:bg-black/[0.09] dark:active:bg-white/[0.16] transition-colors duration-100 cursor-pointer text-zinc-800 dark:text-zinc-100"
-        >
-          <Plus size={15} strokeWidth={1.85} className="text-zinc-500/90 dark:text-zinc-400/90" />
-          <span className="leading-snug">{showAllLanguages ? "Show fewer" : "Add more"}</span>
-        </button>
+          {/* Confirm & Set Button */}
+          <button
+            type="button"
+            onClick={applyAndClose}
+            className="px-3.5 py-1 rounded-[10px] text-[11.5px] font-[600] tracking-tight bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 shadow-xs hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer"
+          >
+            Select ({activeLang.short})
+          </button>
+        </div>
       </motion.div>
     </AnimatePresence>
   );
@@ -833,22 +1373,22 @@ function LanguageIslandButton({
         background: isLangOpen
           ? "radial-gradient(120% 120% at 50% 0%, rgba(56, 189, 248, 0.35) 0%, rgba(14, 165, 233, 0.15) 60%, rgba(0, 0, 0, 0.6) 100%), #0D131C"
           : isTranslationMode
-          ? "radial-gradient(120% 120% at 50% 0%, rgba(245, 158, 11, 0.35) 0%, rgba(217, 119, 6, 0.15) 60%, rgba(0, 0, 0, 0.6) 100%), #17130D"
-          : "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.5) 100%), #10121A",
+            ? "radial-gradient(120% 120% at 50% 0%, rgba(245, 158, 11, 0.35) 0%, rgba(217, 119, 6, 0.15) 60%, rgba(0, 0, 0, 0.6) 100%), #17130D"
+            : "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.5) 100%), #10121A",
         border: isLangOpen
           ? "1px solid rgba(56, 189, 248, 0.6)"
           : isTranslationMode
-          ? "1px solid rgba(245, 158, 11, 0.55)"
-          : "1px solid rgba(255, 255, 255, 0.18)",
+            ? "1px solid rgba(245, 158, 11, 0.55)"
+            : "1px solid rgba(255, 255, 255, 0.18)",
         boxShadow: isLangOpen
           ? "0 16px 36px rgba(56, 189, 248, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4)"
           : isTranslationMode
-          ? "0 16px 36px rgba(245, 158, 11, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4)"
-          : "0 16px 36px rgba(0, 0, 0, 0.6), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.3)",
+            ? "0 16px 36px rgba(245, 158, 11, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4)"
+            : "0 16px 36px rgba(0, 0, 0, 0.6), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.3)",
         backdropFilter: "blur(36px) saturate(190%)",
         WebkitBackdropFilter: "blur(36px) saturate(190%)",
       }}
-      className="relative h-9 px-3 rounded-full flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xl shrink-0 select-none overflow-hidden group"
+      className="relative h-7 px-2 rounded-full flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-2xl shrink-0 select-none overflow-hidden group"
       title={`Language & Translation: ${langLabel} (Click to change)`}
     >
       {/* Specular Liquid Top Sheen */}
@@ -856,7 +1396,7 @@ function LanguageIslandButton({
 
       {/* Upward Chevron */}
       <ChevronUp
-        size={10.5}
+        size={9}
         className={cn(
           "stroke-[2.5] transition-colors relative z-10",
           isLangOpen ? "text-sky-300" : isTranslationMode ? "text-amber-300" : "text-white/80"
@@ -864,7 +1404,7 @@ function LanguageIslandButton({
       />
 
       {/* Glass Divider */}
-      <div className="w-[1px] h-2.5 bg-white/25 relative z-10" />
+      <div className="w-[1px] h-2 bg-white/25 relative z-10" />
 
       {/* Globe Icon with Liquid Rotation */}
       <motion.div
@@ -873,7 +1413,7 @@ function LanguageIslandButton({
         className="flex items-center relative z-10"
       >
         <Globe
-          size={12}
+          size={10.5}
           className={cn(
             "transition-colors",
             isTranslationMode ? "text-amber-300" : isLangOpen ? "text-sky-300" : "text-white/90"
@@ -893,6 +1433,8 @@ interface VoiceAlertCapsuleProps {
   browserGuidance: string | null;
   onRecover: () => void;
   onDismiss: () => void;
+  isListening?: boolean;
+  floatingPosition?: string;
 }
 
 function VoiceAlertCapsule({
@@ -901,6 +1443,8 @@ function VoiceAlertCapsule({
   browserGuidance,
   onRecover,
   onDismiss,
+  isListening = false,
+  floatingPosition = "bottom_center",
 }: VoiceAlertCapsuleProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(5);
@@ -920,11 +1464,16 @@ function VoiceAlertCapsule({
     return () => clearInterval(interval);
   }, [isHovered, onDismiss]);
 
+  const isTop = floatingPosition === "top_center";
+  const positionClass = isTop
+    ? (isListening ? "top-16 mt-2" : "top-5")
+    : (isListening ? "bottom-16 mb-2" : "bottom-6");
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.92 }}
+      initial={{ opacity: 0, y: isTop ? -16 : 16, scale: 0.92 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 12, scale: 0.92 }}
+      exit={{ opacity: 0, y: isTop ? -12 : 12, scale: 0.92 }}
       transition={{
         type: "spring",
         stiffness: 480,
@@ -938,60 +1487,54 @@ function VoiceAlertCapsule({
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
         textRendering: "optimizeLegibility",
-        background: isPermissionError
-          ? "linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.25) 40%, rgba(0, 0, 0, 0.04) 100%), #FDE8D3"
-          : "linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.25) 40%, rgba(0, 0, 0, 0.04) 100%), #F3C3B2",
-        boxShadow: isPermissionError
-          ? "0 20px 48px -8px rgba(215, 150, 110, 0.45), 0 8px 20px rgba(0, 0, 0, 0.1), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.85), inset 0 -1.5px 2px rgba(0, 0, 0, 0.08)"
-          : "0 20px 48px -8px rgba(195, 105, 90, 0.48), 0 8px 20px rgba(0, 0, 0, 0.1), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.85), inset 0 -1.5px 2px rgba(0, 0, 0, 0.08)",
-        border: "1px solid rgba(255, 255, 255, 0.75)",
         backdropFilter: "blur(32px) saturate(190%)",
         WebkitBackdropFilter: "blur(32px) saturate(190%)",
       }}
-      className="overflow-hidden absolute bottom-12 left-1/2 z-[10001] -translate-x-1/2 rounded-full py-2.5 px-4 text-[#2D1B16] flex items-center gap-3.5 max-w-[calc(100vw-24px)] select-none pointer-events-auto shadow-2xl"
+      className={cn(
+        "overflow-hidden fixed left-1/2 z-[10010] -translate-x-1/2 rounded-full py-2.5 px-4 flex items-center gap-3.5 max-w-[calc(100vw-24px)] select-none pointer-events-auto shadow-2xl border transition-all duration-300",
+        isPermissionError
+          ? "bg-[#FDE8D3]/95 text-[#2D1B16] border-white/80 shadow-[0_20px_48px_-8px_rgba(215,150,110,0.45)] dark:bg-[#201511]/95 dark:text-[#FDE8D3] dark:border-amber-600/40 dark:shadow-[0_20px_48px_-8px_rgba(245,158,11,0.25)]"
+          : "bg-[#F3C3B2]/95 text-[#2D1B16] border-white/80 shadow-[0_20px_48px_-8px_rgba(195,105,90,0.48)] dark:bg-[#241313]/95 dark:text-[#FCE8E6] dark:border-rose-600/40 dark:shadow-[0_20px_48px_-8px_rgba(244,63,94,0.25)]",
+        positionClass
+      )}
       role="alert"
     >
       {/* Ambient Glowing Status Badge */}
       <div
-        className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-          isPermissionError
-            ? "bg-amber-700/15 text-amber-900 border border-amber-700/25"
-            : "bg-rose-700/15 text-rose-900 border border-rose-700/25"
-        } shadow-inner`}
+        className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${isPermissionError
+            ? "bg-amber-700/15 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-700/25 dark:border-amber-500/30"
+            : "bg-rose-700/15 text-rose-900 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-700/25 dark:border-rose-500/30"
+          } shadow-inner`}
       >
         <AlertCircle size={15} strokeWidth={2.3} />
         <div
-          className={`absolute inset-0 rounded-full ${
-            isPermissionError ? "bg-amber-600/20" : "bg-rose-600/20"
-          } animate-ping opacity-50`}
+          className={`absolute inset-0 rounded-full ${isPermissionError ? "bg-amber-600/20 dark:bg-amber-400/25" : "bg-rose-600/20 dark:bg-rose-400/25"
+            } animate-ping opacity-50`}
         />
       </div>
 
       {/* Title & Info Description Text with Countdown Display */}
       <div className="min-w-0 pr-1">
         <div className="flex items-center gap-2">
-          <span className="text-[12.5px] font-[600] text-[#2A1713] tracking-[-0.015em] leading-tight">
+          <span className="text-[12.5px] font-[600] text-[#2A1713] dark:text-[#FDE8D3] tracking-[-0.015em] leading-tight">
             {isPermissionError
               ? "Microphone Access Needed"
               : browserGuidance
-              ? "Browser Dictation Unavailable"
-              : "Voice Typing Paused"}
+                ? "Browser Dictation Unavailable"
+                : "Voice Input Alert"}
           </span>
           {/* Subtle Countdown Indicator Pill */}
-          <span className="text-[9.5px] font-[600] tracking-tight px-1.5 py-0.5 rounded-full bg-black/8 text-[#2A1713]/80 tabular-nums">
+          <span className="text-[9.5px] font-[600] tracking-tight px-1.5 py-0.5 rounded-full bg-black/8 dark:bg-white/12 text-[#2A1713]/80 dark:text-[#FDE8D3]/90 tabular-nums">
             {secondsLeft}s
           </span>
         </div>
-        <p className="text-[11px] text-[#5A3A32] font-[450] tracking-[-0.006em] leading-tight mt-0.5 whitespace-nowrap">
-          {browserGuidance ||
-            (voiceError.includes("aborted")
-              ? "Tap retry to resume speaking"
-              : voiceError)}
+        <p className="text-[11px] text-[#5A3A32] dark:text-[#D1A89D] font-[450] tracking-[-0.006em] leading-tight mt-0.5 whitespace-nowrap">
+          {browserGuidance || voiceError || "Tap retry to resume speaking"}
         </p>
       </div>
 
       {/* Sleek Apple Glass Icon Actions */}
-      <div className="flex items-center gap-1.5 shrink-0 pl-2.5 border-l border-black/10">
+      <div className="flex items-center gap-1.5 shrink-0 pl-2.5 border-l border-black/10 dark:border-white/15">
         {/* Retry Icon Button */}
         <button
           type="button"
@@ -1001,7 +1544,7 @@ function VoiceAlertCapsule({
             onRecover();
           }}
           title={isPermissionError ? "Allow microphone & retry" : "Try again"}
-          className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/8 hover:bg-black/15 active:scale-95 text-[#2A1713] border border-black/10 transition-all duration-200 cursor-pointer shadow-xs hover:scale-105"
+          className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/8 hover:bg-black/15 dark:bg-white/10 dark:hover:bg-white/18 active:scale-95 text-[#2A1713] dark:text-[#FDE8D3] border border-black/10 dark:border-white/15 transition-all duration-200 cursor-pointer shadow-xs hover:scale-105"
         >
           <RefreshCw size={13} strokeWidth={2.5} />
         </button>
@@ -1017,7 +1560,7 @@ function VoiceAlertCapsule({
               strokeWidth="1.5"
               fill="none"
               opacity="0.12"
-              className="text-[#2A1713]"
+              className="text-[#2A1713] dark:text-white"
             />
             <motion.circle
               cx="16"
@@ -1031,19 +1574,21 @@ function VoiceAlertCapsule({
               animate={{ strokeDashoffset: 81.68 }}
               transition={{ duration: 5, ease: "linear" }}
               strokeLinecap="round"
-              className="text-[#2A1713]/60"
+              className="text-[#2A1713]/60 dark:text-white/60"
             />
           </svg>
           <button
             type="button"
             aria-label="Dismiss"
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
               onDismiss();
             }}
             title="Dismiss"
-            className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/5 hover:bg-black/12 active:scale-95 text-[#5A3A32] hover:text-[#2A1713] border border-black/8 transition-all duration-200 cursor-pointer hover:scale-105"
+            className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/5 hover:bg-black/12 dark:bg-white/8 dark:hover:bg-white/15 active:scale-95 text-[#5A3A32] hover:text-[#2A1713] dark:text-[#D1A89D] dark:hover:text-[#FDE8D3] border border-black/8 dark:border-white/10 transition-all duration-200 cursor-pointer hover:scale-105"
           >
             <X size={12} strokeWidth={2.2} />
           </button>
@@ -1051,13 +1596,142 @@ function VoiceAlertCapsule({
       </div>
 
       {/* Smooth 5-Second Hairline Progress Bar Along the Bottom */}
-      <div className="absolute bottom-0 inset-x-5 h-[1.5px] overflow-hidden rounded-full bg-black/[0.08]">
+      <div className="absolute bottom-0 inset-x-5 h-[1.5px] overflow-hidden rounded-full bg-black/[0.08] dark:bg-white/[0.1]">
         <motion.div
           initial={{ scaleX: 1 }}
           animate={{ scaleX: 0 }}
           transition={{ duration: 5, ease: "linear" }}
           style={{ originX: 0 }}
-          className="h-full w-full bg-[#2A1713]/40 rounded-full"
+          className="h-full w-full bg-[#2A1713]/40 dark:bg-white/40 rounded-full"
+        />
+      </div>
+    </motion.div>
+  );
+}
+
+/**
+ * Apple macOS Glass Toast Capsule for Agent Mode Feedback (Placed cleanly ABOVE the pill)
+ */
+function AgentModeToastCapsule({
+  agentMode,
+  onDismiss,
+  isListening = false,
+  floatingPosition = "bottom_center",
+}: {
+  agentMode: boolean;
+  onDismiss: () => void;
+  isListening?: boolean;
+  floatingPosition?: string;
+}) {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 2800);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
+  const isTop = floatingPosition === "top_center";
+  const positionClass = isTop
+    ? (isListening ? "top-16 mt-2" : "top-5")
+    : (isListening ? "bottom-16 mb-2" : "bottom-6");
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: isTop ? -16 : 16, scale: 0.94, filter: "blur(6px)" }}
+      animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+      exit={{ opacity: 0, y: isTop ? -12 : 12, scale: 0.94, filter: "blur(6px)" }}
+      transition={{
+        type: "spring",
+        stiffness: 480,
+        damping: 28,
+        mass: 0.8,
+      }}
+      style={{
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", system-ui, -apple-system-headline, sans-serif',
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+        textRendering: "optimizeLegibility",
+      }}
+      className={cn(
+        "overflow-hidden fixed left-1/2 z-[10010] -translate-x-1/2 rounded-[18px] py-2.5 pl-3.5 pr-3 flex items-center justify-between gap-3.5 w-max max-w-[calc(100vw-32px)] select-none pointer-events-auto backdrop-blur-2xl shrink-0 transition-all duration-300",
+        "bg-white/85 dark:bg-[#141620]/85 border border-black/[0.07] dark:border-white/[0.12]",
+        "shadow-[0_20px_48px_-8px_rgba(0,0,0,0.14),0_1px_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(0,0,0,0.03)] dark:shadow-[0_24px_50px_-10px_rgba(0,0,0,0.65),0_1px_1px_0_rgba(255,255,255,0.15)_inset,0_0_0_1px_rgba(255,255,255,0.08)]",
+        positionClass
+      )}
+      role="status"
+    >
+      {/* Decorative Soft Diagonal Ambient Stripes */}
+      <div
+        className="pointer-events-none absolute right-0 inset-y-0 w-[55%] rounded-r-[18px] overflow-hidden"
+        style={{
+          background: agentMode
+            ? "repeating-linear-gradient(45deg, rgba(16, 185, 129, 0.09) 0px, rgba(16, 185, 129, 0.09) 8px, transparent 8px, transparent 16px)"
+            : "repeating-linear-gradient(45deg, rgba(56, 189, 248, 0.08) 0px, rgba(56, 189, 248, 0.08) 8px, transparent 8px, transparent 16px)",
+          maskImage: "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.4) 30%, rgba(0,0,0,1) 100%)",
+          WebkitMaskImage: "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.4) 30%, rgba(0,0,0,1) 100%)",
+        }}
+      />
+
+      {/* Left Content Area: Diamond Icon + Stacked Title & Subtitle */}
+      <div className="relative z-10 flex items-center gap-2.5 shrink-0">
+        {/* Diamond Status Badge with Bevel / Glow */}
+        <div className="relative flex items-center justify-center w-7 h-7 shrink-0">
+          <div
+            className={cn(
+              "w-[18px] h-[18px] rounded-[4.5px] rotate-45 flex items-center justify-center transition-all duration-300",
+              agentMode
+                ? "bg-gradient-to-br from-emerald-400 via-teal-500 to-emerald-600 text-white shadow-[0_2px_10px_rgba(16,185,129,0.45),0_0_0_1px_rgba(255,255,255,0.35)_inset]"
+                : "bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_2px_10px_rgba(56,189,248,0.45),0_0_0_1px_rgba(255,255,255,0.35)_inset]"
+            )}
+          >
+            {agentMode ? (
+              <Sparkles size={10} className="-rotate-45 text-white fill-white/90" />
+            ) : (
+              <Mic size={9.5} className="-rotate-45 text-white stroke-[2.2]" />
+            )}
+          </div>
+        </div>
+
+        {/* Text Content */}
+        <div className="flex flex-col pr-1 whitespace-nowrap">
+          <span className="text-[12.5px] font-[650] text-[#1a1917] dark:text-[#f2f2f5] tracking-[-0.015em] leading-snug whitespace-nowrap">
+            {agentMode ? "Agent Mode Active" : "Standard Voice Typing"}
+          </span>
+          <span className="text-[11px] font-[450] text-[#6b6760] dark:text-[#9ea0aa] tracking-[-0.008em] leading-none mt-0.5 whitespace-nowrap">
+            {agentMode ? "Spoken prompts execute AI actions." : "Spoken words type directly into document."}
+          </span>
+        </div>
+      </div>
+
+      {/* Right Apple Liquid Glass Pill Button */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onDismiss();
+        }}
+        className={cn(
+          "relative z-10 ml-2.5 px-3 py-1 rounded-[10px] text-[11.5px] font-[600] tracking-[-0.01em] transition-all duration-150 cursor-pointer shrink-0 whitespace-nowrap",
+          "bg-white/90 hover:bg-white text-zinc-800 dark:bg-white/10 dark:hover:bg-white/15 dark:text-zinc-100",
+          "shadow-[0_1px_3px_rgba(0,0,0,0.07),0_1px_1px_rgba(255,255,255,1)_inset,0_0_0_1px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.3),0_1px_1px_rgba(255,255,255,0.12)_inset,0_0_0_1px_rgba(255,255,255,0.1)]",
+          "hover:scale-[1.03] active:scale-[0.97]"
+        )}
+      >
+        {agentMode ? "Action" : "Dismiss"}
+      </button>
+
+      {/* Inset Hairline Progress Bar */}
+      <div className="absolute bottom-1 inset-x-3.5 h-[1.5px] overflow-hidden rounded-full bg-black/[0.04] dark:bg-white/[0.06]">
+        <motion.div
+          initial={{ scaleX: 1 }}
+          animate={{ scaleX: 0 }}
+          transition={{ duration: 2.8, ease: "linear" }}
+          style={{ originX: 0 }}
+          className={cn(
+            "h-full w-full rounded-full",
+            agentMode
+              ? "bg-gradient-to-r from-emerald-400 to-teal-500 shadow-[0_0_4px_rgba(16,185,129,0.7)]"
+              : "bg-gradient-to-r from-sky-400 to-blue-500 shadow-[0_0_4px_rgba(56,189,248,0.6)]"
+          )}
         />
       </div>
     </motion.div>
@@ -1089,10 +1763,18 @@ export function VoiceInput({
   const [mins, setMins] = useState("00");
   const [secs, setSecs] = useState("00");
   const [agentMode, setAgentMode] = useState(false);
+  const [agentToast, setAgentToast] = useState<{ id: number; mode: boolean } | null>(null);
   const [lastTranscript, setLastTranscript] = useState("");
   const [isLangOpen, setIsLangOpen] = useState(false);
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
   const [isErrorDismissed, setIsErrorDismissed] = useState(false);
+
+  // Sync agentMode with controller
+  useEffect(() => {
+    if (getAgentMode) {
+      setAgentMode(getAgentMode());
+    }
+  }, [getAgentMode]);
 
   // When a new error occurs or mic state changes, allow the alert to show
   useEffect(() => {
@@ -1145,9 +1827,12 @@ export function VoiceInput({
     ? `${sourceLangObj?.short || "Auto"} → ${targetLangObj?.short || "EN"}`
     : currentLangObj?.short || "EN";
 
-  const rawVoiceError = error?.message || (connectionState === "needs_attention"
-    ? "Voice typing needs your attention."
-    : "");
+  const rawVoiceError = (() => {
+    if (!error?.message && connectionState !== "needs_attention") return "";
+    const msg = error?.message || "";
+    if (msg.toLowerCase().includes("aborted") || msg.toLowerCase().includes("no-speech")) return "";
+    return msg || (connectionState === "needs_attention" ? "Voice typing needs your attention." : "");
+  })();
   const voiceError = !isErrorDismissed ? rawVoiceError : "";
 
   const isPermissionError = /permission|microphone|not-allowed|denied/i.test(voiceError);
@@ -1174,6 +1859,28 @@ export function VoiceInput({
     start();
   };
 
+  const handleStopVoice = (e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    stop?.();
+    globalVoiceController.stop();
+  };
+
+  const handleToggleAgentMode = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const next = !agentMode;
+    setAgentMode(next);
+    setAgentModeCtrl(next);
+    setAgentToast({ id: Date.now(), mode: next });
+  };
+
+  const handleToggleTranslate = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setIsLangOpen((prev) => !prev);
+  };
+
   return (
     <div
       data-voice-pill
@@ -1198,13 +1905,27 @@ export function VoiceInput({
           if (lastTranscript) {
             import("../../lib/voice/active-input").then(({ streamTextIntoActiveInput }) => {
               streamTextIntoActiveInput(lastTranscript);
-            }).catch(() => {});
+            }).catch(() => { });
           }
         }}
       />
 
+      {/* Agent Mode Floating Feedback Toast — strictly above the Flow Pill */}
       <AnimatePresence>
-        {voiceError && !isListening && (
+        {agentToast && (
+          <AgentModeToastCapsule
+            key={agentToast.id}
+            agentMode={agentToast.mode}
+            onDismiss={() => setAgentToast(null)}
+            isListening={isListening}
+            floatingPosition={settings.floatingPosition}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Voice Alert & Error Capsule — strictly above the Flow Pill */}
+      <AnimatePresence>
+        {voiceError && (
           <VoiceAlertCapsule
             key={voiceError}
             voiceError={voiceError}
@@ -1212,167 +1933,227 @@ export function VoiceInput({
             browserGuidance={browserGuidance}
             onRecover={recoverVoice}
             onDismiss={handleDismissError}
+            isListening={isListening}
+            floatingPosition={settings.floatingPosition}
           />
         )}
       </AnimatePresence>
 
       <AnimatePresence mode="wait">
         {isListening && (
-          /* Active Recording Dynamic Island: Fluid 3-Piece Water-Droplet Layout */
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 14 }}
-            transition={{
-              type: "spring",
-              stiffness: 420,
-              damping: 25,
-              mass: 0.85,
-            }}
-            className="flex items-center gap-1.5"
-          >
-            {/* 1. Standalone Left Language Island Button */}
-            <LanguageIslandButton
-              isLangOpen={isLangOpen}
-              isTranslationMode={isTranslationMode}
-              langLabel={langLabel}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsLangOpen((v) => !v);
-              }}
-            />
-
-            {/* 2. Main Liquid Center Dynamic Island Capsule */}
+          ["apple_intelligence_orb", "siri_glow_orb", "vision_spatial_glass", "solar_ember_orb", "cyber_matrix_orb"].includes(settings.pillTheme) ? (
             <motion.div
-              key="active-dynamic-island"
-              layoutId="apple-dynamic-island-capsule"
-              initial={{ scale: 0.9, filter: "blur(6px)" }}
-              animate={{
-                scale: [0.92, 1.025, 0.99, 1],
-                filter: "blur(0px)",
-              }}
-              exit={{ scale: 0.9, opacity: 0, filter: "blur(6px)" }}
-              whileHover={{ scale: 1.025, y: -0.5 }}
-              whileTap={{ scale: 0.98 }}
+              key={`active-apple-orb-${settings.pillTheme}`}
+              initial={{ opacity: 0, scale: 0.8, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 14 }}
               transition={{
                 type: "spring",
-                stiffness: 480,
-                damping: 26,
-                mass: 0.8,
+                stiffness: 420,
+                damping: 25,
+                mass: 0.85,
               }}
-              style={{
-                background: "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.55) 100%), #10121A",
-                border: "1px solid rgba(255, 255, 255, 0.18)",
-                boxShadow: "0 20px 48px -8px rgba(0, 0, 0, 0.75), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35)",
-                backdropFilter: "blur(36px) saturate(190%)",
-                WebkitBackdropFilter: "blur(36px) saturate(190%)",
-              }}
-              className="relative flex items-center gap-3 h-9 px-3.5 rounded-full transition-all duration-300 overflow-hidden shadow-2xl shrink-0 select-none"
+              className="flex items-center justify-center select-none"
             >
-              {/* Specular Liquid Gloss Top Sheen */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-[48%] rounded-full bg-gradient-to-b from-white/30 via-white/10 to-transparent" />
-
-              {/* Ambient Fluid Breathing Pulse Glow */}
-              <motion.div
-                animate={{
-                  opacity: [0.15, 0.35, 0.15],
-                  scale: [0.98, 1.02, 0.98],
+              <AppleIntelligenceOrb
+                isListening={isListening}
+                size="md"
+                variant={
+                  settings.pillTheme === "siri_glow_orb"
+                    ? "siri_glow"
+                    : settings.pillTheme === "vision_spatial_glass"
+                      ? "vision_spatial"
+                      : settings.pillTheme === "solar_ember_orb"
+                        ? "solar_ember"
+                        : settings.pillTheme === "cyber_matrix_orb"
+                          ? "cyber_matrix"
+                          : "aurora"
+                }
+                agentMode={agentMode}
+                onToggleAgentMode={handleToggleAgentMode}
+                onToggleTranslate={handleToggleTranslate}
+                isTranslationMode={isTranslationMode}
+                langLabel={langLabel}
+                onToggle={handleStopVoice}
+                onStop={handleStopVoice}
+                onClose={handleStopVoice}
+              />
+            </motion.div>
+          ) : (
+            /* Active Recording Dynamic Island: Fluid 3-Piece Water-Droplet Layout */
+            <motion.div
+              key="active-island-layout"
+              initial={{ opacity: 0, scale: 0.8, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 14 }}
+              transition={{
+                type: "spring",
+                stiffness: 420,
+                damping: 25,
+                mass: 0.85,
+              }}
+              className="flex items-center gap-1.5"
+            >
+              {/* 1. Standalone Left Language Island Button */}
+              <LanguageIslandButton
+                isLangOpen={isLangOpen}
+                isTranslationMode={isTranslationMode}
+                langLabel={langLabel}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLangOpen((v) => !v);
                 }}
-                transition={{
-                  duration: 2.2,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-                className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-r from-sky-500/10 via-emerald-500/15 to-purple-500/10"
               />
 
-              {/* Left Stop Squircle */}
+              {/* 2. Main Liquid Center Dynamic Island Capsule */}
+              <motion.div
+                key="active-dynamic-island"
+                layoutId="apple-dynamic-island-capsule"
+                initial={{ scale: 0.9, filter: "blur(6px)" }}
+                animate={{
+                  scale: [0.92, 1.025, 0.99, 1],
+                  filter: "blur(0px)",
+                }}
+                exit={{ scale: 0.9, opacity: 0, filter: "blur(6px)" }}
+                whileHover={{ scale: 1.025, y: -0.5 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 480,
+                  damping: 26,
+                  mass: 0.8,
+                }}
+                style={{
+                  background: agentMode
+                    ? "radial-gradient(120% 120% at 50% 0%, rgba(16, 185, 129, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.65) 100%), #0e1411"
+                    : "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.55) 100%), #10121A",
+                  border: agentMode ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid rgba(255, 255, 255, 0.18)",
+                  boxShadow: agentMode
+                    ? "0 20px 48px -8px rgba(16, 185, 129, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35)"
+                    : "0 20px 48px -8px rgba(0, 0, 0, 0.75), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35)",
+                  backdropFilter: "blur(36px) saturate(190%)",
+                  WebkitBackdropFilter: "blur(36px) saturate(190%)",
+                }}
+                onClick={(e) => {
+                  handleStopVoice(e);
+                }}
+                className="relative flex items-center gap-2 h-7 px-2.5 rounded-full transition-all duration-300 overflow-hidden shadow-2xl shrink-0 select-none cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {/* Specular Liquid Gloss Top Sheen */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-[48%] rounded-full bg-gradient-to-b from-white/30 via-white/10 to-transparent" />
+
+                {/* Ambient Fluid Breathing Pulse Glow */}
+                <motion.div
+                  animate={{
+                    opacity: agentMode ? [0.25, 0.45, 0.25] : [0.15, 0.35, 0.15],
+                    scale: [0.98, 1.02, 0.98],
+                  }}
+                  transition={{
+                    duration: 2.2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className={cn(
+                    "pointer-events-none absolute inset-0 rounded-full",
+                    agentMode
+                      ? "bg-gradient-to-r from-emerald-500/20 via-teal-500/25 to-emerald-500/20"
+                      : "bg-gradient-to-r from-sky-500/10 via-emerald-500/15 to-purple-500/10"
+                  )}
+                />
+
+                {/* Left Stop Squircle with generous clickable hit area */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleStopVoice(e);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="relative z-30 flex h-6 w-6 -ml-1 shrink-0 items-center justify-center cursor-pointer select-none group pointer-events-auto hover:scale-110 active:scale-90 transition-transform duration-150 outline-none appearance-none"
+                  aria-label="Stop voice typing"
+                  title="Click to stop recording"
+                >
+                  <div className={cn(
+                    "w-3.5 h-3.5 rounded-[3px] flex items-center justify-center transition-transform",
+                    squircleClass || "bg-white group-hover:bg-white/95 shadow-[0_0_10px_rgba(255,255,255,0.95)]"
+                  )}>
+                    <span className="w-1.5 h-1.5 rounded-[0.5px] bg-black/90" />
+                  </div>
+                </button>
+
+                {/* Smooth Real-Time Waveform / Dynamic Dots Visualizer */}
+                <div className="relative z-10 flex items-center">
+                  <RealtimeEqualizer
+                    isListening={isListening}
+                    barColor={agentMode ? "emerald" : settings.barColor}
+                    styleOverride={settings.waveformStyle}
+                  />
+                </div>
+
+                {/* Digital Timer */}
+                <div className="relative z-10 font-mono text-[10.5px] font-semibold text-white tracking-tight">
+                  <TimerDisplay mins={mins} secs={secs} timerTheme={agentMode ? "neon_green" : settings.timerTheme} />
+                </div>
+
+                {/* Live animated transcript preview (if enabled) */}
+                {settings.showTranscriptPreview && lastTranscript ? (
+                  <div className="relative z-10 text-[10.5px] text-white/85 max-w-[120px] truncate border-l border-white/15 pl-1.5 font-medium flex items-center gap-1">
+                    {agentMode && (
+                      <span className="text-[8.5px] font-bold px-1 py-0.2 rounded bg-emerald-500/30 text-emerald-300 uppercase tracking-wider shrink-0">
+                        AI
+                      </span>
+                    )}
+                    <StreamingWordText text={lastTranscript} isListening={isListening} />
+                  </div>
+                ) : null}
+              </motion.div>
+
+              {/* 3. Standalone Right Circular Dynamic Island Agent Button */}
               <motion.button
                 type="button"
                 tabIndex={-1}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={stop}
-                whileHover={{ scale: 1.18, rotate: [0, -4, 4, 0] }}
-                whileTap={{ scale: 0.85 }}
-                transition={{ type: "spring", stiffness: 600, damping: 22 }}
-                className="w-4 h-4 rounded-[4.5px] flex-shrink-0 cursor-pointer transition-colors relative flex items-center justify-center z-10 shadow-sm bg-white hover:bg-white shadow-[0_0_12px_rgba(255,255,255,0.9),0_0_20px_rgba(255,255,255,0.4)]"
-                aria-label="Stop voice typing"
-                title="Click to stop recording"
+                layoutId="apple-dynamic-island-agent-btn"
+                initial={{ opacity: 0, scale: 0.7, x: -12, filter: "blur(6px)" }}
+                animate={{ opacity: 1, scale: 1, x: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, scale: 0.7, x: -8, filter: "blur(6px)" }}
+                whileHover={{ scale: 1.12, y: -0.5 }}
+                whileTap={{ scale: 0.9, y: 0.5 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 480,
+                  damping: 26,
+                  mass: 0.8,
+                }}
+                onClick={handleToggleAgentMode}
+                style={{
+                  background: agentMode
+                    ? "radial-gradient(120% 120% at 50% 0%, rgba(16, 185, 129, 0.35) 0%, rgba(5, 150, 105, 0.15) 60%, rgba(0, 0, 0, 0.6) 100%), #0D1612"
+                    : "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.5) 100%), #10121A",
+                  border: agentMode ? "1px solid rgba(16, 185, 129, 0.55)" : "1px solid rgba(255, 255, 255, 0.18)",
+                  boxShadow: agentMode
+                    ? "0 16px 36px rgba(16, 185, 129, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4)"
+                    : "0 16px 36px rgba(0, 0, 0, 0.6), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.3)",
+                  backdropFilter: "blur(36px) saturate(190%)",
+                  WebkitBackdropFilter: "blur(36px) saturate(190%)",
+                }}
+                className="relative w-7 h-7 rounded-full flex items-center justify-center cursor-pointer transition-colors shadow-2xl shrink-0 overflow-hidden group select-none"
+                title={agentMode ? "Agent Mode: ON (Spoken commands execute AI actions)" : "Agent Mode: OFF (Click to switch to AI Agent commands)"}
               >
-                <span className="w-1.5 h-1.5 rounded-[1px] bg-black/75" />
-              </motion.button>
+                {/* Specular Liquid Top Sheen */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white/30 via-white/5 to-transparent" />
 
-              {/* Smooth Real-Time Waveform / Dynamic Dots Visualizer */}
-              <div className="relative z-10 flex items-center">
-                <RealtimeEqualizer
-                  isListening={isListening}
-                  barColor={settings.barColor}
-                  styleOverride={settings.waveformStyle}
-                />
-              </div>
-
-              {/* Digital Timer */}
-              <div className="relative z-10 font-mono text-[12px] font-semibold text-white tracking-wider">
-                <TimerDisplay mins={mins} secs={secs} timerTheme={settings.timerTheme} />
-              </div>
-
-              {/* Live animated transcript preview (if enabled) */}
-              {settings.showTranscriptPreview && lastTranscript ? (
-                <div className="relative z-10 text-[11px] text-white/85 max-w-[130px] truncate border-l border-white/15 pl-2 font-medium">
-                  <StreamingWordText text={lastTranscript} isListening={isListening} />
+                <div className="relative z-10 flex items-center justify-center">
+                  <ActivityRing
+                    isListening={isListening}
+                    color={agentMode ? "#10b981" : "#ffffff"}
+                    agentMode={agentMode}
+                  />
                 </div>
-              ) : null}
+              </motion.button>
             </motion.div>
-
-            {/* 3. Standalone Right Circular Dynamic Island Agent Button */}
-            <motion.button
-              type="button"
-              tabIndex={-1}
-              onMouseDown={(e) => e.preventDefault()}
-              layoutId="apple-dynamic-island-agent-btn"
-              initial={{ opacity: 0, scale: 0.7, x: -12, filter: "blur(6px)" }}
-              animate={{ opacity: 1, scale: 1, x: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, scale: 0.7, x: -8, filter: "blur(6px)" }}
-              whileHover={{ scale: 1.12, y: -0.5 }}
-              whileTap={{ scale: 0.9, y: 0.5 }}
-              transition={{
-                type: "spring",
-                stiffness: 480,
-                damping: 26,
-                mass: 0.8,
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                const next = !agentMode;
-                setAgentMode(next);
-                setAgentModeCtrl(next);
-              }}
-              style={{
-                background: agentMode
-                  ? "radial-gradient(120% 120% at 50% 0%, rgba(16, 185, 129, 0.35) 0%, rgba(5, 150, 105, 0.15) 60%, rgba(0, 0, 0, 0.6) 100%), #0D1612"
-                  : "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 65%, rgba(0, 0, 0, 0.5) 100%), #10121A",
-                border: agentMode ? "1px solid rgba(16, 185, 129, 0.55)" : "1px solid rgba(255, 255, 255, 0.18)",
-                boxShadow: agentMode
-                  ? "0 16px 36px rgba(16, 185, 129, 0.35), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.4)"
-                  : "0 16px 36px rgba(0, 0, 0, 0.6), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.3)",
-                backdropFilter: "blur(36px) saturate(190%)",
-                WebkitBackdropFilter: "blur(36px) saturate(190%)",
-              }}
-              className="relative w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-colors shadow-2xl shrink-0 overflow-hidden group select-none"
-              title={agentMode ? "Agent Mode: ON (Click to toggle)" : "Agent Mode: OFF (Click to toggle)"}
-            >
-              {/* Specular Liquid Top Sheen */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-[45%] rounded-full bg-gradient-to-b from-white/30 via-white/5 to-transparent" />
-
-              <div className="relative z-10 flex items-center justify-center">
-                <ActivityRing
-                  isListening={isListening}
-                  color={agentMode ? "#10b981" : "#ffffff"}
-                  agentMode={agentMode}
-                />
-              </div>
-            </motion.button>
-          </motion.div>
+          )
         )}
       </AnimatePresence>
     </div>

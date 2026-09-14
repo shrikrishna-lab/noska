@@ -12,6 +12,7 @@ import {
   executeIntegrationTool,
   validateIntegrationToolParams,
 } from './integrationTools';
+import { resolveViewTarget, VIEW_TARGETS } from '../lib/viewTargets';
 
 const TOOL_SOURCE = '<<TOOL:(\\w+)>>([\\s\\S]*?)<</TOOL>>';
 const TOOL_PATTERN = new RegExp(TOOL_SOURCE, 'g');
@@ -258,6 +259,49 @@ const DEFINITIONS = [
     }
   },
   {
+    name: "open_view",
+    description: "Navigate the user to an app view. Use whenever the user asks to open, show, or go to a section of the app (e.g. 'open my inbox').",
+    params: {
+      view: { type: "string", desc: "View name: inbox, calendar, home, tasks, chats, meetings, meeting notes, library, shared, daily/journal, trash, graph, canvas, command center, agents, automations, marketplace, creator, company, settings", required: true }
+    }
+  },
+  {
+    name: "open_page",
+    description: "Open an existing page in the editor by ID or title keyword. Use when the user asks to open a specific page/note.",
+    params: {
+      page_id: { type: "string", desc: "Page ID or title keyword", required: true }
+    }
+  },
+  {
+    name: "create_reminder",
+    description: "Create a reminder in the user's Inbox. Use for 'remind me to…' requests. Compute the due date from the current date/time given in your context when the user says things like 'tomorrow at 9'.",
+    params: {
+      text: { type: "string", desc: "What to remind the user about", required: true },
+      date: { type: "string", desc: "Due date as ISO 8601 (e.g. 2026-09-15T09:00:00) or empty for no due date", required: false },
+      priority: { type: "string", desc: "'high', 'medium', or 'low' (default medium)", required: false }
+    }
+  },
+  {
+    name: "daily_briefing",
+    description: "Gather a workspace briefing: page counts, open todos, recently edited pages, and pending Inbox reminders. Use for 'catch me up' / 'brief me' requests.",
+    params: {}
+  },
+  {
+    name: "web_search",
+    description: "Search the public web for current information. Use when the answer needs facts beyond the workspace (news, docs, prices, recent events). Requires the user's web-search key to be configured.",
+    params: {
+      query: { type: "string", desc: "Search query", required: true },
+      max_results: { type: "number", desc: "Number of results 1-10 (default 5)", required: false }
+    }
+  },
+  {
+    name: "ask_user",
+    description: "Ask the user a clarifying question mid-task and pause for their answer. Use ONLY when genuinely ambiguous (e.g. two pages match a name) — never for trivial choices.",
+    params: {
+      question: { type: "string", desc: "The question to ask the user", required: true }
+    }
+  },
+  {
     name: "call_subagent",
     description: "Delegate a subtask to a specialist subagent (e.g. 'researcher', 'coder', 'writer', 'analyst', 'organizer') to execute focused work, gather data, write code, or perform analysis, and return the synthesized result.",
     params: {
@@ -308,10 +352,11 @@ export function getToolInstructions(options: { compact?: boolean } = {}) {
     "",
     "### RULES",
     "1. When asked to create, write, edit, rename, add, search, or organize — ALWAYS use the matching tool immediately",
-    "2. The tool block will be automatically removed from what the user sees — you do NOT need to hide it yourself",
-    "3. Write the tool block FIRST, then your summary text",
-    "4. Never describe what you would do — just do it with the tool",
-    "5. If no tool exists for the request, say so honestly",
+    "2. When the user asks to open/show/go to a part of the app or a page — use open_view / open_page so it actually happens",
+    "3. The tool block will be automatically removed from what the user sees — you do NOT need to hide it yourself",
+    "4. Write the tool block FIRST, then your summary text",
+    "5. Never describe what you would do — just do it with the tool",
+    "6. If no tool exists for the request, say so honestly",
     "",
   ];
   if (!options.compact) {
@@ -380,8 +425,20 @@ export function getCapabilities() {
   const integrationDesc = integrations.connectedConnectors > 0
     ? `Connected platforms via MCP/API: ${integrations.connectedConnectors} connection${integrations.connectedConnectors === 1 ? "" : "s"}, ${integrations.toolCount} external tool${integrations.toolCount === 1 ? "" : "s"}`
     : "Connect Notion, GitHub, Slack, Gmail, Calendar or any MCP server in Settings → Integrations";
+  let webSearchStatus: "✓" | "✕" = "✕";
+  let webSearchDesc = "Search the public web from chat — add a free Tavily key in Settings → Noska AI → Web Search";
+  try {
+    // Lazy import avoids a static cycle through the lib layer; sync probe is cheap.
+    const key = typeof localStorage !== "undefined" ? localStorage.getItem("noska_tavily_key") : null;
+    if (key?.trim() || (import.meta.env.VITE_TAVILY_API_KEY as string | undefined)?.trim()) {
+      webSearchStatus = "✓";
+      webSearchDesc = "Search the public web from chat (Tavily)";
+    }
+  } catch { /* ignore */ }
   return [
     { name: "Page Management", description: "Create, rename, organize pages", status: "✓" },
+    { name: "App Navigation", description: "Open views (Inbox, Calendar, Tasks, Chats…) and pages on request", status: "✓" },
+    { name: "Web Search", description: webSearchDesc, status: webSearchStatus },
     { name: "Rich Content Editing", description: "Headings, bullets, numbers, todos, quotes, code blocks, dividers, callouts, toggles", status: "✓" },
     { name: "Emoji & Icons", description: "Set page icons, use emojis in content", status: "✓" },
     { name: "Favorites", description: "Mark/unmark pages as favorites", status: "✓" },
@@ -537,6 +594,65 @@ async function executeTool(name, params, context) {
   const { currentPage, pages, actions } = context;
 
   switch (name) {
+    case "open_view": {
+      const view = resolveViewTarget(String(params.view || params.name || ""));
+      if (!view) {
+        const valid = VIEW_TARGETS.map(t => t.id).join(", ");
+        throw new Error(`Unknown view "${params.view}". Valid views: ${valid}`);
+      }
+      actions.openView(view);
+      return { opened: view };
+    }
+
+    case "open_page": {
+      const target = findPageByIdOrTitle(String(params.page_id || params.title || ""), pages, currentPage);
+      if (!target) throw new Error(`Page not found: "${params.page_id}"`);
+      actions.openPage(target.id);
+      return { opened: target.id, title: target.title };
+    }
+
+    case "create_reminder": {
+      const { addReminder } = await import('../lib/reminders');
+      const reminder = addReminder({
+        text: String(params.text || ""),
+        date: params.date ? String(params.date) : undefined,
+        priority: params.priority === "high" || params.priority === "low" ? params.priority : "medium",
+      });
+      return { created: true, id: reminder.id, text: reminder.text, date: reminder.date };
+    }
+
+    case "daily_briefing": {
+      const active = (pages || []).filter(p => !p.trashed);
+      const byUpdated = [...active].sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+      const openTodos = active.reduce(
+        (sum, p) => sum + (p.blocks || []).filter(b => b.type === "todo" && !b.checked).length, 0
+      );
+      const { loadReminders } = await import('../lib/reminders');
+      const pendingReminders = loadReminders().filter(r => !r.dismissed);
+      const today = new Date().toISOString().slice(0, 10);
+      return {
+        date: today,
+        workspace: { pages: active.length, favorites: active.filter(p => p.favorite).length },
+        todos: { open: openTodos },
+        recentlyEdited: byUpdated.slice(0, 5).map(p => ({ title: p.title, icon: p.icon, updatedAt: p.updatedAt })),
+        reminders: {
+          pending: pendingReminders.length,
+          dueToday: pendingReminders.filter(r => (r.date || "").slice(0, 10) === today).map(r => r.text),
+          next: pendingReminders.slice(0, 5).map(r => ({ text: r.text, date: r.date }))
+        }
+      };
+    }
+
+    case "web_search": {
+      const { webSearch } = await import('../lib/webSearch');
+      const results = await webSearch(String(params.query || ""), Number(params.max_results) || 5);
+      return { query: params.query, count: results.length, results };
+    }
+
+    case "ask_user": {
+      throw new Error("ask_user is handled by the agent runtime — it cannot run as a plain tool.");
+    }
+
     case "create_page": {
       const id = actions.createPage(params.title, params.icon || "📝", params.content, params.tags);
       return { pageId: id, title: params.title };
@@ -1075,3 +1191,41 @@ async function executeCreateFlashcards(params, context) {
 }
 
 export { DEFINITIONS as TOOL_DEFINITIONS };
+
+/**
+ * Tool definitions as provider-native function schemas (JSON Schema).
+ * Used for native function calling — the runtime still parses the
+ * <<TOOL:name>> text protocol as a fallback, and native tool_calls are
+ * serialized back into that protocol, so both paths converge.
+ */
+export function getToolSchemas() {
+  const schemas = DEFINITIONS.map((d) => ({
+    name: d.name,
+    description: d.description,
+    parameters: {
+      type: "object",
+      properties: Object.fromEntries(
+        Object.entries(d.params).map(([key, spec]) => [
+          key,
+          { type: spec.type === "number" ? "number" : "string", description: spec.desc },
+        ])
+      ),
+      required: Object.entries(d.params).filter(([, spec]) => spec.required).map(([key]) => key),
+    },
+  }));
+  const integrationSchemas = getIntegrationToolDefinitions().map((d) => ({
+    name: d.name,
+    description: d.description,
+    parameters: {
+      type: "object",
+      properties: Object.fromEntries(
+        Object.entries(d.params).map(([key, spec]) => [
+          key,
+          { type: spec.type === "number" ? "number" : "string", description: spec.desc },
+        ])
+      ),
+      required: Object.entries(d.params).filter(([, spec]) => spec.required).map(([key]) => key),
+    },
+  }));
+  return [...schemas, ...integrationSchemas];
+}

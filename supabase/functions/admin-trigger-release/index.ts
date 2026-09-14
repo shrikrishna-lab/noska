@@ -186,6 +186,170 @@ async function readVersions(token: string, branch: string) {
   );
 }
 
+// Newest desktop-v* tag by semver — the release-history anchor the version
+// files can drift away from (e.g. releases cut from another machine).
+async function latestDesktopTag(token: string): Promise<{ name: string | null; version: string | null }> {
+  const tagsR = await gh<Array<{ name: string; commit: { sha: string } }>>(token, `/repos/${REPO}/tags?per_page=100`);
+  if (!tagsR.ok) return { name: null, version: null };
+  const desktopTags = (tagsR.data ?? [])
+    .filter((t) => /^desktop-v\d/.test(t.name))
+    .sort((a, b) => compareVersions(b.name.slice("desktop-v".length), a.name.slice("desktop-v".length)));
+  const name = desktopTags[0]?.name ?? null;
+  return { name, version: name ? name.slice("desktop-v".length) : null };
+}
+
+// Every commit between the last release tag and the branch tip — the full
+// range a release covers, not just the newest commit.
+async function collectCommitsSince(token: string, branch: string, baseTag: string) {
+  const cmpR = await gh<{
+    commits: Array<{ sha: string; commit: { message: string; author?: { name?: string }; committer?: { date?: string } } }>;
+    total_commits: number;
+  }>(token, `/repos/${REPO}/compare/${baseTag}...${branch}?per_page=250`);
+  if (!cmpR.ok) throw new Error(`GitHub compare failed: ${cmpR.status} ${cmpR.raw}`);
+  const totalCommits = Number(cmpR.data!.total_commits ?? 0);
+  const commits = (cmpR.data!.commits ?? [])
+    .map((c) => analyzeCommit(
+      c.sha.slice(0, 7),
+      c.commit.message,
+      c.commit.author?.name ?? "unknown",
+      c.commit.committer?.date ?? "",
+    ))
+    // GitHub's compare endpoint returns commits oldest-first; every consumer
+    // (newest-commit indicator, notes ordering) expects newest-first.
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    // Version-bump commits made by previous releases are noise.
+    .filter((c) => !/^chore\(release\):/i.test(c.message));
+  return { commits, totalCommits, truncated: totalCommits > commits.length };
+}
+
+// --- Server-side release-note composition -----------------------------------
+// Auto-generated notes land in the PUBLIC releases repo, so commit-derived
+// text is scrubbed the same way the admin panel scrubs it: no emails, no
+// token/key shapes, no env-var names, no URLs, no repo paths, no private
+// identities, no internal plumbing topics.
+const NOTES_REDACT: RegExp[] = [
+  /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g,
+  /\b(?:ghp|gho|ghu|ghs|ghr|github_pat|sbp|sk|pk)[-_][A-Za-z0-9_]{8,}\b/g,
+  /\b[A-Z][A-Z0-9_]{3,}_(?:KEY|TOKEN|SECRET|PASSWORD|DSN)\b/g,
+  /\b(?:service_role|anon[\s-]?key|jwt|jwks|minisign|signing[\s-]?key)\b/gi,
+  /\bhttps?:\/\/\S+/g,
+  /\b[\w.-]+(?:\/[\w.-]+)+\.(?:ts|tsx|js|jsx|json|toml|sql|ya?ml|py|md)\b/g,
+  /\bshrikrishna[\w-]*\b|\bnot-krrish\b|\bkrishnahandibag\w*\b/gi,
+  /\b(?:edge function|gateway|admin panel|admin api|oauth config)\b/gi,
+];
+const NOTES_INTERNAL =
+  /\b(?:secret|credential|password|api[\s-]?key|token|env var|environment variable|\.env|service role|signing|webhook secret|admin|tauri(?:-action)?|workflow|github actions?|pipeline|infra(?:structure)?|deploy(?:ment|ed|ing|s)?|edge function|gateway|backend|server-?side|monitoring|sentry|posthog|supabase|vercel|notariz\w*|draft release|staging|jwt)\b/i;
+const NOTES_INTERNAL_SCOPE = /^\w+\((?:release|ci|cd|build|infra|deploy|ops|admin|internal)\)/i;
+
+function sanitizeNotesLine(text: string): string {
+  let s = text;
+  for (const p of NOTES_REDACT) s = s.replace(p, "…");
+  return s
+    .replace(/\s*[…,;:-]\s*(?=[…,;:-])/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[\s(]*(?:—|,|;)?[\s)*]*$/g, "")
+    .trim();
+}
+
+function humanizeNotesCommit(message: string): { group: string; text: string } {
+  const m = message.match(/^(feat|fix|chore|docs|refactor|perf|test|build|ci|style|revert)(\(([^)]*)\))?(!)?:\s*(.*)$/);
+  if (!m) return { group: "General", text: message };
+  const scope = m[3];
+  const raw = m[5].trim();
+  const text = raw.charAt(0).toUpperCase() + raw.slice(1);
+  const ACRONYMS: Record<string, string> = { ai: "AI", ui: "UI", ci: "CI", api: "API" };
+  if (!scope) return { group: "General", text };
+  const base = scope.split(/[/|,]/)[0].replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return { group: ACRONYMS[base.toLowerCase()] ?? base, text };
+}
+
+// Full markdown notes from every commit since the base tag. Subjects stay
+// verbatim (after redaction); nothing is invented.
+function composeReleaseNotes(
+  version: string,
+  baseTag: string,
+  totalCommits: number,
+  truncated: boolean,
+  commits: CommitInfo[],
+): string {
+  const safeCommits = commits
+    .filter((c) => !NOTES_INTERNAL.test(c.message) && !NOTES_INTERNAL_SCOPE.test(c.message))
+    .map((c) => ({ ...c, ...humanizeNotesCommit(c.message) }))
+    .map((c) => ({ ...c, text: sanitizeNotesLine(c.text) }))
+    .filter((c) => c.text.replace(/[^a-zA-Z0-9]/g, "").length >= 4);
+
+  const feats = safeCommits.filter((c) => c.type === "feat");
+  const fixes = safeCommits.filter((c) => c.type === "fix");
+  const chores = safeCommits.filter((c) => c.type === "other");
+  const breaking = safeCommits.filter((c) => c.breaking);
+
+  const lines: string[] = [];
+  lines.push(`# Noska Desktop v${version}`);
+  lines.push("");
+  if (commits.length > 0) {
+    const summary = breaking.length > 0
+      ? `A significant release with major changes, ${feats.length} new feature${feats.length === 1 ? "" : "s"} and ${fixes.length} improvement${fixes.length === 1 ? "" : "s"}.`
+      : feats.length > 0
+        ? `A feature release bringing ${feats.length} new capabilit${feats.length === 1 ? "y" : "ies"} and ${fixes.length} improvement${fixes.length === 1 ? "" : "s"}.`
+        : `A maintenance release focused on ${fixes.length} fix${fixes.length === 1 ? "" : "es"} and stability.`;
+    lines.push(`> ${summary} Existing installs update automatically.`);
+    lines.push("");
+  }
+
+  const section = (title: string, emoji: string, items: typeof safeCommits) => {
+    if (items.length === 0) return;
+    lines.push(`## ${emoji} ${title}`);
+    lines.push("");
+    const byGroup = new Map<string, typeof safeCommits>();
+    for (const c of items) {
+      const arr = byGroup.get(c.group) ?? [];
+      arr.push(c);
+      byGroup.set(c.group, arr);
+    }
+    const ordered = [...byGroup.entries()].sort((a, b) => b[1].length - a[1].length);
+    for (const [group, itemsInGroup] of ordered) {
+      const seen = new Set<string>();
+      const parts: string[] = [];
+      for (const item of itemsInGroup) {
+        const normalized = item.text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (seen.has(normalized)) continue;
+        seen.add(normalized);
+        parts.push(item.text.charAt(0).toLowerCase() + item.text.slice(1));
+      }
+      const body = parts.slice(0, 4).join("; ");
+      const extra = parts.length > 4 ? ` (+${parts.length - 4} more)` : "";
+      lines.push(`- ${group === "General" ? "" : `**${group}** — `}${body}${extra}`);
+    }
+    lines.push("");
+  };
+
+  section("New", "✨", feats);
+  section("Fixed", "🛠", fixes);
+  section("Maintenance", "🧹", chores);
+
+  if (breaking.length > 0) {
+    lines.push(`## ⚠️ Breaking changes`);
+    lines.push("");
+    for (const c of breaking) lines.push(`- ${c.text}`);
+    lines.push("");
+  }
+
+  lines.push(`## 📦 Install & Update`);
+  lines.push("");
+  lines.push("- **Already using Noska?** The app updates itself in the background — restart when prompted.");
+  lines.push("- **Fresh install:** grab the latest installer from the [releases page](https://github.com/shrikrishna-lab/noska-desktop-releases/releases/latest) (Windows, macOS — Apple Silicon & Intel, Linux).");
+  lines.push("");
+
+  if (baseTag) {
+    lines.push("---");
+    const scope = truncated
+      ? `${totalCommits} commits since \`${baseTag}\` (highlights from the ${commits.length} most recent)`
+      : `${commits.length} commit${commits.length === 1 ? "" : "s"} since \`${baseTag}\``;
+    lines.push(`_Full changelog: ${scope}._`);
+  }
+  return lines.join("\n").trim();
+}
+
 interface GitHubRef {
   object: { sha: string };
 }
@@ -241,7 +405,7 @@ Deno.serve(async (req: Request) => {
   try {
     if (body.action === "status" || body.action === "runs" || body.action === "releases" || body.action === "whatsnew" || body.action === "preflight" || body.action === "mobile_status") {
       if (!requireRole(admin, "support")) return resError("Forbidden", 403);
-    } else if (body.action === "delete_draft" || body.action === "retry") {
+    } else if (body.action === "delete_draft" || body.action === "delete_release" || body.action === "retry") {
       if (!requireRole(admin, "admin")) return resError("Forbidden: admin role required", 403);
     } else if (body.action === "trigger") {
       if (!requireRole(admin, "admin")) return resError("Forbidden: admin role required to ship releases", 403);
@@ -690,24 +854,51 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (body.action === "delete_draft") {
-      // Housekeeping: delete a DRAFT release (staged build leftovers).
-      // Published releases are refused — deleting those is a job for GitHub.
+    if (body.action === "delete_release" || body.action === "delete_draft") {
+      // Housekeeping & Re-release support: delete a draft OR published release and its git tag.
+      // This frees up the version tag so it can be re-released or rebuilt for launch.
       const tag = String(body.tag ?? "").trim();
-      if (!/^desktop-v/.test(tag)) return resError("Invalid tag", 400);
+      const deleteTag = body.delete_tag !== false; // default true
+      if (!/^(desktop-v|mobile-v)/.test(tag)) return resError("Invalid tag", 400);
+
+      // 1. Delete release from private repo (shrikrishna-lab/noska)
       const relR = await gh<{ id: number; draft: boolean; tag_name: string }>(
         token,
         `/repos/${REPO}/releases/tags/${tag}`,
       );
-      if (relR.status === 404) return resError(`No release found for ${tag}`, 404);
-      if (!relR.ok) return resError(`GitHub API ${relR.status}: ${relR.raw}`, 502);
-      if (!relR.data!.draft) {
-        return resError(`${tag} is published — refusing to delete. Delete it on GitHub if really needed.`, 409);
+      if (relR.ok && relR.data?.id) {
+        await gh(token, `/repos/${REPO}/releases/${relR.data.id}`, { method: "DELETE" });
       }
-      const del = await gh(token, `/repos/${REPO}/releases/${relR.data!.id}`, { method: "DELETE" });
-      if (!del.ok) return resError(`Delete failed: ${del.status} ${del.raw}`, 502);
-      await audit(admin, "release.draft_deleted", { tag });
-      return res({ ok: true, tag });
+
+      // 2. Delete release from public distribution repo if exists
+      const publicToken = Deno.env.get("RELEASES_REPO_TOKEN") ?? token;
+      const publicRepo = `${REPO_OWNER}/noska-desktop-releases`;
+      try {
+        const pubRel = await gh<{ id: number }>(
+          publicToken,
+          `/repos/${publicRepo}/releases/tags/${tag}`,
+        );
+        if (pubRel.ok && pubRel.data?.id) {
+          await gh(publicToken, `/repos/${publicRepo}/releases/${pubRel.data.id}`, { method: "DELETE" });
+        }
+      } catch {}
+
+      // 3. Delete Git tag reference so this version can be released again
+      if (deleteTag) {
+        await gh(token, `/repos/${REPO}/git/refs/tags/${tag}`, { method: "DELETE" });
+        try {
+          await gh(publicToken, `/repos/${publicRepo}/git/refs/tags/${tag}`, { method: "DELETE" });
+        } catch {}
+      }
+
+      // 4. Clean up corresponding changelog_entries from Supabase if applicable
+      try {
+        const cleanVer = tag.replace(/^(desktop-v|mobile-v)/, "");
+        await supabase.from("changelog_entries").delete().or(`version.eq.v${cleanVer},version.eq.${cleanVer}`);
+      } catch {}
+
+      await audit(admin, "release.deleted", { tag, deleteTag });
+      return res({ ok: true, tag, message: `Release ${tag} and associated tag deleted successfully` });
     }
 
     if (body.action === "status") {
@@ -747,16 +938,9 @@ Deno.serve(async (req: Request) => {
 
       // Latest desktop-v* tag (draft releases carry their tag already, so this
       // includes yet-to-be-published versions — the right base for "what's new").
-      const tagsR = await gh<Array<{ name: string; commit: { sha: string } }>>(
-        token,
-        `/repos/${REPO}/tags?per_page=100`,
-      );
-      if (!tagsR.ok) return resError(`GitHub API ${tagsR.status}: ${tagsR.raw}`, 502);
-      const desktopTags = (tagsR.data ?? [])
-        .filter((t) => /^desktop-v\d/.test(t.name))
-        .sort((a, b) => compareVersions(b.name.slice("desktop-v".length), a.name.slice("desktop-v".length)));
-      const baseTag = desktopTags[0]?.name ?? null;
-      const baseVersion = baseTag ? baseTag.slice("desktop-v".length) : null;
+      const lastTag = await latestDesktopTag(token);
+      const baseTag = lastTag.name;
+      const baseVersion = lastTag.version;
 
       const suggestions: Array<{ level: "info" | "warn"; title: string; detail: string; url?: string }> = [];
 
@@ -764,27 +948,14 @@ Deno.serve(async (req: Request) => {
       let totalCommits = 0;
       let truncated = false;
       if (baseTag) {
-        const cmpR = await gh<{
-          commits: Array<{ sha: string; commit: { message: string; author?: { name?: string }; committer?: { date?: string } } }>;
-          status: string;
-          total_commits: number;
-        }>(token, `/repos/${REPO}/compare/${baseTag}...${branch}?per_page=250`);
-        if (!cmpR.ok) return resError(`GitHub compare failed: ${cmpR.status} ${cmpR.raw}`, 502);
-        totalCommits = Number(cmpR.data!.total_commits ?? 0);
-        commits = (cmpR.data!.commits ?? [])
-          .map((c) => analyzeCommit(
-            c.sha.slice(0, 7),
-            c.commit.message,
-            c.commit.author?.name ?? "unknown",
-            c.commit.committer?.date ?? "",
-          ))
-          // GitHub's compare endpoint returns commits oldest-first; every
-          // consumer here (newest-commit indicator, notes ordering) expects
-          // newest-first.
-          .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-          // Version-bump commits made by previous releases are noise.
-          .filter((c) => !/^chore\(release\):/i.test(c.message));
-        truncated = totalCommits > commits.length;
+        try {
+          const range = await collectCommitsSince(token, branch, baseTag);
+          commits = range.commits;
+          totalCommits = range.totalCommits;
+          truncated = range.truncated;
+        } catch (err) {
+          return resError(err instanceof Error ? err.message : "GitHub compare failed", 502);
+        }
       }
 
       const counts = {
@@ -925,7 +1096,10 @@ Deno.serve(async (req: Request) => {
         currentVersion,
         suggested,
         counts,
-        commits: commits.slice(0, 30),
+        // The full analyzed range (up to the compare API's 250 per page) — the
+        // note generator and the UI preview must see everything between the
+        // last tag and the version being pushed, not a 30-commit window.
+        commits: commits.slice(0, 250),
         totalCommits,
         truncated,
         branch,
@@ -1034,8 +1208,16 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const force = Boolean(body.force || body.overwrite);
       const tagRef = await gh<GitHubRef>(token, `/repos/${REPO}/git/ref/tags/${tag}`);
-      if (tagRef.ok) return resError(`Tag ${tag} already exists`, 409);
+      if (tagRef.ok) {
+        if (!force) return resError(`Tag ${tag} already exists. Enable force re-release or delete the existing release first.`, 409);
+        const oldRel = await gh<{ id: number }>(token, `/repos/${REPO}/releases/tags/${tag}`);
+        if (oldRel.ok && oldRel.data?.id) {
+          await gh(token, `/repos/${REPO}/releases/${oldRel.data.id}`, { method: "DELETE" });
+        }
+        await gh(token, `/repos/${REPO}/git/refs/tags/${tag}`, { method: "DELETE" });
+      }
 
       const headRef = await gh<GitHubRef>(token, `/repos/${REPO}/git/ref/heads/${branch}`);
       if (!headRef.ok) return resError(`Cannot resolve branch ${branch}`, 502);
@@ -1083,13 +1265,48 @@ Deno.serve(async (req: Request) => {
     if (!repoInfo.ok) return resError(`GitHub API ${repoInfo.status}: ${repoInfo.raw}`, 502);
     const branch = repoInfo.data!.default_branch;
 
-    // Refuse duplicate tags before doing any writes.
+    const force = Boolean(body.force || body.overwrite);
     const tagRef = await gh<GitHubRef>(token, `/repos/${REPO}/git/ref/tags/${tag}`);
-    if (tagRef.ok) return resError(`Tag ${tag} already exists`, 409);
+    if (tagRef.ok) {
+      if (!force) return resError(`Tag ${tag} already exists. Enable force re-release or delete the existing release first.`, 409);
+      const oldRel = await gh<{ id: number }>(token, `/repos/${REPO}/releases/tags/${tag}`);
+      if (oldRel.ok && oldRel.data?.id) {
+        await gh(token, `/repos/${REPO}/releases/${oldRel.data.id}`, { method: "DELETE" });
+      }
+      await gh(token, `/repos/${REPO}/git/refs/tags/${tag}`, { method: "DELETE" });
+    }
 
     const headRef = await gh<GitHubRef>(token, `/repos/${REPO}/git/ref/heads/${branch}`);
     if (!headRef.ok) return resError(`Cannot resolve branch ${branch}`, 502);
     const headSha = headRef.data!.object.sha;
+
+    // The version files can drift behind the release history, so check the
+    // pushed version against the LATEST TAG too — v1.0.10 must never be
+    // re-tagged over v1.0.12 just because the files still say 1.0.11.
+    const lastTag = await latestDesktopTag(token);
+    if (lastTag.version && !force && compareVersions(version, lastTag.version) <= 0) {
+      return resError(
+        `Version ${version} must be greater than the latest release tag ${lastTag.name} (or enable force re-release)`,
+        400,
+      );
+    }
+
+    // Real release notes from the full commit range between the last release
+    // tag and this one — used whenever the admin didn't author notes. Never a
+    // single-commit blurb.
+    let notesBody = notes;
+    let notesSource: "admin" | "auto-generated" | "default" = notes ? "admin" : "default";
+    if (!notesBody && lastTag.name) {
+      try {
+        const range = await collectCommitsSince(token, branch, lastTag.name);
+        if (range.commits.length > 0) {
+          notesBody = composeReleaseNotes(version, lastTag.name, range.totalCommits, range.truncated, range.commits);
+          notesSource = "auto-generated";
+        }
+      } catch (err) {
+        console.error("[admin-trigger-release] auto note generation failed:", err);
+      }
+    }
 
     // Read + patch the version files, then land everything as one commit.
     const patched: Array<{ path: string; content: string }> = [];
@@ -1104,8 +1321,8 @@ Deno.serve(async (req: Request) => {
       );
       const m = text.match(f.kind === "json" ? /"version"\s*:\s*"([^"]+)"/ : /version\s*=\s*"([^"]+)"/);
       if (!m) return resError(`No version string found in ${f.path}`, 500);
-      if (compareVersions(version, m[1]) <= 0) {
-        return resError(`Version ${version} must be greater than current ${m[1]} in ${f.path}`, 400);
+      if (compareVersions(version, m[1]) < 0 || (compareVersions(version, m[1]) === 0 && !force)) {
+        return resError(`Version ${version} must be greater than current ${m[1]} in ${f.path} (or enable force re-release)`, 400);
       }
       patched.push({ path: f.path, content: bumpContent(text, f.kind, version) });
     }
@@ -1159,7 +1376,11 @@ Deno.serve(async (req: Request) => {
       method: "POST",
       body: {
         tag,
-        message: notes || `Noska Desktop v${version}`,
+        // Keep the tag message a one-liner; the full notes belong to the
+        // release, not the tag object.
+        message: notesSource === "auto-generated"
+          ? `Noska Desktop v${version} — auto-generated notes from all commits since ${lastTag.name}`
+          : notes || `Noska Desktop v${version}`,
         object: commitSha,
         type: "commit",
         tagger: { name: `Noska Admin (${admin.name})`, email: admin.email },
@@ -1173,10 +1394,11 @@ Deno.serve(async (req: Request) => {
     });
     if (!tagCreate.ok) return resError(`Tag creation failed: ${tagCreate.status} ${tagCreate.raw}`, 502);
 
-    // Pre-create the draft release so the admin's notes survive —
-    // tauri-action attaches build artifacts to this release.
+    // Pre-create the draft release so the notes (admin-authored or
+    // auto-generated from the commit range) survive — tauri-action attaches
+    // build artifacts to this release.
     let releaseUrl: string | null = null;
-    const draftBodyText = notes || "Installers for Windows (.exe/.msi), macOS (.dmg) and Linux (.AppImage/.deb/.rpm). Auto-update manifest: latest.json";
+    const draftBodyText = notesBody || "Installers for Windows (.exe/.msi), macOS (.dmg) and Linux (.AppImage/.deb/.rpm). Auto-update manifest: latest.json";
     const draft = await gh<{ html_url: string; id: number }>(token, `/repos/${REPO}/releases`, {
       method: "POST",
       body: {
@@ -1213,6 +1435,7 @@ Deno.serve(async (req: Request) => {
       version,
       commitSha,
       releaseUrl,
+      notesSource,
       runUrl: `https://github.com/${REPO}/actions/workflows/${WORKFLOW_FILE}`,
       warning: draft.ok ? null : "Tag created, but draft release pre-creation failed — tauri-action will create one with default notes.",
     });

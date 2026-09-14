@@ -11,7 +11,7 @@ import {
   Plus, Link, Paperclip, Search, Mic, AtSign, Terminal,
   ChevronRight, Bot, Zap, ShieldCheck, CheckCircle2, XCircle,
   Loader2, Clock, ArrowUp, Check, ThumbsUp, ThumbsDown, Copy,
-  ArrowDownToLine, Trash2, RefreshCw, Square
+  ArrowDownToLine, Trash2, RefreshCw, Square, Volume2, VolumeX
 } from "lucide-react";
 import { aiManager } from "../ai/AIManager";
 import { getAllProviders, getProvider } from "../ai/providers";
@@ -19,6 +19,8 @@ import { getAgentList, getAgent } from "../ai/agents";
 import { uid, now, timeAgo } from "../utils/helpers";
 import { getAllRelations } from "../utils/pageLinks";
 import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
+import { matchNavigationCommand, viewLabel } from "../lib/viewTargets";
+import { loadReminders, subscribeReminders } from "../lib/reminders";
 import { renderAIMarkdown } from "../utils/aiMarkdownRenderer";
 import {
   classifyIntent,
@@ -159,6 +161,8 @@ interface AIChatMessage {
   runId?: string;
   runSteps?: StepProgress[];
   runStatus?: "running" | "completed" | "failed" | "interrupted";
+  /** Live model text streamed while the run is in progress. */
+  liveText?: string;
 }
 
 /** Shape of `toolContext`, passed straight through to
@@ -170,6 +174,8 @@ interface AIChatMessage {
  * shape here wouldn't be enforced on the producing side anyway. */
 interface ToolContextActions {
   createPage: (title: string, icon?: string, content?: string, tags?: string) => string;
+  openView: (view: string) => string;
+  openPage: (pageId: string) => string;
   renamePage: (title: string) => void;
   appendBlocks: (blocks: Block[]) => void;
   setPageTags: (tags: unknown[]) => void;
@@ -215,6 +221,10 @@ interface AIRightPanelProps {
   onReplaceText?: (text: string) => void;
   onToast?: (message: string) => void;
   toolContext: ToolContextShape;
+  /** Spoken command handed off from the voice agent (unknown to the
+   * deterministic parser) — auto-sent through the agentic pipeline. */
+  seedPrompt?: string | null;
+  onSeedConsumed?: () => void;
 }
 
 export default function AIRightPanel({
@@ -222,7 +232,7 @@ export default function AIRightPanel({
   apiKey, aiProvider, nvidiaKey,
   aiChats = [], activeChatId, onChatsChange, onActiveChat, onNewChat,
   onSelectChat, onDeleteChat, onRenameChat, onPagePatch, onInsert,
-  onAppend, onReplaceText, onToast, toolContext
+  onAppend, onReplaceText, onToast, toolContext, seedPrompt, onSeedConsumed
 }: AIRightPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<AIChatMessage[]>([]);
@@ -333,6 +343,72 @@ export default function AIRightPanel({
   const [automationProposal, setAutomationProposal] = useState<AutomationProposal | null>(null);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
+  /** Draft answers for clarification requests (keyed by approval id). */
+  const [clarifyDrafts, setClarifyDrafts] = useState<Record<string, string>>({});
+  /** Spoken replies: final assistant messages are read aloud when enabled. */
+  const [autoSpeak, setAutoSpeak] = useState(() => {
+    try { return localStorage.getItem("noska_ai_autospeak") === "1"; } catch { return false; }
+  });
+  const spokenIdRef = useRef<string | null>(null);
+
+  const toggleAutoSpeak = useCallback(() => {
+    setAutoSpeak(prev => {
+      const next = !prev;
+      try { localStorage.setItem("noska_ai_autospeak", next ? "1" : "0"); } catch { /* ignore */ }
+      if (!next && typeof window !== "undefined") window.speechSynthesis?.cancel();
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!autoSpeak || loading) return;
+    const last = messages[messages.length - 1];
+    const text = String(last?.content || "").trim();
+    if (!last || last.role !== "assistant" || last.runSteps || !text || spokenIdRef.current === last.id) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    spokenIdRef.current = last.id;
+    const speakable = text
+      .replace(/```[\s\S]*?```/g, " Code block omitted. ")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\[([^\]]+)\]\(([^)]*)\)/g, "$1")
+      .replace(/[*_#>`~|]/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .slice(0, 800);
+    if (!speakable.trim()) return;
+    const utterance = new SpeechSynthesisUtterance(speakable);
+    utterance.rate = 1.05;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }, [messages, autoSpeak, loading]);
+
+  // Stop speaking when the panel closes or the component unmounts.
+  useEffect(() => {
+    if (!open && typeof window !== "undefined") window.speechSynthesis?.cancel();
+    return () => { if (typeof window !== "undefined") window.speechSynthesis?.cancel(); };
+  }, [open]);
+
+  // ── Proactive suggestions (conservative) ─────────────────────────────
+  // Surface up to 3 starter prompts from live workspace state on a fresh
+  // chat. They never auto-run — tapping one just sends the prompt.
+  const [remindersTick, setRemindersTick] = useState(0);
+  useEffect(() => subscribeReminders(() => setRemindersTick(t => t + 1)), []);
+  const suggestions = useMemo(() => {
+    void remindersTick;
+    const out: string[] = [];
+    try {
+      const pending = loadReminders().filter(r => !r.dismissed);
+      const today = new Date().toISOString().slice(0, 10);
+      const dueToday = pending.filter(r => String(r.date || "").slice(0, 10) === today).length;
+      if (dueToday > 0) out.push(`Catch me up on today (${dueToday} reminder${dueToday === 1 ? "" : "s"} due)`);
+      else if (pending.length > 0) out.push("Catch me up on everything");
+      const pages = toolContext.pages || [];
+      const openTodos = pages.reduce((sum, p) => p.trashed ? sum : sum + (p.blocks || []).filter(b => b.type === "todo" && !b.checked).length, 0);
+      if (openTodos >= 3) out.push(`What should I tackle first from my ${openTodos} open todos?`);
+      const staleCount = pages.filter(p => !p.trashed && p.updatedAt && Date.now() - new Date(p.updatedAt).getTime() > 30 * 864e5).length;
+      if (staleCount >= 3) out.push(`Review my ${staleCount} pages untouched for a month`);
+    } catch { /* suggestions are best-effort */ }
+    return out.slice(0, 3);
+  }, [toolContext.pages, remindersTick]);
 
   useEffect(() => subscribeApprovals((list) => setPendingApprovals(list)), []);
 
@@ -369,6 +445,28 @@ export default function AIRightPanel({
       ? (aiChats.map(c => c.id === chatId ? updatedChat : c) as unknown as AIChat[])
       : ([...aiChats, updatedChat] as unknown as AIChat[]);
     onChatsChange?.(chats);
+
+    // ── Deterministic navigation fast-path ("open inbox", "go to my tasks",
+    // "open page X") — instant and free, never depends on the model emitting
+    // a tool call. Only fires on clean navigation phrasings. ──
+    const fastNav = matchNavigationCommand(text, toolContext.pages);
+    if (fastNav) {
+      let reply = "";
+      if (fastNav.kind === "view") {
+        toolContext.actions.openView?.(fastNav.view!);
+        reply = `Opened **${viewLabel(fastNav.view!)}** for you.`;
+      } else if (fastNav.pageId) {
+        toolContext.actions.openPage?.(fastNav.pageId);
+        reply = `Opened **${fastNav.pageTitle}**.`;
+      }
+      if (reply) {
+        const navMsg: AIChatMessage = { id: uid(), role: "assistant", content: reply, createdAt: now() };
+        const navMessages = [...updatedMessages, navMsg];
+        setMessages(navMessages);
+        onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: navMessages, updatedAt: now() } : c) as unknown as AIChat[]);
+        return;
+      }
+    }
 
     // ── Intelligent routing (rules first, LLM refinement for ambiguous
     // multi-step asks) ───────────────────────────────────────────────────
@@ -417,11 +515,20 @@ export default function AIRightPanel({
           sourceKind: "ai",
           trigger: "manual",
           instructions: paneNote || undefined,
+          // Recent conversation so the agent resolves follow-ups ("now add a
+          // todo to that page") against what was said before.
+          history: updatedMessages.slice(0, -1).map(m => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: String(m.content || m.text || ""),
+          })).filter(m => m.content.trim()).slice(-8),
           getContext: () => ({ currentPage: toolContext.currentPage, pages: toolContext.pages, actions: toolContext.actions as unknown as Record<string, (...args: unknown[]) => unknown> }),
           onProgress: (steps, r) => {
             setActiveRunId(r.id);
             setActiveSteps(steps);
             setMessages(prev => prev.map(m => m.id === progressMsgId ? { ...m, runSteps: steps, runStatus: r.status as AIChatMessage["runStatus"], runId: r.id } : m));
+          },
+          onLiveText: (chunk) => {
+            setMessages(prev => prev.map(m => m.id === progressMsgId ? { ...m, liveText: chunk } : m));
           },
         });
 
@@ -553,6 +660,21 @@ export default function AIRightPanel({
     abortRef.current?.abort();
     abortRef.current = null;
   }, [activeRunId]);
+
+  // ── Voice-agent handoff ───────────────────────────────────────────────
+  // A spoken command the deterministic voice parser couldn't handle arrives
+  // as seedPrompt and runs through the full agentic pipeline here.
+  const consumedSeedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !seedPrompt || consumedSeedRef.current === seedPrompt) return;
+    if (loading) return;
+    consumedSeedRef.current = seedPrompt;
+    onSeedConsumed?.();
+    void handleSend(seedPrompt);
+    // handleSend intentionally excluded: it changes every render; the seed
+    // guard above ensures each seed fires exactly once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, seedPrompt, loading]);
 
   const handleQuickAction = useCallback((actionId: string) => {
     const action = AI_ACTIONS.find(a => a.id === actionId) || QUICK_ACTIONS.find(a => a.id === actionId) || WORKFLOW_ACTIONS.find(a => a.id === actionId);
@@ -995,29 +1117,93 @@ export default function AIRightPanel({
               <div className="shrink-0 border-t border-[var(--border)] bg-[var(--warning)]/10 px-3.5 py-2 space-y-1.5">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--warning)]">
                   <ShieldCheck size={13} />
-                  Approval Required ({pendingApprovals.length})
+                  {pendingApprovals.some(a => a.category === "clarify")
+                    ? `Agent needs your input (${pendingApprovals.length})`
+                    : `Approval Required (${pendingApprovals.length})`}
                 </div>
                 {pendingApprovals.map((apr) => (
                   <div key={apr.id} className="rounded-xl bg-[var(--surface)] border border-[var(--border)] p-2.5 shadow-xs">
-                    <p className="text-xs text-[var(--text)] font-medium truncate">{apr.action}</p>
-                    <p className="text-[11px] text-[var(--muted)] mt-0.5">{apr.reason}</p>
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => respondToApproval(apr.id, true)}
-                        className="rounded-lg bg-[var(--success)] text-white hover:opacity-90 px-3 py-1 text-xs font-semibold transition cursor-pointer"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => respondToApproval(apr.id, false)}
-                        className="rounded-lg bg-[var(--surface-2)] hover:bg-[var(--hover)] text-[var(--text)] px-3 py-1 text-xs font-semibold transition cursor-pointer border border-[var(--border)]"
-                      >
-                        Decline
-                      </button>
-                    </div>
+                    {apr.category === "clarify" ? (
+                      // Clarification: the agent paused to ask a question —
+                      // answer inline and the run continues.
+                      <>
+                        <p className="text-xs text-[var(--text)] font-medium">{apr.action}</p>
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={clarifyDrafts[apr.id] || ""}
+                            onChange={(e) => setClarifyDrafts(prev => ({ ...prev, [apr.id]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && (clarifyDrafts[apr.id] || "").trim()) {
+                                respondToApproval(apr.id, true, (clarifyDrafts[apr.id] || "").trim());
+                                setClarifyDrafts(prev => { const next = { ...prev }; delete next[apr.id]; return next; });
+                              }
+                            }}
+                            placeholder="Type your answer…"
+                            className="flex-1 min-w-0 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)]"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const answer = (clarifyDrafts[apr.id] || "").trim();
+                              if (!answer) return;
+                              respondToApproval(apr.id, true, answer);
+                              setClarifyDrafts(prev => { const next = { ...prev }; delete next[apr.id]; return next; });
+                            }}
+                            className="rounded-lg bg-[var(--accent)] text-white hover:opacity-90 px-3 py-1 text-xs font-semibold transition cursor-pointer"
+                          >
+                            Answer
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => respondToApproval(apr.id, false)}
+                            className="rounded-lg bg-[var(--surface-2)] hover:bg-[var(--hover)] text-[var(--text)] px-3 py-1 text-xs font-semibold transition cursor-pointer border border-[var(--border)]"
+                          >
+                            Skip
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-[var(--text)] font-medium truncate">{apr.action}</p>
+                        <p className="text-[11px] text-[var(--muted)] mt-0.5">{apr.reason}</p>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => respondToApproval(apr.id, true)}
+                            className="rounded-lg bg-[var(--success)] text-white hover:opacity-90 px-3 py-1 text-xs font-semibold transition cursor-pointer"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => respondToApproval(apr.id, false)}
+                            className="rounded-lg bg-[var(--surface-2)] hover:bg-[var(--hover)] text-[var(--text)] px-3 py-1 text-xs font-semibold transition cursor-pointer border border-[var(--border)]"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
+                ))}
+              </div>
+            )}
+
+            {/* ===== PROACTIVE SUGGESTIONS (fresh chats only) ===== */}
+            {messages.length === 0 && suggestions.length > 0 && (
+              <div className="shrink-0 px-3.5 pb-2 flex flex-wrap gap-1.5">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => handleSend(s)}
+                    title={s}
+                    className="max-w-full truncate rounded-full bg-[var(--surface)] hover:bg-[var(--hover)] border border-[var(--border)] px-3 py-1 text-[11px] text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+                  >
+                    {s}
+                  </button>
                 ))}
               </div>
             )}
@@ -1043,6 +1229,17 @@ export default function AIRightPanel({
                     style={{ outline: "none", border: "none", boxShadow: "none", background: "transparent" }}
                     className="flex-1 bg-transparent text-[13px] text-[var(--text)] outline-none border-none ring-0 placeholder:text-[var(--muted)]"
                   />
+
+                  <button
+                    type="button"
+                    onClick={toggleAutoSpeak}
+                    title={autoSpeak ? "Spoken replies on — click to mute" : "Replies are muted — click to hear them spoken"}
+                    className={`p-1.5 rounded-lg transition cursor-pointer shrink-0 ${autoSpeak
+                      ? "text-[var(--accent)] bg-[var(--accent)]/10"
+                      : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]"}`}
+                  >
+                    {autoSpeak ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                  </button>
 
                   {loading ? (
                     <LiquidMetalButton
@@ -1242,7 +1439,14 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
             </div>
           </details>
         ) : (
-          <RunProgressBubble steps={message.runSteps} />
+          <>
+            <RunProgressBubble steps={message.runSteps} />
+            {message.liveText?.trim() && (
+              <div className="mt-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2.5 py-2 text-[11px] leading-relaxed text-[var(--muted)] max-h-28 overflow-hidden">
+                {message.liveText.trim()}
+              </div>
+            )}
+          </>
         )}
       </motion.div>
     );

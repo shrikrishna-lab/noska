@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock,
@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   X,
   Search,
-  AlertTriangle,
+  Activity,
+  ShieldAlert,
 } from "lucide-react";
 import {
   getVoiceFineTuneLog,
@@ -18,6 +19,7 @@ import {
   setVoiceLoggingConsent,
   type VoiceLogEntry,
 } from "../../lib/voice/dictation-cleanup";
+import { cn } from "../../lib/utils";
 
 export interface VoiceTelemetryModalProps {
   isOpen: boolean;
@@ -28,10 +30,26 @@ export default function VoiceTelemetryModal({
   isOpen,
   onClose,
 }: VoiceTelemetryModalProps) {
-  const [logs, setLogs] = useState<VoiceLogEntry[]>(getVoiceFineTuneLog);
-  const [consent, setConsent] = useState<boolean>(getVoiceLoggingConsent);
+  const [logs, setLogs] = useState<VoiceLogEntry[]>([]);
+  const [consent, setConsent] = useState<boolean>(false);
   const [search, setSearch] = useState("");
-  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLogs(getVoiceFineTuneLog());
+      setConsent(getVoiceLoggingConsent());
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    if (isOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -56,20 +74,21 @@ export default function VoiceTelemetryModal({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `noska_voice_finetune_log_${Date.now()}.jsonl`;
+    link.download = `noska_voice_telemetry_log_${Date.now()}.jsonl`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  const filteredLogs = logs.filter((l) =>
-    l.input.toLowerCase().includes(search.toLowerCase()) ||
-    l.output.toLowerCase().includes(search.toLowerCase()) ||
-    (l.instruction || "").toLowerCase().includes(search.toLowerCase())
+  const filteredLogs = logs.filter(
+    (l) =>
+      l.input.toLowerCase().includes(search.toLowerCase()) ||
+      l.output.toLowerCase().includes(search.toLowerCase()) ||
+      (l.instruction || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 select-none">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -84,42 +103,58 @@ export default function VoiceTelemetryModal({
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="relative w-full max-w-3xl rounded-3xl bg-[#141416] border border-white/15 text-white shadow-2xl overflow-hidden z-10 font-sans"
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-3xl rounded-3xl bg-[#faf8f5] dark:bg-[#18191c] border border-[#ded8cc] dark:border-white/10 text-[#1c1b18] dark:text-white shadow-[0_25px_60px_rgba(0,0,0,0.35)] overflow-hidden z-10 font-sans flex flex-col max-h-[88vh]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                <Lock size={20} />
+          <div className="flex items-center justify-between p-6 border-b border-[#e8e4db] dark:border-white/10 bg-white/60 dark:bg-white/[0.02]">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-purple-100 dark:bg-purple-500/20 border border-purple-300/60 dark:border-purple-500/30 flex items-center justify-center text-purple-700 dark:text-purple-400 shadow-xs shrink-0">
+                <Activity size={22} />
               </div>
               <div>
-                <h2 className="text-lg font-semibold tracking-tight text-white">
-                  Voice Telemetry & Fine-Tuning Log
-                </h2>
-                <p className="text-xs text-white/50">
-                  Inspect, export, or erase all local voice instruction pairs.
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold tracking-tight text-[#1c1b18] dark:text-white">
+                    Voice Telemetry &amp; Quality Logs
+                  </h2>
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                      consent
+                        ? "bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border-purple-300/60"
+                        : "bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-300/60"
+                    )}
+                  >
+                    {consent ? "● Logging Active" : "○ Disabled (Private)"}
+                  </span>
+                </div>
+                <p className="text-xs text-[#706c64] dark:text-white/50 mt-0.5">
+                  Inspect, export, or permanently erase all local voice instruction pairs.
                 </p>
               </div>
             </div>
 
             <button
               onClick={onClose}
-              className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition cursor-pointer"
+              className="h-8 w-8 rounded-full bg-[#ede8df] hover:bg-[#e4ded3] dark:bg-white/10 dark:hover:bg-white/20 text-[#706c64] hover:text-[#1c1b18] dark:text-white/70 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
             >
               <X size={15} />
             </button>
           </div>
 
           {/* Consent Banner */}
-          <div className="p-4 mx-6 mt-5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
+          <div className="p-4 mx-6 mt-5 rounded-2xl bg-[#ede8df]/70 dark:bg-white/[0.03] border border-[#ded8cc] dark:border-white/10 flex items-center justify-between shadow-2xs">
             <div className="space-y-0.5">
-              <div className="text-sm font-semibold text-white">
-                Log Instruction-Output Pairs for Quality & Fine-Tuning
+              <div className="text-xs font-bold text-[#1c1b18] dark:text-white flex items-center gap-2">
+                <span>Record Cleaned Voice Instruction Pairs</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white dark:bg-white/10 text-[#706c64] dark:text-white/70">
+                  Local RAM only
+                </span>
               </div>
-              <div className="text-xs text-white/50">
+              <div className="text-[11.5px] text-[#706c64] dark:text-white/60">
                 {consent
-                  ? "Active • Stored strictly on local device for dataset export."
-                  : "Disabled • Zero data logged. Resting state is 100% private."}
+                  ? "Active • Stored strictly on this machine for dataset inspection and JSONL export."
+                  : "Disabled • Zero voice pairs are recorded. Noska operates in 100% private resting state."}
               </div>
             </div>
 
@@ -127,27 +162,30 @@ export default function VoiceTelemetryModal({
               type="checkbox"
               checked={consent}
               onChange={handleToggleConsent}
-              className="h-5 w-5 rounded accent-purple-500 cursor-pointer"
+              className="h-5 w-5 rounded accent-purple-600 cursor-pointer"
             />
           </div>
 
-          {/* Search & Actions Bar */}
-          <div className="p-6 pb-2 flex items-center justify-between gap-3">
+          {/* Search & Action Bar */}
+          <div className="px-6 py-3 flex items-center justify-between gap-3">
             <div className="relative flex-1">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+              <Search
+                size={14}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#706c64] dark:text-white/40"
+              />
               <input
                 type="text"
-                placeholder="Search logged pairs..."
+                placeholder="Search logged voice pairs..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-white/40 focus:outline-none focus:border-purple-400/50"
+                className="w-full pl-9 pr-4 py-2 rounded-xl bg-white dark:bg-white/5 border border-[#ded8cc] dark:border-white/10 text-xs text-[#1c1b18] dark:text-white placeholder-[#8c887f] dark:placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/20 shadow-2xs font-medium"
               />
             </div>
 
             <button
               onClick={handleExportJSONL}
               disabled={logs.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 text-xs font-semibold text-white transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-white/10 hover:bg-[#ede8df] dark:hover:bg-white/15 disabled:opacity-40 text-xs font-semibold text-[#1c1b18] dark:text-white border border-[#ded8cc] dark:border-white/10 shadow-2xs transition cursor-pointer shrink-0"
             >
               <Download size={13} />
               <span>Export JSONL</span>
@@ -156,72 +194,75 @@ export default function VoiceTelemetryModal({
             <button
               onClick={handleClear}
               disabled={logs.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 disabled:opacity-40 text-xs font-semibold transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/40 disabled:opacity-40 text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0"
             >
               <Trash2 size={13} />
               <span>Delete All</span>
             </button>
           </div>
 
-          {/* Log Table */}
-          <div className="p-6 pt-3 max-h-80 overflow-y-auto scrollbar-thin">
+          {/* Log Table Body */}
+          <div className="px-6 pb-6 pt-1 max-h-80 overflow-y-auto scrollbar-thin space-y-2.5">
             {filteredLogs.length === 0 ? (
-              <div className="py-12 text-center text-xs text-white/40">
-                {logs.length === 0
-                  ? "No voice pairs logged. Logging is disabled by default for privacy."
-                  : "No matching voice pairs found."}
+              <div className="py-14 text-center space-y-2">
+                <div className="w-10 h-10 rounded-2xl bg-[#ede8df] dark:bg-white/5 flex items-center justify-center mx-auto text-[#706c64]">
+                  <Lock size={18} />
+                </div>
+                <p className="text-xs text-[#706c64] dark:text-white/40 font-medium">
+                  {logs.length === 0
+                    ? "No voice pairs logged. Logging is disabled by default for zero data retention."
+                    : "No matching voice pairs found."}
+                </p>
               </div>
             ) : (
-              <div className="space-y-2.5">
-                {filteredLogs.map((entry, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5 text-xs"
-                  >
-                    <div className="flex items-center justify-between text-[11px] text-white/40">
-                      <span className="font-mono">{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold">
-                          {entry.type}
+              filteredLogs.map((entry, idx) => (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-2xl bg-white dark:bg-white/[0.03] border border-[#e8e4db] dark:border-white/10 space-y-2 text-xs shadow-2xs"
+                >
+                  <div className="flex items-center justify-between text-[11px] text-[#706c64] dark:text-white/50">
+                    <span className="font-mono">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-bold font-mono text-[10px]">
+                        {entry.type}
+                      </span>
+                      {entry.targetApp && (
+                        <span className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-white/10 text-neutral-700 dark:text-white/70 font-semibold text-[10px]">
+                          {entry.targetApp}
                         </span>
-                        {entry.targetApp && (
-                          <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/60">
-                            {entry.targetApp}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {entry.instruction && (
-                      <div className="text-purple-300 font-medium">
-                        Instruction: <span className="text-white">{entry.instruction}</span>
-                      </div>
-                    )}
-
-                    <div className="text-white/60">
-                      Input: <span className="text-white/90">{entry.input}</span>
-                    </div>
-
-                    <div className="text-emerald-400">
-                      Output: <span className="text-emerald-300 font-medium">{entry.output}</span>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  {entry.instruction && (
+                    <div className="text-xs text-purple-700 dark:text-purple-300 font-semibold">
+                      Instruction: <span className="text-[#1c1b18] dark:text-white font-normal">{entry.instruction}</span>
+                    </div>
+                  )}
+
+                  <div className="text-[11.5px] text-[#706c64] dark:text-white/60">
+                    Input: <span className="text-[#1c1b18] dark:text-white/90 font-medium">{entry.input}</span>
+                  </div>
+
+                  <div className="text-[11.5px] text-emerald-700 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/30 p-2 rounded-xl border border-emerald-200/50 dark:border-emerald-800/30">
+                    Output: <span className="font-semibold text-emerald-900 dark:text-emerald-200">{entry.output}</span>
+                  </div>
+                </div>
+              ))
             )}
           </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-white/10 bg-white/[0.02] flex items-center justify-between">
-            <span className="text-xs text-white/50">
-              Total Logged: {logs.length} / 500 max pairs
+          <div className="p-5 border-t border-[#e8e4db] dark:border-white/10 bg-white/60 dark:bg-white/[0.02] flex items-center justify-between">
+            <span className="text-xs text-[#706c64] dark:text-white/50 font-medium">
+              Total Logged: <strong className="text-[#1c1b18] dark:text-white">{logs.length}</strong> / 500 max pairs
             </span>
 
             <button
               onClick={onClose}
-              className="px-5 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-white/90 transition cursor-pointer"
+              className="px-5 py-2 rounded-xl bg-[#1c1b18] hover:bg-black text-white text-xs font-bold shadow-sm transition cursor-pointer"
             >
-              Close
+              Done
             </button>
           </div>
         </motion.div>

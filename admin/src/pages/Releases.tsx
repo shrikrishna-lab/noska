@@ -343,9 +343,9 @@ const CHECK_STYLE: Record<string, { icon: typeof PassIcon; cls: string }> = {
 // Character-by-character spring text (idle → cycling steps → results).
 function AnimatedText({ text, className }: { text: string; className?: string }) {
   return (
-    <span className={className} style={{ display: "inline-flex" }}>
+    <span className={`inline-flex ${className ?? ""}`}>
       <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span key={text} style={{ display: "inline-flex", willChange: "transform" }}>
+        <motion.span key={text} className="inline-flex will-change-transform">
           {text.split("").map((char, i) => (
             <motion.span
               key={`${text}-${i}`}
@@ -353,7 +353,7 @@ function AnimatedText({ text, className }: { text: string; className?: string })
               animate={{ y: 0, opacity: 1, scale: 1, filter: "blur(0px)" }}
               exit={{ y: -8, opacity: 0, scale: 0.6, filter: "blur(2px)" }}
               transition={{ type: "spring", stiffness: 240, damping: 16, delay: i * 0.012 }}
-              style={{ display: "inline-block", whiteSpace: char === " " ? "pre" : undefined }}
+              className={`inline-block ${char === " " ? "whitespace-pre" : ""}`}
             >
               {char}
             </motion.span>
@@ -540,7 +540,7 @@ function RunRow({ run }: { run: GitHubRun }) {
   );
 }
 
-function ReleaseRow({ release, onDeleteDraft, deleting, onRetry, retrying }: { release: GitHubRelease; onDeleteDraft?: (tag: string) => void; deleting?: boolean; onRetry?: (tag: string, notes?: string) => void; retrying?: boolean }) {
+function ReleaseRow({ release, onDeleteRelease, deleting, onRetry, retrying }: { release: GitHubRelease; onDeleteRelease?: (tag: string) => void; deleting?: boolean; onRetry?: (tag: string, notes?: string) => void; retrying?: boolean }) {
   const installers = release.assets.filter((a) => !a.name.endsWith(".json") && !a.name.endsWith(".sig"));
   return (
     <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
@@ -583,12 +583,12 @@ function ReleaseRow({ release, onDeleteDraft, deleting, onRetry, retrying }: { r
             <RotateCcw className="h-4 w-4" />
           </button>
         )}
-        {release.draft && onDeleteDraft && (
+        {onDeleteRelease && (
           <button
             type="button"
-            title="Delete this draft release (staged leftovers)"
+            title="Delete this release & remove its git tag (frees up version for re-release)"
             disabled={deleting}
-            onClick={() => onDeleteDraft(release.tag_name)}
+            onClick={() => onDeleteRelease(release.tag_name)}
             className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40"
           >
             <Trash2 className="h-4 w-4" />
@@ -607,6 +607,9 @@ export function ReleasesPage() {
   const [generating, setGenerating] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+
+  const [forceReRelease, setForceReRelease] = useState(false);
 
   const { data: status, isLoading, refetch, isRefetching, isError, error } = useQuery({
     queryKey: ["admin", "releases", "status"],
@@ -655,10 +658,14 @@ export function ReleasesPage() {
       if (!finalNotes && whatsnew && whatsnew.counts.total > 0) {
         finalNotes = generateNotes(whatsnew, suggested);
       }
-      return releaseApi.trigger(version.trim(), finalNotes);
+      return releaseApi.trigger(version.trim(), finalNotes, forceReRelease);
     },
     onSuccess: (result) => {
-      toast.success(`Release ${result.tag} triggered — build started`);
+      toast.success(
+        `Release ${result.tag} triggered — build started${
+          result.notesSource === "auto-generated" ? " · notes auto-generated from all commits since the last tag" : ""
+        }`,
+      );
       setConfirmOpen(false);
       setNotes("");
       qc.invalidateQueries({ queryKey: ["admin", "releases"] });
@@ -677,10 +684,10 @@ export function ReleasesPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message.slice(0, 200) : "Rebuild failed to start"),
   });
 
-  const deleteDraft = useMutation({
-    mutationFn: (tag: string) => releaseApi.deleteDraft(tag),
+  const deleteRelease = useMutation({
+    mutationFn: (tag: string) => releaseApi.deleteRelease(tag, true),
     onSuccess: (_r, tag) => {
-      toast.success(`Draft ${tag} deleted`);
+      toast.success(`Release ${tag} and git tag deleted`);
       qc.invalidateQueries({ queryKey: ["admin", "releases"] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message.slice(0, 200) : "Delete failed"),
@@ -801,7 +808,34 @@ export function ReleasesPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="release-version">Version</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="release-version">Target Version</Label>
+                {currentVersion && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setVersion(bumpVersion(currentVersion, "patch"))}
+                      className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    >
+                      +Patch ({bumpVersion(currentVersion, "patch")})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVersion(bumpVersion(currentVersion, "minor"))}
+                      className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    >
+                      +Minor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVersion(bumpVersion(currentVersion, "major"))}
+                      className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    >
+                      +Major
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex gap-2">
                 <Input
                   id="release-version"
@@ -824,8 +858,21 @@ export function ReleasesPage() {
               <p className="text-xs text-muted-foreground">
                 {recommendedReason
                   ? `Suggested: ${recommended} — ${recommendedReason}.`
-                  : "Semver, must be greater than the current version."}
+                  : "Semver, must be greater than current version unless force re-releasing."}
               </p>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs">
+              <input
+                type="checkbox"
+                id="force-re-release"
+                checked={forceReRelease}
+                onChange={(e) => setForceReRelease(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <label htmlFor="force-re-release" className="cursor-pointer select-none text-muted-foreground">
+                <span className="font-medium text-foreground">Force re-release</span> (overwrites tag/release if already created)
+              </label>
             </div>
 
             <div className="space-y-1.5">
@@ -889,7 +936,7 @@ export function ReleasesPage() {
               />
               <p className="text-xs text-muted-foreground">
                 {notes.trim()
-                  ? "Your notes will be used for the draft release."
+                  ? "Your notes will be used for the release."
                   : whatsnew && whatsnew.counts.total > 0
                     ? `Left empty: auto-generated from commits since ${whatsnew.baseTag ?? "the last tag"} — newest included: ${whatsnew.commits[0]?.sha ?? "…"}${whatsnew.commits[0]?.date ? ` (${new Date(whatsnew.commits[0].date).toLocaleString()})` : ""}. Just pushed? Generate re-fetches GitHub first.`
                     : "Left empty: a generic default is used when there are no new commits."}
@@ -965,7 +1012,7 @@ export function ReleasesPage() {
                     <ReleaseRow
                       key={release.id}
                       release={release}
-                      deleting={deleteDraft.isPending}
+                      deleting={deleteRelease.isPending}
                       retrying={retryRelease.isPending}
                       onRetry={(tag, notes) => {
                         const published = !release.draft;
@@ -977,9 +1024,9 @@ export function ReleasesPage() {
                           retryRelease.mutate({ tag, notes });
                         }
                       }}
-                      onDeleteDraft={(tag) => {
-                        if (window.confirm(`Delete draft release ${tag}? Its staged installers are removed from the private repo.`)) {
-                          deleteDraft.mutate(tag);
+                      onDeleteRelease={(tag) => {
+                        if (window.confirm(`Delete release ${tag}? This removes the release and its git tag from GitHub so the version can be released again.`)) {
+                          deleteRelease.mutate(tag);
                         }
                       }}
                     />
@@ -1163,6 +1210,7 @@ function MobileReleasesPanel() {
   const qc = useQueryClient();
   const [version, setVersion] = useState("");
   const [notes, setNotes] = useState("");
+  const [forceReRelease, setForceReRelease] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: mobile, isLoading, isError, error, refetch, isRefetching } = useQuery({
@@ -1173,7 +1221,7 @@ function MobileReleasesPanel() {
   });
 
   const trigger = useMutation({
-    mutationFn: () => releaseApi.mobileTrigger(version.trim(), notes.trim() || undefined),
+    mutationFn: () => releaseApi.mobileTrigger(version.trim(), notes.trim() || undefined, forceReRelease),
     onSuccess: (result) => {
       toast.success(`Mobile build ${result.tag} triggered — iOS + Android builds started`);
       setConfirmOpen(false);
@@ -1183,6 +1231,15 @@ function MobileReleasesPanel() {
     onError: (err) => {
       toast.error(err instanceof Error ? err.message.slice(0, 300) : "Mobile build trigger failed");
     },
+  });
+
+  const deleteRelease = useMutation({
+    mutationFn: (tag: string) => releaseApi.deleteRelease(tag, true),
+    onSuccess: (_r, tag) => {
+      toast.success(`Mobile release ${tag} and git tag deleted`);
+      qc.invalidateQueries({ queryKey: ["admin", "releases", "mobile-status"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message.slice(0, 200) : "Delete failed"),
   });
 
   if (isError) {
@@ -1260,6 +1317,19 @@ function MobileReleasesPanel() {
                   Mobile builds ship the repo <span className="font-medium">as-is</span> — the version must equal the
                   current repo version ({mobile.currentVersion ?? "?"}). Bump versions with a Desktop release first.
                 </p>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs">
+                <input
+                  type="checkbox"
+                  id="force-mobile-re-release"
+                  checked={forceReRelease}
+                  onChange={(e) => setForceReRelease(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label htmlFor="force-mobile-re-release" className="cursor-pointer select-none text-muted-foreground">
+                  <span className="font-medium text-foreground">Force re-build</span> (replaces mobile tag if exists)
+                </label>
               </div>
 
               <div className="space-y-1.5">
@@ -1379,25 +1449,40 @@ function MobileReleasesPanel() {
                 <div className="divide-y">
                   {mobile.releases.slice(0, 8).map((release) => (
                     <div key={release.id} className="px-4 py-3 transition-colors hover:bg-muted/30">
-                      <a
-                        href={release.html_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3"
-                      >
-                        <PackageOpen className="h-5 w-5 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{release.name ?? release.tag_name}</span>
-                            {release.draft && <Badge variant="secondary">Draft</Badge>}
-                            {release.prerelease && <Badge variant="secondary">Pre-release</Badge>}
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={release.html_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex min-w-0 flex-1 items-center gap-3"
+                        >
+                          <PackageOpen className="h-5 w-5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{release.name ?? release.tag_name}</span>
+                              {release.draft && <Badge variant="secondary">Draft</Badge>}
+                              {release.prerelease && <Badge variant="secondary">Pre-release</Badge>}
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {new Date(release.published_at ?? release.created_at).toLocaleString()}
+                            </p>
                           </div>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {new Date(release.published_at ?? release.created_at).toLocaleString()}
-                          </p>
-                        </div>
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      </a>
+                          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        </a>
+                        <button
+                          type="button"
+                          title="Delete this mobile release & remove its git tag"
+                          disabled={deleteRelease.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Delete mobile release ${release.tag_name}? This removes the release and its git tag.`)) {
+                              deleteRelease.mutate(release.tag_name);
+                            }
+                          }}
+                          className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                       {release.assets.length > 0 && (
                         <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
                           {release.assets.map((a) => <MobileAssetRow key={a.name} asset={a} />)}

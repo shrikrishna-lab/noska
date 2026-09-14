@@ -50,6 +50,25 @@ const RULES: Rule[] = [
     ],
   },
   {
+    intent: "action",
+    multiStep: false,
+    rationale: "Navigating to a view or page in the app",
+    patterns: [
+      /\b(open|show|display|go\s*to|switch\s*to|navigate\s*to|take\s*me\s*to|jump\s*to)\s+(?:me\s+)?(?:to\s+)?(?:the\s+|my\s+)?(inbox|calendar|tasks?|todos?|chats?|meetings?|library|shared|trash|graph|canvas|home|daily|journal|dashboard|command\s*center|agents?|automations?|marketplace|creator|company\s*workspace|teamspace|settings)\b/i,
+      /\b(open|go\s*to|switch\s*to|navigate\s*to|take\s*me\s*to)\s+(?:the\s+|my\s+)?(?:page|note|document)\b/i,
+    ],
+  },
+  {
+    intent: "action",
+    multiStep: false,
+    rationale: "Setting a reminder or asking for a briefing",
+    patterns: [
+      /\bremind\s+(?:me|us)\b/i,
+      /\b(set|add|create)\s+(?:a\s+)?reminder\b/i,
+      /\b(catch\s+me\s+up|brief\s+me|daily\s+briefing|summarize\s+my\s+day)\b/i,
+    ],
+  },
+  {
     intent: "organize",
     multiStep: true,
     rationale: "Reorganizing the workspace requires inspecting and moving content",

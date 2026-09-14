@@ -25,7 +25,15 @@ const TOOL_CATEGORY: Record<string, PermissionCategory> = {
   analyze_page: "read",
   capabilities: "read",
   get_user_profile: "read",
+  // Navigation — UI-only, no data changes
+  open_view: "read",
+  open_page: "read",
+  // Briefing
+  daily_briefing: "read",
+  // Web search — read-only; only functional after the user opts in with a key
+  web_search: "read",
   // Creates
+  create_reminder: "create",
   create_page: "create",
   create_page_from_template: "create",
   duplicate_page: "create",
@@ -52,6 +60,9 @@ const TOOL_CATEGORY: Record<string, PermissionCategory> = {
   // External / cross-cutting
   send_notification: "external",
   create_flashcards: "update",
+  // Multi-agent delegation
+  call_subagent: "agents",
+  create_subagent: "agents",
 };
 
 export function categoryForTool(toolName: string): PermissionCategory | null {

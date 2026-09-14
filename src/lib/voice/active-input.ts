@@ -24,6 +24,18 @@ interface StreamingSession {
 
 let activeStreamSession: StreamingSession | null = null;
 
+/**
+ * Feed every successful dictation insertion into the Rewind engine's rolling
+ * buffer so hands-free self-correction ("wait, I meant…", "scratch that")
+ * knows what to replace. Dynamic import keeps this module free of a static
+ * cycle (rewind-engine imports getActiveTypingElement from here).
+ */
+function recordForRewind(target: HTMLElement, text: string, charStart: number, charEnd: number): void {
+  void import("./rewind-engine")
+    .then(({ recordUtterance }) => recordUtterance(target, text, charStart, charEnd))
+    .catch(() => {});
+}
+
 if (typeof window !== "undefined") {
   document.addEventListener(
     "focusin",
@@ -379,6 +391,7 @@ export function streamTextIntoActiveInput(text: string, targetOverride?: HTMLEle
     }
     const nextVal = session.initialPrefix + textToInsert + session.initialSuffix;
     setInputValue(target, nextVal);
+    recordForRewind(target, textToInsert, session.initialPrefix.length, session.initialPrefix.length + textToInsert.length);
     lastInsertedText = textToInsert;
     lastInsertedTarget = target;
     return true;
@@ -396,7 +409,9 @@ export function streamTextIntoActiveInput(text: string, targetOverride?: HTMLEle
     ) {
       removeLastInsertedContentEditable(target);
     }
+    const insertOffset = getContentEditableCursorOffset(target);
     insertIntoContentEditable(target, text);
+    recordForRewind(target, text, insertOffset, insertOffset + text.length);
     lastInsertedText = text;
     lastInsertedTarget = target;
     return true;
@@ -421,14 +436,17 @@ export function insertTextAtCursor(text: string, targetOverride?: HTMLElement | 
     }
     const nextValue = prefix + textToInsert + suffix;
     setInputValue(target, nextValue);
+    recordForRewind(target, textToInsert, start, start + textToInsert.length);
     lastInsertedText = textToInsert;
     lastInsertedTarget = target;
     return true;
   }
 
   if (target.isContentEditable || target.getAttribute("contenteditable") === "true") {
+    const insertOffset = getContentEditableCursorOffset(target);
     const ok = insertIntoContentEditable(target, text);
     if (ok) {
+      recordForRewind(target, text, insertOffset, insertOffset + text.length);
       lastInsertedText = text;
       lastInsertedTarget = target;
     }
@@ -664,6 +682,7 @@ export function replaceSelectionWith(text: string, targetOverride?: HTMLElement 
     const prefix = target.value.substring(0, start);
     const suffix = target.value.substring(end);
     setInputValue(target, prefix + text + suffix);
+    recordForRewind(target, text, start, start + text.length);
     lastInsertedText = text;
     lastInsertedTarget = target;
     return true;
@@ -684,6 +703,7 @@ export function replaceSelectionWith(text: string, targetOverride?: HTMLElement 
     }
     // No selection — just insert
     insertIntoContentEditable(target, text);
+    recordForRewind(target, text, 0, text.length);
     lastInsertedText = text;
     lastInsertedTarget = target;
     return true;

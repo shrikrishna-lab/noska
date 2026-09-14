@@ -168,6 +168,7 @@ export interface TriggerReleaseResult {
   version: string;
   commitSha: string;
   releaseUrl: string | null;
+  notesSource?: "admin" | "auto-generated" | "default";
   runUrl: string;
   warning: string | null;
 }
@@ -220,14 +221,16 @@ export const releaseApi = {
     invokeEdgeFunction<ReleaseStatus>("admin-trigger-release", { action: "status" }),
   whatsnew: () =>
     invokeEdgeFunction<WhatsNew>("admin-trigger-release", { action: "whatsnew" }),
-  trigger: (version: string, notes: string) =>
-    invokeEdgeFunction<TriggerReleaseResult>("admin-trigger-release", { action: "trigger", version, notes }),
+  trigger: (version: string, notes: string, force?: boolean) =>
+    invokeEdgeFunction<TriggerReleaseResult>("admin-trigger-release", { action: "trigger", version, notes, force }),
   runs: () =>
     invokeEdgeFunction<{ runs: GitHubRun[] }>("admin-trigger-release", { action: "runs" }),
   releases: () =>
     invokeEdgeFunction<{ releases: GitHubRelease[] }>("admin-trigger-release", { action: "releases" }),
   deleteDraft: (tag: string) =>
-    invokeEdgeFunction<{ ok: boolean; tag: string }>("admin-trigger-release", { action: "delete_draft", tag }),
+    invokeEdgeFunction<{ ok: boolean; tag: string }>("admin-trigger-release", { action: "delete_release", tag, delete_tag: true }),
+  deleteRelease: (tag: string, deleteTag: boolean = true) =>
+    invokeEdgeFunction<{ ok: boolean; tag: string }>("admin-trigger-release", { action: "delete_release", tag, delete_tag: deleteTag }),
   retry: (tag: string, notes?: string) =>
     invokeEdgeFunction<{ ok: boolean; tag: string; headSha: string; previousSha: string }>(
       "admin-trigger-release", { action: "retry", tag, notes },
@@ -235,8 +238,8 @@ export const releaseApi = {
   // ── Mobile (iOS/Android) builds ──
   mobileStatus: () =>
     invokeEdgeFunction<MobileStatus>("admin-trigger-release", { action: "mobile_status" }),
-  mobileTrigger: (version: string, notes?: string) =>
-    invokeEdgeFunction<MobileTriggerResult>("admin-trigger-release", { action: "mobile_trigger", version, notes }),
+  mobileTrigger: (version: string, notes?: string, force?: boolean) =>
+    invokeEdgeFunction<MobileTriggerResult>("admin-trigger-release", { action: "mobile_trigger", version, notes, force }),
 };
 
 /** One polled read covering the whole mobile pipeline. */

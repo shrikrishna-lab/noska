@@ -6,6 +6,11 @@
 import { useState, useEffect } from "react";
 
 export type PillTheme =
+  | "apple_intelligence_orb"
+  | "siri_glow_orb"
+  | "vision_spatial_glass"
+  | "solar_ember_orb"
+  | "cyber_matrix_orb"
   | "dynamic_island"
   | "dynamic_island_pro"
   | "apple_vision_glass"
@@ -21,7 +26,15 @@ export type PillTheme =
   | "amber_ember"
   | "minimal_stealth";
 
-export type WaveformStyle = "formant_13" | "dense_24" | "minimal_pulse" | "dynamic_dots" | "audio_ribbon";
+export type WaveformStyle =
+  | "formant_13"
+  | "dense_24"
+  | "minimal_pulse"
+  | "dynamic_dots"
+  | "audio_ribbon"
+  | "siri_aurora_ribbon"
+  | "chromatic_vortex"
+  | "siri_ios18_glow";
 export type SquircleStyle = "apple_glow" | "ruby_studio" | "emerald_active" | "titanium_frosted" | "siri_gradient" | "cyber_neon";
 export type BarColor = "white" | "cyan" | "violet" | "amber" | "emerald" | "gradient" | "rainbow" | "orange_flame";
 export type TimerTheme = "dual_tone" | "cyan_gold" | "monochrome" | "sunset" | "neon_green" | "gold_ring";
@@ -74,10 +87,10 @@ export interface VoiceSettings {
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   shortcut: "Ctrl+Shift+Space",
   activationMode: "toggle",
-  pillTheme: "dynamic_island",
-  waveformStyle: "dynamic_dots",
-  squircleStyle: "apple_glow",
-  barColor: "white",
+  pillTheme: "apple_intelligence_orb",
+  waveformStyle: "siri_aurora_ribbon",
+  squircleStyle: "siri_gradient",
+  barColor: "rainbow",
   timerTheme: "dual_tone",
   accessoryStyle: "agent_pill",
   floatingPosition: "bottom_center",

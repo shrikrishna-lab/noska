@@ -81,12 +81,20 @@ export function getLastUtterance(targetElement?: HTMLElement | null): RewindUtte
   const target = targetElement || getActiveTypingElement();
   if (!target) return rollingBuffer[rollingBuffer.length - 1] || null;
 
+  // Prefer an utterance recorded for exactly this element…
   for (let i = rollingBuffer.length - 1; i >= 0; i--) {
-    if (rollingBuffer[i].targetElement === target || document.body.contains(rollingBuffer[i].targetElement)) {
+    if (rollingBuffer[i].targetElement === target) {
       return rollingBuffer[i];
     }
   }
-  return rollingBuffer[rollingBuffer.length - 1] || null;
+  // …otherwise the most recent utterance whose element is still live
+  // (dictation may have moved focus between insertion and correction).
+  for (let i = rollingBuffer.length - 1; i >= 0; i--) {
+    if (document.body.contains(rollingBuffer[i].targetElement)) {
+      return rollingBuffer[i];
+    }
+  }
+  return null;
 }
 
 /**
@@ -146,6 +154,74 @@ export function classifyRewindTrigger(rawSpokenText: string): RewindMatchResult 
   return { isRewind: false, isDelete: false, correctionText: "", matchedTrigger: "" };
 }
 
+// ─── Correction Splicing ─────────────────────────────────────────
+
+function stripEdgePunct(token: string): string {
+  return token.replace(/^[^\w$£€]+|[^\w%$£€]+$/g, "");
+}
+
+/** 0..1 similarity; numbers count as near-matches (correcting "3" → "4"). */
+function tokenSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (/^\d+([.,]\d+)?$/.test(a) && /^\d+([.,]\d+)?$/.test(b)) return 0.9;
+  const max = Math.max(a.length, b.length);
+  if (!max) return 1;
+  // Small Levenshtein distance (tokens are short words)
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    prev = cur;
+  }
+  return 1 - prev[b.length] / max;
+}
+
+/**
+ * "wait, I meant 4 PM" usually corrects a SLICE of the previous utterance
+ * ("…at 3 PM"), not the whole sentence. When the correction aligns with the
+ * utterance's tail tokens (exact, numeric, or near-identical words), splice
+ * it into just those tokens; otherwise the correction restates everything.
+ */
+function spliceCorrectionIntoUtterance(originalText: string, correctionText: string): string {
+  const oTokens = originalText.trim().split(/\s+/);
+  const cTokens = correctionText.trim().split(/\s+/);
+  if (oTokens.length === 0 || cTokens.length === 0) return correctionText;
+
+  // Single-word correction: swap the trailing word, keeping the sentence
+  // ("…send email to John" + "Jane" → "…send email to Jane"). Keeping the
+  // surrounding sentence always preserves more meaning than erasing it.
+  if (cTokens.length === 1) {
+    return [...oTokens.slice(0, -1), correctionText].join(" ");
+  }
+
+  // Positional tail alignment ("The meeting is at 3 PM" + "4 PM"
+  // → "The meeting is at 4 PM").
+  if (oTokens.length > cTokens.length) {
+    const start = oTokens.length - cTokens.length;
+    let allMatch = true;
+    let anyDiff = false;
+    for (let i = 0; i < cTokens.length; i++) {
+      const orig = stripEdgePunct(oTokens[start + i]).toLowerCase();
+      const corr = stripEdgePunct(cTokens[i]).toLowerCase();
+      const sim = tokenSimilarity(orig, corr);
+      if (sim < 0.6) { allMatch = false; break; }
+      if (sim < 1) anyDiff = true;
+    }
+    if (allMatch && anyDiff) {
+      return [...oTokens.slice(0, start), correctionText].join(" ");
+    }
+  }
+
+  // Fallback: the correction restates the whole utterance.
+  return correctionText;
+}
+
 // ─── In-Place In-Input Rewind Execution ───────────────────────────
 
 /**
@@ -165,7 +241,7 @@ export function executeRewind(
 
   const { isDelete, correctionText } = correctionResult;
   const originalText = lastUtterance.text;
-  const replacementText = isDelete ? "" : correctionText;
+  const replacementText = isDelete ? "" : spliceCorrectionIntoUtterance(originalText, correctionText);
 
   let success = false;
 

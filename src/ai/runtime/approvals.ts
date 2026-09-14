@@ -12,7 +12,7 @@
 import type { ApprovalRequest } from "./types";
 
 interface PendingApproval extends ApprovalRequest {
-  resolve: (approved: boolean) => void;
+  resolve: (approved: boolean, answer?: string) => void;
 }
 
 const pending = new Map<string, PendingApproval>();
@@ -81,11 +81,50 @@ export function requestApproval(input: {
   });
 }
 
-export function respondToApproval(approvalId: string, approved: boolean): boolean {
+/**
+ * Ask the user a clarifying question mid-run and wait for a typed answer.
+ * Reuses the pending-approval pipeline (category "clarify") so the existing
+ * UI subscription surfaces it; the answer travels back through
+ * respondToApproval(id, true, answer).
+ */
+export function requestClarification(input: {
+  executionId: string;
+  question: string;
+}): Promise<{ answer: string | null }> {
+  const id = `apr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return new Promise((resolve) => {
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      if (!pending.has(id)) return;
+      timedOut = true;
+      pending.delete(id);
+      notify();
+      resolve({ answer: null });
+    }, 10 * 60_000);
+
+    pending.set(id, {
+      id,
+      executionId: input.executionId,
+      category: "clarify",
+      action: input.question,
+      reason: "The agent needs your answer to continue",
+      resolve: (approved, answer) => {
+        if (timedOut) return;
+        clearTimeout(timer);
+        pending.delete(id);
+        notify();
+        resolve({ answer: approved ? (answer || "") : null });
+      },
+    });
+    notify();
+  });
+}
+
+export function respondToApproval(approvalId: string, approved: boolean, answer?: string): boolean {
   const entry = pending.get(approvalId);
   if (!entry) return false;
   pending.delete(approvalId);
-  entry.resolve(approved);
+  entry.resolve(approved, answer);
   notify();
   return true;
 }

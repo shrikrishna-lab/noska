@@ -3144,6 +3144,16 @@ const AiPromptInput = React.forwardRef<HTMLTextAreaElement, AiPromptInputProps>(
       onVoiceChange?.(false)
     }, [hasText, talking, onVoiceChange])
 
+    React.useEffect(() => {
+      const unsub = globalVoiceController.subscribe((state) => {
+        if (!state.isListening && dictationPhase === "recording") {
+          setDictationPhase("idle")
+          onDictationChange?.(false)
+        }
+      })
+      return unsub
+    }, [dictationPhase, onDictationChange])
+
     const resize = React.useCallback(() => {
       const el = textareaRef.current
       const mirror = mirrorRef.current

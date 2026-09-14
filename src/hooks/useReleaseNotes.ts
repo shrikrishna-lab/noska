@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { APP_CURRENT_VERSION } from "@/lib/versionService";
 import { supabaseAnon } from "@/lib/supabase";
-import { DEFAULT_CHANGELOG_ENTRIES } from "@/pages/marketing/Changelog";
+import { DEFAULT_CHANGELOG_ENTRIES } from "@/lib/changelogDefaults";
 
 // Per-version "What's New" release notes system:
 // After the Noska desktop app updates, the release notes for the new version

@@ -23,6 +23,8 @@ import {
 import { getVoiceSettings, cleanVoiceTranscript, playVoiceChime } from "./voice-settings";
 import { applyDictionaryCorrections, loadVoiceDictionary, type VoiceDictionary } from "./dictionary";
 import { AUTO_LANGUAGE, canUseEnglishOnlyLocalModel, resolveRecognitionLanguage } from "./language";
+import { classifyRewindTrigger, executeRewind } from "./rewind-engine";
+import { matchVoiceSnippet } from "./snippet-engine";
 import { useEffect, useState } from "react";
 
 export type VoiceState = "idle" | "starting" | "listening" | "stopping" | "error";
@@ -129,6 +131,16 @@ class VoiceController {
     return () => {
       this.agentCommandCallbacks.delete(cb);
     };
+  }
+
+  /**
+   * Route a spoken command into the app-wide voice agent pipeline from any
+   * surface (e.g. the VoiceCapture modal, which runs its own recognition).
+   * Handlers registered via onAgentCommand execute it.
+   */
+  public emitAgentCommand(text: string): void {
+    if (!text?.trim()) return;
+    this.agentCommandCallbacks.forEach((cb) => cb(text));
   }
 
   private setConnectionState(next: VoiceConnectionState) {
@@ -253,16 +265,36 @@ class VoiceController {
             }
           }
 
-          // Agent mode: route final transcripts to the AI agent instead of editor
-          if (isFinal && this.agentMode && this.agentCommandCallbacks.size) {
-            const command = applyDictionaryCorrections(cleanVoiceTranscript(finalText, settings.smartClean), this.voiceDictionary);
-            const commandText = command.text;
-            const commandCorrection = command.corrections.length
-              ? command.corrections.map((item) => `${item.heard} → ${item.write}`).join("; ")
-              : undefined;
-            this.agentCommandCallbacks.forEach((cb) => cb(commandText));
-            this.transcriptCallbacks.forEach((cb) => cb(commandText, commandCorrection));
-            return;
+          // ── Agent mode: route all spoken audio (interim & final) to AI Agent ONLY ──
+          // NEVER type or stream into active inputs/editor when in Agent mode!
+          if (this.agentMode) {
+            if (isInterimOnly) {
+              const liveAgentPreview = `🤖 ${text}`;
+              this.transcriptCallbacks.forEach((cb) => cb(liveAgentPreview));
+              if (options?.onTranscript) {
+                options.onTranscript(liveAgentPreview);
+              }
+              this.notify();
+              return;
+            }
+
+            if (isFinal) {
+              const command = applyDictionaryCorrections(cleanVoiceTranscript(finalText, settings.smartClean), this.voiceDictionary);
+              const commandText = command.text;
+              const commandCorrection = command.corrections.length
+                ? command.corrections.map((item) => `${item.heard} → ${item.write}`).join("; ")
+                : undefined;
+              
+              // Broadcast to any registered agent command callbacks
+              this.agentCommandCallbacks.forEach((cb) => cb(commandText));
+              const finalAgentPreview = `🤖 AI Agent: ${commandText}`;
+              this.transcriptCallbacks.forEach((cb) => cb(finalAgentPreview, commandCorrection));
+              if (options?.onTranscript) {
+                options.onTranscript(finalAgentPreview);
+              }
+              this.notify();
+              return;
+            }
           }
 
           // Update health: we are actively writing if text insertion will happen
@@ -278,7 +310,6 @@ class VoiceController {
             // 1. Signature Feature: Rewind Hands-Free Self-Correction
             if (settings.rewindEnabled !== false) {
               try {
-                const { classifyRewindTrigger, executeRewind } = require("./rewind-engine");
                 const rewindResult = classifyRewindTrigger(raw);
                 if (rewindResult.isRewind) {
                   const rewound = executeRewind(rewindResult, activeEl);
@@ -334,7 +365,6 @@ class VoiceController {
             // 3. Fuzzy / Semantic Voice Snippets
             if (settings.fuzzySnippetsEnabled !== false) {
               try {
-                const { matchVoiceSnippet } = require("./snippet-engine");
                 const snippetResult = matchVoiceSnippet(raw, "docs");
                 if (snippetResult.matched && snippetResult.expandedText) {
                   if (options?.onTranscript) {
@@ -380,19 +410,24 @@ class VoiceController {
           }
         },
         onError: (err) => {
+          const msg = (err.message || "").toLowerCase();
+          if (msg.includes("aborted") || msg.includes("no-speech")) {
+            return;
+          }
           console.warn("[Voice] Recognition error:", err.message, { ts: new Date().toISOString() });
           // Detect permission-related errors as needs_attention
-          const msg = (err.message || "").toLowerCase();
           if (msg.includes("not-allowed") || msg.includes("permission") || msg.includes("denied")) {
             this.setConnectionState("needs_attention");
-          } else if (msg.includes("network") || msg.includes("aborted")) {
+            this.error = err;
+          } else if (msg.includes("network")) {
             this.setConnectionState("reconnecting");
+            this.error = err;
             // Will auto-retry via speech-recognition adapter; show reconnecting briefly
             setTimeout(() => { if (this.isListening) this.setConnectionState("listening"); }, 1200);
           } else {
             this.setConnectionState("reconnecting");
+            this.error = err;
           }
-          this.error = err;
           this.notify();
           if (this.recognitionAdapter?.id === "tauri-whisper" && this.isListening) {
             void this.startBrowserFallback(recognitionCallbacks, language)
@@ -484,17 +519,12 @@ class VoiceController {
         ok = insertTextAtCursor(localCleanedText);
       }
       if (!ok) {
-        console.warn("[Voice] streamTextIntoActiveInput AND insertTextAtCursor both failed — retrying", { len: localCleanedText.length });
-        this.setConnectionState("reconnecting");
+        // Retry once quietly; if no input field is focused (e.g. testing in settings), don't show an intrusive alert
         setTimeout(() => {
           let retry = streamTextIntoActiveInput(localCleanedText);
           if (!retry) retry = insertTextAtCursor(localCleanedText);
           if (retry) {
             this.setConnectionState("writing");
-          } else {
-            this.error = new Error("No editable text field is active. Click inside a note block, then start voice typing again.");
-            this.setConnectionState("needs_attention");
-            this.notify();
           }
         }, 80);
       } else {
@@ -592,6 +622,7 @@ class VoiceController {
     this.interimText = "";
     this.lastInterimRaw = "";
     this.connectionState = "idle";
+    this.error = null;
     if (this.aiPolishTimer) {
       clearTimeout(this.aiPolishTimer);
       this.aiPolishTimer = null;

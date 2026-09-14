@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { aiManager } from "../../ai/AIManager";
 import { getProviderList, testProviderConnection, type AIProvider, type AIModel } from "../../ai/providers";
+import { getTavilyKey, TAVILY_KEY_STORAGE } from "../../lib/webSearch";
 import { modelCatalogService, isModelNew } from "../../ai/ModelCatalogService";
 import { modelCatalogSyncService } from "../../ai/models/ModelCatalogSyncService";
 import { modelRepository } from "../../ai/models/ModelRepository";
@@ -189,6 +190,9 @@ export default function NoskaAISettings({
 
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [batchSyncResult, setBatchSyncResult] = useState<string | null>(null);
+  // Web search (Tavily) key — device-local, managed entirely here.
+  const [tavilyKey, setTavilyKey] = useState(() => getTavilyKey());
+  const [tavilySaved, setTavilySaved] = useState(false);
 
   const handleSyncAll = async () => {
     setIsSyncingAll(true);
@@ -797,6 +801,55 @@ export default function NoskaAISettings({
           onChange={(e) => setGhostWriterEnabled?.(e.target.checked)}
           className="h-4 w-4 rounded accent-[#1c1b18] cursor-pointer shrink-0"
         />
+      </div>
+
+      {/* ── Web Search Card ───────────────────────────────────── */}
+      <div className="rounded-2xl bg-[#f8f6f0] dark:bg-[#181b24] p-5 border border-[#e8e4db] dark:border-white/10 shadow-sm">
+        <div className="flex items-center gap-2">
+          <Globe size={13} className="text-[#706c64] dark:text-white/70" />
+          <span className="text-xs font-bold text-[#1c1b18] dark:text-white">Web Search</span>
+          <span className="rounded-full bg-white dark:bg-white/10 border border-[#e8e4db] dark:border-white/10 px-2 py-0.5 text-[9.5px] font-semibold text-[#706c64] dark:text-white/70">
+            Agent Tool
+          </span>
+          {tavilyKey.trim() && (
+            <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[9.5px] font-semibold text-emerald-600 dark:text-emerald-400">
+              Connected
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] text-[#706c64] dark:text-white/60 mt-0.5">
+          Lets Noska AI search the public web (via Tavily). Get a free key at tavily.com — it stays on this device.
+        </p>
+        <div className="flex items-center gap-2 mt-3">
+          <input
+            type="password"
+            value={tavilyKey}
+            onChange={(e) => { setTavilyKey(e.target.value); setTavilySaved(false); }}
+            placeholder="tvly-…"
+            className="flex-1 min-w-0 rounded-xl bg-white dark:bg-white/5 border border-[#e8e4db] dark:border-white/10 px-3.5 py-2 text-xs text-[#1c1b18] dark:text-white outline-none focus:border-[#1c1b18] dark:focus:border-white/30"
+          />
+          <button
+            type="button"
+            disabled={!tavilyKey.trim()}
+            onClick={() => {
+              try { localStorage.setItem(TAVILY_KEY_STORAGE, tavilyKey.trim()); } catch { /* ignore */ }
+              setTavilySaved(true);
+              setTimeout(() => setTavilySaved(false), 2000);
+            }}
+            className="rounded-xl bg-[#1c1b18] dark:bg-white hover:bg-black dark:hover:bg-white/90 px-3.5 py-2 text-xs font-semibold text-white dark:text-[#1c1b18] transition disabled:opacity-40 cursor-pointer shrink-0"
+          >
+            {tavilySaved ? "Saved ✓" : "Save"}
+          </button>
+          {tavilyKey.trim() && (
+            <button
+              type="button"
+              onClick={() => { try { localStorage.removeItem(TAVILY_KEY_STORAGE); } catch { /* ignore */ } setTavilyKey(""); setTavilySaved(false); }}
+              className="rounded-xl bg-white dark:bg-white/10 hover:bg-[#ede8df] dark:hover:bg-white/20 px-3 py-2 text-xs font-semibold text-[#706c64] dark:text-white/70 border border-[#e8e4db] dark:border-white/10 transition cursor-pointer shrink-0"
+            >
+              Remove
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

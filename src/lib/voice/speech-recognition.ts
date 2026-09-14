@@ -40,8 +40,14 @@ export function getWebVoiceReadiness(): WebVoiceReadiness {
   if (typeof window === "undefined") {
     return { ready: false, code: "speech-recognition-unavailable", message: "Voice typing is only available in a browser window." };
   }
-  if (!window.isSecureContext && window.location.hostname !== "localhost") {
-    return { ready: false, code: "secure-context", message: "Voice typing needs HTTPS. Open Noska over a secure connection and try again." };
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".localhost");
+  if (!window.isSecureContext && !isLocalhost) {
+    return {
+      ready: false,
+      code: "secure-context",
+      message: `Microphone is blocked on unencrypted HTTP (${hostname}). Open via http://localhost:5176 or HTTPS to enable.`,
+    };
   }
   if (!navigator.mediaDevices?.getUserMedia) {
     return { ready: false, code: "microphone-unavailable", message: "This browser cannot access a microphone. Try Chrome or Edge on a secure connection." };
@@ -153,10 +159,7 @@ export function createBrowserSpeechRecognition(
       message: errorMsg,
       eventKeys: typeof event === "object" ? Object.keys(event) : [],
     });
-    if (errorCode === "no-speech") {
-      return;
-    }
-    if (errorCode === "aborted" && isExplicitStop) {
+    if (errorCode === "no-speech" || errorCode === "aborted") {
       return;
     }
     const err: any = new Error(`Speech recognition error: ${errorCode}`);

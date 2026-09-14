@@ -6,6 +6,7 @@ import { runAI } from "../../utils/ai";
 import { uid, blockFor } from "../../utils/helpers";
 import { capture } from "../../lib/posthog";
 import { cleanDictation, detectTargetApp } from "../../lib/voice/dictation-cleanup";
+import { globalVoiceController } from "../../lib/voice/voice-controller";
 import { createVoiceIntelligence, type VoiceIntent, type VoiceProcessingResult } from "../../lib/voice/voice-intelligence";
 
 declare class SpeechRecognition extends EventTarget {
@@ -89,6 +90,17 @@ export default function VoiceCapture({
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [agentMode, setAgentMode] = useState(false);
+  // Mirrors agentMode for the recognition.onresult closure, which is bound
+  // once per recording session — agent mode can be toggled mid-session.
+  const agentModeRef = useRef(false);
+  // Tracks the cumulative final transcript already dispatched in agent mode,
+  // so each new finalized utterance is routed exactly once.
+  const agentDispatchedRef = useRef("");
+
+  const applyAgentMode = useCallback((on: boolean) => {
+    agentModeRef.current = on;
+    setAgentMode(on);
+  }, []);
 
   // Initialize Voice Intelligence engine (moved before canvasRef for proper scoping)
   const voiceIntelligence = createVoiceIntelligence({
@@ -425,8 +437,8 @@ export default function VoiceCapture({
     }
     setIsRecording(false);
     setInterimText("");
-    setAgentMode(false); // Reset agent mode when stopping
-  }, []);
+    applyAgentMode(false); // Reset agent mode when stopping
+  }, [applyAgentMode]);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -469,7 +481,7 @@ export default function VoiceCapture({
       }
       setIsRecording(false);
       setInterimText("");
-      setAgentMode(false); // Reset agent mode when stopping
+      applyAgentMode(false); // Reset agent mode when stopping
       return;
     }
 
@@ -517,21 +529,24 @@ export default function VoiceCapture({
         }
         setInterimText(currentInterim);
 
-        // If not in agent mode, just update transcript
-        if (!agentMode) {
+        // If not in agent mode, just update transcript. Reads the ref so
+        // toggling Agent mid-recording applies without restarting.
+        if (!agentModeRef.current) {
           // Normal dictation mode - just show text
-        } else {
-          // Agent mode - process with voice intelligence
-          voiceIntelligence.processUtterance(currentInterim, {
-            getContent: () => transcript,
-            getCursorPosition: () => 0,
-            getSelection: () => null,
-            getCurrentBlock: () => null,
-            executeAction: async (action, params) => {
-              // Execute actions based on agent commands
-              return { success: true, feedback: `Action: ${action}` };
-            }
-          });
+        } else if (accumulatedFinal) {
+          // Agent mode — route each NEW finalized utterance through the
+          // app-wide voice agent pipeline (same deterministic handler as the
+          // floating voice pill: open views/pages, write, create, search).
+          const previous = agentDispatchedRef.current;
+          let newChunk = accumulatedFinal;
+          if (accumulatedFinal.startsWith(previous) && previous) {
+            newChunk = accumulatedFinal.slice(previous.length);
+          }
+          agentDispatchedRef.current = accumulatedFinal;
+          const command = newChunk.trim();
+          if (command) {
+            globalVoiceController.emitAgentCommand(command);
+          }
         }
       };
 
@@ -551,6 +566,7 @@ export default function VoiceCapture({
       isListeningRef.current = true;
       recognition.start();
       isStartingRef.current = false;
+      agentDispatchedRef.current = "";
       setIsRecording(true);
       setElapsed(0);
 
@@ -572,7 +588,7 @@ export default function VoiceCapture({
       onToast?.("Microphone access denied or unavailable");
       setIsRecording(false);
     }
-  }, [isRecording, agentMode, transcript, voiceIntelligence]);
+  }, [isRecording, agentMode, transcript, voiceIntelligence, applyAgentMode]);
 
   const handleStructure = async () => {
     const fullText = (transcript + " " + interimText).trim();
@@ -887,7 +903,7 @@ Rules:
               {/* Agent mode button - appears when recording starts */}
               {isRecording && !agentMode && (
                 <button
-                  onClick={() => setAgentMode(true)}
+                  onClick={() => applyAgentMode(true)}
                   className="px-3 py-2 rounded-full text-xs font-semibold bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white shadow-lg shadow-green-500/25 transition cursor-pointer"
                   title="Enable Agent Mode: Voice can perform tasks & activities"
                 >

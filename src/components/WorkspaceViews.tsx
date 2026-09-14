@@ -77,6 +77,7 @@ import { useTeams } from "../lib/TeamContext";
 import { useCompany } from "../contexts/CompanyContext";
 import MonthCalendar from "./MonthCalendar";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
+import { loadReminders, saveReminders, subscribeReminders } from "../lib/reminders";
 import { computeAnalytics } from "../features/study/LearningAnalytics";
 import { curateWorkspace } from "../utils/curator";
 import type { Page, AIChat } from "../lib/supabaseService";
@@ -1871,16 +1872,16 @@ interface InboxReminder {
   createdAt?: string;
 }
 
+// Canonical store lives in src/lib/reminders.ts so the AI agent's
+// create_reminder tool writes the same list the Inbox displays.
 function loadInboxReminders(): InboxReminder[] {
-  try {
-    const data = localStorage.getItem(INBOX_STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch { return []; }
+  return loadReminders() as InboxReminder[];
 }
 
 function saveInboxReminders(reminders: InboxReminder[]): void {
-  try { localStorage.setItem(INBOX_STORAGE_KEY, JSON.stringify(reminders)); } catch {}
+  saveReminders(reminders);
 }
+
 
 interface InboxRouteProps {
   pages?: Page[];
@@ -1921,6 +1922,15 @@ function InboxRoute({
   } catch { /* Graceful fallback if TeamContext not in scope */ }
 
   useEffect(() => { saveInboxReminders(reminders); }, [reminders]);
+
+  // Pick up reminders created elsewhere (AI agent's create_reminder tool)
+  // without clobbering local edits: reload only when the store grew.
+  useEffect(() => subscribeReminders(() => {
+    setReminders((prev) => {
+      const latest = loadInboxReminders();
+      return latest.length > prev.length ? latest : prev;
+    });
+  }), []);
 
   const respond = async (inviteId: string, action: "accept" | "decline") => {
     setRespondingId(inviteId);

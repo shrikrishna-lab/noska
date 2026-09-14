@@ -1,6 +1,9 @@
 /** Deterministic, non-destructive commands understood by Noska Voice Agent. */
+import { resolveViewExact, stripCourtesyPhrases } from "../viewTargets";
+
 export type VoiceAgentCommand =
   | { kind: "open-page"; query: string }
+  | { kind: "open-view"; view: string }
   | { kind: "write"; text: string }
   | { kind: "create-page"; title: string }
   | { kind: "search-pages"; query: string }
@@ -18,7 +21,9 @@ export type VoiceAgentCommand =
 function clean(value: string) { return value.trim().replace(/[.?!]+$/, "").trim(); }
 
 export function parseVoiceAgentCommand(raw: string): VoiceAgentCommand {
-  const text = clean(raw);
+  // "can you open my inbox", "could you please write…" — politeness wrappers
+  // must not block command matching.
+  const text = stripCourtesyPhrases(clean(raw));
   if (/^(?:set|configure|add|change)\s+(?:my\s+)?(?:opencode|open code)(?:\s+zen)?\s+(?:api\s*)?key$/i.test(text)) {
     return { kind: "configure-provider", providerId: "opencode_zen", providerName: "OpenCode Zen" };
   }
@@ -33,8 +38,17 @@ export function parseVoiceAgentCommand(raw: string): VoiceAgentCommand {
   if (match?.[1]) return { kind: "create-agent", name: clean(match[1]), instructions: clean(match[2] || "Assist with the workspace and report progress clearly") };
   match = text.match(/^(?:create|make|build)\s+(?:an?\s+)?automation(?:\s+(?:called|named))?\s+(.+?)(?:\s+(?:to|that)\s+(.+))?$/i);
   if (match?.[1]) return { kind: "create-automation", name: clean(match[1]), instructions: clean(match[2] || "Run this workflow when manually started") };
+  match = text.match(/^(?:open|show|go to|switch to|navigate to|take me to|jump to)\s+(?:the\s+|my\s+)?(.+)$/i);
+  if (match?.[1]) {
+    // App views (Inbox, Calendar, Tasks, …) win over the page catch-all so
+    // "open inbox" navigates instead of searching for a page named "inbox".
+    const view = resolveViewExact(match[1]);
+    if (view) return { kind: "open-view", view };
+  }
   match = text.match(/^(?:open|go to|show)\s+(?:the\s+)?(?:page|note|document)?\s*(.+)$/i);
-  if (match?.[1]) return { kind: "open-page", query: clean(match[1]) };
+  // "open the roadmap page" — a trailing page/note/document noun is phrasing,
+  // not part of the title.
+  if (match?.[1]) return { kind: "open-page", query: clean(match[1]).replace(/\s+(?:page|note|document)$/i, "") };
   match = text.match(/^(?:write|add|insert|type)\s+(?:this|there|in (?:this|the) (?:page|note))?\s*[:, -]*\s*(.+)$/i);
   if (match?.[1]) return { kind: "write", text: clean(match[1]) };
   match = text.match(/^(?:create|make|new)\s+(?:a\s+)?(?:page|note|document)(?:\s+(?:called|named|titled))?\s*(.+)?$/i);

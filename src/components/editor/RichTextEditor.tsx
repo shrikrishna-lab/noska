@@ -161,8 +161,20 @@ const RichTextMode = React.forwardRef<HTMLElement, RichTextModeProps>(function R
 
     if (e.key === "Backspace") {
       const text = divRef.current?.textContent || "";
-      if (!text) {
-        e.preventDefault();
+      let isAtStart = !text.trim();
+      const sel = window.getSelection();
+      if (!isAtStart && sel && sel.rangeCount > 0 && divRef.current) {
+        const range = sel.getRangeAt(0);
+        if (range.collapsed) {
+          const preRange = range.cloneRange();
+          preRange.selectNodeContents(divRef.current);
+          preRange.setEnd(range.endContainer, range.endOffset);
+          if (preRange.toString().length === 0) {
+            isAtStart = true;
+          }
+        }
+      }
+      if (isAtStart) {
         onKeyDown?.(e);
         return;
       }
@@ -380,8 +392,20 @@ const MarkdownMode = React.forwardRef<HTMLDivElement, MarkdownModeProps>(functio
     }
     if (e.key === "Backspace") {
       const text = divRef.current?.textContent || "";
-      if (!text && !value) {
-        e.preventDefault();
+      let isAtStart = !text.trim();
+      const sel = window.getSelection();
+      if (!isAtStart && sel && sel.rangeCount > 0 && divRef.current) {
+        const range = sel.getRangeAt(0);
+        if (range.collapsed) {
+          const preRange = range.cloneRange();
+          preRange.selectNodeContents(divRef.current);
+          preRange.setEnd(range.endContainer, range.endOffset);
+          if (preRange.toString().length === 0) {
+            isAtStart = true;
+          }
+        }
+      }
+      if (isAtStart) {
         onKeyDown?.(e);
         return;
       }

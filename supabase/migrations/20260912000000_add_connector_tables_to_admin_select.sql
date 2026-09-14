@@ -21,8 +21,7 @@ SELECT
   granted_scopes,
   connected_at,
   last_used_at,
-  revoked_at,
-  created_at
+  revoked_at
 FROM public.user_connections;
 
 CREATE OR REPLACE FUNCTION public.admin_select(p_session_token text, p_table text, p_select text DEFAULT '*'::text, p_order_col text DEFAULT NULL::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT NULL::integer, p_eq_col text DEFAULT NULL::text, p_eq_val text DEFAULT NULL::text)

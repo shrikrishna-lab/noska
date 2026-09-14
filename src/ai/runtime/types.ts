@@ -40,7 +40,10 @@ export type PermissionCategory =
   | "memory"
   | "agents"
   | "automations"
-  | "external";
+  | "external"
+  /** Not a permission bucket — a tag for clarification requests that ride
+   * the approval pipeline (the agent pauses to ask the user a question). */
+  | "clarify";
 
 /** 🟢 auto — run silently · 🟡 approval — ask first · 🔴 disabled — never */
 export type PermissionMode = "auto" | "approval" | "disabled";
@@ -261,6 +264,12 @@ export interface RuntimeJobOptions {
   memoryMode?: "off" | "run" | "persistent";
   /** extra system-level instructions merged into every model call */
   instructions?: string;
+  /** Recent conversation turns so interactive runs can resolve follow-ups
+   * like "now add a todo to that page". Capped and truncated by the runtime. */
+  history?: Array<{ role: string; content: string }>;
+  /** Live model text while an agentic step runs (interactive UI streaming).
+   * Receives tool-call-stripped partials for the given step id. */
+  onLiveText?: (chunk: string, stepId: string) => void;
   /** context pages to seed retrieval (workspace snapshot provider) */
   getContext?: () => ToolContextLike;
   onProgress?: (steps: StepProgress[], run: RunRecord) => void;

@@ -360,7 +360,7 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(fun
 
 export { default as PearlButton } from "./PearlButton";
 export { default as VoiceDictator } from "./voice-dictator";
-export { VoiceInput, VoiceFloatingIndicator, VoicePill, RealtimeEqualizer, StreamingWordText } from "./voice-input";
+export { VoiceInput, VoiceFloatingIndicator, VoicePill, RealtimeEqualizer, StreamingWordText, AppleIntelligenceOrb } from "./voice-input";
 export { default as VoiceCustomizationSettings } from "../settings/VoiceCustomizationSettings";
 export * from "../../lib/voice/voice-settings";
 export { Banner04 } from "./banner-04";
@@ -386,3 +386,5 @@ export { OptionPickerBase, default as OptionPickerBaseDefault } from "./quick-op
 export type { OptionPickerBaseProps } from "./quick-option-picker-base";
 export { AiPromptInput, ReasoningEffortButton } from "./ai-prompt-input";
 export { LiquidMetalButton } from "./liquid-metal-button";
+export { SiriWave, default as SiriWaveDefault } from "./siri-wave";
+export type { SiriWaveProps, SiriWaveVariant } from "./siri-wave";
