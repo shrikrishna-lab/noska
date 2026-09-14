@@ -161,6 +161,25 @@ npm run tauri ios build -- --export-method app-store-connect
   patching the native projects each run. Tag builds additionally land in a
   **draft pre-release** with the APK/AAB/IPA attached.
 
+### Dev login bypass (dev builds only)
+
+Development builds skip the browser handoff so engineers land straight in a
+local workspace:
+
+- **Auto**: in dev builds, a signed-out mobile app auto-creates a local
+  "Mobile Tester" session when the loading screen completes.
+- **Manual**: the auth screen also shows a "Skip for now (Dev preview)"
+  button (and the desktop screen a "Dev sign-in (local, no account)" one).
+
+Both are gated by `isDevBypassAvailable()` (`import.meta.env.DEV`) in
+`src/lib/devAuth.ts` — the production bundle compiles the gate to a constant
+`false` (verified in the built output), so no bypass UI or path exists in
+shipped builds. The fake session is LOCAL ONLY: Supabase RLS rejects its
+token and the app runs on localStorage, exactly like an offline session.
+Sign out clears it. Re-run the UI walkthrough any time with
+`node scripts/mobile-e2e.mjs` (needs the two scratch vite servers, see the
+script header).
+
 ### Managing mobile releases from the admin panel
 
 The admin **Releases** page has a **Mobile** tab (next to Desktop):

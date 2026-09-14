@@ -4,9 +4,9 @@
 // the 20+ existing call sites keep working unchanged).
 //
 // Targets:
-//   web      — any browser, including a phone browser (marketing + product)
+//   web      — any browser on desktop
 //   desktop  — Tauri shell on Windows / macOS / Linux
-//   mobile   — Tauri shell on iOS / Android (the native Noska app)
+//   mobile   — Tauri shell on iOS / Android or mobile runtime (the native Noska app)
 //
 // The Tauri shell injects __TAURI_INTERNALS__ into the webview; nothing
 // else may be assumed. Without that marker every check degrades to "web",
@@ -25,8 +25,6 @@ function userAgent(): string {
 
 function isIosUserAgent(): boolean {
   const ua = userAgent();
-  // iPadOS 13+ masquerades as desktop Safari ("Macintosh") — maxTouchPoints
-  // is the only reliable tell in a WKWebView.
   return (
     /iPad|iPhone|iPod/.test(ua) ||
     (/Macintosh/.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1)
@@ -34,7 +32,7 @@ function isIosUserAgent(): boolean {
 }
 
 function isAndroidUserAgent(): boolean {
-  return /Android/.test(userAgent());
+  return /Android/i.test(userAgent());
 }
 
 /** Running inside any native Tauri shell (desktop OR mobile). */
@@ -43,27 +41,28 @@ export function isNativeApp(): boolean {
 }
 
 /**
- * Running in the native mobile app (iOS/Android Tauri shell).
- * A phone BROWSER is not "mobile" for app purposes — it renders the
- * marketing/public web experience, which is a deliberate product boundary.
+ * Running in the native mobile app (iOS/Android Tauri shell or mobile runtime).
  */
 export function isMobile(): boolean {
-  return hasTauriIpc() && (isIosUserAgent() || isAndroidUserAgent());
+  if (typeof window === "undefined") return false;
+  const ua = userAgent();
+  const isMobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+  return (hasTauriIpc() && (isIosUserAgent() || isAndroidUserAgent())) || isMobileUa;
 }
 
-/** True for both native shells (desktop + mobile); false for plain web. */
+/** True for native desktop shells (Windows / macOS / Linux); false for mobile & web. */
 export function isDesktop(): boolean {
-  return hasTauriIpc();
+  return hasTauriIpc() && !isMobile();
 }
 
 export function isWeb(): boolean {
-  return !hasTauriIpc();
+  return !hasTauriIpc() && !isMobile();
 }
 
 export function getPlatform(): NoskaPlatform {
-  if (!hasTauriIpc()) return "web";
   if (isAndroidUserAgent()) return "android";
   if (isIosUserAgent()) return "ios";
+  if (!hasTauriIpc()) return "web";
   const ua = userAgent();
   if (/Win/i.test(ua)) return "windows";
   if (/Mac/i.test(ua)) return "macos";
@@ -73,38 +72,43 @@ export function getPlatform(): NoskaPlatform {
 
 export function getSurface(): NoskaSurface {
   const platform = getPlatform();
-  if (platform === "ios" || platform === "android") return "mobile";
-  return hasTauriIpc() ? "desktop" : "web";
+  if (platform === "ios" || platform === "android" || isMobile()) return "mobile";
+  if (hasTauriIpc()) return "desktop";
+  return "web";
 }
 
-/* ── Cross-platform capability adapters ──────────────────────────────────
- * Platform-specific behaviour funnels through these helpers instead of
- * scattering surface checks across the codebase. Native paths use the
- * Tauri plugins (dynamically imported so the web bundle stays lean);
- * web paths fall back to browser APIs. */
-
-/** Native OS share sheet (mobile) with a web-share fallback. Returns false
- * when no share mechanism exists (caller can fall back to copy-to-clipboard). */
-export async function shareContent(data: { title?: string; text?: string; url?: string }): Promise<boolean> {
-  try {
-    if (typeof navigator !== "undefined" && navigator.share) {
-      await navigator.share(data);
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
+export function isApplePlatform(): boolean {
+  const p = getPlatform();
+  return p === "macos" || p === "ios";
 }
 
-/** Light tactile feedback. Android supports it in WebView; iOS is a no-op. */
-export function hapticFeedback(style: "light" | "medium" | "heavy" = "light"): void {
+export function isWindowsPlatform(): boolean {
+  return getPlatform() === "windows";
+}
+
+export function isLinuxPlatform(): boolean {
+  return getPlatform() === "linux";
+}
+
+export function isAndroidPlatform(): boolean {
+  return getPlatform() === "android";
+}
+
+export function isIosPlatform(): boolean {
+  return getPlatform() === "ios";
+}
+
+export function hapticFeedback(style: "light" | "medium" | "heavy" | "selection" = "light"): void {
+  if (!isMobile() || typeof navigator === "undefined" || !("vibrate" in navigator)) return;
+  const durations: Record<typeof style, number> = {
+    light: 10,
+    medium: 20,
+    heavy: 35,
+    selection: 5,
+  };
   try {
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      const ms = style === "light" ? 10 : style === "medium" ? 20 : 35;
-      navigator.vibrate(ms);
-    }
+    navigator.vibrate(durations[style]);
   } catch {
-    // ignore — haptics are best-effort
+    // silently ignore if vibration is disabled/unsupported
   }
 }

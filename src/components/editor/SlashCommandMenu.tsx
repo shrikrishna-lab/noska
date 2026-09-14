@@ -281,162 +281,320 @@ export default forwardRef<HTMLDivElement, SlashCommandMenuProps>(function SlashC
   const visibleCategories = groups.map(g => ({ name: g.name, icon: g.icon }));
   const activeCatName = activeCategory || (visibleCategories[0]?.name || null);
 
+  const isMobileLayout = viewportWidth < 640;
+
   return (
     <AnimatePresence>
       {open && (
-        <div
-          ref={menuRef}
-          style={{
-            position: "fixed",
-            top: position?.top ?? 0,
-            left: position?.left ?? 0,
-            zIndex: 130,
-          }}
-        >
+        <>
           {/* Offscreen live region for screen readers */}
           <div aria-live="polite" aria-atomic="true" className="sr-only">
             {previewCmd ? `${previewCmd.title} — ${previewCmd.preview?.description || previewCmd.description || ""}` : ""}
           </div>
 
-          {/* Main Menu */}
-          <motion.div
-            ref={innerMenuRef}
-            drag
-            dragMomentum={false}
-            initial={{ opacity: 0, scale: 0.95, y: 6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 3, transition: { duration: 0.08, ease: [0.7, 0, 0.84, 0] } }}
-            transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-            style={{ width: MENU_WIDTH }}
-            className="apple-liquid-glass flex overflow-hidden rounded-2xl max-h-[460px]"
-            role="dialog" aria-label="Block type selector"
-          >
-            {/* Category sidebar */}
-            {!search && (
-              <div className="flex flex-col gap-0.5 border-r border-[var(--border)] bg-[var(--surface)] p-1.5 w-9 shrink-0">
-                {visibleCategories.map((cat) => (
-                  <button
-                    key={cat.name}
-                    onClick={() => setActiveCategory(activeCatName === cat.name ? null : cat.name)}
-                    className={`grid h-6 w-6 place-items-center rounded transition cursor-pointer ${
-                      activeCatName === cat.name ? "bg-[var(--accent)]/10 text-[var(--accent)]" : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-                    }`}
-                    title={cat.name}
-                  >
-                    <RenderIcon iconName={CATEGORY_ICONS[cat.name] || cat.icon} size={13} />
-                  </button>
-                ))}
-              </div>
-            )}
+          {isMobileLayout ? (
+            <>
+              {/* Mobile Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mobile-slash-backdrop"
+                onClick={wrappedOnClose}
+              />
 
-            <div className="flex flex-col flex-1 min-w-0">
-              {/* Search + Draggable header handle */}
-              <div className="relative border-b border-[var(--border)] cursor-grab active:cursor-grabbing">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none" />
-                <input
-                  ref={searchRef}
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setHighlightedIndex(-1); setActiveCategory(null); }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Search or type a command..."
-                  className="w-full bg-transparent py-[10px] pl-[32px] pr-3 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-                  role="combobox"
-                  aria-autocomplete="list"
-                  aria-expanded={open}
-                  aria-haspopup="listbox"
-                  aria-controls="slash-listbox"
-                  aria-activedescendant={(() => {
-                    const current = flatItems[highlightedIndex];
-                    return highlightedIndex >= 0 && current && !isGroupHeader(current) ? `slash-item-${current.id}` : undefined;
-                  })()}
-                />
-                {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)]">
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-
-              {/* Results */}
-              <div ref={listRef} className="overflow-y-auto scrollbar-none py-1" role="listbox" id="slash-listbox" style={{ maxHeight: 320 }}>
-                {flatItems.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-xs text-[var(--muted)]">No blocks found</div>
-                ) : (
-                  flatItems.map((item, idx) => {
-                    if (isGroupHeader(item)) {
-                      return (
-                        <div key={`group-${item._groupName}`} className="flex items-center gap-1.5 px-3 py-1.5 border-b border-[var(--border)] mb-1" role="presentation">
-                          <RenderIcon iconName={item._groupIcon} size={11} className="text-[var(--muted)]" />
-                          <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]" style={{ letterSpacing: "0.05em" }}>
-                            {CATEGORY_LABELS[item._groupName] || item._groupName}
-                          </span>
-                        </div>
-                      );
-                    }
-
-                    const isSelected = highlightedIndex === idx;
-                    const isFav = favorites.includes(item.id);
-
-                    return (
-                      <button
-                        key={`${item.id}-${idx}`}
-                        data-slash-item
-                        id={`slash-item-${item.id}`}
-                        role="option"
-                        aria-selected={isSelected}
-                        onClick={() => { addFavorite(item.id); handleSelect(item.id); wrappedOnClose(); }}
-                        onMouseEnter={() => setHighlightedIndex(idx)}
-                        className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors duration-75 cursor-pointer ${
-                          isSelected ? "bg-[var(--accent)]/8" : ""
-                        }`}
-                      >
-                        <div className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${
-                          isSelected ? "bg-[var(--accent)]/10 text-[var(--accent)]" : "bg-[var(--surface)] text-[var(--secondary)]"
-                        }`}>
-                          <RenderIcon iconName={item.icon} size={14} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="truncate text-[13px] font-medium flex items-center gap-1.5">
-                            {item.title}
-                            {isFav && !search && <Star size={9} className="text-[var(--muted)] shrink-0" />}
-                          </div>
-                          {item.description && (
-                            <div className="truncate text-[11px] text-[var(--muted)] mt-0.5">
-                              {item.description}
-                            </div>
-                          )}
-                        </div>
-                        {item.shortcut && (
-                          <span className="shrink-0 text-[10px] text-[var(--muted)] px-1.5 py-0.5 rounded border border-[var(--border)]" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas", background: "var(--surface)" }}>
-                            {item.shortcut}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex items-center justify-between text-[10px] text-[var(--muted)] select-none">
-                <div className="flex items-center gap-2.5">
-                  <span><kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">↑↓</kbd> Navigate</span>
-                  <span><kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">↵</kbd> Select</span>
-                  <span className="opacity-75">✋ Hold to drag card</span>
+              {/* Mobile Bottom Sheet */}
+              <motion.div
+                ref={menuRef}
+                initial={{ y: "100%", opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: "100%", opacity: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                className="mobile-slash-sheet"
+                role="dialog"
+                aria-label="Insert block"
+              >
+                {/* Pull handle */}
+                <div className="mobile-slash-handle-bar">
+                  <div className="mobile-slash-handle" />
                 </div>
-                <kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">esc</kbd>
-              </div>
-            </div>
-          </motion.div>
 
-          {/* Side Preview Panel */}
-          <SlashCommandPreviewPanel
-            command={previewCmd}
-            side={panelSide}
-            visible={panelVisible}
-            menuWidth={MENU_WIDTH}
-          />
-        </div>
+                {/* Mobile Search Input */}
+                <div className="mobile-slash-search-row">
+                  <div className="mobile-slash-search-wrap">
+                    <Search size={16} className="mobile-slash-search-icon" />
+                    <input
+                      ref={searchRef}
+                      value={search}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setHighlightedIndex(-1);
+                        setActiveCategory(null);
+                      }}
+                      placeholder="Insert block or command…"
+                      className="mobile-slash-search-input"
+                      autoFocus
+                    />
+                    {search && (
+                      <button
+                        type="button"
+                        onClick={() => setSearch("")}
+                        className="mobile-slash-clear-btn"
+                        aria-label="Clear search"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={wrappedOnClose}
+                    className="mobile-slash-close-btn"
+                    aria-label="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Horizontal Category Filter Pills */}
+                {!search && (
+                  <div className="mobile-slash-category-pills">
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategory(null)}
+                      className={`mobile-slash-pill ${activeCategory === null ? "is-active" : ""}`}
+                    >
+                      <Star size={13} />
+                      <span>All</span>
+                    </button>
+                    {visibleCategories.map((cat) => (
+                      <button
+                        key={cat.name}
+                        type="button"
+                        onClick={() => setActiveCategory(activeCatName === cat.name ? null : cat.name)}
+                        className={`mobile-slash-pill ${activeCategory === cat.name ? "is-active" : ""}`}
+                      >
+                        <RenderIcon iconName={CATEGORY_ICONS[cat.name] || cat.icon} size={13} />
+                        <span>{CATEGORY_LABELS[cat.name] || cat.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Mobile Command List */}
+                <div ref={listRef} className="mobile-slash-list" role="listbox" id="slash-listbox">
+                  {flatItems.length === 0 ? (
+                    <div className="mobile-slash-empty">No matching blocks found</div>
+                  ) : (
+                    flatItems.map((item, idx) => {
+                      if (isGroupHeader(item)) {
+                        return (
+                          <div key={`group-${item._groupName}`} className="mobile-slash-section-header" role="presentation">
+                            <RenderIcon iconName={item._groupIcon} size={12} />
+                            <span>{CATEGORY_LABELS[item._groupName] || item._groupName}</span>
+                          </div>
+                        );
+                      }
+
+                      const isSelected = highlightedIndex === idx;
+                      const isFav = favorites.includes(item.id);
+
+                      return (
+                        <motion.button
+                          key={`${item.id}-${idx}`}
+                          type="button"
+                          data-slash-item
+                          id={`slash-item-${item.id}`}
+                          role="option"
+                          aria-selected={isSelected}
+                          whileTap={{ scale: 0.96 }}
+                          onClick={() => {
+                            try {
+                              if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+                                navigator.vibrate(12);
+                              }
+                            } catch {}
+                            addFavorite(item.id);
+                            handleSelect(item.id);
+                            wrappedOnClose();
+                          }}
+                          className={`mobile-slash-item ${isSelected ? "is-selected" : ""}`}
+                        >
+                          <div className="mobile-slash-item__icon-tile">
+                            <RenderIcon iconName={item.icon} size={18} />
+                          </div>
+                          <div className="mobile-slash-item__info">
+                            <div className="mobile-slash-item__title">
+                              {item.title}
+                              {isFav && !search && <Star size={10} className="mobile-slash-item__star" />}
+                            </div>
+                            {item.description && (
+                              <div className="mobile-slash-item__desc">{item.description}</div>
+                            )}
+                          </div>
+                          {item.shortcut && (
+                            <span className="mobile-slash-item__badge">{item.shortcut}</span>
+                          )}
+                        </motion.button>
+                      );
+                    })
+                  )}
+                </div>
+              </motion.div>
+            </>
+          ) : (
+            /* Desktop Floating Menu */
+            <div
+              ref={menuRef}
+              style={{
+                position: "fixed",
+                top: position?.top ?? 0,
+                left: position?.left ?? 0,
+                zIndex: 130,
+              }}
+            >
+              <motion.div
+                ref={innerMenuRef}
+                drag
+                dragMomentum={false}
+                initial={{ opacity: 0, scale: 0.95, y: 6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.97, y: 3, transition: { duration: 0.08, ease: [0.7, 0, 0.84, 0] } }}
+                transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                style={{ width: MENU_WIDTH }}
+                className="apple-liquid-glass flex overflow-hidden rounded-2xl max-h-[460px]"
+                role="dialog"
+                aria-label="Block type selector"
+              >
+                {/* Category sidebar */}
+                {!search && (
+                  <div className="flex flex-col gap-0.5 border-r border-[var(--border)] bg-[var(--surface)] p-1.5 w-9 shrink-0">
+                    {visibleCategories.map((cat) => (
+                      <button
+                        key={cat.name}
+                        onClick={() => setActiveCategory(activeCatName === cat.name ? null : cat.name)}
+                        className={`grid h-6 w-6 place-items-center rounded transition cursor-pointer ${
+                          activeCatName === cat.name ? "bg-[var(--accent)]/10 text-[var(--accent)]" : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+                        }`}
+                        title={cat.name}
+                      >
+                        <RenderIcon iconName={CATEGORY_ICONS[cat.name] || cat.icon} size={13} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex flex-col flex-1 min-w-0">
+                  {/* Search + Draggable header handle */}
+                  <div className="relative border-b border-[var(--border)] cursor-grab active:cursor-grabbing">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none" />
+                    <input
+                      ref={searchRef}
+                      value={search}
+                      onChange={(e) => { setSearch(e.target.value); setHighlightedIndex(-1); setActiveCategory(null); }}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Search or type a command..."
+                      className="w-full bg-transparent py-[10px] pl-[32px] pr-3 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-expanded={open}
+                      aria-haspopup="listbox"
+                      aria-controls="slash-listbox"
+                      aria-activedescendant={(() => {
+                        const current = flatItems[highlightedIndex];
+                        return highlightedIndex >= 0 && current && !isGroupHeader(current) ? `slash-item-${current.id}` : undefined;
+                      })()}
+                    />
+                    {search && (
+                      <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)]">
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Results */}
+                  <div ref={listRef} className="overflow-y-auto scrollbar-none py-1" role="listbox" id="slash-listbox" style={{ maxHeight: 320 }}>
+                    {flatItems.length === 0 ? (
+                      <div className="px-3 py-8 text-center text-xs text-[var(--muted)]">No blocks found</div>
+                    ) : (
+                      flatItems.map((item, idx) => {
+                        if (isGroupHeader(item)) {
+                          return (
+                            <div key={`group-${item._groupName}`} className="flex items-center gap-1.5 px-3 py-1.5 border-b border-[var(--border)] mb-1" role="presentation">
+                              <RenderIcon iconName={item._groupIcon} size={11} className="text-[var(--muted)]" />
+                              <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]" style={{ letterSpacing: "0.05em" }}>
+                                {CATEGORY_LABELS[item._groupName] || item._groupName}
+                              </span>
+                            </div>
+                          );
+                        }
+
+                        const isSelected = highlightedIndex === idx;
+                        const isFav = favorites.includes(item.id);
+
+                        return (
+                          <button
+                            key={`${item.id}-${idx}`}
+                            data-slash-item
+                            id={`slash-item-${item.id}`}
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => { addFavorite(item.id); handleSelect(item.id); wrappedOnClose(); }}
+                            onMouseEnter={() => setHighlightedIndex(idx)}
+                            className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors duration-75 cursor-pointer ${
+                              isSelected ? "bg-[var(--accent)]/8" : ""
+                            }`}
+                          >
+                            <div className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${
+                              isSelected ? "bg-[var(--accent)]/10 text-[var(--accent)]" : "bg-[var(--surface)] text-[var(--secondary)]"
+                            }`}>
+                              <RenderIcon iconName={item.icon} size={14} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="truncate text-[13px] font-medium flex items-center gap-1.5">
+                                {item.title}
+                                {isFav && !search && <Star size={9} className="text-[var(--muted)] shrink-0" />}
+                              </div>
+                              {item.description && (
+                                <div className="truncate text-[11px] text-[var(--muted)] mt-0.5">
+                                  {item.description}
+                                </div>
+                              )}
+                            </div>
+                            {item.shortcut && (
+                              <span className="shrink-0 text-[10px] text-[var(--muted)] px-1.5 py-0.5 rounded border border-[var(--border)]" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas", background: "var(--surface)" }}>
+                                {item.shortcut}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex items-center justify-between text-[10px] text-[var(--muted)] select-none">
+                    <div className="flex items-center gap-2.5">
+                      <span><kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">↑↓</kbd> Navigate</span>
+                      <span><kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">↵</kbd> Select</span>
+                      <span className="opacity-75">✋ Hold to drag card</span>
+                    </div>
+                    <kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">esc</kbd>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Side Preview Panel */}
+              <SlashCommandPreviewPanel
+                command={previewCmd}
+                side={panelSide}
+                visible={panelVisible}
+                menuWidth={MENU_WIDTH}
+              />
+            </div>
+          )}
+        </>
       )}
     </AnimatePresence>
   );

@@ -20,6 +20,7 @@ import DatabaseBlock from "../DatabaseBlock";
 import LinkedViewBlock from "./LinkedViewBlock";
 import FormsBlock from "../FormsBlock";
 import ExternalLinkPreview from "./ExternalLinkPreview";
+import WidgetEditorBlock from "./WidgetEditorBlock";
 import { PageIcon } from "../PageIcon";
 
 
@@ -66,6 +67,19 @@ export default function renderBlockEditor(
   onBlocks?: (blocks: any[]) => void,
   onPasteUrl?: (url: string) => void
 ) {
+  if (block.type === "widget") {
+    return (
+      <WidgetEditorBlock
+        block={block}
+        onPatch={onPatch}
+        onDelete={onDelete}
+        pages={pages}
+        onNavigate={onNavigate}
+        onToast={onToast}
+      />
+    );
+  }
+
   if (block.type === "external-preview") {
     return <ExternalLinkPreview block={block} onPatch={onPatch} onDelete={onDelete} />;
   }

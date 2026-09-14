@@ -2,7 +2,7 @@
 // The canonical implementation now lives in src/platform (it also knows
 // about the iOS/Android native shells); this module keeps the historical
 // import path stable for the existing call sites.
-export { isDesktop, isWeb, isNativeApp } from "../../platform";
+export { isDesktop, isWeb, isNativeApp, isMobile } from "../../platform";
 
 export type DesktopPlatform = "windows" | "macos" | "linux" | "unknown";
 

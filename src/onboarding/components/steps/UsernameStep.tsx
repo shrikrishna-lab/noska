@@ -147,7 +147,20 @@ export default function UsernameStep() {
         )}
       </div>
 
-      <div className="flex items-center justify-end pt-1">
+      <div className="flex items-center justify-between pt-1">
+        <button
+          type="button"
+          onClick={() => {
+            if (!form.username) {
+              setFormField("username", `user_${Math.floor(1000 + Math.random() * 9000)}`);
+            }
+            next();
+          }}
+          className="text-xs font-semibold hover:underline"
+          style={{ color: C.muted }}
+        >
+          Skip for now
+        </button>
         <PrimaryBtn onClick={next} disabled={!canContinue}>
           Continue <ChevronRight size={15} />
         </PrimaryBtn>

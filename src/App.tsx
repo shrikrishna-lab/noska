@@ -5,6 +5,7 @@ import { isMobile, isNativeApp } from "./platform";
 import MobileWorkspaceApp from "./platform/mobile/MobileWorkspaceApp";
 import MobileAuthScreen from "./platform/mobile/MobileAuthScreen";
 import { MobileControllerContext, type MobileAppController } from "./platform/mobile/MobileAppController";
+import { devSignInLocal, isDevBypassAvailable } from "./lib/devAuth";
 import { VOICE_SETTINGS_EVENT } from "./lib/desktop/DesktopBridge";
 import { globalVoiceController } from "./lib/voice/voice-controller";
 import { parseVoiceAgentCommand, scorePageName } from "./lib/voice/agent-commands";
@@ -12,7 +13,7 @@ import { blankAgent, saveAgent } from "./features/agents/agentStore";
 import { blankAutomation, saveAutomation } from "./features/automations/automationStore";
 import { refreshDefinitions } from "./intelligence/triggerService";
 import { collectLocalDiagnostics, queueLocalBugReport } from "./lib/diagnostics/localDiagnostics";
-import { getDesktopIdentity, subscribePairing, pairingVersion, desktopSignOut } from "./lib/desktop/pairing";
+import { getDesktopIdentity, subscribePairing, pairingVersion, desktopSignOut, saveSession, toIdentity } from "./lib/desktop/pairing";
 import { clearBrowserAuthState } from "./lib/desktop/browserAuth";
 import { handleShortcutEvent } from "./lib/shortcuts";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
@@ -856,7 +857,7 @@ function AppContent() {
           if (!profile?.onboarding_complete && u.id) {
             setOnboardingComplete(u.id, profile?.use_case || null, profile?.workspace_name || `${uname}'s Workspace`, profile?.username).catch(() => {});
           }
-          setNeedsUsernameClaim(!profile?.username);
+          setNeedsUsernameClaim(!profile?.username && !isMobile());
           // Returning user: set their data
           const normalized = normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })));
           // Register the DB/local merged state as the sync baseline so the
@@ -899,12 +900,49 @@ function AppContent() {
           }
           setAppFlowState("workspace");
         } else {
-          // New user: clear everything, redirect to onboarding
-          setPages([]);
-          setAiChats([]);
-          setActiveId(null);
-          setStackedPageIds([]);
-          setAppFlowState("onboarding");
+          if (isMobile()) {
+            const initialTimestamp = now();
+            const starterPages: Page[] = [
+              {
+                id: uid(),
+                title: "Getting Started",
+                icon: "🚀",
+                favorite: true,
+                trashed: false,
+                tags: ["welcome", "guide"],
+                parentId: null,
+                createdAt: initialTimestamp,
+                updatedAt: initialTimestamp,
+                lineage: [{ action: "created" as const, timestamp: initialTimestamp, detail: "Mobile starter page" }],
+                blocks: textToBlocks("# Welcome to Noska Mobile\n\nYour workspace — pages, tasks, widgets and AI — right on your phone.\n\n- [x] Explore pages\n- [ ] Create custom widgets\n- [ ] Try AI chat"),
+              },
+              {
+                id: uid(),
+                title: "Mobile Projects & Tasks",
+                icon: "🎯",
+                favorite: true,
+                trashed: false,
+                tags: ["work", "active"],
+                parentId: null,
+                createdAt: initialTimestamp,
+                updatedAt: initialTimestamp,
+                lineage: [{ action: "created" as const, timestamp: initialTimestamp, detail: "Mobile starter page" }],
+                blocks: textToBlocks("# Mobile Projects & Roadmap\n\nTrack your priorities on the go.\n\n- [x] Setup Android test environment\n- [x] Configure GPU acceleration\n- [ ] Customize workspace layout"),
+              }
+            ];
+            setPages(starterPages);
+            setAiChats([]);
+            setActiveId(starterPages[0].id);
+            setStackedPageIds([starterPages[0].id]);
+            setAppFlowState("workspace");
+          } else {
+            // New user: clear everything, redirect to onboarding
+            setPages([]);
+            setAiChats([]);
+            setActiveId(null);
+            setStackedPageIds([]);
+            setAppFlowState("onboarding");
+          }
         }
       } catch {
         if (loadedPages && loadedPages.length > 0) {
@@ -920,11 +958,33 @@ function AppContent() {
           setStackedPageIds([deepLinkId]);
           setAppFlowState("workspace");
         } else {
-          setPages([]);
-          setAiChats([]);
-          setActiveId(null);
-          setStackedPageIds([]);
-          setAppFlowState("onboarding");
+          if (isMobile()) {
+            const initialTimestamp = now();
+            const defaultPage: Page = {
+              id: uid(),
+              title: "Getting Started",
+              icon: "🚀",
+              favorite: true,
+              trashed: false,
+              tags: ["welcome"],
+              parentId: null,
+              createdAt: initialTimestamp,
+              updatedAt: initialTimestamp,
+              lineage: [{ action: "created" as const, timestamp: initialTimestamp, detail: "Mobile starter page" }],
+              blocks: textToBlocks("# Welcome to Noska Mobile\n\nYour workspace is ready!"),
+            };
+            setPages([defaultPage]);
+            setAiChats([]);
+            setActiveId(defaultPage.id);
+            setStackedPageIds([defaultPage.id]);
+            setAppFlowState("workspace");
+          } else {
+            setPages([]);
+            setAiChats([]);
+            setActiveId(null);
+            setStackedPageIds([]);
+            setAppFlowState("onboarding");
+          }
         }
       }
 
@@ -1035,7 +1095,7 @@ function AppContent() {
       // Same pre-existing-account gate as the initial-mount bootstrap
       // above — see its comment for why this can't just be folded into
       // the onboarding wizard for these users.
-      setNeedsUsernameClaim(!existingProfile?.username);
+      setNeedsUsernameClaim(!existingProfile?.username && !isMobile());
       // Returning user signing in mid-session (the initial mount bootstrap
       // already ran before this sign-in completed) — load their data now.
       // DB-first: fetchPages above is awaited BEFORE any localStorage read,
@@ -3064,27 +3124,24 @@ function AppContent() {
                   </div>
                 </div>
               ) : (
-                <LoadingScreen key="mobile-loader" onComplete={() => { if (!ticketPending) setAppFlowState("auth"); }} />
-              )
-            ) : appFlowState === "auth" ? (
-              <LoginGate>
-                <MobileAuthScreen key="mobile-auth" />
-              </LoginGate>
-            ) : appFlowState === "onboarding" || onboardingOpen ? (
-              <div className="mobile-onboarding-host" data-testid="mobile-onboarding">
-                <OnboardingPage
-                  key={onboardingOpen ? "mobile-onboarding-overlay" : "mobile-onboarding"}
-                  overlay={onboardingOpen || undefined}
-                  initialWorkspaceName={workspaceName}
-                  initialUsername={currentUsername ?? undefined}
-                  currentUserId={currentUserId ?? undefined}
-                  onFinalize={handleFinalize}
-                  onComplete={(data, starterPages) => {
-                    if (onboardingOpen) setOnboardingOpen(false);
-                    void handleOnboardingComplete(data, starterPages);
+                <LoadingScreen
+                  key="mobile-loader"
+                  onComplete={() => {
+                    // Dev-only auto sign-in: skips the browser handoff in dev
+                    // builds so engineers (and emulators) land straight in a
+                    // local workspace. Production NEVER bypasses — it goes to
+                    // the sign-in screen.
+                    if (isMobile() && !isSignedIn && isDevBypassAvailable()) {
+                      devSignInLocal("Mobile Tester");
+                      setAppFlowState("workspace");
+                    } else if (!ticketPending) {
+                      setAppFlowState("auth");
+                    }
                   }}
                 />
-              </div>
+              )
+            ) : appFlowState === "auth" ? (
+              <MobileAuthScreen key="mobile-auth" />
             ) : location.pathname === "/banned" ? (
               <div className="mobile-auth-screen mobile-auth-screen--center">
                 <h1 className="mobile-auth-title">Access revoked</h1>
@@ -3202,7 +3259,7 @@ function AppContent() {
             {toast && <Toast message={toast} onDone={() => setToast("")} />}
           </AnimatePresence>
           <VoiceFloatingIndicator />
-          {needsUsernameClaim && currentUserId && (
+          {needsUsernameClaim && currentUserId && !isMobile() && (
             <ClaimUsernameModal
               userId={currentUserId}
               onDone={(username) => { setCurrentUsername(username); setNeedsUsernameClaim(false); }}

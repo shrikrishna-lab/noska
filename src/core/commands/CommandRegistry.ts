@@ -603,6 +603,34 @@ const advanced = [
     preview: "AI-powered meeting notes — capture and summarize",
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "ai-meeting", ctx.text)); }
   },
+  {
+    id: "widget", title: "Dashboard Widget", aliases: ["widget", "gadget", "card"],
+    icon: "LayoutGrid", category: "Advanced blocks",
+    description: "Embed an interactive Noska dashboard widget",
+    preview: "Interactive data-aware widget (KPI, chart, tasks, calendar, world clock, or AI hub)",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "widget", ctx.text || "my-tasks")); }
+  },
+  {
+    id: "widget-tasks", title: "Widget: My Tasks", aliases: ["wtasks", "task-widget"],
+    icon: "CheckSquare", category: "Advanced blocks",
+    description: "Embed live tasks widget with quick complete",
+    preview: "Interactive task list with due dates, overdue counts and 1-click completion",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "widget", "my-tasks")); }
+  },
+  {
+    id: "widget-chart", title: "Widget: Velocity Chart", aliases: ["wchart", "chart-widget"],
+    icon: "BarChart3", category: "Advanced blocks",
+    description: "Embed animated velocity points chart",
+    preview: "SVG daily completion volume bar chart with interactive bars",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "widget", "task-velocity-chart")); }
+  },
+  {
+    id: "widget-clock", title: "Widget: World Clock", aliases: ["wclock", "clock-widget"],
+    icon: "Clock", category: "Advanced blocks",
+    description: "Embed multi-timezone analog clock",
+    preview: "Analog chronometer with rotating sweep hand and multi-city time zones",
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "widget", "world-clock")); }
+  },
 ];
 
 // ── Layout ──────────────────────────────────────────────────────

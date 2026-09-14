@@ -14,6 +14,7 @@ import {
   startBrowserAuth,
   subscribeBrowserAuth,
 } from "../../lib/desktop/browserAuth";
+import { devSignInLocal, isDevBypassAvailable } from "../../lib/devAuth";
 import { openExternal } from "../../lib/desktop/links";
 import { hapticFeedback } from "../index";
 
@@ -23,6 +24,14 @@ const PRIVACY_URL = "https://www.noska.me/privacy";
 export default function MobileAuthScreen() {
   useSyncExternalStore(subscribeBrowserAuth, browserAuthVersion);
   const { status, authUrl, error, pollError } = getBrowserAuthState();
+
+  // Dev-only local sign-in. isDevBypassAvailable() is false in production
+  // builds, so every bypass button below is removed from the shipped app.
+  const devBypass = isDevBypassAvailable();
+  const handleSkipAuth = () => {
+    hapticFeedback("medium");
+    devSignInLocal("Mobile Tester");
+  };
 
   if (status === "success") {
     return (
@@ -86,7 +95,7 @@ export default function MobileAuthScreen() {
         <p className="mobile-auth-subtitle">
           You started signing in earlier but it didn't finish.
         </p>
-        <div className="mobile-auth-actions">
+        <div className="mobile-auth-actions" style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 320 }}>
           <button
             type="button"
             className="mobile-btn mobile-btn--primary"
@@ -94,6 +103,15 @@ export default function MobileAuthScreen() {
           >
             Continue signing in
           </button>
+          {devBypass && (
+          <button
+            type="button"
+            className="mobile-btn mobile-btn--secondary"
+            onClick={handleSkipAuth}
+          >
+            Skip & Open Dev Workspace
+          </button>
+          )}
           <button
             type="button"
             className="mobile-btn mobile-btn--ghost"
@@ -122,7 +140,7 @@ export default function MobileAuthScreen() {
             ? "Sign-in attempts are valid for 10 minutes."
             : error ?? "Check your connection and try again."}
         </p>
-        <div className="mobile-auth-actions">
+        <div className="mobile-auth-actions" style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 320 }}>
           <button
             type="button"
             className="mobile-btn mobile-btn--primary"
@@ -130,6 +148,15 @@ export default function MobileAuthScreen() {
           >
             Try again
           </button>
+          {devBypass && (
+          <button
+            type="button"
+            className="mobile-btn mobile-btn--secondary"
+            onClick={handleSkipAuth}
+          >
+            Skip & Open Dev Workspace
+          </button>
+          )}
         </div>
       </div>
     );
@@ -152,6 +179,16 @@ export default function MobileAuthScreen() {
       >
         Sign in
       </button>
+      {devBypass && (
+      <button
+        type="button"
+        className="mobile-btn mobile-btn--secondary"
+        style={{ marginTop: 12, width: "100%", maxWidth: 320 }}
+        onClick={handleSkipAuth}
+      >
+        Skip for now (Dev preview)
+      </button>
+      )}
       {error && <p className="mobile-auth-error" role="alert">{error}</p>}
       <div className="mobile-auth-legal">
         <a href={TERMS_URL} onClick={(e) => { e.preventDefault(); void openExternal(TERMS_URL); }}>Terms</a>

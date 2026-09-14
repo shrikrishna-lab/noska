@@ -13,16 +13,6 @@ val tauriProperties = Properties().apply {
     }
 }
 
-val testSigning = signingConfigs.create("noskaTest") {
-    val ksFile = rootProject.file("../noska-test.keystore")
-    if (ksFile.exists()) {
-        storeFile = ksFile
-        storePassword = "noska-test-pass"
-        keyAlias = "noska"
-        keyPassword = "noska-test-pass"
-    }
-}
-
 android {
     compileSdk = 36
     namespace = "dev.noska.app"
@@ -34,21 +24,33 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        create("noskaTest") {
+            val ksFile = rootProject.file("noska-test.keystore")
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = "noska-test-pass"
+                keyAlias = "noska"
+                keyPassword = "noska-test-pass"
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
-            packaging {                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
+            packaging {
+                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
                 jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
             }
         }
         getByName("release") {
-            if (rootProject.file("../noska-test.keystore").exists()) {
-                signingConfig = testSigning
+            if (rootProject.file("noska-test.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("noskaTest")
             }
             isMinifyEnabled = true
             proguardFiles(

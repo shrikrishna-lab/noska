@@ -61,7 +61,11 @@ export interface GatewayTool {
 /* ─── Transport ───────────────────────────────────────────────────────── */
 
 async function authedRequest(path: string, init: RequestInit = {}): Promise<any> {
-  const token = await currentAccessToken();
+  let token = await currentAccessToken();
+  if (!token) {
+    const { data } = await supabase.auth.getSession();
+    token = data?.session?.access_token ?? null;
+  }
   if (!token) throw new Error("Sign in to Noska to manage platform connections.");
   try {
     const res = await fetch(`${GATEWAY}/${path}`, {

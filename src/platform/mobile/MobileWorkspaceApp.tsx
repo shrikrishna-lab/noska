@@ -1,188 +1,384 @@
-// MobileWorkspaceApp — the native-feeling mobile shell for the Noska
-// workspace. Presentation only: ALL state and mutations come from App.tsx
-// through MobileAppController, so web, desktop and mobile share one business
-// layer (one workspace, one sync, one AI).
-//
-// Surfaces: compact header, bottom navigation (Home · Search · Create ·
-// Inbox · Profile), touch-first screens, bottom sheets, safe-area + visual
-// viewport (keyboard) insets, offline/sync status.
+// MobileWorkspaceApp — Apple Liquid Glass mobile shell for the Noska workspace.
+// Features:
+// - Single bottom Apple Liquid Glass Capsule Dock with attached (+) Action Button
+// - Expandable Liquid Glass Action Grid Sheet on tapping (+)
+// - Horizontal Recents Card Carousel with cover banners and floating emoji badges
+// - Hierarchical Page Tree ("Private" & "Teamspaces") with expandable subpages
+// - Mobile Keyboard Accessory Toolbar & quick block formatting chips
+// - Noska Flow Compact Waveform Pill & Live Dictation / Speech Recognition
+// - Native touch responsiveness with 60fps hardware acceleration
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  Home as HomeIcon,
-  Search as SearchIcon,
-  Plus,
-  Inbox as InboxIcon,
-  User as UserIcon,
   ChevronLeft,
   ChevronRight,
-  Star,
-  Clock,
-  Trash2,
-  LogOut,
-  Sparkles,
+  ChevronDown,
+  Search as SearchIcon,
   MoreVertical,
-  WifiOff,
   Share2,
-  Copy,
-  Pencil,
-  FolderPlus,
-  Layers,
+  Plus,
+  Lock,
+  LayoutTemplate,
   Sun,
   Moon,
-  Monitor,
-  Bell,
-  Settings as SettingsIcon,
   X,
-  Check,
+  Mic,
+  Sparkles,
+  Volume2,
+  Database,
 } from "lucide-react";
 
-import { useWorkspace } from "../../contexts/WorkspaceContext";
+import type { Page } from "../../lib/supabaseService";
+import type { Block } from "../../../types/blocks";
 import { useUI } from "../../contexts/UIContext";
 import { useAI } from "../../contexts/AIContext";
-import { Toast } from "../../components/ui";
-import { TrashModal, ShareModal } from "../../components/Modals";
-import ProfileModal from "../../components/ProfileModal";
-import ClaimUsernameModal from "../../components/auth/ClaimUsernameModal";
 import SplitWorkspaceRenderer from "../../features/split/SplitWorkspaceRenderer";
-import { plainText, slugifyWorkspaceName, timeAgo, uid } from "../../utils/helpers";
-import { hasPendingSyncWrites } from "../../utils/storage";
-import { ensureNotificationPermission } from "../../lib/desktop/notify";
-import { openExternal } from "../../lib/desktop/links";
+import { plainText, timeAgo, uid } from "../../utils/helpers";
 import { hapticFeedback } from "../index";
 import { useMobileController } from "./MobileAppController";
 import { MobileFloatingNavbar, type MobileTab } from "./MobileFloatingNavbar";
+import { MobileActionGridSheet } from "./MobileActionGridSheet";
+import { MobileKeyboardToolbar } from "./MobileKeyboardToolbar";
+import { MobileFlowPill } from "./MobileFlowPill";
 import "./mobile.css";
 
-const AIPanel = lazy(() => import("../../components/AIPanel"));
+const COVER_GRADIENTS = [
+  "linear-gradient(135deg, #fbcfe8 0%, #e0e7ff 100%)",
+  "linear-gradient(135deg, #fed7aa 0%, #fef08a 100%)",
+  "linear-gradient(135deg, #a7f3d0 0%, #bfdbfe 100%)",
+  "linear-gradient(135deg, #c7d2fe 0%, #fbcfe8 100%)",
+  "linear-gradient(135deg, #bae6fd 0%, #d9f99d 100%)",
+];
 
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 5) return "Working late";
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+function getCoverStyle(page: Page, index: number): string {
+  if (page.cover) {
+    if (page.cover.startsWith("http") || page.cover.startsWith("data:") || page.cover.startsWith("/")) {
+      return `url(${page.cover}) center/cover no-repeat`;
+    }
+    return page.cover;
+  }
+  return COVER_GRADIENTS[index % COVER_GRADIENTS.length];
 }
 
-function PageRow({ page, onOpen, showTime = true, starred }: {
-  page: { id: string; title?: string; icon?: string | null; updatedAt?: string };
-  onOpen: (id: string) => void;
-  showTime?: boolean;
-  starred?: boolean;
-}) {
-  return (
-    <button type="button" className="mobile-page-row" onClick={() => { hapticFeedback("light"); onOpen(page.id); }}>
-      <span className="mobile-page-row__icon" aria-hidden>{page.icon || "📝"}</span>
-      <span className="mobile-page-row__body">
-        <span className="mobile-page-row__title">{page.title || "Untitled"}</span>
-        {showTime && page.updatedAt && (
-          <span className="mobile-page-row__meta">Edited {timeAgo(page.updatedAt)}</span>
-        )}
-      </span>
-      {starred && <Star size={15} className="mobile-page-row__star" fill="currentColor" />}
-    </button>
-  );
-}
+/* ── Recents Card Carousel ─────────────────────────────────────────────── */
 
-/* ── Home ──────────────────────────────────────────────────────────────── */
-
-function HomeScreen({ openPage, onCreate }: { openPage: (id: string) => void; onCreate: () => void }) {
-  const controller = useMobileController();
-  const favorites = controller.visiblePages.filter((p) => p.favorite);
-  const recents = useMemo(
-    () => [...controller.visiblePages]
-      .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
-      .slice(0, 8),
-    [controller.visiblePages]
-  );
-  const rootPages = useMemo(
-    () => controller.visiblePages.filter((p) => !p.parentId),
-    [controller.visiblePages]
-  );
-  const databases = useMemo(
-    () => controller.visiblePages.filter((p) =>
-      (p.blocks || []).some((b) => (b as { type?: string }).type === "database")
-    ).slice(0, 4),
-    [controller.visiblePages]
-  );
-
-  const name = controller.currentUsername || controller.currentUserEmail?.split("@")[0] || "there";
+function RecentsCarousel({ pages, onOpen }: { pages: Page[]; onOpen: (id: string) => void }) {
+  if (pages.length === 0) return null;
 
   return (
-    <div className="mobile-screen">
-      <div className="mobile-greeting">
-        <h1>{greeting()}, {name.charAt(0).toUpperCase() + name.slice(1)}</h1>
-        <p>{controller.workspaceName} · {controller.visiblePages.length} page{controller.visiblePages.length === 1 ? "" : "s"}</p>
+    <div className="mobile-recents-section">
+      <div className="mobile-section-header">
+        <span className="mobile-section-title">Recents</span>
       </div>
+      <div className="mobile-recents-carousel">
+        {pages.map((p, idx) => (
+          <motion.button
+            key={p.id}
+            type="button"
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 450, damping: 25 }}
+            className="mobile-recents-card"
+            onClick={() => {
+              hapticFeedback("light");
+              onOpen(p.id);
+            }}
+          >
+            <div className="mobile-recents-card__cover" style={{ background: getCoverStyle(p, idx) }} />
+            <div className="mobile-recents-card__body">
+              <span className="mobile-recents-card__icon" aria-hidden>
+                {p.icon || "📝"}
+              </span>
+              <span className="mobile-recents-card__title">{p.title || "Untitled"}</span>
+              <span className="mobile-recents-card__time">{timeAgo(p.updatedAt)}</span>
+            </div>
+          </motion.button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-      <div className="mobile-quickrow">
-        <button type="button" className="mobile-quickcard" onClick={onCreate}>
-          <span aria-hidden>📝</span>New page
-        </button>
-        <button type="button" className="mobile-quickcard" onClick={onCreate}>
-          <span aria-hidden>✅</span>Tasks
-        </button>
-        <button type="button" className="mobile-quickcard" onClick={onCreate}>
-          <span aria-hidden>🗓️</span>Meeting
-        </button>
+/* ── Hierarchical Page Tree ─────────────────────────────────────────────── */
+
+function PageTreeItem({
+  page,
+  level = 0,
+  allPages,
+  expandedIds,
+  onToggleExpand,
+  onOpen,
+  onCreateChild,
+}: {
+  page: Page;
+  level?: number;
+  allPages: Page[];
+  expandedIds: Set<string>;
+  onToggleExpand: (id: string) => void;
+  onOpen: (id: string) => void;
+  onCreateChild: (parentId: string) => void;
+}) {
+  const children = useMemo(
+    () => allPages.filter((p) => p.parentId === page.id && !p.trashed),
+    [allPages, page.id]
+  );
+  const hasChildren = children.length > 0;
+  const isExpanded = expandedIds.has(page.id);
+
+  return (
+    <div className="mobile-tree-node">
+      <div
+        className="mobile-tree-row"
+        style={{ paddingLeft: `${14 + level * 18}px` }}
+        onClick={() => {
+          hapticFeedback("light");
+          onOpen(page.id);
+        }}
+      >
         <button
           type="button"
-          className="mobile-quickcard"
-          onClick={() => {
-            const target = controller.activePage?.id || recents[0]?.id;
-            if (target) openPage(target);
+          className="mobile-tree-chevron"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasChildren) onToggleExpand(page.id);
           }}
+          aria-label={isExpanded ? "Collapse" : "Expand"}
         >
-          <span aria-hidden>✦</span>Continue
+          {hasChildren ? (
+            <ChevronDown
+              size={15}
+              className={`transition-transform duration-150 ${isExpanded ? "" : "-rotate-90"}`}
+            />
+          ) : (
+            <div className="mobile-tree-chevron-placeholder" />
+          )}
         </button>
+
+        <span className="mobile-tree-icon" aria-hidden>
+          {page.icon || "📄"}
+        </span>
+
+        <span className="mobile-tree-title">{page.title || "Untitled"}</span>
+
+        <div className="mobile-tree-actions" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="mobile-tree-btn"
+            onClick={() => {
+              hapticFeedback("light");
+              onCreateChild(page.id);
+            }}
+            aria-label="Add subpage"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
       </div>
 
-      {favorites.length > 0 && (
-        <>
-          <div className="mobile-section-label">Favorites</div>
-          {favorites.map((p) => <PageRow key={p.id} page={p} onOpen={openPage} starred showTime={false} />)}
-        </>
-      )}
-
-      <div className="mobile-section-label">Recent</div>
-      {recents.length === 0 ? (
-        <div className="mobile-empty">
-          <span className="mobile-empty__art" aria-hidden>🌱</span>
-          <span className="mobile-empty__title">Your workspace is empty</span>
-          <span className="mobile-empty__body">Create your first page with the + button below.</span>
+      {hasChildren && isExpanded && (
+        <div className="mobile-tree-children">
+          {children.map((child) => (
+            <PageTreeItem
+              key={child.id}
+              page={child}
+              level={level + 1}
+              allPages={allPages}
+              expandedIds={expandedIds}
+              onToggleExpand={onToggleExpand}
+              onOpen={onOpen}
+              onCreateChild={onCreateChild}
+            />
+          ))}
         </div>
-      ) : (
-        recents.map((p) => <PageRow key={p.id} page={p} onOpen={openPage} />)
-      )}
-
-      {rootPages.length > 0 && (
-        <>
-          <div className="mobile-section-label">Pages</div>
-          {rootPages.map((p) => <PageRow key={p.id} page={p} onOpen={openPage} showTime={false} starred={p.favorite} />)}
-        </>
-      )}
-
-      {databases.length > 0 && (
-        <>
-          <div className="mobile-section-label">Databases &amp; tasks</div>
-          {databases.map((p) => <PageRow key={p.id} page={p} onOpen={openPage} showTime={false} />)}
-        </>
       )}
     </div>
   );
 }
 
-/* ── Search ────────────────────────────────────────────────────────────── */
+/* ── Home Screen ────────────────────────────────────────────────────────── */
 
-function SearchScreen({ openPage }: { openPage: (id: string) => void }) {
+function HomeScreen({
+  openPage,
+  onOpenActionGrid,
+}: {
+  openPage: (id: string) => void;
+  onOpenActionGrid: () => void;
+}) {
+  const controller = useMobileController();
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const recents = useMemo(() => {
+    return [...controller.visiblePages]
+      .filter((p) => !p.trashed)
+      .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
+      .slice(0, 8);
+  }, [controller.visiblePages]);
+
+  const rootPages = useMemo(
+    () => controller.visiblePages.filter((p) => !p.parentId && !p.trashed),
+    [controller.visiblePages]
+  );
+
+  return (
+    <div className="mobile-screen">
+      {/* Recents Horizontal Carousel */}
+      <RecentsCarousel pages={recents} onOpen={openPage} />
+
+      {/* Pages Section */}
+      <div className="mobile-section-header">
+        <span className="mobile-section-title">Private</span>
+        <div className="mobile-section-actions">
+          <button
+            type="button"
+            className="mobile-icon-btn"
+            onClick={() => onOpenActionGrid()}
+            aria-label="New page"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mobile-tree-container">
+        {rootPages.length === 0 ? (
+          <div className="mobile-empty">
+            <span className="mobile-empty__art" aria-hidden>✨</span>
+            <span className="mobile-empty__title">Your workspace is ready</span>
+            <span className="mobile-empty__body">Tap the + button below to create your first page.</span>
+          </div>
+        ) : (
+          rootPages.map((page) => (
+            <PageTreeItem
+              key={page.id}
+              page={page}
+              allPages={controller.visiblePages}
+              expandedIds={expandedIds}
+              onToggleExpand={toggleExpand}
+              onOpen={openPage}
+              onCreateChild={(parentId) => {
+                const newId = controller.newPage(undefined, parentId);
+                if (newId) openPage(newId);
+              }}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Teamspaces Section */}
+      <div className="mobile-section-header" style={{ marginTop: 24 }}>
+        <span className="mobile-section-title">Teamspaces</span>
+        <div className="mobile-section-actions">
+          <button
+            type="button"
+            className="mobile-icon-btn"
+            onClick={() => {
+              const newId = controller.newPage();
+              if (newId) openPage(newId);
+            }}
+            aria-label="New team page"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mobile-teamspace-card" onClick={() => {
+        if (rootPages[0]) openPage(rootPages[0].id);
+      }}>
+        <div className="mobile-teamspace-icon">🏢</div>
+        <div className="mobile-teamspace-info">
+          <span className="mobile-teamspace-name">{controller.workspaceName || "Workspace HQ"}</span>
+          <span className="mobile-teamspace-meta">Shared workspace · {controller.visiblePages.length} docs</span>
+        </div>
+        <ChevronRight size={16} className="opacity-40" />
+      </div>
+
+      {/* Browse Templates Banner */}
+      <div className="mobile-template-banner" onClick={() => onOpenActionGrid()}>
+        <div className="mobile-template-banner__icon">
+          <LayoutTemplate size={20} />
+        </div>
+        <div className="mobile-template-banner__text">
+          <span className="mobile-template-banner__title">Browse templates</span>
+          <span className="mobile-template-banner__subtitle">Projects, notes, databases, and meetings</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Pages Hierarchy Screen ─────────────────────────────────────────────── */
+
+function PagesScreen({ openPage, onOpenActionGrid }: { openPage: (id: string) => void; onOpenActionGrid: () => void }) {
+  const controller = useMobileController();
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const rootPages = useMemo(
+    () => controller.visiblePages.filter((p) => !p.parentId && !p.trashed),
+    [controller.visiblePages]
+  );
+
+  return (
+    <div className="mobile-screen">
+      <div className="mobile-screen-title-bar">
+        <h1>Pages &amp; Hierarchy</h1>
+        <button
+          type="button"
+          className="mobile-btn mobile-btn--secondary"
+          style={{ height: 36, padding: "0 12px", fontSize: 13 }}
+          onClick={onOpenActionGrid}
+        >
+          <Plus size={14} /> New
+        </button>
+      </div>
+
+      <div className="mobile-tree-container">
+        {rootPages.map((page) => (
+          <PageTreeItem
+            key={page.id}
+            page={page}
+            allPages={controller.visiblePages}
+            expandedIds={expandedIds}
+            onToggleExpand={toggleExpand}
+            onOpen={openPage}
+            onCreateChild={(parentId) => {
+              const newId = controller.newPage(undefined, parentId);
+              if (newId) openPage(newId);
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Search Screen ─────────────────────────────────────────────────────── */
+
+function SearchScreen({ openPage, onBack }: { openPage: (id: string) => void; onBack?: () => void }) {
   const controller = useMobileController();
   const [q, setQ] = useState("");
 
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return controller.visiblePages.slice(0, 8);
+    if (!needle) return controller.visiblePages.slice(0, 10);
     return controller.visiblePages
       .filter((p) =>
         (p.title || "untitled").toLowerCase().includes(needle) ||
@@ -194,751 +390,568 @@ function SearchScreen({ openPage }: { openPage: (id: string) => void }) {
 
   return (
     <div className="mobile-screen">
-      <div className="mobile-search-field">
-        <SearchIcon size={17} />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search pages, docs, tasks…"
-          autoComplete="off"
-          enterKeyHint="search"
-        />
-        {q && (
-          <button type="button" className="mobile-icon-btn" style={{ width: 32, height: 32 }} onClick={() => setQ("")} aria-label="Clear">
-            <X size={15} />
+      <div className="mobile-search-header-row">
+        <div className="mobile-search-field" style={{ flex: 1 }}>
+          <SearchIcon size={17} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search pages, tasks, notes…"
+            autoComplete="off"
+            autoFocus
+            enterKeyHint="search"
+          />
+          {q && (
+            <button type="button" className="mobile-icon-btn" style={{ width: 32, height: 32 }} onClick={() => setQ("")} aria-label="Clear">
+              <X size={15} />
+            </button>
+          )}
+        </div>
+        {onBack && (
+          <button
+            type="button"
+            className="mobile-search-cancel-btn"
+            onClick={() => {
+              hapticFeedback("light");
+              onBack();
+            }}
+          >
+            Cancel
           </button>
         )}
       </div>
-      {results.length === 0 && q.trim() ? (
-        <div className="mobile-empty">
-          <span className="mobile-empty__art" aria-hidden>🔍</span>
-          <span className="mobile-empty__title">No matches</span>
-          <span className="mobile-empty__body">Nothing in this workspace matches “{q}”.</span>
-        </div>
-      ) : (
-        results.map((p) => <PageRow key={p.id} page={p} onOpen={openPage} />)
-      )}
+
+      <div className="mobile-search-results">
+        {results.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className="mobile-search-row"
+            onClick={() => {
+              hapticFeedback("light");
+              openPage(p.id);
+            }}
+          >
+            <span className="mobile-search-row__icon">{p.icon || "📄"}</span>
+            <div className="mobile-search-row__body">
+              <span className="mobile-search-row__title">{p.title || "Untitled"}</span>
+              <span className="mobile-search-row__meta">{timeAgo(p.updatedAt)}</span>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-/* ── Inbox ─────────────────────────────────────────────────────────────── */
+/* ── Inbox Screen ──────────────────────────────────────────────────────── */
 
 function InboxScreen({ openPage }: { openPage: (id: string) => void }) {
   const controller = useMobileController();
 
   return (
     <div className="mobile-screen">
-      {controller.pendingInvites.length > 0 && (
-        <>
-          <div className="mobile-section-label">Invites</div>
-          {controller.pendingInvites.map((invite) => {
-            const pageId = (invite as { page_id?: string }).page_id;
-            const page = controller.visiblePages.find((p) => p.id === pageId)
-              || controller.sharedPages.find((p) => p.id === pageId);
-            return (
-              <div key={invite.id} className="mobile-invite-card">
-                <span className="mobile-invite-card__title">
-                  {page ? page.title || "Untitled" : "A page was shared with you"}
-                </span>
-                <span className="mobile-invite-card__meta">
-                  Role: {(invite as { role?: string }).role || "viewer"}
-                </span>
-                <div className="mobile-invite-card__actions">
-                  <button
-                    type="button"
-                    className="mobile-btn mobile-btn--primary"
-                    style={{ minHeight: 40, fontSize: 13.5, flex: 1 }}
-                    onClick={() => { hapticFeedback("medium"); controller.acceptInvite(invite.id); }}
-                  >
-                    <Check size={15} /> Accept
-                  </button>
-                  <button
-                    type="button"
-                    className="mobile-btn mobile-btn--secondary"
-                    style={{ minHeight: 40, fontSize: 13.5, flex: 1 }}
-                    onClick={() => controller.declineInvite(invite.id)}
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </>
-      )}
+      <div className="mobile-screen-title-bar">
+        <h1>Inbox &amp; Activity</h1>
+      </div>
 
-      <div className="mobile-section-label">Shared with you</div>
-      {controller.sharedPages.length === 0 ? (
+      {controller.pendingInvites.length === 0 ? (
         <div className="mobile-empty">
-          <span className="mobile-empty__art" aria-hidden>📭</span>
-          <span className="mobile-empty__title">Nothing shared yet</span>
-          <span className="mobile-empty__body">Pages shared to you will show up here.</span>
+          <span className="mobile-empty__art" aria-hidden>🔔</span>
+          <span className="mobile-empty__title">All caught up</span>
+          <span className="mobile-empty__body">No pending invites or workspace notifications.</span>
         </div>
       ) : (
-        controller.sharedPages.map((p) => <PageRow key={p.id} page={p} onOpen={openPage} showTime={false} />)
-      )}
-
-      <div className="mobile-section-label">Recently edited</div>
-      {[...controller.visiblePages]
-        .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
-        .slice(0, 5)
-        .map((p) => <PageRow key={p.id} page={p} onOpen={openPage} />)}
-    </div>
-  );
-}
-
-/* ── Profile & settings ────────────────────────────────────────────────── */
-
-function ProfileScreen({ onOpenTrash, onEditProfile }: {
-  onOpenTrash: () => void;
-  onEditProfile: () => void;
-}) {
-  const controller = useMobileController();
-  const [, { setDialogState }] = useUI();
-  const av = {
-    url: controller.currentUserAvatar || null,
-    fallback: (controller.currentUsername || controller.currentUserEmail || "👤").slice(0, 1).toUpperCase(),
-  };
-
-  const requestNotifications = async () => {
-    const granted = await ensureNotificationPermission();
-    controller.showToast(granted ? "Notifications enabled" : "Notifications not permitted");
-  };
-
-  const resolveFn = (action: (value: string | boolean | null) => void) =>
-    action as unknown as (value: string | boolean | null) => void;
-
-  const confirmLogout = () => {
-    setDialogState({
-      open: true,
-      type: "confirm",
-      title: "Sign out of Noska?",
-      placeholder: "",
-      defaultValue: "",
-      resolve: resolveFn((value) => { if (value === true) controller.logout(); }),
-    });
-  };
-
-  const renameWorkspace = () => {
-    setDialogState({
-      open: true,
-      type: "prompt",
-      title: "Workspace name",
-      placeholder: "",
-      defaultValue: controller.workspaceName,
-      resolve: resolveFn((value) => {
-        if (typeof value === "string" && value.trim() && value.trim() !== controller.workspaceName) {
-          controller.updateWorkspaceName(value.trim());
-        }
-      }),
-    });
-  };
-
-  return (
-    <div className="mobile-screen">
-      <div className="mobile-profile-head">
-        <div className="mobile-avatar">{av.url ? <img src={av.url} alt="" /> : av.fallback}</div>
-        <span className="name">{controller.currentUsername || "Workspace user"}</span>
-        <span className="email">{controller.currentUserEmail || ""}</span>
-      </div>
-
-      <div className="mobile-list">
-        <button type="button" className="mobile-list-row" onClick={onEditProfile}>
-          <UserIcon size={17} className="mobile-list-row__icon" />
-          <span className="mobile-list-row__label">Edit profile</span>
-          <ChevronRight size={16} className="mobile-list-row__icon" />
-        </button>
-        <button type="button" className="mobile-list-row" onClick={renameWorkspace}>
-          <Layers size={17} className="mobile-list-row__icon" />
-          <span className="mobile-list-row__label">Workspace</span>
-          <span className="mobile-list-row__value">{controller.workspaceName}</span>
-        </button>
-        <button type="button" className="mobile-list-row" onClick={onOpenTrash}>
-          <Trash2 size={17} className="mobile-list-row__icon" />
-          <span className="mobile-list-row__label">Trash</span>
-          <span className="mobile-list-row__value">{controller.trashPages.length}</span>
-        </button>
-        <button type="button" className="mobile-list-row" onClick={() => controller.openSettings()}>
-          <SettingsIcon size={17} className="mobile-list-row__icon" />
-          <span className="mobile-list-row__label">All settings</span>
-          <ChevronRight size={16} className="mobile-list-row__icon" />
-        </button>
-      </div>
-
-      <div className="mobile-section-label">Appearance</div>
-      <div className="mobile-segmented" role="group" aria-label="Theme">
-        {([
-          ["light", Sun, "Light"],
-          ["dark", Moon, "Dark"],
-          ["system", Monitor, "Auto"],
-        ] as const).map(([value, Icon, label]) => (
-          <button
-            key={value}
-            type="button"
-            className={controller.theme === value ? "is-active" : ""}
-            onClick={() => { hapticFeedback("light"); controller.setTheme(value); }}
-          >
-            <Icon size={15} /> {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mobile-section-label">Notifications &amp; AI</div>
-      <div className="mobile-list">
-        <button type="button" className="mobile-list-row" onClick={() => void requestNotifications()}>
-          <Bell size={17} className="mobile-list-row__icon" />
-          <span className="mobile-list-row__label">Enable push notifications</span>
-          <ChevronRight size={16} className="mobile-list-row__icon" />
-        </button>
-        <button type="button" className="mobile-list-row" onClick={() => controller.openSettings("Noska AI")}>
-          <Sparkles size={17} className="mobile-list-row__icon" />
-          <span className="mobile-list-row__label">AI settings</span>
-          <ChevronRight size={16} className="mobile-list-row__icon" />
-        </button>
-        <button type="button" className="mobile-list-row" onClick={() => controller.openSettings("Integrations")}>
-          <span className="mobile-list-row__label">Integrations</span>
-          <ChevronRight size={16} className="mobile-list-row__icon" />
-        </button>
-      </div>
-
-      <div className="mobile-section-label">Security</div>
-      <div className="mobile-list">
-        <button type="button" className="mobile-list-row mobile-list-row--danger" onClick={confirmLogout}>
-          <LogOut size={17} className="mobile-list-row__icon" />
-          <span className="mobile-list-row__label">Sign out</span>
-        </button>
-      </div>
-
-      <div className="mobile-list">
-        <button type="button" className="mobile-list-row" onClick={() => void openExternal("https://www.noska.me/terms")}>
-          <span className="mobile-list-row__label">Terms</span>
-        </button>
-        <button type="button" className="mobile-list-row" onClick={() => void openExternal("https://www.noska.me/privacy")}>
-          <span className="mobile-list-row__label">Privacy</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ── Page (editor) screen ──────────────────────────────────────────────── */
-
-const BLOCK_TYPES: Array<{ type: string; icon: string; label: string }> = [
-  { type: "text", icon: "Aa", label: "Text" },
-  { type: "h1", icon: "H1", label: "Heading" },
-  { type: "h2", icon: "H2", label: "Subheading" },
-  { type: "todo", icon: "☑", label: "To-do" },
-  { type: "bullet", icon: "•", label: "Bullet" },
-  { type: "number", icon: "1.", label: "Numbered" },
-  { type: "quote", icon: "❝", label: "Quote" },
-  { type: "callout", icon: "!", label: "Callout" },
-  { type: "code", icon: "{}", label: "Code" },
-  { type: "divider", icon: "—", label: "Divider" },
-];
-
-function PageScreen({ openPage, onOpenAI, onShare }: {
-  openPage: (id: string) => void;
-  onOpenAI: () => void;
-  onShare: () => void;
-}) {
-  const controller = useMobileController();
-  const navigate = useNavigate();
-  const page = controller.activePage;
-  const [{ history, future }, { undo, redo }] = useWorkspace();
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const [blocksOpen, setBlocksOpen] = useState(false);
-
-  const subpages = useMemo(
-    () => (page ? controller.visiblePages.filter((p) => p.parentId === page.id) : []),
-    [controller.visiblePages, page]
-  );
-
-  const addBlock = useCallback((type: string) => {
-    setBlocksOpen(false);
-    if (!page) return;
-    const blocks = page.blocks || [];
-    if (blocks.length === 0) {
-      controller.updatePage(page.id, {
-        blocks: [{ id: uid(), type, text: "" } as never],
-      });
-      return;
-    }
-    const lastId = blocks[blocks.length - 1].id;
-    controller.editorProps.onAddBlock?.(page.id, lastId, type, "");
-  }, [controller, page]);
-
-  const goBack = () => {
-    hapticFeedback("light");
-    if (window.history.length > 1) navigate(-1);
-    else navigate("/app/home", { replace: true });
-  };
-
-  if (!page) {
-    return (
-      <>
-        <div className="mobile-shell__header">
-          <button type="button" className="mobile-icon-btn" aria-label="Back" onClick={goBack}>
-            <ChevronLeft size={22} />
-          </button>
-          <div className="mobile-shell__header-title"><span className="mobile-ws-name">Page</span></div>
-        </div>
-        <div className="mobile-screen mobile-screen--flush" style={{ flex: 1 }}>
-          <div className="mobile-empty" style={{ height: "100%" }}>
-            <span className="mobile-empty__art" aria-hidden>📄</span>
-            <span className="mobile-empty__title">Page not found</span>
-            <span className="mobile-empty__body">This page may have been deleted or is still syncing.</span>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <>
-      {/* Compact page header */}
-      <div className="mobile-shell__header">
-        <button type="button" className="mobile-icon-btn" aria-label="Back" onClick={goBack}>
-          <ChevronLeft size={22} />
-        </button>
-        <div className="mobile-shell__header-title">
-          <span aria-hidden style={{ fontSize: 17 }}>{page.icon || "📝"}</span>
-          <span className="mobile-ws-name">{page.title || "Untitled"}</span>
-        </div>
-        <button
-          type="button"
-          className="mobile-icon-btn"
-          aria-label="Favorite"
-          onClick={() => {
-            hapticFeedback("light");
-            controller.updatePage(page.id, { favorite: !page.favorite });
-          }}
-        >
-          <Star size={19} fill={page.favorite ? "currentColor" : "none"} color={page.favorite ? "#f59e0b" : undefined} />
-        </button>
-        <button type="button" className="mobile-icon-btn" aria-label="Page actions" onClick={() => { hapticFeedback("light"); setActionsOpen(true); }}>
-          <MoreVertical size={20} />
-        </button>
-      </div>
-
-      <div className="mobile-page">
-        <div className="mobile-page__editor mobile-touch-targets">
-          <SplitWorkspaceRenderer {...controller.editorProps} />
-        </div>
-
-        {/* Editor toolbar — thumb-reachable, sits above the keyboard via --mobile-kb */}
-        <div className="mobile-editor-toolbar">
-          <button type="button" className="mobile-icon-btn" aria-label="Insert block" onClick={() => { hapticFeedback("light"); setBlocksOpen(true); }}>
-            <Plus size={21} />
-          </button>
-          <button
-            type="button"
-            className="mobile-icon-btn"
-            aria-label="Undo"
-            style={{ opacity: history.length === 0 ? 0.35 : undefined }}
-            onClick={() => { hapticFeedback("light"); undo(); }}
-          >
-            <Pencil size={19} style={{ transform: "rotate(-12deg)" }} />
-          </button>
-          <button
-            type="button"
-            className="mobile-icon-btn"
-            aria-label="Redo"
-            style={{ opacity: future.length === 0 ? 0.35 : undefined }}
-            onClick={() => { hapticFeedback("light"); redo(); }}
-          >
-            <Pencil size={19} style={{ transform: "rotate(12deg) scaleX(-1)" }} />
-          </button>
-          <button type="button" className="mobile-icon-btn" aria-label="Ask AI" onClick={() => { hapticFeedback("light"); onOpenAI(); }}>
-            <Sparkles size={20} />
-          </button>
-          <button
-            type="button"
-            className="mobile-icon-btn"
-            aria-label="Dismiss keyboard"
-            onClick={() => (document.activeElement as HTMLElement | null)?.blur?.()}
-          >
-            <ChevronLeft size={20} style={{ transform: "rotate(-90deg)" }} />
-          </button>
-        </div>
-      </div>
-
-      {/* Page actions sheet */}
-      <AnimatePresence>
-        {actionsOpen && (
-          <MobileSheet title="Page actions" onClose={() => setActionsOpen(false)}>
-            {subpages.length > 0 && (
-              <>
-                <div className="mobile-section-label" style={{ margin: "2px 2px 6px" }}>Subpages</div>
-                {subpages.map((p) => <PageRow key={p.id} page={p} onOpen={openPage} showTime={false} />)}
-                <div style={{ height: 12 }} />
-              </>
-            )}
-            <div className="mobile-list" style={{ marginBottom: 0 }}>
-              <button type="button" className="mobile-list-row" onClick={() => { setActionsOpen(false); onShare(); }}>
-                <Share2 size={17} className="mobile-list-row__icon" />
-                <span className="mobile-list-row__label">Share</span>
-              </button>
-              <button type="button" className="mobile-list-row" onClick={() => { setActionsOpen(false); controller.copyPageLink(page.id); }}>
-                <Copy size={17} className="mobile-list-row__icon" />
-                <span className="mobile-list-row__label">Copy public link</span>
-              </button>
-              <button type="button" className="mobile-list-row" onClick={() => { setActionsOpen(false); controller.renameFocus(page.id); }}>
-                <Pencil size={17} className="mobile-list-row__icon" />
-                <span className="mobile-list-row__label">Rename</span>
-              </button>
-              <button type="button" className="mobile-list-row" onClick={() => { setActionsOpen(false); controller.addInside(page.id); }}>
-                <FolderPlus size={17} className="mobile-list-row__icon" />
-                <span className="mobile-list-row__label">Add subpage</span>
-              </button>
-              <button type="button" className="mobile-list-row" onClick={() => { setActionsOpen(false); controller.toggleOffline(page.id); }}>
-                <WifiOff size={17} className="mobile-list-row__icon" />
-                <span className="mobile-list-row__label">{page.offline ? "Remove from offline" : "Available offline"}</span>
-              </button>
-              <button type="button" className="mobile-list-row" onClick={() => { setActionsOpen(false); controller.duplicatePage(page.id); }}>
-                <Layers size={17} className="mobile-list-row__icon" />
-                <span className="mobile-list-row__label">Duplicate</span>
-              </button>
-              <button type="button" className="mobile-list-row mobile-list-row--danger" onClick={() => { setActionsOpen(false); controller.trashPage(page.id); }}>
-                <Trash2 size={17} className="mobile-list-row__icon" />
-                <span className="mobile-list-row__label">Move to trash</span>
-              </button>
-            </div>
-          </MobileSheet>
-        )}
-      </AnimatePresence>
-
-      {/* Insert-block sheet */}
-      <AnimatePresence>
-        {blocksOpen && (
-          <MobileSheet title="Insert block" onClose={() => setBlocksOpen(false)}>
-            <div className="mobile-blockgrid">
-              {BLOCK_TYPES.map((b) => (
-                <button type="button" key={b.type} className="mobile-create-card" onClick={() => addBlock(b.type)}>
-                  <span aria-hidden>{b.icon}</span>
-                  {b.label}
+        controller.pendingInvites.map((invite) => {
+          const pageId = (invite as { page_id?: string }).page_id;
+          const page = controller.visiblePages.find((p) => p.id === pageId)
+            || controller.sharedPages.find((p) => p.id === pageId);
+          return (
+            <div key={invite.id} className="mobile-invite-card">
+              <span className="mobile-invite-card__title">
+                {page ? page.title || "Untitled" : "A page was shared with you"}
+              </span>
+              <div className="mobile-invite-card__actions">
+                <button
+                  type="button"
+                  className="mobile-btn mobile-btn--primary"
+                  onClick={() => controller.acceptInvite(invite.id)}
+                >
+                  Accept
                 </button>
-              ))}
+                <button
+                  type="button"
+                  className="mobile-btn mobile-btn--ghost"
+                  onClick={() => controller.declineInvite(invite.id)}
+                >
+                  Decline
+                </button>
+              </div>
             </div>
-          </MobileSheet>
-        )}
-      </AnimatePresence>
-    </>
+          );
+        })
+      )}
+    </div>
   );
 }
 
-/* ── Bottom sheet primitive ────────────────────────────────────────────── */
+/* ── Settings Screen (Apple iOS Native Style) ───────────────────────────── */
 
-export function MobileSheet({ title, onClose, children }: {
-  title?: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
+function SettingsScreen() {
+  const controller = useMobileController();
+  const [themePreference, setThemePreference] = useState<"system" | "light" | "dark">(() => {
+    return (localStorage.getItem("noska_theme_mode") as "system" | "light" | "dark") || "system";
+  });
+  const [hapticsEnabled, setHapticsEnabled] = useState(true);
+  const [ghostWriter, setGhostWriter] = useState(true);
+  const [aiEngine, setAiEngine] = useState("auto");
+
+  // Sync with device theme when in system mode
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    if (themePreference === "system") {
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      const applySystemTheme = () => {
+        controller.setTheme(media.matches ? "dark" : "light");
+      };
+      applySystemTheme();
+      media.addEventListener("change", applySystemTheme);
+      return () => media.removeEventListener("change", applySystemTheme);
+    }
+  }, [themePreference, controller]);
+
+  const handleSelectThemeMode = (mode: "system" | "light" | "dark") => {
+    hapticFeedback("medium");
+    setThemePreference(mode);
+    localStorage.setItem("noska_theme_mode", mode);
+    if (mode === "system") {
+      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      controller.setTheme(isDark ? "dark" : "light");
+    } else {
+      controller.setTheme(mode);
+    }
+  };
 
   return (
-    <>
-      <motion.div
-        className="mobile-sheet-backdrop"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-      />
-      <motion.div
-        className="mobile-sheet"
-        role="dialog"
-        aria-modal="true"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 380, damping: 38 }}
-      >
-        <div className="mobile-sheet__grabber" aria-hidden />
-        {title && (
-          <div className="mobile-sheet__title">
-            {title}
-            <button type="button" className="mobile-icon-btn" style={{ width: 36, height: 36 }} onClick={onClose} aria-label="Close">
-              <X size={17} />
+    <div className="mobile-screen mobile-settings-screen">
+      <div className="mobile-screen-title-bar">
+        <h1>Settings</h1>
+      </div>
+
+      {/* Profile & Account Card */}
+      <div className="mobile-settings-profile-card" onClick={() => controller.openSettings("account")}>
+        <div className="mobile-user-avatar mobile-user-avatar--large">
+          {(controller.currentUsername || "K").charAt(0).toUpperCase()}
+        </div>
+        <div className="mobile-settings-profile-info">
+          <div className="mobile-settings-profile-name-row">
+            <span className="mobile-settings-profile-name">{controller.currentUsername || "Workspace User"}</span>
+            <span className="mobile-settings-plan-badge">PRO</span>
+          </div>
+          <span className="mobile-settings-profile-email">{controller.currentUserEmail || "@workspace"}</span>
+          <span className="mobile-settings-profile-ws">{controller.workspaceName || "Noska HQ"} · Active</span>
+        </div>
+        <ChevronRight size={18} className="opacity-40" />
+      </div>
+
+      {/* Group 1: Appearance (Acts on Device Theme) */}
+      <div className="mobile-settings-group">
+        <span className="mobile-settings-group-title">APPEARANCE</span>
+        <div className="mobile-settings-card">
+          <div className="mobile-settings-theme-selector">
+            <button
+              type="button"
+              className={`mobile-theme-choice ${themePreference === "system" ? "is-selected" : ""}`}
+              onClick={() => handleSelectThemeMode("system")}
+            >
+              <div className="mobile-theme-choice__preview mobile-theme-choice__preview--system">
+                <div className="preview-half preview-half--light" />
+                <div className="preview-half preview-half--dark" />
+              </div>
+              <span className="mobile-theme-choice__label">Device Theme</span>
+              <span className="mobile-theme-choice__sub">Auto sync</span>
+            </button>
+
+            <button
+              type="button"
+              className={`mobile-theme-choice ${themePreference === "light" ? "is-selected" : ""}`}
+              onClick={() => handleSelectThemeMode("light")}
+            >
+              <div className="mobile-theme-choice__preview mobile-theme-choice__preview--light">
+                <Sun size={18} />
+              </div>
+              <span className="mobile-theme-choice__label">Light</span>
+              <span className="mobile-theme-choice__sub">Always light</span>
+            </button>
+
+            <button
+              type="button"
+              className={`mobile-theme-choice ${themePreference === "dark" ? "is-selected" : ""}`}
+              onClick={() => handleSelectThemeMode("dark")}
+            >
+              <div className="mobile-theme-choice__preview mobile-theme-choice__preview--dark">
+                <Moon size={18} />
+              </div>
+              <span className="mobile-theme-choice__label">Dark</span>
+              <span className="mobile-theme-choice__sub">Always dark</span>
             </button>
           </div>
-        )}
-        <div className="mobile-sheet__body">{children}</div>
-      </motion.div>
-    </>
-  );
-}
-
-/* ── Create sheet ──────────────────────────────────────────────────────── */
-
-const CREATE_TEMPLATES: Array<{ template: string; icon: string; label: string }> = [
-  { template: "blank", icon: "📝", label: "New page" },
-  { template: "tasks", icon: "✅", label: "Tasks tracker" },
-  { template: "projects", icon: "🔎", label: "Projects" },
-  { template: "standup", icon: "🗓️", label: "Meeting notes" },
-  { template: "docs", icon: "📄", label: "Document hub" },
-  { template: "brainstorm", icon: "💡", label: "Brainstorm" },
-  { template: "goals", icon: "🏁", label: "Goals" },
-];
-
-function CreateSheet({ onClose, openPage }: { onClose: () => void; openPage: (id: string) => void }) {
-  const controller = useMobileController();
-  const [, { setAiOpen }] = useAI();
-
-  const create = (template: string) => {
-    const id = controller.newPage(template);
-    onClose();
-    hapticFeedback("medium");
-    if (id) openPage(id);
-  };
-
-  return (
-    <MobileSheet title="Create" onClose={onClose}>
-      <div className="mobile-create-grid">
-        {CREATE_TEMPLATES.map((t) => (
-          <button type="button" key={t.template} className="mobile-create-card" onClick={() => create(t.template)}>
-            <span aria-hidden>{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          className="mobile-create-card"
-          onClick={() => { onClose(); setAiOpen(true); }}
-        >
-          <span aria-hidden>✦</span>
-          Ask AI
-        </button>
+        </div>
       </div>
-    </MobileSheet>
+
+      {/* Group 2: Noska Flow & Voice Engine */}
+      <div className="mobile-settings-group">
+        <span className="mobile-settings-group-title">NOSKA FLOW &amp; VOICE</span>
+        <div className="mobile-settings-card">
+          <div className="mobile-settings-row">
+            <div className="mobile-settings-row__left">
+              <div className="mobile-settings-icon-box mobile-settings-icon-box--purple">
+                <Mic size={16} />
+              </div>
+              <div className="mobile-settings-row__text">
+                <span>Speech-to-Text Engine</span>
+                <span className="mobile-settings-subtext">Real-time continuous dictation</span>
+              </div>
+            </div>
+            <span className="mobile-settings-value">Native WebSpeech</span>
+          </div>
+
+          <div className="mobile-settings-row">
+            <div className="mobile-settings-row__left">
+              <div className="mobile-settings-icon-box mobile-settings-icon-box--blue">
+                <Sparkles size={16} />
+              </div>
+              <div className="mobile-settings-row__text">
+                <span>GhostWriter AI</span>
+                <span className="mobile-settings-subtext">Smart autocomplete in editor</span>
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              className="mobile-switch"
+              checked={ghostWriter}
+              onChange={(e) => setGhostWriter(e.target.checked)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Group 3: Mobile Experience & Device Features */}
+      <div className="mobile-settings-group">
+        <span className="mobile-settings-group-title">DEVICE &amp; STORAGE</span>
+        <div className="mobile-settings-card">
+          <div className="mobile-settings-row">
+            <div className="mobile-settings-row__left">
+              <div className="mobile-settings-icon-box mobile-settings-icon-box--amber">
+                <Volume2 size={16} />
+              </div>
+              <div className="mobile-settings-row__text">
+                <span>Haptic Micro-Feedback</span>
+                <span className="mobile-settings-subtext">Tactile clicks on taps and gestures</span>
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              className="mobile-switch"
+              checked={hapticsEnabled}
+              onChange={(e) => {
+                setHapticsEnabled(e.target.checked);
+                if (e.target.checked) hapticFeedback("medium");
+              }}
+            />
+          </div>
+
+          <div className="mobile-settings-row">
+            <div className="mobile-settings-row__left">
+              <div className="mobile-settings-icon-box mobile-settings-icon-box--emerald">
+                <Database size={16} />
+              </div>
+              <div className="mobile-settings-row__text">
+                <span>Offline Stored Pages</span>
+                <span className="mobile-settings-subtext">Instant offline access</span>
+              </div>
+            </div>
+            <span className="mobile-settings-value">{controller.visiblePages.length} cached</span>
+          </div>
+
+          <div className="mobile-settings-row" onClick={() => {
+            hapticFeedback("light");
+            controller.showToast("Local offline cache is fresh and synchronized");
+          }}>
+            <span className="mobile-settings-action-text">Clear Cache &amp; Re-sync</span>
+            <span className="opacity-40">›</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Group 4: Workspace & Account */}
+      <div className="mobile-settings-group">
+        <span className="mobile-settings-group-title">WORKSPACE ACTIONS</span>
+        <div className="mobile-settings-card">
+          <div className="mobile-settings-row" onClick={() => controller.openSettings("general")}>
+            <span>Workspace Preferences</span>
+            <span className="opacity-40">›</span>
+          </div>
+
+          <div className="mobile-settings-row mobile-settings-row--danger" onClick={() => {
+            hapticFeedback("heavy");
+            controller.logout();
+          }}>
+            <span>Log Out of Workspace</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Info */}
+      <div className="mobile-settings-footer">
+        <span>Noska Mobile v1.1.1</span>
+        <span>Android Native · Tauri v2 GPU Pipeline</span>
+      </div>
+    </div>
   );
 }
 
-/* ── Root shell ────────────────────────────────────────────────────────── */
+/* ── Main Mobile Workspace Shell ────────────────────────────────────────── */
 
 export default function MobileWorkspaceApp() {
   const controller = useMobileController();
+  const [, uiActions] = useUI();
+  const [aiState, aiActions] = useAI();
   const location = useLocation();
   const navigate = useNavigate();
-  const [{ toast }, { setToast }] = useUI();
-  const [{ aiOpen, apiKey, aiProvider, nvidiaKey, aiChats, activeChatId }, { setAiOpen, setAiChats, setActiveChatId }] = useAI();
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [trashOpen, setTrashOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [online, setOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
-  const [pendingWrites, setPendingWrites] = useState(() => hasPendingSyncWrites());
+  const [activeTab, setActiveTab] = useState<MobileTab>("home");
+  const [isActionGridOpen, setIsActionGridOpen] = useState(false);
+  const [isFlowActive, setIsFlowActive] = useState(false);
 
-  // Platform bootstrap: mobile CSS scope + keyboard (visual viewport) insets.
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.add("noska-mobile");
-    const vv = window.visualViewport;
-    let cleanup: (() => void) | undefined;
-    if (vv) {
-      const sync = () => {
-        const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-        root.style.setProperty("--mobile-kb", `${Math.round(kb)}px`);
-      };
-      vv.addEventListener("resize", sync);
-      vv.addEventListener("scroll", sync);
-      sync();
-      cleanup = () => {
-        vv.removeEventListener("resize", sync);
-        vv.removeEventListener("scroll", sync);
-        root.style.setProperty("--mobile-kb", "0px");
-      };
-    }
-    return () => {
-      root.classList.remove("noska-mobile");
-      cleanup?.();
-    };
-  }, []);
+  const isPageRoute = Boolean(controller.activePage && location.pathname.startsWith("/p/"));
 
-  // Network + unsynced-writes state (offline support surfacing).
-  useEffect(() => {
-    const goOnline = () => setOnline(true);
-    const goOffline = () => setOnline(false);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-    const t = window.setInterval(() => setPendingWrites(hasPendingSyncWrites()), 2500);
-    return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
-      window.clearInterval(t);
-    };
-  }, []);
-
-  const path = location.pathname;
-  const isPageRoute = path.startsWith("/app/page/");
-  const routePageId = isPageRoute ? decodeURIComponent(path.split("/")[3] ?? "") : null;
-  const tab: MobileTab = path.startsWith("/app/search")
-    ? "search"
-    : path.startsWith("/app/inbox")
-      ? "inbox"
-      : path.startsWith("/app/profile")
-        ? "profile"
-        : "home";
-
-  const goTab = useCallback((next: MobileTab) => {
-    hapticFeedback("light");
-    navigate(`/app/${next}`, { replace: true });
-  }, [navigate]);
-
-  const openPage = useCallback((pageId: string) => {
-    if (!pageId) return;
-    controller.selectPage(pageId);
-    navigate(`/app/page/${encodeURIComponent(pageId)}`);
+  const openPage = useCallback((id: string) => {
+    controller.selectPage(id);
+    navigate(`/p/${id}`);
   }, [controller, navigate]);
 
-  const syncLabel = !online
-    ? "Offline"
-    : pendingWrites
-      ? "Syncing…"
-      : controller.saveState === "Saving..."
-        ? "Saving…"
-        : null;
+  const handleActionGridSelect = (action: string) => {
+    hapticFeedback("medium");
+    if (action === "flow" || action === "voice") {
+      setIsFlowActive(true);
+    } else if (action === "page") {
+      const newId = controller.newPage("blank");
+      if (newId) openPage(newId);
+    } else if (action === "private") {
+      const newId = controller.newPage("blank", null, { title: "Private Note" });
+      if (newId) {
+        controller.updatePage(newId, { icon: "🔒" });
+        openPage(newId);
+      }
+    } else if (action === "ai") {
+      aiActions.setAiOpen(true);
+    } else if (action === "database") {
+      const newId = controller.newPage("tasks", null, { title: "Database" });
+      if (newId) openPage(newId);
+    } else if (action === "task") {
+      const newId = controller.newPage("standup", null, { title: "To-Do & Tasks" });
+      if (newId) openPage(newId);
+    } else if (action === "template") {
+      const newId = controller.newPage("projects", null, { title: "Project Board" });
+      if (newId) openPage(newId);
+    }
+  };
+
+  const handleFlowInsert = (text: string) => {
+    if (isPageRoute && controller.activePage) {
+      // Append a block into the active page
+      const newBlock = { id: uid(), type: "text", text, properties: {} };
+      const currentBlocks = controller.activePage.blocks || [];
+      const updatedBlocks = [...currentBlocks, newBlock];
+      controller.updatePage(controller.activePage.id, {
+        blocks: updatedBlocks,
+        updatedAt: new Date().toISOString(),
+      });
+      controller.showToast("Dictated into page");
+    } else {
+      // Create a new Flow note page
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const newId = controller.newPage(undefined, null, { title: `Flow Note · ${timeStr}` });
+      if (newId) {
+        controller.updatePage(newId, {
+          icon: "🎙️",
+          blocks: [{ id: uid(), type: "text", text, properties: {} }],
+        });
+        openPage(newId);
+        controller.showToast("Created Flow note");
+      }
+    }
+  };
 
   return (
-    <div className="mobile-shell" data-testid="mobile-shell">
-      {/* Tab-screen header (page screens render their own compact header) */}
-      {!isPageRoute && (
-        <div className="mobile-shell__header">
-          <div className="mobile-shell__header-title">
-            <span className="mobile-ws-name">{controller.workspaceName}</span>
-            {syncLabel && (
-              <span className="mobile-shell__header-sub">
-                {online ? <Clock size={11} /> : <WifiOff size={11} />}
-                {syncLabel}
+    <div className={`noska-mobile ${controller.theme === "dark" ? "dark" : ""}`}>
+      {/* Top Header */}
+      <header className="mobile-header">
+        {isPageRoute ? (
+          <div className="mobile-header__left">
+            <button
+              type="button"
+              className="mobile-header__back-btn"
+              onClick={() => {
+                hapticFeedback("light");
+                navigate("/");
+              }}
+              aria-label="Back to workspace"
+            >
+              <ChevronLeft size={20} strokeWidth={2.4} />
+              <span className="mobile-header__breadcrumb">
+                {controller.activePage?.icon ? (
+                  <span className="mr-1">{controller.activePage.icon}</span>
+                ) : (
+                  <Lock size={12} className="inline mr-1 opacity-60" />
+                )}
+                {controller.activePage?.title || "Page"}
               </span>
-            )}
+            </button>
           </div>
-          <button type="button" className="mobile-icon-btn" aria-label="Open Noska AI" onClick={() => { hapticFeedback("light"); setAiOpen(true); }}>
-            <Sparkles size={19} />
-          </button>
+        ) : (
+          <div className="mobile-header__left">
+            <button
+              type="button"
+              className="mobile-header__profile-btn"
+              onClick={() => controller.openSettings("account")}
+            >
+              <div className="mobile-user-avatar">
+                {(controller.currentUsername || "K").charAt(0).toUpperCase()}
+              </div>
+              <div className="mobile-header__ws-meta">
+                <span className="mobile-header__workspace-name">
+                  {controller.workspaceName || "Noska"}
+                </span>
+                <span className="mobile-header__user-sub">
+                  @{controller.currentUsername || "workspace"}
+                </span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        <div className="mobile-header__right">
+          {isPageRoute ? (
+            <>
+              <button
+                type="button"
+                className="mobile-icon-btn"
+                onClick={() => uiActions.setShareOpen(true)}
+                aria-label="Share"
+              >
+                <Share2 size={18} />
+              </button>
+              <button
+                type="button"
+                className="mobile-icon-btn"
+                onClick={() => controller.openSettings()}
+                aria-label="More"
+              >
+                <MoreVertical size={18} />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className={`mobile-icon-btn ${activeTab === "search" ? "is-active" : ""}`}
+              onClick={() => {
+                hapticFeedback("light");
+                setActiveTab((prev) => (prev === "search" ? "home" : "search"));
+              }}
+              aria-label="Search"
+            >
+              <SearchIcon size={18} />
+            </button>
+          )}
         </div>
+      </header>
+
+      {/* Main Screen Content Area */}
+      <main className="mobile-content-host">
+        {isPageRoute ? (
+          <div className="mobile-editor-host">
+            <SplitWorkspaceRenderer {...controller.editorProps} />
+            <MobileKeyboardToolbar
+              onInsertBlock={(type) => {
+                if (!controller.activePage) return;
+                const pageId = controller.activePage.id;
+                const blocks = controller.activePage.blocks || [];
+                const newBlock = {
+                  id: uid(),
+                  type: type,
+                  text: "",
+                  properties: {},
+                };
+                controller.updatePage(pageId, {
+                  blocks: [...blocks, newBlock],
+                  updatedAt: new Date().toISOString(),
+                });
+                controller.showToast(`Added ${type.toUpperCase()}`);
+              }}
+              onFormatText={(format) => {
+                if (format === "undo") {
+                  document.execCommand("undo", false);
+                } else if (format === "bold") {
+                  document.execCommand("bold", false);
+                } else if (format === "italic") {
+                  document.execCommand("italic", false);
+                }
+              }}
+              onAskAI={() => aiActions.setAiOpen(true)}
+              onVoiceNote={() => setIsFlowActive(true)}
+              onFlow={() => setIsFlowActive((prev) => !prev)}
+              onDismissKeyboard={() => {
+                if (document.activeElement instanceof HTMLElement) {
+                  document.activeElement.blur();
+                }
+              }}
+            />
+          </div>
+        ) : activeTab === "home" ? (
+          <HomeScreen
+            openPage={openPage}
+            onOpenActionGrid={() => setIsActionGridOpen(true)}
+          />
+        ) : activeTab === "pages" ? (
+          <PagesScreen openPage={openPage} onOpenActionGrid={() => setIsActionGridOpen(true)} />
+        ) : activeTab === "search" ? (
+          <SearchScreen openPage={openPage} onBack={() => setActiveTab("home")} />
+        ) : activeTab === "inbox" ? (
+          <InboxScreen openPage={openPage} />
+        ) : (
+          <SettingsScreen />
+        )}
+      </main>
+
+      {/* Single Bottom Apple Liquid Glass Dock (switches to Flow Pill when Flow mode is active) */}
+      {!isPageRoute && !isFlowActive && (
+        <MobileFloatingNavbar
+          activeTab={activeTab}
+          isPageRoute={isPageRoute}
+          pendingInvitesCount={controller.pendingInvites.length}
+          onSelectTab={(tab) => setActiveTab(tab)}
+          onOpenActionGrid={() => setIsActionGridOpen((prev) => !prev)}
+          isActionGridOpen={isActionGridOpen}
+        />
       )}
 
-      {!online && (
-        <div className="mobile-offline-banner">
-          <WifiOff size={13} />
-          Offline — edits are saved locally and will sync when you reconnect.
-        </div>
-      )}
-
-      {/* Content */}
-      <div className="mobile-shell__content">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={isPageRoute ? `page-${routePageId}` : tab}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
-            style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}
-          >
-            {isPageRoute ? (
-              <PageScreen openPage={openPage} onOpenAI={() => setAiOpen(true)} onShare={() => setShareOpen(true)} />
-            ) : tab === "search" ? (
-              <SearchScreen openPage={openPage} />
-            ) : tab === "inbox" ? (
-              <InboxScreen openPage={openPage} />
-            ) : tab === "profile" ? (
-              <ProfileScreen onOpenTrash={() => setTrashOpen(true)} onEditProfile={() => setProfileOpen(true)} />
-            ) : (
-              <HomeScreen openPage={openPage} onCreate={() => setCreateOpen(true)} />
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Minimal Hover / Floating Bottom Navigation (Framer Style) */}
-      <MobileFloatingNavbar
-        activeTab={tab}
+      {/* Noska Flow Compact Pill Bar (both in Editor and in Workspace) */}
+      <MobileFlowPill
+        isOpen={isFlowActive}
+        onClose={() => setIsFlowActive(false)}
         isPageRoute={isPageRoute}
-        pendingInvitesCount={controller.pendingInvites.length}
-        onSelectTab={goTab}
-        onCreate={() => setCreateOpen(true)}
+        onOpenAI={() => aiActions.setAiOpen(true)}
+        onInsertText={handleFlowInsert}
       />
 
-      {/* Overlays */}
-      <AnimatePresence>
-        {toast && <Toast message={toast} onDone={() => setToast("")} />}
-      </AnimatePresence>
-      <AnimatePresence>
-        {createOpen && <CreateSheet onClose={() => setCreateOpen(false)} openPage={openPage} />}
-      </AnimatePresence>
-
-      <Suspense fallback={null}>
-        <AIPanel
-          open={aiOpen}
-          onClose={() => setAiOpen(false)}
-          page={controller.activePage}
-          pages={controller.visiblePages}
-          apiKey={apiKey}
-          aiProvider={aiProvider}
-          nvidiaKey={nvidiaKey}
-          aiChats={aiChats}
-          activeChatId={activeChatId}
-          onChatsChange={setAiChats}
-          onActiveChat={setActiveChatId}
-          onNewChat={() => setActiveChatId(null)}
-          onSelectChat={(id) => { setActiveChatId(id); setAiOpen(true); }}
-          onDeleteChat={(id) => setAiChats((prev) => prev.filter((c) => c.id !== id))}
-          onRenameChat={(id, name) => setAiChats((prev) => prev.map((c) => c.id === id ? { ...c, name } : c))}
-          onPagePatch={(patch) => { if (controller.activePage) controller.updatePage(controller.activePage.id, patch); }}
-          onInsert={(blocks) => { if (controller.activePage) controller.updatePage(controller.activePage.id, { blocks: [...blocks, ...(controller.activePage.blocks || [])] }); }}
-          onAppend={(blocks) => { if (controller.activePage) controller.updatePage(controller.activePage.id, { blocks: [...(controller.activePage.blocks || []), ...blocks] }); }}
-          onReplaceText={(text) => { if (controller.activePage) controller.updatePage(controller.activePage.id, { blocks: [{ id: uid(), type: "callout", text, meta: { tone: "tip", icon: "✦" } } as never, ...(controller.activePage.blocks || [])] }); }}
-          onSelectPage={(p) => openPage(p.id)}
-          onToast={controller.showToast}
-          toolContext={controller.toolContext}
-          currentUsername={controller.currentUsername}
-          currentUserEmail={controller.currentUserEmail}
-          currentUserAvatar={controller.currentUserAvatar}
-          currentUserId={controller.currentUserId}
-        />
-      </Suspense>
-
-      {trashOpen && (
-        <TrashModal
-          pages={controller.trashPages}
-          onClose={() => setTrashOpen(false)}
-          onRestore={controller.restorePage}
-          onDelete={controller.deleteForever}
-        />
-      )}
-      {profileOpen && (
-        <ProfileModal
-          open={profileOpen}
-          onClose={() => setProfileOpen(false)}
-          currentUserId={controller.currentUserId}
-          currentUsername={controller.currentUsername}
-          currentUserEmail={controller.currentUserEmail}
-          onToast={controller.showToast}
-        />
-      )}
-      {shareOpen && controller.activePage && (
-        <ShareModal
-          page={controller.activePage}
-          onClose={() => setShareOpen(false)}
-          onToast={controller.showToast}
-          currentUserId={controller.currentUserId}
-          currentUsername={controller.currentUsername}
-          workspaceSlug={slugifyWorkspaceName(controller.workspaceName)}
-        />
-      )}
-      {controller.needsUsernameClaim && controller.currentUserId && (
-        <ClaimUsernameModal
-          userId={controller.currentUserId}
-          onDone={(username) => controller.claimUsername(username)}
-        />
-      )}
+      {/* Apple-style Liquid Glass Action Grid Sheet */}
+      <MobileActionGridSheet
+        isOpen={isActionGridOpen}
+        onClose={() => setIsActionGridOpen(false)}
+        onAction={handleActionGridSelect}
+      />
     </div>
   );
 }

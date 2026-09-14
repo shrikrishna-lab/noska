@@ -1,32 +1,32 @@
 /**
- * MobileFloatingNavbar — Minimal Hover & Floating Pill Navbar for Noska Mobile.
- * Inspired by Framer Minimal Hover Navbar (https://framer.com/m/Minimal-Hover-Navbar-98UQqN.js).
+ * MobileFloatingNavbar — Apple Liquid Glass Bottom Navigation Dock.
  * Features:
- * - Floating glassmorphic capsule dock with Noska warm editorial palette & dark mode
- * - Smooth sliding active indicator pill with Framer Motion spring physics
- * - Tactile central Create action button with spring bounce
- * - Unread invite counter badge on Inbox
- * - Safe-area inset support & touch-friendly tap targets
+ * - Multi-layer frosted glass capsule with specular highlight rim and inner glow
+ * - Fluid sliding active indicator pill with Framer Motion spring physics
+ * - Standalone circular floating action button (+) with tactile spring bounce & rotation
+ * - Unread notification badge support
  */
 import React from "react";
 import { motion, LayoutGroup, type Transition } from "framer-motion";
 import {
   Home as HomeIcon,
+  Layers as PagesIcon,
+  Bell as InboxIcon,
   Search as SearchIcon,
+  Settings as SettingsIcon,
   Plus,
-  Inbox as InboxIcon,
-  User as UserIcon,
 } from "lucide-react";
 import { hapticFeedback } from "../index";
 
-export type MobileTab = "home" | "search" | "inbox" | "profile";
+export type MobileTab = "home" | "pages" | "inbox" | "search" | "settings";
 
 interface MobileFloatingNavbarProps {
   activeTab: MobileTab;
   isPageRoute?: boolean;
   pendingInvitesCount?: number;
   onSelectTab: (tab: MobileTab) => void;
-  onCreate: () => void;
+  onOpenActionGrid: () => void;
+  isActionGridOpen?: boolean;
 }
 
 interface NavItemConfig {
@@ -36,10 +36,11 @@ interface NavItemConfig {
   hasBadge?: boolean;
 }
 
-const SPRING_TRANSITION: Transition = {
+const TAB_SPRING_TRANSITION: Transition = {
   type: "spring",
-  bounce: 0.22,
-  duration: 0.38,
+  stiffness: 480,
+  damping: 32,
+  mass: 0.6,
 };
 
 export function MobileFloatingNavbar({
@@ -47,106 +48,89 @@ export function MobileFloatingNavbar({
   isPageRoute = false,
   pendingInvitesCount = 0,
   onSelectTab,
-  onCreate,
+  onOpenActionGrid,
+  isActionGridOpen = false,
 }: MobileFloatingNavbarProps) {
   const items: NavItemConfig[] = [
     { id: "home", label: "Home", icon: HomeIcon },
-    { id: "search", label: "Search", icon: SearchIcon },
+    { id: "pages", label: "Pages", icon: PagesIcon },
     { id: "inbox", label: "Inbox", icon: InboxIcon, hasBadge: pendingInvitesCount > 0 },
-    { id: "profile", label: "Profile", icon: UserIcon },
+    { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
 
   return (
-    <div className="mobile-floating-nav-wrapper" role="navigation" aria-label="Primary Mobile Navigation">
-      <nav className="mobile-floating-nav">
-        <LayoutGroup id="mobile-floating-navbar-group">
-          {/* First 2 items (Home & Search) */}
-          {items.slice(0, 2).map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id && !isPageRoute;
+    <div className="mobile-liquid-dock-wrapper" role="navigation" aria-label="Primary Mobile Navigation">
+      <div className="mobile-liquid-dock-inner">
+        {/* Left Liquid Glass Capsule Bar */}
+        <nav className="mobile-liquid-capsule">
+          <LayoutGroup id="mobile-liquid-nav-group">
+            {items.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id && !isPageRoute;
 
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={`mobile-floating-nav-item ${isActive ? "is-active" : ""}`}
-                onClick={() => {
-                  hapticFeedback("light");
-                  onSelectTab(item.id);
-                }}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="mobile-floating-nav-active-pill"
-                    className="mobile-floating-nav-indicator"
-                    transition={SPRING_TRANSITION}
-                  />
-                )}
-                <span className="mobile-floating-nav-icon-wrap">
-                  <Icon size={19} strokeWidth={isActive ? 2.4 : 1.9} />
-                </span>
-                <span className="mobile-floating-nav-label">{item.label}</span>
-              </button>
-            );
-          })}
-
-          {/* Center Create Button */}
-          <div className="mobile-floating-nav-create-wrap">
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.88 }}
-              whileHover={{ scale: 1.05 }}
-              transition={{ type: "spring", stiffness: 500, damping: 25 }}
-              className="mobile-floating-nav-create-btn"
-              aria-label="Create new page or task"
-              onClick={() => {
-                hapticFeedback("medium");
-                onCreate();
-              }}
-            >
-              <Plus size={20} strokeWidth={2.6} />
-            </motion.button>
-          </div>
-
-          {/* Last 2 items (Inbox & Profile) */}
-          {items.slice(2).map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id && !isPageRoute;
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={`mobile-floating-nav-item ${isActive ? "is-active" : ""}`}
-                onClick={() => {
-                  hapticFeedback("light");
-                  onSelectTab(item.id);
-                }}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="mobile-floating-nav-active-pill"
-                    className="mobile-floating-nav-indicator"
-                    transition={SPRING_TRANSITION}
-                  />
-                )}
-                <span className="mobile-floating-nav-icon-wrap relative">
-                  <Icon size={19} strokeWidth={isActive ? 2.4 : 1.9} />
-                  {item.hasBadge && (
-                    <span
-                      aria-label={`${pendingInvitesCount} unread invites`}
-                      className="mobile-floating-nav-badge"
+              return (
+                <motion.button
+                  key={item.id}
+                  type="button"
+                  whileTap={{ scale: 0.88 }}
+                  className={`mobile-liquid-tab ${isActive ? "is-active" : ""}`}
+                  onClick={() => {
+                    hapticFeedback("light");
+                    onSelectTab(item.id);
+                  }}
+                  aria-label={item.label}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="mobile-liquid-active-pill"
+                      className="mobile-liquid-active-pill"
+                      transition={TAB_SPRING_TRANSITION}
                     />
                   )}
-                </span>
-                <span className="mobile-floating-nav-label">{item.label}</span>
-              </button>
-            );
-          })}
-        </LayoutGroup>
-      </nav>
+                  <motion.span
+                    className="mobile-liquid-icon-wrap"
+                    animate={{
+                      scale: isActive ? 1.12 : 1,
+                      y: isActive ? -1 : 0,
+                    }}
+                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                  >
+                    <Icon size={20} strokeWidth={isActive ? 2.5 : 1.9} />
+                    {item.hasBadge && (
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        aria-label={`${pendingInvitesCount} unread invites`}
+                        className="mobile-liquid-badge"
+                      />
+                    )}
+                  </motion.span>
+                </motion.button>
+              );
+            })}
+          </LayoutGroup>
+        </nav>
+
+        {/* Right Standalone Circular Liquid Glass Create (+) Button */}
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.85 }}
+          whileHover={{ scale: 1.05 }}
+          animate={{
+            rotate: isActionGridOpen ? 45 : 0,
+            scale: isActionGridOpen ? 0.94 : 1,
+          }}
+          transition={{ type: "spring", stiffness: 480, damping: 26, mass: 0.7 }}
+          className={`mobile-liquid-fab ${isActionGridOpen ? "is-open" : ""}`}
+          aria-label={isActionGridOpen ? "Close create actions" : "Open create actions"}
+          onClick={() => {
+            hapticFeedback("medium");
+            onOpenActionGrid();
+          }}
+        >
+          <Plus size={22} strokeWidth={2.6} />
+        </motion.button>
+      </div>
     </div>
   );
 }
-
-export default MobileFloatingNavbar;

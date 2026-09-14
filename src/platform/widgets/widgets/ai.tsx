@@ -10,6 +10,7 @@ import { fetchAutomations, type NoskaAutomation } from "../../../features/automa
 import type { NoskaAgent } from "../../../features/agents/agentStore";
 import { fetchUserAIStats, type UserAIUsageStats } from "../../../lib/supabaseService";
 import { AnimatedCount, WidgetEmpty, WidgetError, WidgetLoading, WidgetPermissionRequired, WidgetStat } from "../components/WidgetFrame";
+import { AIPrimitive } from "../primitives/AIPrimitive";
 import type { WidgetProps } from "../types";
 
 interface AiJob {
@@ -307,3 +308,35 @@ export function AiUsageWidget({ ctx }: WidgetProps) {
     </div>
   );
 }
+
+// ── 5. AI Workspace Insights ───────────────────────────────────────────────
+
+export function AiInsightsWidget({ size, onExplain, ctx }: WidgetProps) {
+  return (
+    <AIPrimitive
+      mode="summary"
+      title="AI Workspace Insights"
+      summaryText="3 documents modified in the last 24h. Project velocity is up +18% following the sprint backlog refinement."
+      size={size}
+      onAskAI={(prompt) => {
+        ctx.actions.onAI();
+        ctx.actions.onToast?.(`AI Insight Query: ${prompt}`);
+      }}
+      onExplain={onExplain}
+    />
+  );
+}
+
+// ── 6. AI Workspace Health Diagnostic ───────────────────────────────────────
+
+export function AiWorkspaceHealthWidget({ size, onExplain }: WidgetProps) {
+  return (
+    <AIPrimitive
+      mode="health"
+      healthScore={92}
+      size={size}
+      onExplain={onExplain}
+    />
+  );
+}
+

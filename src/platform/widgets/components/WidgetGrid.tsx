@@ -25,15 +25,20 @@ import { useWidgetEngine } from "../engine";
 import { getWidgetDefinition } from "../registry";
 import { WidgetFrame, SIZE_CLASS } from "./WidgetFrame";
 import type { WidgetInstance, WidgetRuntimeContext } from "../types";
+import type { GlobalDashboardFilterState } from "../data/types";
 
 function SortableWidget({
   instance,
   ctx,
+  globalFilters,
   onConfigure,
+  onExplain,
 }: {
   instance: WidgetInstance;
   ctx: WidgetRuntimeContext;
+  globalFilters?: GlobalDashboardFilterState;
   onConfigure: (instanceId: string, config: Record<string, unknown>) => void;
+  onExplain?: (instance: WidgetInstance) => void;
 }) {
   const definition = getWidgetDefinition(instance.widgetId);
   const { removeWidget, resizeWidget } = useWidgetEngine();
@@ -54,10 +59,12 @@ function SortableWidget({
         definition={definition}
         instance={instance}
         ctx={ctx}
+        globalFilters={globalFilters}
         dragging={isDragging}
         dragHandleProps={{ ...attributes, ...listeners }}
         onRemove={() => removeWidget(instance.id)}
         onResize={(size) => resizeWidget(instance.id, size)}
+        onExplain={onExplain ? () => onExplain(instance) : undefined}
         onConfigure={
           definition.configSchema?.length
             ? (config) => onConfigure(instance.id, config)
@@ -71,11 +78,15 @@ function SortableWidget({
 export function WidgetGrid({
   widgets,
   ctx,
+  globalFilters,
   onConfigure,
+  onExplain,
 }: {
   widgets: WidgetInstance[];
   ctx: WidgetRuntimeContext;
+  globalFilters?: GlobalDashboardFilterState;
   onConfigure: (instanceId: string, config: Record<string, unknown>) => void;
+  onExplain?: (instance: WidgetInstance) => void;
 }) {
   const { reorderWidgets } = useWidgetEngine();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -104,7 +115,14 @@ export function WidgetGrid({
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <AnimatePresence mode="popLayout">
             {widgets.map((instance) => (
-              <SortableWidget key={instance.id} instance={instance} ctx={ctx} onConfigure={onConfigure} />
+              <SortableWidget
+                key={instance.id}
+                instance={instance}
+                ctx={ctx}
+                globalFilters={globalFilters}
+                onConfigure={onConfigure}
+                onExplain={onExplain}
+              />
             ))}
           </AnimatePresence>
         </div>
@@ -112,3 +130,4 @@ export function WidgetGrid({
     </DndContext>
   );
 }
+

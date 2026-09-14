@@ -31,6 +31,7 @@ open class RustPlugin : Plugin<Project> {
             productFlavors {
                 create("universal") {
                     dimension = "abi"
+                    isDefault = true
                     ndk {
                         abiFilters += abiList
                     }

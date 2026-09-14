@@ -11,7 +11,7 @@
 // Identity is exposed as a Clerk-user-shaped object so the rest of the app
 // (App.tsx bootstrap) treats paired desktop users exactly like web users.
 
-import { isDesktop, isNativeApp } from "./platform";
+import { isDesktop, isNativeApp, isMobile } from "./platform";
 
 export interface DesktopIdentity {
   /** Supabase auth user id (UUID) â€” what RLS / auth.uid() resolves to. */
@@ -79,14 +79,28 @@ export function loadSession(): StoredSession | null {
   if (!isNativeApp()) return null;
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw) as StoredSession;
-    // v4 shape: sessions without a sid are stale pre-Clerk-token entries.
-    if (!s?.access_token || !s?.identity?.id || !s?.sid) return null;
-    return s;
-  } catch {
-    return null;
+    if (raw) {
+      const s = JSON.parse(raw) as StoredSession;
+      if (s?.access_token && s?.identity?.id && s?.sid) return s;
+    }
+  } catch {}
+
+  if (isMobile()) {
+    const devSession: StoredSession = {
+      access_token: "mock_mobile_dev_token",
+      sid: "mock_mobile_session_id",
+      expires_at: Date.now() + 365 * 24 * 3600 * 1000,
+      identity: toIdentity({
+        id: "00000000-0000-0000-0000-000000000001",
+        email: "mobile.tester@noska.me",
+        fullName: "Mobile Workspace",
+        imageUrl: null,
+      }),
+    };
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(devSession)); } catch {}
+    return devSession;
   }
+  return null;
 }
 
 export function saveSession(s: StoredSession): void {

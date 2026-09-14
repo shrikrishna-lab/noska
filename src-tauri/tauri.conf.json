@@ -5,7 +5,7 @@
   "identifier": "dev.noska.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://127.0.0.1:5173",
+    "devUrl": null,
     "beforeBuildCommand": "npm run build:desktop",
     "frontendDist": "../dist-desktop"
   },

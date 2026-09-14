@@ -26,19 +26,24 @@ import {
   Wifi,
   X,
   Flame,
+  HelpCircle,
 } from "lucide-react";
 import { trackWidgetEvent } from "../analytics";
 import type { WidgetCategory, WidgetDefinition, WidgetInstance, WidgetRuntimeContext, WidgetSize } from "../types";
+import type { GlobalDashboardFilterState } from "../data/types";
 
 export const WIDGET_CATEGORY_ICONS: Record<WidgetCategory, React.ComponentType<{ size?: number; className?: string }>> = {
   productivity: CheckCircle2,
-    gamified: Flame,
+  gamified: Flame,
   ai: Sparkles,
   workspace: LayoutGrid,
   project: Target,
+  analytics: Sparkles,
   notifications: Bell,
   integrations: Plug,
+  automation: Target,
   system: Wifi,
+  embed: LayoutGrid,
 };
 
 /** Grid semantics on the 4-column dashboard grid. */
@@ -187,18 +192,22 @@ export function WidgetFrame({
   definition,
   instance,
   ctx,
+  globalFilters,
   onRemove,
   onResize,
   onConfigure,
+  onExplain,
   dragHandleProps,
   dragging,
 }: {
   definition?: WidgetDefinition;
   instance: WidgetInstance;
   ctx: WidgetRuntimeContext;
+  globalFilters?: GlobalDashboardFilterState;
   onRemove: () => void;
   onResize?: (size: WidgetSize) => void;
   onConfigure?: (config: Record<string, unknown>) => void;
+  onExplain?: () => void;
   dragHandleProps?: Record<string, unknown>;
   dragging?: boolean;
 }) {
@@ -247,6 +256,15 @@ export function WidgetFrame({
           {definition.name}
         </h3>
         <div className="flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          {onExplain && (
+            <button
+              onClick={onExplain}
+              title="Explain Calculation & Provenance"
+              className="rounded-lg p-1 text-neutral-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-all active:scale-90 cursor-pointer"
+            >
+              <HelpCircle size={13} />
+            </button>
+          )}
           {onConfigure && (
             <button
               onClick={() => onConfigure({ ...definition.defaultConfig, ...instance.config })}
@@ -276,7 +294,14 @@ export function WidgetFrame({
       </header>
       <div className="min-h-0 flex-1 px-4 pb-3.5 pt-1">
         <WidgetErrorBoundary widgetId={definition.id} key={`${instance.id}:${instance.size}`}>
-          <definition.component config={instance.config ?? {}} size={instance.size} ctx={ctx} />
+          <definition.component
+            config={instance.config ?? {}}
+            size={instance.size}
+            ctx={ctx}
+            instanceId={instance.id}
+            globalFilters={globalFilters}
+            onExplain={onExplain}
+          />
         </WidgetErrorBoundary>
       </div>
     </motion.section>

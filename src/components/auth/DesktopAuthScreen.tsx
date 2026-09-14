@@ -19,6 +19,7 @@ import {
   startBrowserAuth,
   subscribeBrowserAuth,
 } from "../../lib/desktop/browserAuth";
+import { devSignInLocal, isDevBypassAvailable } from "../../lib/devAuth";
 
 const TERMS_URL = "https://www.noska.me/terms";
 const PRIVACY_URL = "https://www.noska.me/privacy";
@@ -36,6 +37,9 @@ export default function DesktopAuthScreen() {
   const navigate = useNavigate();
   useSyncExternalStore(subscribeBrowserAuth, browserAuthVersion);
   const { status, authUrl, error, pollError } = getBrowserAuthState();
+  // Dev-only local sign-in — removed entirely from production builds.
+  const devBypass = isDevBypassAvailable();
+  const handleDevSignIn = () => devSignInLocal("Dev Tester");
 
   // On success the paired identity appears and the app bootstrap routes
   // into the workspace/onboarding. Brief success beat so the transition
@@ -210,7 +214,17 @@ export default function DesktopAuthScreen() {
           className="w-full h-11 mt-9 rounded-[8px] bg-slate-800 text-white font-semibold text-xs hover:bg-slate-700 transition-all duration-150 disabled:opacity-40 shadow-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/40"
         >
           {(status as string) === "starting" ? "Opening browser…" : "Continue with Web"}
+      </button>
+
+        {devBypass && (
+        <button
+          type="button"
+          onClick={handleDevSignIn}
+          className="w-full h-11 mt-3 rounded-[8px] border border-dashed border-slate-300 text-slate-500 font-semibold text-xs hover:border-slate-400 hover:text-slate-700 transition-all duration-150 focus:outline-none"
+        >
+          Dev sign-in (local, no account)
         </button>
+        )}
 
         <AnimatePresence>
           {error && (
