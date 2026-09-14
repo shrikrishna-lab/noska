@@ -168,13 +168,13 @@ jobs:
       contents: write
     steps:
       - name: Download Android artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: noska-android
           path: dist/android
 
       - name: Download iOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: noska-ios
           path: dist/ios
