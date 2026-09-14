@@ -190,14 +190,14 @@ pub fn run() {
             emit_deep_links(app, urls);
         }));
 
-        // Persist size/position but NOT the maximized flag: restoring
-        // "maximized" onto a borderless (decorations:false, shadow:false)
-        // window can collapse it to a degenerate size on Windows.
+        // Persist size and position only. Exclude MAXIMIZED and DECORATIONS so
+        // that the custom borderless titlebar is always clean without native OS titlebars.
         builder = builder.plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(
-                    tauri_plugin_window_state::StateFlags::all()
-                        & !tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::VISIBLE,
                 )
                 .build()
         )
@@ -234,9 +234,10 @@ pub fn run() {
                 setup_app_menu(app)?;
                 setup_tray(app)?;
 
-                // Self-heal degenerate window-state restores (tiny/offscreen
-                // window = corrupted or pre-borderless state file).
+                // Enforce borderless frameless window without native OS titlebar
+                // and self-heal degenerate window-state restores.
                 if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_decorations(false);
                     let size = win.outer_size().unwrap_or_default();
                     if size.width < 500 || size.height < 400 {
                         let _ = win.unmaximize();
