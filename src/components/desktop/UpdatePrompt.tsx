@@ -70,8 +70,17 @@ export default function UpdatePrompt() {
       <Banner04
         version={formattedVer}
         title="Update available"
-        description={cleanReleaseNotes(update.notes)}
         onUpdate={async () => {
+          if (update.notes) {
+            try {
+              localStorage.setItem("noska_pending_update_notes", update.notes);
+            } catch {}
+          }
+          if (update.version) {
+            try {
+              localStorage.setItem("noska_pending_update_version", update.version);
+            } catch {}
+          }
           await update.install(); // relaunches the app when done
         }}
         onLater={() => setUpdate(null)}

@@ -1,85 +1,90 @@
 import { useCallback, useEffect, useState } from "react";
 import { APP_CURRENT_VERSION } from "@/lib/versionService";
+import { supabaseAnon } from "@/lib/supabase";
+import { DEFAULT_CHANGELOG_ENTRIES } from "@/pages/marketing/Changelog";
 
-// Per-version "What's New" flow: after the desktop app updates, the release
-// notes for the new version are fetched from the public releases repo and
-// shown once. Dismissing stores the version — the notes never appear again
-// until the next update ships a new version. First-ever runs are marked seen
-// silently (there was no update to explain).
+// Per-version "What's New" release notes system:
+// After the Noska desktop app updates, the release notes for the new version
+// are fetched from multi-tiered sources (cached update payload, GitHub releases,
+// latest.json CDN manifest, Supabase changelog, and built-in fallbacks) and
+// displayed in a dedicated What's New modal.
+//
+// Crucial Rule: Release notes stay visible until the user explicitly dismisses them.
+// Upon dismissal, the seen version is saved to localStorage so the modal NEVER
+// re-shows for that version until a newer app update occurs.
 
-const SEEN_KEY = "noska_release_notes_seen_version";
-const GH_RELEASE_API =
-  "https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases/tags/desktop-v";
+export const RELEASE_NOTES_SEEN_KEY = "noska_release_notes_seen_version";
+export const PENDING_UPDATE_NOTES_KEY = "noska_pending_update_notes";
+export const PENDING_UPDATE_VERSION_KEY = "noska_pending_update_version";
+
+const GH_RELEASES_LIST_API =
+  "https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases?per_page=30";
+const GH_RELEASE_TAG_API =
+  "https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases/tags/";
+const GH_LATEST_MANIFEST_URL =
+  "https://github.com/shrikrishna-lab/noska-desktop-releases/releases/latest/download/latest.json";
 
 export interface ReleaseNotes {
   version: string; // normalized "vX.Y.Z"
   title: string;
   body: string; // markdown
   url: string;
+  tag?: string;
+  publishedAt?: string;
 }
 
-function readSeenVersion(): string {
+export function readSeenVersion(): string {
   try {
-    return localStorage.getItem(SEEN_KEY) ?? "";
+    return localStorage.getItem(RELEASE_NOTES_SEEN_KEY) ?? "";
   } catch {
     return "";
   }
 }
 
-function markSeen(version: string) {
+export function markSeen(version: string) {
   try {
-    localStorage.setItem(SEEN_KEY, version);
-  } catch { /* private mode — notes may re-show, acceptable */ }
-}
-
-async function fetchNotesFor(version: string): Promise<ReleaseNotes | null> {
-  const tag = version.startsWith("desktop-v")
-    ? version
-    : `desktop-v${version.replace(/^v/, "")}`;
-  try {
-    const res = await fetch(`${GH_RELEASE_API}${tag}`, {
-      headers: { Accept: "application/vnd.github+json" },
-    });
-    if (!res.ok) return null; // 404 = notes not published yet for this version
-    const rel = (await res.json()) as {
-      name?: string;
-      body?: string;
-      html_url?: string;
-      tag_name?: string;
-    };
-    if (!rel.body || !rel.body.trim()) return null;
-    return {
-      version: version.startsWith("v") ? version : `v${version.replace(/^desktop-v/, "")}`,
-      title: rel.name || `What's new in ${version}`,
-      body: rel.body,
-      url: rel.html_url ?? `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/${tag}`,
-    };
+    if (version) {
+      localStorage.setItem(RELEASE_NOTES_SEEN_KEY, version);
+    }
   } catch {
-    return null;
+    /* private mode — notes may re-show, acceptable */
   }
 }
 
-function compareVersions(a: string, b: string): number {
-  const pa = a.replace(/^[^\d]*/, "").split("-")[0].split(".").map(Number);
-  const pb = b.replace(/^[^\d]*/, "").split("-")[0].split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+export function normalizeVersion(v?: string | null): string {
+  if (!v) return "";
+  const clean = v.replace(/^desktop-v?|^v?/, "").trim();
+  return clean ? `v${clean}` : "";
+}
+
+export function parseSemver(v: string): number[] {
+  const clean = v.replace(/^[^\d]*/, "").split("-")[0];
+  return clean.split(".").map((n) => parseInt(n, 10) || 0);
+}
+
+export function compareVersions(a: string, b: string): number {
+  const pa = parseSemver(a);
+  const pb = parseSemver(b);
+  const maxLen = Math.max(pa.length, pb.length, 3);
+  for (let i = 0; i < maxLen; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
   }
   return 0;
 }
 
-// Users can skip versions (the updater always jumps to latest), so the
-// What's New covers EVERY published release between the last-seen version
-// and the current one — not just the current version's notes.
+/**
+ * Fetch notes across a version range when user skipped multiple updates
+ */
 async function fetchNotesBetween(
   seenVersion: string,
   currentVersion: string,
 ): Promise<ReleaseNotes | null> {
   try {
-    const res = await fetch(
-      "https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases?per_page=30",
-      { headers: { Accept: "application/vnd.github+json" } },
-    );
+    const res = await fetch(GH_RELEASES_LIST_API, {
+      headers: { Accept: "application/vnd.github+json" },
+      cache: "no-store",
+    });
     if (!res.ok) return null;
     const releases = (await res.json()) as Array<{
       name?: string;
@@ -93,10 +98,11 @@ async function fetchNotesBetween(
 
     const inRange = releases
       .filter((r) => !r.draft && !r.prerelease && r.body && r.body.trim() && r.tag_name)
-      .map((r) => ({ ...r, version: (r.tag_name ?? "").replace(/^desktop-v/, "v") }))
+      .map((r) => ({ ...r, version: normalizeVersion(r.tag_name) }))
       .filter((r) => {
-        const v = compareVersions(r.version, seenVersion);
-        return v > 0 && compareVersions(r.version, currentVersion) <= 0;
+        const vDiffSeen = compareVersions(r.version, seenVersion);
+        const vDiffCurrent = compareVersions(r.version, currentVersion);
+        return vDiffSeen > 0 && vDiffCurrent <= 0;
       })
       .sort((a, b) => compareVersions(a.version, b.version)); // oldest first
 
@@ -108,27 +114,195 @@ async function fetchNotesBetween(
         version: r.version,
         title: r.name || `What's new in ${r.version}`,
         body: r.body!,
-        url: r.html_url ?? `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/${r.tag_name}`,
+        url:
+          r.html_url ??
+          `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/${r.tag_name}`,
+        publishedAt: r.created_at,
       };
     }
 
-    // Multiple versions skipped — compose one body with a section per release
-    // (oldest first, each entry's own "# title" line dropped to avoid
-    // duplicate titles; the modal chrome shows the current version).
+    // Multiple versions skipped — compose aggregated body with sections
     const sections = inRange.map((r) => {
-      const date = r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+      const date = r.created_at
+        ? new Date(r.created_at).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          })
+        : "";
       const bodyLines = (r.body ?? "").split("\n").filter((l) => !/^#\s/.test(l));
       return [`### ${r.version}${date ? ` — ${date}` : ""}`, ...bodyLines].join("\n");
     });
+
+    const normCurrent = normalizeVersion(currentVersion);
     return {
-      version: currentVersion.startsWith("v") ? currentVersion : `v${currentVersion.replace(/^desktop-v/, "")}`,
-      title: `What's new in ${currentVersion.startsWith("v") ? currentVersion : `v${currentVersion.replace(/^desktop-v/, "")}`}`,
-      body: sections.join("\n\n"),
-      url: `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/desktop-v${currentVersion.replace(/^v/, "")}`,
+      version: normCurrent,
+      title: `What's new in ${normCurrent}`,
+      body: sections.join("\n\n---\n\n"),
+      url: `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/desktop-${normCurrent}`,
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Fetch release notes for a single version using multi-tier fallback
+ */
+async function fetchNotesFor(version: string): Promise<ReleaseNotes | null> {
+  const normVer = normalizeVersion(version);
+  const cleanVer = normVer.replace(/^v/, "");
+
+  // Tier 1: Try GitHub Release Tag endpoints
+  const tagCandidates = [`desktop-v${cleanVer}`, `v${cleanVer}`, cleanVer];
+  for (const tag of tagCandidates) {
+    try {
+      const res = await fetch(`${GH_RELEASE_TAG_API}${tag}`, {
+        headers: { Accept: "application/vnd.github+json" },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const rel = (await res.json()) as {
+          name?: string;
+          body?: string;
+          html_url?: string;
+          tag_name?: string;
+          created_at?: string;
+        };
+        if (rel.body && rel.body.trim()) {
+          return {
+            version: normVer,
+            title: rel.name || `What's new in ${normVer}`,
+            body: rel.body,
+            url:
+              rel.html_url ??
+              `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/${tag}`,
+            publishedAt: rel.created_at,
+          };
+        }
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  // Tier 2: Try GitHub static CDN latest.json manifest (Zero rate limit)
+  try {
+    const res = await fetch(GH_LATEST_MANIFEST_URL, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const manifest = await res.json();
+      if (manifest?.notes && manifest.notes.trim()) {
+        const manifestVer = normalizeVersion(manifest.version || version);
+        return {
+          version: manifestVer,
+          title: `What's new in ${manifestVer}`,
+          body: manifest.notes,
+          url: `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/desktop-${manifestVer}`,
+          publishedAt: manifest.pub_date,
+        };
+      }
+    }
+  } catch {
+    // try next tier
+  }
+
+  // Tier 3: Supabase published changelog_entries table
+  try {
+    const { data: entries } = await (supabaseAnon as any)
+      .from("changelog_entries")
+      .select("id, version, title, description, created_at, published_at")
+      .eq("published", true)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (entries && entries.length > 0) {
+      // Find matching version or fallback to latest entry
+      const match =
+        entries.find(
+          (e: any) =>
+            normalizeVersion(e.version) === normVer ||
+            normalizeVersion(e.version) === normalizeVersion(version),
+        ) || entries[0];
+
+      if (match?.description) {
+        const entryVer = normalizeVersion(match.version) || normVer;
+        return {
+          version: entryVer,
+          title: match.title || `What's new in ${entryVer}`,
+          body: match.description,
+          url: `https://noska.me/changelog`,
+          publishedAt: match.published_at || match.created_at,
+        };
+      }
+    }
+  } catch {
+    // try next tier
+  }
+
+  // Tier 4: Built-in DEFAULT_CHANGELOG_ENTRIES fallback
+  if (DEFAULT_CHANGELOG_ENTRIES && DEFAULT_CHANGELOG_ENTRIES.length > 0) {
+    const localMatch =
+      DEFAULT_CHANGELOG_ENTRIES.find(
+        (e) => normalizeVersion(e.version) === normVer,
+      ) || DEFAULT_CHANGELOG_ENTRIES[0];
+
+    if (localMatch?.description) {
+      const localVer = normalizeVersion(localMatch.version) || normVer;
+      return {
+        version: localVer,
+        title: localMatch.title || `What's new in ${localVer}`,
+        body: localMatch.description,
+        url: `https://noska.me/changelog`,
+        publishedAt: localMatch.published_at || localMatch.created_at,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resolves release notes for an update using cached payload or online sources
+ */
+export async function resolveReleaseNotes(
+  seenVersion: string,
+  currentVersion: string,
+): Promise<ReleaseNotes | null> {
+  const normCurrent = normalizeVersion(currentVersion);
+
+  // 1. Check if installer cached update notes directly before relaunch
+  try {
+    const cachedNotes = localStorage.getItem(PENDING_UPDATE_NOTES_KEY);
+    const cachedVer = localStorage.getItem(PENDING_UPDATE_VERSION_KEY);
+    if (cachedNotes && cachedNotes.trim()) {
+      return {
+        version: normalizeVersion(cachedVer) || normCurrent,
+        title: `What's new in ${normalizeVersion(cachedVer) || normCurrent}`,
+        body: cachedNotes,
+        url: `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/desktop-${normCurrent}`,
+      };
+    }
+  } catch {}
+
+  // 2. If updating across versions and we have a valid seenVersion, try range notes
+  if (seenVersion && seenVersion !== currentVersion) {
+    const rangeNotes = await fetchNotesBetween(seenVersion, currentVersion);
+    if (rangeNotes) return rangeNotes;
+  }
+
+  // 3. Single version notes lookup
+  const singleNotes = await fetchNotesFor(currentVersion);
+  if (singleNotes) return singleNotes;
+
+  // 4. Fallback: generate default structured notes
+  return {
+    version: normCurrent,
+    title: `What's new in ${normCurrent}`,
+    body: `### 🚀 Noska Desktop ${normCurrent}\n- Enhanced app performance, memory optimizations, and security updates.\n- Seamless auto-updating, offline synchronization, and workspace stability improvements.`,
+    url: `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/desktop-${normCurrent}`,
+  };
 }
 
 export function useReleaseNotes() {
@@ -138,51 +312,77 @@ export function useReleaseNotes() {
   useEffect(() => {
     if (!APP_CURRENT_VERSION) return;
     const seen = readSeenVersion();
-    const current = APP_CURRENT_VERSION;
+    const current = normalizeVersion(APP_CURRENT_VERSION);
 
+    // Case 1: Already seen & dismissed by user for this version
     if (seen === current) {
-      // Already shown/handled for this version — cycle complete.
       setReady(true);
       return;
     }
 
+    // Case 2: First run on a fresh install — mark seen silently so onboarding is undisturbed
     if (seen === "") {
-      // First run on this device: no update happened, don't interrupt.
       markSeen(current);
       setReady(true);
       return;
     }
 
-    // Version changed since we last saw notes → this is an update. Show the
-    // notes for every version between the last-seen one and now.
+    // Case 3: An app update occurred (seen !== current)!
+    // Fetch and display the release notes for the new version.
     let cancelled = false;
-    fetchNotesBetween(seen, current).then((n) => {
+    resolveReleaseNotes(seen, current).then((resolved) => {
       if (cancelled) return;
-      if (n) {
-        setNotes(n);
-        markSeen(current);
-        setReady(true);
-        return;
+      if (resolved) {
+        setNotes(resolved);
       }
-      // Range unavailable — fall back to the current version's notes alone.
-      return fetchNotesFor(current);
-    }).then((n) => {
-      if (cancelled) return;
-      if (n) setNotes(n);
-      // No notes published for this version — mark seen so we don't retry
-      // every launch; the next update will trigger again.
-      markSeen(current);
       setReady(true);
     });
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const dismiss = useCallback(() => {
-    setNotes(null);
-    markSeen(APP_CURRENT_VERSION);
+  // Listen for manual trigger events (e.g. from Help / Settings / About modal)
+  useEffect(() => {
+    const handleShow = (e: Event) => {
+      const customEvent = e as CustomEvent<{ version?: string }>;
+      const targetVer = customEvent.detail?.version || APP_CURRENT_VERSION;
+      fetchNotesFor(targetVer).then((n) => {
+        if (n) {
+          setNotes(n);
+        } else {
+          setNotes({
+            version: normalizeVersion(targetVer),
+            title: `What's new in ${normalizeVersion(targetVer)}`,
+            body: `### 🚀 Noska Desktop ${normalizeVersion(targetVer)}\n- Performance improvements and bug fixes.`,
+            url: `https://noska.me/changelog`,
+          });
+        }
+      });
+    };
+
+    window.addEventListener("noska:show-release-notes", handleShow);
+    return () => window.removeEventListener("noska:show-release-notes", handleShow);
   }, []);
 
-  return { notes, dismiss, ready };
+  const dismiss = useCallback(() => {
+    const current = normalizeVersion(APP_CURRENT_VERSION);
+    markSeen(current);
+    try {
+      localStorage.removeItem(PENDING_UPDATE_NOTES_KEY);
+      localStorage.removeItem(PENDING_UPDATE_VERSION_KEY);
+    } catch {}
+    setNotes(null);
+  }, []);
+
+  const showReleaseNotes = useCallback(async (targetVersion?: string) => {
+    const ver = targetVersion || APP_CURRENT_VERSION;
+    const n = await fetchNotesFor(ver);
+    if (n) {
+      setNotes(n);
+    }
+  }, []);
+
+  return { notes, dismiss, ready, showReleaseNotes };
 }

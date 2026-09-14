@@ -1941,6 +1941,7 @@ export function HelpModal({ onClose }: HelpModalProps) {
     { id: "shortcuts", label: "Shortcuts", icon: "⌨️" },
     { id: "ai", label: "AI Guide", icon: "✨" },
     { id: "canvas", label: "Canvas & Graph", icon: "🎨" },
+    { id: "release", label: "What's New", icon: "🎉" },
     { id: "ticket", label: "Report / Request", icon: "🎫" }
   ];
 
@@ -2111,6 +2112,54 @@ export function HelpModal({ onClose }: HelpModalProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {tab === "release" && (
+            <div className="space-y-6 max-w-lg">
+              <div>
+                <h2 className="text-2xl font-bold text-[var(--text)]">What's New in Noska</h2>
+                <p className="text-sm text-[var(--secondary)] mt-1">
+                  Explore the latest release notes, feature launches, and performance enhancements.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] text-lg">
+                    🚀
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold text-[var(--text)]">Release Notes & Updates</div>
+                    <div className="text-xs text-[var(--secondary)]">View full changelog details for current & past versions</div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-[var(--secondary)] leading-relaxed">
+                  Whenever Noska updates, release notes appear automatically. You can also re-open the What's New modal anytime right here.
+                </p>
+
+                <div className="pt-2 flex flex-wrap gap-2.5">
+                  <button
+                    onClick={() => {
+                      onClose();
+                      window.dispatchEvent(new CustomEvent("noska:show-release-notes"));
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-95"
+                  >
+                    <span>✨ Open Release Notes</span>
+                  </button>
+                  <a
+                    href="https://noska.me/changelog"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-medium text-[var(--text)] transition hover:bg-[var(--surface-3)]"
+                  >
+                    <span>Web Changelog</span>
+                    <Globe size={13} />
+                  </a>
+                </div>
               </div>
             </div>
           )}

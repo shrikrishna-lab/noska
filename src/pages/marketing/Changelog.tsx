@@ -17,7 +17,7 @@ interface ChangelogEntry {
   created_at: string;
 }
 
-const DEFAULT_CHANGELOG_ENTRIES: ChangelogEntry[] = [
+export const DEFAULT_CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
     id: "release-v1-2-1",
     title: "Spatial Canvas 2.0: AI Spatial Synthesis, Smart Connectors, 2D Kanban Dual-View & Interactive Presentation Mode",

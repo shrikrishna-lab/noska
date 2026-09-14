@@ -20,6 +20,16 @@ export async function checkForUpdate(): Promise<AppUpdate | null> {
     version: update.version,
     notes: update.body,
     install: async () => {
+      if (update.body) {
+        try {
+          localStorage.setItem("noska_pending_update_notes", update.body);
+        } catch {}
+      }
+      if (update.version) {
+        try {
+          localStorage.setItem("noska_pending_update_version", update.version);
+        } catch {}
+      }
       await update.downloadAndInstall();
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
