@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { 
   ZoomIn, 
   ZoomOut, 
@@ -9,12 +9,27 @@ import {
   Play, 
   Pause, 
   Download, 
-  Search,
-  Filter,
-  Tags,
-  Circle
+  Circle,
+  SlidersHorizontal
 } from "lucide-react";
 import GraphLayoutMenu from "./GraphLayoutMenu";
+
+interface GraphControlsProps {
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFitGraph: () => void;
+  onCenterGraph: () => void;
+  onAutoArrange: () => void;
+  showLabels: boolean;
+  onToggleLabels: () => void;
+  animated: boolean;
+  onToggleAnimation: () => void;
+  onExport: () => void;
+  activeLayout: string;
+  onApplyLayout: (layoutId: string) => void;
+  sizeByConnections: boolean;
+  onToggleSizeByConnections: () => void;
+}
 
 export default function GraphControls({
   onZoomIn,
@@ -27,99 +42,64 @@ export default function GraphControls({
   animated,
   onToggleAnimation,
   onExport,
-  onToggleSearch,
-  onNodeSelect,
-  linkFilters,
-  onLinkFilterChange,
-  tagFilter,
-  onTagFilterChange,
-  allTags,
   activeLayout,
   onApplyLayout,
   sizeByConnections,
   onToggleSizeByConnections
-}) {
-  const [showFilters, setShowFilters] = useState(false);
-
-  const linkTypes = [
-    { key: "hierarchy", label: "Parent", color: "text-blue-400" },
-    { key: "tag", label: "Tag", color: "text-green-400" },
-    { key: "mention", label: "Link", color: "text-orange-400" },
-  ];
-
+}: GraphControlsProps) {
   const buttons = [
-    { icon: <Search size={14} />, label: "Search Notes", onClick: onToggleSearch },
-    { icon: <ZoomIn size={14} />, label: "Zoom In", onClick: onZoomIn },
-    { icon: <ZoomOut size={14} />, label: "Zoom Out", onClick: onZoomOut },
-    { icon: <Maximize size={14} />, label: "Fit View", onClick: onFitGraph },
-    { icon: <Crosshair size={14} />, label: "Center View", onClick: onCenterGraph },
-    { icon: <Sparkles size={14} className="text-[var(--warning)]" />, label: "Auto Arrange Layout", onClick: onAutoArrange },
-    { icon: <Type size={14} />, label: showLabels ? "Hide Labels" : "Show Labels", onClick: onToggleLabels, active: showLabels },
-    { icon: <Circle size={14} />, label: sizeByConnections ? "Uniform node size" : "Size by connections", onClick: onToggleSizeByConnections, active: sizeByConnections },
-    { icon: animated ? <Pause size={14} /> : <Play size={14} />, label: animated ? "Pause Animation" : "Play Animation", onClick: onToggleAnimation, active: animated },
-    { icon: <Filter size={14} />, label: "Toggle Filters", onClick: () => setShowFilters(!showFilters), active: showFilters },
-    { icon: <Download size={14} />, label: "Export Graph", onClick: onExport }
+    { icon: <ZoomIn size={13.5} strokeWidth={2} />, label: "Zoom In", onClick: onZoomIn },
+    { icon: <ZoomOut size={13.5} strokeWidth={2} />, label: "Zoom Out", onClick: onZoomOut },
+    { icon: <Maximize size={13.5} strokeWidth={2} />, label: "Fit View", onClick: onFitGraph },
+    { icon: <Crosshair size={13.5} strokeWidth={2} />, label: "Center Graph", onClick: onCenterGraph },
+    { 
+      icon: <Sparkles size={13.5} strokeWidth={2} className="text-amber-500" />, 
+      label: "Auto Arrange (Force Physics)", 
+      onClick: onAutoArrange 
+    },
+    { 
+      icon: <Type size={13.5} strokeWidth={2} />, 
+      label: showLabels ? "Hide Labels" : "Show Labels", 
+      onClick: onToggleLabels, 
+      active: showLabels 
+    },
+    { 
+      icon: <Circle size={13.5} strokeWidth={2} />, 
+      label: sizeByConnections ? "Uniform Node Size" : "Scale by Connections", 
+      onClick: onToggleSizeByConnections, 
+      active: sizeByConnections 
+    },
+    { 
+      icon: animated ? <Pause size={13.5} strokeWidth={2} /> : <Play size={13.5} strokeWidth={2} />, 
+      label: animated ? "Pause Animation" : "Play Animation", 
+      onClick: onToggleAnimation, 
+      active: animated 
+    },
+    { icon: <Download size={13.5} strokeWidth={2} />, label: "Export JSON", onClick: onExport }
   ];
 
   return (
-    <>
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 rounded-xl bg-[var(--elevated)]/80 backdrop-blur-md border border-[var(--border-strong)] p-1.5 shadow-lg">
-        <GraphLayoutMenu activeLayout={activeLayout} onApply={onApplyLayout} />
-        <div className="w-px h-6 bg-[var(--border-strong)] mx-0.5" />
-        {buttons.map((btn, index) => (
-          <button
-            key={index}
-            onClick={btn.onClick}
-            title={btn.label}
-            aria-label={btn.label}
-            className={`relative group flex items-center justify-center w-8 h-8 rounded-lg border transition-all cursor-pointer ${
-              btn.active 
-                ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-sm"
-                : "bg-[var(--surface)]/50 border-[var(--border)] text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:border-[var(--secondary)]"
-            }`}
-          >
-            {btn.icon}
-            <span className="absolute bottom-full right-1/2 translate-x-1/2 mb-2 px-2 py-1 rounded bg-[var(--elevated)] border border-[var(--border)] text-[9px] text-[var(--text)] font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-md z-30">
-              {btn.label}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {showFilters && (
-        <div className="absolute top-16 right-4 z-20 flex flex-col gap-2 rounded-xl bg-[var(--elevated)]/80 backdrop-blur-md border border-[var(--border)] p-3 shadow-lg min-w-[180px]">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1">Link Types</span>
-          {linkTypes.map((lt) => (
-            <label key={lt.key} className="flex items-center gap-2 cursor-pointer text-xs text-[var(--text)] hover:text-[var(--accent)] transition-colors">
-              <input
-                type="checkbox"
-                checked={linkFilters[lt.key]}
-                onChange={(e) => onLinkFilterChange({ ...linkFilters, [lt.key]: e.target.checked })}
-                className="accent-[var(--accent)]"
-              />
-              <span className={lt.color}>{lt.label}</span>
-            </label>
-          ))}
-          {allTags.length > 0 && (
-            <>
-              <div className="border-t border-[var(--border)] my-1.5" />
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1 flex items-center gap-1">
-                <Tags size={10} /> Tag Filter
-              </span>
-              <select
-                value={tagFilter || ""}
-                onChange={(e) => onTagFilterChange(e.target.value || null)}
-                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] outline-none"
-              >
-                <option value="">All tags</option>
-                {allTags.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </>
-          )}
-        </div>
-      )}
-    </>
+    <div className="flex items-center gap-0.5 h-10 px-2 rounded-full bg-white/90 dark:bg-[#181920]/90 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.8)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.08)] select-none">
+      <GraphLayoutMenu activeLayout={activeLayout} onApply={onApplyLayout} />
+      <div className="w-px h-3.5 bg-black/10 dark:bg-white/10 mx-1 shrink-0" />
+      {buttons.map((btn, index) => (
+        <button
+          key={index}
+          onClick={btn.onClick}
+          title={btn.label}
+          aria-label={btn.label}
+          className={`relative group flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-150 cursor-pointer ${
+            btn.active 
+              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs font-semibold"
+              : "text-slate-600 dark:text-slate-300 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] hover:text-slate-900 dark:hover:text-white"
+          }`}
+        >
+          {btn.icon}
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded-md bg-slate-900/90 dark:bg-black/90 text-white text-[10.5px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl z-50 backdrop-blur-md">
+            {btn.label}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }

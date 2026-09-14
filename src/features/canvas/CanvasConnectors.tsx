@@ -12,8 +12,8 @@ interface CanvasConnectorsProps {
 }
 
 /**
- * CanvasConnectors — draws charming hand-drawn dashed curves with typed arrowheads
- * and interactive relationship badges between sticky notes and canvas shapes.
+ * CanvasConnectors — draws charming hand-drawn dashed curves or crisp orthogonal
+ * circuit routes with typed arrowheads and interactive relationship badges.
  */
 export default function CanvasConnectors({
   connectors,
@@ -27,12 +27,36 @@ export default function CanvasConnectors({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempLabel, setTempLabel] = useState("");
 
+  const computePathData = (p1: { x: number; y: number }, p2: { x: number; y: number }, routing?: "curved" | "orthogonal") => {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+
+    if (routing === "orthogonal") {
+      const mx = (p1.x + p2.x) / 2;
+      return {
+        d: `M ${p1.x} ${p1.y} L ${mx} ${p1.y} L ${mx} ${p2.y} L ${p2.x} ${p2.y}`,
+        mid: { x: mx, y: (p1.y + p2.y) / 2 }
+      };
+    }
+
+    const dist = Math.hypot(dx, dy);
+    const curvature = Math.min(60, Math.max(20, dist * 0.18));
+    const mx = (p1.x + p2.x) / 2;
+    const my = (p1.y + p2.y) / 2 - (dx > 0 ? curvature * 0.3 : -curvature * 0.3);
+
+    return {
+      d: `M ${p1.x} ${p1.y} Q ${mx} ${my}, ${p2.x} ${p2.y}`,
+      mid: { x: mx, y: my }
+    };
+  };
+
   const paths: Array<{
     id: string;
     conn: Connector;
     p1: { x: number; y: number };
     p2: { x: number; y: number };
     mid: { x: number; y: number };
+    d: string;
     typeConfig: ReturnType<typeof getConnectorTypeConfig>;
   }> = [];
 
@@ -45,44 +69,30 @@ export default function CanvasConnectors({
     const p1 = edgeAnchor(a, cb);
     const p2 = edgeAnchor(b, ca);
 
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const dist = Math.hypot(dx, dy);
-    const curvature = Math.min(60, Math.max(20, dist * 0.18));
-    const mx = (p1.x + p2.x) / 2;
-    const my = (p1.y + p2.y) / 2 - (dx > 0 ? curvature * 0.3 : -curvature * 0.3);
-
+    const { d, mid } = computePathData(p1, p2, conn.routing);
     const typeConfig = getConnectorTypeConfig(conn.type);
+
     paths.push({
       id: conn.id,
       conn,
       p1,
       p2,
-      mid: { x: mx, y: my },
+      mid,
+      d,
       typeConfig
     });
   }
 
-  let draftPath: { p1: { x: number; y: number }; p2: { x: number; y: number } } | null = null;
+  let draftPath: { p1: { x: number; y: number }; p2: { x: number; y: number }; d: string } | null = null;
   if (draft) {
     const a = getRect(draft.fromKey);
     if (a) {
       const target = { x: draft.x, y: draft.y };
       const p1 = edgeAnchor(a, target);
-      draftPath = { p1, p2: target };
+      const { d } = computePathData(p1, target, "curved");
+      draftPath = { p1, p2: target, d };
     }
   }
-
-  // Smooth roadmap curve with gentle arching
-  const handDrawnCurve = (p1: { x: number; y: number }, p2: { x: number; y: number }) => {
-    const dx = p2.x - p1.x;
-    const dist = Math.hypot(dx, p2.y - p1.y);
-    const curvature = Math.min(60, Math.max(20, dist * 0.18));
-    const mx = (p1.x + p2.x) / 2;
-    const my = (p1.y + p2.y) / 2 - (dx > 0 ? curvature * 0.3 : -curvature * 0.3);
-
-    return `M ${p1.x} ${p1.y} Q ${mx} ${my}, ${p2.x} ${p2.y}`;
-  };
 
   return (
     <>
@@ -114,9 +124,10 @@ export default function CanvasConnectors({
             <g key={p.id} className="group/conn">
               {/* Generous invisible stroke for effortless selection click */}
               <path
-                d={handDrawnCurve(p.p1, p.p2)}
+                d={p.d}
                 stroke="transparent"
                 strokeWidth={24}
+                strokeLinejoin="round"
                 fill="none"
                 style={{ pointerEvents: "stroke", cursor: "pointer" }}
                 onPointerDown={(e) => {
@@ -128,20 +139,22 @@ export default function CanvasConnectors({
               {/* Glowing halo when selected */}
               {isSel && (
                 <path
-                  d={handDrawnCurve(p.p1, p.p2)}
+                  d={p.d}
                   stroke="rgba(245, 158, 11, 0.35)"
                   strokeWidth={8}
+                  strokeLinejoin="round"
                   fill="none"
                 />
               )}
 
-              {/* Soft dashed roadmap curve */}
+              {/* Soft dashed roadmap curve or circuit path */}
               <path
-                d={handDrawnCurve(p.p1, p.p2)}
+                d={p.d}
                 stroke={strokeColor}
                 strokeWidth={isSel ? 3.2 : 2.4}
                 strokeDasharray={p.conn.type === "blocks" ? "4 4" : "7 6"}
                 strokeLinecap="round"
+                strokeLinejoin="round"
                 fill="none"
                 markerEnd={`url(#${p.typeConfig.markerId})`}
                 className="transition-all duration-150"
@@ -153,11 +166,12 @@ export default function CanvasConnectors({
         {/* Active drafting connector preview */}
         {draftPath && (
           <path
-            d={handDrawnCurve(draftPath.p1, draftPath.p2)}
+            d={draftPath.d}
             stroke="#059669"
             strokeWidth={2.5}
             strokeDasharray="6 5"
             strokeLinecap="round"
+            strokeLinejoin="round"
             fill="none"
             markerEnd="url(#cv-arrow-leads-to)"
           />
@@ -179,16 +193,40 @@ export default function CanvasConnectors({
             >
               {isEditing ? (
                 <div
-                  className="rounded-2xl border border-black/10 dark:border-white/15 bg-white/95 dark:bg-[#181a22]/95 backdrop-blur-xl p-2.5 shadow-xl flex flex-col gap-2 min-w-[200px]"
+                  className="rounded-2xl border border-black/10 dark:border-white/15 bg-white/95 dark:bg-[#181a22]/95 backdrop-blur-xl p-3 shadow-2xl flex flex-col gap-2.5 min-w-[220px]"
                   onPointerDown={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-between gap-1 text-[11px] font-semibold text-slate-500">
-                    <span>Relationship Type</span>
+                    <span>Connection Settings</span>
                     <button
                       onClick={() => setEditingId(null)}
                       className="text-slate-400 hover:text-slate-700 dark:hover:text-white px-1 cursor-pointer"
                     >
                       ✕
+                    </button>
+                  </div>
+
+                  {/* Routing style toggle: Curved vs Orthogonal */}
+                  <div className="flex items-center p-0.5 rounded-lg bg-black/[0.04] dark:bg-white/[0.06] text-[10.5px] font-medium">
+                    <button
+                      onClick={() => onUpdateConnector?.(p.id, { routing: "curved" })}
+                      className={`flex-1 py-1 rounded-md transition cursor-pointer ${
+                        p.conn.routing !== "orthogonal"
+                          ? "bg-white dark:bg-[#282a36] text-slate-900 dark:text-white shadow-2xs font-semibold"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      Curved
+                    </button>
+                    <button
+                      onClick={() => onUpdateConnector?.(p.id, { routing: "orthogonal" })}
+                      className={`flex-1 py-1 rounded-md transition cursor-pointer ${
+                        p.conn.routing === "orthogonal"
+                          ? "bg-white dark:bg-[#282a36] text-slate-900 dark:text-white shadow-2xs font-semibold"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      Orthogonal
                     </button>
                   </div>
 
@@ -224,7 +262,7 @@ export default function CanvasConnectors({
                       autoFocus
                       value={tempLabel}
                       onChange={(e) => setTempLabel(e.target.value)}
-                      placeholder="Custom label..."
+                      placeholder="e.g. INTERNET, Resolves..."
                       className="w-full text-xs rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 outline-none text-[var(--text)] focus:ring-1 focus:ring-slate-400"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {

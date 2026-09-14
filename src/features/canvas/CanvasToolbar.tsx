@@ -1,5 +1,5 @@
-import React from "react";
-import { motion } from "framer-motion";
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   MousePointer2,
   Hand,
@@ -22,7 +22,14 @@ import {
   Volume2,
   VolumeX,
   Maximize2,
-  LayoutTemplate
+  LayoutTemplate,
+  CheckSquare,
+  Server,
+  Users,
+  ChevronDown,
+  Layers,
+  Award,
+  Shapes
 } from "lucide-react";
 
 const DRAW_TOOLS = [
@@ -32,11 +39,11 @@ const DRAW_TOOLS = [
   { id: "connector", icon: Spline, label: "Connector (C)" },
 ];
 
-const SHAPE_TOOLS = [
-  { id: "rect", icon: Square, label: "Frame (R)" },
-  { id: "ellipse", icon: Circle, label: "Circle (O)" },
-  { id: "text", icon: Type, label: "Text (T)" },
-  { id: "frame", icon: Frame, label: "Section (F)" },
+const SHAPES_LIST = [
+  { id: "rect", icon: Square, label: "Rectangle Frame" },
+  { id: "ellipse", icon: Circle, label: "Circle Shape" },
+  { id: "text", icon: Type, label: "Text Label" },
+  { id: "frame", icon: Frame, label: "Section Frame" },
 ];
 
 interface ToolButtonProps {
@@ -83,6 +90,10 @@ interface CanvasToolbarProps {
   showGrid: boolean;
   onToggleGrid: () => void;
   onAddCard: () => void;
+  onAddWorkflow?: () => void;
+  onAddInfra?: () => void;
+  onAddRole?: () => void;
+  onAddClientBadge?: () => void;
   showLegend?: boolean;
   onToggleLegend?: () => void;
   viewMode?: "flow" | "kanban";
@@ -110,6 +121,10 @@ export default function CanvasToolbar({
   showGrid,
   onToggleGrid,
   onAddCard,
+  onAddWorkflow,
+  onAddInfra,
+  onAddRole,
+  onAddClientBadge,
   showLegend,
   onToggleLegend,
   viewMode = "flow",
@@ -124,12 +139,17 @@ export default function CanvasToolbar({
   onPresentationMode,
   onOpenTemplates,
 }: CanvasToolbarProps) {
+  const [nodesMenuOpen, setNodesMenuOpen] = useState(false);
+  const [shapesMenuOpen, setShapesMenuOpen] = useState(false);
+
+  const isShapeActive = ["rect", "ellipse", "text", "frame"].includes(tool);
+
   return (
     <motion.div
       initial={{ y: -16, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: "spring", stiffness: 360, damping: 30 }}
-      className="absolute top-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 h-10 px-2 rounded-full bg-white/80 dark:bg-[#181920]/80 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.1] shadow-[0_12px_36px_-6px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.06)] max-w-[calc(100vw-32px)] overflow-x-auto scrollbar-none select-none whitespace-nowrap"
+      className="relative flex items-center gap-1.5 h-10 px-2 rounded-full bg-white/85 dark:bg-[#181920]/85 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.1] shadow-[0_12px_36px_-6px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.06)] overflow-x-auto scrollbar-none select-none whitespace-nowrap"
     >
       {/* 1. Mode Switcher (Apple Segments) */}
       {onToggleViewMode && (
@@ -161,7 +181,7 @@ export default function CanvasToolbar({
         </div>
       )}
 
-      {/* 2. Drawing & Selection Tools (Only in Flow Mode) */}
+      {/* 2. Drawing Tools */}
       {viewMode === "flow" && (
         <>
           <div className="w-px h-4 bg-black/[0.08] dark:bg-white/[0.1] mx-0.5 shrink-0" />
@@ -173,13 +193,52 @@ export default function CanvasToolbar({
             ))}
           </div>
 
-          <div className="w-px h-4 bg-black/[0.08] dark:bg-white/[0.1] mx-0.5 shrink-0" />
-          <div className="flex items-center gap-0.5 shrink-0">
-            {SHAPE_TOOLS.map((t) => (
-              <ToolButton key={t.id} active={tool === t.id} label={t.label} onClick={() => onToolChange(t.id)}>
-                <t.icon size={14} strokeWidth={2} />
-              </ToolButton>
-            ))}
+          {/* Compact Shapes Menu */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => {
+                setShapesMenuOpen((prev) => !prev);
+                setNodesMenuOpen(false);
+              }}
+              title="Shapes & Sections"
+              className={`flex items-center gap-1 px-2 h-7.5 rounded-lg transition-all text-xs font-medium cursor-pointer ${
+                isShapeActive
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs font-semibold"
+                  : "bg-black/[0.04] dark:bg-white/[0.06] text-slate-700 dark:text-slate-200 hover:bg-black/[0.08]"
+              }`}
+            >
+              <Shapes size={13} />
+              <ChevronDown size={10} className="opacity-60" />
+            </button>
+
+            <AnimatePresence>
+              {shapesMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                  className="absolute left-0 top-full mt-2 w-44 rounded-2xl border border-black/10 dark:border-white/12 bg-white/95 dark:bg-[#181a24]/95 backdrop-blur-2xl shadow-2xl p-1.5 z-50 flex flex-col gap-0.5"
+                >
+                  {SHAPES_LIST.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        onToolChange(s.id);
+                        setShapesMenuOpen(false);
+                      }}
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-left transition text-xs font-medium cursor-pointer ${
+                        tool === s.id
+                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                          : "hover:bg-black/[0.05] dark:hover:bg-white/[0.06] text-slate-800 dark:text-slate-200"
+                      }`}
+                    >
+                      <s.icon size={13} />
+                      <span>{s.label}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </>
       )}
@@ -196,7 +255,106 @@ export default function CanvasToolbar({
         <span>Note</span>
       </button>
 
-      {/* 4. Smart Utilities (Clean Linear Ghost Buttons) */}
+      {/* 4. Executive Nodes Menu */}
+      <div className="relative shrink-0">
+        <button
+          onClick={() => {
+            setNodesMenuOpen((prev) => !prev);
+            setShapesMenuOpen(false);
+          }}
+          title="Add Executive Canvas Nodes"
+          className="flex items-center gap-1 px-2.5 h-7.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 text-[11.5px] font-medium transition cursor-pointer"
+        >
+          <Layers size={12.5} className="text-blue-500" />
+          <span>Nodes</span>
+          <ChevronDown size={11} className="opacity-60" />
+        </button>
+
+        <AnimatePresence>
+          {nodesMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 6, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.96 }}
+              className="absolute left-0 top-full mt-2 w-52 rounded-2xl border border-black/10 dark:border-white/12 bg-white/95 dark:bg-[#181a24]/95 backdrop-blur-2xl shadow-2xl p-1.5 z-50 flex flex-col gap-1"
+            >
+              {onAddWorkflow && (
+                <button
+                  onClick={() => {
+                    onAddWorkflow();
+                    setNodesMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-blue-500/10 text-slate-800 dark:text-slate-200 text-left transition text-xs font-medium cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                    <CheckSquare size={13} />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[11.5px]">Workflow Tasks</div>
+                    <div className="text-[9.5px] text-slate-400">To-Do overview & progress</div>
+                  </div>
+                </button>
+              )}
+
+              {onAddInfra && (
+                <button
+                  onClick={() => {
+                    onAddInfra();
+                    setNodesMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-amber-500/10 text-slate-800 dark:text-slate-200 text-left transition text-xs font-medium cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <Server size={13} />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[11.5px]">Cloud Infrastructure</div>
+                    <div className="text-[9.5px] text-slate-400">Region, metrics & health</div>
+                  </div>
+                </button>
+              )}
+
+              {onAddRole && (
+                <button
+                  onClick={() => {
+                    onAddRole();
+                    setNodesMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-purple-500/10 text-slate-800 dark:text-slate-200 text-left transition text-xs font-medium cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <Users size={13} />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[11.5px]">Role & Team Card</div>
+                    <div className="text-[9.5px] text-slate-400">Owner & tech stack chips</div>
+                  </div>
+                </button>
+              )}
+
+              {onAddClientBadge && (
+                <button
+                  onClick={() => {
+                    onAddClientBadge();
+                    setNodesMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-emerald-500/10 text-slate-800 dark:text-slate-200 text-left transition text-xs font-medium cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Award size={13} />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[11.5px]">Client Badge</div>
+                    <div className="text-[9.5px] text-slate-400">Header milestone capsule</div>
+                  </div>
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* 5. Smart Utilities */}
       {viewMode === "flow" && onAutoTidy && (
         <button
           onClick={onAutoTidy}
@@ -232,7 +390,7 @@ export default function CanvasToolbar({
 
       <div className="w-px h-4 bg-black/[0.08] dark:bg-white/[0.1] mx-0.5 shrink-0" />
 
-      {/* 5. Undo / Redo */}
+      {/* 6. Undo / Redo */}
       <div className="flex items-center gap-0.5 shrink-0">
         <ToolButton label="Undo (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
           <Undo2 size={13.5} strokeWidth={2} />
@@ -244,7 +402,7 @@ export default function CanvasToolbar({
 
       <div className="w-px h-4 bg-black/[0.08] dark:bg-white/[0.1] mx-0.5 shrink-0" />
 
-      {/* 6. Grid, Snap & Legend */}
+      {/* 7. Grid, Snap & Utilities */}
       <div className="flex items-center gap-0.5 shrink-0">
         {viewMode === "flow" && (
           <>

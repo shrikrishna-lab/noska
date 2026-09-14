@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import GraphBackground from "./GraphBackground";
 import GraphCanvas from "./GraphCanvas";
+import GraphScatterView from "./GraphScatterView";
+import GraphOrbitView from "./GraphOrbitView";
+import GraphDiscoverySidebar from "./GraphDiscoverySidebar";
 import GraphControls from "./GraphControls";
 import GraphMiniMap from "./GraphMiniMap";
 import GraphSearch from "./GraphSearch";
@@ -11,8 +15,22 @@ import GraphLayoutMenu from "./GraphLayoutMenu";
 import { autoArrangeLayout } from "./graphPhysics";
 import { computeLayout, computeDegrees } from "./graphLayouts";
 import { getAllRelations } from "../../utils/pageLinks";
+import {
+  Sparkles,
+  Layers,
+  Sliders,
+  Globe,
+  RotateCcw,
+  Maximize,
+  ZoomIn,
+  ZoomOut,
+  Crosshair
+} from "lucide-react";
+
+export type GraphViewMode = "constellation" | "scatter" | "orbit";
 
 export default function GraphView({ pages, activeId, onSelect }) {
+  const [viewMode, setViewMode] = useState<GraphViewMode>("constellation");
   const [nodePositions, setNodePositions] = useState({});
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
@@ -22,11 +40,10 @@ export default function GraphView({ pages, activeId, onSelect }) {
   const [showLabels, setShowLabels] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [linkFilters, setLinkFilters] = useState({ hierarchy: true, tag: true, mention: true });
-  const [tagFilter, setTagFilter] = useState(null);
-  const [activeLayout, setActiveLayout] = useState("force");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [activeLayout, setActiveLayout] = useState("constellation");
   const [sizeByConnections, setSizeByConnections] = useState(false);
   
-  // Respect prefers-reduced-motion setting
   const [animated, setAnimated] = useState(() => {
     try {
       return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -35,7 +52,7 @@ export default function GraphView({ pages, activeId, onSelect }) {
     }
   });
 
-  const containerRef = useRef(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
   const isDraggingBg = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
@@ -47,13 +64,13 @@ export default function GraphView({ pages, activeId, onSelect }) {
     
     const visiblePages = pages.filter((p) => !p.trashed);
     const count = visiblePages.length;
-    const centerX = 500;
-    const centerY = 350;
-    const radius = Math.min(220, count * 50 + 80);
+    const centerX = 520;
+    const centerY = 380;
+    const radius = Math.min(240, count * 45 + 90);
 
     visiblePages.forEach((page, idx) => {
       if (!initialPos[page.id]) {
-        const angle = (idx / count) * 2 * Math.PI;
+        const angle = (idx / Math.max(1, count)) * 2 * Math.PI - Math.PI / 2;
         initialPos[page.id] = {
           x: centerX + radius * Math.cos(angle) - 80,
           y: centerY + radius * Math.sin(angle) - 20
@@ -64,7 +81,7 @@ export default function GraphView({ pages, activeId, onSelect }) {
     setNodePositions(initialPos);
   }, [pages]);
 
-  // Monitor canvas container dimensions for the minimap viewbox sizing
+  // Monitor canvas container dimensions for viewport sizing
   useEffect(() => {
     if (!containerRef.current) return;
     const resizeObserver = new ResizeObserver((entries) => {
@@ -84,18 +101,18 @@ export default function GraphView({ pages, activeId, onSelect }) {
     localStorage.setItem("noska-graph-positions", JSON.stringify(newPos));
   };
 
-  // Drag Background to Pan Graph Viewport
-  const handleMouseDown = (e) => {
+  // Drag Background to Pan Graph Viewport (Constellation & Scatter modes)
+  const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    // Verify target matches background canvas elements
-    if (e.target !== e.currentTarget && !e.target.classList.contains("graph-bg")) return;
+    if (viewMode === "orbit") return; // Orbit handles its own 3D rotation
+    if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("graph-bg")) return;
     
     isDraggingBg.current = true;
     dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
     if (containerRef.current) containerRef.current.style.cursor = "grabbing";
   };
 
-  const handleMouseMove = (e) => {
+  const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDraggingBg.current) return;
     setPan({
       x: e.clientX - dragStart.current.x,
@@ -110,16 +127,16 @@ export default function GraphView({ pages, activeId, onSelect }) {
     }
   };
 
-  const handleWheel = (e) => {
+  const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomIntensity = 0.05;
     const delta = e.deltaY < 0 ? 1 : -1;
-    const nextScale = Math.min(2.0, Math.max(0.25, scale + delta * zoomIntensity));
+    const nextScale = Math.min(2.5, Math.max(0.2, scale + delta * zoomIntensity * scale));
     setScale(nextScale);
   };
 
   // Node Drag Handlers
-  const handleNodeDrag = (pageId, info) => {
+  const handleNodeDrag = (pageId: string, info: any) => {
     const startPos = nodePositions[pageId] || { x: 500, y: 350 };
     const updated = {
       ...nodePositions,
@@ -145,6 +162,8 @@ export default function GraphView({ pages, activeId, onSelect }) {
         if (childPos && parentPos) {
           calculatedLinks.push({
             id: `${page.id}-${page.parentId}`,
+            source: page.parentId,
+            target: page.id,
             x1: parentPos.x + 80,
             y1: parentPos.y + 20,
             x2: childPos.x + 80,
@@ -170,6 +189,8 @@ export default function GraphView({ pages, activeId, onSelect }) {
               if (pos1 && pos2) {
                 calculatedLinks.push({
                   id: `${page.id}-${other.id}`,
+                  source: page.id,
+                  target: other.id,
                   x1: pos1.x + 80,
                   y1: pos1.y + 20,
                   x2: pos2.x + 80,
@@ -197,6 +218,8 @@ export default function GraphView({ pages, activeId, onSelect }) {
           if (pos1 && pos2) {
             calculatedLinks.push({
               id: linkId,
+              source: page.id,
+              target: link.pageId,
               x1: pos1.x + 80,
               y1: pos1.y + 20,
               x2: pos2.x + 80,
@@ -211,7 +234,7 @@ export default function GraphView({ pages, activeId, onSelect }) {
   }, [pages, nodePositions, linkFilters, tagFilter]);
 
   // Center camera focused on a specific selected node
-  const centerOnNode = (nodeId) => {
+  const centerOnNode = (nodeId: string) => {
     const pos = nodePositions[nodeId];
     if (!pos) return;
 
@@ -225,17 +248,16 @@ export default function GraphView({ pages, activeId, onSelect }) {
     onSelect?.(nodeId);
   };
 
-  const handleNodeSelect = (nodeId) => {
+  const handleNodeSelect = (nodeId: string) => {
     setSelectedNodeId(prev => prev === nodeId ? null : nodeId);
+    onSelect?.(nodeId);
   };
 
-  // Center Graph
   const handleCenterGraph = () => {
     setPan({ x: 0, y: 0 });
     setScale(1.0);
   };
 
-  // Fit Graph bounds inside viewport
   const handleFitGraph = () => {
     const visiblePages = pages.filter((p) => !p.trashed);
     if (visiblePages.length === 0) return;
@@ -252,7 +274,7 @@ export default function GraphView({ pages, activeId, onSelect }) {
     });
 
     minX -= 100;
-    maxX += 260; // offset width
+    maxX += 260;
     minY -= 100;
     maxY += 100;
 
@@ -260,7 +282,6 @@ export default function GraphView({ pages, activeId, onSelect }) {
     const graphH = maxY - minY;
 
     const fitScale = Math.max(0.35, Math.min(1.4, Math.min(containerSize.width / graphW, containerSize.height / graphH)));
-
     const targetCenterX = minX + graphW / 2;
     const targetCenterY = minY + graphH / 2;
 
@@ -271,34 +292,29 @@ export default function GraphView({ pages, activeId, onSelect }) {
     setScale(fitScale);
   };
 
-  // Auto Arrange Physics calculation
   const handleAutoArrange = () => {
-    const solvedPositions = autoArrangeLayout(pages, links, nodePositions, 500, 350);
+    const solvedPositions = autoArrangeLayout(pages, links, nodePositions, 520, 380);
     savePositions(solvedPositions);
     setActiveLayout("force");
   };
 
-  // Apply a named layout algorithm (radial / circle / grid / timeline / force)
-  const handleApplyLayout = (layoutId) => {
+  const handleApplyLayout = (layoutId: string) => {
     setActiveLayout(layoutId);
     if (layoutId === "force") {
       handleAutoArrange();
       return;
     }
     const cx = 520, cy = 400;
-    const solved = computeLayout(layoutId, pages, cx, cy);
+    const solved = computeLayout(layoutId, pages, links, cx, cy);
     if (solved) {
       savePositions(solved);
-      // Recenter after layout so the arrangement is visible
       setTimeout(() => handleFitGraph(), 30);
     }
   };
 
-  // Degree map for optional connection-based node sizing
   const degrees = useMemo(() => computeDegrees(pages, links), [pages, links]);
   const maxDegree = useMemo(() => Math.max(1, ...Object.values(degrees)), [degrees]);
 
-  // Export JSON Map
   const handleExport = () => {
     const mapExport = {
       nodes: pages.filter(p => !p.trashed).map(p => ({
@@ -331,60 +347,140 @@ export default function GraphView({ pages, activeId, onSelect }) {
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onWheel={handleWheel}
-      className="relative flex-1 overflow-hidden select-none bg-[var(--editor)] border-t border-[var(--border)]"
-      style={{ cursor: "grab" }}
+      className="relative flex-1 overflow-hidden select-none bg-[#faf7f2] dark:bg-[#15171f] border-t border-[var(--border)]"
+      style={{ cursor: viewMode === "orbit" ? "grab" : "grab" }}
     >
-      {/* Composited Parallax Background layers */}
+      {/* Background Ambience */}
       <GraphBackground pan={pan} scale={scale} animated={animated} />
 
-      {/* Main Canvas Viewport container */}
-      <GraphCanvas
+      {/* ── Unified Top Navigation Bar (Zero Overlap Flex Layout) ── */}
+      <div className="absolute top-3.5 left-4 right-4 z-30 flex items-center justify-between gap-3 pointer-events-none select-none">
+        {/* Left: Breadcrumbs */}
+        <div className="pointer-events-auto flex items-center gap-2 shrink-0">
+          <GraphBreadcrumb
+            activeNodeClusterName={activeCluster?.name}
+            totalNodesCount={pages.filter((p) => !p.trashed).length}
+          />
+        </div>
+
+        {/* Center: Apple-style Mode Switcher Segment Pills */}
+        <div className="pointer-events-auto flex items-center p-0.5 rounded-full bg-white/90 dark:bg-[#181920]/90 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.8)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.08)] select-none shrink-0">
+          <button
+            onClick={() => setViewMode("constellation")}
+            title="Constellation Hub & Network Flow (Image 1)"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition cursor-pointer ${
+              viewMode === "constellation"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs font-semibold"
+                : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <Sparkles size={12.5} className={viewMode === "constellation" ? "text-amber-400" : "text-amber-500"} />
+            <span>Constellation</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode("scatter")}
+            title="2D Metric Scatter Matrix (Image 2)"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition cursor-pointer ${
+              viewMode === "scatter"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs font-semibold"
+                : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <Sliders size={12.5} className={viewMode === "scatter" ? "text-blue-400" : "text-blue-500"} />
+            <span>Scatter Matrix</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode("orbit")}
+            title="3D Holographic Planetary Orbit (Image 3)"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition cursor-pointer ${
+              viewMode === "orbit"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs font-semibold"
+                : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <Globe size={12.5} className={viewMode === "orbit" ? "text-emerald-400" : "text-emerald-500"} />
+            <span>3D Orbit</span>
+          </button>
+        </div>
+
+        {/* Right: Camera & View Controls */}
+        <div className="pointer-events-auto hidden sm:flex items-center gap-2 shrink-0">
+          <GraphControls
+            onZoomIn={() => setScale((prev) => Math.min(2.5, prev + 0.1))}
+            onZoomOut={() => setScale((prev) => Math.max(0.2, prev - 0.1))}
+            onFitGraph={handleFitGraph}
+            onCenterGraph={handleCenterGraph}
+            onAutoArrange={handleAutoArrange}
+            showLabels={showLabels}
+            onToggleLabels={() => setShowLabels(!showLabels)}
+            animated={animated}
+            onToggleAnimation={() => setAnimated(!animated)}
+            onExport={handleExport}
+            activeLayout={activeLayout}
+            onApplyLayout={handleApplyLayout}
+            sizeByConnections={sizeByConnections}
+            onToggleSizeByConnections={() => setSizeByConnections((s) => !s)}
+          />
+        </div>
+      </div>
+
+      {/* ── Active Visual Graph Engine ── */}
+      {viewMode === "constellation" && (
+        <GraphCanvas
+          pages={pages}
+          links={links}
+          nodePositions={nodePositions}
+          pan={pan}
+          scale={scale}
+          activeId={activeId}
+          hoveredNodeId={hoveredNodeId}
+          searchQuery={searchQuery}
+          showLabels={showLabels}
+          animated={animated}
+          onNodeDrag={handleNodeDrag}
+          onNodeSelect={handleNodeSelect}
+          degrees={degrees}
+          maxDegree={maxDegree}
+          sizeByConnections={sizeByConnections}
+        />
+      )}
+
+      {viewMode === "scatter" && (
+        <GraphScatterView
+          pages={pages}
+          links={links}
+          activeId={activeId}
+          onSelectNode={handleNodeSelect}
+          pan={pan}
+          scale={scale}
+        />
+      )}
+
+      {viewMode === "orbit" && (
+        <GraphOrbitView
+          pages={pages}
+          links={links}
+          activeId={activeId}
+          onSelectNode={handleNodeSelect}
+          pan={pan}
+          scale={scale}
+        />
+      )}
+
+      {/* ── Right Floating Discovery & Filter Panel (Matching Image 1) ── */}
+      <GraphDiscoverySidebar
         pages={pages}
-        links={links}
-        nodePositions={nodePositions}
-        pan={pan}
-        scale={scale}
-        activeId={activeId}
-        hoveredNodeId={hoveredNodeId}
         searchQuery={searchQuery}
-        showLabels={showLabels}
-        animated={animated}
-        onNodeDrag={handleNodeDrag}
-        onNodeSelect={onSelect}
-        degrees={degrees}
-        maxDegree={maxDegree}
-        sizeByConnections={sizeByConnections}
-      />
-
-      {/* Top Left Navigation Trace */}
-      <GraphBreadcrumb
-        activeNodeClusterName={activeCluster?.name}
-        totalNodesCount={pages.filter(p => !p.trashed).length}
-      />
-
-      {/* Top Right Floating Controls HUD */}
-      <GraphControls
-        onZoomIn={() => setScale(prev => Math.min(2.0, prev + 0.1))}
-        onZoomOut={() => setScale(prev => Math.max(0.25, prev - 0.1))}
-        onFitGraph={handleFitGraph}
-        onCenterGraph={handleCenterGraph}
-        onAutoArrange={handleAutoArrange}
-        showLabels={showLabels}
-        onToggleLabels={() => setShowLabels(!showLabels)}
-        animated={animated}
-        onToggleAnimation={() => setAnimated(!animated)}
-        onExport={handleExport}
-        onToggleSearch={() => setIsSearchOpen(!isSearchOpen)}
-        onNodeSelect={handleNodeSelect}
+        onSearchChange={setSearchQuery}
+        selectedTag={tagFilter}
+        onSelectTag={setTagFilter}
         linkFilters={linkFilters}
         onLinkFilterChange={setLinkFilters}
-        tagFilter={tagFilter}
-        onTagFilterChange={setTagFilter}
-        allTags={[...new Set(pages.filter(p => !p.trashed).flatMap(p => p.tags || []))]}
-        activeLayout={activeLayout}
-        onApplyLayout={handleApplyLayout}
-        sizeByConnections={sizeByConnections}
-        onToggleSizeByConnections={() => setSizeByConnections((s) => !s)}
+        onSelectNode={centerOnNode}
+        activeId={activeId}
+        totalLinksCount={links.length}
       />
 
       {/* Search overlay dropdown widget */}
@@ -396,9 +492,6 @@ export default function GraphView({ pages, activeId, onSelect }) {
         onClose={() => setIsSearchOpen(false)}
       />
 
-      {/* Cluster Tags Map Legend */}
-      <GraphLegend />
-
       {/* Node Detail Info Panel */}
       {selectedNodeId && (
         <GraphInfoPanel
@@ -409,32 +502,20 @@ export default function GraphView({ pages, activeId, onSelect }) {
         />
       )}
 
-      {/* Tag filter indicator */}
-      {tagFilter && (
-        <div className="absolute bottom-20 left-4 z-20 flex items-center gap-2 rounded-lg bg-[var(--elevated)]/80 backdrop-blur-md border border-[var(--border)] px-3 py-1.5 shadow-md">
-          <span className="text-[10px] text-[var(--muted)]">Filtering:</span>
-          <span className="text-[11px] font-medium text-[var(--text)]">{tagFilter}</span>
-          <button
-            onClick={() => setTagFilter(null)}
-            className="ml-1 text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer text-xs"
-          >
-            ✕
-          </button>
-        </div>
+      {/* Bottom-right Interactive Minimap (in Constellation mode) */}
+      {viewMode === "constellation" && (
+        <GraphMiniMap
+          pages={pages}
+          nodePositions={nodePositions}
+          pan={pan}
+          scale={scale}
+          containerWidth={containerSize.width}
+          containerHeight={containerSize.height}
+          onPanChange={setPan}
+          onResetView={handleCenterGraph}
+          onFitGraph={handleFitGraph}
+        />
       )}
-
-      {/* Figma styled bottom-right Interactive Minimap */}
-      <GraphMiniMap
-        pages={pages}
-        nodePositions={nodePositions}
-        pan={pan}
-        scale={scale}
-        containerWidth={containerSize.width}
-        containerHeight={containerSize.height}
-        onPanChange={setPan}
-        onResetView={handleCenterGraph}
-        onFitGraph={handleFitGraph}
-      />
     </div>
   );
 }

@@ -24,27 +24,24 @@ export default function GraphCanvas({
   const visiblePages = pages.filter((p) => !p.trashed);
 
   // Check if a node is dimmed based on active select/search state
-  const isNodeDimmed = (nodeId) => {
-    // If search active: dim nodes that don't match
+  const isNodeDimmed = (nodeId: string) => {
     if (searchQuery.trim()) {
-      const page = pages.find(p => p.id === nodeId);
+      const page = pages.find((p) => p.id === nodeId);
       return !page?.title?.toLowerCase().includes(searchQuery.toLowerCase());
     }
 
-    // If node selected: dim nodes that aren't the selected node and are not connected to it
     if (activeId) {
       if (nodeId === activeId) return false;
-      const isConnected = links.some(l => 
-        l.id.includes(activeId) && l.id.includes(nodeId)
+      const isConnected = links.some(
+        (l) => l.id.includes(activeId) && l.id.includes(nodeId)
       );
       return !isConnected;
     }
 
-    // If node hovered: dim nodes that aren't hovered and are not connected to it
     if (hoveredNodeId) {
       if (nodeId === hoveredNodeId) return false;
-      const isConnected = links.some(l => 
-        l.id.includes(hoveredNodeId) && l.id.includes(nodeId)
+      const isConnected = links.some(
+        (l) => l.id.includes(hoveredNodeId) && l.id.includes(nodeId)
       );
       return !isConnected;
     }
@@ -53,14 +50,13 @@ export default function GraphCanvas({
   };
 
   // Check if a node is highlighted
-  const isNodeHighlighted = (nodeId) => {
+  const isNodeHighlighted = (nodeId: string) => {
     if (nodeId === activeId) return true;
     if (nodeId === hoveredNodeId) return true;
     
-    // Highlight connected nodes to active/hovered node
     const focusId = activeId || hoveredNodeId;
     if (focusId) {
-      return links.some(l => l.id.includes(focusId) && l.id.includes(nodeId));
+      return links.some((l) => l.id.includes(focusId) && l.id.includes(nodeId));
     }
 
     return false;
@@ -70,11 +66,16 @@ export default function GraphCanvas({
     <motion.div
       animate={{ x: pan.x, y: pan.y, scale }}
       transition={animated ? NODE_SPRING : { duration: 0 }}
-      className="absolute inset-0 w-[2000px] h-[1500px] origin-top-left graph-bg z-10"
+      className="absolute inset-0 w-[4000px] h-[3000px] origin-top-left graph-bg z-10"
     >
-      {/* 1. Animated SVG Connection Links overlay */}
+      {/* 1. Concentric Orbital Constellation Rings & Celestial Dust (Image 1 reference) */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
         <defs>
+          <radialGradient id="celestial-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(59, 130, 246, 0.08)" />
+            <stop offset="40%" stopColor="rgba(168, 85, 247, 0.04)" />
+            <stop offset="100%" stopColor="transparent" />
+          </radialGradient>
           <linearGradient id="active-beam-grad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="var(--accent)" />
             <stop offset="50%" stopColor="#a855f7" />
@@ -87,8 +88,32 @@ export default function GraphCanvas({
           </linearGradient>
         </defs>
 
+        {/* Ambient Celestial Core Glow */}
+        <circle cx={520} cy={400} r={420} fill="url(#celestial-core)" />
+
+        {/* Concentric Guide Rings */}
+        <circle cx={520} cy={400} r={160} stroke="rgba(100,116,139,0.14)" strokeWidth={1} strokeDasharray="4 6" fill="none" />
+        <circle cx={520} cy={400} r={320} stroke="rgba(100,116,139,0.11)" strokeWidth={1} strokeDasharray="6 8" fill="none" />
+        <circle cx={520} cy={400} r={480} stroke="rgba(100,116,139,0.08)" strokeWidth={1} strokeDasharray="8 10" fill="none" />
+        <circle cx={520} cy={400} r={640} stroke="rgba(100,116,139,0.05)" strokeWidth={1} strokeDasharray="10 12" fill="none" />
+
+        {/* Outer Particle Dots along constellation ring */}
+        {[...Array(32)].map((_, i) => {
+          const angle = (i * 2 * Math.PI) / 32;
+          const r = 480 + (i % 3) * 40;
+          return (
+            <circle
+              key={`dust-${i}`}
+              cx={520 + r * Math.cos(angle)}
+              cy={400 + r * Math.sin(angle)}
+              r={1.8}
+              fill="rgba(148, 163, 184, 0.35)"
+            />
+          );
+        })}
+
+        {/* 2. Animated Connection Links overlay */}
         {links.map((link) => {
-          // Determine link activity state
           const isActiveLink = link.id.includes(activeId || hoveredNodeId || "");
           const isDimmedLink = (activeId || hoveredNodeId) && !isActiveLink;
 
@@ -104,14 +129,13 @@ export default function GraphCanvas({
         })}
       </svg>
 
-      {/* 2. Floating Interactive Page Nodes */}
+      {/* 3. Floating Interactive Page Nodes */}
       {visiblePages.map((page) => {
         const pos = nodePositions[page.id] || { x: 500, y: 350 };
         const isActive = page.id === activeId;
         const isDimmed = isNodeDimmed(page.id);
         const isHighlighted = isNodeHighlighted(page.id);
 
-        // Node size scale from connection count (1.0 – 1.5x) when enabled
         const deg = degrees[page.id] || 0;
         const sizeScale = sizeByConnections ? 1 + Math.min(0.5, (deg / maxDegree) * 0.5) : 1;
 

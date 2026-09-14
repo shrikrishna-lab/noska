@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Copy, Trash2, Edit2, Check, X, LayoutTemplate, Layers, ChevronLeft, ChevronRight } from "lucide-react";
 import { CanvasBoardMeta, BOARD_TEMPLATES } from "./canvasStore";
 
@@ -55,42 +56,42 @@ export default function CanvasBoardSidebar({
 
   return (
     <>
-      {/* Collapsed Toggle Button */}
-      {!isOpen && (
-        <button
-          onClick={onToggle}
-          title="Open Boards Panel"
-          className="absolute left-3 top-20 z-30 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 dark:bg-[#181a22]/90 backdrop-blur-xl border border-black/10 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-md hover:bg-white dark:hover:bg-[#202430] transition active:scale-95 cursor-pointer"
-        >
-          <Layers size={14} className="text-amber-500" />
-          <span>Boards ({boards.length})</span>
-          <ChevronRight size={13} className="text-slate-400" />
-        </button>
-      )}
-
-      {/* Expanded Sidebar */}
+      <AnimatePresence>
+        {/* Expanded Sidebar Floating Panel */}
       {isOpen && (
-        <aside
-          className="absolute left-3 top-20 z-30 w-64 rounded-2xl border border-black/10 dark:border-white/15 bg-white/95 dark:bg-[#181a22]/95 backdrop-blur-2xl p-3.5 shadow-2xl flex flex-col gap-3 transition-all duration-200"
-          style={{ maxHeight: "calc(100vh - 180px)" }}
+        <motion.aside
+          initial={{ opacity: 0, x: -16, y: 0, scale: 0.95 }}
+          animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+          exit={{ opacity: 0, x: -12, scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 400, damping: 32 }}
+          className="absolute left-4 top-15 z-40 w-72 rounded-3xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-[#14161f]/90 backdrop-blur-2xl p-4 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.25)] flex flex-col gap-3.5"
+          style={{ maxHeight: "calc(100vh - 120px)" }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text)]">
-              <Layers size={14} className="text-amber-500" />
-              <span>Canvases & Boards</span>
+          <div className="flex items-center justify-between pb-2.5 border-b border-black/[0.06] dark:border-white/[0.08]">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-500/25 flex items-center justify-center text-amber-500 shadow-2xs">
+                <Layers size={13} strokeWidth={2.2} />
+              </div>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 tracking-tight">
+                Canvases & Boards
+              </span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                {boards.length}
+              </span>
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setShowTemplateModal(true)}
                 title="New Board from Template"
-                className="h-6 w-6 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center hover:opacity-90 transition cursor-pointer"
+                className="h-6.5 px-2 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center gap-1 text-[11px] font-semibold hover:opacity-90 transition active:scale-95 cursor-pointer shadow-xs"
               >
-                <Plus size={13} strokeWidth={2.5} />
+                <Plus size={12} strokeWidth={2.5} />
+                <span>New</span>
               </button>
               <button
                 onClick={onToggle}
-                className="h-6 w-6 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
+                className="h-6.5 w-6.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center transition cursor-pointer"
               >
                 <ChevronLeft size={14} />
               </button>
@@ -184,11 +185,12 @@ export default function CanvasBoardSidebar({
             <LayoutTemplate size={13} />
             <span>New from Template</span>
           </button>
-        </aside>
+        </motion.aside>
       )}
+    </AnimatePresence>
 
-      {/* New Board / Template Modal */}
-      {showTemplateModal && (
+    {/* New Board / Template Modal */}
+    {showTemplateModal && (
         <div
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
           onClick={() => setShowTemplateModal(false)}

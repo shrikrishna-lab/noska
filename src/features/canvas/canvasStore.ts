@@ -10,7 +10,17 @@ export const CARD_W = 310;
 export const CARD_H = 190;
 export const GRID = 24;
 
-export const ELEMENT_KINDS = ["sticky", "rect", "ellipse", "text", "frame"];
+export const ELEMENT_KINDS = [
+  "sticky",
+  "rect",
+  "ellipse",
+  "text",
+  "frame",
+  "workflow_tasks",
+  "infra_service",
+  "role_team",
+  "client_badge"
+];
 
 // Executive studio palette tailored for office, product teams, and professional strategy boards
 export const STICKY_PALETTES = [
@@ -234,6 +244,16 @@ export function getConnectorTypeConfig(type?: string): ConnectorTypeConfig {
   return CONNECTOR_TYPES.leads_to;
 }
 
+export type TaskStatus = "in_progress" | "todo" | "client_send" | "done";
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  progress: number;
+  status: TaskStatus;
+  updateTime?: string;
+}
+
 export interface CanvasElementData {
   id: string;
   kind: string;
@@ -245,6 +265,31 @@ export interface CanvasElementData {
   color: string;
   text?: string;
   fontSize?: number;
+  // Workflow Tasks fields
+  tasksTitle?: string;
+  tasksSubtitle?: string;
+  tasks?: TaskItem[];
+  // Infra Service fields
+  region?: string;
+  regionFlag?: string;
+  serviceName?: string;
+  serviceSubtitle?: string;
+  status?: "operational" | "unstable" | "degraded";
+  alertMessage?: string;
+  metrics?: {
+    traffic?: string;
+    cpu?: string;
+    ram?: string;
+  };
+  // Role & Team fields
+  roleTitle?: string;
+  roleSubtitle?: string;
+  assignee?: string;
+  techStack?: string[];
+  // Client Header badge
+  clientName?: string;
+  onboardDate?: string;
+  badgeText?: string;
 }
 
 export interface Connector {
@@ -254,6 +299,7 @@ export interface Connector {
   type?: ConnectorType;
   label?: string;
   color?: string;
+  routing?: "curved" | "orthogonal";
 }
 
 export interface CanvasBoardMeta {
@@ -662,7 +708,6 @@ export function autoSuggestConnections(
   return suggestions;
 }
 
-// Default geometry for a freshly created element of a given kind.
 export function makeElement(kind: string, x: number, y: number): CanvasElementData {
   const base = { id: uid(kind), kind, x, y, rotation: 0, color: "default" };
   switch (kind) {
@@ -675,7 +720,60 @@ export function makeElement(kind: string, x: number, y: number): CanvasElementDa
     case "text":
       return { ...base, w: 240, h: 44, text: "Text", fontSize: 20, color: "default" };
     case "frame":
-      return { ...base, w: 520, h: 360, text: "Frame", color: "gray" };
+      return { ...base, w: 520, h: 360, text: "Frame", color: "peach" };
+    case "workflow_tasks":
+      return {
+        ...base,
+        w: 330,
+        h: 280,
+        color: "blue",
+        tasksTitle: "Project To-Do's Overview",
+        tasksSubtitle: "Tasks & Client Updates",
+        tasks: [
+          { id: uid("t"), title: "User Persona Research & Journey", progress: 75, status: "in_progress", updateTime: "2h ago" },
+          { id: uid("t"), title: "Design System Tokens (Dark/Light)", progress: 44, status: "todo", updateTime: "1d ago" },
+          { id: uid("t"), title: "Architecture Deck & Client Sign-off", progress: 100, status: "client_send", updateTime: "3d ago" },
+        ]
+      };
+    case "infra_service":
+      return {
+        ...base,
+        w: 290,
+        h: 215,
+        color: "peach",
+        region: "us-east-1",
+        regionFlag: "🇺🇸",
+        serviceName: "API Gateway & Router",
+        serviceSubtitle: "Kong Ingress v3.2",
+        status: "unstable",
+        alertMessage: "Unstable - health check failures",
+        metrics: {
+          traffic: "1L 24",
+          cpu: "16% CPU",
+          ram: "18% RAM"
+        }
+      };
+    case "role_team":
+      return {
+        ...base,
+        w: 260,
+        h: 165,
+        color: "purple",
+        roleTitle: "Project Manager",
+        roleSubtitle: "Alex Morgan • Lead PM",
+        assignee: "Alex Morgan",
+        techStack: ["Slack", "Gmail", "Asana", "Figma", "Jira"]
+      };
+    case "client_badge":
+      return {
+        ...base,
+        w: 320,
+        h: 52,
+        color: "green",
+        clientName: "SaaSflow",
+        onboardDate: "25 Jun",
+        badgeText: "Client: SaaSflow | Onboarded: 25 Jun"
+      };
     default:
       return { ...base, w: 200, h: 140, text: "" };
   }

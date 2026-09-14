@@ -10,7 +10,11 @@ import {
   MessageSquare,
   Plus,
   StickyNote,
-  Palette
+  Palette,
+  GitBranch,
+  GitCommit,
+  Layers,
+  ChevronRight
 } from "lucide-react";
 import { usePresence } from "../../hooks/usePresence";
 import { useCursor } from "../../hooks/useCursor";
@@ -413,7 +417,7 @@ export default function CanvasView({ page, onBlockPatch, onAddBlock }: CanvasVie
     setActiveColorPickerBlockId(null);
 
     // Creation tools spawn an element where clicked
-    if (["sticky", "rect", "ellipse", "text", "frame"].includes(tool)) {
+    if (["sticky", "rect", "ellipse", "text", "frame", "workflow_tasks", "infra_service", "role_team", "client_badge"].includes(tool)) {
       const c = screenToCanvas(e.clientX, e.clientY);
       const el = makeElement(tool, snap(c.x, snapEnabled), snap(c.y, snapEnabled));
       snapshot();
@@ -873,41 +877,123 @@ export default function CanvasView({ page, onBlockPatch, onAddBlock }: CanvasVie
         onOpenTemplateBrowser={() => setTemplateBrowserOpen(true)}
       />
 
-      {/* Main Canvas Toolbar with Mode Switcher & Smart Actions */}
-      <CanvasToolbar
-        tool={tool}
-        onToolChange={setTool}
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={undoStack.current.length > 0}
-        canRedo={redoStack.current.length > 0}
-        snapEnabled={snapEnabled}
-        onToggleSnap={() => setSnapEnabled((s) => !s)}
-        showGrid={showGrid}
-        onToggleGrid={() => setShowGrid((s) => !s)}
-        showLegend={legendOpen}
-        onToggleLegend={() => setLegendOpen((prev) => !prev)}
-        viewMode={viewMode}
-        onToggleViewMode={setViewMode}
-        onAutoTidy={handleAutoTidy}
-        onAutoConnect={handleAutoConnect}
-        onToggleBoards={() => setBoardsSidebarOpen(prev => !prev)}
-        boardsCount={boards.length}
-        onOpenAIModal={() => setAiModalOpen(true)}
-        soundActive={soundActive}
-        onToggleSound={() => setSoundActive(toggleSound())}
-        onPresentationMode={() => setPresentationOpen(true)}
-        onOpenTemplates={() => setTemplateBrowserOpen(true)}
-        onAddCard={() => {
-          const el = makeElement("sticky", -pan.x / scale + 240, -pan.y / scale + 180);
-          snapshot();
-          persistData({
-            ...data,
-            elements: { ...data.elements, [el.id]: el }
-          });
-          setSelection([elKey(el.id)]);
-        }}
-      />
+      {/* Unified Top Navigation & Controls Bar (Zero Overlap Flex Layout) */}
+      <div className="absolute top-3.5 left-4 right-4 z-30 flex items-center justify-between gap-3 pointer-events-none select-none">
+        {/* Left: Boards Drawer & Breadcrumbs */}
+        <div className="pointer-events-auto flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setBoardsSidebarOpen((prev) => !prev)}
+            title="Open Boards Drawer"
+            className="group flex items-center gap-2 px-3 h-10 rounded-full bg-white/90 dark:bg-[#181920]/90 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.8)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.08)] hover:bg-white dark:hover:bg-[#202430] hover:border-amber-500/30 transition-all duration-150 cursor-pointer active:scale-95"
+          >
+            <div className="w-5.5 h-5.5 rounded-lg bg-gradient-to-br from-amber-400/25 to-orange-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-2xs group-hover:scale-105 transition-transform">
+              <Layers size={13} strokeWidth={2.4} />
+            </div>
+            <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 tracking-tight">Boards</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/10 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+              {boards.length}
+            </span>
+            <motion.div
+              animate={{ rotate: boardsSidebarOpen ? 90 : 0 }}
+              transition={{ duration: 0.15 }}
+              className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200"
+            >
+              <ChevronRight size={12} strokeWidth={2.4} />
+            </motion.div>
+            <div className="h-3 w-px bg-black/10 dark:bg-white/10 mx-0.5" />
+            <span className="tracking-tight text-[11.5px] font-medium text-slate-500 dark:text-slate-400 max-w-[120px] truncate">
+              {boards.find((b) => b.id === activeBoardId)?.name || page.title || "Canvas"}
+            </span>
+          </button>
+        </div>
+
+        {/* Center: Canvas Toolbar */}
+        <div className="pointer-events-auto flex items-center justify-center min-w-0">
+          <CanvasToolbar
+            tool={tool}
+            onToolChange={setTool}
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={undoStack.current.length > 0}
+            canRedo={redoStack.current.length > 0}
+            snapEnabled={snapEnabled}
+            onToggleSnap={() => setSnapEnabled((s) => !s)}
+            showGrid={showGrid}
+            onToggleGrid={() => setShowGrid((s) => !s)}
+            showLegend={legendOpen}
+            onToggleLegend={() => setLegendOpen((prev) => !prev)}
+            viewMode={viewMode}
+            onToggleViewMode={setViewMode}
+            onAutoTidy={handleAutoTidy}
+            onAutoConnect={handleAutoConnect}
+            onToggleBoards={() => setBoardsSidebarOpen(prev => !prev)}
+            boardsCount={boards.length}
+            onOpenAIModal={() => setAiModalOpen(true)}
+            soundActive={soundActive}
+            onToggleSound={() => setSoundActive(toggleSound())}
+            onPresentationMode={() => setPresentationOpen(true)}
+            onOpenTemplates={() => setTemplateBrowserOpen(true)}
+            onAddCard={() => {
+              const el = makeElement("sticky", -pan.x / scale + 240, -pan.y / scale + 180);
+              snapshot();
+              persistData({
+                ...data,
+                elements: { ...data.elements, [el.id]: el }
+              });
+              setSelection([elKey(el.id)]);
+            }}
+            onAddWorkflow={() => {
+              const el = makeElement("workflow_tasks", -pan.x / scale + 220, -pan.y / scale + 140);
+              snapshot();
+              persistData({
+                ...data,
+                elements: { ...data.elements, [el.id]: el }
+              });
+              setSelection([elKey(el.id)]);
+            }}
+            onAddInfra={() => {
+              const el = makeElement("infra_service", -pan.x / scale + 240, -pan.y / scale + 150);
+              snapshot();
+              persistData({
+                ...data,
+                elements: { ...data.elements, [el.id]: el }
+              });
+              setSelection([elKey(el.id)]);
+            }}
+            onAddRole={() => {
+              const el = makeElement("role_team", -pan.x / scale + 260, -pan.y / scale + 160);
+              snapshot();
+              persistData({
+                ...data,
+                elements: { ...data.elements, [el.id]: el }
+              });
+              setSelection([elKey(el.id)]);
+            }}
+            onAddClientBadge={() => {
+              const el = makeElement("client_badge", -pan.x / scale + 200, -pan.y / scale + 80);
+              snapshot();
+              persistData({
+                ...data,
+                elements: { ...data.elements, [el.id]: el }
+              });
+              setSelection([elKey(el.id)]);
+            }}
+          />
+        </div>
+
+        {/* Right: Version & Branch Capsules */}
+        <div className="pointer-events-auto hidden md:flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 h-10 px-3 rounded-full bg-white/85 dark:bg-[#181920]/85 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.1] shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 text-[10px] font-mono font-bold">
+              v_alpha001
+            </span>
+            <span className="flex items-center gap-1 text-slate-600 dark:text-slate-300 text-[10.5px] font-mono font-medium">
+              <GitBranch size={11} className="text-emerald-500" />
+              <span>main</span>
+            </span>
+          </div>
+        </div>
+      </div>
 
       {/* Template Browser & Marketplace Hub */}
       <TemplateBrowserModal
@@ -1044,6 +1130,16 @@ export default function CanvasView({ page, onBlockPatch, onAddBlock }: CanvasVie
               onPointerDownHandle={(id, handle, e) => beginResize(id, handle, e)}
               onStartConnector={(id, e) => startConnectorFrom(elKey(id), e)}
               onChangeText={changeElementText}
+              onUpdateElement={(id, updates) => {
+                snapshot();
+                persistData({
+                  ...data,
+                  elements: {
+                    ...data.elements,
+                    [id]: { ...data.elements[id], ...updates }
+                  }
+                });
+              }}
               onSelect={() => setSelection([elKey(el.id)])}
             />
           </div>

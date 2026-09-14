@@ -60,19 +60,22 @@ function GraphNodeComponent({
         scale: sizeScale,
         transformOrigin: "center center",
       }}
-      className={`w-[160px] h-[40px] rounded-full border px-3.5 flex items-center gap-2 cursor-grab active:cursor-grabbing select-none transition-opacity duration-200 bg-[var(--surface)]/80 backdrop-blur-md ${
+      className={`w-[170px] h-[42px] rounded-full border px-3 flex items-center gap-2 cursor-grab active:cursor-grabbing select-none transition-all duration-200 bg-white/90 dark:bg-[#181a24]/90 backdrop-blur-2xl ${
         isActive 
-          ? "ring-2 ring-[var(--accent)]/30 font-semibold"
-          : "hover:bg-[var(--hover)]/95"
+          ? "ring-2 ring-blue-500/40 border-blue-500 font-bold shadow-[0_8px_24px_rgba(59,130,246,0.25)]"
+          : "border-black/[0.08] dark:border-white/[0.12] shadow-[0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.8)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.08)] hover:border-black/20 dark:hover:border-white/25 hover:shadow-[0_8px_24px_rgba(0,0,0,0.1)]"
       }`}
     >
-      {/* Category indicator icon */}
-      <span className="text-sm shrink-0 select-none flex items-center justify-center">
-        <PageIcon icon={page.icon} size={14} fallback={<span>📄</span>} />
-      </span>
+      {/* Category indicator icon squircle */}
+      <div 
+        className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 shadow-2xs"
+        style={{ backgroundColor: `${cluster.color}18`, border: `1px solid ${cluster.color}30` }}
+      >
+        <PageIcon icon={page.icon} size={13} fallback={<span>📄</span>} />
+      </div>
       
       {showLabels && (
-        <span className="truncate text-xs font-medium text-[var(--text)] select-none flex-1 leading-none">
+        <span className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100 select-none flex-1 leading-none tracking-tight">
           {page.title || "Untitled"}
         </span>
       )}
@@ -80,8 +83,12 @@ function GraphNodeComponent({
       {/* Connection-count badge (shown when node has links) */}
       {degree > 0 && (
         <span
-          className="shrink-0 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-semibold flex items-center justify-center select-none"
-          style={{ backgroundColor: `${cluster.color}22`, color: cluster.color }}
+          className="shrink-0 min-w-[18px] h-4 px-1 rounded-full text-[9.5px] font-bold flex items-center justify-center select-none border"
+          style={{ 
+            backgroundColor: `${cluster.color}18`, 
+            color: cluster.color,
+            borderColor: `${cluster.color}35`
+          }}
           title={`${degree} connection${degree === 1 ? "" : "s"}`}
         >
           {degree}
@@ -89,12 +96,12 @@ function GraphNodeComponent({
       )}
       
       {page.favorite && (
-        <Star size={10} className="fill-[var(--warning)] text-[var(--warning)] shrink-0 select-none" />
+        <Star size={11} className="fill-amber-400 text-amber-400 shrink-0 select-none" />
       )}
       
-      {/* Category Colored Indicator Dot */}
+      {/* Category Colored Indicator Pulse Dot */}
       <span 
-        className="w-1.5 h-1.5 rounded-full shrink-0 select-none" 
+        className="w-2 h-2 rounded-full shrink-0 select-none shadow-xs" 
         style={{ backgroundColor: cluster.color }} 
       />
     </motion.div>
