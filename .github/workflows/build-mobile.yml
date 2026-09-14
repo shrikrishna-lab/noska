@@ -188,7 +188,7 @@ jobs:
           ls -la stage/
 
       - name: Create draft pre-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: "Noska Mobile ${{ github.ref_name }}"
           body: |
