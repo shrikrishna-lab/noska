@@ -1,6 +1,6 @@
 [package]
 name = "noska"
-version = "1.1.1"
+version = "1.2.1"
 description = "Noska — AI-powered workspace (web, agents, automations)"
 authors = ["Noska"]
 license = "Proprietary"
