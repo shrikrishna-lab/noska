@@ -71,9 +71,9 @@ export default function TabHoverPreview({
         <div
           className="h-12 w-full shrink-0 border-b border-[var(--border)]"
           style={{
-            background: page.cover.startsWith("linear-gradient")
-              ? page.cover
-              : `url(${page.cover}) center/cover no-repeat`
+            ...(page.cover.includes("gradient(") || page.cover.startsWith("#") || page.cover.startsWith("rgb") || page.cover.startsWith("hsl")
+              ? { background: page.cover }
+              : { backgroundImage: `url(${page.cover})`, backgroundPosition: "center", backgroundSize: "cover", backgroundRepeat: "no-repeat" })
           }}
         />
       )}

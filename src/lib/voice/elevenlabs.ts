@@ -17,6 +17,94 @@ export interface ElevenLabsVoice {
   useCase?: string;
 }
 
+export interface NoskaVoicePreset {
+  id: string;
+  name: string;
+  gender: "female" | "male";
+  accent: string;
+  description: string;
+  pitch: number;
+  rate: number;
+  sampleText: string;
+  preferredKeywords: string[];
+}
+
+export const NOSKA_VOICE_PRESETS: NoskaVoicePreset[] = [
+  {
+    id: "noska-natural",
+    name: "Noska Voice (Neural AI)",
+    gender: "female",
+    accent: "Natural & Expressive",
+    description: "Signature neural reading voice with balanced cadence and high clarity.",
+    pitch: 1.05,
+    rate: 1.0,
+    sampleText: "Welcome to Noska. Reading your documents with natural clarity and focus.",
+    preferredKeywords: ["Google US English", "Samantha", "Victoria", "Karen", "Microsoft Zira", "Natural", "en-US"]
+  },
+  {
+    id: "noska-sarah",
+    name: "Noska Voice - Sarah (Calm Storyteller)",
+    gender: "female",
+    accent: "American (Soft & Gentle)",
+    description: "Soothing and gentle rhythm ideal for long reading sessions and deep focus.",
+    pitch: 0.98,
+    rate: 0.95,
+    sampleText: "Take your time. Let's delve into your notes with clarity and ease.",
+    preferredKeywords: ["Samantha", "Serena", "Microsoft Zira", "Google US English", "en-US"]
+  },
+  {
+    id: "noska-adam",
+    name: "Noska Voice - Adam (Executive Clarity)",
+    gender: "male",
+    accent: "American (Deep & Resonant)",
+    description: "Deep executive male cadence with commanding clarity.",
+    pitch: 0.88,
+    rate: 0.98,
+    sampleText: "Reviewing executive summary and critical highlights for your workspace.",
+    preferredKeywords: ["Daniel", "Alex", "Microsoft David", "Google UK English Male", "en-US", "en-GB"]
+  },
+  {
+    id: "noska-rachel",
+    name: "Noska Voice - Rachel (Warm Dialogue)",
+    gender: "female",
+    accent: "American (Expressive)",
+    description: "Warm, engaging conversational voice for articles and ideas.",
+    pitch: 1.1,
+    rate: 1.02,
+    sampleText: "Let's explore this idea together and uncover the key points.",
+    preferredKeywords: ["Google US English", "Samantha", "Microsoft Zira", "en-US"]
+  },
+  {
+    id: "noska-george",
+    name: "Noska Voice - George (British Intellectual)",
+    gender: "male",
+    accent: "British (Warm)",
+    description: "Warm British cadence for thoughtful reasoning and summaries.",
+    pitch: 0.92,
+    rate: 0.96,
+    sampleText: "Synthesizing document takeaways and analytical insights.",
+    preferredKeywords: ["Daniel", "Oliver", "Google UK English Male", "Microsoft George", "en-GB"]
+  }
+];
+
+export function findBestVoiceForPreset(
+  preset: NoskaVoicePreset,
+  availableVoices: SpeechSynthesisVoice[]
+): SpeechSynthesisVoice | null {
+  if (!availableVoices || availableVoices.length === 0) return null;
+
+  for (const kw of preset.preferredKeywords) {
+    const match = availableVoices.find(
+      (v) => v.name.toLowerCase().includes(kw.toLowerCase()) || v.lang.toLowerCase().includes(kw.toLowerCase())
+    );
+    if (match) return match;
+  }
+
+  // Fallback to first English voice or first available
+  const englishFallback = availableVoices.find((v) => v.lang.startsWith("en"));
+  return englishFallback || availableVoices[0] || null;
+}
+
 // ─── Real Official Studio Voices with Official Preview URLs ───────────────────
 
 export const ELEVENLABS_VOICES: ElevenLabsVoice[] = [

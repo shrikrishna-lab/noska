@@ -275,6 +275,23 @@ export function blockFor(type: string, text: string = ''): Block {
   if (type === 'code') {
     return { ...block, text, language: props.language } as unknown as CodeBlockData;
   }
+  if (type === 'interactive' || type === 'html') {
+    return {
+      ...block,
+      type: 'interactive',
+      text,
+      title: text || 'Interactive App',
+      html: `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>Interactive App</title>\n</head>\n<body>\n  <div class="card">\n    <h2>✨ Interactive Noska Block</h2>\n    <p>Click "Edit" in the top corner to customize with AI, code, or imported files.</p>\n    <button id="counter-btn" class="btn">Clicked 0 times</button>\n  </div>\n</body>\n</html>`,
+      css: `body {\n  font-family: system-ui, -apple-system, sans-serif;\n  background: #0f172a;\n  color: #f8fafc;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  min-height: 100vh;\n  margin: 0;\n  padding: 1rem;\n  box-sizing: border-box;\n}\n.card {\n  background: rgba(30, 41, 59, 0.7);\n  border: 1px solid rgba(255, 255, 255, 0.1);\n  border-radius: 16px;\n  padding: 2rem;\n  max-width: 420px;\n  text-align: center;\n  backdrop-filter: blur(12px);\n  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);\n}\nh2 { margin-top: 0; font-size: 1.35rem; color: #38bdf8; }\np { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }\n.btn {\n  background: linear-gradient(135deg, #0284c7, #2563eb);\n  color: white;\n  border: none;\n  border-radius: 10px;\n  padding: 0.6rem 1.25rem;\n  font-weight: 600;\n  cursor: pointer;\n  transition: transform 0.15s ease, opacity 0.15s ease;\n}\n.btn:hover { transform: scale(1.03); opacity: 0.95; }\n.btn:active { transform: scale(0.97); }`,
+      javascript: `let count = 0;\nconst btn = document.getElementById('counter-btn');\nif (btn) {\n  btn.addEventListener('click', () => {\n    count++;\n    btn.textContent = \`Clicked \${count} time\${count === 1 ? '' : 's'}\`;\n    console.log('[Interactive] Button count updated:', count);\n  });\n}`,
+      height: 380,
+      sizingPreset: 'standard',
+      themeMode: 'inherit',
+      permissions: { allowThemeInheritance: true, allowStorage: true },
+      version: 1,
+      versions: []
+    } as unknown as Block;
+  }
   return { ...block, text } as GenericBlock;
 }
 

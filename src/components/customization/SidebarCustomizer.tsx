@@ -40,6 +40,8 @@ import {
 import {
   useSidebarCustomization,
   SIDEBAR_THEME_PRESETS,
+  SIDEBAR_LAYOUT_TEMPLATES,
+  getFullTemplateConfig,
   SOFT_ACCENT_PALETTES,
   TEXTURE_DEFINITIONS,
   ALL_SIDEBAR_SECTIONS,
@@ -59,14 +61,27 @@ interface SidebarCustomizerProps {
 
 export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
   const { config, updateConfig, resetToDefault } = useSidebarCustomization();
-  const [activeTab, setActiveTab] = useState<"aesthetics" | "textures" | "arrangements" | "whatsNeed" | "bottom">("aesthetics");
-  const [themeFilter, setThemeFilter] = useState<"all" | "gradient" | "solid">("all");
+  const [activeTab, setActiveTab] = useState<"templates" | "aesthetics" | "textures" | "arrangements" | "whatsNeed" | "bottom">("templates");
+  const [themeFilter, setThemeFilter] = useState<"all" | "gradient" | "cyber" | "artisan" | "solid">("all");
   const [customAccent, setCustomAccent] = useState(config.accentColor);
   const [previewThemeMode, setPreviewThemeMode] = useState<"light" | "dark">("dark");
+  const [previewingTemplateId, setPreviewingTemplateId] = useState<string | null>(null);
+  const [hoveredTemplateId, setHoveredTemplateId] = useState<string | null>(null);
+
+  const activeTemplate = SIDEBAR_LAYOUT_TEMPLATES.find((t) => t.id === (hoveredTemplateId || previewingTemplateId));
+  const displayConfig = activeTemplate ? getFullTemplateConfig(activeTemplate) : config;
 
   const filteredPresets = SIDEBAR_THEME_PRESETS.filter((p) => {
     if (themeFilter === "all") return true;
-    return p.type === themeFilter;
+    if (themeFilter === "gradient") return p.type === "gradient";
+    if (themeFilter === "solid") return p.type === "solid";
+    if (themeFilter === "cyber") {
+      return ["cyberpunk-neon", "tokyo-night", "matrix-terminal", "dracula-vampire", "synthwave-sunset", "oled-pure-black", "frost-titanium", "cosmic-aurora"].includes(p.id);
+    }
+    if (themeFilter === "artisan") {
+      return ["kyoto-bamboo", "terracotta-sun", "nordic-pine", "espresso-crema", "parchment-archive", "warm-sand", "matcha-mist", "amber-honey"].includes(p.id);
+    }
+    return true;
   });
 
   const handleMoveSection = (index: number, direction: "up" | "down") => {
@@ -138,13 +153,13 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
     reader.readAsText(file);
   };
 
-  // Preview styling calculations
-  const previewBg = previewThemeMode === "dark" ? config.customBgDark : config.customBgLight;
-  const previewBorder = previewThemeMode === "dark" ? config.customBorderDark : config.customBorderLight;
-  const textureOverlay = getTextureOverlayStyle(config.texture);
+  // Preview styling calculations using displayConfig (supports live template preview)
+  const previewBg = previewThemeMode === "dark" ? displayConfig.customBgDark : displayConfig.customBgLight;
+  const previewBorder = previewThemeMode === "dark" ? displayConfig.customBorderDark : displayConfig.customBorderLight;
+  const textureOverlay = getTextureOverlayStyle(displayConfig.texture);
 
-  const previewRadiusOuter = config.radius === "sharp" ? "rounded-[8px]" : config.radius === "subtle" ? "rounded-[16px]" : config.radius === "squircle" ? "rounded-[22px]" : "rounded-[28px]";
-  const previewRadiusInner = config.radius === "sharp" ? "rounded-[6px]" : config.radius === "subtle" ? "rounded-[14px]" : config.radius === "squircle" ? "rounded-[20px]" : "rounded-[26px]";
+  const previewRadiusOuter = displayConfig.radius === "sharp" ? "rounded-[8px]" : displayConfig.radius === "subtle" ? "rounded-[16px]" : displayConfig.radius === "squircle" ? "rounded-[22px]" : "rounded-[28px]";
+  const previewRadiusInner = displayConfig.radius === "sharp" ? "rounded-[6px]" : displayConfig.radius === "subtle" ? "rounded-[14px]" : displayConfig.radius === "squircle" ? "rounded-[20px]" : "rounded-[26px]";
 
   return (
     <div className="space-y-6 text-[#1c1b18] pb-12 font-sans">
@@ -164,6 +179,8 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
           <button
             onClick={() => {
               resetToDefault();
+              setPreviewingTemplateId(null);
+              setHoveredTemplateId(null);
               onToast?.("Sidebar reset to default layout");
             }}
             className="h-8 px-3 rounded-xl border border-[#e8e4db] bg-white hover:bg-[#ede8df] text-xs font-semibold text-[#706c64] hover:text-[#1c1b18] shadow-2xs transition cursor-pointer flex items-center gap-1.5"
@@ -191,14 +208,21 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
       </div>
 
       {/* Grid: Left Live Interactive Preview + Right Customization Tabs */}
-      <div className="grid grid-cols-[250px_1fr] gap-6 items-start max-[820px]:grid-cols-1">
+      <div className="grid grid-cols-[260px_1fr] gap-6 items-start max-[820px]:grid-cols-1">
         
         {/* =========================================================================
             LEFT COLUMN: REAL-TIME ACCURATE MINIATURE SIMULATOR
            ========================================================================= */}
         <div className="rounded-3xl bg-[#f8f6f0] border border-[#e8e4db] p-4 sticky top-2 shadow-sm space-y-3 select-none">
           <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[#8c887f]">
-            <span>Live Simulator</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span>Live Simulator</span>
+              {activeTemplate && (
+                <span className="px-1.5 py-0.5 rounded-full bg-[#1c1b18] text-white text-[8.5px] font-bold tracking-tight lowercase truncate">
+                  preview: {activeTemplate.name}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1 bg-[#ede8df] p-0.5 rounded-lg">
               <button
                 onClick={() => setPreviewThemeMode("light")}
@@ -221,18 +245,51 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
             </div>
           </div>
 
+          {/* Active Template Notice Bar if previewing */}
+          {activeTemplate && (
+            <div className="p-2 rounded-xl bg-white border border-[#e8e4db] text-xs flex items-center justify-between gap-2 shadow-2xs">
+              <div className="min-w-0">
+                <div className="font-bold text-[#1c1b18] truncate text-[11px]">{activeTemplate.name}</div>
+                <div className="text-[9.5px] text-[#706c64] truncate">Previewing template</div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    updateConfig(getFullTemplateConfig(activeTemplate));
+                    setPreviewingTemplateId(null);
+                    setHoveredTemplateId(null);
+                    onToast?.(`Applied "${activeTemplate.name}" template!`);
+                  }}
+                  className="px-2 py-1 rounded-lg bg-[#1c1b18] text-white text-[10px] font-bold hover:bg-[#333] transition cursor-pointer shadow-2xs"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={() => {
+                    setPreviewingTemplateId(null);
+                    setHoveredTemplateId(null);
+                  }}
+                  className="px-1.5 py-1 rounded-lg text-[10px] font-semibold text-[#706c64] hover:bg-[#f8f6f0] transition cursor-pointer"
+                  title="Exit Preview"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Outer Specular Double Bezel Simulator Wrapper */}
           <div
             className={`relative p-[1.5px] ${previewRadiusOuter} transition-all duration-300 ${
-              config.specularBezel
+              displayConfig.specularBezel
                 ? previewThemeMode === "dark"
                   ? "bg-gradient-to-br from-white/20 via-white/5 to-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
                   : "bg-gradient-to-br from-white/95 via-[#E6EAF5]/80 to-white/95 shadow-[0_8px_24px_rgba(18,18,26,0.08)]"
                 : "border shadow-md"
             }`}
             style={{
-              borderColor: config.specularBezel ? "transparent" : previewBorder,
-              boxShadow: config.glowEffect ? `0 0 24px ${config.accentColor}33` : undefined
+              borderColor: displayConfig.specularBezel ? "transparent" : previewBorder,
+              boxShadow: displayConfig.glowEffect ? `0 0 24px ${displayConfig.accentColor}33` : undefined
             }}
           >
             {/* Inner Liquid Glass Body */}
@@ -241,8 +298,8 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
               style={{
                 background: previewBg,
                 color: previewThemeMode === "dark" ? "#ffffff" : "#111827",
-                backdropFilter: config.blur === "ultra" ? "blur(40px)" : config.blur === "deep" ? "blur(24px)" : config.blur === "soft" ? "blur(12px)" : "none",
-                minHeight: "360px"
+                backdropFilter: displayConfig.blur === "ultra" ? "blur(40px)" : displayConfig.blur === "deep" ? "blur(24px)" : displayConfig.blur === "soft" ? "blur(12px)" : "none",
+                minHeight: "370px"
               }}
             >
               {/* Texture Overlay Layer */}
@@ -258,7 +315,7 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
                   <div className="flex items-center gap-1.5 min-w-0">
                     <div
                       className="h-5 w-5 rounded-lg flex items-center justify-center text-[10px] text-white font-bold shrink-0 shadow-2xs"
-                      style={{ backgroundColor: config.accentColor }}
+                      style={{ backgroundColor: displayConfig.accentColor }}
                     >
                       N
                     </div>
@@ -270,22 +327,22 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
                 </div>
 
                 {/* Quick Capsule Nav Simulator */}
-                {config.showQuickNav && (
+                {displayConfig.showQuickNav && (
                   <div className="p-0.5 rounded-full bg-black/5 dark:bg-white/10 border border-black/5 dark:border-white/10 flex items-center justify-between px-1.5 py-0.5">
-                    {config.quickTabs.home && (
+                    {displayConfig.quickTabs?.home && (
                       <div className="p-1 rounded-full bg-white dark:bg-neutral-800 shadow-2xs">
-                        <Folder size={10} style={{ color: config.accentColor }} />
+                        <Folder size={10} style={{ color: displayConfig.accentColor }} />
                       </div>
                     )}
-                    {config.quickTabs.aiSpace && <Brain size={10} className="opacity-60" />}
-                    {config.quickTabs.meetings && <Calendar size={10} className="opacity-60" />}
-                    {config.quickTabs.library && <Library size={10} className="opacity-60" />}
-                    {config.quickTabs.inbox && <Bell size={10} className="opacity-60" />}
+                    {displayConfig.quickTabs?.aiSpace && <Brain size={10} className="opacity-60" />}
+                    {displayConfig.quickTabs?.meetings && <Calendar size={10} className="opacity-60" />}
+                    {displayConfig.quickTabs?.library && <Library size={10} className="opacity-60" />}
+                    {displayConfig.quickTabs?.inbox && <Bell size={10} className="opacity-60" />}
                   </div>
                 )}
 
                 {/* Search Bar Simulator */}
-                {config.showSearch && (
+                {displayConfig.showSearch && (
                   <div className="h-5 rounded-md bg-black/5 dark:bg-white/10 border border-black/5 dark:border-white/10 flex items-center justify-between px-1.5 text-[8.5px] opacity-70">
                     <div className="flex items-center gap-1">
                       <Search size={8.5} />
@@ -297,11 +354,21 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
               </div>
 
               {/* Center: Scrollable Rendered Section Items */}
-              <div className="relative z-10 space-y-2 py-1.5 max-h-[170px] overflow-hidden">
-                {config.sectionOrder.map((secKey) => {
-                  if (config.sectionVisibility[secKey] === false) return null;
+              <div
+                className="relative z-10 py-1.5 max-h-[170px] overflow-hidden transition-all duration-200"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: displayConfig.density === "ultra-compact" ? "4px" : displayConfig.density === "compact" ? "6px" : displayConfig.density === "spacious" ? "12px" : "8px"
+                }}
+              >
+                {displayConfig.sectionOrder.map((secKey) => {
+                  if (displayConfig.sectionVisibility[secKey] === false) return null;
                   const sec = ALL_SIDEBAR_SECTIONS.find((s) => s.key === secKey);
                   if (!sec) return null;
+
+                  const rowHeight = displayConfig.density === "ultra-compact" ? "13px" : displayConfig.density === "compact" ? "16px" : displayConfig.density === "spacious" ? "24px" : "20px";
+                  const fontSize = displayConfig.density === "ultra-compact" ? "7px" : displayConfig.density === "compact" ? "8px" : displayConfig.density === "spacious" ? "9.5px" : "8.5px";
 
                   return (
                     <div key={secKey} className="space-y-0.5">
@@ -309,10 +376,11 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
                         {sec.label}
                       </div>
                       <div
-                        className={`h-4 rounded-md bg-black/5 dark:bg-white/5 flex items-center justify-between px-1.5 text-[8.5px] truncate transition-colors`}
+                        className="rounded-md bg-black/5 dark:bg-white/5 flex items-center justify-between px-1.5 truncate transition-all duration-200"
+                        style={{ height: rowHeight, minHeight: rowHeight, fontSize }}
                       >
                         <span className="truncate">• {sec.label} items</span>
-                        <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: config.accentColor }} />
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: displayConfig.accentColor }} />
                       </div>
                     </div>
                   );
@@ -321,31 +389,31 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
 
               {/* Bottom: Dynamic Info Card & New Creation Button */}
               <div className="relative z-10 pt-1 border-t border-black/5 dark:border-white/10 space-y-1.5">
-                {config.showUserInfoCard && (
+                {displayConfig.showUserInfoCard && (
                   <div className="p-1 rounded-lg bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-[8px] flex items-center gap-1 opacity-80">
-                    <Sparkle size={8} style={{ color: config.accentColor }} />
+                    <Sparkle size={8} style={{ color: displayConfig.accentColor }} />
                     <span className="truncate">Noska Pro Active</span>
                   </div>
                 )}
 
-                {config.showNewCreationButton && (
+                {displayConfig.showNewCreationButton && (
                   <div
                     className="h-5.5 rounded-lg flex items-center justify-between px-2 text-[9px] font-semibold text-white shadow-xs"
                     style={{
-                      background: config.newCreationColor === "amber-gold"
+                      background: displayConfig.newCreationColor === "amber-gold"
                         ? "linear-gradient(135deg, #E6CA9E 0%, #D5B584 100%)"
-                        : config.newCreationColor === "rose-clay"
+                        : displayConfig.newCreationColor === "rose-clay"
                         ? "linear-gradient(135deg, #dfa0a7 0%, #ba7e84 100%)"
-                        : config.newCreationColor === "sage-olive"
+                        : displayConfig.newCreationColor === "sage-olive"
                         ? "linear-gradient(135deg, #9bb8a0 0%, #7a9a80 100%)"
-                        : config.newCreationColor === "nordic-slate"
+                        : displayConfig.newCreationColor === "nordic-slate"
                         ? "linear-gradient(135deg, #8ba8be 0%, #6b8ba4 100%)"
-                        : config.newCreationColor === "cyber-cyan"
+                        : displayConfig.newCreationColor === "cyber-cyan"
                         ? "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)"
-                        : config.newCreationColor === "purple-radiant"
+                        : displayConfig.newCreationColor === "purple-radiant"
                         ? "linear-gradient(135deg, #c084fc 0%, #8b5cf6 100%)"
                         : "linear-gradient(135deg, #262626 0%, #171717 100%)",
-                      color: ["amber-gold", "rose-clay", "sage-olive"].includes(config.newCreationColor) ? "#1c1b18" : "#ffffff"
+                      color: ["amber-gold", "rose-clay", "sage-olive"].includes(displayConfig.newCreationColor) ? "#1c1b18" : "#ffffff"
                     }}
                   >
                     <div className="flex items-center gap-1">
@@ -356,7 +424,7 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
                   </div>
                 )}
 
-                {config.showMoreButton && (
+                {displayConfig.showMoreButton && (
                   <div className="flex items-center justify-between px-1 text-[8px] opacity-60">
                     <span>⋮ More Options</span>
                   </div>
@@ -366,7 +434,7 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
           </div>
 
           <div className="text-[11px] text-[#706c64] text-center italic">
-            Theme: <span className="font-semibold text-[#1c1b18]">{config.themePreset}</span> · Texture: <span className="font-semibold text-[#1c1b18]">{config.texture}</span>
+            Theme: <span className="font-semibold text-[#1c1b18]">{displayConfig.themePreset}</span> · Texture: <span className="font-semibold text-[#1c1b18]">{displayConfig.texture}</span>
           </div>
         </div>
 
@@ -375,8 +443,9 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
            ========================================================================= */}
         <div className="space-y-5">
           {/* Main Top Navigation Sub-Tabs */}
-          <div className="grid grid-cols-5 gap-1 p-1 rounded-2xl bg-[#f8f6f0] border border-[#e8e4db] w-full">
+          <div className="grid grid-cols-6 gap-1 p-1 rounded-2xl bg-[#f8f6f0] border border-[#e8e4db] w-full">
             {[
+              { id: "templates", label: "Templates", icon: Layout },
               { id: "aesthetics", label: "Aesthetics", icon: Palette },
               { id: "textures", label: "Textures", icon: Layers },
               { id: "arrangements", label: "Arrangements", icon: SlidersHorizontal },
@@ -389,7 +458,7 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
                 <button
                   key={tabItem.id}
                   onClick={() => setActiveTab(tabItem.id as typeof activeTab)}
-                  className={`relative py-2 px-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer select-none text-center min-w-0 ${
+                  className={`relative py-2 px-1 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition cursor-pointer select-none text-center min-w-0 ${
                     isSelected ? "text-[#1c1b18]" : "text-[#706c64] hover:text-[#1c1b18]"
                   }`}
                 >
@@ -400,14 +469,162 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
                       transition={{ type: "spring", stiffness: 440, damping: 32 }}
                     />
                   )}
-                  <span className="relative z-10 flex items-center justify-center gap-1.5 truncate">
-                    <Icon size={13} className="shrink-0" />
+                  <span className="relative z-10 flex items-center justify-center gap-1 truncate">
+                    <Icon size={12.5} className="shrink-0" />
                     <span className="truncate">{tabItem.label}</span>
                   </span>
                 </button>
               );
             })}
           </div>
+
+          {/* ═══════════════════════════════════════════════════════════════════════
+              TAB 0: COMPLETE SIDEBAR LAYOUT TEMPLATES
+             ═══════════════════════════════════════════════════════════════════════ */}
+          {activeTab === "templates" && (
+            <div className="space-y-6">
+              <div className="rounded-2xl bg-[#f8f6f0] p-5 shadow-sm border border-[#e8e4db] space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-[#1c1b18]">Complete Sidebar Layout Templates</div>
+                    <div className="text-xs text-[#706c64] mt-0.5">
+                      Hover over any template to preview it live in the simulator, or click to apply.
+                    </div>
+                  </div>
+                  {previewingTemplateId && (
+                    <button
+                      onClick={() => setPreviewingTemplateId(null)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold border border-[#e8e4db] bg-white text-[#706c64] hover:text-[#1c1b18] transition cursor-pointer"
+                    >
+                      Clear Preview
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5 max-[900px]:grid-cols-1 pt-1">
+                  {SIDEBAR_LAYOUT_TEMPLATES.map((tpl) => {
+                    const isCurrent = config.themePreset === tpl.config.themePreset && config.density === tpl.config.density && config.texture === tpl.config.texture;
+                    const isPreviewing = (previewingTemplateId === tpl.id) || (hoveredTemplateId === tpl.id);
+                    const tplFull = getFullTemplateConfig(tpl);
+                    const tplTexOverlay = getTextureOverlayStyle(tpl.config.texture || "clean");
+
+                    return (
+                      <div
+                        key={tpl.id}
+                        onMouseEnter={() => setHoveredTemplateId(tpl.id)}
+                        onMouseLeave={() => setHoveredTemplateId(null)}
+                        onClick={() => setPreviewingTemplateId(tpl.id)}
+                        className={`rounded-2xl border p-4 transition-all flex flex-col justify-between gap-3 bg-white cursor-pointer ${
+                          isCurrent
+                            ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30 shadow-md"
+                            : isPreviewing
+                            ? "border-[#1c1b18] ring-2 ring-[#1c1b18]/15 shadow-sm"
+                            : "border-[#e8e4db] hover:border-[#1c1b18]/40 hover:shadow-xs"
+                        }`}
+                      >
+                        <div className="space-y-3">
+                          {/* Rich Mini-Sidebar Visual Mockup Header */}
+                          <div
+                            className="h-24 w-full rounded-xl relative overflow-hidden shadow-inner border border-black/10 p-2 flex flex-col justify-between"
+                            style={{
+                              background: previewThemeMode === "dark" ? tplFull.customBgDark : tplFull.customBgLight,
+                              color: previewThemeMode === "dark" ? "#ffffff" : "#1c1b18"
+                            }}
+                          >
+                            {/* Texture overlay in mockup */}
+                            <div className="absolute inset-0 pointer-events-none rounded-[inherit]" style={tplTexOverlay} />
+
+                            {/* Mini Mockup Top Header */}
+                            <div className="relative z-10 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="h-4.5 w-4.5 rounded-md flex items-center justify-center text-white font-bold text-[9px] shadow-2xs"
+                                  style={{ backgroundColor: tpl.accent }}
+                                >
+                                  N
+                                </span>
+                                <span className="text-[10px] font-bold truncate max-w-[120px]">
+                                  {tpl.name}
+                                </span>
+                              </div>
+                              <span
+                                className="px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider bg-black/10 dark:bg-white/15 backdrop-blur-xs border border-white/20 shadow-2xs"
+                              >
+                                {tpl.config.density}
+                              </span>
+                            </div>
+
+                            {/* Mini Mockup Section Rows */}
+                            <div className="relative z-10 space-y-1">
+                              <div className="h-2 rounded-xs bg-black/10 dark:bg-white/10 w-3/4 flex items-center px-1">
+                                <div className="h-1 w-1 rounded-full" style={{ backgroundColor: tpl.accent }} />
+                              </div>
+                              <div className="h-2 rounded-xs bg-black/10 dark:bg-white/10 w-1/2 flex items-center px-1">
+                                <div className="h-1 w-1 rounded-full" style={{ backgroundColor: tpl.accent }} />
+                              </div>
+                              <div className="h-2 rounded-xs bg-black/10 dark:bg-white/10 w-2/3 flex items-center px-1">
+                                <div className="h-1 w-1 rounded-full" style={{ backgroundColor: tpl.accent }} />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs font-bold text-[#1c1b18]">{tpl.name}</div>
+                              {isPreviewing && !isCurrent && (
+                                <span className="text-[9.5px] font-bold text-[#a8824b] uppercase tracking-wide">
+                                  Live in Simulator
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] font-medium text-[#a8824b] mt-0.5">{tpl.tagline}</div>
+                            <p className="text-[11px] text-[#706c64] mt-1 leading-relaxed">{tpl.description}</p>
+                          </div>
+
+                          {/* Quick spec badges */}
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            <span className="px-1.5 py-0.5 rounded-md bg-[#f8f6f0] text-[9.5px] font-mono text-[#706c64] border border-[#e8e4db]">
+                              {tpl.config.radius}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-[#f8f6f0] text-[9.5px] font-mono text-[#706c64] border border-[#e8e4db]">
+                              {tpl.config.texture}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-[#f8f6f0] text-[9.5px] font-mono text-[#706c64] border border-[#e8e4db]">
+                              blur: {tpl.config.blur}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateConfig(getFullTemplateConfig(tpl));
+                            setPreviewingTemplateId(null);
+                            setHoveredTemplateId(null);
+                            onToast?.(`Applied "${tpl.name}" sidebar template`);
+                          }}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                            isCurrent
+                              ? "bg-[#1c1b18] text-white shadow-xs"
+                              : "bg-[#f8f6f0] hover:bg-[#ede8df] text-[#1c1b18] border border-[#e8e4db]"
+                          }`}
+                        >
+                          {isCurrent ? (
+                            <>
+                              <Check size={13} />
+                              <span>Active Template</span>
+                            </>
+                          ) : (
+                            <span>Apply Template</span>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ═══════════════════════════════════════════════════════════════════════
               TAB 1: AESTHETICS & COLORS (Soft Luxury Gradients & Soft Solids)
@@ -425,18 +642,24 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
                   </div>
 
                   {/* Filter switcher */}
-                  <div className="flex items-center gap-1 bg-[#ede8df] p-0.5 rounded-xl text-xs">
-                    {(["all", "gradient", "solid"] as const).map((filter) => (
+                  <div className="flex items-center gap-1 bg-[#ede8df] p-0.5 rounded-xl text-xs flex-wrap">
+                    {([
+                      { id: "all", label: "All Palettes" },
+                      { id: "gradient", label: "Luxury Gradients" },
+                      { id: "cyber", label: "Cyber & OLED" },
+                      { id: "artisan", label: "Nature & Artisan" },
+                      { id: "solid", label: "Smooth Solids" }
+                    ] as const).map((filter) => (
                       <button
-                        key={filter}
-                        onClick={() => setThemeFilter(filter)}
-                        className={`px-2.5 py-1 rounded-lg font-semibold capitalize transition cursor-pointer ${
-                          themeFilter === filter
+                        key={filter.id}
+                        onClick={() => setThemeFilter(filter.id)}
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                          themeFilter === filter.id
                             ? "bg-white shadow-xs text-[#1c1b18]"
                             : "text-[#706c64] hover:text-[#1c1b18]"
                         }`}
                       >
-                        {filter === "all" ? "All Palettes" : filter === "gradient" ? "Soft Gradients" : "Soft Solids"}
+                        {filter.label}
                       </button>
                     ))}
                   </div>

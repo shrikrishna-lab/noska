@@ -50,6 +50,9 @@ export interface BaseBlock {
    * (src/utils/helpers.js blockFor, type 'synced-block') — links mirrored
    * copies of the same block across pages. */
   syncedGroupId?: string;
+  width?: number | string;
+  height?: number | string;
+  align?: "left" | "center" | "right" | "full";
   [key: string]: unknown;
 }
 
@@ -316,6 +319,41 @@ export interface LinkedViewBlockData extends BaseBlock {
   sourceBlockId?: string | null;
 }
 
+export interface InteractiveVersion {
+  id: string;
+  version: number;
+  html: string;
+  css: string;
+  javascript: string;
+  entryFile?: string;
+  summary?: string;
+  createdAt: string;
+}
+
+export interface InteractivePermissions {
+  allowThemeInheritance?: boolean;
+  allowStorage?: boolean;
+  allowPageInfo?: boolean;
+  allowNetwork?: boolean;
+}
+
+export interface InteractiveBlock extends BaseBlock {
+  type: "interactive" | "html";
+  title?: string;
+  html?: string;
+  css?: string;
+  javascript?: string;
+  entryFile?: string;
+  height?: number;
+  width?: number | string;
+  align?: "left" | "center" | "right" | "full";
+  sizingPreset?: "compact" | "standard" | "wide" | "full";
+  themeMode?: "inherit" | "custom" | "dark" | "light";
+  permissions?: InteractivePermissions;
+  versions?: InteractiveVersion[];
+  version?: number;
+}
+
 /** Anything not covered by a more specific interface above — the large
  * majority of block types (paragraph, headings, lists, to_do, toggle,
  * callout, quote, divider, image, code, link_to_page, mention, video,
@@ -339,6 +377,7 @@ export type Block =
   | ChartBlockData
   | ImageBlockData
   | LinkedViewBlockData
+  | InteractiveBlock
   | GenericBlock;
 
 /** The `pages.lineage` JSON column — an append-only history of actions

@@ -10,6 +10,26 @@ export interface ChangelogEntry {
 
 export const DEFAULT_CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    id: "release-v1-2-2",
+    title: "Free 5-Directional Block Resizer, Organic Playful To-Do Lists & Interactive Live Blocks Suite",
+    tag: "Feature Update",
+    version: "v1.2.2",
+    published_at: "2026-09-15T00:00:00Z",
+    created_at: "2026-09-15T00:00:00Z",
+    description: `### 📐 Universal Free Block Resizing Engine
+- **5-Directional Resizing Handles**: Free width (left/right blue edge bars), height (bottom pill), and simultaneous 2D free resizing (bottom-left and bottom-right curved corner handles).
+- **Symmetric Breakout Expansion**: Wide and custom-width blocks now smoothly break out into both left and right margins with 1:1 cursor tracking and real-time dimension HUD tooltip.
+- **Double-Click Reset**: Instant double-click reset on any handle or corner to restore default block dimensions.
+- **Full Reading & Editor Parity**: Seamless resizing support across interactive blocks, embeds, code cells, tables, widgets, databases, videos, and charts in both Editor and Reading modes.
+
+### ✨ Playful Animated To-Do Lists
+- **Organic Pen Strikethrough Animation**: Smooth, variable-width monotonic pen stroke SVG strikethrough that renders cleanly on single letters, words, or full multi-line items without distortion or blotting.
+- **Playful Particle Confetti & Sound Feedback**: Tactile celebration micro-interactions on task completion.
+
+### ⚡ Interactive Sandboxed Blocks Suite
+- **Dynamic KPI Dashboards & Charts**: Embed live interactive widgets, real-time counters, countdown timers, and charts with fluid width and height adaptation.`
+  },
+  {
     id: "release-v1-2-1",
     title: "Spatial Canvas 2.0: AI Spatial Synthesis, Smart Connectors, 2D Kanban Dual-View & Interactive Presentation Mode",
     tag: "Major Release",

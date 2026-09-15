@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles, GripHorizontal, FileText } from "lucide-react";
+import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles, GripHorizontal, FileText, Plus } from "lucide-react";
 import { TextArea } from "../ui";
 import RichTextEditor from "./RichTextEditor";
 import { BlockRegistry } from "../../registry/BlockRegistry";
@@ -21,8 +21,40 @@ import LinkedViewBlock from "./LinkedViewBlock";
 import FormsBlock from "../FormsBlock";
 import ExternalLinkPreview from "./ExternalLinkPreview";
 import WidgetEditorBlock from "./WidgetEditorBlock";
+import InteractiveBlock from "./interactive/InteractiveBlock";
 import { PageIcon } from "../PageIcon";
+import BlockResizer from "./BlockResizer";
+import { PlayfulTodoList } from "../ui/playful-todolist";
+import { Checkbox } from "../ui/checkbox";
 
+const RESIZABLE_BLOCK_TYPES = new Set([
+  "interactive",
+  "html",
+  "widget",
+  "external-preview",
+  "code",
+  "video",
+  "audio",
+  "file",
+  "bookmark",
+  "table",
+  "columns",
+  "database",
+  "database-inline",
+  "database-full",
+  "linked-view",
+  "callout",
+  "mermaid",
+  "ai-block",
+  "ai-meeting",
+  "ai-meeting-notes",
+  "chart",
+  "block-equation",
+  "equation",
+  "forms",
+  "embed",
+  "embed-generic"
+]);
 
 function placeholderFor(type: string) {
   if (type === "code") return "Code";
@@ -30,20 +62,7 @@ function placeholderFor(type: string) {
   return "Press 'space' for AI or '/' for commands";
 }
 
-// `block` is typed as `any` here rather than the real `Block` union from
-// types/blocks.ts: this dispatcher reads dozens of type-specific fields
-// (linkedPageId, targetPageId, mentionPageId, videoWidth, templateBlocks,
-// tabs, syncedGroupId, color, bgColor, name, ...) across ~35 branches, and
-// narrowing `block` to `Block` per-branch would require a full discriminated
-// switch/exhaustiveness rewrite of this dispatcher's if-chain — a much
-// larger structural change than a type-only migration pass. The match
-// table above (see MIGRATION_LOG.md, "Phase 4 — Block union match table")
-// confirms every branch here does correspond to a real Block member; this
-// is a documented, deliberate scope boundary, not a silent gap. `pages`/
-// `page` similarly stay loose (Page[] would require importing the app-facing
-// Page type and doesn't change safety here since block/page interplay is
-// read dynamically throughout).
-export default function renderBlockEditor(
+function renderBlockCore(
   block: any,
   index: number,
   cls: string,
@@ -67,6 +86,18 @@ export default function renderBlockEditor(
   onBlocks?: (blocks: any[]) => void,
   onPasteUrl?: (url: string) => void
 ) {
+  if (block.type === "interactive" || block.type === "html") {
+    return (
+      <InteractiveBlock
+        block={block}
+        onPatch={onPatch}
+        onDelete={onDelete}
+        isLocked={isLocked}
+        onToast={onToast}
+      />
+    );
+  }
+
   if (block.type === "widget") {
     return (
       <WidgetEditorBlock
@@ -218,34 +249,113 @@ export default function renderBlockEditor(
     const richText = block.properties?.richText != null
       ? block.properties.richText
       : markdownToRichText(block.text || '');
+
+    const handleAddNextTodo = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (onBlocks && page?.blocks) {
+        const newBlock = {
+          id: uid(),
+          type: "todo",
+          text: "",
+          checked: false,
+          properties: { checked: false, richText: [] }
+        };
+        const currentIdx = page.blocks.findIndex((b: any) => b.id === block.id);
+        const nextBlocks = [...page.blocks];
+        if (currentIdx >= 0) {
+          nextBlocks.splice(currentIdx + 1, 0, newBlock);
+        } else {
+          nextBlocks.push(newBlock);
+        }
+        onBlocks(nextBlocks);
+      }
+    };
+
     return (
-      <label className="flex items-start gap-2">
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={isLocked}
-          onChange={(e) => onPatch({
-            properties: { ...(block.properties || {}), checked: e.target.checked },
-            checked: e.target.checked
-          })}
-          className="mt-1.5 h-4 w-4 accent-[var(--accent)] cursor-pointer"
-        />
-        <RichTextEditor
-          ref={ref}
-          richText={richText}
-          onRichTextChange={(rt, pt) => onPatch({
-            properties: { ...(block.properties || {}), richText: rt },
-            text: pt
-          })}
-          onKeyDown={onKeyDown}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          readOnly={isLocked}
-          onPasteUrl={onPasteUrl}
-          className={`${cls} ${checked ? "text-[var(--muted)] line-through" : ""}`}
-          placeholder="To-do"
-        />
-      </label>
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            ref.current?.focus();
+          }
+        }}
+        className="group/todo flex items-start gap-2.5 relative my-1.5 py-0.5 cursor-text"
+      >
+        <div className="mt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={checked}
+            disabled={isLocked}
+            onCheckedChange={(val) => {
+              const isChecked = val === true;
+              onPatch({
+                properties: { ...(block.properties || {}), checked: isChecked },
+                checked: isChecked
+              });
+            }}
+            className="h-4 w-4 rounded-md border-neutral-400 dark:border-neutral-600 data-[state=checked]:bg-[var(--accent,#3b82f6)] data-[state=checked]:border-[var(--accent,#3b82f6)] transition-all cursor-pointer"
+          />
+        </div>
+        <div className="relative inline-block w-fit max-w-full">
+          <RichTextEditor
+            ref={ref}
+            richText={richText}
+            onRichTextChange={(rt, pt) => onPatch({
+              properties: { ...(block.properties || {}), richText: rt },
+              text: pt
+            })}
+            onKeyDown={onKeyDown}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            readOnly={isLocked}
+            onPasteUrl={onPasteUrl}
+            className={`${cls} transition-opacity duration-300 ${checked ? "opacity-60" : "opacity-100"}`}
+            placeholder="To-do"
+          />
+          {/* Playful Animated SVG Strikethrough strictly covering only the text */}
+          <motion.svg
+            viewBox="0 0 300 20"
+            preserveAspectRatio="none"
+            className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none z-20 w-full h-5"
+          >
+            <motion.path
+              d="M 2 10.5 C 45 7.5, 90 13.5, 145 10 C 200 6.5, 250 13, 298 9.5"
+              vectorEffect="non-scaling-stroke"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeMiterlimit={10}
+              fill="none"
+              initial={false}
+              animate={{
+                pathLength: checked ? 1 : 0,
+                opacity: checked ? 0.85 : 0
+              }}
+              transition={{
+                pathLength: { duration: 0.35, ease: "easeInOut" },
+                opacity: { duration: 0.01, delay: checked ? 0 : 0.3 }
+              }}
+              className="stroke-neutral-800 dark:stroke-neutral-200"
+            />
+          </motion.svg>
+        </div>
+        <div className="flex-1 min-w-4 self-stretch" onClick={() => ref.current?.focus()} />
+        {!isLocked && onBlocks && (
+          <button
+            onClick={handleAddNextTodo}
+            className="opacity-0 group-hover/todo:opacity-100 p-1 mt-0.5 rounded text-[var(--secondary)] hover:text-[var(--foreground)] hover:bg-[var(--hover)] transition-opacity cursor-pointer shrink-0"
+            title="Add to-do below (+)"
+          >
+            <Plus size={14} />
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (block.type === "playful-todo") {
+    return (
+      <div className="my-4">
+        <PlayfulTodoList />
+      </div>
     );
   }
   if (block.type === "toggle") {
@@ -348,9 +458,9 @@ export default function renderBlockEditor(
               Your browser does not support the video tag.
             </video>
             <div className="absolute inset-y-0 right-0 w-1.5 cursor-col-resize opacity-0 group-hover/video:opacity-60 transition"
-                 onMouseDown={handleVidResize('right')} />
+              onMouseDown={handleVidResize('right')} />
             <div className="absolute -bottom-1 -right-1 h-3 w-3 cursor-nwse-resize opacity-0 group-hover/video:opacity-60 transition"
-                 onMouseDown={handleVidResize('corner')}>
+              onMouseDown={handleVidResize('corner')}>
               <GripHorizontal size={12} className="absolute -bottom-0.5 -right-0.5 text-white drop-shadow" />
             </div>
             {!isLocked && (
@@ -503,9 +613,9 @@ export default function renderBlockEditor(
                 <button onClick={onDelete} className="text-[var(--muted)] hover:text-red-400 transition">
                   <Trash2 size={13} />
                 </button>
-          )}
+              )}
+            </div>
           </div>
-        </div>
         )}
       </div>
     );
@@ -526,7 +636,7 @@ export default function renderBlockEditor(
     </div>
   );
   if (block.type === "linked-view") return <LinkedViewBlock block={block} onPatch={onPatch} isLocked={isLocked} pages={pages} page={page} apiKey={apiKey} aiProvider={aiProvider} onNavigate={onNavigate} />;
-  
+
   if (block.type === "callout") {
     return <CalloutBlock block={block} cls={cls} isLocked={isLocked} onPatch={onPatch} onKeyDown={onKeyDown} onFocus={onFocus} onBlur={onBlur} onPasteUrl={onPasteUrl} innerRef={ref} />;
   }
@@ -599,9 +709,9 @@ export default function renderBlockEditor(
                 {h.text || "Untitled Section"}
               </div>
             ))}
-              </div>
-            )}
-        </div>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -616,9 +726,8 @@ export default function renderBlockEditor(
             <button
               key={idx}
               onClick={() => onPatch({ activeTabIdx: idx })}
-              className={`px-4 py-2 text-xs font-semibold border-r border-[var(--border)] transition cursor-pointer ${
-                activeTabIdx === idx ? "bg-[var(--hover)] text-[var(--accent)]" : "text-[var(--secondary)] hover:text-[var(--text)]"
-              }`}
+              className={`px-4 py-2 text-xs font-semibold border-r border-[var(--border)] transition cursor-pointer ${activeTabIdx === idx ? "bg-[var(--hover)] text-[var(--accent)]" : "text-[var(--secondary)] hover:text-[var(--text)]"
+                }`}
             >
               {tabLabel}
             </button>
@@ -663,11 +772,10 @@ export default function renderBlockEditor(
             newBlocks.splice(idx + 1, 0, ...clones);
             onBlocks(newBlocks);
           }}
-          className={`rounded-lg px-4 py-2 text-xs font-semibold shadow-md active:scale-95 transition cursor-pointer ${
-            isTemplate
+          className={`rounded-lg px-4 py-2 text-xs font-semibold shadow-md active:scale-95 transition cursor-pointer ${isTemplate
               ? "bg-[var(--success)] hover:bg-[var(--success)]/80 text-white"
               : "bg-[var(--accent)] hover:bg-[var(--accent-deep)] text-white"
-          }`}
+            }`}
         >
           {isTemplate ? "▶ " : ""}{block.text || (isTemplate ? "Template button" : "Interactive Button")}
         </button>
@@ -714,11 +822,10 @@ export default function renderBlockEditor(
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => onNavigate?.(p.id, { altKey: e.altKey })}
-              className={`transition cursor-pointer inline-flex items-center gap-1 ${
-                i === chain.length - 1
+              className={`transition cursor-pointer inline-flex items-center gap-1 ${i === chain.length - 1
                   ? "text-[var(--text)] font-semibold"
                   : "text-[var(--secondary)] hover:text-[var(--text)]"
-              }`}
+                }`}
             >
               {p.icon && <span>{p.icon}</span>}
               {p.title || "Untitled"}
@@ -886,8 +993,8 @@ export default function renderBlockEditor(
   const showFormatted = !isFocused && hasMarkers && !isLocked;
 
   if (block.type === "text") {
-    const richText = block.properties?.richText != null 
-      ? block.properties.richText 
+    const richText = block.properties?.richText != null
+      ? block.properties.richText
       : markdownToRichText(block.text || '');
     return (
       <RichTextEditor
@@ -1082,4 +1189,77 @@ function CalloutBlock({ block, cls, isLocked, onPatch, onKeyDown, onFocus, onBlu
       </div>
     </div>
   );
+}
+
+export default function renderBlockEditor(
+  block: any,
+  index: number,
+  cls: string,
+  ref: React.RefObject<any>,
+  onPatch: (patch: any) => void,
+  onKeyDown?: (e: React.KeyboardEvent) => void,
+  onDelete?: () => void,
+  pages: any[] = [],
+  onFocus?: () => void,
+  onBlur?: () => void,
+  isLocked?: boolean,
+  isFocused?: boolean,
+  onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void,
+  onOpenImagePicker?: () => void,
+  pageId?: string,
+  onToast?: (message: string) => void,
+  onCreateSubpage?: (blockId: string, text: string) => string | null | undefined,
+  apiKey?: string,
+  aiProvider?: string,
+  page?: any,
+  onBlocks?: (blocks: any[]) => void,
+  onPasteUrl?: (url: string) => void
+) {
+  const content = renderBlockCore(
+    block,
+    index,
+    cls,
+    ref,
+    onPatch,
+    onKeyDown,
+    onDelete,
+    pages,
+    onFocus,
+    onBlur,
+    isLocked,
+    isFocused,
+    onNavigate,
+    onOpenImagePicker,
+    pageId,
+    onToast,
+    onCreateSubpage,
+    apiKey,
+    aiProvider,
+    page,
+    onBlocks,
+    onPasteUrl
+  );
+
+  if (!content) return null;
+
+  const registryItem = BlockRegistry.find((r) => r.type === block.type);
+  const isEmbed = registryItem?.category === "Embeds";
+
+  if (RESIZABLE_BLOCK_TYPES.has(block.type) || isEmbed) {
+    const enableHeight = !["callout", "bookmark", "file", "audio", "block-equation", "equation"].includes(block.type);
+    return (
+      <BlockResizer
+        width={block.width}
+        height={block.height || (block.type === "interactive" || block.type === "html" ? 420 : undefined)}
+        align={block.align || "center"}
+        isLocked={isLocked}
+        onPatch={onPatch}
+        enableHeightResize={enableHeight}
+      >
+        {content}
+      </BlockResizer>
+    );
+  }
+
+  return content;
 }

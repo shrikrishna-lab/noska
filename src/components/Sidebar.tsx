@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, memo, useMemo } from "react";
+import React, { useState, useRef, useEffect, memo, useMemo, useCallback } from "react";
 import type { ReactNode, ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -246,6 +246,63 @@ const Sidebar = memo(function Sidebar({
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [hoveredQuickTab, setHoveredQuickTab] = useState<string | null>(null);
 
+  // Dynamic draggable sidebar width with local persistence
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("noska_sidebar_width");
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 200 && parsed <= 480) return parsed;
+      }
+    } catch {}
+    return 260;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const isResizingRef = useRef(false);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    isResizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const newWidth = Math.min(480, Math.max(200, moveEvent.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isResizingRef.current = false;
+      setIsResizing(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      setSidebarWidth((w) => {
+        try {
+          localStorage.setItem("noska_sidebar_width", String(w));
+        } catch {}
+        return w;
+      });
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, []);
+
+  const resetSidebarWidth = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSidebarWidth(260);
+    try {
+      localStorage.setItem("noska_sidebar_width", "260");
+    } catch {}
+    onToast?.("Sidebar width reset to 260px");
+  }, [onToast]);
+
   const quickNavItems = useMemo(() => [
     {
       id: "home",
@@ -350,6 +407,53 @@ const Sidebar = memo(function Sidebar({
         return "bg-gradient-to-r from-[#E6CA9E] via-[#DFC293] to-[#D5B584] dark:from-[#A8824D] dark:to-[#8F6A35] text-neutral-900 dark:text-white border-[#D5B584]/50 dark:border-[#8F6A35]/50 shadow-[0_2px_8px_rgba(213,181,132,0.3)]";
     }
   }, [customConfig.newCreationColor]);
+
+  // Dynamic density variables and classes
+  const densityStyles = useMemo(() => {
+    switch (customConfig.density) {
+      case "ultra-compact":
+        return {
+          "--sidebar-row-height": "24px",
+          "--sidebar-row-min-height": "24px",
+          "--sidebar-row-font-size": "11px",
+          "--sidebar-row-py": "1px",
+          "--sidebar-icon-size": "12px",
+          "--sidebar-section-gap": "2px",
+          "--sidebar-section-title-size": "10px",
+        } as React.CSSProperties;
+      case "compact":
+        return {
+          "--sidebar-row-height": "27px",
+          "--sidebar-row-min-height": "27px",
+          "--sidebar-row-font-size": "11.5px",
+          "--sidebar-row-py": "2px",
+          "--sidebar-icon-size": "13px",
+          "--sidebar-section-gap": "3px",
+          "--sidebar-section-title-size": "10.5px",
+        } as React.CSSProperties;
+      case "spacious":
+        return {
+          "--sidebar-row-height": "38px",
+          "--sidebar-row-min-height": "38px",
+          "--sidebar-row-font-size": "13.5px",
+          "--sidebar-row-py": "5px",
+          "--sidebar-icon-size": "15px",
+          "--sidebar-section-gap": "8px",
+          "--sidebar-section-title-size": "11.5px",
+        } as React.CSSProperties;
+      case "standard":
+      default:
+        return {
+          "--sidebar-row-height": "32px",
+          "--sidebar-row-min-height": "32px",
+          "--sidebar-row-font-size": "12.5px",
+          "--sidebar-row-py": "3px",
+          "--sidebar-icon-size": "14px",
+          "--sidebar-section-gap": "6px",
+          "--sidebar-section-title-size": "11px",
+        } as React.CSSProperties;
+    }
+  }, [customConfig.density]);
 
   // Click-outside references
   const switcherRef = useRef<HTMLButtonElement>(null);
@@ -655,10 +759,10 @@ const Sidebar = memo(function Sidebar({
     <motion.aside
       initial={false}
       animate={{
-        width: open ? 260 : 58,
+        width: open ? sidebarWidth : 58,
         opacity: 1
       }}
-      transition={SPRING_PRESETS.soft}
+      transition={isResizing ? { duration: 0 } : SPRING_PRESETS.soft}
       className="relative flex h-full shrink-0 flex-col overflow-visible select-none z-30 p-2 pointer-events-auto font-sans"
     >
       {/* Outer Specular Precision Shell */}
@@ -679,7 +783,8 @@ const Sidebar = memo(function Sidebar({
           style={{
             background: (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches))
               ? (customConfig.customBgDark || "linear-gradient(135deg, rgba(24, 25, 30, 0.94), rgba(19, 20, 24, 0.98))")
-              : (customConfig.customBgLight || "linear-gradient(135deg, rgba(246, 246, 250, 0.94), rgba(255, 255, 255, 0.98))")
+              : (customConfig.customBgLight || "linear-gradient(135deg, rgba(246, 246, 250, 0.94), rgba(255, 255, 255, 0.98))"),
+            ...densityStyles
           }}
         >
           {/* Genuine Physical Texture Overlay Layer */}
@@ -1204,6 +1309,27 @@ const Sidebar = memo(function Sidebar({
         document.body
       )}
 
+      {/* Interactive Sidebar Drag-to-Resize Handle */}
+      {open && (
+        <div
+          onMouseDown={startResizing}
+          onDoubleClick={resetSidebarWidth}
+          className={`absolute top-0 -right-1 bottom-0 w-3 z-50 cursor-col-resize group/resizer flex items-center justify-center select-none transition-colors ${
+            isResizing ? "bg-transparent" : "hover:bg-black/5 dark:hover:bg-white/5"
+          }`}
+          title="Drag to resize sidebar · Double-click to reset (260px)"
+        >
+          {/* Subtle grab bar line that lights up on hover/drag */}
+          <div
+            className={`h-12 w-1 rounded-full transition-all duration-150 ${
+              isResizing
+                ? "bg-[var(--accent)] scale-y-125 shadow-[0_0_10px_var(--accent)] opacity-100"
+                : "bg-black/15 dark:bg-white/20 opacity-0 group-hover/resizer:opacity-100 group-hover/resizer:bg-[var(--accent)]"
+            }`}
+          />
+        </div>
+      )}
+
       {showJoinCompanyModal && (
         <JoinCompanyModal
           onClose={() => setShowJoinCompanyModal(false)}
@@ -1228,10 +1354,17 @@ function RecentsPageItemBase({ page, active, onSelect, onRemove }: RecentsPageIt
       whileHover={{ x: 2 }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: "spring", stiffness: 450, damping: 32 }}
-      className={`group relative flex min-h-[26px] h-[26px] items-center rounded-lg transition-all duration-150 ${active
+      className={`group relative flex items-center rounded-lg transition-all duration-150 ${active
         ? "bg-black/[0.055] dark:bg-white/[0.08] text-neutral-900 dark:text-white border border-black/[0.03] dark:border-white/[0.06] shadow-2xs"
         : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.035] dark:hover:bg-white/[0.05] hover:text-neutral-900 dark:hover:text-white"
         }`}
+      style={{
+        minHeight: "var(--sidebar-row-min-height, 26px)",
+        height: "var(--sidebar-row-height, 26px)",
+        fontSize: "var(--sidebar-row-font-size, 11.5px)",
+        paddingTop: "var(--sidebar-row-py, 2px)",
+        paddingBottom: "var(--sidebar-row-py, 2px)",
+      }}
     >
       <button
         onClick={(e) => onSelect(page.id, selectOptionsFromEvent(e))}
@@ -1287,10 +1420,11 @@ interface NoskaSectionProps {
 function NoskaSection({ title, children, defaultExpanded = true }: NoskaSectionProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   return (
-    <div className="select-none">
+    <div className="select-none" style={{ marginBottom: "var(--sidebar-section-gap, 6px)" }}>
       <div
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between px-2 py-0.5 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 select-none cursor-pointer rounded-md hover:bg-black/[0.025] dark:hover:bg-white/[0.03] transition-colors group/header"
+        className="flex items-center justify-between px-2 py-0.5 font-semibold text-neutral-500 dark:text-neutral-400 select-none cursor-pointer rounded-md hover:bg-black/[0.025] dark:hover:bg-white/[0.03] transition-colors group/header"
+        style={{ fontSize: "var(--sidebar-section-title-size, 11px)" }}
       >
         <span className="tracking-tight">{title}</span>
         <div
@@ -1347,12 +1481,19 @@ function NoskaNavItem({ icon: Icon, label, subtitle, active, muted, onClick, ari
       transition={{ type: "spring", stiffness: 450, damping: 32 }}
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onClick?.(e); } }}
       onMouseUp={(e) => (e.currentTarget as HTMLButtonElement).blur()}
-      className={`flex ${compact ? "min-h-[23px] h-[23px] text-[10.5px] py-0.5" : "min-h-[26px] h-[26px] text-[11.5px] py-0.5"} w-full items-center gap-2 rounded-lg px-2 text-left outline-none relative transition-colors duration-150 cursor-pointer select-none ${active
+      className={`flex ${compact ? "text-[10.5px]" : ""} w-full items-center gap-2 rounded-lg px-2 text-left outline-none relative transition-colors duration-150 cursor-pointer select-none ${active
         ? "text-neutral-900 dark:text-white font-medium bg-black/[0.055] dark:bg-white/[0.08] border border-black/[0.03] dark:border-white/[0.06] shadow-2xs"
         : muted
           ? "text-neutral-400 dark:text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
           : "text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-black/[0.035] dark:hover:bg-white/[0.05]"
         }`}
+      style={{
+        minHeight: compact ? "22px" : "var(--sidebar-row-min-height, 26px)",
+        height: compact ? "22px" : "var(--sidebar-row-height, 26px)",
+        fontSize: compact ? "10.5px" : "var(--sidebar-row-font-size, 11.5px)",
+        paddingTop: "var(--sidebar-row-py, 2px)",
+        paddingBottom: "var(--sidebar-row-py, 2px)",
+      }}
     >
       <Icon size={compact ? 12 : 13.5} className={`shrink-0 z-10 transition-colors duration-150 ${active ? "text-neutral-900 dark:text-white" : "text-neutral-500 dark:text-neutral-400"}`} />
       <span className="min-w-0 flex-1 z-10 relative">

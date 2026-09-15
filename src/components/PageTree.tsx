@@ -218,11 +218,16 @@ function PremiumPageItemBase({
         aria-expanded={hasChildren ? expanded : undefined}
         aria-level={depth + 1}
         aria-selected={active}
-        className={`group relative flex items-center justify-between min-h-[34px] h-[34px] py-1.5 rounded-lg transition-all duration-150 cursor-pointer select-none ${active
+        className={`group relative flex items-center justify-between rounded-lg transition-all duration-150 cursor-pointer select-none ${active
           ? 'text-neutral-900 dark:text-white font-medium bg-black/[0.055] dark:bg-white/[0.08] border border-black/[0.03] dark:border-white/[0.06] shadow-2xs'
           : 'text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-black/[0.035] dark:hover:bg-white/[0.05]'
           }`}
         style={{
+          minHeight: "var(--sidebar-row-min-height, 32px)",
+          height: "var(--sidebar-row-height, 32px)",
+          fontSize: "var(--sidebar-row-font-size, 13px)",
+          paddingTop: "var(--sidebar-row-py, 3px)",
+          paddingBottom: "var(--sidebar-row-py, 3px)",
           paddingLeft: depth === 0 ? 8 : depth * 12 + 8,
           paddingRight: 8,
         }}

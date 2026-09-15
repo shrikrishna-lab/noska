@@ -212,7 +212,8 @@ Type \`/\` anywhere on the page to open the block picker. Choose from 33 block t
 | Heading 2 | \`##\` | Medium section heading |
 | Bullet list | \`-\` | Unordered list |
 | Numbered list | \`1.\` | Ordered list |
-| To-do | \`[]\` | Checkable task |
+| To-do | \`[]\` | Playful checkable task with organic animated strikethrough |
+| Interactive | \`/interactive\` | Live KPI dashboards, charts, counters & sandboxed widgets |
 | Code block | \`\`\` | Code with syntax highlighting |
 | Table | \`table\` | Rich data table |
 | Flashcard | \`/flashcard\` | Spaced repetition study card |
@@ -248,8 +249,9 @@ Pages have four viewing modes:
 
 **Blocks**
 
-Blocks are the building blocks of content. Everything on a page is a block — text, images, tables, code, embeds, flashcards, databases, and more. Each block has its own identity, which means blocks can be:
+Blocks are the building blocks of content. Everything on a page is a block — text, images, tables, code, embeds, flashcards, databases, interactive widgets, and more. Each block has its own identity, which means blocks can be:
 - Dragged and reordered freely
+- Freely resized in 5 directions (width edge bars, length pill, and 2D curved corners with symmetric margin breakout)
 - Converted between block types
 - Turned into spaced-repetition study flashcards
 - Linked to from other pages with bi-directional references

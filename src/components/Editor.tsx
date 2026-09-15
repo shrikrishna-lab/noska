@@ -830,10 +830,27 @@ export default function Editor({
           sendCursor(e.clientX - rect.left, e.clientY - rect.top + e.currentTarget.scrollTop);
         }
       }}
-      className={`min-h-0 flex-1 overflow-y-auto scrollbar-thin relative transition-all duration-200 ${page.fontStyle === "serif" ? "font-serif" : page.fontStyle === "mono" ? "font-mono" : "font-sans"
-        }`}
+      className={`min-h-0 flex-1 overflow-y-auto scrollbar-thin relative transition-all duration-200 ${
+        page.fontStyle === "serif"
+          ? "font-serif"
+          : page.fontStyle === "mono"
+          ? "font-mono"
+          : page.fontStyle === "handwriting"
+          ? "font-serif italic"
+          : page.fontStyle === "display"
+          ? "font-sans uppercase font-bold tracking-wide"
+          : "font-sans"
+      }`}
       style={page.pageBg ? { background: page.pageBg } : undefined}
     >
+      {/* Ambient Canvas Mesh Overlay */}
+      {page.pageMeshBg && (
+        <div
+          className="absolute inset-0 pointer-events-none z-0"
+          style={{ background: page.pageMeshBg }}
+        />
+      )}
+
       {/* Live cursors from other collaborators */}
       <CursorOverlay pageId={page.id} />
 
@@ -851,9 +868,14 @@ export default function Editor({
             }`}
           style={{
             height: (page.coverHeight || 160) + "px",
-            background: typeof page.cover === "string" && (page.cover.startsWith('linear-gradient') || page.cover.startsWith('radial-gradient'))
-              ? page.cover
-              : `url(${page.cover}) ${isRepositioningCover && coverDragYPercent !== null ? `center ${coverDragYPercent}%` : (page.coverPosition || "center")}/cover no-repeat`,
+            ...(typeof page.cover === "string" && (page.cover.includes("gradient(") || page.cover.startsWith("#") || page.cover.startsWith("rgb") || page.cover.startsWith("hsl"))
+              ? { background: page.cover }
+              : {
+                  backgroundImage: page.cover ? `url(${page.cover})` : undefined,
+                  backgroundPosition: isRepositioningCover && coverDragYPercent !== null ? `center ${coverDragYPercent}%` : (page.coverPosition || "center"),
+                  backgroundSize: "cover",
+                  backgroundRepeat: "no-repeat"
+                }),
             filter: page.coverOverlay ? `brightness(${page.coverBrightness || 100}%)` : "none",
             ...(page.coverParallax ? { backgroundAttachment: "fixed" } : {})
           }}
@@ -920,7 +942,14 @@ export default function Editor({
         </div>
       )}
 
-      <div className={`mx-auto px-16 ${page.cover ? "pt-4 pb-10" : "py-10"} transition-all duration-200 ${page.fullWidth ? "max-w-full px-8" : "max-w-[720px]"
+      <div className={`mx-auto ${page.cover ? "pt-4 pb-10" : "py-10"} transition-all duration-200 relative z-10 ${
+          page.fullWidth
+            ? "max-w-full px-8"
+            : page.pageWidth === "wide"
+            ? "max-w-[960px] px-12"
+            : page.pageWidth === "compact"
+            ? "max-w-[580px] px-8"
+            : "max-w-[720px] px-16"
         } ${page.smallText ? "noska-small-text text-xs" : ""
         }`}
         onClick={(e) => {

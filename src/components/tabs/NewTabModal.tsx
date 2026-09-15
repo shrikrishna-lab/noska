@@ -445,11 +445,11 @@ export function NewTabModal({
                     {/* Cover image or refined top banner */}
                     {previewPage.cover ? (
                       <div
-                        className="h-20 w-full bg-center bg-cover shrink-0 border-b border-[var(--border)]"
+                        className="h-20 w-full shrink-0 border-b border-[var(--border)]"
                         style={{
-                          backgroundImage: previewPage.cover.startsWith("linear-gradient")
-                            ? previewPage.cover
-                            : `url(${previewPage.cover})`
+                          ...(previewPage.cover.includes("gradient(") || previewPage.cover.startsWith("#") || previewPage.cover.startsWith("rgb") || previewPage.cover.startsWith("hsl")
+                            ? { background: previewPage.cover }
+                            : { backgroundImage: `url(${previewPage.cover})`, backgroundPosition: "center", backgroundSize: "cover", backgroundRepeat: "no-repeat" })
                         }}
                       />
                     ) : (

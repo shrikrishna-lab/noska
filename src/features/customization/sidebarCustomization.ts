@@ -12,6 +12,23 @@ export type SidebarThemePreset =
   | "rose-quartz"
   | "sage-alabaster"
   | "velvet-obsidian"
+  // Cyber & Futuristic OLED Themes
+  | "cyberpunk-neon"
+  | "tokyo-night"
+  | "matrix-terminal"
+  | "dracula-vampire"
+  | "synthwave-sunset"
+  | "oled-pure-black"
+  // Artisan & Botanical Nature Themes
+  | "kyoto-bamboo"
+  | "terracotta-sun"
+  | "nordic-pine"
+  | "espresso-crema"
+  | "parchment-archive"
+  // Apple Glass & Aerospace Themes
+  | "mac-sonoma"
+  | "frost-titanium"
+  | "cosmic-aurora"
   // Soft Smooth Solids
   | "solid-alabaster"
   | "solid-bisque"
@@ -34,7 +51,13 @@ export type SidebarTexturePreset =
   | "carbon-fiber"
   | "linear-specular"
   | "paper-fiber"
-  | "aurora-dust";
+  | "aurora-dust"
+  | "holographic-foil"
+  | "brushed-titanium"
+  | "topo-contour"
+  | "dot-matrix-glow"
+  | "woven-linen"
+  | "blueprint-grid";
 
 export type SidebarSectionKey =
   | "workspace"
@@ -465,6 +488,180 @@ export const SIDEBAR_THEME_PRESETS: ThemePresetDefinition[] = [
     borderLight: "#CBCDD3",
     borderDark: "#1E2026",
     previewGradient: "#121316"
+  },
+
+  // ─── CYBER & FUTURISTIC OLED THEMES ───
+  {
+    id: "cyberpunk-neon",
+    name: "Cyberpunk Neon & Chrome",
+    type: "gradient",
+    description: "Electric cyan and hyper-magenta glow on deep pitch cyber black",
+    bgLight: "linear-gradient(135deg, #f0f7ff 0%, #e0f2fe 50%, #fdf2f8 100%)",
+    bgDark: "linear-gradient(135deg, #090a12 0%, #0d111d 50%, #11091a 100%)",
+    accent: "#06B6D4",
+    borderLight: "rgba(6, 182, 212, 0.3)",
+    borderDark: "rgba(6, 182, 212, 0.35)",
+    previewGradient: "linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #ec4899 100%)"
+  },
+  {
+    id: "tokyo-night",
+    name: "Tokyo Night Indigo",
+    type: "gradient",
+    description: "Atmospheric Shibuya midnight rain with vibrant neon indigo & violet",
+    bgLight: "linear-gradient(135deg, #f3f4fd 0%, #e7eafc 50%, #fbf8ff 100%)",
+    bgDark: "linear-gradient(135deg, #101222 0%, #16182e 50%, #131221 100%)",
+    accent: "#7AA2F7",
+    borderLight: "rgba(122, 162, 247, 0.25)",
+    borderDark: "rgba(122, 162, 247, 0.3)",
+    previewGradient: "linear-gradient(135deg, #1a1b26 0%, #24283b 50%, #7aa2f7 100%)"
+  },
+  {
+    id: "matrix-terminal",
+    name: "Matrix Phosphor Terminal",
+    type: "gradient",
+    description: "Classic retro cyberpunk green terminal glow with pure obsidian contrast",
+    bgLight: "linear-gradient(135deg, #f2fbf4 0%, #e4f6e9 50%, #ffffff 100%)",
+    bgDark: "linear-gradient(135deg, #070e09 0%, #0c160f 50%, #050805 100%)",
+    accent: "#10B981",
+    borderLight: "rgba(16, 185, 129, 0.25)",
+    borderDark: "rgba(16, 185, 129, 0.3)",
+    previewGradient: "linear-gradient(135deg, #050505 0%, #064e3b 50%, #10b981 100%)"
+  },
+  {
+    id: "dracula-vampire",
+    name: "Dracula Twilight",
+    type: "gradient",
+    description: "Legendary dark slate purple with luminous pink & cyan accents",
+    bgLight: "linear-gradient(135deg, #f7f4fb 0%, #eee8f8 50%, #faf8fd 100%)",
+    bgDark: "linear-gradient(135deg, #181724 0%, #211f33 50%, #151420 100%)",
+    accent: "#BD93F9",
+    borderLight: "rgba(189, 147, 249, 0.25)",
+    borderDark: "rgba(189, 147, 249, 0.3)",
+    previewGradient: "linear-gradient(135deg, #282a36 0%, #44475a 50%, #bd93f9 100%)"
+  },
+  {
+    id: "synthwave-sunset",
+    name: "Synthwave Sunset 1984",
+    type: "gradient",
+    description: "Vibrant retro wave sunset with neon tangerine and purple horizon",
+    bgLight: "linear-gradient(135deg, #fff7ed 0%, #fef2f2 50%, #faf5ff 100%)",
+    bgDark: "linear-gradient(135deg, #1b0f1d 0%, #241427 50%, #130a17 100%)",
+    accent: "#F97316",
+    borderLight: "rgba(249, 115, 22, 0.25)",
+    borderDark: "rgba(249, 115, 22, 0.3)",
+    previewGradient: "linear-gradient(135deg, #ff007f 0%, #7928ca 50%, #ff8000 100%)"
+  },
+  {
+    id: "oled-pure-black",
+    name: "OLED Pitch Stealth",
+    type: "solid",
+    description: "100% True Black OLED display mode with hyper-crisp metallic micro-borders",
+    bgLight: "#F8F9FA",
+    bgDark: "#000000",
+    accent: "#E2E8F0",
+    borderLight: "rgba(0, 0, 0, 0.1)",
+    borderDark: "rgba(255, 255, 255, 0.14)",
+    previewGradient: "#000000"
+  },
+
+  // ─── ARTISAN & BOTANICAL NATURE THEMES ───
+  {
+    id: "kyoto-bamboo",
+    name: "Kyoto Bamboo & Moss",
+    type: "gradient",
+    description: "Serene Japanese bamboo forest and mineral moss stone tranquility",
+    bgLight: "linear-gradient(135deg, #f2f7f2 0%, #e5ede5 50%, #f9fcf9 100%)",
+    bgDark: "linear-gradient(135deg, #111a13 0%, #17241a 50%, #0d140e 100%)",
+    accent: "#22C55E",
+    borderLight: "rgba(34, 197, 94, 0.22)",
+    borderDark: "rgba(34, 197, 94, 0.25)",
+    previewGradient: "linear-gradient(135deg, #22c55e 0%, #15803d 50%, #14532d 100%)"
+  },
+  {
+    id: "terracotta-sun",
+    name: "Mediterranean Terracotta",
+    type: "gradient",
+    description: "Sunbaked Italian clay tiles, warm amber pottery, and golden olive oil aura",
+    bgLight: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fefce8 100%)",
+    bgDark: "linear-gradient(135deg, #241610 0%, #2f1d15 50%, #1a100c 100%)",
+    accent: "#EA580C",
+    borderLight: "rgba(234, 88, 12, 0.22)",
+    borderDark: "rgba(234, 88, 12, 0.28)",
+    previewGradient: "linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #fb923c 100%)"
+  },
+  {
+    id: "nordic-pine",
+    name: "Nordic Evergreen Pine",
+    type: "gradient",
+    description: "Crisp Scandinavian pine needles and alpine frost with deep cedar tones",
+    bgLight: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #f8fafc 100%)",
+    bgDark: "linear-gradient(135deg, #0d1b14 0%, #13241b 50%, #0a140f 100%)",
+    accent: "#16A34A",
+    borderLight: "rgba(22, 163, 74, 0.22)",
+    borderDark: "rgba(22, 163, 74, 0.25)",
+    previewGradient: "linear-gradient(135deg, #14532d 0%, #166534 50%, #22c55e 100%)"
+  },
+  {
+    id: "espresso-crema",
+    name: "Espresso & Roasted Crema",
+    type: "gradient",
+    description: "Rich dark roasted coffee beans with velvety caramel crema undertones",
+    bgLight: "linear-gradient(135deg, #faf6f0 0%, #f0e6d6 50%, #fcf9f5 100%)",
+    bgDark: "linear-gradient(135deg, #1e1510 0%, #281c15 50%, #150f0b 100%)",
+    accent: "#B45309",
+    borderLight: "rgba(180, 83, 9, 0.22)",
+    borderDark: "rgba(180, 83, 9, 0.28)",
+    previewGradient: "linear-gradient(135deg, #451a03 0%, #78350f 50%, #b45309 100%)"
+  },
+  {
+    id: "parchment-archive",
+    name: "Oxford Parchment & Gold",
+    type: "gradient",
+    description: "Historic library manuscript with antique parchment and hand-hammered gold",
+    bgLight: "linear-gradient(135deg, #fcf9ee 0%, #f3ecd6 50%, #fefcf5 100%)",
+    bgDark: "linear-gradient(135deg, #1c1810 0%, #262016 50%, #14110b 100%)",
+    accent: "#D97706",
+    borderLight: "rgba(217, 119, 6, 0.25)",
+    borderDark: "rgba(217, 119, 6, 0.3)",
+    previewGradient: "linear-gradient(135deg, #78350f 0%, #d97706 50%, #fde68a 100%)"
+  },
+
+  // ─── APPLE GLASS & AEROSPACE THEMES ───
+  {
+    id: "mac-sonoma",
+    name: "Sonoma Amber Horizon",
+    type: "gradient",
+    description: "California golden hour horizon with warm ambient blur and glass refraction",
+    bgLight: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 50%, #fefce8 100%)",
+    bgDark: "linear-gradient(135deg, #1e1910 0%, #292215 50%, #17130b 100%)",
+    accent: "#F59E0B",
+    borderLight: "rgba(245, 158, 11, 0.25)",
+    borderDark: "rgba(245, 158, 11, 0.3)",
+    previewGradient: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #fef08a 100%)"
+  },
+  {
+    id: "frost-titanium",
+    name: "Aerospace Titanium",
+    type: "gradient",
+    description: "Natural grade 5 titanium brushed texture with frosted optical clarity",
+    bgLight: "linear-gradient(135deg, #f8fafc 0%, #edf2f7 50%, #ffffff 100%)",
+    bgDark: "linear-gradient(135deg, #14161b 0%, #1a1d24 50%, #101216 100%)",
+    accent: "#94A3B8",
+    borderLight: "rgba(148, 163, 184, 0.25)",
+    borderDark: "rgba(148, 163, 184, 0.28)",
+    previewGradient: "linear-gradient(135deg, #334155 0%, #64748b 50%, #cbd5e1 100%)"
+  },
+  {
+    id: "cosmic-aurora",
+    name: "Cosmic Aurora Borealis",
+    type: "gradient",
+    description: "Mystical northern polar magnetic lights in iridescent emerald and cyan",
+    bgLight: "linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 50%, #f0fdf4 100%)",
+    bgDark: "linear-gradient(135deg, #091a18 0%, #0e2724 50%, #061210 100%)",
+    accent: "#14B8A6",
+    borderLight: "rgba(20, 184, 166, 0.25)",
+    borderDark: "rgba(20, 184, 166, 0.3)",
+    previewGradient: "linear-gradient(135deg, #0f766e 0%, #06b6d4 50%, #10b981 100%)"
   }
 ];
 
@@ -528,6 +725,42 @@ export const TEXTURE_DEFINITIONS: Array<{
     name: "Aurora Stardust",
     description: "Ambient micro stardust luminescence with subtle starry reflections",
     preview: "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.4) 1px, transparent 1px)"
+  },
+  {
+    id: "holographic-foil",
+    name: "Holographic Prismatic Foil",
+    description: "Iridescent prismatic angle-shifting rainbow shimmer",
+    preview: "linear-gradient(135deg, rgba(255,0,128,0.2) 0%, rgba(0,255,255,0.2) 50%, rgba(255,215,0,0.2) 100%)"
+  },
+  {
+    id: "brushed-titanium",
+    name: "Brushed Grade-5 Titanium",
+    description: "Precision aerospace horizontal micro-grain directional finish",
+    preview: "repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 2px)"
+  },
+  {
+    id: "topo-contour",
+    name: "Topographic Elevation",
+    description: "Elegant organic contour map elevation curves and terrain linework",
+    preview: "radial-gradient(ellipse at center, transparent 30%, rgba(120,120,120,0.12) 31%, transparent 32%, rgba(120,120,120,0.12) 55%, transparent 56%)"
+  },
+  {
+    id: "dot-matrix-glow",
+    name: "Cyber Dot Matrix Glow",
+    description: "Sci-fi phosphorescent matrix coordinates with glowing focal points",
+    preview: "radial-gradient(circle at 50% 50%, rgba(6,182,212,0.35) 1px, transparent 1px)"
+  },
+  {
+    id: "woven-linen",
+    name: "Woven Belgian Linen",
+    description: "Warm architectural textile weave with natural acoustic feel",
+    preview: "repeating-linear-gradient(0deg, rgba(0,0,0,0.02) 0, rgba(0,0,0,0.02) 1px, transparent 1px, transparent 4px), repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0, rgba(0,0,0,0.02) 1px, transparent 1px, transparent 4px)"
+  },
+  {
+    id: "blueprint-grid",
+    name: "Blueprint Drafting Grid",
+    description: "Technical CAD drafting grid with fine millimeter guidelines",
+    preview: "linear-gradient(rgba(59,130,246,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.12) 1px, transparent 1px)"
   }
 ];
 
@@ -569,10 +802,308 @@ export function getTextureOverlayStyle(texture: SidebarTexturePreset): React.CSS
         backgroundSize: "14px 14px",
         opacity: 0.9
       };
+    case "holographic-foil":
+      return {
+        backgroundImage: `linear-gradient(135deg, rgba(255, 0, 128, 0.08) 0%, rgba(0, 229, 255, 0.08) 35%, rgba(255, 215, 0, 0.08) 70%, rgba(147, 51, 234, 0.08) 100%)`,
+        backgroundSize: "100% 100%",
+        opacity: 0.85
+      };
+    case "brushed-titanium":
+      return {
+        backgroundImage: `repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0px, rgba(255, 255, 255, 0.04) 1px, transparent 1px, transparent 2px)`,
+        backgroundSize: "100% 2px",
+        opacity: 0.75
+      };
+    case "topo-contour":
+      return {
+        backgroundImage: `radial-gradient(ellipse at center, transparent 35%, rgba(140, 140, 140, 0.08) 36%, transparent 37%, rgba(140, 140, 140, 0.08) 65%, transparent 66%)`,
+        backgroundSize: "32px 32px",
+        opacity: 0.8
+      };
+    case "dot-matrix-glow":
+      return {
+        backgroundImage: `radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.25) 1px, transparent 1px)`,
+        backgroundSize: "8px 8px",
+        opacity: 0.85
+      };
+    case "woven-linen":
+      return {
+        backgroundImage: `repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.025) 0, rgba(0, 0, 0, 0.025) 1px, transparent 1px, transparent 4px), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 4px)`,
+        backgroundSize: "4px 4px",
+        opacity: 0.9
+      };
+    case "blueprint-grid":
+      return {
+        backgroundImage: `linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px)`,
+        backgroundSize: "16px 16px",
+        opacity: 0.85
+      };
     case "clean":
     default:
       return {};
   }
+}
+
+export interface SidebarLayoutTemplate {
+  id: string;
+  name: string;
+  tagline: string;
+  description: string;
+  previewGradient: string;
+  accent: string;
+  config: Partial<SidebarCustomizationConfig>;
+}
+
+export const SIDEBAR_LAYOUT_TEMPLATES: SidebarLayoutTemplate[] = [
+  {
+    id: "minimal-focus",
+    name: "Minimalist Focus",
+    tagline: "Distraction-free zen document editor",
+    description: "Compact density with only document trees and recents visible. Clean and lightweight.",
+    previewGradient: "linear-gradient(135deg, #f7f6f2 0%, #ebe7df 100%)",
+    accent: "#706c64",
+    config: {
+      themePreset: "cashmere-silk",
+      density: "compact",
+      radius: "squircle",
+      texture: "paper-fiber",
+      blur: "soft",
+      specularBezel: false,
+      glowEffect: false,
+      accentColor: "#706c64",
+      showQuickNav: false,
+      showSearch: false,
+      showUserInfoCard: false,
+      showNewCreationButton: true,
+      newCreationColor: "monochrome",
+      sectionOrder: ["privateDocs", "recents", "support"],
+      sectionVisibility: {
+        workspace: false,
+        company: false,
+        favorites: true,
+        recents: true,
+        privateDocs: true,
+        teams: false,
+        sharedSpace: false,
+        intelligence: false,
+        marketplace: false,
+        tools: false,
+        support: true
+      }
+    }
+  },
+  {
+    id: "power-workspace",
+    name: "Power Workspace",
+    tagline: "All-in-one supercharged command center",
+    description: "Full liquid glass body, specular bezel, quick navigation capsule, and all intelligence tools active.",
+    previewGradient: "linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%)",
+    accent: "#C8A97E",
+    config: {
+      themePreset: "liquid-glass",
+      density: "standard",
+      radius: "apple-curved",
+      texture: "linear-specular",
+      blur: "ultra",
+      specularBezel: true,
+      glowEffect: true,
+      accentColor: "#C8A97E",
+      showQuickNav: true,
+      quickTabs: { home: true, aiSpace: true, meetings: true, library: true, inbox: true },
+      showSearch: true,
+      showUserInfoCard: true,
+      showNewCreationButton: true,
+      newCreationColor: "amber-gold",
+      sectionOrder: ["workspace", "favorites", "recents", "privateDocs", "intelligence", "tools", "company", "teams", "sharedSpace", "marketplace", "support"],
+      sectionVisibility: {
+        workspace: true,
+        company: true,
+        favorites: true,
+        recents: true,
+        privateDocs: true,
+        teams: true,
+        sharedSpace: true,
+        intelligence: true,
+        marketplace: true,
+        tools: true,
+        support: true
+      }
+    }
+  },
+  {
+    id: "developer-terminal",
+    name: "Developer Cyberpunk",
+    tagline: "High-contrast neon phosphor terminal",
+    description: "Vibrant neon cyan, sharp corners, dot matrix glow texture, and developer tools prioritized.",
+    previewGradient: "linear-gradient(135deg, #090a12 0%, #0d111d 50%, #06b6d4 100%)",
+    accent: "#06B6D4",
+    config: {
+      themePreset: "cyberpunk-neon",
+      density: "ultra-compact",
+      radius: "sharp",
+      texture: "dot-matrix-glow",
+      blur: "none",
+      specularBezel: true,
+      glowEffect: true,
+      accentColor: "#06B6D4",
+      showQuickNav: true,
+      quickTabs: { home: true, aiSpace: true, meetings: false, library: true, inbox: true },
+      showSearch: true,
+      showUserInfoCard: true,
+      showNewCreationButton: true,
+      newCreationColor: "cyber-cyan",
+      sectionOrder: ["intelligence", "tools", "privateDocs", "workspace", "recents", "marketplace", "support"],
+      sectionVisibility: {
+        workspace: true,
+        company: false,
+        favorites: true,
+        recents: true,
+        privateDocs: true,
+        teams: false,
+        sharedSpace: false,
+        intelligence: true,
+        marketplace: true,
+        tools: true,
+        support: true
+      }
+    }
+  },
+  {
+    id: "executive-studio",
+    name: "Executive Studio",
+    tagline: "Luxury cashmere parchment & boardroom hub",
+    description: "Warm ivory and velvet charcoal tones, subtle grain, and structured organizational hierarchy.",
+    previewGradient: "linear-gradient(135deg, #FAF7F2 0%, #EFEBE4 50%, #D5B584 100%)",
+    accent: "#B48C5E",
+    config: {
+      themePreset: "cashmere-silk",
+      density: "standard",
+      radius: "apple-curved",
+      texture: "subtle-grain",
+      blur: "deep",
+      specularBezel: true,
+      glowEffect: false,
+      accentColor: "#B48C5E",
+      showQuickNav: true,
+      quickTabs: { home: true, aiSpace: true, meetings: true, library: true, inbox: true },
+      showSearch: true,
+      showUserInfoCard: true,
+      showNewCreationButton: true,
+      newCreationColor: "amber-gold",
+      sectionOrder: ["company", "workspace", "favorites", "privateDocs", "teams", "sharedSpace", "recents", "support"],
+      sectionVisibility: {
+        workspace: true,
+        company: true,
+        favorites: true,
+        recents: true,
+        privateDocs: true,
+        teams: true,
+        sharedSpace: true,
+        intelligence: true,
+        marketplace: false,
+        tools: true,
+        support: true
+      }
+    }
+  },
+  {
+    id: "artisan-botanical",
+    name: "Artisan Botanical",
+    tagline: "Kyoto bamboo forest & woven linen warmth",
+    description: "Relaxing nature green gradients, woven linen texture, and comfortable spacious row density.",
+    previewGradient: "linear-gradient(135deg, #f2f7f2 0%, #e5ede5 50%, #22c55e 100%)",
+    accent: "#22C55E",
+    config: {
+      themePreset: "kyoto-bamboo",
+      density: "spacious",
+      radius: "squircle",
+      texture: "woven-linen",
+      blur: "soft",
+      specularBezel: false,
+      glowEffect: false,
+      accentColor: "#22C55E",
+      showQuickNav: true,
+      quickTabs: { home: true, aiSpace: false, meetings: true, library: true, inbox: false },
+      showSearch: true,
+      showUserInfoCard: false,
+      showNewCreationButton: true,
+      newCreationColor: "sage-olive",
+      sectionOrder: ["privateDocs", "workspace", "favorites", "recents", "tools", "support"],
+      sectionVisibility: {
+        workspace: true,
+        company: false,
+        favorites: true,
+        recents: true,
+        privateDocs: true,
+        teams: false,
+        sharedSpace: false,
+        intelligence: false,
+        marketplace: true,
+        tools: true,
+        support: true
+      }
+    }
+  },
+  {
+    id: "oled-stealth",
+    name: "Pure OLED Stealth",
+    tagline: "0% pure black OLED with brushed titanium",
+    description: "Battery-saving true black mode with brushed aerospace titanium micro-texture and ultra-compact rows.",
+    previewGradient: "linear-gradient(135deg, #000000 0%, #111111 50%, #222222 100%)",
+    accent: "#E2E8F0",
+    config: {
+      themePreset: "oled-pure-black",
+      density: "ultra-compact",
+      radius: "sharp",
+      texture: "brushed-titanium",
+      blur: "none",
+      specularBezel: true,
+      glowEffect: false,
+      accentColor: "#E2E8F0",
+      showQuickNav: true,
+      quickTabs: { home: true, aiSpace: true, meetings: false, library: false, inbox: true },
+      showSearch: true,
+      showUserInfoCard: true,
+      showNewCreationButton: true,
+      newCreationColor: "monochrome",
+      sectionOrder: ["privateDocs", "favorites", "intelligence", "recents", "tools", "support"],
+      sectionVisibility: {
+        workspace: true,
+        company: false,
+        favorites: true,
+        recents: true,
+        privateDocs: true,
+        teams: false,
+        sharedSpace: false,
+        intelligence: true,
+        marketplace: false,
+        tools: true,
+        support: true
+      }
+    }
+  }
+];
+
+export function getFullTemplateConfig(template: SidebarLayoutTemplate): SidebarCustomizationConfig {
+  const themePresetDef = SIDEBAR_THEME_PRESETS.find((p) => p.id === template.config.themePreset);
+  const themeDefaults = themePresetDef
+    ? {
+        customBgLight: themePresetDef.bgLight,
+        customBgDark: themePresetDef.bgDark,
+        customBorderLight: themePresetDef.borderLight,
+        customBorderDark: themePresetDef.borderDark,
+        accentColor: template.accent || themePresetDef.accent
+      }
+    : {};
+
+  return {
+    ...DEFAULT_SIDEBAR_CUSTOMIZATION,
+    ...themeDefaults,
+    ...template.config,
+    quickTabs: { ...DEFAULT_SIDEBAR_CUSTOMIZATION.quickTabs, ...(template.config.quickTabs || {}) },
+    sectionVisibility: { ...DEFAULT_SIDEBAR_CUSTOMIZATION.sectionVisibility, ...(template.config.sectionVisibility || {}) },
+    itemVisibility: { ...DEFAULT_SIDEBAR_CUSTOMIZATION.itemVisibility, ...(template.config.itemVisibility || {}) }
+  };
 }
 
 const STORAGE_KEY = "noska_sidebar_customization_v3";
@@ -633,7 +1164,20 @@ export function useSidebarCustomization() {
 
   const updateConfig = useCallback((patch: Partial<SidebarCustomizationConfig>) => {
     setConfigState((prev) => {
-      const updated = { ...prev, ...patch };
+      let themeOverrides: Partial<SidebarCustomizationConfig> = {};
+      if (patch.themePreset && patch.themePreset !== prev.themePreset && !patch.customBgDark && !patch.customBgLight) {
+        const themePresetDef = SIDEBAR_THEME_PRESETS.find((p) => p.id === patch.themePreset);
+        if (themePresetDef) {
+          themeOverrides = {
+            customBgLight: themePresetDef.bgLight,
+            customBgDark: themePresetDef.bgDark,
+            customBorderLight: themePresetDef.borderLight,
+            customBorderDark: themePresetDef.borderDark,
+            accentColor: patch.accentColor || themePresetDef.accent
+          };
+        }
+      }
+      const updated = { ...prev, ...themeOverrides, ...patch };
       setSidebarCustomization(updated);
       return updated;
     });
@@ -646,3 +1190,4 @@ export function useSidebarCustomization() {
 
   return { config, updateConfig, resetToDefault };
 }
+

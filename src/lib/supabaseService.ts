@@ -93,10 +93,12 @@ export interface Page {
    * around a missing field) is not a behavior change — it's the same
    * gap `content` had, just for page-styling/comment/wiki fields instead
    * of tree structure. */
-  fontStyle?: "default" | "serif" | "mono";
+  fontStyle?: "default" | "serif" | "mono" | "handwriting" | "display" | string;
   fullWidth?: boolean;
+  pageWidth?: "standard" | "wide" | "compact" | "full" | string;
   smallText?: boolean;
   pageBg?: string | null;
+  pageMeshBg?: string | null;
   coverHeight?: number;
   coverPosition?: string;
   iconSize?: number;
@@ -123,7 +125,7 @@ export interface Page {
    * above — not a `pages` table column, set only through
    * `updatePage()`'s in-memory `{ ...p, ...patch }` merge, lost on
    * reload unless a future migration adds real columns. */
-  highlights?: string[];
+  highlights?: Array<string | { id?: string; text: string; color?: string; createdAt?: number }>;
   bookmarked?: boolean;
   coverSize?: "small" | "standard" | "wide" | "full";
   coverParallax?: boolean;

@@ -604,6 +604,13 @@ const advanced = [
     execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "ai-meeting", ctx.text)); }
   },
   {
+    id: "interactive", title: "Interactive", aliases: ["interactive", "html", "custom-app", "code-app", "playground", "embed-html"],
+    icon: "Sparkles", category: "Advanced blocks",
+    description: "Create interactive experiences with AI, code, or imported files.",
+    preview: { description: "Build custom interactive experiences with AI generation, live code editor, or imported HTML/ZIP projects." },
+    execute(ctx) { ctx.onPatch(blockForTree(ctx.block, "interactive", ctx.text)); }
+  },
+  {
     id: "widget", title: "Dashboard Widget", aliases: ["widget", "gadget", "card"],
     icon: "LayoutGrid", category: "Advanced blocks",
     description: "Embed an interactive Noska dashboard widget",

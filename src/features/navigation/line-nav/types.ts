@@ -119,4 +119,5 @@ export interface LineNavigationRailProps {
   showInSidebar?: boolean;
   position?: "left" | "right";
   sidebarOpen?: boolean;
+  offsetX?: number | string;
 }

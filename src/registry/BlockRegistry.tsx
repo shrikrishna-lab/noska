@@ -121,10 +121,13 @@ export const BlockType: Record<string, string> = {
   MONDAY: "monday",
   QUIP: "quip",
   ZIP: "zip",
+  INTERACTIVE: "interactive",
+  HTML: "interactive"
 };
 
 export const BlockRegistry: BlockRegistryEntry[] = [
   // 1. Suggested
+  { type: "interactive", label: "Interactive", icon: Sparkles, category: "Suggested", badge: "New" },
   { type: "ai-meeting-notes", label: "AI Meeting Notes", icon: Sparkles, category: "Suggested", badge: "Beta" },
 
   // 2. Basic blocks
@@ -186,7 +189,7 @@ export const BlockRegistry: BlockRegistryEntry[] = [
   { type: "3-columns", label: "3 columns", icon: Columns3, category: "Advanced blocks" },
   { type: "4-columns", label: "4 columns", icon: Columns3, category: "Advanced blocks" },
   { type: "5-columns", label: "5 columns", icon: Columns3, category: "Advanced blocks" },
-  { type: "ai-meeting", label: "AI Meeting Notes", icon: Sparkles, category: "Advanced blocks", badge: "Beta" },
+  { type: "interactive", label: "Interactive", icon: Sparkles, category: "Advanced blocks", badge: "New" },
   { type: "mermaid", label: "Code – Mermaid", icon: Code, category: "Advanced blocks" },
   { type: "ai-block", label: "AI Block", icon: Sparkles, category: "Advanced blocks" },
 

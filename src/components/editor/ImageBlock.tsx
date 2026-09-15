@@ -185,15 +185,21 @@ export default function ImageBlock({
                 </div>
               </div>
 
-              {/* Resize handles */}
-              <div className="absolute inset-y-0 left-0 w-1.5 cursor-col-resize opacity-0 hover:opacity-100 group-hover/image:opacity-60 transition"
-                onMouseDown={handleResizeStart("left")} />
-              <div className="absolute inset-y-0 right-0 w-1.5 cursor-col-resize opacity-0 hover:opacity-100 group-hover/image:opacity-60 transition"
-                onMouseDown={handleResizeStart("right")} />
-              <div className="absolute -bottom-1 -right-1 h-3 w-3 cursor-nwse-resize opacity-0 hover:opacity-100 group-hover/image:opacity-60 transition"
-                onMouseDown={handleResizeStart("corner")}>
-                <GripHorizontal size={12} className="absolute -bottom-0.5 -right-0.5 text-white drop-shadow" />
-              </div>
+              {/* Flush Curved Corner Resize Handle (_|) */}
+              {!isLocked && (
+                <div
+                  onMouseDown={handleResizeStart("corner")}
+                  onDoubleClick={handleDoubleClick}
+                  className="absolute -bottom-1 -right-1 w-9 h-9 cursor-nwse-resize z-40 group/corner-br flex items-end justify-end p-1 select-none"
+                  title="Drag corner to resize image (Double-click to reset)"
+                >
+                  <div className="w-5 h-5 flex items-end justify-end opacity-0 group-hover/image:opacity-100 group-hover/corner-br:scale-125 active:scale-95 transition-all duration-200 ease-out">
+                    <svg width="14" height="14" viewBox="0 0 14 14" className="text-blue-500 dark:text-blue-400">
+                      <path d="M12 2v6.5a3.5 3.5 0 0 1-3.5 3.5H2" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Alignment & Size toolbar below image */}
@@ -202,11 +208,10 @@ export default function ImageBlock({
                 <button
                   key={opt.id}
                   onClick={() => onPatch({ imageSize: opt.id, imageAlign: currentAlignment })}
-                  className={`px-2 py-0.5 text-[10px] rounded transition cursor-pointer ${
-                    currentSize === opt.id
+                  className={`px-2 py-0.5 text-[10px] rounded transition cursor-pointer ${currentSize === opt.id
                       ? "bg-[var(--accent)]/10 text-[var(--accent)] font-medium"
                       : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]"
-                  }`}
+                    }`}
                 >
                   {opt.label}
                 </button>
@@ -216,9 +221,8 @@ export default function ImageBlock({
                 <button
                   key={a}
                   onClick={() => onPatch({ imageAlign: a, imageSize: currentSize })}
-                  className={`p-0.5 rounded transition cursor-pointer ${
-                    currentAlignment === a ? "text-[var(--accent)]" : "text-[var(--muted)] hover:text-[var(--text)]"
-                  }`}
+                  className={`p-0.5 rounded transition cursor-pointer ${currentAlignment === a ? "text-[var(--accent)]" : "text-[var(--muted)] hover:text-[var(--text)]"
+                    }`}
                 >
                   {a === "left" ? <AlignLeft size={11} /> : a === "center" ? <AlignCenter size={11} /> : <AlignRight size={11} />}
                 </button>
@@ -291,9 +295,8 @@ function ToolbarButton({ icon: Icon, size, tooltip, onClick, danger, label }: To
     <button
       onClick={onClick}
       title={tooltip}
-      className={`flex items-center gap-1 rounded px-1.5 py-1 text-white/80 hover:text-white transition cursor-pointer ${
-        danger ? "hover:bg-[var(--danger)]/60" : "hover:bg-white/10"
-      }`}
+      className={`flex items-center gap-1 rounded px-1.5 py-1 text-white/80 hover:text-white transition cursor-pointer ${danger ? "hover:bg-[var(--danger)]/60" : "hover:bg-white/10"
+        }`}
     >
       <Icon size={size || 12} />
       {label && <span className="text-[10px]">{label}</span>}
@@ -351,11 +354,10 @@ function EmptyImagePlaceholder({ onOpenPicker, pageId, onPatch, onToast }: Empty
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium transition cursor-pointer border-b-2 -mb-[1px] ${
-              tab === t.id
+            className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium transition cursor-pointer border-b-2 -mb-[1px] ${tab === t.id
                 ? "text-[var(--accent)] border-[var(--accent)]"
                 : "text-[var(--muted)] border-transparent hover:text-[var(--text)] hover:border-[var(--border)]"
-            }`}
+              }`}
           >
             {renderTabIcon(t.icon)}
             {t.label}
@@ -485,11 +487,10 @@ function ImagePickerContent({ onSelect, onClose, pageId, onToast }: ImagePickerC
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition cursor-pointer border-b-2 -mb-[1px] ${
-              tab === t.id
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition cursor-pointer border-b-2 -mb-[1px] ${tab === t.id
                 ? "text-[var(--accent)] border-[var(--accent)]"
                 : "text-[var(--muted)] border-transparent hover:text-[var(--text)] hover:border-[var(--border)]"
-            }`}
+              }`}
           >
             {renderTabIcon(t.icon)}
             {t.label}
@@ -649,7 +650,7 @@ function UnsplashTab({ onSelect, onToast }: UnsplashTabProps) {
     })
       .then(r => r.json())
       .then(data => setPopular(data || []))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const search = useCallback(async (p = 1) => {
@@ -762,7 +763,7 @@ function GiphyTab({ onSelect, onToast }: GiphyTabProps) {
     fetch(`https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=12`)
       .then(r => r.json())
       .then(data => setTrending(data.data || []))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const search = useCallback(async () => {

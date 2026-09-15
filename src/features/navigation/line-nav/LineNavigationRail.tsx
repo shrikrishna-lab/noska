@@ -31,6 +31,7 @@ export function LineNavigationRail({
   collapsed = false,
   position = "left",
   sidebarOpen,
+  offsetX,
 }: LineNavigationRailProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<NavigationTreeItem | null>(null);
@@ -180,7 +181,16 @@ export function LineNavigationRail({
   const isEligibleView = !appView || appView === "page" || appView === "chats" || appView === "chat" || appView === "ai";
   if (!isEligibleView || navigationTree.length === 0) return null;
 
-  const posX = sidebarOpen !== undefined ? (sidebarOpen ? 276 : 72) : (position === "left" ? 16 : undefined);
+  const posX =
+    offsetX !== undefined
+      ? offsetX
+      : sidebarOpen !== undefined
+      ? sidebarOpen
+        ? 276
+        : 72
+      : position === "left"
+      ? 16
+      : undefined;
 
   return (
     <motion.nav
