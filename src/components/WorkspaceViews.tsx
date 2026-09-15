@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ListChecks,
   Edit3,
+  Pencil,
   Mic,
   SlidersHorizontal,
   X,
@@ -46,6 +47,7 @@ import {
   Clock3,
   Bell,
   Check,
+  Play,
   Clock,
   CheckCheck,
   RotateCcw,
@@ -58,6 +60,7 @@ import {
   Layers,
   type LucideIcon
 } from "lucide-react";
+import { TactilePriorityPicker, TactileDuePicker, isTaskOverdue } from "./ui/TaskMetaPickers";
 import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
 import MarketplacePage from "../features/marketplace/MarketplacePage";
 import CreatorDashboard from "../features/creator/CreatorDashboard";
@@ -221,11 +224,27 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   if (view === "commandCenter") return <CommandCenter onToast={onToast} onNavigate={(v) => onView?.(v)} />;
   if (view === "library") return <LibraryRoute pages={pages} sharedPages={sharedPages} workspaceName={workspaceName} onSelect={onSelect} onNew={onNew} />;
   if (view === "tasks") {
-    const tasks: TaskItem[] = pages.flatMap((page) =>
-      page.blocks
-        .filter((block) => block.type === "todo")
-        .map((block) => ({ ...block, pageTitle: page.title, pageIcon: page.icon, pageId: page.id }))
-    );
+    const tasks: TaskItem[] = pages.flatMap((page) => {
+      const pageTasks: TaskItem[] = [];
+      page.blocks.forEach((block) => {
+        if (block.type === "todo") {
+          pageTasks.push({ ...block, pageTitle: page.title, pageIcon: page.icon, pageId: page.id });
+        } else if (block.type === "playful-todo" && Array.isArray(block.properties?.tasks)) {
+          (block.properties.tasks as Array<{ id: string; title?: string; text?: string; completed?: boolean; status?: string }>).forEach((t) => {
+            pageTasks.push({
+              id: t.id || `${block.id}-${Math.random().toString(36).substr(2, 4)}`,
+              type: "todo",
+              text: t.title || t.text || "Untitled task",
+              checked: Boolean(t.completed ?? (t.status === "completed")),
+              pageTitle: page.title,
+              pageIcon: page.icon,
+              pageId: page.id,
+            } as TaskItem);
+          });
+        }
+      });
+      return pageTasks;
+    });
     return <TasksRoute tasks={tasks} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
   }
   if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
@@ -1532,177 +1551,516 @@ interface TasksRouteProps {
 }
 
 function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
+  const [activeTab, setActiveTab] = useState<'all' | 'upcoming' | 'overdue' | 'completed'>('upcoming');
   const [searchQuery, setSearchQuery] = useState("");
-  const [hideCompleted, setHideCompleted] = useState(false);
   const [sourcesModalOpen, setSourcesModalOpen] = useState(false);
   const [sourceDocPages, setSourceDocPages] = useState(true);
   const [sourceDatabases, setSourceDatabases] = useState(true);
   const [sourceCalendars, setSourceCalendars] = useState(false);
+  const [isInlineAdding, setIsInlineAdding] = useState(false);
+  const [inlineTitle, setInlineTitle] = useState("");
+  const [inlineSubtitle, setInlineSubtitle] = useState("");
+  const [inlineDue, setInlineDue] = useState("");
+  const [inlinePriority, setInlinePriority] = useState<'urgent' | 'high' | 'medium' | 'low'>('medium');
+  const [localTasks, setLocalTasks] = useState<TaskItem[]>([]);
+  const [taskOverrides, setTaskOverrides] = useState<Record<string, { checked: boolean; isDeleted?: boolean; title?: string; subtitle?: string; due?: string; priority?: string; editedAt?: number }>>({});
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editSubtitle, setEditSubtitle] = useState("");
+  const [editDue, setEditDue] = useState("");
+  const [editPriority, setEditPriority] = useState<'urgent' | 'high' | 'medium' | 'low'>('medium');
 
-  const completedCount = tasks.filter(t => t.checked).length;
-  const pendingCount = tasks.filter(t => !t.checked).length;
-  const highPriorityCount = tasks.filter(t => !t.checked && (t.text?.toLowerCase().includes("urgent") || t.text?.toLowerCase().includes("high") || t.text?.toLowerCase().includes("proposal"))).length || (pendingCount > 2 ? 2 : pendingCount);
+  const allCombinedTasks: TaskItem[] = [...localTasks, ...tasks]
+    .filter(t => !taskOverrides[t.id]?.isDeleted)
+    .map(t => {
+      const override = taskOverrides[t.id];
+      if (!override) return t;
+      return {
+        ...t,
+        checked: override.checked !== undefined ? override.checked : t.checked,
+        text: override.title !== undefined ? override.title : t.text,
+        subtitle: override.subtitle !== undefined ? override.subtitle : (t as any).subtitle,
+        due: override.due !== undefined ? override.due : (t as any).due,
+        priority: override.priority !== undefined ? override.priority : (t as any).priority,
+        editedAt: override.editedAt !== undefined ? override.editedAt : (t as any).editedAt,
+      };
+    });
 
-  const filteredTasks = tasks.filter(t => {
-    if (hideCompleted && t.checked) return false;
+  const completedCount = allCombinedTasks.filter(t => t.checked).length;
+  const overdueCount = allCombinedTasks.filter(t => isTaskOverdue(t as any)).length;
+  const pendingCount = allCombinedTasks.filter(t => !t.checked).length;
+  const upcomingCount = allCombinedTasks.filter(t => !t.checked && !isTaskOverdue(t as any)).length;
+  const totalCount = allCombinedTasks.length;
+
+  const currentTabTasks = allCombinedTasks.filter(t => {
+    const isOverdue = isTaskOverdue(t as any);
+    if (activeTab === 'all') return true;
+    if (activeTab === 'completed') return t.checked;
+    if (activeTab === 'overdue') return isOverdue;
+    return !t.checked && !isOverdue;
+  });
+
+  const filteredTasks = currentTabTasks.filter(t => {
     if (searchQuery.trim() && !t.text?.toLowerCase().includes(searchQuery.toLowerCase()) && !t.pageTitle?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
+  const handleInlineSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inlineTitle.trim()) return;
+    const isUrgent = activeTab === 'overdue' || inlinePriority === 'urgent';
+    const isDone = activeTab === 'completed';
+    const newTask: TaskItem = {
+      id: `task-local-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      type: 'todo',
+      text: inlineTitle.trim(),
+      subtitle: inlineSubtitle.trim() || undefined,
+      due: inlineDue.trim() || undefined,
+      priority: isUrgent ? 'urgent' : inlinePriority,
+      checked: isDone,
+      pageTitle: 'My Tasks',
+      pageIcon: '✓',
+      pageId: '',
+    } as any;
+    setLocalTasks(prev => [newTask, ...prev]);
+    onToast?.(`Task "${inlineTitle.trim()}" created`);
+    setInlineTitle("");
+    setInlineSubtitle("");
+    setInlineDue("");
+    setInlinePriority('medium');
+    setIsInlineAdding(false);
+  };
+
+  const handleToggleTask = (task: TaskItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextChecked = !task.checked;
+    setTaskOverrides(prev => ({
+      ...prev,
+      [task.id]: {
+        ...(prev[task.id] || {}),
+        checked: nextChecked
+      }
+    }));
+    onToast?.(nextChecked ? "Task marked completed" : "Task marked pending");
+  };
+
+  const startEditTask = (task: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTaskId(task.id);
+    setEditTitle(task.text || "");
+    setEditSubtitle((task as any).subtitle || "");
+    setEditDue((task as any).due || "");
+    setEditPriority((task as any).priority || "medium");
+  };
+
+  const saveEditTask = (taskId: string, e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitle.trim()) return;
+    setTaskOverrides(prev => ({
+      ...prev,
+      [taskId]: {
+        ...(prev[taskId] || {}),
+        checked: prev[taskId]?.checked ?? false,
+        title: editTitle.trim(),
+        subtitle: editSubtitle.trim() || undefined,
+        due: editDue.trim() || undefined,
+        priority: editPriority,
+        editedAt: Date.now()
+      }
+    }));
+    setEditingTaskId(null);
+    onToast?.("Task updated");
+  };
+
+  const handleDeleteTask = (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTaskOverrides(prev => ({
+      ...prev,
+      [taskId]: { ...(prev[taskId] || {}), checked: false, isDeleted: true }
+    }));
+    onToast?.("Task removed");
+  };
+
+  const formatEditedTime = (ts?: number) => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
+
   return (
     <RouteShell
-      title="Tasks"
+      title="My Tasks"
       subtitle="Track your workspace action items, deliverables, and priorities"
       actions={
-        <button
-          onClick={() => onNew("tasks")}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-xs font-semibold text-white shadow-md transition active:scale-95 cursor-pointer"
+        <motion.button
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => setIsInlineAdding(true)}
+          className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-[#2956ff] via-[#434eff] to-[#6042ff] hover:from-[#1e48f0] hover:to-[#5233ef] text-[13px] font-semibold text-white shadow-[0_4px_16px_rgba(67,78,255,0.4)] hover:shadow-[0_6px_22px_rgba(67,78,255,0.55)] transition-all cursor-pointer select-none"
         >
-          <Plus size={14} strokeWidth={2.5} />
+          <Plus size={15} strokeWidth={2.6} />
           <span>New Task</span>
-        </button>
+        </motion.button>
       }
     >
       <div className="space-y-6">
         {/* 4 Soft Pastel Gradient Glass KPI Metric Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <GlassKpiCard
-            count={tasks.length || 7}
+            count={totalCount}
             label="Total tasks"
             variant="blue"
+            active={activeTab === 'all'}
+            onClick={() => setActiveTab('all')}
             badgeIcon={<FileText size={16} />}
           />
           <GlassKpiCard
             count={completedCount}
             label="Completed"
             variant="green"
+            active={activeTab === 'completed'}
+            onClick={() => setActiveTab('completed')}
             badgeIcon={<Check size={16} strokeWidth={2.5} />}
           />
           <GlassKpiCard
-            count={pendingCount || 5}
+            count={pendingCount}
             label="Pending"
             variant="peach"
+            active={activeTab === 'upcoming'}
+            onClick={() => setActiveTab('upcoming')}
             badgeIcon={<Clock size={16} />}
           />
           <GlassKpiCard
-            count={highPriorityCount || 2}
-            label="High Priority"
+            count={overdueCount}
+            label="Overdue / Urgent"
             variant="rose"
+            active={activeTab === 'overdue'}
+            onClick={() => setActiveTab('overdue')}
             badgeIcon={<AlertTriangle size={16} />}
           />
         </div>
 
-        {/* Search & Filter Controls */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setHideCompleted(!hideCompleted)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition cursor-pointer shadow-xs ${
-                hideCompleted
-                  ? "bg-blue-500 text-white border-blue-600"
-                  : "border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] text-[var(--secondary)] hover:text-[var(--text)]"
-              }`}
-            >
-              <Filter size={13} />
-              <span>{hideCompleted ? "Active Only" : "Show All"}</span>
-            </button>
+        {/* Tactile Tasks Card */}
+        <div className="rounded-[28px] border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#17171a] p-7 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_12px_32px_-4px_rgba(0,0,0,0.45)]">
+          {/* Header Row: Tabs & Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-black/[0.06] dark:border-white/[0.08] pb-3 mb-5">
+            {/* Sliding Pill Tabs */}
+            <div className="flex items-center gap-6 relative">
+              {([
+                { id: 'all', label: 'All Tasks' },
+                { id: 'upcoming', label: 'Upcoming' },
+                { id: 'overdue', label: 'Overdue' },
+                { id: 'completed', label: 'Completed' }
+              ] as const).map(tab => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`text-[15px] pb-2 font-medium transition-colors relative cursor-pointer ${
+                      isActive
+                        ? 'font-bold text-neutral-900 dark:text-neutral-100'
+                        : 'text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    {isActive && (
+                      <motion.div
+                        layoutId="workspace-tasks-tab-pill-indicator"
+                        className="absolute bottom-[-13px] left-1/2 -translate-x-1/2 w-6 h-1 rounded-full bg-neutral-900 dark:bg-neutral-100 z-10"
+                        transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-            <button
-              onClick={() => setSourcesModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] text-[var(--secondary)] hover:text-[var(--text)] transition cursor-pointer shadow-xs"
-            >
-              <SlidersHorizontal size={13} />
-              <span>Task Sources</span>
-            </button>
+            {/* Search Input */}
+            <div className="relative min-w-[220px]">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter tasks..."
+                className="w-full rounded-full border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-800/60 pl-9 pr-4 py-1.5 text-xs text-[var(--text)] outline-none focus:border-blue-400 placeholder:text-slate-400"
+              />
+            </div>
           </div>
 
-          <div className="relative min-w-[240px]">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter tasks..."
-              className="w-full rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-xl pl-9 pr-4 py-2 text-xs text-[var(--text)] outline-none focus:border-blue-400 placeholder:text-slate-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)]"
-            />
+          {/* Create Task Row */}
+          <div className="mb-4">
+            {isInlineAdding ? (
+              <form onSubmit={handleInlineSubmit} className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-black/[0.08] dark:border-white/[0.1] space-y-2.5">
+                <input
+                  type="text"
+                  value={inlineTitle}
+                  onChange={(e) => setInlineTitle(e.target.value)}
+                  placeholder="What needs to be done?"
+                  autoFocus
+                  className="w-full bg-transparent px-2 text-sm font-medium text-[var(--text)] outline-none placeholder:text-neutral-400"
+                />
+                <input
+                  type="text"
+                  value={inlineSubtitle}
+                  onChange={(e) => setInlineSubtitle(e.target.value)}
+                  placeholder="Description or notes (optional)"
+                  className="w-full bg-transparent px-2 text-xs text-[var(--secondary)] outline-none placeholder:text-neutral-400"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.08]">
+                  <div className="flex items-center gap-2">
+                    <TactileDuePicker
+                      value={inlineDue}
+                      onChange={setInlineDue}
+                    />
+                    <TactilePriorityPicker
+                      value={inlinePriority}
+                      onChange={setInlinePriority}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsInlineAdding(false)}
+                      className="px-3 py-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 rounded-xl bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs font-semibold shadow-sm cursor-pointer"
+                    >
+                      Add Task
+                    </button>
+                  </div>
+                </div>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsInlineAdding(true)}
+                className="flex items-center gap-3.5 py-1 text-left cursor-pointer group select-none"
+              >
+                <div className="size-9 rounded-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 border border-black/[0.08] dark:border-white/[0.1] shadow-2xs flex items-center justify-center text-neutral-500 group-hover:scale-105 group-hover:shadow-xs transition-all">
+                  <Plus size={15} strokeWidth={2.4} />
+                </div>
+                <span className="text-[15px] font-medium text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 transition-colors">
+                  Create Task
+                </span>
+              </button>
+            )}
           </div>
-        </div>
 
-        {/* Task Items Container */}
-        <div className="rounded-3xl border border-white/60 dark:border-white/10 bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-2xl p-6 sm:p-8 shadow-xl">
+          {/* Tasks List */}
           {filteredTasks.length === 0 ? (
             <div className="py-12 text-center">
               <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-xs">
                 <CheckSquare size={26} />
               </div>
-              <h3 className="text-sm font-bold text-[var(--text)] mb-1">No tasks found</h3>
+              <h3 className="text-sm font-bold text-[var(--text)] mb-1">No {activeTab} tasks</h3>
               <p className="text-xs text-[var(--muted)] max-w-sm mx-auto mb-4">
-                Checkboxes created in your documents will automatically sync and organize here.
+                Checkboxes created in your documents and notes will automatically sync here.
               </p>
-              <button
-                onClick={() => setSourcesModalOpen(true)}
-                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-              >
-                Configure task sources
-              </button>
             </div>
           ) : (
-            <div className="space-y-2.5">
-              {filteredTasks.map((task) => {
-                const priority = task.text?.toLowerCase().includes("urgent") || task.text?.toLowerCase().includes("proposal") ? "high" : task.text?.toLowerCase().includes("review") ? "medium" : "low";
-                const isHigh = priority === "high";
-                const isLow = priority === "low";
+            <div className="divide-y divide-dashed divide-black/[0.08] dark:divide-white/[0.08]">
+              {filteredTasks.map((task, idx) => {
+                const isChecked = task.checked;
+                const isUrgent = !isChecked && ((task as any).priority === 'urgent' || task.text?.toLowerCase().includes("urgent"));
+                const badgeTheme = isChecked 
+                  ? 'purple' 
+                  : isUrgent 
+                  ? 'rose' 
+                  : idx % 2 === 0 
+                  ? 'green' 
+                  : 'amber';
+
+                if (editingTaskId === task.id) {
+                  return (
+                    <form
+                      key={`edit-${task.id}`}
+                      onSubmit={(e) => saveEditTask(task.id, e)}
+                      className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/80 border border-blue-500/40 space-y-2.5 my-2 shadow-xs"
+                    >
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        placeholder="Task title"
+                        autoFocus
+                        className="w-full bg-transparent px-2 text-sm font-medium text-[var(--text)] outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={editSubtitle}
+                        onChange={(e) => setEditSubtitle(e.target.value)}
+                        placeholder="Description (optional)"
+                        className="w-full bg-transparent px-2 text-xs text-[var(--secondary)] outline-none"
+                      />
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.08]">
+                        <div className="flex items-center gap-2">
+                          <TactileDuePicker
+                            value={editDue}
+                            onChange={setEditDue}
+                          />
+                          <TactilePriorityPicker
+                            value={editPriority}
+                            onChange={setEditPriority}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingTaskId(null)}
+                            className="px-3 py-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-sm cursor-pointer"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  );
+                }
 
                 return (
-                  <div
-                    key={`${task.pageId}-${task.id}`}
-                    onClick={() => onSelect(task.pageId)}
-                    className={`group flex items-center justify-between gap-3 p-3 rounded-2xl border transition-all duration-150 cursor-pointer ${
-                      task.checked
-                        ? "bg-black/[0.02] dark:bg-white/[0.02] border-transparent opacity-70"
-                        : "bg-white/60 dark:bg-white/[0.04] border-black/[0.04] dark:border-white/[0.06] hover:bg-white/90 dark:hover:bg-white/[0.08] hover:border-black/10 dark:hover:border-white/15 hover:shadow-xs"
+                  <motion.div
+                    key={`${task.pageId || 'local'}-${task.id}`}
+                    layout
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    onClick={() => task.pageId && onSelect(task.pageId)}
+                    className={`flex items-center justify-between gap-4 py-3.5 px-2 group select-none transition-colors rounded-xl ${
+                      task.pageId ? 'cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.03]' : 'hover:bg-black/[0.015] dark:hover:bg-white/[0.02]'
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      {/* Tactile Circular Badge with Interactive Toggle */}
                       <button
                         type="button"
-                        className={`h-5 w-5 rounded-full flex items-center justify-center transition-all duration-150 shrink-0 ${
-                          task.checked
-                            ? "bg-[#2563eb] text-white shadow-xs"
-                            : "border-2 border-slate-300 dark:border-slate-600 hover:border-[#2563eb] bg-transparent"
-                        }`}
+                        onClick={(e) => handleToggleTask(task, e)}
+                        className="shrink-0 cursor-pointer focus:outline-none"
+                        title={isChecked ? "Mark pending" : "Mark completed"}
                       >
-                        {task.checked && <Check size={11} strokeWidth={3} />}
+                        {badgeTheme === 'purple' && (
+                          <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-950 dark:to-purple-900 border border-purple-500/30 text-purple-600 dark:text-purple-400 shadow-[0_4px_14px_-1px_rgba(139,92,246,0.35)] group-hover:scale-105 transition-transform">
+                            <Check size={14} strokeWidth={3} />
+                          </div>
+                        )}
+                        {badgeTheme === 'green' && (
+                          <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shadow-[0_4px_14px_-1px_rgba(16,185,129,0.3)] group-hover:scale-105 transition-transform relative">
+                            <svg className="absolute inset-0 size-full" viewBox="0 0 36 36">
+                              <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3.5" className="text-emerald-500/70" />
+                            </svg>
+                            <Check size={12} strokeWidth={2.8} className="relative z-10" />
+                          </div>
+                        )}
+                        {badgeTheme === 'amber' && (
+                          <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-[0_4px_14px_-1px_rgba(245,158,11,0.3)] group-hover:scale-105 transition-transform relative">
+                            <svg className="absolute inset-0 size-full" viewBox="0 0 36 36">
+                              <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="2.5 3" className="text-amber-500/70" />
+                            </svg>
+                            <Play size={11} strokeWidth={2.6} className="ml-0.5 relative z-10 fill-amber-600/30" />
+                          </div>
+                        )}
+                        {badgeTheme === 'rose' && (
+                          <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-rose-100 to-rose-200 dark:from-rose-950 dark:to-rose-900 border border-rose-500/30 text-rose-600 dark:text-rose-400 shadow-[0_4px_14px_-1px_rgba(244,63,94,0.3)] group-hover:scale-105 transition-transform">
+                            <Clock size={13} strokeWidth={2.6} />
+                          </div>
+                        )}
                       </button>
 
-                      <span
-                        className={`text-xs sm:text-sm font-medium tracking-tight truncate ${
-                          task.checked ? "text-[var(--muted)] line-through" : "text-[var(--text)]"
-                        }`}
-                      >
-                        {task.text || "Untitled task"}
-                      </span>
-                    </div>
+                      {/* Title, Subtitle, and Badges */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[15px] font-medium truncate inline-block ${
+                            isChecked 
+                              ? 'text-purple-600 dark:text-purple-400 line-through decoration-2 decoration-purple-500/80 dark:decoration-purple-400/80' 
+                              : 'text-neutral-800 dark:text-neutral-200'
+                          }`}>
+                            {task.text || "Untitled task"}
+                          </span>
 
-                    <div className="flex items-center gap-3 shrink-0 select-none">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide capitalize ${
-                          isHigh
-                            ? "bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40"
-                            : isLow
-                            ? "bg-blue-100/80 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-900/40"
-                            : "bg-amber-100/80 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40"
-                        }`}
-                      >
-                        {isHigh ? "High" : isLow ? "Low" : "Med"}
-                      </span>
+                          {/* Priority Badge */}
+                          {(task as any).priority && (task as any).priority !== 'medium' && (
+                            <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider ${
+                              (task as any).priority === 'urgent'
+                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25'
+                                : (task as any).priority === 'high'
+                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25'
+                                : 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border border-neutral-500/25'
+                            }`}>
+                              {(task as any).priority === 'urgent' ? '🔥 Urgent' : (task as any).priority}
+                            </span>
+                          )}
 
-                      <div className="text-xs text-[var(--muted)] flex items-center gap-1.5">
-                        <span>{task.pageIcon}</span>
-                        <span className="truncate max-w-[140px] hidden sm:inline">{task.pageTitle}</span>
+                          {/* Due Date / Timeline Badge */}
+                          {(task as any).due && (
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium flex items-center gap-1 ${
+                              (task as any).priority === 'urgent'
+                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                : 'bg-black/[0.04] dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300 border border-black/[0.05] dark:border-white/[0.08]'
+                            }`}>
+                              <Calendar size={11} />
+                              <span>{(task as any).due}</span>
+                            </span>
+                          )}
+
+                          {/* Edited timestamp badge */}
+                          {(task as any).editedAt && (
+                            <span
+                              className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[10.5px] font-medium flex items-center gap-1"
+                              title={`Last edited: ${formatEditedTime((task as any).editedAt)}`}
+                            >
+                              <Clock size={10} />
+                              <span>Edited</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {(task as any).subtitle && (
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
+                            {(task as any).subtitle}
+                          </p>
+                        )}
                       </div>
                     </div>
-                  </div>
+
+                    {/* Right: Page Origin & Action Buttons on Hover */}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-xs text-neutral-400 dark:text-neutral-500 flex items-center gap-1.5 shrink-0">
+                        <span>{task.pageIcon}</span>
+                        <span className="truncate max-w-[120px] hidden sm:inline">{task.pageTitle}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={(e) => startEditTask(task, e)}
+                          className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                          title="Edit task"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteTask(task.id, e)}
+                          className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          title="Delete task"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
                 );
               })}
             </div>

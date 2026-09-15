@@ -212,6 +212,13 @@ const basic = [
     execute(ctx) { ctx.onPatch({ ...blockForTree(ctx.block, "todo", ctx.text), checked: false }); }
   },
   {
+    id: "playful-todo", title: "Tactile Tasks Card", aliases: ["tasks", "checklist", "playful-todo", "tactile"],
+    icon: "CheckSquare", category: "Basic blocks",
+    description: "Interactive tactile tasks tracker with status badges & filters",
+    preview: { description: "Tactile task manager with glowing badges, tabs & filters", image: "/previews/todo.svg" },
+    execute(ctx) { ctx.onPatch({ ...blockForTree(ctx.block, "playful-todo", ctx.text) }); }
+  },
+  {
     id: "toggle", title: "Toggle list", aliases: [">", "details"],
     icon: "ChevronRight", category: "Basic blocks",
     description: "Collapsible block with nested children",

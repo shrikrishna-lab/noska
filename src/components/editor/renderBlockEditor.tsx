@@ -25,36 +25,25 @@ import InteractiveBlock from "./interactive/InteractiveBlock";
 import { PageIcon } from "../PageIcon";
 import BlockResizer from "./BlockResizer";
 import { PlayfulTodoList } from "../ui/playful-todolist";
+import { TactileTaskList } from "../ui/TactileTaskList";
 import { Checkbox } from "../ui/checkbox";
 
-const RESIZABLE_BLOCK_TYPES = new Set([
-  "interactive",
-  "html",
-  "widget",
-  "external-preview",
-  "code",
-  "video",
-  "audio",
-  "file",
-  "bookmark",
-  "table",
-  "columns",
-  "database",
-  "database-inline",
-  "database-full",
-  "linked-view",
-  "callout",
-  "mermaid",
-  "ai-block",
-  "ai-meeting",
-  "ai-meeting-notes",
-  "chart",
-  "block-equation",
-  "equation",
-  "forms",
-  "embed",
-  "embed-generic"
+const NON_RESIZABLE_BLOCK_TYPES = new Set([
+  "text",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "bullet",
+  "number",
+  "todo",
+  "quote",
+  "divider"
 ]);
+
+export function isBlockResizable(blockType: string): boolean {
+  return !NON_RESIZABLE_BLOCK_TYPES.has(blockType);
+}
 
 function placeholderFor(type: string) {
   if (type === "code") return "Code";
@@ -295,7 +284,7 @@ function renderBlockCore(
             className="h-4 w-4 rounded-md border-neutral-400 dark:border-neutral-600 data-[state=checked]:bg-[var(--accent,#3b82f6)] data-[state=checked]:border-[var(--accent,#3b82f6)] transition-all cursor-pointer"
           />
         </div>
-        <div className="relative inline-block w-fit max-w-full">
+        <div className="flex-1 min-w-0 relative">
           <RichTextEditor
             ref={ref}
             richText={richText}
@@ -308,37 +297,10 @@ function renderBlockCore(
             onBlur={onBlur}
             readOnly={isLocked}
             onPasteUrl={onPasteUrl}
-            className={`${cls} transition-opacity duration-300 ${checked ? "opacity-60" : "opacity-100"}`}
+            className={`${cls} transition-all duration-200 ${checked ? "line-through decoration-2 decoration-purple-500/80 dark:decoration-purple-400/80 text-purple-600/80 dark:text-purple-400/80" : "opacity-100"}`}
             placeholder="To-do"
           />
-          {/* Playful Animated SVG Strikethrough strictly covering only the text */}
-          <motion.svg
-            viewBox="0 0 300 20"
-            preserveAspectRatio="none"
-            className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none z-20 w-full h-5"
-          >
-            <motion.path
-              d="M 2 10.5 C 45 7.5, 90 13.5, 145 10 C 200 6.5, 250 13, 298 9.5"
-              vectorEffect="non-scaling-stroke"
-              strokeWidth={2.2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeMiterlimit={10}
-              fill="none"
-              initial={false}
-              animate={{
-                pathLength: checked ? 1 : 0,
-                opacity: checked ? 0.85 : 0
-              }}
-              transition={{
-                pathLength: { duration: 0.35, ease: "easeInOut" },
-                opacity: { duration: 0.01, delay: checked ? 0 : 0.3 }
-              }}
-              className="stroke-neutral-800 dark:stroke-neutral-200"
-            />
-          </motion.svg>
         </div>
-        <div className="flex-1 min-w-4 self-stretch" onClick={() => ref.current?.focus()} />
         {!isLocked && onBlocks && (
           <button
             onClick={handleAddNextTodo}
@@ -352,9 +314,106 @@ function renderBlockCore(
     );
   }
   if (block.type === "playful-todo") {
+    const tasks = (block.properties?.tasks as any[] | undefined) || [];
+    const steps = (block.properties?.steps as any[] | undefined) || [];
+    const showTasks = block.properties?.showTasks !== false;
+    const showOnboarding = block.properties?.showOnboarding !== false;
+
+    if (!showTasks && !showOnboarding) {
+      if (onDelete && !isLocked) {
+        onDelete();
+      }
+      return null;
+    }
+
     return (
       <div className="my-4">
-        <PlayfulTodoList />
+        <TactileTaskList
+          tasks={tasks}
+          steps={steps}
+          showTasksSection={showTasks}
+          showOnboardingSection={showOnboarding}
+          onAddTask={(taskData) => {
+            const newTask = {
+              id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              ...taskData,
+            };
+            const updated = [newTask, ...tasks];
+            onPatch({
+              properties: { ...(block.properties || {}), tasks: updated }
+            });
+          }}
+          onEditTask={(id, updates) => {
+            const updated = tasks.map((t) => t.id === id ? { ...t, ...updates } : t);
+            onPatch({
+              properties: { ...(block.properties || {}), tasks: updated }
+            });
+          }}
+          onToggleTask={(id, completed) => {
+            const updated = tasks.map((t) => t.id === id ? {
+              ...t,
+              completed,
+              status: completed ? 'completed' : 'upcoming',
+              category: completed ? 'purple' : t.category || 'green',
+            } : t);
+            onPatch({
+              properties: { ...(block.properties || {}), tasks: updated }
+            });
+          }}
+          onDeleteTask={(id) => {
+            const updated = tasks.filter((t) => t.id !== id);
+            onPatch({
+              properties: { ...(block.properties || {}), tasks: updated }
+            });
+          }}
+          onAddStep={(stepData) => {
+            const newStep = {
+              id: `step-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              ...stepData,
+            };
+            const updated = [...steps, newStep];
+            onPatch({
+              properties: { ...(block.properties || {}), steps: updated }
+            });
+          }}
+          onEditStep={(id, updates) => {
+            const updated = steps.map((s) => s.id === id ? { ...s, ...updates } : s);
+            onPatch({
+              properties: { ...(block.properties || {}), steps: updated }
+            });
+          }}
+          onToggleStep={(id, completed) => {
+            const updated = steps.map((s) => s.id === id ? { ...s, completed } : s);
+            onPatch({
+              properties: { ...(block.properties || {}), steps: updated }
+            });
+          }}
+          onDeleteStep={(id) => {
+            const updated = steps.filter((s) => s.id !== id);
+            onPatch({
+              properties: { ...(block.properties || {}), steps: updated }
+            });
+          }}
+          onRemoveTasksSection={() => {
+            if (!showOnboarding) {
+              if (onDelete && !isLocked) onDelete();
+            } else {
+              onPatch({
+                properties: { ...(block.properties || {}), showTasks: false }
+              });
+            }
+          }}
+          onRemoveGetStarted={() => {
+            if (!showTasks) {
+              if (onDelete && !isLocked) onDelete();
+            } else {
+              onPatch({
+                properties: { ...(block.properties || {}), showOnboarding: false }
+              });
+            }
+          }}
+          onDeleteBlock={!isLocked && onDelete ? () => onDelete() : undefined}
+        />
       </div>
     );
   }
@@ -1245,7 +1304,7 @@ export default function renderBlockEditor(
   const registryItem = BlockRegistry.find((r) => r.type === block.type);
   const isEmbed = registryItem?.category === "Embeds";
 
-  if (RESIZABLE_BLOCK_TYPES.has(block.type) || isEmbed) {
+  if (isBlockResizable(block.type) || isEmbed) {
     const enableHeight = !["callout", "bookmark", "file", "audio", "block-equation", "equation"].includes(block.type);
     return (
       <BlockResizer

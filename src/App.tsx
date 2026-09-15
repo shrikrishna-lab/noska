@@ -2444,11 +2444,10 @@ function AppContent() {
     // makeEmptyDatabase()'s `rows` is typed `unknown[]` (blockModel.ts —
     // it's always empty at creation, so the element shape is genuinely
     // unknown there); these template builders are the first real place
-    // that shapes a row, so cast to a documented minimal row shape here.
     const namedRow = (r: unknown, name: string) => ({ ...(r as Record<string, unknown>), name });
     switch (template) {
       case "prd": case "tasks":
-        return [{ id: uid(), type: "database", text: "Tasks Tracker", database: emptyDb } as unknown as Block];
+        return [{ id: uid(), type: "playful-todo", text: "Tactile Tasks Tracker" } as unknown as Block];
       case "projects":
         return [{ id: uid(), type: "database", text: "Projects", database: { ...emptyDb, view: "board", rows: emptyDb.rows.map((r, i) => namedRow(r, ["Website refresh", "Launch plan", "Customer research"][i] || "")) } } as unknown as Block];
       case "docs":
@@ -2618,7 +2617,7 @@ function AppContent() {
       ],
       blocks: (
         resolved === "prd" || resolved === "tasks"
-          ? [{ id: uid(), type: "database", text: "Tasks Tracker", database: makeEmptyDatabase() }]
+          ? [{ id: uid(), type: "playful-todo", text: "Tactile Tasks Tracker" }]
           : resolved === "projects"
             ? [{ id: uid(), type: "database", text: "Projects", database: { ...makeEmptyDatabase(), view: "board", rows: makeEmptyDatabase().rows.map((r, i) => ({ ...(r as Record<string, unknown>), name: ["Website refresh", "Launch plan", "Customer research"][i] || "" })) } }]
             : resolved === "standup"

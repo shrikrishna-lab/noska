@@ -1,0 +1,819 @@
+.tactile-tasks-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  font-family: inherit;
+}
+
+/* Card Container */
+.tactile-card {
+  background: #ffffff;
+  border-radius: 28px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.02),
+    0 8px 24px -4px rgba(0, 0, 0, 0.04),
+    0 24px 48px -12px rgba(0, 0, 0, 0.03);
+  padding: 28px 28px 24px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+:root.dark .tactile-card,
+[data-theme="dark"] .tactile-card {
+  background: #17171a;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    0 12px 32px -4px rgba(0, 0, 0, 0.45);
+}
+
+/* Header */
+.tactile-card-header {
+  margin-bottom: 20px;
+}
+
+.tactile-card-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #111827;
+  margin: 0;
+  line-height: 1.2;
+}
+
+:root.dark .tactile-card-title,
+[data-theme="dark"] .tactile-card-title {
+  color: #f9fafb;
+}
+
+.tactile-card-title-sub {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #111827;
+  margin: 0 0 4px 0;
+}
+
+:root.dark .tactile-card-title-sub,
+[data-theme="dark"] .tactile-card-title-sub {
+  color: #f9fafb;
+}
+
+.tactile-card-desc {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+:root.dark .tactile-card-desc,
+[data-theme="dark"] .tactile-card-desc {
+  color: #9ca3af;
+}
+
+/* Tabs Row with Pill Indicator */
+.tactile-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding-bottom: 8px;
+  margin-bottom: 18px;
+  position: relative;
+}
+
+:root.dark .tactile-tabs-row,
+[data-theme="dark"] .tactile-tabs-row {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+.tactile-tab-btn {
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px 0 10px;
+  position: relative;
+  transition: color 0.2s ease;
+  font-family: inherit;
+}
+
+.tactile-tab-btn:hover {
+  color: #4b5563;
+}
+
+:root.dark .tactile-tab-btn:hover {
+  color: #d1d5db;
+}
+
+.tactile-tab-btn.active {
+  font-weight: 700;
+  color: #111827;
+}
+
+:root.dark .tactile-tab-btn.active {
+  color: #f9fafb;
+}
+
+/* Black pill slider indicator underneath active tab */
+.tactile-tab-pill-indicator {
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 4px;
+  border-radius: 999px;
+  background: #111827;
+}
+
+:root.dark .tactile-tab-pill-indicator,
+[data-theme="dark"] .tactile-tab-pill-indicator {
+  background: #f3f4f6;
+}
+
+/* Create Task Button */
+.tactile-create-section {
+  margin-bottom: 16px;
+}
+
+.tactile-create-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 0;
+  width: 100%;
+  text-align: left;
+  transition: opacity 0.2s ease;
+}
+
+.tactile-create-btn:hover .tactile-plus-circle {
+  transform: scale(1.04);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tactile-plus-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 
+    0 2px 5px rgba(0, 0, 0, 0.04),
+    inset 0 1px 1px #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root.dark .tactile-plus-circle,
+[data-theme="dark"] .tactile-plus-circle {
+  background: linear-gradient(135deg, #26262a, #1f1f23);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 2px 5px rgba(0, 0, 0, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+}
+
+.tactile-create-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+:root.dark .tactile-create-label,
+[data-theme="dark"] .tactile-create-label {
+  color: #9ca3af;
+}
+
+/* Create Form */
+.tactile-create-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f9fafb;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 6px 8px 6px 14px;
+}
+
+:root.dark .tactile-create-form,
+[data-theme="dark"] .tactile-create-form {
+  background: #202024;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.tactile-create-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #111827;
+}
+
+:root.dark .tactile-create-input,
+[data-theme="dark"] .tactile-create-input {
+  color: #f9fafb;
+}
+
+.tactile-submit-btn {
+  background: #111827;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+:root.dark .tactile-submit-btn,
+[data-theme="dark"] .tactile-submit-btn {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.tactile-cancel-btn {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+/* Tasks List */
+.tactile-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.tactile-item-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+:root.dark .tactile-item-row,
+[data-theme="dark"] .tactile-item-row {
+  border-bottom-color: rgba(255, 255, 255, 0.09);
+}
+
+.tactile-item-row:last-child {
+  border-bottom: none;
+}
+
+/* Tactile Circular Glowing Badges */
+.tactile-badge-wrapper {
+  flex-shrink: 0;
+}
+
+.tactile-circle-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+
+.tactile-item-row:hover .tactile-circle-badge {
+  transform: scale(1.05);
+}
+
+/* Purple Completed State */
+.badge-purple {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 
+    0 4px 14px -1px rgba(139, 92, 246, 0.35),
+    inset 0 1px 2px #ffffff;
+}
+
+:root.dark .badge-purple,
+[data-theme="dark"] .badge-purple {
+  background: linear-gradient(135deg, #3b2866 0%, #2e1a53 100%);
+  border-color: rgba(168, 85, 247, 0.4);
+  box-shadow: 
+    0 4px 16px -1px rgba(168, 85, 247, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+/* Green / Sage Active State */
+.badge-green {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  box-shadow: 
+    0 4px 14px -1px rgba(16, 185, 129, 0.3),
+    inset 0 1px 2px #ffffff;
+}
+
+:root.dark .badge-green,
+[data-theme="dark"] .badge-green {
+  background: linear-gradient(135deg, #134e40 0%, #0d382d 100%);
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 
+    0 4px 16px -1px rgba(16, 185, 129, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+/* Amber / Orange Pending State */
+.badge-amber {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: 
+    0 4px 14px -1px rgba(245, 158, 11, 0.3),
+    inset 0 1px 2px #ffffff;
+}
+
+:root.dark .badge-amber,
+[data-theme="dark"] .badge-amber {
+  background: linear-gradient(135deg, #573a08 0%, #452c03 100%);
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 
+    0 4px 16px -1px rgba(245, 158, 11, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+/* Rose / Overdue State */
+.badge-rose {
+  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  box-shadow: 
+    0 4px 14px -1px rgba(244, 63, 94, 0.3),
+    inset 0 1px 2px #ffffff;
+}
+
+:root.dark .badge-rose,
+[data-theme="dark"] .badge-rose {
+  background: linear-gradient(135deg, #5e1c28 0%, #46111b 100%);
+  border-color: rgba(244, 63, 94, 0.4);
+  box-shadow: 
+    0 4px 16px -1px rgba(244, 63, 94, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.tactile-dashed-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Title & Strikethrough */
+.tactile-title-container {
+  position: relative;
+  display: inline-block;
+  flex: 1;
+}
+
+.tactile-task-title {
+  font-size: 15.5px;
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.35;
+  transition: color 0.2s ease;
+}
+
+:root.dark .tactile-task-title,
+[data-theme="dark"] .tactile-task-title {
+  color: #e5e7eb;
+}
+
+.tactile-task-title.completed-purple {
+  color: #7c3aed;
+  font-weight: 500;
+  text-decoration: line-through;
+  text-decoration-color: rgba(124, 58, 237, 0.8);
+  text-decoration-thickness: 2px;
+}
+
+:root.dark .tactile-task-title.completed-purple,
+[data-theme="dark"] .tactile-task-title.completed-purple {
+  color: #a78bfa;
+  text-decoration-color: rgba(167, 139, 250, 0.8);
+}
+
+.tactile-strikethrough-svg {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 16px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.tactile-empty-hint {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+/* ── CARD 2: Step Checklist & Get Started ── */
+.tactile-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+
+.tactile-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.tactile-step-item:hover,
+.tactile-step-item.hovered {
+  background: rgba(0, 0, 0, 0.028);
+}
+
+:root.dark .tactile-step-item:hover,
+:root.dark .tactile-step-item.hovered,
+[data-theme="dark"] .tactile-step-item:hover,
+[data-theme="dark"] .tactile-step-item.hovered {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Vertical left accent bar on hover */
+.tactile-step-accent-line {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3.5px;
+  border-radius: 999px;
+  background: #f97316;
+}
+
+:root.dark .tactile-step-accent-line,
+[data-theme="dark"] .tactile-step-accent-line {
+  background: #fb923c;
+}
+
+.tactile-step-indicator {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.tactile-dark-check-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #18181b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+}
+
+:root.dark .tactile-dark-check-badge,
+[data-theme="dark"] .tactile-dark-check-badge {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+:root.dark .tactile-dark-check-badge .text-white,
+[data-theme="dark"] .tactile-dark-check-badge .text-white {
+  color: #18181b !important;
+}
+
+.tactile-step-empty-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+:root.dark .tactile-step-empty-circle,
+[data-theme="dark"] .tactile-step-empty-circle {
+  background: #27272a;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.tactile-step-text-wrap {
+  flex: 1;
+}
+
+.tactile-step-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #18181b;
+  line-height: 1.3;
+}
+
+:root.dark .tactile-step-title,
+[data-theme="dark"] .tactile-step-title {
+  color: #f4f4f5;
+}
+
+.tactile-step-title.completed-strike {
+  color: #71717a;
+  text-decoration: line-through;
+  text-decoration-color: rgba(113, 113, 122, 0.8);
+  text-decoration-thickness: 1.8px;
+}
+
+:root.dark .tactile-step-title.completed-strike,
+[data-theme="dark"] .tactile-step-title.completed-strike {
+  color: #a1a1aa;
+  text-decoration-color: rgba(161, 161, 170, 0.8);
+}
+
+.tactile-step-subtitle {
+  font-size: 13px;
+  color: #9ca3af;
+  margin: 2px 0 0 0;
+  line-height: 1.3;
+}
+
+/* Edited Badge */
+.tactile-edited-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  padding: 1px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+
+:root.dark .tactile-edited-badge,
+[data-theme="dark"] .tactile-edited-badge {
+  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.18);
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+/* Hover Action Buttons */
+.tactile-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.tactile-item-row:hover .tactile-actions-group,
+.tactile-step-item:hover .tactile-actions-group {
+  opacity: 1;
+}
+
+.tactile-icon-btn {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 5px;
+  color: #9ca3af;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.tactile-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #374151;
+}
+
+:root.dark .tactile-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e5e7eb;
+}
+
+.tactile-icon-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* Subtitle and Meta Details */
+.tactile-task-subtitle {
+  font-size: 12.5px;
+  color: #9ca3af;
+  margin: 2px 0 0 0;
+  line-height: 1.35;
+}
+
+:root.dark .tactile-task-subtitle,
+[data-theme="dark"] .tactile-task-subtitle {
+  color: #8b8f9a;
+}
+
+/* Inline Edit Area */
+.tactile-inline-edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+:root.dark .tactile-inline-edit-box,
+[data-theme="dark"] .tactile-inline-edit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.tactile-edit-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #111827;
+  width: 100%;
+}
+
+:root.dark .tactile-edit-input,
+[data-theme="dark"] .tactile-edit-input {
+  color: #f9fafb;
+}
+
+.tactile-edit-subinput {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12.5px;
+  color: #6b7280;
+  width: 100%;
+}
+
+:root.dark .tactile-edit-subinput,
+[data-theme="dark"] .tactile-edit-subinput {
+  color: #9ca3af;
+}
+
+.tactile-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+/* Header Action Tools */
+.tactile-header-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.tactile-delete-block-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tactile-delete-block-btn:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+}
+
+/* Due Date & Timeline Badges */
+.tactile-due-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+:root.dark .tactile-due-badge,
+[data-theme="dark"] .tactile-due-badge {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.tactile-due-badge.overdue {
+  color: #e11d48;
+  background: rgba(225, 29, 72, 0.08);
+  border-color: rgba(225, 29, 72, 0.25);
+}
+
+:root.dark .tactile-due-badge.overdue,
+[data-theme="dark"] .tactile-due-badge.overdue {
+  color: #fb7185;
+  background: rgba(225, 29, 72, 0.18);
+  border-color: rgba(225, 29, 72, 0.35);
+}
+
+/* Priority Badges */
+.tactile-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  text-transform: capitalize;
+}
+
+.tactile-priority-badge.urgent {
+  color: #e11d48;
+  background: rgba(244, 63, 94, 0.12);
+}
+
+.tactile-priority-badge.high {
+  color: #ea580c;
+  background: rgba(249, 115, 22, 0.12);
+}
+
+.tactile-priority-badge.medium {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.tactile-priority-badge.low {
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+/* Add Step Button in Get Started */
+.tactile-add-step-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 8px;
+  transition: all 0.15s ease;
+}
+
+:root.dark .tactile-add-step-btn,
+[data-theme="dark"] .tactile-add-step-btn {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #9ca3af;
+}
+
+.tactile-add-step-btn:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: #111827;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:root.dark .tactile-add-step-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f9fafb;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
