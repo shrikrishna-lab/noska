@@ -490,9 +490,9 @@ export class AgentRuntime {
       if (visible) accumulatedText = visible;
 
       if (calls.length > 0) {
-        // Repetition check: every call in this round already succeeded
-        // identically earlier in this step.
-        const sigs = calls.map((c) => `${c.name}:${JSON.stringify(c.params)}`);
+        // Repetition check (semantic): every call in this round already
+        // attempted earlier in this step, after normalizing case/whitespace.
+        const sigs = calls.map((c) => normalizedToolSig(c.name, c.params));
         if (sigs.every((s) => attemptedSigs.has(s))) {
           if (!loopNudgeUsed) {
             loopNudgeUsed = true;
