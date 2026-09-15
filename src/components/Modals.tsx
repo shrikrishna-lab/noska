@@ -1938,6 +1938,7 @@ export function HelpModal({ onClose }: HelpModalProps) {
 
   const tabs = [
     { id: "start", label: "Getting Started", icon: "🚀" },
+    { id: "editor", label: "Editor & Free Resize", icon: "📐" },
     { id: "shortcuts", label: "Shortcuts", icon: "⌨️" },
     { id: "ai", label: "AI Guide", icon: "✨" },
     { id: "canvas", label: "Canvas & Graph", icon: "🎨" },
@@ -2037,6 +2038,78 @@ export function HelpModal({ onClose }: HelpModalProps) {
                       <div className="text-sm font-semibold text-[var(--text)]">{item.title}</div>
                       <div className="text-xs text-[var(--secondary)] mt-0.5 leading-relaxed">{item.desc}</div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === "editor" && (
+            <div className="space-y-6 max-w-lg">
+              <div>
+                <h2 className="text-2xl font-bold text-[var(--text)]">Editor & Free Resize Guide</h2>
+                <p className="text-sm text-[var(--secondary)] mt-1">
+                  Master freeform block resizing, breakout layouts, playful to-dos, and interactive live sandboxes.
+                </p>
+              </div>
+
+              <div className="space-y-3.5">
+                {[
+                  {
+                    title: "5-Directional Free Resizing",
+                    icon: "📐",
+                    badge: "New",
+                    desc: "Hover over any resizable block (Interactive, Embeds, Code, Tables, Widgets, Databases, Videos, Mermaid) to reveal 5 interactive handles:",
+                    bullets: [
+                      "Left & Right Blue Edge Bars: Drag to freely resize width.",
+                      "Bottom Center Pill: Drag to freely resize height (length).",
+                      "Bottom-Left & Bottom-Right Curved Corners: Drag in 2D to freely resize width and height simultaneously.",
+                      "Double-Click: Double-click any handle or corner to instantly reset dimensions."
+                    ]
+                  },
+                  {
+                    title: "Symmetric Margin Breakout",
+                    icon: "↔️",
+                    badge: "Fluid",
+                    desc: "When resizing a block wider than the standard column width, it smoothly and symmetrically expands into both the left and right page margins with 1:1 cursor tracking."
+                  },
+                  {
+                    title: "Playful Animated To-Do Lists",
+                    icon: "✅",
+                    badge: "Upgraded",
+                    desc: "Type [] or choose To-do from the slash menu. Checking items triggers an organic hand-drawn pen strikethrough animation with celebratory confetti and sound effects."
+                  },
+                  {
+                    title: "Interactive Live Sandboxed Blocks",
+                    icon: "✨",
+                    badge: "New",
+                    desc: "Type /interactive to embed live KPI dashboards, interactive charts, counters, timers, forms, or custom sandboxed web widgets directly into your documents."
+                  },
+                  {
+                    title: "33+ Embeds & Ecosystem Integrations",
+                    icon: "🔌",
+                    badge: "Ecosystem",
+                    desc: "Seamlessly paste or insert Figma, Miro, Excalidraw, Loom, YouTube, Google Drive, CodePen, Replit, or PDF embeds with responsive auto-resizing."
+                  }
+                ].map((item) => (
+                  <div key={item.title} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{item.icon}</span>
+                        <span className="text-sm font-semibold text-[var(--text)]">{item.title}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)]">
+                        {item.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--secondary)] leading-relaxed">{item.desc}</p>
+                    {item.bullets && (
+                      <ul className="text-xs text-[var(--secondary)] space-y-1 list-disc list-inside pt-1">
+                        {item.bullets.map((b, i) => (
+                          <li key={i}>{b}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 ))}
               </div>
