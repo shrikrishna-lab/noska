@@ -512,6 +512,11 @@ export default function Editor({
   const [selection, setSelection] = useState<SelectionState>({ text: "", rect: null, blockId: null, selStart: 0, selEnd: 0 });
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
   const [pageMenuPos, setPageMenuPos] = useState({ top: 0, left: 0 });
+  const [schedulePageOpen, setSchedulePageOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [scheduleTime, setScheduleTime] = useState("10:00");
+  const [scheduleDurationHours, setScheduleDurationHours] = useState(1);
+  const [scheduleCategory, setScheduleCategory] = useState("Tasks");
   const [openSlashForBlockId, setOpenSlashForBlockId] = useState(null);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
@@ -993,6 +998,13 @@ export default function Editor({
             <div className="relative flex items-center">
               <div ref={pageOptionsRef} className="flex items-center">
                 <button
+                  onClick={() => setSchedulePageOpen(true)}
+                  className="grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+                  title="Schedule this page / Add to Calendar"
+                >
+                  <Calendar size={17} />
+                </button>
+                <button
                   onClick={() => {
                     if (!pageMenuOpen) {
                       const rect = pageOptionsRef.current?.getBoundingClientRect();
@@ -1018,6 +1030,138 @@ export default function Editor({
                   <MoreHorizontal size={18} />
                 </button>
               </div>
+              {schedulePageOpen && createPortal(
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSchedulePageOpen(false)} />
+                  <div className="relative z-10 w-full max-w-md rounded-3xl border border-[var(--border)] bg-[var(--elevated)] p-6 shadow-2xl space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+                      <div className="flex items-center gap-2">
+                        <div className="size-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
+                          <Calendar size={16} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-[var(--text)]">Schedule Page in Calendar</h3>
+                          <p className="text-[11px] text-[var(--muted)]">Plan focus sessions, reviews, and deadlines</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSchedulePageOpen(false)}
+                        className="rounded-lg p-1 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--muted)]">Page Document</label>
+                        <div className="mt-1 px-3 py-2 rounded-xl bg-[var(--surface)] text-xs font-bold text-[var(--text)] border border-[var(--border)] truncate">
+                          {page.title || "Untitled Document"}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs font-semibold text-[var(--muted)]">Target Date</label>
+                          <input
+                            type="date"
+                            value={scheduleDate}
+                            onChange={(e) => setScheduleDate(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-[var(--muted)]">Start Time</label>
+                          <input
+                            type="time"
+                            value={scheduleTime}
+                            onChange={(e) => setScheduleTime(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs font-semibold text-[var(--muted)]">Duration</label>
+                          <select
+                            value={scheduleDurationHours}
+                            onChange={(e) => setScheduleDurationHours(Number(e.target.value))}
+                            className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                          >
+                            <option value={0.5}>30 minutes</option>
+                            <option value={1}>1 hour (Deep Focus)</option>
+                            <option value={1.5}>1.5 hours</option>
+                            <option value={2}>2 hours (Intensive)</option>
+                            <option value={3}>3 hours</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-[var(--muted)]">Category</label>
+                          <select
+                            value={scheduleCategory}
+                            onChange={(e) => setScheduleCategory(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                          >
+                            <option value="Tasks">Deep Focus / Task</option>
+                            <option value="Review">Spaced Repetition</option>
+                            <option value="Document">Knowledge Milestone</option>
+                            <option value="Meeting">Discussion</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
+                      <button
+                        onClick={() => setSchedulePageOpen(false)}
+                        className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          const [hours, mins] = scheduleTime.split(":").map(Number);
+                          const start = new Date(scheduleDate);
+                          start.setHours(hours || 10, mins || 0, 0, 0);
+                          const end = new Date(start.getTime() + scheduleDurationHours * 3600000);
+
+                          const newEvt = {
+                            id: `page-sched-${page.id}-${Date.now()}`,
+                            title: page.title || "Untitled Document",
+                            description: `Dedicated focus & work block on: ${page.title || "Document"}`,
+                            startTime: start,
+                            endTime: end,
+                            color: scheduleCategory === "Review" ? "amber" : "blue",
+                            category: scheduleCategory,
+                            status: "confirmed",
+                            pageId: page.id,
+                            isCreatedPage: true,
+                            timeSpentMinutes: Math.round(scheduleDurationHours * 60)
+                          };
+
+                          try {
+                            const raw = localStorage.getItem("noska_calendar_events");
+                            const existing = raw ? JSON.parse(raw) : [];
+                            existing.push(newEvt);
+                            localStorage.setItem("noska_calendar_events", JSON.stringify(existing));
+                            window.dispatchEvent(new Event("storage"));
+                          } catch (err) {
+                            console.error(err);
+                          }
+
+                          setSchedulePageOpen(false);
+                          onToast?.(`Scheduled "${page.title || "Document"}" in Calendar!`);
+                        }}
+                        className="px-5 py-2 rounded-xl bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-xs font-semibold shadow-md transition cursor-pointer"
+                      >
+                        Add to Calendar
+                      </button>
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
               {pageMenuOpen && createPortal(
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setPageMenuOpen(false)} />

@@ -46,7 +46,7 @@ function SelectValue({ placeholder }: { placeholder?: string }) {
   return <span className={cn(!value && "text-[var(--muted)]")}>{value || placeholder}</span>;
 }
 
-function SelectContent({ children }: { children: React.ReactNode }) {
+function SelectContent({ className, children }: { className?: string; children: React.ReactNode }) {
   const { open, setOpen } = React.useContext(SelectContext);
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -64,14 +64,17 @@ function SelectContent({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={ref}
-      className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-md animate-in fade-in-0 zoom-in-95"
+      className={cn(
+        "absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-md animate-in fade-in-0 zoom-in-95",
+        className
+      )}
     >
       {children}
     </div>
   );
 }
 
-function SelectItem({ value, children }: { value: string; children: React.ReactNode }) {
+function SelectItem({ value, className, children }: { value: string; className?: string; children: React.ReactNode }) {
   const { value: selected, onValueChange, setOpen } = React.useContext(SelectContext);
   return (
     <div
@@ -81,7 +84,8 @@ function SelectItem({ value, children }: { value: string; children: React.ReactN
       }}
       className={cn(
         "relative flex cursor-pointer select-none items-center rounded-sm px-3 py-2 text-sm outline-none hover:bg-[var(--hover)]",
-        selected === value && "bg-[var(--hover)] font-semibold"
+        selected === value && "bg-[var(--hover)] font-semibold",
+        className
       )}
     >
       {children}

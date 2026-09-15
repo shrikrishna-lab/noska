@@ -75,6 +75,7 @@ import { GlassTaskSection } from "./ui/GlassTaskSection";
 import { GlassHeaderBar } from "./ui/GlassHeaderBar";
 import { TeamInvitation } from "./ui/team-invitation";
 import { EventManager, type Event } from "./ui/event-manager";
+import { useUser } from "@clerk/react";
 import { MeetingScheduler } from "./ui/meeting-scheduler";
 import { useTeams } from "../lib/TeamContext";
 import { useCompany } from "../contexts/CompanyContext";
@@ -3455,29 +3456,171 @@ interface CalendarRouteProps {
 }
 
 function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) {
+  const { user } = useUser();
+
   const calendarEvents: Event[] = React.useMemo(() => {
-    const pageEvents: Event[] = pages
-      .filter((p) => !p.trashed)
-      .map((p) => ({
+    const extractedEvents: Event[] = [];
+
+    // Extract real page milestones and blocks
+    pages.filter(p => !p.trashed).forEach(p => {
+      // Base page updated milestone
+      extractedEvents.push({
         id: `page-${p.id}`,
-        title: p.title || "Untitled",
+        title: p.title || "Untitled Document",
         description: plainText(p).slice(0, 120),
-        startTime: new Date(p.createdAt || p.updatedAt),
-        endTime: new Date(p.updatedAt),
+        startTime: new Date(p.updatedAt || p.createdAt),
+        endTime: new Date(new Date(p.updatedAt || p.createdAt).getTime() + 3600000),
         color: "blue",
         category: "Document",
-      }));
+        status: "confirmed"
+      });
+
+      // Extract to-do blocks and spaced repetition review dates
+      (p.blocks || []).forEach(b => {
+        if (b.type === "todo" && b.text) {
+          const isDone = !!b.checked;
+          const dueTime = (b as any).due ? new Date((b as any).due) : new Date(p.updatedAt);
+          extractedEvents.push({
+            id: `task-${p.id}-${b.id}`,
+            title: b.text,
+            description: `From page: ${p.title || "Document"}`,
+            startTime: isNaN(dueTime.getTime()) ? new Date(p.updatedAt) : dueTime,
+            endTime: new Date((isNaN(dueTime.getTime()) ? new Date(p.updatedAt) : dueTime).getTime() + 1800000),
+            color: isDone ? "green" : (b as any).priority === "urgent" ? "rose" : "purple",
+            category: "Tasks",
+            status: isDone ? "done" : "todo",
+            reminder: (b as any).priority === "urgent"
+          });
+        }
+
+        const review = (b as any).review;
+        if (review && review.nextReview) {
+          const revDate = new Date(review.nextReview);
+          if (!isNaN(revDate.getTime())) {
+            extractedEvents.push({
+              id: `rev-${p.id}-${b.id}`,
+              title: `Review: ${b.text?.slice(0, 30) || p.title || "Flashcard"}`,
+              description: `Spaced repetition review session`,
+              startTime: revDate,
+              endTime: new Date(revDate.getTime() + 1800000),
+              color: "amber",
+              category: "Review",
+              status: "confirmed"
+            });
+          }
+        }
+      });
+    });
+
     const stored = loadCalendarEvents();
-    return [...stored, ...pageEvents];
+    return [...stored, ...extractedEvents];
+  }, [pages]);
+
+  // Real Workspace Tracks derived dynamically from user's pages
+  const workspaceTracks = React.useMemo(() => {
+    const active = pages.filter(p => !p.trashed);
+    const colors = ["purple", "cyan", "green", "rose", "blue", "amber"];
+    return active.slice(0, 8).map((p, idx) => {
+      const todos = (p.blocks || []).filter(b => b.type === "todo");
+      const doneTodos = todos.filter(b => b.checked);
+      const totalBlocks = (p.blocks || []).length;
+      const progress = todos.length > 0 
+        ? Math.round((doneTodos.length / todos.length) * 100)
+        : totalBlocks > 0 
+          ? Math.min(100, Math.round((totalBlocks / 10) * 100))
+          : 0;
+
+      return {
+        id: p.id,
+        title: p.title || "Untitled Document",
+        category: (p as any).category || (todos.length > 0 ? "Tasks & Notes" : "Document"),
+        subtitle: todos.length > 0 
+          ? `${doneTodos.length}/${todos.length} tasks` 
+          : `${totalBlocks} blocks · Updated`,
+        progress,
+        color: colors[idx % colors.length]
+      };
+    });
+  }, [pages]);
+
+  // Real user profile stats
+  const workspaceStats = React.useMemo(() => {
+    const activePages = pages.filter(p => !p.trashed);
+    const totalTodos = activePages.reduce((acc, p) => acc + (p.blocks || []).filter(b => b.type === "todo").length, 0);
+    const doneTodos = activePages.reduce((acc, p) => acc + (p.blocks || []).filter(b => b.type === "todo" && b.checked).length, 0);
+    const completionRate = totalTodos > 0 ? Math.round((doneTodos / totalTodos) * 100) : (activePages.length > 0 ? 100 : 0);
+
+    const fullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : null) || "Workspace Admin";
+    const email = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || "active.workspace@noska.app";
+    const joinDate = user?.createdAt 
+      ? new Date(user.createdAt).toLocaleDateString([], { month: "2-digit", day: "2-digit", year: "numeric" }) 
+      : new Date().toLocaleDateString([], { month: "2-digit", day: "2-digit", year: "numeric" });
+    const initials = fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+
+    return {
+      userName: fullName,
+      userEmail: email,
+      signUpDate: joinDate,
+      userInitials: initials,
+      avatarUrl: user?.imageUrl,
+      completionRate,
+      completedTasks: doneTodos,
+      totalPages: activePages.length,
+      activeReviews: activePages.reduce((acc, p) => acc + (p.blocks || []).filter((b: any) => b.review?.nextReview).length, 0)
+    };
+  }, [user, pages]);
+
+  // Real Workspace Milestones
+  const workspaceMilestones = React.useMemo(() => {
+    const activePages = pages.filter(p => !p.trashed);
+    const totalBlocks = activePages.reduce((acc, p) => acc + (p.blocks || []).length, 0);
+    const totalTodos = activePages.reduce((acc, p) => acc + (p.blocks || []).filter(b => b.type === "todo").length, 0);
+    const doneTodos = activePages.reduce((acc, p) => acc + (p.blocks || []).filter(b => b.type === "todo" && b.checked).length, 0);
+    const flashcards = activePages.reduce((acc, p) => acc + (p.blocks || []).filter((b: any) => b.review?.nextReview).length, 0);
+
+    return [
+      {
+        title: "Workspace Knowledge Base",
+        description: `${activePages.length} active documents · ${totalBlocks} blocks`,
+        badge: "Active",
+        type: "knowledge"
+      },
+      {
+        title: "Action Items & Execution",
+        description: `${doneTodos}/${totalTodos} tasks completed`,
+        badge: `${totalTodos > 0 ? Math.round((doneTodos / totalTodos) * 100) : 100}% Done`,
+        type: "tasks"
+      },
+      {
+        title: "Spaced Repetition Mastery",
+        description: `${flashcards} review cycles scheduled`,
+        badge: "Review",
+        type: "review"
+      }
+    ];
   }, [pages]);
 
   return (
-    <RouteShell title="Calendar" subtitle="Manage events and schedule">
+    <RouteShell title="Schedule" subtitle="Timetable, events & daily workspace calendar">
       <EventManager
         events={calendarEvents}
-        defaultView="month"
-        onEventCreate={(e) => { saveCalendarEvent(e); onToast?.(`Event "${e.title}" created`); }}
-        onEventDelete={(id) => { deleteCalendarEvent(id); onToast?.("Event deleted"); }}
+        defaultView="week"
+        workspaceTracks={workspaceTracks}
+        workspaceStats={workspaceStats}
+        workspaceMilestones={workspaceMilestones}
+        onSelectTrack={(trackId) => onSelect(trackId)}
+        onEventCreate={(e) => {
+          saveCalendarEvent(e);
+          onToast?.(`Event "${e.title}" scheduled`);
+        }}
+        onEventUpdate={(id, updated) => {
+          updateCalendarEvent(id, updated);
+          onToast?.("Event updated");
+        }}
+        onEventDelete={(id) => {
+          deleteCalendarEvent(id);
+          onToast?.("Event removed");
+        }}
       />
     </RouteShell>
   );
@@ -3499,7 +3642,12 @@ function loadCalendarEvents(): Event[] {
 
 function saveCalendarEvent(event: Omit<Event, "id">) {
   const events = loadCalendarEvents();
-  events.push({ ...event, id: Math.random().toString(36).slice(2, 11) });
+  events.push({ ...event, id: `user-evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+  localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
+}
+
+function updateCalendarEvent(id: string, updated: Partial<Event>) {
+  const events = loadCalendarEvents().map(e => e.id === id ? { ...e, ...updated } : e);
   localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
 }
 
