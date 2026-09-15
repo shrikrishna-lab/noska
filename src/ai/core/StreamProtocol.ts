@@ -302,6 +302,17 @@ export async function* parseGeminiStream(
               if (part.thought) {
                 yield { type: "reasoning_delta", text: part.thought };
               }
+              // Native function calling: Gemini streams complete functionCall
+              // parts (not argument deltas), so emit them as finished calls.
+              if (part.functionCall?.name) {
+                yield {
+                  type: "tool_call_start",
+                  toolCall: {
+                    name: part.functionCall.name,
+                    arguments: JSON.stringify(part.functionCall.args ?? {}),
+                  }
+                };
+              }
             }
           }
 
@@ -478,5 +489,69 @@ export async function* streamEventsToText(
       case "error":
         throw new Error(event.error || "Stream error");
     }
+  }
+}
+
+/**
+ * Streaming WITH native tool calling: like streamEventsToText, but native
+ * tool_call deltas (OpenAI tool_calls / Anthropic tool_use / Gemini
+ * functionCall) are accumulated and appended to the FINAL yield as
+ * <<TOOL:name>>{...}<</TOOL>> markers — so consumers that parse the marker
+ * protocol get native calls for free while live text stays marker-free.
+ *
+ * Known limitation (shared with the parsers): parallel tool calls in one
+ * stream interleave argument deltas; sequences of complete calls (the common
+ * case) serialize correctly.
+ */
+export async function* streamEventsToTextWithTools(
+  events: AsyncGenerator<StreamEvent>
+): AsyncGenerator<string> {
+  let fullText = "";
+  let reasoning = "";
+  let inReasoning = false;
+  const openCalls: Array<{ id?: string; name?: string; args: string }> = [];
+  let activeCall: { id?: string; name?: string; args: string } | null = null;
+
+  for await (const event of events) {
+    switch (event.type) {
+      case "tool_call_start": {
+        activeCall = { id: event.toolCall?.id, name: event.toolCall?.name, args: event.toolCall?.arguments || "" };
+        openCalls.push(activeCall);
+        break;
+      }
+      case "tool_call_delta": {
+        const target = activeCall ?? openCalls[openCalls.length - 1];
+        if (target) target.args += event.toolCall?.arguments || "";
+        break;
+      }
+      case "reasoning_delta":
+        if (!inReasoning) {
+          reasoning = "";
+          inReasoning = true;
+        }
+        reasoning += event.text || "";
+        yield `<think>${reasoning}</think>${fullText}`;
+        break;
+      case "text_delta":
+        if (inReasoning) inReasoning = false;
+        fullText += event.text || "";
+        if (reasoning) {
+          yield `<think>${reasoning}</think>${fullText}`;
+        } else {
+          yield fullText;
+        }
+        break;
+      case "error":
+        throw new Error(event.error || "Stream error");
+    }
+  }
+
+  // Serialize accumulated native calls as text markers on the final chunk.
+  const markers = openCalls
+    .filter((c) => c.name)
+    .map((c) => `<<TOOL:${c.name}>>${c.args.trim() || "{}"}<</TOOL>>`)
+    .join("");
+  if (markers) {
+    yield (reasoning ? `<think>${reasoning}</think>` : "") + fullText + markers;
   }
 }

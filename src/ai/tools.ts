@@ -546,11 +546,29 @@ export function parseToolCalls(text) {
  * Validate and execute a single tool call against a tool context.
  * Exported for the shared agent runtime (which applies its own permission
  * gate before calling this). Throws on unknown tools or missing params.
+ * Network-dependent tools get ONE bounded retry on transient errors —
+ * a dropped connection shouldn't fail an otherwise-correct run.
  */
+const RETRYABLE_TOOLS = new Set(["send_notification", "web_search"]);
+
+function isTransientToolError(err: unknown): boolean {
+  const msg = String((err as Error)?.message || "");
+  return /failed to fetch|networkerror|network error|\btimeout\b|timed out|\b502\b|\b503\b|\b504\b|bad gateway|service unavailable|econn/i.test(msg);
+}
+
 export async function runTool(name, params, context) {
   const canonical = resolveToolName(name);
   validateParams(canonical, params);
-  return await executeTool(canonical, params, context);
+  try {
+    return await executeTool(canonical, params, context);
+  } catch (err) {
+    const retryable = RETRYABLE_TOOLS.has(canonical) || Boolean(getIntegrationTool(canonical));
+    if (retryable && isTransientToolError(err)) {
+      await new Promise((r) => setTimeout(r, 600));
+      return await executeTool(canonical, params, context);
+    }
+    throw err;
+  }
 }
 
 export function stripToolCalls(text) {
@@ -561,18 +579,19 @@ export function hasToolCalls(text) {
   return new RegExp(TOOL_SOURCE, 'g').test(text);
 }
 
+/** Calls emitted together in one response are independent — execute them in
+ * parallel; result order matches call order. */
 export async function executeAllToolCalls(text, context) {
   const calls = parseToolCalls(text);
-  const results = [];
-  for (const call of calls) {
+  const results = await Promise.all(calls.map(async (call) => {
     try {
       validateParams(call.name, call.params);
       const result = await executeTool(call.name, call.params, context);
-      results.push({ name: call.name, ok: true, result, params: call.params });
+      return { name: call.name, ok: true, result, params: call.params };
     } catch (err) {
-      results.push({ name: call.name, ok: false, error: err.message, params: call.params });
+      return { name: call.name, ok: false, error: err.message, params: call.params };
     }
-  }
+  }));
   return results;
 }
 

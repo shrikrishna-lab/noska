@@ -532,14 +532,19 @@ export class AgentRuntime {
         return { ok: true, text: visible || undefined, isText: visible.length > 0 };
       }
 
-      // Execute tool calls through permission gate + verification
+      // Execute tool calls through permission gate + verification. Calls in
+      // one round are independent by construction (the model emitted them
+      // together), so they run in parallel; records/outcomes keep call order.
       const beforeSnapshot = snapshotWorkspace(options.getContext);
       const outcomes: string[] = [];
       const roundRecords: Array<{ record: ToolCallRecord; params: Record<string, unknown>; result: unknown }> = [];
-      for (const call of calls) {
+      const executed = await Promise.all(calls.map(async (call) => {
         const toolStart = Date.now();
         track("TOOL_REQUESTED", undefined, call.name);
         const record = await this.gatedExecute(call.name, call.params, options, context);
+        return { call, record, toolStart };
+      }));
+      for (const { call, record, toolStart } of executed) {
         context.run.toolCalls.push(record);
         if (record.ok) anyToolSucceeded = true;
         roundRecords.push({ record, params: call.params, result: (record as ToolCallRecord & { rawResult?: unknown }).rawResult });
@@ -821,6 +826,28 @@ export class AgentRuntime {
 }
 
 // Helper kept outside the class so gatedExecute stays readable.
+
+/**
+ * Normalized tool-call signature for repetition detection: case-insensitive,
+ * whitespace-collapsed strings and sorted object keys, so "INBOX " vs "inbox"
+ * count as the same call while genuinely different args stay distinct.
+ */
+function normalizedToolSig(name: string, params: Record<string, unknown>): string {
+  const norm = (v: unknown): unknown => {
+    if (typeof v === "string") return v.toLowerCase().replace(/\s+/g, " ").trim();
+    if (Array.isArray(v)) return v.map(norm);
+    if (v && typeof v === "object") {
+      return Object.keys(v as Record<string, unknown>)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, key) => {
+          acc[key] = norm((v as Record<string, unknown>)[key]);
+          return acc;
+        }, {});
+    }
+    return v;
+  };
+  return `${name.toLowerCase()}:${JSON.stringify(norm(params || {}))}`;
+}
 
 /** Heuristic for a tool attempt that failed to parse (marker fragments,
  * truncated JSON, stray function-call syntax) — gates the repair round. */

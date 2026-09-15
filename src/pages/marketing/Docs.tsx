@@ -4,9 +4,11 @@ import { motion } from 'framer-motion';
 import { 
   Search, BookOpen, ChevronRight, Terminal, Shield, Users, Key, Database, 
   Layout, HelpCircle, ExternalLink, Menu, X, Plug, Copy, Check, ThumbsUp, ThumbsDown,
-  Monitor, Mic, GraduationCap, KeyRound, Sparkles
+  Monitor, Mic, GraduationCap, KeyRound, Sparkles, PenTool
 } from 'lucide-react';
 import './Docs.css';
+
+import { DEFAULT_CHANGELOG_ENTRIES, ChangelogEntry } from '../../lib/changelogDefaults';
 
 export type BadgeTheme = 
   | 'violet' 
@@ -30,6 +32,7 @@ export interface DocItem {
   isNew?: boolean;
   theme?: BadgeTheme;
   badgeLabel?: string;
+  children?: DocItem[];
 }
 
 export const THEME_PALETTE: BadgeTheme[] = [
@@ -50,19 +53,69 @@ export const THEME_PALETTE: BadgeTheme[] = [
 ];
 
 /**
- * Dynamic registry of active NEW documentation features.
- * - Add any doc ID here to activate a dynamic badge.
- * - When multiple new items exist, each gets a DIFFERENT unique soft color automatically.
- * - When shifting to new docs, simply update this map and older badges disappear automatically.
+ * Dynamically computes "NEW" badges exclusively for new changes from the latest release.
+ * - Inspects the latest changelog release (DEFAULT_CHANGELOG_ENTRIES[0]).
+ * - Automatically strips all badges and colors from older changes/releases.
+ * - Allocates 100% unique, non-duplicate colors from THEME_PALETTE (zero duplicate colors).
+ * - As soon as a newer version is released, old doc badges and colors automatically expire and are removed.
  */
-export const ACTIVE_NEW_DOCS: Record<string, { theme?: BadgeTheme; label?: string }> = {
-  'canvas': { theme: 'violet', label: 'NEW' },
-  'voice-hub': { theme: 'emerald', label: 'NEW' },
-  'ai-assistant': { theme: 'cyan', label: 'NEW' },
-  'desktop-tabs': { theme: 'rose', label: 'NEW' },
-  'mcp-server': { theme: 'amber', label: 'NEW' },
-  'all-ecosystems-catalog': { theme: 'sage', label: 'NEW' },
-};
+export function computeDynamicDocBadges(
+  allItems: DocItem[],
+  docContents: Record<string, { title: string; body: string }>
+): Map<string, { isNew: boolean; theme: BadgeTheme; label: string }> {
+  const badgeMap = new Map<string, { isNew: boolean; theme: BadgeTheme; label: string }>();
+  const usedThemes = new Set<BadgeTheme>();
+
+  const latestRelease = DEFAULT_CHANGELOG_ENTRIES[0];
+  if (!latestRelease) return badgeMap;
+
+  const latestText = `${latestRelease.title} ${latestRelease.description || ''}`.toLowerCase();
+  const matchedItemIds: string[] = [];
+
+  for (const item of allItems) {
+    const itemIdParts = item.id.toLowerCase().replace(/[-_]/g, ' ');
+    const itemTitle = item.title.toLowerCase();
+    const doc = docContents[item.id];
+    const docBody = doc?.body ? doc.body.toLowerCase() : '';
+
+    let isLatestMatch = false;
+
+    // Direct high-signal match against latest release notes
+    const keywords = [...itemIdParts.split(' '), ...itemTitle.split(' ')].filter(
+      w => w.length > 3 && !['overview', 'with', 'from', 'this', 'that', 'guide', 'features'].includes(w)
+    );
+    
+    if (latestText.includes(itemTitle) || latestText.includes(itemIdParts)) {
+      isLatestMatch = true;
+    } else {
+      const matchCount = keywords.filter(k => latestText.includes(k)).length;
+      if (matchCount >= 2 || (keywords.length === 1 && matchCount === 1)) {
+        isLatestMatch = true;
+      }
+    }
+
+    // Explicit release version tag in doc body (e.g. v1.2.2)
+    if (latestRelease.version && docBody.includes(latestRelease.version.toLowerCase())) {
+      isLatestMatch = true;
+    }
+
+    // Only active new docs matching the latest changes are accepted; older changes are completely excluded
+    if (isLatestMatch) {
+      matchedItemIds.push(item.id);
+    }
+  }
+
+  // Allocate strictly unique, non-duplicate colors from THEME_PALETTE
+  for (const id of matchedItemIds) {
+    const availableTheme = THEME_PALETTE.find(t => !usedThemes.has(t));
+    if (availableTheme) {
+      usedThemes.add(availableTheme);
+      badgeMap.set(id, { isNew: true, theme: availableTheme, label: 'NEW' });
+    }
+  }
+
+  return badgeMap;
+}
 
 interface DocSection {
   id: string;
@@ -78,6 +131,19 @@ interface DocContent {
   };
 }
 
+export function getAllDocItems(sectionList: DocSection[]): DocItem[] {
+  const list: DocItem[] = [];
+  for (const s of sectionList) {
+    for (const item of s.items) {
+      list.push(item);
+      if (item.children) {
+        list.push(...item.children);
+      }
+    }
+  }
+  return list;
+}
+
 const sections: DocSection[] = [
   {
     id: 'getting-started',
@@ -86,24 +152,33 @@ const sections: DocSection[] = [
     items: [
       { id: 'introduction', title: 'Introduction' },
       { id: 'quickstart', title: 'Quick Start' },
-      { id: 'core-concepts', title: 'Core Concepts' },
-      { id: 'desktop-tabs', title: 'Desktop & Multi-Tab Navigation', isNew: true },
+      { 
+        id: 'core-concepts', 
+        title: 'Core Concepts',
+        children: [
+          { id: 'desktop-tabs', title: 'Desktop & Multi-Tab Navigation' }
+        ]
+      },
     ],
   },
   {
-    id: 'integrations',
-    icon: Plug,
-    title: 'Integrations & Ecosystems',
+    id: 'editor-section',
+    icon: PenTool,
+    title: 'Editor & Blocks',
     items: [
-      { id: 'integrations-overview', title: 'Ecosystem Architecture' },
-      { id: 'google-workspace-integration', title: 'Google Workspace' },
-      { id: 'microsoft-365-integration', title: 'Microsoft 365' },
-      { id: 'atlassian-integration', title: 'Atlassian (Jira & Confluence)' },
-      { id: 'github-integration', title: 'GitHub & DevOps' },
-      { id: 'slack-discord-integration', title: 'Slack & Discord' },
-      { id: 'notion-linear-integration', title: 'Notion, Linear & Tasks' },
-      { id: 'developer-cloud-integrations', title: 'Databases & Cloud Storage' },
-      { id: 'all-ecosystems-catalog', title: 'All 28 Connected Apps', isNew: true },
+      { 
+        id: 'editor-overview', 
+        title: 'Editor & Slash Menu',
+        children: [
+          { id: 'editor-resizer', title: 'Free 5-Directional Resizer' },
+          { id: 'editor-todos', title: 'Playful Animated To-Dos' },
+          { id: 'editor-interactive', title: 'Interactive Live Blocks' },
+          { id: 'editor-code-latex', title: 'Code & LaTeX Equations' },
+          { id: 'editor-databases', title: 'Databases & Views' },
+          { id: 'editor-embeds', title: '33+ Embeds & Rich Media' },
+          { id: 'editor-reading-modes', title: 'Reading Mode & Widths' },
+        ]
+      },
     ],
   },
   {
@@ -111,13 +186,32 @@ const sections: DocSection[] = [
     icon: Layout,
     title: 'Core Features',
     items: [
-      { id: 'pages-blocks', title: 'Pages & Blocks' },
-      { id: 'databases', title: 'Databases' },
-      { id: 'canvas', title: 'Spatial Canvas', isNew: true },
-      { id: 'voice-hub', title: 'Voice & Dynamic Island', isNew: true },
+      { id: 'canvas', title: 'Spatial Canvas & Whiteboards' },
+      { id: 'voice-hub', title: 'Voice & Dynamic Island' },
       { id: 'thought-graph', title: 'Thought Graph' },
       { id: 'spaced-repetition', title: 'Spaced Repetition & Study' },
-      { id: 'ai-assistant', title: 'AI Assistant & 13 Live Models', isNew: true },
+      { id: 'ai-assistant', title: 'AI Assistant & 13 Live Models' },
+    ],
+  },
+  {
+    id: 'integrations',
+    icon: Plug,
+    title: 'Integrations & Ecosystems',
+    items: [
+      { 
+        id: 'integrations-overview', 
+        title: 'Ecosystem Architecture',
+        children: [
+          { id: 'google-workspace-integration', title: 'Google Workspace' },
+          { id: 'microsoft-365-integration', title: 'Microsoft 365' },
+          { id: 'atlassian-integration', title: 'Atlassian (Jira & Confluence)' },
+          { id: 'github-integration', title: 'GitHub & DevOps' },
+          { id: 'slack-discord-integration', title: 'Slack & Discord' },
+          { id: 'notion-linear-integration', title: 'Notion, Linear & Tasks' },
+          { id: 'developer-cloud-integrations', title: 'Databases & Cloud Storage' },
+          { id: 'all-ecosystems-catalog', title: 'All 28 Connected Apps' },
+        ]
+      },
     ],
   },
   {
@@ -125,9 +219,14 @@ const sections: DocSection[] = [
     icon: Users,
     title: 'Workspace',
     items: [
-      { id: 'collaboration', title: 'Collaboration & Company Workspaces' },
-      { id: 'sharing', title: 'Sharing & Permissions' },
-      { id: 'keyboard-shortcuts', title: 'Keyboard Shortcuts Studio' },
+      { 
+        id: 'collaboration', 
+        title: 'Collaboration & Teamspaces',
+        children: [
+          { id: 'sharing', title: 'Sharing & Permissions' },
+          { id: 'keyboard-shortcuts', title: 'Keyboard Shortcuts Studio' },
+        ]
+      },
     ],
   },
   {
@@ -135,9 +234,14 @@ const sections: DocSection[] = [
     icon: Shield,
     title: 'Security',
     items: [
-      { id: 'encryption', title: 'Encryption' },
-      { id: 'data-privacy', title: 'Data Privacy' },
-      { id: 'rls', title: 'Row-Level Security' },
+      { 
+        id: 'encryption', 
+        title: 'Security Architecture',
+        children: [
+          { id: 'data-privacy', title: 'Data Privacy & Offline Isolation' },
+          { id: 'rls', title: 'Row-Level Security (RLS)' },
+        ]
+      },
     ],
   },
   {
@@ -145,9 +249,14 @@ const sections: DocSection[] = [
     icon: Terminal,
     title: 'Developers',
     items: [
-      { id: 'mcp-server', title: 'MCP Server', isNew: true },
-      { id: 'api-keys', title: 'API Keys & Scopes' },
-      { id: 'api-reference', title: 'API Reference' },
+      { 
+        id: 'mcp-server', 
+        title: 'Developer Platform',
+        children: [
+          { id: 'api-keys', title: 'API Keys & Scopes' },
+          { id: 'api-reference', title: 'API Reference' },
+        ]
+      },
     ],
   },
   {
@@ -155,8 +264,31 @@ const sections: DocSection[] = [
     icon: Key,
     title: 'Account',
     items: [
-      { id: 'plans', title: 'Plans & Pricing' },
-      { id: 'import-export', title: 'Import & Export' },
+      { 
+        id: 'plans', 
+        title: 'Account & Billing',
+        children: [
+          { id: 'import-export', title: 'Import & Export Data' },
+        ]
+      },
+    ],
+  },
+  {
+    id: 'marketing-resources',
+    icon: Sparkles,
+    title: 'Product & Marketing',
+    items: [
+      { 
+        id: 'product-overview', 
+        title: 'Product Tour',
+        children: [
+          { id: 'changelog-doc', title: 'Changelog & Releases' },
+          { id: 'roadmap-doc', title: 'Public Roadmap' },
+          { id: 'enterprise-doc', title: 'Enterprise Solutions' },
+          { id: 'new-updated-doc', title: 'What’s New & Updated' },
+          { id: 'download-apps-doc', title: 'Download Desktop Apps' },
+        ]
+      },
     ],
   },
   {
@@ -164,9 +296,14 @@ const sections: DocSection[] = [
     icon: HelpCircle,
     title: 'Help & Support',
     items: [
-      { id: 'contact-support', title: 'Support & Community' },
-      { id: 'troubleshooting', title: 'Troubleshooting & Diagnostics' },
-      { id: 'faq', title: 'Frequently Asked Questions' },
+      { 
+        id: 'contact-support', 
+        title: 'Support & Community',
+        children: [
+          { id: 'troubleshooting', title: 'Troubleshooting & Diagnostics' },
+          { id: 'faq', title: 'Frequently Asked Questions' },
+        ]
+      },
     ],
   },
 ];
@@ -318,93 +455,166 @@ Work on multiple documents simultaneously just like in a high-performance web br
 | **Switch to Tab 1-9** | \`Ctrl / Cmd + 1..9\` |
 | **Reopen Last Closed Tab** | \`Ctrl / Cmd + Shift + T\` |`,
   },
-  'pages-blocks': {
-    title: 'Pages & Blocks',
-    body: `Pages are the heart of Noska. Here's everything you need to know about working with them.
+  'editor-overview': {
+    title: 'Editor Overview & Slash Commands',
+    body: `Noska Editor is an ultra-fast, block-based writing canvas engineered for clarity and fluid speed. Every paragraph, heading, list, or embed is an independent block with its own unique identity and drag handle.
 
-**Creating a page**
+---
 
-- Click **+ New Page** in the sidebar
-- Press \`Ctrl + N\` from anywhere
-- Use the command palette (\`Ctrl + K\`) and type "New page"
+### ⚡ Quick Slash Commands (\`/\`)
+Type \`/\` on any empty line to trigger the block selector menu:
 
-**Page types**
+| Shortcut | Block Type | Description |
+|---|---|---|
+| \`/\` or \`#\` | **Heading 1-4** | Hierarchical section headings with auto-anchor links |
+| \`[]\` | **To-do List** | Playful animated task checkboxes with monotonic pen strikethroughs |
+| \`-\` or \`*\` | **Bulleted List** | Unordered list with tab indentation hierarchy |
+| \`1.\` | **Numbered List** | Auto-incrementing numbered list |
+| \`>\` | **Toggle List** | Collapsible toggle heading or list |
+| \`""\` | **Quote** | Styled callout block with quote styling |
+| \`\`\`\` | **Code Block** | Syntax-highlighted code cell with 40+ language grammars |
+| \`/interactive\` | **Interactive Block** | Sandboxed live KPI dashboards, charts, counters, and widgets |
+| \`/table\` | **Simple Table** | Lightweight tabular spreadsheet |
+| \`/database\` | **Database View** | Relational database in Table, Board, Calendar, or Timeline view |
+| \`/mermaid\` | **Mermaid Diagram** | Text-to-diagram flowcharts, sequence diagrams, and architecture maps |
+| \`/canvas\` | **Embedded Canvas** | 2D infinite whiteboard embed |
 
-Each page has a type that determines its behavior:
-- **Document** — Free-form page with any blocks
-- **Database** — Structured rows and columns
-- **Canvas** — Spatial layout with draggable blocks
+---
 
-You can switch between these modes at any time using the tabs at the top of the page — your data is preserved across views.
-
-**Block types (33 total)**
-
-| Category | Blocks |
-|---|---|
-| **Text** | Paragraph, Heading 1-3, Bullet list, Numbered list, To-do, Toggle, Callout, Quote |
-| **Media** | Image, Video, Audio, File, Embed, Bookmark, Divider |
-| **Code** | Code block (with syntax highlighting for 40+ languages), Inline code |
-| **Data** | Table, Database view, Chart, Kanban board |
-| **Learning** | Spaced repetition flashcards (SM-2), Quiz blocks |
-| **Advanced** | Math (KaTeX), Diagram (Mermaid), Timeline, Map, Link preview |
-| **Layout** | Columns, Spacer, Section divider |
-
-**Organizing pages**
-
-- **Drag and drop** pages in the sidebar to reorder or nest
-- **Favorites** — Star important pages for quick access
-- **Tags** — Add tags to categorize across workspaces
-- **Backlinks** — Every page shows which other pages link to it`,
+### 🖱️ Block Actions & Drag Handles
+- **Drag Reorder** — Grab the \`⋮⋮\` handle on the left of any block to drag and drop it anywhere.
+- **Alt + Click** — Click any page link to open it side-by-side in stacked view.
+- **Ctrl / Cmd + D** — Instant duplicate block.
+- **Backspace on Empty Block** — Converts block back to plain text or deletes it cleanly.`,
   },
-  'databases': {
-    title: 'Databases',
-    body: `Databases transform your pages into structured, queryable collections. Every row in a database is a full page — not just a spreadsheet cell.
+  'editor-resizer': {
+    title: 'Free 5-Directional Block Resizing Engine',
+    body: `Resize any media, embed, code cell, database, or interactive widget freely in **both width and height** with pixel-perfect 1:1 cursor tracking and symmetric margin breakout.
 
-**Creating a database**
+---
 
-Type \`/\` and select **Database** from the block picker, or create a new page and switch to Database mode using the tabs at the top.
+### 🕹️ 5 Interactive Resize Handles
+Hover over any resizable block in either the Editor or Reading view to reveal the 5 handles:
 
-**Views**
+1. **Right Edge Blue Bar (\`col-resize\`)**:
+   - Drag left or right to freely adjust width.
+2. **Left Edge Blue Bar (\`col-resize\`)**:
+   - Drag left or right to freely adjust width with smooth left margin breakout.
+3. **Bottom Edge Center Pill (\`row-resize\`)**:
+   - Drag up or down to freely adjust length / height without altering width.
+4. **Bottom-Right Curved Corner (\`nwse-resize\` \`_|\`)**:
+   - Drag in any 2D direction to freely resize **both width and height simultaneously**.
+5. **Bottom-Left Curved Corner (\`nesw-resize\` \`|_\`)**:
+   - Drag in any 2D direction to freely resize **both width and height simultaneously**.
 
-Databases support multiple visualization modes:
+---
 
-\`\`\`
-Table view    | Name    | Status      | Due date   |
-              |---------|-------------|------------|
-              | Task A  | In progress | 2026-07-20 |
-              | Task B  | Done        | 2026-07-15 |
+### ↔️ Symmetric Margin Breakout
+When a block is resized wider than the standard central reading column (e.g. 760px), it automatically breaks out symmetrically:
+- Expands equally into both the **left page gutter** and **right page gutter**.
+- Preserves balanced visual centering without clipping or one-sided overflow.
+- Displays a real-time HUD tooltip showing live dimensions (\`{width}px × {height}px\`).
 
-Board view    | To Do   | In Progress | Done       |
-              |---------|-------------|------------|
-              |         | Task A      | Task B     |
+---
 
-Calendar view | July 2026
-              | Mon | Tue | Wed | Thu | Fri
-              |     |     |  1  |  2  |  3
-\`\`\`
+### 🔄 Double-Click Reset
+Double-click any handle or corner to instantly reset the block back to its default responsive dimensions.`,
+  },
+  'editor-todos': {
+    title: 'Playful Animated To-Do Lists',
+    body: `Noska upgrades traditional checkboxes into tactile, rewarding micro-interactions that make checking off tasks genuinely fun.
 
-**Properties**
+---
 
-Each column in a database is a property with a specific type:
-- Text, Number, Date, Select, Multi-select, Status
-- Person, File, URL, Email, Phone, Checkbox
-- Formula, Rollup, Relation (link to another database)
+### ✍️ Organic Variable-Width Monotonic Pen Stroke
+Unlike standard CSS strikethroughs that render rigid straight lines or looping blotches, Noska uses a custom monotonic SVG pen stroke path:
+- **Clean at any word length**: Scales organically from single letters (*"a"*, *"hi"*) to full multi-line paragraphs without squishing or dark knots.
+- **Smooth Spring Progression**: Animates across the text with a natural hand-drawn acceleration curve.
 
-**Filters & sorting**
+---
 
-Click the filter icon to show only matching rows. Combine multiple conditions:
+### 🎉 Confetti Celebrations & Sound Micro-Interactions
+- Checking an item triggers playful burst confetti particles with delightful auditory click feedback.
+- Completed tasks smoothly adjust text opacity while preserving full readability.
+- Re-checking or unchecking instantly resets state without page jumping.`,
+  },
+  'editor-interactive': {
+    title: 'Interactive Live Sandboxed Blocks Suite',
+    body: `Embed dynamic, real-time interactive widgets, KPI dashboards, charts, counters, countdown timers, and web apps directly inside your documents via \`/interactive\`.
 
-\`\`\`
-Status  is       "In Progress"
-AND
-Due date before  2026-08-01
-\`\`\`
+---
 
-Sort by any property ascending or descending. Save filtered views as named presets.
+### 🚀 Sandboxed iframe Security Architecture
+- Every interactive block runs inside a secure sandboxed container with strict CSP restrictions.
+- Live two-way communication allows blocks to adapt dynamically to document theme changes (dark/light mode).
+- **Responsive Width & Height**: Supports full 5-directional free resizing — charts and dashboards automatically re-render and re-layout as you drag block dimensions.
 
-**Relations**
+---
 
-Link databases together using the Relation property type. For example, link your "Projects" database to your "Tasks" database so each task belongs to a project.`,
+### 📊 Pre-built Interactive Templates
+- **Executive KPI Dashboard**: Live revenue, MRR, conversion charts, and progress bars.
+- **Interactive Countdown Timer**: Customizable launch timers and study pomodoro timers.
+- **Metric Counter & Stepper**: Increment/decrement counters for habit tracking.
+- **Live Poll & Rating Widget**: Interactive rating sliders and customer feedback forms.
+- **Custom HTML/JS Embed**: Write or paste sandboxed HTML, CSS, and JavaScript with live preview.`,
+  },
+  'editor-code-latex': {
+    title: 'Code Blocks & LaTeX Mathematical Equations',
+    body: `Engineered for developers, engineers, and researchers with full syntax highlighting, copy actions, and real-time LaTeX formula rendering.
+
+---
+
+### 💻 Code Blocks
+- **40+ Language Grammars**: TypeScript, JavaScript, Rust, Python, Go, C++, SQL, JSON, YAML, HTML, CSS, and more.
+- **1-Click Copy**: Built-in copy button with tactile visual confirmation.
+- **Free Resizing**: Drag the bottom pill to expand code block height for long scripts.
+
+---
+
+### 🧮 LaTeX Math Equations
+- **Inline Equations**: Write math directly inside paragraphs using \`$E = mc^2$\`.
+- **Block Equations (\`$$\`)**: Type \`/equation\` to insert full-width KaTeX rendered formulas with instant visual rendering.`,
+  },
+  'editor-databases': {
+    title: 'Databases & Relational Views',
+    body: `Databases in Noska transform plain documents into structured, relational knowledge engines where every row is a full page.
+
+---
+
+### 📑 4 Visual View Switchers
+- **Table View**: Spreadsheet grid with sortable columns, custom filters, and column reordering.
+- **Board View (Kanban)**: Drag-and-drop cards grouped by Status, Priority, or Custom Tags.
+- **Calendar View**: Monthly calendar layout mapped to date properties.
+- **Timeline View**: Gantt-style roadmap with date ranges and milestone tracking.
+
+---
+
+### 🏷️ 12+ Property Types
+Text, Number, Date, Select, Multi-Select, Status, Person, File, URL, Email, Phone, Checkbox, Formulas, and Relations.`,
+  },
+  'editor-embeds': {
+    title: '33+ Embeds & Rich Media Integrations',
+    body: `Connect external design files, video recordings, and developer sandboxes directly into your documents.
+
+---
+
+### 🔌 Supported Embed Providers
+- **Design & Whiteboards**: Figma, Miro, Excalidraw, Whimsical, InVision, Sketch.
+- **Video & Audio**: Loom, YouTube, Vimeo, Spotify, SoundCloud, Native MP4/WebM.
+- **Developer Sandboxes**: CodePen, Replit, GitHub Gists, JSFiddle.
+- **Documents & Forms**: Google Drive, Google Docs, Typeform, Native PDF Viewer.
+- **Social & Previews**: Tweet / X, Web Bookmarks with rich OpenGraph metadata.
+
+All embeds feature universal 5-directional free resizing and responsive breakout margins.`,
+  },
+  'editor-reading-modes': {
+    title: 'Reading Mode & Column Widths',
+    body: `Switch between focused writing and distraction-free presentation with 4 column width presets:
+
+- **Compact**: 680px narrow column optimized for long-form reading and essays.
+- **Medium**: 820px balanced width for standard notes and documentation.
+- **Wide**: 1080px expanded layout for side-by-side tables and charts.
+- **Full**: 100% edge-to-edge width for complex dashboards, code cells, and databases.`,
   },
   'canvas': {
     title: 'Spatial Canvas & Whiteboards',
@@ -1368,6 +1578,77 @@ The Thought Graph automatically analyzes bi-directional wiki links (\`[[Page Nam
 - **Plus**: Unlimited file uploads, 30-day version history, team collaboration, and cloud sync.
 - **Enterprise**: Custom SSO / SAML, audit logs, shared teamspaces, custom MCP connector deployment, and dedicated SLAs.`,
   },
+  'product-overview': {
+    title: 'Product Overview & Feature Tour',
+    body: `Noska combines documents, spatial whiteboards, relational databases, AI models, and real-time voice capture into a unified, local-first workspace.
+
+### 🌟 Core Product Capabilities
+- **Spatial Canvas 2.0**: Non-linear whiteboards, dynamic magnetic Bezier connectors, 2D Kanban dual-views, and step-by-step presentation mode.
+- **5-Directional Free Block Resizing**: Symmetrical margin breakout and 2D corner resizing across all editor blocks and embeds.
+- **Dynamic Island Fluid Voice Capture**: Whisper-powered speech-to-text dictation with live waveform audio feedback.
+- **Universal Multi-Provider AI**: BYOK access to 13 flagship AI providers with live dynamic model discovery and zero proxying.
+- **Local-First Speed**: Instant offline search, SQLite storage cache, and seamless CRDT cloud synchronization.
+
+[Visit the Interactive Product Tour](/product)`,
+  },
+  'changelog-doc': {
+    title: 'Changelog & Release Notes Engine',
+    body: `Track all continuous updates, feature releases, performance optimizations, and bug fixes in Noska.
+
+### 🔄 How Changelogs Work in Noska
+- **In-App Desktop / Web Release Notes**: Automatically alerts you when a new version is detected, powered by \`changelogDefaults.ts\` and \`ReleaseNotesModal.tsx\`.
+- **Public Web Changelog**: Accessible anytime at [/changelog](/changelog) with categorized tags (Major Release, Feature Update, Bug Fixes).
+- **Offline Resilient Fallback**: Always available offline via embedded default release history.
+
+[Open the Web Changelog Page](/changelog)`,
+  },
+  'roadmap-doc': {
+    title: 'Public Roadmap & Feature Voting',
+    body: `Noska develops in the open with community-driven feature voting and transparent milestone tracking.
+
+### 🗺️ Roadmap Categories
+- **Planned**: Features prioritized for upcoming release cycles.
+- **In Progress**: Active engineering sprints currently under development and testing.
+- **Completed**: Launched features across macOS, Windows, Linux, and Web clients.
+
+[View the Public Roadmap & Vote on Features](/roadmap)`,
+  },
+  'enterprise-doc': {
+    title: 'Enterprise & Security Solutions',
+    body: `Noska Enterprise is designed for organizations requiring custom security, compliance controls, and dedicated deployment topologies.
+
+### 🔒 Enterprise Features
+- **SAML 2.0 / Okta / Azure AD Single Sign-On (SSO)**
+- **Audit Logging & SIEM Ingestion**
+- **Zero-Knowledge Encryption & VPC Private Hosting**
+- **Custom MCP Server Deployment & Internal API Whitelisting**
+- **99.99% Uptime SLA & Dedicated Support Engineers**
+
+[Explore Enterprise Solutions & Contact Sales](/enterprise)`,
+  },
+  'new-updated-doc': {
+    title: 'What’s New & Updated Highlights',
+    body: `Explore the latest features and design upgrades across Noska:
+
+- **Free 5-Directional Block Resizing & Breakout**: Freely adjust width, length, and 2D corners with symmetric page margin expansion.
+- **Playful To-Do Lists**: Dynamic organic SVG pen stroke strikethroughs with celebratory confetti.
+- **Interactive Sandboxed Blocks**: Embed live KPI dashboards, charts, counters, timers, and forms via \`/interactive\`.
+- **ElevenLabs Voice Integration**: Ultra-realistic voice synthesis and voice dictation.
+
+[Check All New & Updated Highlights](/new)`,
+  },
+  'download-apps-doc': {
+    title: 'Download Desktop & Mobile Apps',
+    body: `Get native Noska desktop and mobile applications for the fastest, 100% offline-ready experience.
+
+### 💻 Available Platforms
+- **macOS (Apple Silicon M1/M2/M3/M4 & Intel x64)**: DMG & Homebrew install
+- **Windows (10 & 11 64-bit)**: NSIS Installer & Portable binary
+- **Linux (x86_64 & ARM64)**: AppImage, DEB, and Flatpak packages
+- **Web App**: Accessible from any modern browser with full PWA offline support
+
+[Download Noska for Your Device](/download)`,
+  },
 };
 
 function parseInlineMarkdown(text: string): React.ReactNode[] {
@@ -1661,39 +1942,40 @@ export default function Docs() {
 
   const currentDoc = docs[activeSection] ?? docs.introduction;
 
-  // Dynamically compute active new metadata and unique color theme per item
+  // Dynamically compute active new metadata and unique color theme per item from changelog changes
   const newItemsMap = useMemo(() => {
-    const map = new Map<string, { isNew: boolean; theme: BadgeTheme; label: string }>();
-    let colorIndex = 0;
-
-    for (const section of sections) {
-      for (const item of section.items) {
-        const config = ACTIVE_NEW_DOCS[item.id];
-        const isMarkedNew = Boolean(config || item.isNew);
-        if (isMarkedNew) {
-          const theme = config?.theme || item.theme || THEME_PALETTE[colorIndex % THEME_PALETTE.length];
-          const label = config?.label || item.badgeLabel || 'NEW';
-          map.set(item.id, { isNew: true, theme, label });
-          colorIndex++;
-        }
-      }
-    }
-    return map;
+    const allItems = getAllDocItems(sections);
+    return computeDynamicDocBadges(allItems, docs);
   }, []);
 
   const currentSectionMeta = useMemo(() => {
     for (const sec of sections) {
-      const item = sec.items.find((i) => i.id === activeSection);
-      if (item) {
-        const newMeta = newItemsMap.get(item.id);
-        return { 
-          category: sec.title, 
-          title: item.title, 
-          isNew: Boolean(newMeta?.isNew),
-          theme: newMeta?.theme || 'violet',
-          label: newMeta?.label || 'NEW',
-          icon: sec.icon 
-        };
+      for (const item of sec.items) {
+        if (item.id === activeSection) {
+          const newMeta = newItemsMap.get(item.id);
+          return { 
+            category: sec.title, 
+            title: item.title, 
+            isNew: Boolean(newMeta?.isNew),
+            theme: newMeta?.theme || 'violet',
+            label: newMeta?.label || 'NEW',
+            icon: sec.icon 
+          };
+        }
+        if (item.children) {
+          const child = item.children.find(c => c.id === activeSection);
+          if (child) {
+            const childMeta = newItemsMap.get(child.id);
+            return { 
+              category: `${sec.title} / ${item.title}`, 
+              title: child.title, 
+              isNew: Boolean(childMeta?.isNew),
+              theme: childMeta?.theme || 'violet',
+              label: childMeta?.label || 'NEW',
+              icon: sec.icon 
+            };
+          }
+        }
       }
     }
     const rootMeta = newItemsMap.get('introduction');
@@ -1717,20 +1999,20 @@ export default function Docs() {
     if (!search.trim()) return null;
     const q = search.toLowerCase();
     const results: { id: string; title: string; section: string; isNew?: boolean; theme?: BadgeTheme; label?: string; }[] = [];
-    for (const section of sections) {
-      for (const item of section.items) {
-        const doc = docs[item.id];
-        if (doc && (doc.title.toLowerCase().includes(q) || doc.body.toLowerCase().includes(q))) {
-          const newMeta = newItemsMap.get(item.id);
-          results.push({ 
-            id: item.id, 
-            title: doc.title, 
-            section: section.title, 
-            isNew: newMeta?.isNew, 
-            theme: newMeta?.theme,
-            label: newMeta?.label 
-          });
-        }
+    const allItems = getAllDocItems(sections);
+    
+    for (const item of allItems) {
+      const doc = docs[item.id];
+      if (doc && (doc.title.toLowerCase().includes(q) || doc.body.toLowerCase().includes(q))) {
+        const newMeta = newItemsMap.get(item.id);
+        results.push({ 
+          id: item.id, 
+          title: doc.title, 
+          section: item.title, 
+          isNew: newMeta?.isNew, 
+          theme: newMeta?.theme,
+          label: newMeta?.label 
+        });
       }
     }
     return results;
@@ -1816,19 +2098,44 @@ export default function Docs() {
                   <p className="docs-nav-group-title"><Icon size={14} /> {section.title}</p>
                   {section.items.map((item) => {
                     const itemMeta = newItemsMap.get(item.id);
+                    const isParentActive = activeSection === item.id;
                     return (
-                      <button
-                        key={item.id}
-                        className={`docs-nav-item ${activeSection === item.id ? 'active' : ''} ${itemMeta?.isNew ? 'has-new' : ''}`}
-                        onClick={() => handleSearchSelect(item.id)}
-                      >
-                        <span className="docs-nav-item-text">{item.title}</span>
-                        {itemMeta?.isNew && (
-                          <span className={`docs-sidebar-badge-new theme-${itemMeta.theme}`}>
-                            <span>{itemMeta.label}</span>
-                          </span>
+                      <div key={item.id} className="docs-nav-tree-item">
+                        <button
+                          className={`docs-nav-item ${isParentActive ? 'active' : ''} ${itemMeta?.isNew ? 'has-new' : ''}`}
+                          onClick={() => handleSearchSelect(item.id)}
+                        >
+                          <span className="docs-nav-item-text">{item.title}</span>
+                          {itemMeta?.isNew && (
+                            <span className={`docs-sidebar-badge-new theme-${itemMeta.theme}`}>
+                              <span>{itemMeta.label}</span>
+                            </span>
+                          )}
+                        </button>
+
+                        {item.children && (
+                          <div className="docs-nav-subitems">
+                            {item.children.map((child) => {
+                              const childMeta = newItemsMap.get(child.id);
+                              const isSubActive = activeSection === child.id;
+                              return (
+                                <button
+                                  key={child.id}
+                                  className={`docs-nav-subitem ${isSubActive ? 'active' : ''}`}
+                                  onClick={() => handleSearchSelect(child.id)}
+                                >
+                                  <span className="docs-nav-subitem-text">{child.title}</span>
+                                  {childMeta?.isNew && (
+                                    <span className={`docs-sidebar-badge-new theme-${childMeta.theme}`}>
+                                      <span>{childMeta.label}</span>
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -1884,7 +2191,7 @@ export default function Docs() {
 
           <div className="docs-footer-nav">
             {(() => {
-              const all = sections.flatMap(s => s.items);
+              const all = getAllDocItems(sections);
               const idx = all.findIndex(i => i.id === activeSection);
               const prev = idx > 0 ? all[idx - 1] : null;
               const next = idx < all.length - 1 ? all[idx + 1] : null;

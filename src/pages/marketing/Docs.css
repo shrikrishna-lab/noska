@@ -213,6 +213,60 @@
   font-weight: 600;
 }
 
+/* Tree Structure for Sub-items in Sidebar */
+.docs-nav-tree-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.docs-nav-subitems {
+  margin-left: 14px;
+  padding-left: 10px;
+  border-left: 1.5px solid var(--mkt-border-color);
+  margin-top: 2px;
+  margin-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docs-nav-subitem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  font-size: 12.5px;
+  font-family: var(--mkt-font-sans);
+  color: var(--mkt-text-muted);
+  cursor: pointer;
+  transition: all var(--mkt-transition-fast);
+}
+
+.docs-nav-subitem:hover {
+  background: var(--mkt-bg-secondary);
+  color: var(--mkt-text-primary);
+}
+
+.docs-nav-subitem.active {
+  background: var(--mkt-brand-tint);
+  color: var(--mkt-text-primary);
+  font-weight: 600;
+}
+
+.docs-nav-subitem-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Unique Soft Animated Sidebar New Badge */
 .docs-sidebar-badge-new {
   display: inline-flex;

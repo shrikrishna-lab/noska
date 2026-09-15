@@ -25,6 +25,7 @@ import {
   parseGeminiStream,
   parseOllamaStream,
   streamEventsToText,
+  streamEventsToTextWithTools,
   type StreamEvent,
 } from './core/StreamProtocol.js';
 
@@ -355,14 +356,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("OpenRouter", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
       if (!apiKey) throw configError("OpenRouter");
       const modelId = model || this.defaultModel;
       const payload: Record<string, any> = {
         model: modelId,
         max_tokens: maxTokens,
         temperature: resolveTemperature(temperature, effort),
-        stream: true,
+        stream: true, ...openAiToolsPayload(tools),
         messages: [
           ...(system ? [{ role: "system", content: system }] : []),
           ...messages
@@ -381,7 +382,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify(payload)
         }, signal);
         await checkResponse(res, "OpenRouter", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("OpenRouter", modelId, err as Error);
@@ -446,7 +447,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Gemini", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
       if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
@@ -464,6 +465,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         if (system) {
           body.systemInstruction = { parts: [{ text: system }] };
         }
+        Object.assign(body, geminiToolsPayload(tools) || {});
         const res = await fetchWithTimeout(
           `${this.baseUrl}/models/${modelId}:streamGenerateContent?alt=sse`,
           {
@@ -477,7 +479,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           signal
         );
         await checkResponse(res, "Gemini", modelId);
-        yield* streamEventsToText(parseGeminiStream(res, signal));
+        yield* streamEventsToTextWithTools(parseGeminiStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Gemini", modelId, err as Error);
@@ -538,7 +540,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("OpenAI", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
       if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
       const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.includes("gpt-5") || Boolean(thinking);
@@ -546,7 +548,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         const payload: Record<string, any> = {
           model: modelId,
           max_tokens: maxTokens,
-          stream: true,
+          stream: true, ...openAiToolsPayload(tools),
           messages: [
             ...(system ? [{ role: "system", content: system }] : []),
             ...messages
@@ -566,7 +568,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify(payload)
         }, signal);
         await checkResponse(res, "OpenAI", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("OpenAI", modelId, err as Error);
@@ -630,7 +632,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Anthropic", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, tools, signal }) {
       if (!apiKey) throw configError("Anthropic");
       const modelId = model || this.defaultModel;
       const isAdaptiveThinking = modelId.includes("claude-3-7") || modelId.includes("5") || Boolean(thinking);
@@ -638,7 +640,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         const payload: Record<string, any> = {
           model: modelId,
           max_tokens: Math.max(maxTokens, 4096),
-          stream: true,
+          stream: true, ...openAiToolsPayload(tools),
           ...(system ? { system } : {}),
           messages
         };
@@ -650,6 +652,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           // Extended-thinking payloads must not carry temperature (API 400s).
           payload.temperature = Math.min(Math.max(temperature, 0), 1);
         }
+        Object.assign(payload, anthropicToolsPayload(tools) || {});
         const res = await fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
           headers: {
@@ -661,7 +664,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           body: JSON.stringify(payload)
         }, signal);
         await checkResponse(res, "Anthropic", modelId);
-        yield* streamEventsToText(parseAnthropicStream(res, signal));
+        yield* streamEventsToTextWithTools(parseAnthropicStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Anthropic", modelId, err as Error);
@@ -716,7 +719,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Groq", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("Groq");
       const modelId = model || this.defaultModel;
       try {
@@ -730,7 +733,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
@@ -738,7 +741,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           })
         }, signal);
         await checkResponse(res, "Groq", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Groq", modelId, err as Error);
@@ -783,7 +786,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("DeepSeek", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("DeepSeek");
       const modelId = model || this.defaultModel;
       try {
@@ -794,12 +797,12 @@ const PROVIDERS: Record<string, AIProvider> = {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
         }, signal);
         await checkResponse(res, "DeepSeek", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("DeepSeek", modelId, err as Error);
@@ -848,7 +851,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Mistral", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("Mistral");
       const modelId = model || this.defaultModel;
       try {
@@ -859,12 +862,12 @@ const PROVIDERS: Record<string, AIProvider> = {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
         }, signal);
         await checkResponse(res, "Mistral", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Mistral", modelId, err as Error);
@@ -913,7 +916,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Together", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("Together");
       const modelId = model || this.defaultModel;
       try {
@@ -924,12 +927,12 @@ const PROVIDERS: Record<string, AIProvider> = {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
         }, signal);
         await checkResponse(res, "Together", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Together", modelId, err as Error);
@@ -975,7 +978,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("xAI", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("xAI");
       const modelId = model || this.defaultModel;
       try {
@@ -986,12 +989,12 @@ const PROVIDERS: Record<string, AIProvider> = {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [...(system ? [{ role: "system", content: system }] : []), ...messages]
           })
         }, signal);
         await checkResponse(res, "xAI", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("xAI", modelId, err as Error);
@@ -1043,7 +1046,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("NVIDIA", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError("NVIDIA");
       const modelId = model || this.defaultModel;
       try {
@@ -1059,7 +1062,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort, 0.5),
             top_p: 1,
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
@@ -1067,7 +1070,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           })
         }, signal, 45000);
         await checkResponse(res, "NVIDIA", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("NVIDIA", modelId, err as Error);
@@ -1180,7 +1183,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           ? JSON.stringify({
             model: modelId,
             max_tokens: maxTokens,
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             ...(system ? { system } : {}),
             messages: messages.map(m => ({ role: m.role, content: m.content }))
           })
@@ -1188,7 +1191,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
@@ -1203,9 +1206,9 @@ const PROVIDERS: Record<string, AIProvider> = {
 
         await checkResponse(res, "OpenCode Zen", modelId);
         if (isAnthropic) {
-          yield* streamEventsToText(parseAnthropicStream(res, signal));
+          yield* streamEventsToTextWithTools(parseAnthropicStream(res, signal));
         } else {
-          yield* streamEventsToText(parseOpenAIStream(res, signal));
+          yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
         }
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
@@ -1278,7 +1281,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model: modelId,
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             options: { num_predict: maxTokens, temperature: resolveTemperature(temperature, effort) },
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
@@ -1368,7 +1371,7 @@ const PROVIDERS: Record<string, AIProvider> = {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages
@@ -1376,7 +1379,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           })
         }, signal, 60000);
         await checkResponse(res, "LM Studio", modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("LM Studio", modelId, err as Error);
@@ -1455,7 +1458,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
         throw classifyNetworkError(cfg.name, modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
       if (!apiKey) throw configError(cfg.name);
       const modelId = model || this.defaultModel;
       try {
@@ -1466,7 +1469,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
             model: modelId,
             max_tokens: maxTokens,
             temperature: resolveTemperature(temperature, effort),
-            stream: true,
+            stream: true, ...openAiToolsPayload(tools),
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
               ...messages,
@@ -1474,7 +1477,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
           }),
         }, signal);
         await checkResponse(res, cfg.name, modelId);
-        yield* streamEventsToText(parseOpenAIStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError(cfg.name, modelId, err as Error);
