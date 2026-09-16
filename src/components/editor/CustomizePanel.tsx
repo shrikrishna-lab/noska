@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Type, Maximize2, Palette, Image, Lock, Eye, Sparkles,
   Sun, Moon, Monitor, ChevronDown, Check, Sliders, Layers,
-  Compass, Laptop, Smartphone, BookOpen, FileText, Layout
+  Compass, Laptop, Smartphone, BookOpen, FileText, Layout, Calendar
 } from "lucide-react";
 import type { Page } from "../../lib/supabaseService";
+import { useCalendarTopbarSetting, useAutoPagesInCalendarSetting } from "../../lib/calendarSync";
 import { COVER_CATEGORIES, getAllCovers } from "../../registry/covers/CoverRegistry";
 
 export interface PageThemePreset {
@@ -127,6 +128,8 @@ interface CustomizePanelProps {
 }
 
 export default function CustomizePanel({ open, onClose, page, onPagePatch, onToast }: CustomizePanelProps) {
+  const { enabled: calendarTopbarEnabled, toggle: toggleCalendarTopbar } = useCalendarTopbarSetting();
+  const { enabled: autoPagesEnabled, toggle: toggleAutoPages } = useAutoPagesInCalendarSetting();
   const [tab, setTab] = useState<"theme" | "typography" | "layout" | "cover" | "icon">("theme");
   const [coverCategory, setCoverCategory] = useState<string>("gradients");
 
@@ -377,13 +380,13 @@ export default function CustomizePanel({ open, onClose, page, onPagePatch, onToa
                       </div>
                       <button
                         onClick={() => onPagePatch?.({ smallText: !page?.smallText })}
-                        className={`relative h-4.5 w-8 rounded-full transition-colors cursor-pointer ${
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors cursor-pointer ${
                           page?.smallText ? "bg-[var(--accent)]" : "bg-[var(--border)]"
                         }`}
                       >
                         <span
-                          className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow-xs transition-transform ${
-                            page?.smallText ? "translate-x-4" : "translate-x-0.5"
+                          className={`inline-block size-4 rounded-full bg-white shadow-xs transition-transform ${
+                            page?.smallText ? "translate-x-4" : "translate-x-0"
                           }`}
                         />
                       </button>
@@ -396,13 +399,65 @@ export default function CustomizePanel({ open, onClose, page, onPagePatch, onToa
                       </div>
                       <button
                         onClick={() => onPagePatch?.({ isLocked: !page?.isLocked })}
-                        className={`relative h-4.5 w-8 rounded-full transition-colors cursor-pointer ${
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors cursor-pointer ${
                           page?.isLocked ? "bg-[var(--accent)]" : "bg-[var(--border)]"
                         }`}
                       >
                         <span
-                          className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow-xs transition-transform ${
-                            page?.isLocked ? "translate-x-4" : "translate-x-0.5"
+                          className={`inline-block size-4 rounded-full bg-white shadow-xs transition-transform ${
+                            page?.isLocked ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]/50">
+                      <div>
+                        <div className="text-xs font-semibold text-[var(--text)] flex items-center gap-1.5">
+                          <Calendar size={13} className="text-blue-500" />
+                          <span>Add to Calendar in Topbar</span>
+                        </div>
+                        <div className="text-[10px] text-[var(--muted)]">Show quick calendar sync icon in workspace topbar</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = toggleCalendarTopbar();
+                          onToast?.(next ? "Calendar icon enabled in topbar" : "Calendar icon hidden from topbar");
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                          calendarTopbarEnabled ? "bg-blue-600 dark:bg-blue-500" : "bg-[var(--border)]"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block size-4 rounded-full bg-white shadow-xs transition-transform ${
+                            calendarTopbarEnabled ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]/50">
+                      <div>
+                        <div className="text-xs font-semibold text-[var(--text)] flex items-center gap-1.5">
+                          <FileText size={13} className="text-emerald-500" />
+                          <span>Auto-Show Created Pages in Calendar</span>
+                        </div>
+                        <div className="text-[10px] text-[var(--muted)]">Automatically include newly created workspace pages in timetable (Default: Off)</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = toggleAutoPages();
+                          onToast?.(next ? "Auto-show created pages enabled" : "Auto-show created pages disabled");
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                          autoPagesEnabled ? "bg-emerald-600 dark:bg-emerald-500" : "bg-[var(--border)]"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block size-4 rounded-full bg-white shadow-xs transition-transform ${
+                            autoPagesEnabled ? "translate-x-4" : "translate-x-0"
                           }`}
                         />
                       </button>

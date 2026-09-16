@@ -35,7 +35,8 @@ import {
   Terminal,
   Bookmark,
   Trash2,
-  MessageSquare
+  MessageSquare,
+  FileText
 } from "lucide-react";
 import {
   useSidebarCustomization,
@@ -54,6 +55,7 @@ import {
   getTextureOverlayStyle,
   SidebarItemVisibility
 } from "../../features/customization/sidebarCustomization";
+import { useCalendarTopbarSetting, useAutoPagesInCalendarSetting } from "../../lib/calendarSync";
 
 interface SidebarCustomizerProps {
   onToast?: (message: string) => void;
@@ -61,6 +63,8 @@ interface SidebarCustomizerProps {
 
 export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
   const { config, updateConfig, resetToDefault } = useSidebarCustomization();
+  const { enabled: calendarTopbarEnabled, toggle: toggleCalendarTopbar } = useCalendarTopbarSetting();
+  const { enabled: autoPagesEnabled, toggle: toggleAutoPages } = useAutoPagesInCalendarSetting();
   const [activeTab, setActiveTab] = useState<"templates" | "aesthetics" | "textures" | "arrangements" | "whatsNeed" | "bottom">("templates");
   const [themeFilter, setThemeFilter] = useState<"all" | "gradient" | "cyber" | "artisan" | "solid">("all");
   const [customAccent, setCustomAccent] = useState(config.accentColor);
@@ -450,7 +454,7 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
               { id: "textures", label: "Textures", icon: Layers },
               { id: "arrangements", label: "Arrangements", icon: SlidersHorizontal },
               { id: "whatsNeed", label: "Whats Need", icon: CheckSquare },
-              { id: "bottom", label: "Bottom & Actions", icon: Sparkles }
+              { id: "bottom", label: "Buttons & Actions", icon: Sparkles }
             ].map((tabItem) => {
               const isSelected = activeTab === tabItem.id;
               const Icon = tabItem.icon;
@@ -1056,6 +1060,63 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
                     );
                   })}
                 </div>
+
+                {/* Add to Calendar in Topbar setting */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-[#e8e4db] bg-white shadow-2xs mt-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-7 w-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <Calendar size={14} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-[#1c1b18]">Add to Calendar in Topbar</div>
+                      <div className="text-[10px] text-[#706c64]">Show quick calendar sync icon in workspace page topbar</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = toggleCalendarTopbar();
+                      onToast?.(next ? "Calendar icon enabled in topbar" : "Calendar icon hidden from topbar");
+                    }}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                      calendarTopbarEnabled ? "bg-[#1c1b18]" : "bg-[#e8e4db]"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block size-4 rounded-full bg-white shadow-xs transition-transform ${
+                        calendarTopbarEnabled ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-[#e8e4db] shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                      <FileText size={16} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-[#1c1b18]">Auto-Show Created Pages in Calendar</div>
+                      <div className="text-[10px] text-[#706c64]">Automatically include newly created workspace pages in timetable (Default: Off)</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = toggleAutoPages();
+                      onToast?.(next ? "Auto-show created pages enabled" : "Auto-show created pages disabled");
+                    }}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                      autoPagesEnabled ? "bg-emerald-600" : "bg-[#e8e4db]"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block size-4 rounded-full bg-white shadow-xs transition-transform ${
+                        autoPagesEnabled ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Group 2: Organization & Teams */}
@@ -1163,6 +1224,44 @@ export default function SidebarCustomizer({ onToast }: SidebarCustomizerProps) {
              ═══════════════════════════════════════════════════════════════════════ */}
           {activeTab === "bottom" && (
             <div className="space-y-6">
+              {/* Workspace Topbar "Add to Calendar" Button */}
+              <div className="rounded-2xl bg-[#f8f6f0] p-5 shadow-sm border border-[#e8e4db] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-9 h-9 rounded-xl bg-white border border-[#e8e4db] shadow-2xs flex items-center justify-center shrink-0">
+                      <div className="relative w-[18px] h-[18px] rounded-[5px] overflow-hidden border border-black/10 shadow-xs">
+                        <div className="h-[6px] w-full bg-gradient-to-r from-[#f59e0b] via-[#fb923c] to-[#38bdf8]" />
+                        <div className="h-[12px] w-full bg-gradient-to-b from-white to-white/70 backdrop-blur-md flex items-center justify-center">
+                          <div className="w-[8px] h-[1.5px] rounded-full bg-blue-500/80" />
+                        </div>
+                      </div>
+                      <div className="absolute top-[7px] left-[11.5px] w-[2px] h-[3.5px] rounded-full bg-neutral-700/80 border border-black/10 shadow-2xs" />
+                      <div className="absolute top-[7px] right-[11.5px] w-[2px] h-[3.5px] rounded-full bg-neutral-700/80 border border-black/10 shadow-2xs" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-[#1c1b18]">Add to Calendar Topbar Icon</div>
+                      <div className="text-xs text-[#706c64] mt-0.5">
+                        Shows the quick frosted calendar icon in the workspace page topbar. Click it to add pages to My Calendar.
+                      </div>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={calendarTopbarEnabled}
+                      onChange={() => {
+                        const next = toggleCalendarTopbar();
+                        onToast?.(next ? "Calendar icon enabled in topbar" : "Calendar icon hidden from topbar");
+                      }}
+                      className="h-4 w-4 rounded accent-[#1c1b18] cursor-pointer"
+                    />
+                    <span className="text-xs font-semibold text-[#1c1b18]">
+                      {calendarTopbarEnabled ? "Visible" : "Hidden"}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               {/* Quick Navigation Capsule Bar */}
               <div className="rounded-2xl bg-[#f8f6f0] p-5 shadow-sm border border-[#e8e4db] space-y-4">
                 <div className="flex items-center justify-between">

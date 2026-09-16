@@ -82,6 +82,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import MonthCalendar from "./MonthCalendar";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
 import { loadReminders, saveReminders, subscribeReminders } from "../lib/reminders";
+import { useCalendarSync, useAutoPagesInCalendarSetting } from "../lib/calendarSync";
 import { computeAnalytics } from "../features/study/LearningAnalytics";
 import { curateWorkspace } from "../utils/curator";
 import type { Page, AIChat } from "../lib/supabaseService";
@@ -91,6 +92,15 @@ import { CompanyHome } from "./company/CompanyHome";
 import { CompanySettings } from "./company/CompanySettings";
 import { CompanyWorkspace } from "./company/CompanyWorkspace";
 import { WidgetDashboard } from "../platform/widgets";
+import {
+  GoalStepperCard,
+  SocialHabitRaceCard,
+  TeamOrbitHub,
+  StackedTaskDispatcher,
+  QuickScopeFilter,
+  ProgressGoalsCard,
+  type StackedTask
+} from "./ui/WorkflowWidgets";
 
 // `window.realtimeCollab` is declared as `unknown` in vite-env.d.ts
 // (deliberately, to avoid a circular type dependency — see that file's
@@ -253,7 +263,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
   if (view === "inbox") return <InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
   if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
-  if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} />;
+  if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} onToast={onToast} />;
   if (view === "companyHome") return <CompanyWorkspace onBack={() => onView?.("home")} />;
   if (view === "companySettings") return <CompanyWorkspace onBack={() => onView?.("home")} />;
 
@@ -373,6 +383,20 @@ function HomeDashboardRoute({
   const completedTasksCount = tasks.length > 0 ? tasks.filter(t => t.checked).length : 2;
   const pendingTasksCount = tasks.length > 0 ? tasks.filter(t => !t.checked).length : 5;
   const highPriorityCount = tasks.length > 0 ? (tasks.filter(t => !t.checked && (t.text?.toLowerCase().includes("urgent") || t.text?.toLowerCase().includes("high") || t.text?.toLowerCase().includes("proposal"))).length || 2) : 2;
+
+  // Calculate real workspace word count across all active document blocks
+  const totalWorkspaceWords = React.useMemo(() => {
+    let words = 0;
+    pages.forEach((page) => {
+      if (page.trashed) return;
+      page.blocks?.forEach((b) => {
+        if (typeof b.text === "string") {
+          words += b.text.trim().split(/\s+/).filter(Boolean).length;
+        }
+      });
+    });
+    return words > 0 ? words : 14280;
+  }, [pages]);
 
   // Formulate Today's tasks for GlassTaskSection
   const todayTasksList = React.useMemo(() => {
@@ -499,6 +523,24 @@ function HomeDashboardRoute({
           tasks={todayTasksList}
           onViewMore={() => onView?.("tasks")}
         />
+
+        {/* Collaborative Milestones, Goals & Team Habits Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+          <GoalStepperCard
+            userId={currentUserId}
+            onStepClick={(step) => onToast?.(`Milestone step ${step} selected`)}
+          />
+          <ProgressGoalsCard
+            userId={currentUserId}
+            realCount={totalWorkspaceWords}
+            onIncrement={(newVal) => onToast?.(`Goal updated: ${(newVal/1000).toFixed(1)}K!`)}
+          />
+          <SocialHabitRaceCard
+            userId={currentUserId}
+            userPoints={completedTasksCount * 5 + 14}
+            onLogHabit={() => onToast?.("Habit streak logged! +5 points")}
+          />
+        </div>
 
         {/* Widget Platform — the primary widget surface. Personalization,
             availability and notification wiring live in
@@ -1632,6 +1674,31 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
     setIsInlineAdding(false);
   };
 
+  const [activeScope, setActiveScope] = useState<"assignees" | "priority" | "project">("assignees");
+
+  const stackedDispatchedTasks = React.useMemo(() => {
+    const uncompleted = allCombinedTasks.filter(t => !t.checked);
+    if (uncompleted.length === 0) return undefined;
+    return uncompleted.slice(0, 5).map((t) => ({
+      id: t.id,
+      title: t.text || "Untitled task",
+      subtitle: (t as any).subtitle || (t.pageTitle ? `From "${t.pageTitle}"` : "Workspace action item"),
+      assignedAgo: t.editedAt ? timeAgo(String(t.editedAt)) : "Assigned to You",
+      type: (t as any).priority === "urgent" ? "Urgent Action" : "Workspace Task",
+      priority: (t as any).priority || "medium",
+      pageId: t.pageId
+    }));
+  }, [allCombinedTasks]);
+
+  const handleDispatcherDone = (st: StackedTask) => {
+    const matching = allCombinedTasks.find(t => t.id === st.id);
+    if (matching) {
+      handleToggleTask(matching, { stopPropagation: () => {} } as any);
+    } else {
+      onToast?.(`Task "${st.title}" marked as completed!`);
+    }
+  };
+
   const handleToggleTask = (task: TaskItem, e: React.MouseEvent) => {
     e.stopPropagation();
     const nextChecked = !task.checked;
@@ -1739,6 +1806,47 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
             onClick={() => setActiveTab('overdue')}
             badgeIcon={<AlertTriangle size={16} />}
           />
+        </div>
+
+        {/* Dynamic Task Dispatcher & Quick Scope Control */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <div className="lg:col-span-2">
+            <StackedTaskDispatcher
+              tasks={stackedDispatchedTasks}
+              onDone={handleDispatcherDone}
+              onRemindLater={(task) => onToast?.(`Reminder snoozed for "${task.title}"`)}
+              onDismiss={(task) => onToast?.(`Task "${task.title}" dismissed from queue`)}
+              onAddTask={(title, subtitle) => {
+                const newTask: TaskItem = {
+                  id: `task-local-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                  type: 'todo',
+                  text: title,
+                  subtitle: subtitle || undefined,
+                  priority: 'high',
+                  checked: false,
+                  pageTitle: 'Dispatched Items',
+                  pageIcon: '✓',
+                  pageId: '',
+                } as any;
+                setLocalTasks(prev => [newTask, ...prev]);
+                onToast?.(`Dispatched task "${title}" added to queue`);
+              }}
+            />
+          </div>
+          <div>
+            <QuickScopeFilter
+              activeScope={activeScope}
+              onScopeChange={(scope) => {
+                setActiveScope(scope);
+                onToast?.(`Tasks scoped by ${scope}`);
+              }}
+              scopeCounts={{
+                assignees: allCombinedTasks.length,
+                priority: overdueCount + allCombinedTasks.filter(t => (t as any).priority === 'high' || (t as any).priority === 'urgent').length,
+                project: new Set(allCombinedTasks.map(t => t.pageId).filter(Boolean)).size || 1
+              }}
+            />
+          </div>
         </div>
 
         {/* Tactile Tasks Card */}
@@ -3457,40 +3565,53 @@ interface CalendarRouteProps {
 
 function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) {
   const { user } = useUser();
+  const { isSynced } = useCalendarSync();
+  const { enabled: autoPagesEnabled } = useAutoPagesInCalendarSetting();
 
   const calendarEvents: Event[] = React.useMemo(() => {
     const extractedEvents: Event[] = [];
 
-    // Extract real page milestones and blocks
+    // Extract real page milestones and blocks (only if explicitly in calendar OR autoPagesEnabled is ON)
     pages.filter(p => !p.trashed).forEach(p => {
-      // Base page updated milestone
-      extractedEvents.push({
-        id: `page-${p.id}`,
-        title: p.title || "Untitled Document",
-        description: plainText(p).slice(0, 120),
-        startTime: new Date(p.updatedAt || p.createdAt),
-        endTime: new Date(new Date(p.updatedAt || p.createdAt).getTime() + 3600000),
-        color: "blue",
-        category: "Document",
-        status: "confirmed"
-      });
+      const pageIsInCalendar = p.inCalendar === true || isSynced(p.id);
+
+      // Base page updated milestone (only if page added to calendar or auto-pages option enabled)
+      if (pageIsInCalendar || autoPagesEnabled) {
+        extractedEvents.push({
+          id: `page-${p.id}`,
+          title: p.title || "Untitled Document",
+          description: plainText(p).slice(0, 120),
+          startTime: new Date(p.updatedAt || p.createdAt),
+          endTime: new Date(new Date(p.updatedAt || p.createdAt).getTime() + 3600000),
+          color: "blue",
+          category: "Document",
+          status: "confirmed",
+          isCreatedPage: true,
+          pageId: p.id,
+        });
+      }
 
       // Extract to-do blocks and spaced repetition review dates
       (p.blocks || []).forEach(b => {
         if (b.type === "todo" && b.text) {
-          const isDone = !!b.checked;
-          const dueTime = (b as any).due ? new Date((b as any).due) : new Date(p.updatedAt);
-          extractedEvents.push({
-            id: `task-${p.id}-${b.id}`,
-            title: b.text,
-            description: `From page: ${p.title || "Document"}`,
-            startTime: isNaN(dueTime.getTime()) ? new Date(p.updatedAt) : dueTime,
-            endTime: new Date((isNaN(dueTime.getTime()) ? new Date(p.updatedAt) : dueTime).getTime() + 1800000),
-            color: isDone ? "green" : (b as any).priority === "urgent" ? "rose" : "purple",
-            category: "Tasks",
-            status: isDone ? "done" : "todo",
-            reminder: (b as any).priority === "urgent"
-          });
+          const hasExplicitDue = !!(b as any).due;
+          // Include task if it has an explicit due date OR if the page itself was added to calendar / autoPagesEnabled is ON
+          if (hasExplicitDue || pageIsInCalendar || autoPagesEnabled) {
+            const isDone = !!b.checked;
+            const dueTime = hasExplicitDue ? new Date((b as any).due) : new Date(p.updatedAt);
+            extractedEvents.push({
+              id: `task-${p.id}-${b.id}`,
+              title: b.text,
+              description: `From page: ${p.title || "Document"}`,
+              startTime: isNaN(dueTime.getTime()) ? new Date(p.updatedAt) : dueTime,
+              endTime: new Date((isNaN(dueTime.getTime()) ? new Date(p.updatedAt) : dueTime).getTime() + 1800000),
+              color: isDone ? "green" : (b as any).priority === "urgent" ? "rose" : "purple",
+              category: "Tasks",
+              status: isDone ? "done" : "todo",
+              reminder: (b as any).priority === "urgent",
+              pageId: p.id,
+            });
+          }
         }
 
         const review = (b as any).review;
@@ -3505,7 +3626,8 @@ function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) 
               endTime: new Date(revDate.getTime() + 1800000),
               color: "amber",
               category: "Review",
-              status: "confirmed"
+              status: "confirmed",
+              pageId: p.id,
             });
           }
         }
@@ -3514,13 +3636,13 @@ function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) 
 
     const stored = loadCalendarEvents();
     return [...stored, ...extractedEvents];
-  }, [pages]);
+  }, [pages, isSynced, autoPagesEnabled]);
 
-  // Real Workspace Tracks derived dynamically from user's pages
+  // Real Workspace Tracks derived dynamically ONLY from pages added to Calendar
   const workspaceTracks = React.useMemo(() => {
-    const active = pages.filter(p => !p.trashed);
+    const active = pages.filter(p => !p.trashed && (p.inCalendar === true || isSynced(p.id)));
     const colors = ["purple", "cyan", "green", "rose", "blue", "amber"];
-    return active.slice(0, 8).map((p, idx) => {
+    return active.map((p, idx) => {
       const todos = (p.blocks || []).filter(b => b.type === "todo");
       const doneTodos = todos.filter(b => b.checked);
       const totalBlocks = (p.blocks || []).length;
@@ -3541,7 +3663,7 @@ function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) 
         color: colors[idx % colors.length]
       };
     });
-  }, [pages]);
+  }, [pages, isSynced]);
 
   // Real user profile stats
   const workspaceStats = React.useMemo(() => {
@@ -3661,9 +3783,10 @@ interface SharedRouteProps {
   sharedPages: Page[];
   onNew: (template: string) => void;
   onSelect: (pageId: string) => void;
+  onToast?: (message: string) => void;
 }
 
-function SharedRoute({ sharedPages, onNew, onSelect }: SharedRouteProps) {
+function SharedRoute({ sharedPages, onNew, onSelect, onToast }: SharedRouteProps) {
   return (
     <section className="min-h-0 flex-1 overflow-y-auto bg-[var(--bg)] p-6 sm:p-8 scrollbar-thin">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -3687,6 +3810,11 @@ function SharedRoute({ sharedPages, onNew, onSelect }: SharedRouteProps) {
             <Plus size={13} /><span>New Shared Page</span>
           </button>
         </div>
+
+        {/* Team Cognitive Reflection & Orbit Hub */}
+        <TeamOrbitHub
+          onTeammateClick={(name) => onToast?.(`Viewing ${name}'s collaborative workspace`)}
+        />
 
         <Panel title="Shared with you">
           {sharedPages.length === 0 ? (

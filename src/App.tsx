@@ -3395,6 +3395,7 @@ function AppContent() {
               onLockPage={() => setEncryptOpen(true)}
               onRemoveEncryption={handleRemoveEncryption}
               onVisibilityChange={(visibility) => updatePage(activePage.id, { visibility })}
+              onToggleCalendar={() => updatePage(activePage.id, { inCalendar: !activePage.inCalendar })}
               onToast={showToast}
             />
 

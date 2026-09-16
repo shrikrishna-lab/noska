@@ -1153,7 +1153,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("OpenCode Zen", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal, tools }) {
       const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
       const modelId = model || this.defaultModel;
       if (!modelId) {
@@ -1271,7 +1271,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Ollama", modelId, err as Error);
       }
     },
-    async *stream({ baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal, tools }) {
       const url = baseUrl || this.baseUrl;
       const modelId = model || this.defaultModel;
       if (!modelId) throw configError("Ollama");
@@ -1356,7 +1356,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       }
     },
     // NEW: LM Studio streaming
-    async *stream({ baseUrl, apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal }) {
+    async *stream({ baseUrl, apiKey, model, system, messages, maxTokens = 2048, effort, temperature, signal, tools }) {
       const url = baseUrl || this.baseUrl;
       const modelId = model || this.defaultModel;
       if (!modelId) throw configError("LM Studio");

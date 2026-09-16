@@ -64,6 +64,7 @@ export interface Page {
   iv?: string | null | undefined;
   salt?: string | null | undefined;
   isLocked?: boolean;
+  inCalendar?: boolean;
   blocks: Block[];
   lineage: LineageEntry[];
   updatedAt?: string | null;

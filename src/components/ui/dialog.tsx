@@ -13,16 +13,32 @@ function Dialog({ open, onOpenChange, children }: DialogProps) {
   React.useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
-      return () => { document.body.style.overflow = ""; };
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          onOpenChange?.(false);
+        }
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        document.body.style.overflow = "";
+        window.removeEventListener("keydown", handleKeyDown);
+      };
     }
-  }, [open]);
+  }, [open, onOpenChange]);
 
   if (!open) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => onOpenChange?.(false)} />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer" onClick={() => onOpenChange?.(false)} />
+      <div
+        className="fixed inset-0 flex items-center justify-center p-4 cursor-default"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            onOpenChange?.(false);
+          }
+        }}
+      >
         {children}
       </div>
     </div>,

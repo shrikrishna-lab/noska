@@ -32,6 +32,7 @@ import WorkspaceJoinBar from "./collab/WorkspaceJoinBar";
 import type { Page } from "../lib/supabaseService";
 import { PageIcon } from "./PageIcon";
 import { usePageIsShared } from "../features/collab/hooks";
+import { useCalendarSync, useCalendarTopbarSetting } from "../lib/calendarSync";
 
 interface TopbarProps {
   page: Page;
@@ -61,10 +62,30 @@ interface TopbarProps {
   onLockPage?: () => void;
   onRemoveEncryption?: (pageId: string) => void;
   onVisibilityChange?: (visibility: "private" | "team" | "company" | "public") => void;
+  onToggleCalendar?: () => void;
   onToast?: (msg: string) => void;
 }
 
 const asLucideIcon = (icon: unknown) => icon as LucideIcon;
+
+function FrostedCalendarIcon({ active = false }: { active?: boolean }) {
+  return (
+    <div className="relative w-5 h-5 shrink-0 flex items-center justify-center">
+      {/* Calendar body base */}
+      <div className="relative w-[18px] h-[18px] rounded-[5px] overflow-hidden border border-black/10 dark:border-white/20 shadow-[0_2px_6px_rgba(0,0,0,0.08)]">
+        {/* Top gradient banner: orange-to-sky-blue */}
+        <div className="h-[6px] w-full bg-gradient-to-r from-[#f59e0b] via-[#fb923c] to-[#38bdf8]" />
+        {/* Frosted translucent glass container */}
+        <div className="h-[12px] w-full bg-gradient-to-b from-white/95 to-white/70 dark:from-white/25 dark:to-white/10 backdrop-blur-md flex items-center justify-center">
+          <div className={`w-[8px] h-[1.5px] rounded-full transition-colors ${active ? "bg-blue-500/80 dark:bg-blue-400/80" : "bg-neutral-300/80 dark:bg-white/30"}`} />
+        </div>
+      </div>
+      {/* Twin frosted loops / binder rings */}
+      <div className="absolute -top-[1px] left-[3.5px] w-[2px] h-[3.5px] rounded-full bg-white dark:bg-neutral-200 border border-black/15 shadow-2xs" />
+      <div className="absolute -top-[1px] right-[3.5px] w-[2px] h-[3.5px] rounded-full bg-white dark:bg-neutral-200 border border-black/15 shadow-2xs" />
+    </div>
+  );
+}
 
 const SPRING_TRANSITION = {
   type: "spring" as const,
@@ -107,8 +128,21 @@ const Topbar = memo(function Topbar({
   onLockPage,
   onRemoveEncryption,
   onVisibilityChange,
+  onToggleCalendar,
   onToast,
 }: TopbarProps) {
+  const { isSynced, toggle } = useCalendarSync();
+  const { enabled: calendarTopbarEnabled } = useCalendarTopbarSetting();
+  const inCalendar = isSynced(page);
+
+  const handleCalendarClick = () => {
+    const nextState = toggle(page.id);
+    onToggleCalendar?.();
+    if (onToast) {
+      onToast(nextState ? `Added "${page.title || "Untitled"}" to My Calendar` : `Removed "${page.title || "Untitled"}" from Calendar`);
+    }
+  };
+
   const [visOpen, setVisOpen] = useState(false);
   const [hoveredMode, setHoveredMode] = useState<string | null>(null);
   const visibility = page.visibility || "private";
@@ -116,6 +150,7 @@ const Topbar = memo(function Topbar({
   const sharedViaPerms = usePageIsShared(page?.id ?? null);
   const pageIsShared = isOwner ? (sharedViaPerms || visibility === "public") : true;
   const isPrivate = visibility === "private" && isOwner && !sharedViaPerms;
+  const isPageView = !appView || appView === "page";
 
   const VIS_OPTIONS: { value: "private" | "public"; label: string; description: string; Icon: LucideIcon }[] = [
     { value: "private", label: "Private", description: "Only you and people you invite", Icon: AnimatedLock as unknown as LucideIcon },
@@ -133,17 +168,19 @@ const Topbar = memo(function Topbar({
             className="text-[13px] text-[var(--text)] font-medium"
           />
         </div>
-        <OptionPicker
-          options={[
-            { id: "private", label: "Private", icon: TbLockFilled },
-            { id: "public", label: "Public", icon: Globe },
-          ]}
-          value={visibility === "public" ? "public" : "private"}
-          onChange={(newVal) => onVisibilityChange?.(newVal as "private" | "public")}
-          disabled={!isOwner}
-          size="xs"
-          dropdownPlacement="bottom"
-        />
+        {isPageView && (
+          <OptionPicker
+            options={[
+              { id: "private", label: "Private", icon: TbLockFilled },
+              { id: "public", label: "Public", icon: Globe },
+            ]}
+            value={visibility === "public" ? "public" : "private"}
+            onChange={(newVal) => onVisibilityChange?.(newVal as "private" | "public")}
+            disabled={!isOwner}
+            size="xs"
+            dropdownPlacement="bottom"
+          />
+        )}
       </div>
 
       <LayoutGroup id="topbar-mode-collab-group">
@@ -216,90 +253,116 @@ const Topbar = memo(function Topbar({
         )}
       </LayoutGroup>
 
-
-
-      <motion.button
-        type="button"
-        onClick={onShare}
-        whileHover={{ scale: 1.03 }}
-        whileTap={{ scale: 0.95 }}
-        transition={SPRING_TRANSITION}
-        className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--hover)] border border-transparent hover:border-[var(--border)] transition-colors shrink-0 cursor-pointer shadow-2xs select-none"
-      >
-        <AnimatedLock size={13} />
-        <span>Share</span>
-        <ChevronDown size={11} className="opacity-60" />
-      </motion.button>
-
-      <motion.button
-        type="button"
-        onClick={onCopyLink}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.88 }}
-        transition={SPRING_TRANSITION}
-        className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-150 cursor-pointer select-none ${
-          visibility === "public"
-            ? "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
-            : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-        }`}
-        title={visibility === "public" ? "Copy public link" : "Copy link (Page is Private)"}
-        aria-label={visibility === "public" ? "Copy public link" : "Copy link (Page is Private)"}
-      >
-        <Link2 size={15} />
-      </motion.button>
-
-      <motion.button
-        type="button"
-        onClick={onFavorite}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.88 }}
-        className={`relative grid h-7 w-7 place-items-center rounded-md transition-colors duration-150 cursor-pointer select-none ${
-          page.favorite
-            ? "text-amber-500 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-400/10 hover:bg-amber-500/15"
-            : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-        }`}
-        title={page.favorite ? "Favorited · Click to remove" : "Add to favorites"}
-        aria-label={page.favorite ? "Remove from favorites" : "Add to favorites"}
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          {page.favorite ? (
-            <motion.div
-              key="favorited"
-              initial={{ scale: 0.4, rotate: -20, opacity: 0 }}
-              animate={{
-                scale: [0.4, 1.35, 0.92, 1.06, 1],
-                rotate: [-20, 8, -4, 2, 0],
-                opacity: 1,
-              }}
-              exit={{ scale: 0.4, opacity: 0 }}
-              transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
-              className="relative flex items-center justify-center"
+      {/* Page Actions: Calendar Sync, Share, Copy Link, Favorite (Only shown when viewing a document page) */}
+      {isPageView && (
+        <>
+          {/* Add to My Calendar Icon (Only shown if enabled in Customization) */}
+          {calendarTopbarEnabled && (
+            <motion.button
+              type="button"
+              onClick={handleCalendarClick}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.88 }}
+              transition={SPRING_TRANSITION}
+              className={`relative grid h-7 w-7 place-items-center rounded-md transition-colors duration-150 cursor-pointer select-none mr-0.5 ${
+                inCalendar
+                  ? "bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15"
+                  : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+              }`}
+              title={inCalendar ? "In My Calendar · Click to remove" : "Add to My Calendar"}
+              aria-label={inCalendar ? "In My Calendar · Click to remove" : "Add to My Calendar"}
             >
-              <Bookmark
-                size={16}
-                className="fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400 drop-shadow-[0_2px_8px_rgba(245,158,11,0.45)]"
-              />
-              <motion.span
-                initial={{ scale: 0.2, opacity: 0.8 }}
-                animate={{ scale: 2.2, opacity: 0 }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className="absolute inset-0 rounded-full bg-amber-400/35 pointer-events-none"
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="unfavorited"
-              initial={{ scale: 0.75, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.75, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="flex items-center justify-center"
-            >
-              <Bookmark size={16} strokeWidth={2} />
-            </motion.div>
+              <FrostedCalendarIcon active={inCalendar} />
+              {inCalendar && (
+                <span className="absolute top-1 right-1 size-1.5 rounded-full bg-blue-500 dark:bg-blue-400 ring-2 ring-[var(--bg)] animate-pulse" />
+              )}
+            </motion.button>
           )}
-        </AnimatePresence>
-      </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={onShare}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.95 }}
+            transition={SPRING_TRANSITION}
+            className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--hover)] border border-transparent hover:border-[var(--border)] transition-colors shrink-0 cursor-pointer shadow-2xs select-none"
+          >
+            <AnimatedLock size={13} />
+            <span>Share</span>
+            <ChevronDown size={11} className="opacity-60" />
+          </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={onCopyLink}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.88 }}
+            transition={SPRING_TRANSITION}
+            className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-150 cursor-pointer select-none ${
+              visibility === "public"
+                ? "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+                : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+            }`}
+            title={visibility === "public" ? "Copy public link" : "Copy link (Page is Private)"}
+            aria-label={visibility === "public" ? "Copy public link" : "Copy link (Page is Private)"}
+          >
+            <Link2 size={15} />
+          </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={onFavorite}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.88 }}
+            className={`relative grid h-7 w-7 place-items-center rounded-md transition-colors duration-150 cursor-pointer select-none ${
+              page.favorite
+                ? "text-amber-500 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-400/10 hover:bg-amber-500/15"
+                : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+            }`}
+            title={page.favorite ? "Favorited · Click to remove" : "Add to favorites"}
+            aria-label={page.favorite ? "Remove from favorites" : "Add to favorites"}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {page.favorite ? (
+                <motion.div
+                  key="favorited"
+                  initial={{ scale: 0.4, rotate: -20, opacity: 0 }}
+                  animate={{
+                    scale: [0.4, 1.35, 0.92, 1.06, 1],
+                    rotate: [-20, 8, -4, 2, 0],
+                    opacity: 1,
+                  }}
+                  exit={{ scale: 0.4, opacity: 0 }}
+                  transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
+                  className="relative flex items-center justify-center"
+                >
+                  <Bookmark
+                    size={16}
+                    className="fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400 drop-shadow-[0_2px_8px_rgba(245,158,11,0.45)]"
+                  />
+                  <motion.span
+                    initial={{ scale: 0.2, opacity: 0.8 }}
+                    animate={{ scale: 2.2, opacity: 0 }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className="absolute inset-0 rounded-full bg-amber-400/35 pointer-events-none"
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="unfavorited"
+                  initial={{ scale: 0.75, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.75, opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="flex items-center justify-center"
+                >
+                  <Bookmark size={16} strokeWidth={2} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.button>
+        </>
+      )}
 
       <PearlButton
         onClick={onAI}
@@ -311,9 +374,13 @@ const Topbar = memo(function Topbar({
         className="mx-1"
       />
       <IconButton icon={asLucideIcon(AnimatedSettings)} label="Settings" onClick={onMore} />
-      <IconButton icon={asLucideIcon(AnimatedUndo)} label="Undo" disabled={!canUndo} onClick={onUndo} />
-      <IconButton icon={asLucideIcon(AnimatedRedo)} label="Redo" disabled={!canRedo} onClick={onRedo} />
-      <IconButton icon={asLucideIcon(AnimatedCanvas)} label="Reading Mode" onClick={onReadingModeToggle} />
+      {isPageView && (
+        <>
+          <IconButton icon={asLucideIcon(AnimatedUndo)} label="Undo" disabled={!canUndo} onClick={onUndo} />
+          <IconButton icon={asLucideIcon(AnimatedRedo)} label="Redo" disabled={!canRedo} onClick={onRedo} />
+          <IconButton icon={asLucideIcon(AnimatedCanvas)} label="Reading Mode" onClick={onReadingModeToggle} />
+        </>
+      )}
       <motion.button
         type="button"
         onClick={() => onThemeChange(dark ? "light" : "dark")}

@@ -8,6 +8,7 @@ import {
 import { useCompany } from "../../contexts/CompanyContext"
 import { getCompanyAuditLogs, type CompanyAuditLog } from "../../lib/company"
 import { isCompanyAdmin } from "../../lib/companyAuth"
+import { FinanceWorkflowHub } from "../ui/WorkflowWidgets"
 
 interface CompanyHomeProps {
   onViewSelect: (view: string, options?: Record<string, unknown>) => void
@@ -226,6 +227,14 @@ export function CompanyHome({ onViewSelect }: CompanyHomeProps) {
             </div>
           </div>
         )}
+
+        {/* Financial Operations & Cash Flow Hub (Owner Customizable) */}
+        <FinanceWorkflowHub
+          companyId={currentCompany.id}
+          companyName={currentCompany.name}
+          isOwner={isCompanyAdmin(currentMember?.role)}
+          currentUserId={currentMember?.user_id}
+        />
 
         {/* Live Organization Audit & Activity */}
         <div className="space-y-3">
