@@ -27,6 +27,19 @@ const Workspaces = lazy(() => import("@/pages/Workspaces").then((m) => ({ defaul
 const Teams = lazy(() => import("@/pages/Teams").then((m) => ({ default: m.Teams })));
 const Subscriptions = lazy(() => import("@/pages/Subscriptions").then((m) => ({ default: m.Subscriptions })));
 const Payments = lazy(() => import("@/pages/Payments").then((m) => ({ default: m.Payments })));
+const BillingOverview = lazy(() => import("@/pages/billing/BillingOverview").then((m) => ({ default: m.BillingOverview })));
+const BillingPlans = lazy(() => import("@/pages/billing/BillingPlans").then((m) => ({ default: m.BillingPlans })));
+const BillingSubscriptions = lazy(() => import("@/pages/billing/BillingSubscriptions").then((m) => ({ default: m.BillingSubscriptions })));
+const BillingCoupons = lazy(() => import("@/pages/billing/BillingCoupons").then((m) => ({ default: m.BillingCoupons })));
+const BillingOverrides = lazy(() => import("@/pages/billing/BillingOverrides").then((m) => ({ default: m.BillingOverrides })));
+const BillingWebhooks = lazy(() => import("@/pages/billing/BillingWebhooks").then((m) => ({ default: m.BillingWebhooks })));
+const BillingAudit = lazy(() => import("@/pages/billing/BillingAudit").then((m) => ({ default: m.BillingAudit })));
+const BillingConfig = lazy(() => import("@/pages/billing/BillingConfig").then((m) => ({ default: m.BillingConfig })));
+const BillingFeatures = lazy(() => import("@/pages/billing/BillingFeatures").then((m) => ({ default: m.BillingFeatures })));
+const BillingUsage = lazy(() => import("@/pages/billing/BillingUsage").then((m) => ({ default: m.BillingUsage })));
+const BillingCustomers = lazy(() => import("@/pages/billing/BillingCustomers").then((m) => ({ default: m.BillingCustomers })));
+const BillingTopups = lazy(() => import("@/pages/billing/BillingTopups").then((m) => ({ default: m.BillingTopups })));
+const BillingFailed = lazy(() => import("@/pages/billing/BillingFailed").then((m) => ({ default: m.BillingFailed })));
 const AiUsage = lazy(() => import("@/pages/AiUsage").then((m) => ({ default: m.AiUsage })));
 const Models = lazy(() => import("@/pages/Models").then((m) => ({ default: m.Models })));
 const FeatureFlags = lazy(() => import("@/pages/FeatureFlags").then((m) => ({ default: m.FeatureFlags })));
@@ -166,6 +179,19 @@ export default function App() {
                       <Route path="teams" element={<Suspense fallback={<PageLoading />}><Teams /></Suspense>} />
                       <Route path="subscriptions" element={<Suspense fallback={<PageLoading />}><Subscriptions /></Suspense>} />
                       <Route path="payments" element={<Suspense fallback={<PageLoading />}><Payments /></Suspense>} />
+                      <Route path="billing" element={<Suspense fallback={<PageLoading />}><BillingOverview /></Suspense>} />
+                      <Route path="billing/plans" element={<Suspense fallback={<PageLoading />}><BillingPlans /></Suspense>} />
+                      <Route path="billing/subscriptions" element={<Suspense fallback={<PageLoading />}><BillingSubscriptions /></Suspense>} />
+                      <Route path="billing/coupons" element={<Suspense fallback={<PageLoading />}><BillingCoupons /></Suspense>} />
+                      <Route path="billing/overrides" element={<Suspense fallback={<PageLoading />}><BillingOverrides /></Suspense>} />
+                      <Route path="billing/webhooks" element={<Suspense fallback={<PageLoading />}><BillingWebhooks /></Suspense>} />
+                      <Route path="billing/audit" element={<Suspense fallback={<PageLoading />}><BillingAudit /></Suspense>} />
+                      <Route path="billing/config" element={<Suspense fallback={<PageLoading />}><BillingConfig /></Suspense>} />
+                      <Route path="billing/features" element={<Suspense fallback={<PageLoading />}><BillingFeatures /></Suspense>} />
+                      <Route path="billing/usage" element={<Suspense fallback={<PageLoading />}><BillingUsage /></Suspense>} />
+                      <Route path="billing/customers" element={<Suspense fallback={<PageLoading />}><BillingCustomers /></Suspense>} />
+                      <Route path="billing/topups" element={<Suspense fallback={<PageLoading />}><BillingTopups /></Suspense>} />
+                      <Route path="billing/failed" element={<Suspense fallback={<PageLoading />}><BillingFailed /></Suspense>} />
                       <Route path="ai-usage" element={<Suspense fallback={<PageLoading />}><AiUsage /></Suspense>} />
                       <Route path="user-ai-dashboard" element={<Suspense fallback={<PageLoading />}><AiUsage /></Suspense>} />
                       <Route path="models" element={<Suspense fallback={<PageLoading />}><Models /></Suspense>} />

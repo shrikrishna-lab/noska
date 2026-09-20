@@ -46,7 +46,7 @@ export type NotificationDelivery = NotificationPlatformOverview["recent"][number
 export const PLATFORM_NOTIFICATION_TYPES = ["system", "task", "mention", "ai", "automation", "invite", "broadcast"] as const;
 
 export const platformTestInputSchema = z.object({
-  userIds: z.array(z.string().trim().min(1).max(200).regex(/^[a-zA-Z0-9_-]+$/)).min(1).max(10)
+  userIds: z.array(z.string().trim().min(1).max(200).regex(/^[a-zA-Z0-9_@.+-]+$/)).min(1).max(10)
     .transform((ids) => [...new Set(ids)]),
   title: z.string().trim().min(1).max(200),
   body: z.string().trim().max(1000),

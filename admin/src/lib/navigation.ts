@@ -58,7 +58,7 @@ export interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
-  group: "overview" | "content" | "marketing" | "growth" | "people" | "platform" | "operations" | "monitoring" | "settings";
+  group: "overview" | "content" | "marketing" | "growth" | "billing" | "people" | "platform" | "operations" | "monitoring" | "settings";
   badge?: string | number;
   capability: AdminCapability;
 }
@@ -92,6 +92,19 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/referrals", label: "Referrals", icon: Gift, group: "growth", capability: "users" },
   { to: "/subscriptions", label: "Subscriptions", icon: Layers, group: "growth", capability: "users" },
   { to: "/payments", label: "Payments", icon: CreditCard, group: "growth", capability: "users" },
+  { to: "/billing", label: "Billing Overview", icon: BarChart, group: "billing", capability: "billing_read" },
+  { to: "/billing/plans", label: "Plans & Features", icon: Layers, group: "billing", capability: "billing_manage" },
+  { to: "/billing/features", label: "Feature Catalog", icon: Flag, group: "billing", capability: "billing_manage" },
+  { to: "/billing/subscriptions", label: "Billing Transactions", icon: CreditCard, group: "billing", capability: "billing_read" },
+  { to: "/billing/failed", label: "Failed Payments", icon: AlertTriangle, group: "billing", capability: "billing_read" },
+  { to: "/billing/customers", label: "Customers & Invoices", icon: Users, group: "billing", capability: "billing_read" },
+  { to: "/billing/usage", label: "Usage & AI Credits", icon: Bot, group: "billing", capability: "billing_read" },
+  { to: "/billing/topups", label: "AI Top-ups", icon: Zap, group: "billing", capability: "billing_manage" },
+  { to: "/billing/coupons", label: "Coupons", icon: Tag, group: "billing", capability: "billing_manage" },
+  { to: "/billing/overrides", label: "Overrides", icon: ShieldCheck, group: "billing", capability: "billing_support" },
+  { to: "/billing/webhooks", label: "Webhook Monitor", icon: Radio, group: "billing", capability: "billing_read" },
+  { to: "/billing/audit", label: "Billing Audit", icon: ScrollText, group: "billing", capability: "billing_manage" },
+  { to: "/billing/config", label: "Billing Config", icon: Settings, group: "billing", capability: "billing_manage" },
   { to: "/ai-usage", label: "User AI Dashboard", icon: Bot, group: "platform", capability: "users" },
   { to: "/models", label: "Models", icon: Workflow, group: "platform", capability: "users" },
   { to: "/feature-flags", label: "Feature Flags", icon: Flag, group: "platform", capability: "monitoring" },
@@ -146,6 +159,7 @@ export const NAV_GROUPS: Array<{ id: NavItem["group"]; label: string }> = [
   { id: "content", label: "Content" },
   { id: "marketing", label: "Marketing" },
   { id: "growth", label: "Growth" },
+  { id: "billing", label: "Billing & Monetization" },
   { id: "people", label: "People" },
   { id: "platform", label: "Platform" },
   { id: "operations", label: "Operations" },

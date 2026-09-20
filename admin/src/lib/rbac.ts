@@ -2,7 +2,8 @@ export type AdminRole = "super_admin" | "admin" | "support" | "developer" | "mar
 
 export type AdminCapability =
   | "dashboard" | "users" | "waitlist" | "content" | "marketing"
-  | "support" | "monitoring" | "audit_logs" | "manage_admins" | "destructive_actions";
+  | "support" | "monitoring" | "audit_logs" | "manage_admins" | "destructive_actions"
+  | "billing_manage" | "billing_support" | "billing_read";
 
 export interface AdminWorkflow {
   id: string;
@@ -36,13 +37,16 @@ export const ROLE_RANK: Record<AdminRole, number> = {
   marketing: 1
 };
 
-/** The permission contract shared by the admin UI. Database RPCs remain the final authority. */
+/** The permission contract shared by the admin UI. Database RPCs remain the final authority.
+ * Billing (§35): super_admin = everything; admin = Billing Admin (plans, subs,
+ * payments, coupons, config); support = Support Admin (overrides, trials, user
+ * entitlements); developer = Analyst (read-only analytics). */
 export const ROLE_CAPABILITIES: Record<AdminRole, readonly AdminCapability[]> = {
   marketing: ["dashboard", "content", "marketing"],
-  support: ["dashboard", "users", "waitlist", "support"],
-  developer: ["dashboard", "users", "content", "audit_logs"],
-  admin: ["dashboard", "users", "waitlist", "content", "support", "monitoring", "destructive_actions"],
-  super_admin: ["dashboard", "users", "waitlist", "content", "marketing", "support", "monitoring", "audit_logs", "manage_admins", "destructive_actions"],
+  support: ["dashboard", "users", "waitlist", "support", "billing_support", "billing_read"],
+  developer: ["dashboard", "users", "content", "audit_logs", "billing_read"],
+  admin: ["dashboard", "users", "waitlist", "content", "support", "monitoring", "destructive_actions", "billing_manage", "billing_support", "billing_read"],
+  super_admin: ["dashboard", "users", "waitlist", "content", "marketing", "support", "monitoring", "audit_logs", "manage_admins", "destructive_actions", "billing_manage", "billing_support", "billing_read"],
 };
 
 export const ROLE_DESCRIPTIONS: Record<AdminRole, string> = {

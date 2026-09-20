@@ -40,6 +40,7 @@ import { adminApi } from "@/lib/admin-api";
 import { formatRelativeTime, initialsFromName, formatCurrency } from "@/lib/utils";
 import { useRealtimeInvalidate } from "@/lib/queries";
 import { pickImageFile } from "@/lib/filePicker";
+import { UserBillingSection } from "@/pages/billing/UserBillingSection";
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";
@@ -2432,6 +2433,9 @@ export function UserDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Live billing subscription (new entitlement platform) */}
+      <UserBillingSection clerkUserId={profile?.user_id ?? undefined} />
 
       {/* AI Chats - full width, prominent */}
       <UserDetailChatsCard chats={chats} />

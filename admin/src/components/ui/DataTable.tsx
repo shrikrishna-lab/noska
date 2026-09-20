@@ -26,13 +26,15 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   actions?: React.ReactNode;
   filter?: (row: T) => boolean;
+  rowKey?: (row: T) => string | number;
+  emptyMessage?: string;
 }
 
 
 export function DataTable<T>({
   columns, data, searchable = true, searchPlaceholder = "Search...",
   pageSize = 50, pageSizeOptions = [25, 50, 100, 200],
-  onRowClick, actions, filter,
+  onRowClick, actions, filter, rowKey, emptyMessage,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(null);

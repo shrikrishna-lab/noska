@@ -19,6 +19,9 @@ const CAPABILITY_LINKS: Record<AdminCapability, { label: string; href: string; i
   audit_logs: { label: "Audit logs", href: "/audit-logs", icon: ShieldCheck },
   manage_admins: { label: "Administrator accounts", href: "/admin-accounts", icon: ShieldCheck },
   destructive_actions: { label: "User lifecycle controls", href: "/users", icon: Wrench },
+  billing_manage: { label: "Billing & Plans", href: "/plans-pricing", icon: Activity },
+  billing_support: { label: "Billing Overrides", href: "/users", icon: LifeBuoy },
+  billing_read: { label: "Financial Metrics", href: "/user-funnel", icon: Activity },
 };
 
 export function RoleDashboard() {

@@ -151,15 +151,18 @@
     width: 10px;
     height: 10px;
   }
+
   *::-webkit-scrollbar-track {
     background: transparent;
   }
+
   *::-webkit-scrollbar-thumb {
     background: hsl(215 16% 80%);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: content-box;
   }
+
   *::-webkit-scrollbar-thumb:hover {
     background: hsl(215 16% 65%);
     background-clip: content-box;

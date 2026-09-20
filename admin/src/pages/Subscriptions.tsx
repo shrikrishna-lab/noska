@@ -15,6 +15,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { DollarSign, CreditCard, TrendingUp, Users, Plus, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
+import { PlanBadge } from "@/components/ui/PlanBadge";
+
 const statusColors: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
   active: "success", past_due: "warning", canceled: "destructive", trialing: "default", paused: "secondary",
 };
@@ -22,7 +24,7 @@ const statusColors: Record<string, "default" | "secondary" | "success" | "warnin
 const columns: Column<DbSubscription>[] = [
   { key: "customer_name", label: "Customer", sortable: true, render: (row) => <span className="font-medium">{row.customer_name}</span> },
   { key: "email", label: "Email", sortable: true, render: (row) => row.email || "—", hideOnMobile: true },
-  { key: "plan", label: "Plan", sortable: true, render: (row) => <Badge variant={row.plan === "enterprise" ? "success" : row.plan === "pro" ? "default" : "secondary"}>{row.plan}</Badge> },
+  { key: "plan", label: "Plan", sortable: true, render: (row) => <PlanBadge plan={row.plan} /> },
   { key: "mrr", label: "MRR", sortable: true, render: (row) => formatCurrency(row.mrr ?? 0), className: "text-right" },
   { key: "status", label: "Status", sortable: true, render: (row) => <Badge variant={statusColors[row.status] ?? "secondary"}>{row.status}</Badge> },
   { key: "started_at", label: "Started", sortable: true, render: (row) => row.started_at ? <span className="text-muted-foreground">{formatRelativeTime(row.started_at)}</span> : "—", hideOnMobile: true },
