@@ -19,3 +19,8 @@ verify_jwt = false
 # web/desktop app before any user session exists).
 [functions.info-cards]
 verify_jwt = false
+
+# billing-webhooks is called by Razorpay (HMAC signature verified in-function).
+# Razorpay has no Supabase JWT, so the gateway must not reject it.
+[functions.billing-webhooks]
+verify_jwt = false

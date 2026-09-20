@@ -22,7 +22,8 @@
     "tauri:ios:build": "tauri ios build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest --run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:keys": "node scripts/check-no-live-keys.mjs"
   },
   "dependencies": {
     "@clerk/react": "^6.14.3",
