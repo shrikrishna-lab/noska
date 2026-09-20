@@ -1,9 +1,6 @@
 import { supabase, getAuthUserId } from '../../lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export const WORKSPACE_LIMITS = { free: 1, pro: 3 } as const;
-export type WorkspacePlan = keyof typeof WORKSPACE_LIMITS;
-
 export interface WorkspaceRow {
   id: string;
   name: string;
@@ -11,44 +8,25 @@ export interface WorkspaceRow {
   created_at: string;
 }
 
-export interface WorkspaceQuota {
-  plan: WorkspacePlan;
-  limit: number;
-  used: number;
-}
-
 export class WorkspaceLimitError extends Error {
-  quota: WorkspaceQuota;
-  constructor(quota: WorkspaceQuota) {
-    super(quota.plan === 'pro'
-      ? `Pro workspaces are limited to ${quota.limit}. Delete one to create another.`
-      : `Free accounts can create 1 workspace. Upgrade to Pro for up to ${WORKSPACE_LIMITS.pro}.`);
+  code: string;
+  upgradeRequired: boolean;
+  constructor(message: string, code = 'WORKSPACE_LIMIT_REACHED') {
+    super(message || 'Workspace limit reached for your plan.');
     this.name = 'WorkspaceLimitError';
-    this.quota = quota;
+    this.code = code;
+    this.upgradeRequired = true;
   }
 }
 
-type Client = Pick<SupabaseClient, 'from' | 'rpc'>;
+type Client = Pick<SupabaseClient, 'from'>;
 
 const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 export function isLimitError(error: unknown): boolean {
   const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : '';
-  return message.includes('WORKSPACE_LIMIT_REACHED');
-}
-
-export async function fetchWorkspaceQuota(client: Client = supabase): Promise<WorkspaceQuota> {
-  const { data, error } = await client.rpc('my_workspace_quota');
-  if (error) throw error;
-  const quota = data as Partial<WorkspaceQuota> | null;
-  const plan: WorkspacePlan = quota?.plan === 'pro' ? 'pro' : 'free';
-  const limit = Number(quota?.limit);
-  const used = Number(quota?.used);
-  return {
-    plan,
-    limit: Number.isSafeInteger(limit) && limit > 0 ? limit : WORKSPACE_LIMITS[plan],
-    used: Number.isSafeInteger(used) && used >= 0 ? used : 0,
-  };
+  const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+  return message.includes('WORKSPACE_LIMIT_REACHED') || code === 'LIMIT_EXCEEDED';
 }
 
 export async function listWorkspaces(client: Client = supabase): Promise<WorkspaceRow[]> {
@@ -61,19 +39,17 @@ export async function listWorkspaces(client: Client = supabase): Promise<Workspa
   return ((data || []) as WorkspaceRow[]).filter(row => row && isUuid(row.id));
 }
 
-export async function createWorkspace(name: string, client: Client = supabase): Promise<WorkspaceRow> {
+export async function createWorkspaceRow(name: string, client: Client = supabase): Promise<WorkspaceRow> {
   const trimmed = name.trim().slice(0, 80);
   if (!trimmed) throw new Error('Workspace name is required.');
   const userId = await getAuthUserId();
   if (!userId) throw new Error('Sign in to create a workspace.');
-  const quota = await fetchWorkspaceQuota(client);
-  if (quota.used >= quota.limit) throw new WorkspaceLimitError(quota);
   const { data, error } = await client.from('workspaces')
     .insert({ name: trimmed, owner_id: userId })
     .select('id,name,owner_id,created_at')
     .single();
   if (error) {
-    if (isLimitError(error)) throw new WorkspaceLimitError(await fetchWorkspaceQuota(client));
+    if (isLimitError(error)) throw new WorkspaceLimitError(error.message);
     throw error;
   }
   return data as WorkspaceRow;

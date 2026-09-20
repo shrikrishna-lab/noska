@@ -72,13 +72,13 @@ import { IconButton, FloatingMenu, useOutsideDismiss } from "./ui";
 import { timeAgo, plainText, emojis } from "../utils/helpers";
 import {
   listWorkspaces,
-  fetchWorkspaceQuota,
-  createWorkspace,
+  createWorkspaceRow,
   renameWorkspace,
   WorkspaceLimitError,
   type WorkspaceRow,
-  type WorkspaceQuota,
 } from "../features/workspaces/service";
+import { useEntitlements } from "../hooks/billing/useEntitlements";
+import { requireLimit, trackUsage } from "../lib/billing/guards";
 import PageTree from "./PageTree";
 import { selectOptionsFromEvent } from "./PageTree";
 import type { PageSelectOptions } from "./PageTree";
@@ -491,10 +491,14 @@ const Sidebar = memo(function Sidebar({
   const [switcherCoords, setSwitcherCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
   const [profileCoords, setProfileCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
 
-  // Real workspaces (plan-limited: free 1, pro 3). Pages stay account-wide;
-  // switching changes the active workspace label/context, never hides data.
+  // Real workspaces, governed by Noska billing entitlements (max_workspaces).
+  // Pages stay account-wide; switching changes the active workspace
+  // label/context, never hides data.
+  const { limit: entLimit, used: entUsed, data: entData, refresh: refreshEntitlements } = useEntitlements();
+  const wsLimit = entLimit("max_workspaces");
+  const wsUsed = entUsed("max_workspaces");
+  const wsPlanName = entData?.plan.name ?? "Free";
   const [myWorkspaces, setMyWorkspaces] = useState<WorkspaceRow[]>([]);
-  const [wsQuota, setWsQuota] = useState<WorkspaceQuota | null>(null);
   const [wsLoading, setWsLoading] = useState(false);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
     try { return localStorage.getItem("activeWorkspaceId"); } catch { return null; }
@@ -502,9 +506,7 @@ const Sidebar = memo(function Sidebar({
   const refreshWorkspaces = useCallback(async () => {
     setWsLoading(true);
     try {
-      const [rows, quota] = await Promise.all([listWorkspaces(), fetchWorkspaceQuota()]);
-      setMyWorkspaces(rows);
-      setWsQuota(quota);
+      setMyWorkspaces(await listWorkspaces());
     } catch {
       // Offline or signed out: keep label-only mode, never break the switcher.
     } finally {
@@ -512,8 +514,11 @@ const Sidebar = memo(function Sidebar({
     }
   }, []);
   useEffect(() => {
-    if (switcherOpen) void refreshWorkspaces();
-  }, [switcherOpen, refreshWorkspaces]);
+    if (switcherOpen) {
+      void refreshWorkspaces();
+      void refreshEntitlements();
+    }
+  }, [switcherOpen, refreshWorkspaces, refreshEntitlements]);
   const switchWorkspace = useCallback((row: WorkspaceRow) => {
     setActiveWorkspaceId(row.id);
     try { localStorage.setItem("activeWorkspaceId", row.id); } catch {}
@@ -523,15 +528,25 @@ const Sidebar = memo(function Sidebar({
   const handleNewWorkspace = useCallback(async () => {
     const name = await window.noskaPrompt?.("New workspace name:", "", "Workspace Name");
     if (!name?.trim()) return;
+    const gate = await requireLimit("max_workspaces", 1);
+    if (!gate.ok && !gate.transport) {
+      onToast?.(gate.message || "Workspace limit reached for your plan.");
+      if (gate.upgrade_required && await window.noskaConfirm?.("Upgrade your plan for more workspaces? Open billing settings?")) {
+        setSwitcherOpen(false);
+        onSettings("billing");
+      }
+      return;
+    }
     try {
-      const row = await createWorkspace(name.trim());
-      await refreshWorkspaces();
+      const row = await createWorkspaceRow(name.trim());
+      await trackUsage("max_workspaces", 1, row.id);
+      await Promise.all([refreshWorkspaces(), refreshEntitlements()]);
       switchWorkspace(row);
       onToast?.(`Workspace "${row.name}" created.`);
     } catch (e) {
       if (e instanceof WorkspaceLimitError) {
         onToast?.(e.message);
-        if (e.quota.plan !== "pro" && await window.noskaConfirm?.("Upgrade to Pro for up to 3 workspaces? Open billing settings?")) {
+        if (await window.noskaConfirm?.("Upgrade your plan for more workspaces? Open billing settings?")) {
           setSwitcherOpen(false);
           onSettings("billing");
         }
@@ -539,7 +554,7 @@ const Sidebar = memo(function Sidebar({
         onToast?.(e instanceof Error ? e.message : "Could not create workspace.");
       }
     }
-  }, [refreshWorkspaces, switchWorkspace, onToast, onSettings]);
+  }, [refreshWorkspaces, switchWorkspace, onToast, onSettings, refreshEntitlements]);
 
   // Escape key closes both popovers
   useEffect(() => {
@@ -1467,11 +1482,11 @@ const Sidebar = memo(function Sidebar({
 
               <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-0.5" />
 
-              {/* Real workspaces (plan-limited: free 1, pro 3) */}
+              {/* Real workspaces, governed by plan entitlements */}
               <div className="px-1 pt-0.5">
                 <div className="flex items-center justify-between px-1 mb-1">
                   <span className="text-[10.5px] font-semibold text-neutral-400 uppercase tracking-wider">
-                    Workspaces{wsQuota ? ` · ${wsQuota.used} of ${wsQuota.limit}` : ""}
+                    Workspaces{wsLimit === null ? " · Unlimited" : wsLimit !== null ? ` · ${wsUsed} of ${wsLimit}` : ""}{` · ${wsPlanName}`}
                   </span>
                   <button
                     onClick={handleNewWorkspace}
@@ -1485,7 +1500,7 @@ const Sidebar = memo(function Sidebar({
                   <div className="px-1 py-1 text-[11px] text-neutral-400">Loading workspaces…</div>
                 ) : myWorkspaces.length === 0 ? (
                   <div className="px-1 py-1 text-[11px] text-neutral-400">
-                    No workspaces yet — create your first one{wsQuota && wsQuota.plan !== "pro" ? " (free accounts get 1)" : ""}.
+                    No workspaces yet — create your first one{wsLimit !== null ? ` (${wsPlanName} plan: ${wsLimit})` : ""}.
                   </div>
                 ) : (
                   myWorkspaces.map(row => (
@@ -1503,12 +1518,12 @@ const Sidebar = memo(function Sidebar({
                     </button>
                   ))
                 )}
-                {wsQuota && wsQuota.plan !== "pro" && (
+                {wsLimit !== null && wsUsed >= wsLimit && (
                   <button
                     onClick={() => { setSwitcherOpen(false); onSettings("billing"); }}
                     className="mt-1 w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-left text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition cursor-pointer outline-none"
                   >
-                    Upgrade to Pro for up to 3 workspaces
+                    Workspace limit reached — upgrade your plan for more
                   </button>
                 )}
               </div>
