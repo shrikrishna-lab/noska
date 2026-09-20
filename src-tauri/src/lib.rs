@@ -13,6 +13,12 @@
 use tauri::{Emitter, Manager};
 
 #[cfg(desktop)]
+mod desktop_lifecycle;
+#[cfg(desktop)]
+mod desktop_preferences;
+#[cfg(desktop)]
+use desktop_lifecycle::{get_desktop_preferences, set_desktop_unread_count, show_desktop_main, update_desktop_preferences};
+#[cfg(desktop)]
 mod local_transcription;
 #[cfg(desktop)]
 mod text_injector;
@@ -40,11 +46,10 @@ use voice_dictionary::{load_voice_dictionary, save_voice_dictionary};
 use mobile_stubs::{
     capability_check, inject_text, install_local_model, load_voice_dictionary,
     local_model_status, save_voice_dictionary, start_local_transcription,
-    stop_local_transcription,
+    stop_local_transcription, get_desktop_preferences, update_desktop_preferences,
+    show_desktop_main, set_desktop_unread_count,
 };
 
-/// Event emitted to the webview when a tray menu item is clicked.
-/// Payload is the raw action id ("new-page" | "new-task" | "open-ai").
 const TRAY_ACTION_EVENT: &str = "tray://action";
 /// Event emitted to the webview when a `noska://` deep link is opened.
 /// Payload: array of URL strings.
@@ -99,38 +104,49 @@ fn setup_app_menu(app: &tauri::App) -> tauri::Result<()> {
 #[cfg(desktop)]
 fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::{
-        menu::{Menu, MenuItem, PredefinedMenuItem},
+        menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
         tray::TrayIconBuilder,
     };
     let open = MenuItem::with_id(app, "open", "Open Noska", true, None::<&str>)?;
     let new_page = MenuItem::with_id(app, "new-page", "New Page", true, None::<&str>)?;
-    let new_task = MenuItem::with_id(app, "new-task", "New Task", true, None::<&str>)?;
-    let open_ai = MenuItem::with_id(app, "open-ai", "Open AI", true, None::<&str>)?;
+    let search = MenuItem::with_id(app, "search", "Search", true, None::<&str>)?;
+    let inbox = MenuItem::with_id(app, "inbox", "Inbox", true, None::<&str>)?;
+    let paused = desktop_lifecycle::preferences(app.handle())
+        .map(|preferences| preferences.notifications_paused).unwrap_or(false);
+    let pause = CheckMenuItem::with_id(app, "pause-notifications", "Pause Notifications", true, paused, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Noska", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
 
     let menu = Menu::with_items(
         app,
-        &[&open, &sep1, &new_page, &new_task, &open_ai, &sep2, &quit],
+        &[&open, &sep1, &new_page, &search, &inbox, &pause, &settings, &sep2, &quit],
     )?;
 
-    TrayIconBuilder::with_id("noska-tray")
-        .icon(app.default_window_icon().expect("missing window icon").clone())
+    let mut tray = TrayIconBuilder::with_id("noska-tray")
         .tooltip("Noska")
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "quit" => app.exit(0),
-            "open" => focus_main_window(app),
-            action => {
-                // Forward to the frontend; routing/validation happens in TS.
+            "pause-notifications" => desktop_lifecycle::toggle_pause(app),
+            action @ ("open" | "new-page" | "search" | "inbox" | "settings") => {
+                focus_main_window(app);
                 if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.emit(TRAY_ACTION_EVENT, action);
+                    let _ = win.emit(desktop_lifecycle::ACTION_EVENT, action);
+                    if action == "new-page" {
+                        let _ = win.emit(TRAY_ACTION_EVENT, action);
+                    }
                 }
             }
-        })
-        .build(app)?;
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    desktop_lifecycle::register_tray(app.handle(), pause);
     Ok(())
 }
 
@@ -181,7 +197,9 @@ pub fn run() {
         // Second launch: focus the existing window and forward any deep-link
         // argv to it instead of starting a second instance.
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            focus_main_window(app);
+            if !argv.iter().any(|arg| arg == "--autostart") {
+                focus_main_window(app);
+            }
             let urls: Vec<String> = argv
                 .iter()
                 .filter(|a| a.starts_with("noska://"))
@@ -196,13 +214,17 @@ pub fn run() {
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::SIZE
-                        | tauri_plugin_window_state::StateFlags::POSITION
-                        | tauri_plugin_window_state::StateFlags::VISIBLE,
+                        | tauri_plugin_window_state::StateFlags::POSITION,
                 )
                 .build()
         )
             .plugin(tauri_plugin_updater::Builder::new().build())
-            .plugin(tauri_plugin_process::init());
+            .plugin(tauri_plugin_process::init())
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                Some(vec!["--autostart"]),
+            ))
+            .on_window_event(desktop_lifecycle::on_window_event);
 
         builder
     };
@@ -223,6 +245,10 @@ pub fn run() {
             inject_text,
             load_voice_dictionary,
             save_voice_dictionary,
+            get_desktop_preferences,
+            update_desktop_preferences,
+            show_desktop_main,
+            set_desktop_unread_count,
         ])
         .setup(|app| {
             // Deep links work on every platform.
@@ -230,9 +256,12 @@ pub fn run() {
 
             #[cfg(desktop)]
             {
+                desktop_lifecycle::initialize(app.handle()).map_err(std::io::Error::other)?;
                 #[cfg(target_os = "macos")]
                 setup_app_menu(app)?;
-                setup_tray(app)?;
+                if let Err(error) = setup_tray(app) {
+                    eprintln!("System tray is unavailable: {error}");
+                }
 
                 // Enforce borderless frameless window without native OS titlebar
                 // and self-heal degenerate window-state restores.
@@ -247,9 +276,16 @@ pub fn run() {
                         let _ = win.set_focus();
                     }
                 }
+                desktop_lifecycle::apply_launch_visibility(app.handle());
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Noska");
+        .build(tauri::generate_context!())
+        .expect("error while building Noska")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                focus_main_window(_app);
+            }
+        });
 }

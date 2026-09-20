@@ -232,7 +232,7 @@ export function CompanyHome({ onViewSelect }: CompanyHomeProps) {
         <FinanceWorkflowHub
           companyId={currentCompany.id}
           companyName={currentCompany.name}
-          isOwner={isCompanyAdmin(currentMember?.role)}
+          isOwner={isCompanyAdmin(currentMember, currentCompany)}
           currentUserId={currentMember?.user_id}
         />
 

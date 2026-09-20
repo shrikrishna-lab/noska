@@ -3,7 +3,7 @@
  * Powered by centralized connector gateway & ResourceCache without duplicated API calls.
  */
 import React, { useEffect, useState } from "react";
-import { GitPullRequest, AlertCircle, FileCode, Calendar, HardDrive, Figma, MessageSquare, ExternalLink, RefreshCw } from "lucide-react";
+import { GitPullRequest, AlertCircle, FileCode, Calendar, HardDrive, MessageSquare, ExternalLink, RefreshCw } from "lucide-react";
 import { ListPrimitive, type ListItemData } from "../primitives/ListPrimitive";
 import { MetricPrimitive } from "../primitives/MetricPrimitive";
 import { EmbedPrimitive } from "../primitives/EmbedPrimitive";

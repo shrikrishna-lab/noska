@@ -81,6 +81,8 @@ export function useCursor(pageId: string | null | undefined, options?: { enabled
   useEffect(() => {
     // `enabled: false` (e.g. private page) → no cursor channel join and no
     // sends, so remote users never see this page's cursors.
+    setCursors({});
+    lastSend.current = 0;
     if (!pageId || !enabled || !realtimeCollab.isJoined()) return;
 
     const cleanup = realtimeCollab.on('cursor:move', ({ pageId: pid, ...data }: { pageId: string; userId?: string } & CursorMoveTarget) => {
@@ -106,6 +108,7 @@ export function useCursor(pageId: string | null | undefined, options?: { enabled
 
     return () => {
       cleanup();
+      realtimeCollab.leavePage(pageId);
       clearInterval(expiryInterval);
       Object.values(animFrames.current).forEach(cancelAnimationFrame);
       animFrames.current = {};

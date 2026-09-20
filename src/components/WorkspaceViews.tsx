@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { NotificationInbox } from "../features/notifications/Inbox";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarDays,
@@ -48,6 +49,7 @@ import {
   Bell,
   Check,
   Play,
+  Pause,
   Clock,
   CheckCheck,
   RotateCcw,
@@ -58,6 +60,26 @@ import {
   Folder,
   Globe,
   Layers,
+  Flame,
+  Minimize2,
+  Maximize2,
+  SkipBack,
+  SkipForward,
+  Zap,
+  Activity,
+  Target,
+  Coffee,
+  Trophy,
+  Headphones,
+  Volume2,
+  VolumeX,
+  Bot,
+  ListOrdered,
+  Waves,
+  Compass,
+  Radio,
+  Disc3,
+  Droplets,
   type LucideIcon
 } from "lucide-react";
 import { TactilePriorityPicker, TactileDuePicker, isTaskOverdue } from "./ui/TaskMetaPickers";
@@ -73,6 +95,25 @@ import { IconButton, Modal, ModalHeader, PearlButton } from "./ui";
 import { GlassKpiCard } from "./ui/GlassKpiCard";
 import { GlassTaskSection } from "./ui/GlassTaskSection";
 import { GlassHeaderBar } from "./ui/GlassHeaderBar";
+import {
+  HeroProjectGridBanner,
+  PeachReminderBanner,
+  WeekDateScrubber,
+  PastelProjectCard,
+  ProjectGoalsInspectorModal,
+  QuickJournalSection,
+  DailyRoutineTimeline,
+  WorkloadVelocityGauges,
+  TodayMeetingWidget,
+  MyTurnBentoGrid,
+  NoskaIntelligenceHub,
+  type RoutineItem,
+  type ProjectCardData,
+  type TodayMeetingItem,
+  type VelocityMetric
+} from "./ui/TactileTaskWidgets";
+import type { BentoVectorType } from "./ui/TactileVectorLibrary";
+import { recordUserActivity, analyzeUserPatterns, type IntelligenceReport } from "../lib/noskaIntelligence";
 import { TeamInvitation } from "./ui/team-invitation";
 import { EventManager, type Event } from "./ui/event-manager";
 import { useUser } from "@clerk/react";
@@ -222,6 +263,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
     nvidiaKey,
     onDuplicate,
     onView,
+    onBlockPatch,
     toolContext,
   } = props;
 
@@ -256,12 +298,23 @@ export function WorkspaceView(props: WorkspaceViewProps) {
       });
       return pageTasks;
     });
-    return <TasksRoute tasks={tasks} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
+    return (
+      <TasksRoute
+        tasks={tasks}
+        pages={pages}
+        currentUserId={currentUserId}
+        userName={userName}
+        onSelect={onSelect}
+        onNew={onNew}
+        onBlockPatch={onBlockPatch}
+        onToast={onToast}
+      />
+    );
   }
   if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
   if (view === "meetings") return <MeetingsRoute onNew={onNew} onToast={onToast} />;
   if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
-  if (view === "inbox") return <InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
+  if (view === "inbox") return <><NotificationInbox /><details className="mx-auto max-w-4xl p-6"><summary className="cursor-pointer text-sm">Invitations and saved reminders</summary><InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} /></details></>;
   if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
   if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} onToast={onToast} />;
   if (view === "companyHome") return <CompanyWorkspace onBack={() => onView?.("home")} />;
@@ -1588,14 +1641,28 @@ function LibraryRoute({ pages, sharedPages = [], workspaceName, onSelect, onNew 
 
 interface TasksRouteProps {
   tasks: TaskItem[];
+  pages?: Page[];
+  currentUserId?: string;
+  userName?: string;
   onSelect: (pageId: string) => void;
   onNew: (template: string) => void;
+  onBlockPatch?: (pageId: string, blockId: string, patch: Record<string, unknown>) => void;
   onToast?: (message: string) => void;
 }
 
-function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
+function TasksRoute({
+  tasks,
+  pages = [],
+  currentUserId,
+  userName = "Creator",
+  onSelect,
+  onNew,
+  onBlockPatch,
+  onToast
+}: TasksRouteProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'upcoming' | 'overdue' | 'completed'>('upcoming');
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDateIso, setSelectedDateIso] = useState<string | undefined>(undefined);
   const [sourcesModalOpen, setSourcesModalOpen] = useState(false);
   const [sourceDocPages, setSourceDocPages] = useState(true);
   const [sourceDatabases, setSourceDatabases] = useState(true);
@@ -1612,6 +1679,477 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
   const [editSubtitle, setEditSubtitle] = useState("");
   const [editDue, setEditDue] = useState("");
   const [editPriority, setEditPriority] = useState<'urgent' | 'high' | 'medium' | 'low'>('medium');
+
+  // Active Project Goals Inspector Modal (Image 1 Center Phone)
+  const [inspectingProject, setInspectingProject] = useState<ProjectCardData | null>(null);
+
+  // Active Quick Reflection Modal (Image 3 Quick Journal)
+  const [reflectingEntry, setReflectingEntry] = useState<{ id: string; tag: string; title: string; prompt: string } | null>(null);
+  const [reflectionText, setReflectionText] = useState("");
+
+  // Persistent Daily Routines (Image 2)
+  const routineStorageKey = `noska_daily_routines_${currentUserId || "default"}`;
+  const [routines, setRoutines] = useState<RoutineItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(routineStorageKey);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      { id: "r1", title: "Drink a glass of water", icon: "💧", iconBg: "#fff1e6", iconColor: "#ea580c", streakDays: 3, duration: "5 min", completed: false },
+      { id: "r2", title: "Meditate to relax", icon: "🧘", iconBg: "#e8f7f2", iconColor: "#16a34a", streakDays: 6, duration: "15 min", completed: true },
+      { id: "r3", title: "Stretch for 10 minutes", icon: "🤸", iconBg: "#fdf2f8", iconColor: "#db2777", streakDays: 5, duration: "10 min", completed: false },
+      { id: "r4", title: "Review sprint deliverables", icon: "📋", iconBg: "#fff7ed", iconColor: "#c2410c", streakDays: 3, duration: "8 min", completed: false },
+    ];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(routineStorageKey, JSON.stringify(routines));
+    } catch {}
+  }, [routines, routineStorageKey]);
+
+  const [intelligenceTick, setIntelligenceTick] = useState(0);
+
+  // Active Live Focus Mode Session
+  const [focusSession, setFocusSession] = useState<{
+    active: boolean;
+    taskTitle: string;
+    taskId?: string;
+    pageId?: string;
+    totalSeconds: number;
+    remainingSeconds: number;
+    isPaused: boolean;
+  } | null>(null);
+
+  const [islandExpanded, setIslandExpanded] = useState(false);
+  const [notchMode, setNotchMode] = useState<"sprint" | "break" | "audio" | "ai_copilot" | "queue">("sprint");
+
+  // Multi-Mode Notch: Break & Recharge Timer State
+  const [breakRemainingSeconds, setBreakRemainingSeconds] = useState(300); // 5m default
+  const [isBreakPaused, setIsBreakPaused] = useState(false);
+
+  // Multi-Mode Notch: Ambient Soundscape Engine State
+  const [soundPreset, setSoundPreset] = useState<"binaural" | "brown" | "rain" | "lofi">("binaural");
+  const [soundVolume, setSoundVolume] = useState(0.5);
+  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
+
+  // Web Audio Soundscape Nodes
+  const soundscapeAudioCtxRef = useRef<any>(null);
+  const soundscapeGainRef = useRef<any>(null);
+  const soundscapeSourceNodesRef = useRef<any[]>([]);
+
+  const startSoundscape = (preset: "binaural" | "brown" | "rain" | "lofi", volume: number = soundVolume) => {
+    stopSoundscape();
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") ctx.resume();
+      soundscapeAudioCtxRef.current = ctx;
+
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(volume * 0.14, ctx.currentTime);
+      masterGain.connect(ctx.destination);
+      soundscapeGainRef.current = masterGain;
+
+      if (preset === "binaural") {
+        // Binaural 40Hz Gamma Waves (200Hz Left, 240Hz Right for peak focus)
+        const oscLeft = ctx.createOscillator();
+        const oscRight = ctx.createOscillator();
+        const pannerLeft = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+        const pannerRight = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+
+        oscLeft.type = "sine";
+        oscLeft.frequency.setValueAtTime(200, ctx.currentTime);
+        oscRight.type = "sine";
+        oscRight.frequency.setValueAtTime(240, ctx.currentTime);
+
+        if (pannerLeft && pannerRight) {
+          pannerLeft.pan.setValueAtTime(-1, ctx.currentTime);
+          pannerRight.pan.setValueAtTime(1, ctx.currentTime);
+          oscLeft.connect(pannerLeft);
+          oscRight.connect(pannerRight);
+          pannerLeft.connect(masterGain);
+          pannerRight.connect(masterGain);
+        } else {
+          oscLeft.connect(masterGain);
+          oscRight.connect(masterGain);
+        }
+
+        oscLeft.start();
+        oscRight.start();
+        soundscapeSourceNodesRef.current = [oscLeft, oscRight];
+      } else if (preset === "brown" || preset === "rain") {
+        const bufferSize = ctx.sampleRate * 2;
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        let lastOut = 0.0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          if (preset === "brown") {
+            output[i] = (lastOut + 0.02 * white) / 1.02;
+            lastOut = output[i];
+            output[i] *= 3.5;
+          } else {
+            output[i] = (lastOut + 0.08 * white) / 1.08;
+            lastOut = output[i];
+            output[i] *= 2.2;
+          }
+        }
+        const whiteNoise = ctx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+        whiteNoise.loop = true;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = preset === "brown" ? "lowpass" : "bandpass";
+        filter.frequency.setValueAtTime(preset === "brown" ? 350 : 800, ctx.currentTime);
+
+        whiteNoise.connect(filter);
+        filter.connect(masterGain);
+        whiteNoise.start();
+        soundscapeSourceNodesRef.current = [whiteNoise];
+      } else if (preset === "lofi") {
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(450, ctx.currentTime);
+
+        osc1.type = "triangle";
+        osc1.frequency.setValueAtTime(130.81, ctx.currentTime); // C3
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(196.00, ctx.currentTime); // G3
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(masterGain);
+
+        osc1.start();
+        osc2.start();
+        soundscapeSourceNodesRef.current = [osc1, osc2];
+      }
+      setIsSoundPlaying(true);
+      setSoundPreset(preset);
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  };
+
+  const stopSoundscape = () => {
+    try {
+      soundscapeSourceNodesRef.current.forEach(node => {
+        try { node.stop(); } catch {}
+        try { node.disconnect(); } catch {}
+      });
+      soundscapeSourceNodesRef.current = [];
+      if (soundscapeAudioCtxRef.current) {
+        soundscapeAudioCtxRef.current.close().catch(() => {});
+        soundscapeAudioCtxRef.current = null;
+      }
+    } catch {}
+    setIsSoundPlaying(false);
+  };
+
+  const handleVolumeChange = (newVol: number) => {
+    setSoundVolume(newVol);
+    if (soundscapeGainRef.current && soundscapeAudioCtxRef.current) {
+      soundscapeGainRef.current.gain.setValueAtTime(newVol * 0.14, soundscapeAudioCtxRef.current.currentTime);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopSoundscape();
+    };
+  }, []);
+
+  // Break Countdown Engine
+  useEffect(() => {
+    if (notchMode !== "break" || isBreakPaused) return;
+    const interval = setInterval(() => {
+      setBreakRemainingSeconds(prev => {
+        if (prev <= 1) {
+          playAppleHapticSound("complete");
+          onToast?.("☕ Break time finished! Ready to resume sprint.");
+          setNotchMode("sprint");
+          return 300;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [notchMode, isBreakPaused]);
+
+  // Focus Countdown Engine
+  useEffect(() => {
+    if (!focusSession?.active || focusSession.isPaused) return;
+    const interval = setInterval(() => {
+      setFocusSession(prev => {
+        if (!prev || !prev.active || prev.isPaused) return prev;
+        if (prev.remainingSeconds <= 1) {
+          recordUserActivity(currentUserId, {
+            type: "focus_session",
+            metadata: { minutes: Math.round(prev.totalSeconds / 60) }
+          });
+          setIntelligenceTick(t => t + 1);
+          onToast?.(`🏆 Focus sprint completed! Great job maintaining deep work velocity.`);
+          return null;
+        }
+        return {
+          ...prev,
+          remainingSeconds: prev.remainingSeconds - 1
+        };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [focusSession?.active, focusSession?.isPaused, currentUserId]);
+
+  // Synthesized Apple Taptic Audio Feedback Engine (Zero external dependencies)
+  const playAppleHapticSound = (type: "start" | "pause" | "resume" | "complete" | "tap") => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const now = ctx.currentTime;
+      if (type === "start") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, now); // D5
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.start(now);
+        osc.stop(now + 0.22);
+      } else if (type === "complete") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+        osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+        osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.24); // C6
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        osc.start(now);
+        osc.stop(now + 0.45);
+      } else if (type === "pause") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(330, now + 0.08);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (type === "resume") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(330, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.08);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (type === "tap") {
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(1200, now);
+        gain.gain.setValueAtTime(0.03, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+        osc.start(now);
+        osc.stop(now + 0.04);
+      }
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  };
+
+  const handleStartFocus = (taskTitle?: string, taskId?: string, pageId?: string, minutes: number = 25) => {
+    const title = taskTitle || "Deep Work Sprint";
+    const totalSecs = minutes * 60;
+    setFocusSession({
+      active: true,
+      taskTitle: title,
+      taskId,
+      pageId,
+      totalSeconds: totalSecs,
+      remainingSeconds: totalSecs,
+      isPaused: false
+    });
+    setIslandExpanded(false); // starts in sleek Dynamic Island pill, can be tapped to expand
+    playAppleHapticSound("start");
+    recordUserActivity(currentUserId, {
+      type: "focus_session",
+      taskId,
+      taskTitle: title,
+      metadata: { minutes }
+    });
+    setIntelligenceTick(t => t + 1);
+    onToast?.(`🎯 Focus Mode active in Dynamic Island (${minutes}m)`);
+  };
+
+  const handlePauseResumeFocus = () => {
+    setFocusSession(prev => {
+      if (!prev) return null;
+      const nextPaused = !prev.isPaused;
+      playAppleHapticSound(nextPaused ? "pause" : "resume");
+      onToast?.(nextPaused ? "Focus timer paused ⏸️" : "Focus timer resumed ▶️");
+      return { ...prev, isPaused: nextPaused };
+    });
+  };
+
+  const handleAddFocusTime = (extraMinutes: number = 5) => {
+    setFocusSession(prev => {
+      if (!prev) return null;
+      const addedSecs = extraMinutes * 60;
+      playAppleHapticSound("tap");
+      onToast?.(`Added +${extraMinutes}m to your focus session ⏱️`);
+      return {
+        ...prev,
+        totalSeconds: prev.totalSeconds + addedSecs,
+        remainingSeconds: prev.remainingSeconds + addedSecs
+      };
+    });
+  };
+
+  const handleStopFocus = () => {
+    playAppleHapticSound("pause");
+    setFocusSession(null);
+    onToast?.("Focus session ended");
+  };
+
+  const handleCompleteFocusTask = () => {
+    playAppleHapticSound("complete");
+    if (focusSession?.taskId) {
+      const matching = allCombinedTasks.find(t => t.id === focusSession.taskId);
+      if (matching) {
+        handleToggleTask(matching, { stopPropagation: () => {} } as any);
+      } else {
+        setTaskOverrides(prev => ({
+          ...prev,
+          [focusSession.taskId!]: {
+            ...(prev[focusSession.taskId!] || {}),
+            checked: true
+          }
+        }));
+      }
+    }
+    recordUserActivity(currentUserId, {
+      type: "focus_session",
+      metadata: { minutes: 25, completedTask: true }
+    });
+    setIntelligenceTick(t => t + 1);
+    onToast?.(`🎉 Focus task "${focusSession?.taskTitle}" completed! 100 XP gained 🌟`);
+    setFocusSession(null);
+  };
+
+  const handleToggleRoutine = (id: string) => {
+    setRoutines(prev => prev.map(r => {
+      if (r.id === id) {
+        const nextDone = !r.completed;
+        if (nextDone) {
+          recordUserActivity(currentUserId, {
+            type: "routine_toggle",
+            taskId: r.id,
+            taskTitle: r.title
+          });
+          setIntelligenceTick(t => t + 1);
+          onToast?.(`Habit "${r.title}" completed! Streak increased to ${r.streakDays + 1} days 🔥`);
+        }
+        return { ...r, completed: nextDone, streakDays: nextDone ? r.streakDays + 1 : Math.max(0, r.streakDays - 1) };
+      }
+      return r;
+    }));
+  };
+
+  const handleAddRoutine = (routineData: { title: string; duration: string; vectorType: BentoVectorType; streakDays: number }) => {
+    if (!routineData?.title?.trim()) return;
+    const newR: RoutineItem = {
+      id: `r-${Date.now()}`,
+      title: routineData.title.trim(),
+      vectorType: routineData.vectorType,
+      streakDays: routineData.streakDays || 1,
+      duration: routineData.duration || "10 min",
+      completed: false
+    };
+    setRoutines(prev => [...prev, newR]);
+    recordUserActivity(currentUserId, {
+      type: "routine_toggle",
+      taskId: newR.id,
+      taskTitle: newR.title
+    });
+    setIntelligenceTick(t => t + 1);
+    onToast?.(`New habit "${routineData.title.trim()}" added to your daily timeline! ✨`);
+  };
+
+  const handleEditRoutine = (id: string, updated: Partial<RoutineItem>) => {
+    setRoutines(prev => prev.map(r => r.id === id ? { ...r, ...updated } : r));
+    onToast?.(`Routine habit updated`);
+  };
+
+  const handleDeleteRoutine = (id: string) => {
+    setRoutines(prev => prev.filter(r => r.id !== id));
+    onToast?.(`Routine habit removed`);
+  };
+
+  // Live Workspace Reminders & Meetings
+  const [liveReminders, setLiveReminders] = useState(() => loadReminders());
+  useEffect(() => {
+    return subscribeReminders(() => setLiveReminders(loadReminders()));
+  }, []);
+
+  const todayMeetingsList = React.useMemo<TodayMeetingItem[]>(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const filtered = liveReminders.filter(r => !r.date || r.date.includes(todayStr));
+    return filtered.slice(0, 5).map((r, i) => ({
+      id: r.id || `rem-${i}`,
+      title: r.text || r.pageTitle || "Workspace Alignment & Review",
+      time: r.date?.includes(":") ? r.date.split(" ").slice(1).join(" ") || "10:00 AM" : "Scheduled Sync",
+      attendees: ["🧑", "👩"],
+      link: r.pageId ? `page://${r.pageId}` : undefined
+    }));
+  }, [liveReminders]);
+
+  const handleScheduleNewMeeting = (item?: { title: string; time: string; category?: string; link?: string }) => {
+    if (!item?.title?.trim()) return;
+    const todayStr = new Date().toISOString().split("T")[0];
+    const newRem = {
+      id: `rem-${Date.now()}`,
+      text: item.title.trim(),
+      date: `${todayStr} ${item.time}`,
+      priority: item.category === "deep_work" ? "high" as const : "medium" as const
+    };
+    const current = loadReminders();
+    saveReminders([...current, newRem]);
+    if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+    onToast?.(`Scheduled "${item.title.trim()}" for ${item.time}! 📅`);
+  };
+
+  const handleDeleteMeeting = (id: string) => {
+    const current = loadReminders();
+    saveReminders(current.filter(r => r.id !== id));
+    onToast?.("Meeting removed from today's schedule");
+  };
+
+  const handleSetReminderBanner = () => {
+    const title = prompt("Set morning routine reminder title:", "Daily Focus & Morning Standup");
+    if (!title?.trim()) return;
+    const time = prompt("Enter reminder time (e.g. 09:00 AM):", "09:00 AM") || "09:00 AM";
+    const todayStr = new Date().toISOString().split("T")[0];
+    const newRem = {
+      id: `rem-${Date.now()}`,
+      text: title.trim(),
+      date: `${todayStr} ${time}`,
+      priority: "high" as const
+    };
+    const current = loadReminders();
+    saveReminders([...current, newRem]);
+    if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+    onToast?.(`Daily reminder set for ${time}: "${title.trim()}" 🔔`);
+  };
 
   const allCombinedTasks: TaskItem[] = [...localTasks, ...tasks]
     .filter(t => !taskOverrides[t.id]?.isDeleted)
@@ -1632,7 +2170,6 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
   const completedCount = allCombinedTasks.filter(t => t.checked).length;
   const overdueCount = allCombinedTasks.filter(t => isTaskOverdue(t as any)).length;
   const pendingCount = allCombinedTasks.filter(t => !t.checked).length;
-  const upcomingCount = allCombinedTasks.filter(t => !t.checked && !isTaskOverdue(t as any)).length;
   const totalCount = allCombinedTasks.length;
 
   const currentTabTasks = allCombinedTasks.filter(t => {
@@ -1643,10 +2180,73 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
     return !t.checked && !isOverdue;
   });
 
-  const filteredTasks = currentTabTasks.filter(t => {
-    if (searchQuery.trim() && !t.text?.toLowerCase().includes(searchQuery.toLowerCase()) && !t.pageTitle?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
+  const [activeScope, setActiveScope] = useState<"assignees" | "priority" | "project">("assignees");
+  const [activeHorizon, setActiveHorizon] = useState<"today" | "7d" | "30d" | "all">("all");
+  const [activeLensFilters, setActiveLensFilters] = useState<{ hideCompleted?: boolean; urgentOnly?: boolean; dueSoon?: boolean }>({});
+  const [activeSortBy, setActiveSortBy] = useState<"urgency" | "due" | "name">("urgency");
+
+  const filteredTasks = React.useMemo(() => {
+    let result = [...currentTabTasks];
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(t => t.text?.toLowerCase().includes(q) || t.pageTitle?.toLowerCase().includes(q));
+    }
+
+    // Smart Lens Filters
+    if (activeLensFilters.hideCompleted) {
+      result = result.filter(t => !t.checked);
+    }
+    if (activeLensFilters.urgentOnly) {
+      result = result.filter(t => (t as any).priority === 'urgent' || (t as any).priority === 'high');
+    }
+    if (activeLensFilters.dueSoon) {
+      result = result.filter(t => {
+        if (!(t as any).due) return false;
+        const d = new Date((t as any).due).getTime();
+        const now = Date.now();
+        return d >= now && d <= now + 7 * 86400000;
+      });
+    }
+
+    // Date Scrubber Filter
+    if (selectedDateIso) {
+      result = result.filter(t => {
+        if (!(t as any).due) return true;
+        return (t as any).due.includes(selectedDateIso) || selectedDateIso.includes((t as any).due);
+      });
+    }
+
+    // Time Horizon
+    if (activeHorizon !== "all") {
+      const now = Date.now();
+      const horizonMs = activeHorizon === "today" ? 86400000 : activeHorizon === "7d" ? 7 * 86400000 : 30 * 86400000;
+      result = result.filter(t => {
+        if (!(t as any).due && !t.editedAt) return true;
+        const targetTime = (t as any).due ? new Date((t as any).due).getTime() : Number(t.editedAt);
+        return Math.abs(targetTime - now) <= horizonMs;
+      });
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      if (activeSortBy === "urgency") {
+        const pOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+        const pa = pOrder[(a as any).priority || "medium"] ?? 2;
+        const pb = pOrder[(b as any).priority || "medium"] ?? 2;
+        return pa - pb;
+      }
+      if (activeSortBy === "due") {
+        const da = (a as any).due ? new Date((a as any).due).getTime() : 9999999999999;
+        const db = (b as any).due ? new Date((b as any).due).getTime() : 9999999999999;
+        return da - db;
+      }
+      return (a.text || "").localeCompare(b.text || "");
+    });
+
+    return result;
+  }, [currentTabTasks, searchQuery, activeLensFilters, selectedDateIso, activeHorizon, activeSortBy]);
 
   const handleInlineSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1666,6 +2266,14 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
       pageId: '',
     } as any;
     setLocalTasks(prev => [newTask, ...prev]);
+    recordUserActivity(currentUserId, {
+      type: "task_create",
+      taskId: newTask.id,
+      taskTitle: inlineTitle.trim(),
+      priority: isUrgent ? 'urgent' : inlinePriority,
+      due: inlineDue.trim() || undefined
+    });
+    setIntelligenceTick(t => t + 1);
     onToast?.(`Task "${inlineTitle.trim()}" created`);
     setInlineTitle("");
     setInlineSubtitle("");
@@ -1674,28 +2282,121 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
     setIsInlineAdding(false);
   };
 
-  const [activeScope, setActiveScope] = useState<"assignees" | "priority" | "project">("assignees");
-
   const stackedDispatchedTasks = React.useMemo(() => {
     const uncompleted = allCombinedTasks.filter(t => !t.checked);
-    if (uncompleted.length === 0) return undefined;
-    return uncompleted.slice(0, 5).map((t) => ({
-      id: t.id,
-      title: t.text || "Untitled task",
-      subtitle: (t as any).subtitle || (t.pageTitle ? `From "${t.pageTitle}"` : "Workspace action item"),
-      assignedAgo: t.editedAt ? timeAgo(String(t.editedAt)) : "Assigned to You",
-      type: (t as any).priority === "urgent" ? "Urgent Action" : "Workspace Task",
-      priority: (t as any).priority || "medium",
-      pageId: t.pageId
-    }));
+    const source = uncompleted.length > 0 ? uncompleted : [];
+
+    // Prioritize user created tasks and high-priority deliverables
+    const sorted = [...source].sort((a, b) => {
+      const aIsUser = a.id.startsWith("task-local") || a.id.startsWith("task-custom") || (a as any).sourceType === "user_created";
+      const bIsUser = b.id.startsWith("task-local") || b.id.startsWith("task-custom") || (b as any).sourceType === "user_created";
+      if (aIsUser && !bIsUser) return -1;
+      if (!aIsUser && bIsUser) return 1;
+
+      const aUrgent = (a as any).priority === "urgent" ? 2 : (a as any).priority === "high" ? 1 : 0;
+      const bUrgent = (b as any).priority === "urgent" ? 2 : (b as any).priority === "high" ? 1 : 0;
+      return bUrgent - aUrgent;
+    });
+
+    if (sorted.length === 0) {
+      return [];
+    }
+
+    return sorted.slice(0, 10).map((t) => {
+      const isUserCreated = t.id.startsWith("task-local") || t.id.startsWith("task-custom") || (t as any).sourceType === "user_created";
+      const isUrgent = (t as any).priority === "urgent";
+      const isHigh = (t as any).priority === "high";
+
+      return {
+        id: t.id,
+        title: t.text || "Workspace Task",
+        subtitle: (t as any).subtitle || (isUserCreated ? "Personal deliverable created by you" : t.pageTitle ? `Project: ${t.pageTitle}` : "Workspace action item"),
+        assignedAgo: t.editedAt ? timeAgo(String(t.editedAt)) : "Just now",
+        type: isUserCreated ? "Created by You" : isUrgent ? "Urgent Action" : isHigh ? "High Priority" : "Task Item",
+        sourceType: isUserCreated ? "user_created" : ((t as any).sourceType || "workspace_task"),
+        authorName: isUserCreated ? "You" : userName || undefined,
+        priority: (t as any).priority || "medium",
+        pageId: t.pageId,
+        pageTitle: t.pageTitle,
+        checked: Boolean(t.checked)
+      };
+    });
+  }, [allCombinedTasks, userName]);
+
+  const stackedCompletedTasks = React.useMemo(() => {
+    return allCombinedTasks
+      .filter(t => t.checked)
+      .map(t => ({
+        id: t.id,
+        title: t.text || "Untitled task",
+        subtitle: (t as any).subtitle || (t.pageTitle ? `From page: ${t.pageTitle}` : "Workspace deliverable"),
+        assignedAgo: t.editedAt ? timeAgo(String(t.editedAt)) : "Completed",
+        type: (t as any).priority === "urgent" ? "Urgent Action" : "Workspace Task",
+        priority: (t as any).priority || "medium",
+        pageId: t.pageId,
+        pageTitle: t.pageTitle,
+        checked: true
+      }));
   }, [allCombinedTasks]);
 
-  const handleDispatcherDone = (st: StackedTask) => {
+  const totalTaskStats = React.useMemo(() => ({
+    total: totalCount,
+    completed: completedCount,
+    pending: pendingCount,
+    urgent: overdueCount + allCombinedTasks.filter(t => !t.checked && ((t as any).priority === 'urgent' || (t as any).priority === 'high')).length,
+    high: allCombinedTasks.filter(t => (t as any).priority === 'high').length,
+    medium: allCombinedTasks.filter(t => (t as any).priority === 'medium').length,
+    low: allCombinedTasks.filter(t => (t as any).priority === 'low').length,
+    projectsCount: new Set(allCombinedTasks.map(t => t.pageId).filter(Boolean)).size || 1
+  }), [totalCount, completedCount, pendingCount, overdueCount, allCombinedTasks]);
+
+  const intelligenceReport = React.useMemo<IntelligenceReport>(() => {
+    return analyzeUserPatterns(currentUserId, allCombinedTasks, routines);
+  }, [currentUserId, allCombinedTasks, routines, intelligenceTick]);
+
+  const handleApplyIntelligenceAction = (card: any) => {
+    if (card.actionType === "start_focus") {
+      const candidateTask = allCombinedTasks.find(t => !t.checked && ((t as any).priority === 'urgent' || (t as any).priority === 'high')) || allCombinedTasks.find(t => !t.checked);
+      handleStartFocus(
+        candidateTask ? (candidateTask.text || candidateTask.pageTitle) : "Deep Work Sprint",
+        candidateTask?.id,
+        candidateTask?.pageId,
+        25
+      );
+    } else if (card.actionType === "breakdown_task") {
+      if (pastelProjects.length > 0) {
+        setInspectingProject(pastelProjects[0]);
+      }
+      onToast?.(`Inspecting project goals to decompose tasks`);
+    } else if (card.actionType === "reschedule_overdue") {
+      onToast?.(`Rescheduled overdue items to your peak flow window`);
+    } else {
+      onToast?.(`Applied proactive recommendation: ${card.title}`);
+    }
+  };
+
+  const handleDispatcherDone = (st: any) => {
     const matching = allCombinedTasks.find(t => t.id === st.id);
     if (matching) {
       handleToggleTask(matching, { stopPropagation: () => {} } as any);
     } else {
       onToast?.(`Task "${st.title}" marked as completed!`);
+    }
+  };
+
+  const handleDispatcherReopen = (st: any) => {
+    const matching = allCombinedTasks.find(t => t.id === st.id);
+    if (matching) {
+      handleToggleTask(matching, { stopPropagation: () => {} } as any);
+    } else {
+      setTaskOverrides(prev => ({
+        ...prev,
+        [st.id]: {
+          ...(prev[st.id] || {}),
+          checked: false
+        }
+      }));
+      onToast?.(`Task "${st.title}" reopened to queue`);
     }
   };
 
@@ -1709,7 +2410,21 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
         checked: nextChecked
       }
     }));
-    onToast?.(nextChecked ? "Task marked completed" : "Task marked pending");
+    // Sync live workspace page block in Supabase
+    if (onBlockPatch && task.pageId && task.id) {
+      onBlockPatch(task.pageId, task.id, { checked: nextChecked });
+    }
+    if (nextChecked) {
+      recordUserActivity(currentUserId, {
+        type: "task_complete",
+        taskId: task.id,
+        taskTitle: task.text,
+        priority: (task as any).priority || "medium",
+        due: (task as any).due
+      });
+      setIntelligenceTick(t => t + 1);
+    }
+    onToast?.(nextChecked ? "Task marked completed ✓" : "Task marked pending");
   };
 
   const startEditTask = (task: any, e: React.MouseEvent) => {
@@ -1736,8 +2451,18 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
         editedAt: Date.now()
       }
     }));
+    // Sync to live workspace block
+    const matching = allCombinedTasks.find(t => t.id === taskId);
+    if (onBlockPatch && matching?.pageId) {
+      onBlockPatch(matching.pageId, taskId, {
+        text: editTitle.trim(),
+        subtitle: editSubtitle.trim() || undefined,
+        due: editDue.trim() || undefined,
+        priority: editPriority
+      });
+    }
     setEditingTaskId(null);
-    onToast?.("Task updated");
+    onToast?.("Task updated across workspace");
   };
 
   const handleDeleteTask = (taskId: string, e: React.MouseEvent) => {
@@ -1755,23 +2480,156 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
     return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
+  const projectScopeBreakdown = React.useMemo(() => {
+    const map = new Map<string, { id: string; name: string; count: number }>();
+    allCombinedTasks.forEach(t => {
+      const pId = t.pageId || 'dispatched';
+      const pName = t.pageTitle || 'Dispatched Items';
+      const existing = map.get(pId) || { id: pId, name: pName, count: 0 };
+      existing.count += 1;
+      map.set(pId, existing);
+    });
+    return Array.from(map.values());
+  }, [allCombinedTasks]);
+
+  const priorityScopeBreakdown = React.useMemo(() => ({
+    urgent: overdueCount + allCombinedTasks.filter(t => (t as any).priority === 'urgent').length,
+    high: allCombinedTasks.filter(t => (t as any).priority === 'high').length,
+    medium: allCombinedTasks.filter(t => (t as any).priority === 'medium' || !(t as any).priority).length,
+    low: allCombinedTasks.filter(t => (t as any).priority === 'low').length,
+  }), [overdueCount, allCombinedTasks]);
+
+  // REAL Workspace Projects extracted from workspace pages (Image 1)
+  const pastelProjects: ProjectCardData[] = React.useMemo(() => {
+    const candidatePages = pages.filter(p => p.blocks && p.blocks.length > 0);
+    const sourcePages = candidatePages.length > 0 ? candidatePages : pages;
+    if (sourcePages.length > 0) {
+      const themes: ("mint" | "lavender" | "peach")[] = ["mint", "lavender", "peach"];
+      return sourcePages.slice(0, 6).map((page, idx) => {
+        const pageTodos = allCombinedTasks.filter(t => t.pageId === page.id);
+        const pageDone = pageTodos.filter(t => t.checked).length;
+        const total = pageTodos.length;
+        const progress = total > 0 ? Math.round((pageDone / total) * 100) : 0;
+        const earliestDue = pageTodos.find(t => (t as any).due)?.due || (page as any).due || "Ongoing";
+        return {
+          id: page.id,
+          title: page.title || "Untitled Project",
+          author: userName || "You",
+          status: progress === 100 ? "Completed" : "Ongoing",
+          priority: pageTodos.some(t => (t as any).priority === 'urgent' || (t as any).priority === 'high') ? "High" : "Medium",
+          progress,
+          dueDate: earliestDue,
+          commentsCount: pageTodos.length,
+          membersCount: 1,
+          theme: themes[idx % themes.length]
+        };
+      });
+    }
+    return [];
+  }, [pages, allCombinedTasks, userName]);
+
+  // LIVE Priority Velocity Metrics (Image 3 Pill Bars)
+  const velocityMetrics: VelocityMetric[] = React.useMemo(() => {
+    const total = totalCount || 1;
+    const uCount = priorityScopeBreakdown.urgent;
+    const hCount = priorityScopeBreakdown.high;
+    const mCount = priorityScopeBreakdown.medium;
+    const lCount = priorityScopeBreakdown.low;
+
+    return [
+      { label: "Urgent", priorityKey: "urgent", percentage: Math.min(100, Math.round((uCount / total) * 100) || (uCount > 0 ? 48 : 0)), color: "#f7a93b", count: uCount },
+      { label: "High", priorityKey: "high", percentage: Math.min(100, Math.round((hCount / total) * 100) || (hCount > 0 ? 33 : 0)), color: "#7e3b2b", count: hCount },
+      { label: "Medium", priorityKey: "medium", percentage: Math.min(100, Math.round((mCount / total) * 100) || (mCount > 0 ? 27 : 0)), color: "#7b9e3b", count: mCount },
+      { label: "Low", priorityKey: "low", percentage: Math.min(100, Math.round((lCount / total) * 100) || (lCount > 0 ? 40 : 0)), color: "#545c47", count: lCount },
+    ];
+  }, [totalCount, priorityScopeBreakdown]);
+
+  const liveFormattedDate = React.useMemo(() => {
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(new Date());
+  }, []);
+
+  const handleSaveReflection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reflectionText.trim() || !reflectingEntry) return;
+    try {
+      const key = `noska_reflections_${currentUserId || "default"}`;
+      const prev = JSON.parse(localStorage.getItem(key) || "[]");
+      prev.unshift({
+        id: `refl-${Date.now()}`,
+        prompt: reflectingEntry.prompt,
+        response: reflectionText.trim(),
+        tag: reflectingEntry.tag,
+        timestamp: Date.now()
+      });
+      localStorage.setItem(key, JSON.stringify(prev));
+    } catch {}
+    onToast?.(`Reflection saved to your mindful workspace journal ✨`);
+    setReflectionText("");
+    setReflectingEntry(null);
+  };
+
   return (
     <RouteShell
-      title="My Tasks"
-      subtitle="Track your workspace action items, deliverables, and priorities"
+      title={`Hi, ${userName?.split(' ')[0] || 'Creator'} 👋`}
+      subtitle={liveFormattedDate}
       actions={
-        <motion.button
-          whileHover={{ scale: 1.04 }}
-          whileTap={{ scale: 0.96 }}
-          onClick={() => setIsInlineAdding(true)}
-          className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-[#2956ff] via-[#434eff] to-[#6042ff] hover:from-[#1e48f0] hover:to-[#5233ef] text-[13px] font-semibold text-white shadow-[0_4px_16px_rgba(67,78,255,0.4)] hover:shadow-[0_6px_22px_rgba(67,78,255,0.55)] transition-all cursor-pointer select-none"
-        >
-          <Plus size={15} strokeWidth={2.6} />
-          <span>New Task</span>
-        </motion.button>
+        <div className="flex items-center gap-3">
+          <motion.button
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => setIsInlineAdding(true)}
+            className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-[#2956ff] via-[#434eff] to-[#6042ff] hover:from-[#1e48f0] hover:to-[#5233ef] text-[13px] font-semibold text-white shadow-[0_4px_16px_rgba(67,78,255,0.4)] hover:shadow-[0_6px_22px_rgba(67,78,255,0.55)] transition-all cursor-pointer select-none"
+          >
+            <Plus size={15} strokeWidth={2.6} />
+            <span>New Task</span>
+          </motion.button>
+        </div>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-7 max-w-7xl mx-auto">
+        {/* TOP HERO ROW: Lavender Grid Banner + Peach Reminder Banner (Desktop 2-Col Grid) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <HeroProjectGridBanner
+            title={pastelProjects[0]?.title ? `Focus: ${pastelProjects[0].title}` : "Workspace Master Sprint"}
+            remainingTime={
+              focusSession?.active
+                ? `${Math.floor(focusSession.remainingSeconds / 60)}:${(focusSession.remainingSeconds % 60).toString().padStart(2, '0')}`
+                : pendingCount > 0 ? `${Math.max(1, pendingCount * 25)}m Focus` : "All Done"
+            }
+            statusText={
+              focusSession?.active
+                ? `🔥 Focus Active • ${focusSession.isPaused ? "Paused" : "Deep Work Sprint"}`
+                : pendingCount > 0
+                  ? `${pendingCount} active task${pendingCount > 1 ? "s" : ""} in queue • ${overdueCount > 0 ? `${overdueCount} urgent` : "On track"}`
+                  : "All workspace deliverables completed! 🎉"
+            }
+            onStartFocus={() => {
+              if (focusSession?.active) {
+                handlePauseResumeFocus();
+              } else {
+                const topTask = allCombinedTasks.find(t => !t.checked);
+                handleStartFocus(
+                  topTask ? (topTask.text || topTask.pageTitle) : (pastelProjects[0]?.title || "Deep Work Focus"),
+                  topTask?.id,
+                  topTask?.pageId,
+                  25
+                );
+              }
+            }}
+          />
+          <PeachReminderBanner
+            title="Set the reminder"
+            description="Never miss your morning routine! Set a reminder to stay on track"
+            buttonLabel="Set Now"
+            onAction={handleSetReminderBanner}
+          />
+        </div>
+
         {/* 4 Soft Pastel Gradient Glass KPI Metric Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <GlassKpiCard
@@ -1808,21 +2666,467 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
           />
         </div>
 
-        {/* Dynamic Task Dispatcher & Quick Scope Control */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <div className="lg:col-span-2">
+        {/* HORIZONTAL WEEK DATE SCRUBBER & FULL MONTH HEATMAP MATRIX */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
+              Calendar & Timeline Scrubber
+            </span>
+            {selectedDateIso && (
+              <button
+                type="button"
+                onClick={() => setSelectedDateIso(undefined)}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                Clear date filter ✕
+              </button>
+            )}
+          </div>
+          <WeekDateScrubber
+            selectedDate={selectedDateIso}
+            onSelectDate={(iso) => {
+              setSelectedDateIso(prev => prev === iso ? undefined : iso);
+              onToast?.(`Focused date: ${iso}`);
+            }}
+            taskCountByDate={{
+              [new Date().toISOString().split("T")[0]]: pendingCount
+            }}
+          />
+        </div>
+
+        {/* MAIN DESKTOP 2-COLUMN SPLIT */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
+          {/* LEFT MAIN COLUMN (Col Span 7) */}
+          <div className="lg:col-span-7 space-y-7">
+            {/* Pastel Project Cards Showcase (Image 1 Mint & Lavender cards) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-base font-extrabold text-neutral-900 dark:text-neutral-100 tracking-tight">
+                  Your Projects & Goals
+                </h3>
+                <span className="text-xs font-semibold text-neutral-400">
+                  {pastelProjects.length} Active in workspace
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pastelProjects.length === 0 ? (
+                  <div className="col-span-full p-6 text-center rounded-[24px] bg-[#fafaf9] dark:bg-[#1c1c21] border border-dashed border-[#e7e5e1] dark:border-[#333338] space-y-3">
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                      No project documents created yet.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onNew("default")}
+                      className="px-4 py-2 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-xs font-bold shadow-xs hover:scale-102 transition cursor-pointer"
+                    >
+                      + Create Project Page
+                    </button>
+                  </div>
+                ) : (
+                  pastelProjects.slice(0, 4).map((p) => (
+                    <PastelProjectCard
+                      key={p.id}
+                      project={p}
+                      onOpen={() => p.id && onSelect(p.id)}
+                      onQuickInspect={() => setInspectingProject(p)}
+                      onEdit={() => onToast?.(`Editing project "${p.title}"`)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* "MY TURN 📅" Bento Time-Blocked Habit & Task Grid (Reference Mockup) */}
+            <MyTurnBentoGrid
+              userId={currentUserId}
+              workspaceTasks={allCombinedTasks}
+              onToggleItem={(id, done) => {
+                if (done) {
+                  recordUserActivity(currentUserId, {
+                    type: "routine_toggle",
+                    taskId: id,
+                    taskTitle: `Turn block ${id}`
+                  });
+                  setIntelligenceTick(t => t + 1);
+                }
+              }}
+              onToast={onToast}
+            />
+
+            {/* Daily Routine Timeline Checklist (Image 2 Daily Routine) */}
+            <DailyRoutineTimeline
+              routines={routines}
+              onToggleRoutine={handleToggleRoutine}
+              onAddRoutine={handleAddRoutine}
+              onEditRoutine={handleEditRoutine}
+              onDeleteRoutine={handleDeleteRoutine}
+            />
+
+            {/* Tactile Tasks Card (Main Interactive Task Board) */}
+            <div className="rounded-[28px] border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#17171a] p-7 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_12px_32px_-4px_rgba(0,0,0,0.45)]">
+              {/* Header Row: Tabs & Search */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-black/[0.06] dark:border-white/[0.08] pb-3 mb-5">
+                {/* Sliding Pill Tabs */}
+                <div className="flex items-center gap-6 relative">
+                  {([
+                    { id: 'all', label: 'All Tasks' },
+                    { id: 'upcoming', label: 'Upcoming' },
+                    { id: 'overdue', label: 'Overdue' },
+                    { id: 'completed', label: 'Completed' }
+                  ] as const).map(tab => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`text-[15px] pb-2 font-medium transition-colors relative cursor-pointer ${
+                          isActive
+                            ? 'font-bold text-neutral-900 dark:text-neutral-100'
+                            : 'text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        {isActive && (
+                          <motion.div
+                            layoutId="workspace-tasks-tab-pill-indicator"
+                            className="absolute bottom-[-13px] left-1/2 -translate-x-1/2 w-6 h-1 rounded-full bg-neutral-900 dark:bg-neutral-100 z-10"
+                            transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Search Input */}
+                <div className="relative min-w-[220px]">
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filter tasks..."
+                    className="w-full rounded-full border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-800/60 pl-9 pr-4 py-1.5 text-xs text-[var(--text)] outline-none focus:border-blue-400 placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              {/* Create Task Row */}
+              <div className="mb-4">
+                {isInlineAdding ? (
+                  <form onSubmit={handleInlineSubmit} className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-black/[0.08] dark:border-white/[0.1] space-y-2.5">
+                    <input
+                      type="text"
+                      value={inlineTitle}
+                      onChange={(e) => setInlineTitle(e.target.value)}
+                      placeholder="What needs to be done?"
+                      autoFocus
+                      className="w-full bg-transparent px-2 text-sm font-medium text-[var(--text)] outline-none placeholder:text-neutral-400"
+                    />
+                    <input
+                      type="text"
+                      value={inlineSubtitle}
+                      onChange={(e) => setInlineSubtitle(e.target.value)}
+                      placeholder="Description or notes (optional)"
+                      className="w-full bg-transparent px-2 text-xs text-[var(--secondary)] outline-none placeholder:text-neutral-400"
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.08]">
+                      <div className="flex items-center gap-2">
+                        <TactileDuePicker
+                          value={inlineDue}
+                          onChange={setInlineDue}
+                        />
+                        <TactilePriorityPicker
+                          value={inlinePriority}
+                          onChange={setInlinePriority}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setIsInlineAdding(false)}
+                          className="px-3 py-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 rounded-xl bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs font-semibold shadow-sm cursor-pointer"
+                        >
+                          Add Task
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsInlineAdding(true)}
+                    className="flex items-center gap-3.5 py-1 text-left cursor-pointer group select-none"
+                  >
+                    <div className="size-9 rounded-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 border border-black/[0.08] dark:border-white/[0.1] shadow-2xs flex items-center justify-center text-neutral-500 group-hover:scale-105 group-hover:shadow-xs transition-all">
+                      <Plus size={15} strokeWidth={2.4} />
+                    </div>
+                    <span className="text-[15px] font-medium text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 transition-colors">
+                      Create Task
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {/* Tasks List */}
+              {filteredTasks.length === 0 ? (
+                <div className="py-12 text-center">
+                  <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-xs">
+                    <CheckSquare size={26} />
+                  </div>
+                  <h3 className="text-sm font-bold text-[var(--text)] mb-1">No {activeTab} tasks</h3>
+                  <p className="text-xs text-[var(--muted)] max-w-sm mx-auto mb-4">
+                    Checkboxes created in your documents and notes will automatically sync here.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-dashed divide-black/[0.08] dark:divide-white/[0.08]">
+                  {filteredTasks.map((task, idx) => {
+                    const isChecked = task.checked;
+                    const isUrgent = !isChecked && ((task as any).priority === 'urgent' || task.text?.toLowerCase().includes("urgent"));
+                    const badgeTheme = isChecked 
+                      ? 'purple' 
+                      : isUrgent 
+                      ? 'rose' 
+                      : idx % 2 === 0 
+                      ? 'green' 
+                      : 'amber';
+
+                    if (editingTaskId === task.id) {
+                      return (
+                        <form
+                          key={`edit-${task.id}`}
+                          onSubmit={(e) => saveEditTask(task.id, e)}
+                          className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/80 border border-blue-500/40 space-y-2.5 my-2 shadow-xs"
+                        >
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            placeholder="Task title"
+                            autoFocus
+                            className="w-full bg-transparent px-2 text-sm font-medium text-[var(--text)] outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={editSubtitle}
+                            onChange={(e) => setEditSubtitle(e.target.value)}
+                            placeholder="Description (optional)"
+                            className="w-full bg-transparent px-2 text-xs text-[var(--secondary)] outline-none"
+                          />
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.08]">
+                            <div className="flex items-center gap-2">
+                              <TactileDuePicker
+                                value={editDue}
+                                onChange={setEditDue}
+                              />
+                              <TactilePriorityPicker
+                                value={editPriority}
+                                onChange={setEditPriority}
+                              />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingTaskId(null)}
+                                className="px-3 py-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="px-4 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-sm cursor-pointer"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        </form>
+                      );
+                    }
+
+                    return (
+                      <motion.div
+                        key={`${task.pageId || 'local'}-${task.id}`}
+                        layout
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.96 }}
+                        onClick={() => task.pageId && onSelect(task.pageId)}
+                        className={`flex items-center justify-between gap-4 py-3.5 px-2 group select-none transition-colors rounded-xl ${
+                          task.pageId ? 'cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.03]' : 'hover:bg-black/[0.015] dark:hover:bg-white/[0.02]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                          {/* Tactile Circular Badge with Interactive Toggle */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleTask(task, e)}
+                            className="shrink-0 cursor-pointer focus:outline-none"
+                            title={isChecked ? "Mark pending" : "Mark completed"}
+                          >
+                            {badgeTheme === 'purple' && (
+                              <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-950 dark:to-purple-900 border border-purple-500/30 text-purple-600 dark:text-purple-400 shadow-[0_4px_14px_-1px_rgba(139,92,246,0.35)] group-hover:scale-105 transition-transform">
+                                <Check size={14} strokeWidth={3} />
+                              </div>
+                            )}
+                            {badgeTheme === 'green' && (
+                              <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shadow-[0_4px_14px_-1px_rgba(16,185,129,0.3)] group-hover:scale-105 transition-transform relative">
+                                <svg className="absolute inset-0 size-full" viewBox="0 0 36 36">
+                                  <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3.5" className="text-emerald-500/70" />
+                                </svg>
+                                <Check size={12} strokeWidth={2.8} className="relative z-10" />
+                              </div>
+                            )}
+                            {badgeTheme === 'amber' && (
+                              <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-[0_4px_14px_-1px_rgba(245,158,11,0.3)] group-hover:scale-105 transition-transform relative">
+                                <svg className="absolute inset-0 size-full" viewBox="0 0 36 36">
+                                  <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="2.5 3" className="text-amber-500/70" />
+                                </svg>
+                                <Play size={11} strokeWidth={2.6} className="ml-0.5 relative z-10 fill-amber-600/30" />
+                              </div>
+                            )}
+                            {badgeTheme === 'rose' && (
+                              <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-rose-100 to-rose-200 dark:from-rose-950 dark:to-rose-900 border border-rose-500/30 text-rose-600 dark:text-rose-400 shadow-[0_4px_14px_-1px_rgba(244,63,94,0.3)] group-hover:scale-105 transition-transform">
+                                <Clock size={13} strokeWidth={2.6} />
+                              </div>
+                            )}
+                          </button>
+
+                          {/* Title, Subtitle, and Badges */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-[15px] font-medium truncate inline-block ${
+                                isChecked 
+                                  ? 'text-purple-600 dark:text-purple-400 line-through decoration-2 decoration-purple-500/80 dark:decoration-purple-400/80' 
+                                  : 'text-neutral-800 dark:text-neutral-200'
+                              }`}>
+                                {task.text || "Untitled task"}
+                              </span>
+
+                              {/* Priority Badge */}
+                              {(task as any).priority && (task as any).priority !== 'medium' && (
+                                <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider ${
+                                  (task as any).priority === 'urgent'
+                                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25'
+                                    : (task as any).priority === 'high'
+                                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25'
+                                    : 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border border-neutral-500/25'
+                                }`}>
+                                  {(task as any).priority === 'urgent' ? '🔥 Urgent' : (task as any).priority}
+                                </span>
+                              )}
+
+                              {/* Due Date / Timeline Badge */}
+                              {(task as any).due && (
+                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium flex items-center gap-1 ${
+                                  (task as any).priority === 'urgent'
+                                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                    : 'bg-black/[0.04] dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300 border border-black/[0.05] dark:border-white/[0.08]'
+                                }`}>
+                                  <Calendar size={11} />
+                                  <span>{(task as any).due}</span>
+                                </span>
+                              )}
+
+                              {/* Edited timestamp badge */}
+                              {(task as any).editedAt && (
+                                <span
+                                  className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[10.5px] font-medium flex items-center gap-1"
+                                  title={`Last edited: ${formatEditedTime((task as any).editedAt)}`}
+                                >
+                                  <Clock size={10} />
+                                  <span>Edited</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {(task as any).subtitle && (
+                              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
+                                {(task as any).subtitle}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right: Page Origin & Action Buttons on Hover */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-xs text-neutral-400 dark:text-neutral-500 flex items-center gap-1.5 shrink-0">
+                            <span>{task.pageIcon}</span>
+                            <span className="truncate max-w-[120px] hidden sm:inline">{task.pageTitle}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={(e) => startEditTask(task, e)}
+                              className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                              title="Edit task"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteTask(task.id, e)}
+                              className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Delete task"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Journal & Mindful Reflection Section (Image 3 Quick Journal) */}
+            <QuickJournalSection
+              onSelectPrompt={(entry) => setReflectingEntry(entry)}
+            />
+          </div>
+
+          {/* RIGHT SIDEBAR COLUMN (Col Span 5) */}
+          <div className="lg:col-span-5 space-y-7">
+            {/* Noska Task Intelligence 7-Day Cognitive Engine */}
+            <NoskaIntelligenceHub
+              cognitiveScore={intelligenceReport.summary.cognitiveHealthScore}
+              peakWindow={intelligenceReport.summary.peakProductivityWindow}
+              adviceList={intelligenceReport.adviceList}
+              actionCards={intelligenceReport.actionCards}
+              dayVelocity={intelligenceReport.dayByDayVelocity}
+              onApplyCardAction={handleApplyIntelligenceAction}
+              onRefreshIntelligence={() => {
+                setIntelligenceTick(t => t + 1);
+                onToast?.("Noska Intelligence re-analyzed your workspace rhythms ✨");
+              }}
+            />
+
+            {/* 3D Stacked Task Dispatcher */}
             <StackedTaskDispatcher
               tasks={stackedDispatchedTasks}
+              completedTasks={stackedCompletedTasks}
+              totalStats={totalTaskStats}
               onDone={handleDispatcherDone}
+              onReopenTask={handleDispatcherReopen}
               onRemindLater={(task) => onToast?.(`Reminder snoozed for "${task.title}"`)}
               onDismiss={(task) => onToast?.(`Task "${task.title}" dismissed from queue`)}
-              onAddTask={(title, subtitle) => {
+              onAddTask={(title, subtitle, priority) => {
                 const newTask: TaskItem = {
                   id: `task-local-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
                   type: 'todo',
                   text: title,
                   subtitle: subtitle || undefined,
-                  priority: 'high',
+                  priority: priority || 'high',
                   checked: false,
                   pageTitle: 'Dispatched Items',
                   pageIcon: '✓',
@@ -1832,350 +3136,158 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
                 onToast?.(`Dispatched task "${title}" added to queue`);
               }}
             />
-          </div>
-          <div>
+
+            {/* Workload Velocity & Priority Gauges (Image 3 Pill Bars) */}
+            <WorkloadVelocityGauges
+              metrics={velocityMetrics}
+              completedCount={completedCount}
+              pendingCount={pendingCount}
+              onSelectPriority={(pKey) => {
+                if (pKey === 'urgent') setActiveTab('overdue');
+                else onToast?.(`Filtered to ${pKey} priority items`);
+              }}
+            />
+
+            {/* Today's Meetings & Quick Sync Widget */}
+            <TodayMeetingWidget
+              meetings={todayMeetingsList}
+              onJoinMeet={(m) => {
+                if (m.link) window.open(m.link, "_blank");
+                else onToast?.(`Connecting to: ${m.title}`);
+              }}
+              onScheduleNew={handleScheduleNewMeeting}
+              onDeleteMeeting={handleDeleteMeeting}
+            />
+
+            {/* Quick Scope Filter Capsule */}
             <QuickScopeFilter
               activeScope={activeScope}
               onScopeChange={(scope) => {
                 setActiveScope(scope);
                 onToast?.(`Tasks scoped by ${scope}`);
               }}
+              activeHorizon={activeHorizon}
+              onHorizonChange={(h) => {
+                setActiveHorizon(h);
+                onToast?.(`Time horizon: ${h.toUpperCase()}`);
+              }}
+              onFilterToggle={(key, active) => {
+                setActiveLensFilters(prev => ({ ...prev, [key]: active }));
+                onToast?.(`Smart filter updated`);
+              }}
+              onSortChange={(s) => {
+                setActiveSortBy(s);
+                onToast?.(`Sorted by ${s}`);
+              }}
+              assigneeDetails={{
+                name: userName ? userName.split(' ')[0] : "You",
+                count: allCombinedTasks.length,
+                completed: completedCount,
+                pending: pendingCount
+              }}
+              priorityDetails={priorityScopeBreakdown}
+              projectDetails={projectScopeBreakdown}
+              onSelectPriorityFilter={(p) => {
+                if (p === 'urgent') setActiveTab('overdue');
+                else if (p) onToast?.(`Filtered by ${p} priority`);
+              }}
+              onSelectProjectFilter={(pId) => {
+                if (pId) {
+                  const proj = projectScopeBreakdown.find(p => p.id === pId);
+                  onToast?.(`Focused on project: ${proj?.name || pId}`);
+                }
+              }}
               scopeCounts={{
                 assignees: allCombinedTasks.length,
-                priority: overdueCount + allCombinedTasks.filter(t => (t as any).priority === 'high' || (t as any).priority === 'urgent').length,
-                project: new Set(allCombinedTasks.map(t => t.pageId).filter(Boolean)).size || 1
+                priority: priorityScopeBreakdown.urgent + priorityScopeBreakdown.high,
+                project: projectScopeBreakdown.length || 1
               }}
             />
           </div>
         </div>
+      </div>
 
-        {/* Tactile Tasks Card */}
-        <div className="rounded-[28px] border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#17171a] p-7 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_12px_32px_-4px_rgba(0,0,0,0.45)]">
-          {/* Header Row: Tabs & Search */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-black/[0.06] dark:border-white/[0.08] pb-3 mb-5">
-            {/* Sliding Pill Tabs */}
-            <div className="flex items-center gap-6 relative">
-              {([
-                { id: 'all', label: 'All Tasks' },
-                { id: 'upcoming', label: 'Upcoming' },
-                { id: 'overdue', label: 'Overdue' },
-                { id: 'completed', label: 'Completed' }
-              ] as const).map(tab => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`text-[15px] pb-2 font-medium transition-colors relative cursor-pointer ${
-                      isActive
-                        ? 'font-bold text-neutral-900 dark:text-neutral-100'
-                        : 'text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
-                    }`}
-                  >
-                    <span>{tab.label}</span>
-                    {isActive && (
-                      <motion.div
-                        layoutId="workspace-tasks-tab-pill-indicator"
-                        className="absolute bottom-[-13px] left-1/2 -translate-x-1/2 w-6 h-1 rounded-full bg-neutral-900 dark:bg-neutral-100 z-10"
-                        transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+      {/* Project Goals Inspector Modal (Image 1 Center Phone) */}
+      <AnimatePresence>
+        {inspectingProject && (
+          <ProjectGoalsInspectorModal
+            project={inspectingProject}
+            tasks={allCombinedTasks.filter(t => t.pageId === inspectingProject.id)}
+            onToggleTask={(taskId) => {
+              const matching = allCombinedTasks.find(t => t.id === taskId);
+              if (matching) {
+                handleToggleTask(matching, { stopPropagation: () => {} } as any);
+              }
+            }}
+            onClose={() => setInspectingProject(null)}
+          />
+        )}
+      </AnimatePresence>
 
-            {/* Search Input */}
-            <div className="relative min-w-[220px]">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter tasks..."
-                className="w-full rounded-full border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-800/60 pl-9 pr-4 py-1.5 text-xs text-[var(--text)] outline-none focus:border-blue-400 placeholder:text-slate-400"
-              />
-            </div>
-          </div>
+      {/* Quick Journal Reflection Modal (Image 3 Quick Journal) */}
+      <AnimatePresence>
+        {reflectingEntry && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[3px] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-white dark:bg-[#181926] rounded-[36px] border border-black/10 dark:border-white/10 p-6 sm:p-7 shadow-2xl space-y-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  {reflectingEntry.tag} Reflection
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReflectingEntry(null)}
+                  className="size-8 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-500 cursor-pointer"
+                >
+                  <X size={15} />
+                </button>
+              </div>
 
-          {/* Create Task Row */}
-          <div className="mb-4">
-            {isInlineAdding ? (
-              <form onSubmit={handleInlineSubmit} className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-black/[0.08] dark:border-white/[0.1] space-y-2.5">
-                <input
-                  type="text"
-                  value={inlineTitle}
-                  onChange={(e) => setInlineTitle(e.target.value)}
-                  placeholder="What needs to be done?"
+              <div>
+                <h3 className="text-lg font-black text-neutral-900 dark:text-neutral-100">
+                  {reflectingEntry.title}
+                </h3>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  {reflectingEntry.prompt}
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveReflection} className="space-y-3">
+                <textarea
+                  rows={4}
+                  value={reflectionText}
+                  onChange={(e) => setReflectionText(e.target.value)}
+                  placeholder="Capture your reflection..."
                   autoFocus
-                  className="w-full bg-transparent px-2 text-sm font-medium text-[var(--text)] outline-none placeholder:text-neutral-400"
+                  className="w-full p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/80 border border-black/10 dark:border-white/10 text-xs text-neutral-800 dark:text-neutral-200 outline-none focus:border-amber-500 resize-none"
                 />
-                <input
-                  type="text"
-                  value={inlineSubtitle}
-                  onChange={(e) => setInlineSubtitle(e.target.value)}
-                  placeholder="Description or notes (optional)"
-                  className="w-full bg-transparent px-2 text-xs text-[var(--secondary)] outline-none placeholder:text-neutral-400"
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.08]">
-                  <div className="flex items-center gap-2">
-                    <TactileDuePicker
-                      value={inlineDue}
-                      onChange={setInlineDue}
-                    />
-                    <TactilePriorityPicker
-                      value={inlinePriority}
-                      onChange={setInlinePriority}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setIsInlineAdding(false)}
-                      className="px-3 py-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-1.5 rounded-xl bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs font-semibold shadow-sm cursor-pointer"
-                    >
-                      Add Task
-                    </button>
-                  </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReflectingEntry(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-500 hover:text-neutral-800 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-md cursor-pointer"
+                  >
+                    Save Reflection
+                  </button>
                 </div>
               </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsInlineAdding(true)}
-                className="flex items-center gap-3.5 py-1 text-left cursor-pointer group select-none"
-              >
-                <div className="size-9 rounded-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 border border-black/[0.08] dark:border-white/[0.1] shadow-2xs flex items-center justify-center text-neutral-500 group-hover:scale-105 group-hover:shadow-xs transition-all">
-                  <Plus size={15} strokeWidth={2.4} />
-                </div>
-                <span className="text-[15px] font-medium text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 transition-colors">
-                  Create Task
-                </span>
-              </button>
-            )}
+            </motion.div>
           </div>
+        )}
+      </AnimatePresence>
 
-          {/* Tasks List */}
-          {filteredTasks.length === 0 ? (
-            <div className="py-12 text-center">
-              <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-xs">
-                <CheckSquare size={26} />
-              </div>
-              <h3 className="text-sm font-bold text-[var(--text)] mb-1">No {activeTab} tasks</h3>
-              <p className="text-xs text-[var(--muted)] max-w-sm mx-auto mb-4">
-                Checkboxes created in your documents and notes will automatically sync here.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-dashed divide-black/[0.08] dark:divide-white/[0.08]">
-              {filteredTasks.map((task, idx) => {
-                const isChecked = task.checked;
-                const isUrgent = !isChecked && ((task as any).priority === 'urgent' || task.text?.toLowerCase().includes("urgent"));
-                const badgeTheme = isChecked 
-                  ? 'purple' 
-                  : isUrgent 
-                  ? 'rose' 
-                  : idx % 2 === 0 
-                  ? 'green' 
-                  : 'amber';
-
-                if (editingTaskId === task.id) {
-                  return (
-                    <form
-                      key={`edit-${task.id}`}
-                      onSubmit={(e) => saveEditTask(task.id, e)}
-                      className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/80 border border-blue-500/40 space-y-2.5 my-2 shadow-xs"
-                    >
-                      <input
-                        type="text"
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        placeholder="Task title"
-                        autoFocus
-                        className="w-full bg-transparent px-2 text-sm font-medium text-[var(--text)] outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={editSubtitle}
-                        onChange={(e) => setEditSubtitle(e.target.value)}
-                        placeholder="Description (optional)"
-                        className="w-full bg-transparent px-2 text-xs text-[var(--secondary)] outline-none"
-                      />
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.08]">
-                        <div className="flex items-center gap-2">
-                          <TactileDuePicker
-                            value={editDue}
-                            onChange={setEditDue}
-                          />
-                          <TactilePriorityPicker
-                            value={editPriority}
-                            onChange={setEditPriority}
-                          />
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setEditingTaskId(null)}
-                            className="px-3 py-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            className="px-4 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-sm cursor-pointer"
-                          >
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  );
-                }
-
-                return (
-                  <motion.div
-                    key={`${task.pageId || 'local'}-${task.id}`}
-                    layout
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96 }}
-                    onClick={() => task.pageId && onSelect(task.pageId)}
-                    className={`flex items-center justify-between gap-4 py-3.5 px-2 group select-none transition-colors rounded-xl ${
-                      task.pageId ? 'cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.03]' : 'hover:bg-black/[0.015] dark:hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                      {/* Tactile Circular Badge with Interactive Toggle */}
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleTask(task, e)}
-                        className="shrink-0 cursor-pointer focus:outline-none"
-                        title={isChecked ? "Mark pending" : "Mark completed"}
-                      >
-                        {badgeTheme === 'purple' && (
-                          <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-950 dark:to-purple-900 border border-purple-500/30 text-purple-600 dark:text-purple-400 shadow-[0_4px_14px_-1px_rgba(139,92,246,0.35)] group-hover:scale-105 transition-transform">
-                            <Check size={14} strokeWidth={3} />
-                          </div>
-                        )}
-                        {badgeTheme === 'green' && (
-                          <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shadow-[0_4px_14px_-1px_rgba(16,185,129,0.3)] group-hover:scale-105 transition-transform relative">
-                            <svg className="absolute inset-0 size-full" viewBox="0 0 36 36">
-                              <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3.5" className="text-emerald-500/70" />
-                            </svg>
-                            <Check size={12} strokeWidth={2.8} className="relative z-10" />
-                          </div>
-                        )}
-                        {badgeTheme === 'amber' && (
-                          <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-[0_4px_14px_-1px_rgba(245,158,11,0.3)] group-hover:scale-105 transition-transform relative">
-                            <svg className="absolute inset-0 size-full" viewBox="0 0 36 36">
-                              <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="2.5 3" className="text-amber-500/70" />
-                            </svg>
-                            <Play size={11} strokeWidth={2.6} className="ml-0.5 relative z-10 fill-amber-600/30" />
-                          </div>
-                        )}
-                        {badgeTheme === 'rose' && (
-                          <div className="size-9 rounded-full flex items-center justify-center bg-gradient-to-br from-rose-100 to-rose-200 dark:from-rose-950 dark:to-rose-900 border border-rose-500/30 text-rose-600 dark:text-rose-400 shadow-[0_4px_14px_-1px_rgba(244,63,94,0.3)] group-hover:scale-105 transition-transform">
-                            <Clock size={13} strokeWidth={2.6} />
-                          </div>
-                        )}
-                      </button>
-
-                      {/* Title, Subtitle, and Badges */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[15px] font-medium truncate inline-block ${
-                            isChecked 
-                              ? 'text-purple-600 dark:text-purple-400 line-through decoration-2 decoration-purple-500/80 dark:decoration-purple-400/80' 
-                              : 'text-neutral-800 dark:text-neutral-200'
-                          }`}>
-                            {task.text || "Untitled task"}
-                          </span>
-
-                          {/* Priority Badge */}
-                          {(task as any).priority && (task as any).priority !== 'medium' && (
-                            <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider ${
-                              (task as any).priority === 'urgent'
-                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25'
-                                : (task as any).priority === 'high'
-                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25'
-                                : 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border border-neutral-500/25'
-                            }`}>
-                              {(task as any).priority === 'urgent' ? '🔥 Urgent' : (task as any).priority}
-                            </span>
-                          )}
-
-                          {/* Due Date / Timeline Badge */}
-                          {(task as any).due && (
-                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium flex items-center gap-1 ${
-                              (task as any).priority === 'urgent'
-                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                                : 'bg-black/[0.04] dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300 border border-black/[0.05] dark:border-white/[0.08]'
-                            }`}>
-                              <Calendar size={11} />
-                              <span>{(task as any).due}</span>
-                            </span>
-                          )}
-
-                          {/* Edited timestamp badge */}
-                          {(task as any).editedAt && (
-                            <span
-                              className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[10.5px] font-medium flex items-center gap-1"
-                              title={`Last edited: ${formatEditedTime((task as any).editedAt)}`}
-                            >
-                              <Clock size={10} />
-                              <span>Edited</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {(task as any).subtitle && (
-                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
-                            {(task as any).subtitle}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Right: Page Origin & Action Buttons on Hover */}
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-xs text-neutral-400 dark:text-neutral-500 flex items-center gap-1.5 shrink-0">
-                        <span>{task.pageIcon}</span>
-                        <span className="truncate max-w-[120px] hidden sm:inline">{task.pageTitle}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          onClick={(e) => startEditTask(task, e)}
-                          className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
-                          title="Edit task"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteTask(task.id, e)}
-                          className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                          title="Delete task"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
       {sourcesModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4">
           <div className="bg-[var(--sidebar)] border border-[var(--border-strong)] rounded-xl p-6 max-w-sm w-full shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
@@ -2207,6 +3319,826 @@ function TasksRoute({ tasks, onSelect, onNew, onToast }: TasksRouteProps) {
           </div>
         </div>
       )}
+
+      {/* ── CINEMA AMBIENT FOCUS SPOTLIGHT OVERLAY ── */}
+      <AnimatePresence>
+        {focusSession?.active && (
+          <motion.div
+            key="apple-focus-cinema-spotlight"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: islandExpanded ? 0.45 : 0.22 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="pointer-events-none fixed inset-0 z-[85] bg-[radial-gradient(ellipse_75%_45%_at_50%_0%,rgba(255,255,255,0.08),transparent_70%)]"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── APPLE PRO MACBOOK NOTCH SPRINT FOCUS UI (TRUE APPLE FLUID MORPHING PHYSICS) ── */}
+      <AnimatePresence>
+        {focusSession?.active && (
+          <>
+            {/* Attention Radar Bloom Wave on Launch */}
+            <motion.div
+              key="notch-radar-bloom"
+              initial={{ scaleX: 0.6, scaleY: 0.4, opacity: 0.8 }}
+              animate={{ scaleX: 2.2, scaleY: 2.8, opacity: 0 }}
+              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+              className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 w-64 h-16 rounded-b-[40px] bg-white/25 blur-xl z-[95]"
+            />
+
+            <motion.div
+              layout
+              key="apple-dynamic-notch-island"
+              initial={{ opacity: 0, y: -70, scaleX: 0.75, scaleY: 0.6, filter: "blur(14px)" }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scaleX: 1,
+                scaleY: 1,
+                filter: "blur(0px)",
+                width: islandExpanded ? "min(94vw, 470px)" : "auto",
+                borderRadius: islandExpanded ? "0px 0px 38px 38px" : "0px 0px 24px 24px"
+              }}
+              exit={{
+                opacity: 0,
+                y: -70,
+                scaleX: 0.75,
+                scaleY: 0.6,
+                filter: "blur(14px)",
+                transition: { duration: 0.28, ease: [0.32, 0.72, 0, 1] }
+              }}
+              transition={{
+                type: "spring",
+                stiffness: 240,
+                damping: 22,
+                mass: 0.8
+              }}
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0.35, bottom: 0.04 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y < -25 || info.velocity.y < -250) {
+                  if (islandExpanded) setIslandExpanded(false);
+                  else handleStopFocus();
+                }
+              }}
+              className={`fixed top-0 left-1/2 -translate-x-1/2 z-[100] text-white select-none bg-[#0a0a0c]/96 dark:bg-[#000000]/98 backdrop-blur-3xl border-b border-x border-white/[0.12] shadow-[0_32px_80px_rgba(0,0,0,0.92),0_4px_16px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.22)] overflow-hidden ${
+                islandExpanded
+                  ? "p-5 pt-3 shadow-[0_48px_120px_rgba(0,0,0,0.98)] ring-1 ring-white/[0.08]"
+                  : "px-4 py-2 flex items-center gap-3.5 cursor-pointer hover:border-white/20 active:scale-[0.985] hover:bg-black"
+              }`}
+              onClick={() => {
+                if (!islandExpanded) setIslandExpanded(true);
+              }}
+            >
+            {!islandExpanded ? (
+              /* ── 1. APPLE COMPACT NOTCH (MULTI-MODE COMPACT HEADS-UP) ── */
+              <motion.div
+                key="compact-notch"
+                layout
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="relative z-10 flex items-center justify-between w-full gap-4"
+              >
+                {/* Left Pod: Dynamic per mode */}
+                <motion.div layout className="flex items-center gap-2.5 min-w-0">
+                  {notchMode === "sprint" && (
+                    <>
+                      <motion.div
+                        layoutId="notch-activity-ring"
+                        transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                        className="relative size-5.5 flex items-center justify-center shrink-0"
+                      >
+                        <svg className="size-5.5 -rotate-90" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="9" className="stroke-white/[0.12]" strokeWidth="2.5" fill="none" />
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="9"
+                            className="stroke-white transition-all duration-700 ease-out drop-shadow-[0_0_4px_rgba(255,255,255,0.4)]"
+                            strokeWidth="2.5"
+                            strokeDasharray={56.5}
+                            strokeDashoffset={56.5 - (56.5 * Math.max(0, Math.min(100, ((focusSession.totalSeconds - focusSession.remainingSeconds) / focusSession.totalSeconds) * 100))) / 100}
+                            strokeLinecap="round"
+                            fill="none"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Target size={10} className="text-white/80" />
+                        </div>
+                      </motion.div>
+                      <motion.div layoutId="notch-task-title-wrap" className="min-w-0">
+                        <span className="text-[13px] font-semibold text-white/95 truncate block max-w-[130px] sm:max-w-[170px] tracking-tight">
+                          {focusSession.taskTitle}
+                        </span>
+                      </motion.div>
+                    </>
+                  )}
+
+                  {notchMode === "break" && (
+                    <>
+                      <div className="size-5.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0 text-indigo-300">
+                        <Coffee size={11} />
+                      </div>
+                      <span className="text-[13px] font-semibold text-white/95 truncate block max-w-[130px] sm:max-w-[170px] tracking-tight">
+                        Break & Recharge
+                      </span>
+                    </>
+                  )}
+
+                  {notchMode === "audio" && (
+                    <>
+                      <div className="flex items-center gap-0.5 size-5.5 justify-center shrink-0">
+                        <motion.div animate={{ height: isSoundPlaying ? [4, 14, 6, 12, 4] : 4 }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-0.5 bg-emerald-400 rounded-full" />
+                        <motion.div animate={{ height: isSoundPlaying ? [8, 16, 10, 14, 8] : 8 }} transition={{ repeat: Infinity, duration: 0.7, delay: 0.1 }} className="w-0.5 bg-emerald-300 rounded-full" />
+                        <motion.div animate={{ height: isSoundPlaying ? [6, 12, 4, 16, 6] : 6 }} transition={{ repeat: Infinity, duration: 0.9, delay: 0.2 }} className="w-0.5 bg-emerald-400 rounded-full" />
+                      </div>
+                      <span className="text-[13px] font-semibold text-white/95 truncate block max-w-[130px] sm:max-w-[170px] tracking-tight capitalize">
+                        {soundPreset === "binaural" ? "40Hz Gamma Focus" : `${soundPreset} soundscape`}
+                      </span>
+                    </>
+                  )}
+
+                  {notchMode === "ai_copilot" && (
+                    <>
+                      <div className="size-5.5 rounded-full bg-purple-500/20 border border-purple-400/30 flex items-center justify-center shrink-0 text-purple-300">
+                        <Sparkles size={11} className="animate-spin" style={{ animationDuration: '4s' }} />
+                      </div>
+                      <span className="text-[13px] font-semibold text-white/95 truncate block max-w-[130px] sm:max-w-[170px] tracking-tight">
+                        YoYo AI Co-Pilot
+                      </span>
+                    </>
+                  )}
+
+                  {notchMode === "queue" && (
+                    <>
+                      <div className="size-5.5 rounded-full bg-amber-500/20 border border-amber-400/30 flex items-center justify-center shrink-0 text-amber-300">
+                        <ListOrdered size={11} />
+                      </div>
+                      <span className="text-[13px] font-semibold text-white/95 truncate block max-w-[130px] sm:max-w-[170px] tracking-tight">
+                        Next: {stackedDispatchedTasks[0]?.title || "Queue Active"}
+                      </span>
+                    </>
+                  )}
+                </motion.div>
+
+                {/* Center: TrueTone Optical Camera & Soft Status LED */}
+                <motion.div
+                  layoutId="notch-camera-pod"
+                  transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] shrink-0"
+                >
+                  <div className="size-2 rounded-full bg-[#111] border border-white/20 flex items-center justify-center">
+                    <div className="size-0.5 rounded-full bg-neutral-600" />
+                  </div>
+                  <motion.div
+                    animate={{
+                      opacity: (focusSession.isPaused || isBreakPaused) ? 0.35 : [0.5, 1, 0.5],
+                      scale: (focusSession.isPaused || isBreakPaused) ? 0.9 : [0.95, 1.1, 0.95]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    className={`size-1.5 rounded-full ${
+                      notchMode === "break"
+                        ? "bg-indigo-400 shadow-[0_0_6px_rgba(129,140,248,0.8)]"
+                        : notchMode === "audio"
+                        ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+                        : notchMode === "ai_copilot"
+                        ? "bg-purple-400 shadow-[0_0_6px_rgba(192,132,252,0.8)]"
+                        : notchMode === "queue"
+                        ? "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
+                        : focusSession.isPaused
+                        ? "bg-amber-400/80 shadow-[0_0_6px_rgba(251,191,36,0.5)]"
+                        : "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+                    }`}
+                  />
+                </motion.div>
+
+                {/* Right: Mode-Specific Metric & Expand Button */}
+                <motion.div layout className="flex items-center gap-2 shrink-0">
+                  {notchMode === "sprint" && (
+                    <motion.div
+                      layoutId="notch-timer-badge"
+                      transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                      className="font-mono text-[12px] font-medium text-white tabular-nums tracking-tight bg-white/[0.1] px-2.5 py-0.5 rounded-full border border-white/[0.08]"
+                    >
+                      {Math.floor(focusSession.remainingSeconds / 60).toString().padStart(2, '0')}:
+                      {(focusSession.remainingSeconds % 60).toString().padStart(2, '0')}
+                    </motion.div>
+                  )}
+
+                  {notchMode === "break" && (
+                    <div className="font-mono text-[12px] font-medium text-indigo-200 tabular-nums tracking-tight bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-400/30">
+                      {Math.floor(breakRemainingSeconds / 60).toString().padStart(2, '0')}:
+                      {(breakRemainingSeconds % 60).toString().padStart(2, '0')}
+                    </div>
+                  )}
+
+                  {notchMode === "audio" && (
+                    <div className="text-[11px] font-medium text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-1">
+                      <Headphones size={10} />
+                      <span>{isSoundPlaying ? "Active" : "Muted"}</span>
+                    </div>
+                  )}
+
+                  {notchMode === "ai_copilot" && (
+                    <div className="text-[11px] font-medium text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-400/30 flex items-center gap-1">
+                      <Bot size={10} />
+                      <span>Synced</span>
+                    </div>
+                  )}
+
+                  {notchMode === "queue" && (
+                    <div className="text-[11px] font-medium text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-400/30">
+                      {stackedDispatchedTasks.length} queued
+                    </div>
+                  )}
+
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIslandExpanded(true);
+                    }}
+                    className="size-6 rounded-full bg-white/[0.08] hover:bg-white/[0.18] flex items-center justify-center text-white/70 hover:text-white transition cursor-pointer"
+                    title="Expand Dynamic Island"
+                  >
+                    <ChevronDown size={12} />
+                  </motion.button>
+                </motion.div>
+              </motion.div>
+            ) : (
+              /* ── 2. APPLE EXPANDED MULTI-TEMPLATE WORKSTATION ── */
+              <motion.div
+                key="expanded-notch"
+                layout
+                initial="hidden"
+                animate="visible"
+                exit="hidden"
+                variants={{
+                  hidden: { opacity: 0 },
+                  visible: {
+                    opacity: 1,
+                    transition: {
+                      staggerChildren: 0.05,
+                      delayChildren: 0.04
+                    }
+                  }
+                }}
+                className="relative z-10 space-y-4 pt-1 w-full"
+              >
+                {/* Center Hardware Camera Pod */}
+                <motion.div
+                  layoutId="notch-camera-pod"
+                  transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                  className="flex items-center justify-center -mt-1 mb-2"
+                >
+                  <div className="flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] shadow-inner">
+                    <div className="size-2 rounded-full bg-[#111] border border-white/20 flex items-center justify-center">
+                      <div className="size-0.5 rounded-full bg-neutral-600" />
+                    </div>
+                    <div className="size-1 rounded-full bg-neutral-800" />
+                    <motion.div
+                      animate={{
+                        opacity: (focusSession.isPaused || isBreakPaused) ? 0.35 : [0.5, 1, 0.5],
+                        scale: (focusSession.isPaused || isBreakPaused) ? 0.9 : [0.95, 1.1, 0.95]
+                      }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      className={`size-1.5 rounded-full ${
+                        notchMode === "break" ? "bg-indigo-400" : notchMode === "audio" ? "bg-emerald-400" : notchMode === "ai_copilot" ? "bg-purple-400" : "bg-white"
+                      } shadow-[0_0_6px_rgba(255,255,255,0.8)]`}
+                    />
+                  </div>
+                </motion.div>
+
+                {/* Top Mode Selector Tabs (Apple Frosted Segmented Control) */}
+                <motion.div
+                  variants={{
+                    hidden: { opacity: 0, y: -6 },
+                    visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } }
+                  }}
+                  className="flex items-center justify-between gap-2 px-1"
+                >
+                  {/* Mode Tabs */}
+                  <div className="flex items-center gap-1 bg-white/[0.06] p-1 rounded-xl border border-white/[0.08] overflow-x-auto">
+                    {[
+                      { key: "sprint", label: "Sprint", icon: <Target size={11} /> },
+                      { key: "break", label: "Break", icon: <Coffee size={11} /> },
+                      { key: "audio", label: "Audio", icon: <Headphones size={11} /> },
+                      { key: "ai_copilot", label: "YoYo AI", icon: <Bot size={11} /> },
+                      { key: "queue", label: "Queue", icon: <ListOrdered size={11} /> },
+                    ].map((tab) => {
+                      const isActive = notchMode === tab.key;
+                      return (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => {
+                            setNotchMode(tab.key as any);
+                            playAppleHapticSound("tap");
+                          }}
+                          className={`relative px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                            isActive
+                              ? "text-black bg-white shadow-xs font-bold"
+                              : "text-white/60 hover:text-white hover:bg-white/[0.08]"
+                          }`}
+                        >
+                          {tab.icon}
+                          <span>{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Window Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setIslandExpanded(false)}
+                      className="size-7 rounded-full bg-white/[0.08] hover:bg-white/[0.16] flex items-center justify-center text-white/70 hover:text-white transition cursor-pointer border border-white/[0.06]"
+                      title="Collapse Island"
+                    >
+                      <Minimize2 size={12} />
+                    </motion.button>
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        stopSoundscape();
+                        handleStopFocus();
+                      }}
+                      className="size-7 rounded-full bg-white/[0.08] hover:bg-white/[0.18] hover:text-white flex items-center justify-center text-white/70 transition cursor-pointer border border-white/[0.06]"
+                      title="Close Dynamic Island"
+                    >
+                      <X size={13} />
+                    </motion.button>
+                  </div>
+                </motion.div>
+
+                {/* ── TEMPLATE 1: DEEP SPRINT FOCUS ── */}
+                {notchMode === "sprint" && (
+                  <motion.div
+                    key="template-sprint"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="space-y-3.5"
+                  >
+                    {/* Main Hero Card: Grand Digital Timer + Activity Ring */}
+                    <div className="flex items-center justify-between bg-white/[0.04] p-4.5 px-5 rounded-[24px] border border-white/[0.06]">
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                          Remaining Sprint
+                        </span>
+                        <motion.div
+                          layoutId="notch-timer-badge"
+                          transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                          className="font-mono text-3xl sm:text-4xl font-semibold text-white tracking-tight tabular-nums mt-0.5"
+                        >
+                          {Math.floor(focusSession.remainingSeconds / 60).toString().padStart(2, '0')}:
+                          {(focusSession.remainingSeconds % 60).toString().padStart(2, '0')}
+                        </motion.div>
+                        <span className="text-[11.5px] text-white/45 font-medium mt-1 flex items-center gap-1.5">
+                          <Flame size={12} className="text-white/60 fill-current" />
+                          <span>Deep Work Focus Block</span>
+                        </span>
+                      </div>
+
+                      <motion.div
+                        layoutId="notch-activity-ring"
+                        transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                        className="relative size-16 sm:size-18 flex items-center justify-center shrink-0"
+                      >
+                        <svg className="size-16 sm:size-18 -rotate-90" viewBox="0 0 48 48">
+                          <circle cx="24" cy="24" r="19" className="stroke-white/[0.08]" strokeWidth="4.5" fill="none" />
+                          <circle
+                            cx="24"
+                            cy="24"
+                            r="19"
+                            className="stroke-white transition-all duration-700 ease-out drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+                            strokeWidth="4.5"
+                            strokeDasharray={119.38}
+                            strokeDashoffset={119.38 - (119.38 * Math.max(0, Math.min(100, ((focusSession.totalSeconds - focusSession.remainingSeconds) / focusSession.totalSeconds) * 100))) / 100}
+                            strokeLinecap="round"
+                            fill="none"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                          <span className="text-[13px] sm:text-[14px] font-bold text-white tabular-nums tracking-tight">
+                            {Math.round(((focusSession.totalSeconds - focusSession.remainingSeconds) / focusSession.totalSeconds) * 100)}%
+                          </span>
+                        </div>
+                      </motion.div>
+                    </div>
+
+                    {/* Deliverable Task Banner Strip */}
+                    <div className="flex items-center justify-between bg-white/[0.03] px-4 py-3 rounded-2xl border border-white/[0.06]">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="size-8 rounded-xl bg-white/[0.08] border border-white/[0.12] flex items-center justify-center shrink-0 text-white/80">
+                          <Target size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[13.5px] font-semibold text-white/95 truncate block tracking-tight">
+                            {focusSession.taskTitle}
+                          </span>
+                          <span className="text-[11.5px] text-white/40 block truncate">
+                            Active Deliverable • Sprint Mode
+                          </span>
+                        </div>
+                      </div>
+                      <div className="shrink-0 pl-3">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] text-white/70 text-[11px] font-medium">
+                          <Trophy size={11} className="text-white/60" />
+                          <span>+100 XP</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Timeline Progress Scrubber */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <div className="relative h-1.5 w-full rounded-full bg-white/[0.08] overflow-hidden">
+                        <motion.div
+                          className="h-full bg-white/80 rounded-full transition-all duration-1000 ease-linear shadow-[0_0_8px_rgba(255,255,255,0.3)]"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, ((focusSession.totalSeconds - focusSession.remainingSeconds) / focusSession.totalSeconds) * 100))}%`
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-white/40 px-0.5">
+                        <span>Elapsed: {Math.floor((focusSession.totalSeconds - focusSession.remainingSeconds) / 60)}:{((focusSession.totalSeconds - focusSession.remainingSeconds) % 60).toString().padStart(2, '0')}</span>
+                        <span>Remaining: -{Math.floor(focusSession.remainingSeconds / 60)}:{(focusSession.remainingSeconds % 60).toString().padStart(2, '0')}</span>
+                      </div>
+                    </div>
+
+                    {/* Sprint Controls */}
+                    <div className="grid grid-cols-4 gap-2 pt-1">
+                      <motion.button
+                        whileTap={{ scale: 0.92 }}
+                        whileHover={{ scale: 1.02 }}
+                        type="button"
+                        onClick={() => {
+                          setFocusSession(prev => {
+                            if (!prev) return null;
+                            const nextSecs = Math.max(60, prev.remainingSeconds - 300);
+                            return { ...prev, remainingSeconds: nextSecs };
+                          });
+                          onToast?.("Sprint adjusted (-5 min)");
+                        }}
+                        className="h-11 rounded-2xl bg-white/[0.08] hover:bg-white/[0.14] text-white/80 hover:text-white transition cursor-pointer border border-white/[0.06] flex items-center justify-center gap-1.5 text-[12px] font-medium"
+                      >
+                        <Coffee size={13} className="text-white/70" />
+                        <span>-5m</span>
+                      </motion.button>
+
+                      <motion.button
+                        whileTap={{ scale: 0.92 }}
+                        whileHover={{ scale: 1.02 }}
+                        type="button"
+                        onClick={handlePauseResumeFocus}
+                        className="h-11 rounded-2xl bg-white hover:bg-white/95 text-black font-semibold text-[13px] flex items-center justify-center gap-1.5 transition cursor-pointer shadow-[0_4px_16px_rgba(255,255,255,0.18)]"
+                      >
+                        {focusSession.isPaused ? (
+                          <>
+                            <Play size={13} className="fill-black" />
+                            <span>Resume</span>
+                          </>
+                        ) : (
+                          <>
+                            <Pause size={13} className="fill-black" />
+                            <span>Pause</span>
+                          </>
+                        )}
+                      </motion.button>
+
+                      <motion.button
+                        whileTap={{ scale: 0.92 }}
+                        whileHover={{ scale: 1.02 }}
+                        type="button"
+                        onClick={() => handleAddFocusTime(5)}
+                        className="h-11 rounded-2xl bg-white/[0.08] hover:bg-white/[0.14] text-white/80 hover:text-white transition cursor-pointer border border-white/[0.06] flex items-center justify-center gap-1.5 text-[12px] font-medium"
+                      >
+                        <Clock size={13} className="text-white/70" />
+                        <span>+5m</span>
+                      </motion.button>
+
+                      <motion.button
+                        whileTap={{ scale: 0.92 }}
+                        whileHover={{ scale: 1.02 }}
+                        type="button"
+                        onClick={handleCompleteFocusTask}
+                        className="h-11 rounded-2xl bg-white/[0.12] hover:bg-white/[0.18] text-white border border-white/[0.16] flex items-center justify-center gap-1.5 text-[12px] font-semibold transition cursor-pointer"
+                      >
+                        <Check size={13} strokeWidth={2.5} />
+                        <span>Finish</span>
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── TEMPLATE 2: BREAK & RECHARGE ── */}
+                {notchMode === "break" && (
+                  <motion.div
+                    key="template-break"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="space-y-3.5"
+                  >
+                    <div className="bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-black/60 p-5 rounded-[24px] border border-indigo-500/20 flex items-center justify-between">
+                      <div>
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300">
+                          Bio-Break & Recharge
+                        </span>
+                        <div className="font-mono text-4xl font-semibold text-white tracking-tight mt-1">
+                          {Math.floor(breakRemainingSeconds / 60).toString().padStart(2, '0')}:
+                          {(breakRemainingSeconds % 60).toString().padStart(2, '0')}
+                        </div>
+                        <p className="text-[12px] text-indigo-200/70 mt-1 flex items-center gap-1.5">
+                          <Droplets size={12} className="text-indigo-400" />
+                          <span>Hydrate with water and relax your eyes</span>
+                        </p>
+                      </div>
+
+                      <div className="size-16 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-[0_0_24px_rgba(99,102,241,0.25)]">
+                        <Coffee size={28} />
+                      </div>
+                    </div>
+
+                    {/* Next Deliverable in Line */}
+                    <div className="bg-white/[0.04] p-3.5 px-4 rounded-2xl border border-white/[0.06] flex items-center justify-between">
+                      <div className="min-w-0">
+                        <span className="text-[11px] font-semibold text-white/40 uppercase">Up Next in Sprint</span>
+                        <div className="text-[13px] font-medium text-white truncate mt-0.5">
+                          {focusSession.taskTitle}
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-medium text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/30">
+                        Queued
+                      </span>
+                    </div>
+
+                    {/* Break Controls */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBreakRemainingSeconds(prev => prev + 120);
+                          onToast?.("Added +2 min to break");
+                        }}
+                        className="h-11 rounded-2xl bg-white/[0.08] hover:bg-white/[0.14] text-white/90 font-medium text-[12px] flex items-center justify-center gap-1.5 transition cursor-pointer border border-white/[0.08]"
+                      >
+                        <Clock size={13} />
+                        <span>+2m Rest</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsBreakPaused(!isBreakPaused)}
+                        className="h-11 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[12px] flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md"
+                      >
+                        {isBreakPaused ? <Play size={13} className="fill-white" /> : <Pause size={13} className="fill-white" />}
+                        <span>{isBreakPaused ? "Resume" : "Pause"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotchMode("sprint");
+                          playAppleHapticSound("start");
+                          onToast?.("Resumed deep work sprint");
+                        }}
+                        className="h-11 rounded-2xl bg-white/[0.12] hover:bg-white/[0.2] text-white font-semibold text-[12px] flex items-center justify-center gap-1.5 transition cursor-pointer border border-white/[0.15]"
+                      >
+                        <Zap size={13} />
+                        <span>End Break</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── TEMPLATE 3: AMBIENT SOUNDSCAPES / BINAURAL AUDIO ── */}
+                {notchMode === "audio" && (
+                  <motion.div
+                    key="template-audio"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="space-y-3.5"
+                  >
+                    <div className="bg-gradient-to-br from-emerald-950/40 via-teal-950/20 to-black/60 p-4.5 rounded-[24px] border border-emerald-500/20 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
+                            <Headphones size={18} />
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
+                              Ambient Audio Generator
+                            </span>
+                            <div className="text-[14px] font-semibold text-white capitalize">
+                              {soundPreset === "binaural" ? "40Hz Gamma Focus" : `${soundPreset} soundscape`}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isSoundPlaying) stopSoundscape();
+                            else startSoundscape(soundPreset, soundVolume);
+                          }}
+                          className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                            isSoundPlaying ? "bg-emerald-500 text-black shadow-[0_0_16px_rgba(52,211,153,0.4)]" : "bg-white/[0.1] text-white hover:bg-white/[0.2]"
+                          }`}
+                        >
+                          {isSoundPlaying ? <Pause size={12} className="fill-black" /> : <Play size={12} className="fill-white" />}
+                          <span>{isSoundPlaying ? "Playing" : "Start"}</span>
+                        </button>
+                      </div>
+
+                      {/* Sound Preset Selector */}
+                      <div className="grid grid-cols-4 gap-1.5 pt-1">
+                        {[
+                          { id: "binaural", name: "40Hz Gamma", desc: "Brainwave sync" },
+                          { id: "brown", name: "Brown Noise", desc: "Deep rumble" },
+                          { id: "rain", name: "Soft Rain", desc: "Calm showers" },
+                          { id: "lofi", name: "Lo-Fi Drone", desc: "Warm harmonic" },
+                        ].map((p) => {
+                          const isSel = soundPreset === p.id;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => startSoundscape(p.id as any, soundVolume)}
+                              className={`p-2 rounded-xl text-left transition cursor-pointer border ${
+                                isSel
+                                  ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
+                                  : "bg-white/[0.04] border-white/[0.06] text-white/60 hover:text-white hover:bg-white/[0.08]"
+                              }`}
+                            >
+                              <div className="text-[11.5px] font-semibold leading-tight">{p.name}</div>
+                              <div className="text-[9.5px] text-white/40 mt-0.5">{p.desc}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Volume Slider */}
+                      <div className="flex items-center gap-3 pt-2">
+                        <VolumeX size={14} className="text-white/40 shrink-0" />
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={soundVolume}
+                          onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                          className="w-full accent-emerald-400 h-1.5 bg-white/10 rounded-lg cursor-pointer"
+                        />
+                        <Volume2 size={14} className="text-white/80 shrink-0" />
+                        <span className="text-[11px] font-mono text-white/60 shrink-0 w-8 text-right">
+                          {Math.round(soundVolume * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── TEMPLATE 4: AI CO-PILOT (YOYO AI AGENT) ── */}
+                {notchMode === "ai_copilot" && (
+                  <motion.div
+                    key="template-ai"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="space-y-3.5"
+                  >
+                    <div className="bg-gradient-to-br from-purple-950/40 via-indigo-950/20 to-black/60 p-4.5 rounded-[24px] border border-purple-500/20 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="size-10 rounded-2xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-300 shrink-0 shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+                          <Bot size={20} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[13px] font-bold text-white">YoYo Workspace Intelligence</span>
+                            <span className="text-[10px] font-semibold text-purple-300 bg-purple-500/30 px-1.5 py-0.2 rounded-md">LIVE</span>
+                          </div>
+                          <p className="text-[11.5px] text-purple-200/70 mt-0.5">
+                            Active session co-pilot monitoring project blockers & flow
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Proactive Action Pills */}
+                      <div className="space-y-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (pastelProjects.length > 0) setInspectingProject(pastelProjects[0]);
+                            onToast?.("YoYo: Decomposing project milestones into sprint subtasks");
+                          }}
+                          className="w-full text-left p-2.5 px-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[12px] text-white/90 flex items-center justify-between transition cursor-pointer"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Sparkles size={13} className="text-purple-400" />
+                            <span>Decompose current project milestones</span>
+                          </span>
+                          <ChevronRight size={13} className="text-white/40" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onToast?.("YoYo: Generated velocity summary for today's deliverables");
+                          }}
+                          className="w-full text-left p-2.5 px-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[12px] text-white/90 flex items-center justify-between transition cursor-pointer"
+                        >
+                          <span className="flex items-center gap-2">
+                            <FileText size={13} className="text-purple-400" />
+                            <span>Draft end-of-day sprint summary</span>
+                          </span>
+                          <ChevronRight size={13} className="text-white/40" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── TEMPLATE 5: SPRINT QUEUE & DISPATCH TICKER ── */}
+                {notchMode === "queue" && (
+                  <motion.div
+                    key="template-queue"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">
+                        Immediate Queue ({stackedDispatchedTasks.length} pending)
+                      </span>
+                      <span className="text-[11px] text-amber-300 font-medium">1-Click Dispatch</span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1">
+                      {stackedDispatchedTasks.slice(0, 4).map((task, idx) => (
+                        <div
+                          key={task.id}
+                          className="bg-white/[0.04] hover:bg-white/[0.08] p-2.5 px-3 rounded-xl border border-white/[0.06] flex items-center justify-between gap-2 transition"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="size-5 rounded-full bg-white/[0.08] flex items-center justify-center text-[10px] font-bold text-white/60 shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-[12.5px] font-medium text-white truncate">
+                                {task.title}
+                              </div>
+                              <div className="text-[10.5px] text-white/40 truncate">
+                                {task.type} • {task.subtitle}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleStartFocus(task.title, task.id, task.pageId, 25);
+                                setNotchMode("sprint");
+                              }}
+                              className="px-2 py-1 rounded-lg bg-white/[0.08] hover:bg-white text-[11px] font-medium text-white/80 hover:text-black transition cursor-pointer"
+                              title="Focus this task"
+                            >
+                              Focus
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDispatcherDone(task)}
+                              className="size-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black flex items-center justify-center transition cursor-pointer"
+                              title="Mark task done"
+                            >
+                              <Check size={12} strokeWidth={2.5} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </RouteShell>
   );
 }

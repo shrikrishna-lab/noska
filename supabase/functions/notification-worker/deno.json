@@ -1,0 +1,15 @@
+{
+  "nodeModulesDir": "none",
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.110.8",
+    "web-push": "npm:web-push@3.6.7"
+  },
+  "compilerOptions": {
+    "types": ["npm:@types/web-push@3.6.4"]
+  },
+  "lint": { "rules": { "exclude": ["no-import-prefix"] } },
+  "tasks": {
+    "check": "deno check index.ts ../_shared/notifications/service.ts",
+    "lint": "deno lint index.ts ../_shared/notifications"
+  }
+}

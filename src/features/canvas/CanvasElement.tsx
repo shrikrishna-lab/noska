@@ -178,7 +178,7 @@ export default function CanvasElement({
 
     const handleProgressChange = (taskId: string, newProgress: number) => {
       const clamped = Math.max(0, Math.min(100, newProgress));
-      const updatedTasks = tasks.map((t) =>
+      const updatedTasks = tasks.map((t): TaskItem =>
         t.id === taskId
           ? {
               ...t,

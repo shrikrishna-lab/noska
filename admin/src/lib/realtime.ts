@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED } from "./supabase";
 
 // ─── Shared realtime relay bus ───
@@ -22,6 +23,55 @@ export interface RealtimeOutboxRow {
 }
 
 type Listener = (row: RealtimeOutboxRow) => void;
+
+type InvalidationBatch = {
+  pending: Map<symbol, string[]>;
+  debounce?: ReturnType<typeof setTimeout>;
+  maximum?: ReturnType<typeof setTimeout>;
+};
+
+const invalidationBatches = new WeakMap<QueryClient, InvalidationBatch>();
+
+export function subscribeRealtimeInvalidation(
+  queryClient: QueryClient,
+  queryKey: string[],
+  table: string,
+  event: RealtimeOutboxRow["event"] | "*" = "*",
+): () => void {
+  let batch = invalidationBatches.get(queryClient);
+  if (!batch) {
+    batch = { pending: new Map() };
+    invalidationBatches.set(queryClient, batch);
+  }
+  const state = batch;
+  const owner = Symbol();
+  const clearTimers = () => {
+    clearTimeout(state.debounce);
+    clearTimeout(state.maximum);
+    state.debounce = undefined;
+    state.maximum = undefined;
+  };
+  const flush = () => {
+    clearTimers();
+    const keys = Array.from(state.pending.values());
+    state.pending.clear();
+    void queryClient.invalidateQueries({
+      predicate: (query) => keys.some((key) => key.every((part, index) => query.queryKey[index] === part)),
+    }, { cancelRefetch: false });
+  };
+  const unsubscribe = subscribeRealtime((row) => {
+    if (row.table_name !== table || (event !== "*" && row.event !== event)) return;
+    state.pending.set(owner, queryKey);
+    clearTimeout(state.debounce);
+    state.debounce = setTimeout(flush, 500);
+    state.maximum ??= setTimeout(flush, 5_000);
+  });
+  return () => {
+    unsubscribe();
+    state.pending.delete(owner);
+    if (state.pending.size === 0) clearTimers();
+  };
+}
 
 let channel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
 const listeners = new Set<Listener>();

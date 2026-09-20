@@ -412,11 +412,22 @@ class InfoCardService {
     return DEFAULT_INFO_CARDS;
   }
 
-  public saveCards(cards: InfoCardRecord[]): void {
+  private updateLocalCards(cards: InfoCardRecord[]): void {
     this.cachedCards = cards;
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+      } catch (err) {
+        console.warn("Failed to persist info cards:", err);
+      }
+    }
+    this.notifyListeners();
+  }
+
+  public saveCards(cards: InfoCardRecord[]): void {
+    this.updateLocalCards(cards);
+    if (typeof window !== "undefined") {
+      try {
         this.broadcastChannel?.postMessage({
           type: "CARDS_UPDATED",
           cards,
@@ -439,8 +450,6 @@ class InfoCardService {
     } catch (err) {
       console.warn("[InfoCards] Realtime broadcast send error:", err);
     }
-
-    this.notifyListeners();
   }
 
   public getActiveCard(platform: "desktop" | "web" = "desktop"): InfoCardRecord | null {
@@ -511,7 +520,7 @@ class InfoCardService {
       }
       return c;
     });
-    this.saveCards(cards);
+    this.updateLocalCards(cards);
 
     try {
       this.realtimeChannel?.send({
@@ -529,7 +538,7 @@ class InfoCardService {
       }
       return c;
     });
-    this.saveCards(cards);
+    this.updateLocalCards(cards);
 
     try {
       this.realtimeChannel?.send({
@@ -561,7 +570,7 @@ class InfoCardService {
       }
       return c;
     });
-    this.saveCards(cards);
+    this.updateLocalCards(cards);
 
     try {
       this.realtimeChannel?.send({
@@ -586,7 +595,7 @@ class InfoCardService {
       }
       return c;
     });
-    this.saveCards(cards);
+    this.updateLocalCards(cards);
 
     try {
       this.realtimeChannel?.send({

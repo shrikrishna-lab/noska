@@ -27,8 +27,14 @@ const ENCRYPTION_SECRET = Deno.env.get("AGENT_ENCRYPTION_KEY") ?? "";
 import {
   RESOURCE_LIMITS, redact, extractKeywords, scoreMemory, detectConflict,
   isRetryableError, backoffDelayMs,
-} from "../../src/ai/runtime/serverContract.ts";
-import type { RunEventType } from "../../src/ai/runtime/serverContract.ts";
+} from "../_shared/runtime/serverContract.ts";
+import type { RunEventType } from "../_shared/runtime/serverContract.ts";
+import { NotificationEventService } from "../_shared/notifications/service.ts";
+
+const notificationService = new NotificationEventService(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+);
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -242,14 +248,17 @@ async function executeServerTool(
     }
     case "send_notification": {
       if (dryRun) return { name, ok: true, summary: `[dry-run] would notify: ${params.title}` };
-      const { error } = await db.from("notifications").insert({
-        user_id: ctx.userId, type: "ai_agent",
-        title: String(params.title || "Agent update").slice(0, 120),
-        message: String(params.message || "").slice(0, 500),
-        category: "agent", source: "noska-agent-os", status: "unread",
-        action_url: params.action_url ? String(params.action_url).slice(0, 300) : null,
-      });
-      if (error) return { name, ok: false, summary: `notification failed: ${error.message}` };
+      const actionUrl = typeof params.action_url === "string" && params.action_url.startsWith("/") ? params.action_url : undefined;
+      try {
+        const result = await notificationService.emitRunUpdate(ctx.userId, {
+          id: ctx.runId, title: String(params.title || "Agent update"),
+          body: String(params.message || ""), key: `manual:${ctx.counts.toolCalls}`,
+          actionUrl,
+        });
+        if (result.ids.length === 0) return { name, ok: true, summary: "notification suppressed by user preferences" };
+      } catch (error) {
+        return { name, ok: false, summary: `notification failed: ${error instanceof Error ? error.message : "unknown"}` };
+      }
       return { name, ok: true, summary: `notification sent: ${params.title}` };
     }
     case "remember": {
@@ -297,6 +306,7 @@ function markdownToBlocks(md: string): Array<Record<string, unknown>> {
 
 interface ExecContext {
   userId: string;
+  runId: string;
   sourceKind: "agent" | "automation";
   sourceId: string;
   sourceName: string;
@@ -493,7 +503,7 @@ async function executeRun(opts: {
     userId: opts.userId, sourceKind: opts.sourceKind, sourceId: opts.sourceId, sourceName: name,
     instructions, triggerType: opts.triggerType, triggerPayload: opts.triggerPayload,
     permissions: {}, dryRun: Boolean(opts.dryRun), timeoutMs, deadline: startedAt + timeoutMs,
-    currentPage, mutated: new Set(), counts: { modelCalls: 0, toolCalls: 0, delegations: 0, memoryWrites: 0 },
+    runId, currentPage, mutated: new Set(), counts: { modelCalls: 0, toolCalls: 0, delegations: 0, memoryWrites: 0 },
   };
   execCtx = ctx;
 
@@ -563,7 +573,6 @@ async function executeRun(opts: {
           next_step_index: round, updated_at: new Date().toISOString(),
         }).eq("id", runId);
         await emitEvent(runId, opts.userId, "APPROVAL_REQUESTED", { tool: call.name, reason: `${permCategory} actions need approval` });
-        await notifyUser(opts.userId, "Approval required", `${name} needs approval to use ${call.name}. Open Noska → Runs to decide.`, "/commandCenter");
         return json({ pausedForApproval: true, runId });
       }
       const t0 = Date.now();
@@ -605,8 +614,6 @@ async function executeRun(opts: {
       run_count: (autoRow?.run_count ?? 0) + 1,
     }).eq("id", opts.sourceId);
   }
-  if (status === "timed_out") await notifyUser(opts.userId, "Agent timed out", `${name} exceeded its time budget.`, "/commandCenter");
-
   return json({ runId, status, output: finalText.slice(0, 1000), counts: ctx.counts });
 }
 
@@ -645,13 +652,6 @@ async function finishSkipped(userId: string, kind: string, sourceId: string, nam
     error_message: reason, idempotency_key: idemKey ?? null, scheduled_for: scheduledFor ?? null,
   });
   return json({ runId, status: "skipped", reason });
-}
-
-async function notifyUser(userId: string, title: string, message: string, actionUrl?: string): Promise<void> {
-  await db.from("notifications").insert({
-    user_id: userId, type: "ai_agent", title: title.slice(0, 120), message: message.slice(0, 500),
-    category: "agent", source: "noska-agent-os", status: "unread", action_url: actionUrl ?? null,
-  });
 }
 
 /* ─── Approval resolution (user-JWT authenticated) ─────────────────────── */

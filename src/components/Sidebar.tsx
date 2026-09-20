@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, memo, useMemo, useCallback } from "
 import type { ReactNode, ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { useNotificationPlatform } from "../features/notifications/Provider";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { SPRING_PRESETS, StaggerContainer, StaggerItem } from "../features/motion/MotionSystem";
 import {
@@ -31,6 +32,16 @@ import {
   Home,
   Inbox,
   Lock,
+  CreditCard,
+  Zap,
+  LogOut,
+  Info,
+  SlidersHorizontal,
+  Share2,
+  HelpCircle,
+  User,
+  Plus,
+  LayoutGrid,
   type LucideIcon
 } from "lucide-react";
 import {
@@ -222,6 +233,7 @@ const Sidebar = memo(function Sidebar({
   currentUserAvatar
 }: SidebarProps) {
   const navigate = useNavigate();
+  const { unreadCount } = useNotificationPlatform();
   const { currentCompany } = useCompany()
   const [showJoinCompanyModal, setShowJoinCompanyModal] = useState(false)
   const recents = useMemo(() => [...pages]
@@ -243,7 +255,6 @@ const Sidebar = memo(function Sidebar({
 
   const isAvatarUrl = typeof displayAvatar === "string" && (displayAvatar.startsWith("http://") || displayAvatar.startsWith("https://") || displayAvatar.startsWith("data:") || displayAvatar.startsWith("blob:"));
 
-  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [hoveredQuickTab, setHoveredQuickTab] = useState<string | null>(null);
 
   // Dynamic draggable sidebar width with local persistence
@@ -338,9 +349,9 @@ const Sidebar = memo(function Sidebar({
       icon: AnimatedBell,
       active: appView === "inbox",
       onClick: (e: React.MouseEvent) => onView("inbox", selectOptionsFromEvent(e)),
-      badge: pendingInvitesCount
+      badge: unreadCount
     }
-  ], [appView, onView, onAIFull, pendingInvitesCount]);
+  ], [appView, onView, onAIFull, unreadCount]);
 
   const { config: customConfig } = useSidebarCustomization();
 
@@ -458,15 +469,25 @@ const Sidebar = memo(function Sidebar({
   // Click-outside references
   const switcherRef = useRef<HTMLButtonElement>(null);
   const userRef = useRef<HTMLButtonElement>(null);
+  const profileRef = useRef<HTMLButtonElement>(null);
+
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
   const switcherMenuRef = useOutsideDismiss<HTMLDivElement>(switcherOpen, () => setSwitcherOpen(false));
+  const profileMenuRef = useOutsideDismiss<HTMLDivElement>(profileOpen, () => setProfileOpen(false));
 
-  // Anchor coordinate state for the account-switcher popover.
+  // Anchor coordinate states for popovers
   const [switcherCoords, setSwitcherCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
+  const [profileCoords, setProfileCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
 
-  // Escape key closes the switcher popover.
+  // Escape key closes both popovers
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSwitcherOpen(false);
+      if (e.key === "Escape") {
+        setSwitcherOpen(false);
+        setProfileOpen(false);
+      }
     };
     window.addEventListener("keydown", handleGlobalKeys);
     return () => window.removeEventListener("keydown", handleGlobalKeys);
@@ -898,7 +919,7 @@ const Sidebar = memo(function Sidebar({
                       title="Inbox"
                     >
                       <AnimatedBell size={17} />
-                      {pendingInvitesCount > 0 && (
+                      {unreadCount > 0 && (
                         <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-black" />
                       )}
                     </button>
@@ -912,9 +933,10 @@ const Sidebar = memo(function Sidebar({
                 onClick={() => {
                   if (userRef.current) {
                     const r = userRef.current.getBoundingClientRect();
-                    setSwitcherCoords({ bottom: window.innerHeight - r.top + 6, left: r.left });
+                    setProfileCoords({ bottom: window.innerHeight - r.top + 6, left: r.left });
                   }
-                  setSwitcherOpen(o => !o);
+                  setSwitcherOpen(false);
+                  setProfileOpen(o => !o);
                 }}
                 className="group relative flex h-8.5 w-8.5 items-center justify-center rounded-full hover:scale-105 transition cursor-pointer outline-none"
                 title={`${displayName} (${displayEmail})`}
@@ -934,11 +956,12 @@ const Sidebar = memo(function Sidebar({
                ========================================================================= */
             <div className="flex h-full w-full flex-col justify-between overflow-hidden">
 
-              {/* Top Workspace Header (Row 1) */}
-              <div className="flex items-center justify-between pb-3 pt-0.5 px-0.5 shrink-0 select-none">
-                {/* Workspace Badge + Name + Subtitle + Chevron */}
+              {/* Top Workspace Header (Row 1) - Exact Match with Screenshot */}
+              <div className="flex items-center justify-between gap-2 pb-3 pt-0.5 px-0.5 shrink-0 select-none">
+                {/* Left: Squircle App Grid Badge + Title + Subtitle */}
                 <button
                   ref={switcherRef}
+                  type="button"
                   onClick={() => {
                     if (switcherRef.current) {
                       const r = switcherRef.current.getBoundingClientRect();
@@ -947,33 +970,33 @@ const Sidebar = memo(function Sidebar({
                     setSwitcherOpen(o => !o);
                   }}
                   className="group flex items-center gap-2.5 outline-none cursor-pointer min-w-0 flex-1 text-left p-1 -m-1 rounded-xl hover:bg-black/[0.03] dark:hover:bg-white/[0.05] transition"
-                  title={`${workspaceName} • Account & Workspace Settings`}
+                  title={`${workspaceName} • Workspaces & Account Settings`}
                 >
-                  {/* Rounded Squircle Workspace Icon Badge */}
-                  <div className="relative h-9 w-9 rounded-xl bg-gradient-to-br from-white via-neutral-100 to-neutral-200 dark:from-neutral-800 dark:to-neutral-900 border border-black/10 dark:border-white/10 shadow-[0_2px_6px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0">
-                    <div className="h-5 w-5 rounded-lg bg-neutral-900 dark:bg-white flex items-center justify-center text-white dark:text-neutral-900 shadow-2xs">
-                      <AnimatedCanvas size={12} className="text-white dark:text-neutral-900" />
+                  {/* Squircle App Launcher Grid Button */}
+                  <div className="size-8.5 rounded-[13px] bg-white dark:bg-neutral-800/80 border border-black/[0.08] dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.06)] flex items-center justify-center shrink-0 group-hover:scale-105 active:scale-95 transition">
+                    <div className="size-6 rounded-full bg-[#18181c] dark:bg-white flex items-center justify-center shadow-xs">
+                      <LayoutGrid size={12} className="text-white dark:text-neutral-900" />
                     </div>
                   </div>
 
                   {/* Workspace Title & Subtitle */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[13px] font-semibold text-neutral-900 dark:text-white truncate leading-tight tracking-tight">
-                        {displayName?.replace(/^@/, '') || workspaceName}
+                      <span className="text-[13px] font-bold text-neutral-900 dark:text-white truncate leading-tight tracking-tight">
+                        {workspaceName}
                       </span>
-                      <ChevronDown size={11} className="text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-200 transition shrink-0" />
+                      <ChevronDown size={11} className="text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 transition shrink-0" />
                     </div>
-                    <div className="text-[10.5px] font-normal text-neutral-500 dark:text-neutral-400 truncate leading-tight mt-0.5">
-                      {workspaceName}
+                    <div className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400 truncate leading-tight mt-0.5">
+                      {displayName ? `${displayName.replace(/^@/, '')}'s Workspace` : workspaceName}
                     </div>
                   </div>
                 </button>
 
-                {/* Top Right Sidebar Collapse Toggle Button */}
+                {/* Right: Sidebar Collapse Toggle Button */}
                 <button
                   onClick={onToggle}
-                  className="h-7 w-7 rounded-lg flex items-center justify-center text-[#4B5563] dark:text-[#9CA3AF] hover:bg-black/5 dark:hover:bg-white/10 hover:text-[#111827] dark:hover:text-white transition duration-150 cursor-pointer outline-none shrink-0 ml-1"
+                  className="size-7 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-800 dark:hover:text-white transition duration-150 cursor-pointer outline-none shrink-0"
                   title="Collapse sidebar (Ctrl+\)"
                 >
                   <PanelLeftClose size={15} />
@@ -1167,19 +1190,21 @@ const Sidebar = memo(function Sidebar({
                   </div>
                 )}
 
-                {/* Bottom Clean "⋮ More" Button */}
+                {/* Bottom Clean "⋮ More" Button (Triggers Apple Profile Menu - Screenshot Image 1) */}
                 {customConfig.showMoreButton !== false && (
                   <button
                     ref={userRef}
+                    type="button"
                     onClick={() => {
                       if (userRef.current) {
                         const r = userRef.current.getBoundingClientRect();
-                        setSwitcherCoords({ bottom: window.innerHeight - r.top + 6, left: r.left });
+                        setProfileCoords({ bottom: window.innerHeight - r.top + 6, left: r.left });
                       }
-                      setSwitcherOpen(o => !o);
+                      setSwitcherOpen(false);
+                      setProfileOpen(o => !o);
                     }}
                     className="flex w-full min-h-[28px] h-[28px] items-center gap-2 rounded-lg px-2 hover:bg-black/5 dark:hover:bg-white/10 transition text-left cursor-pointer outline-none group text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white"
-                    title="Account & More Options"
+                    title="Account, Profile & Options"
                   >
                     <MoreVertical size={13} className="text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-200 transition shrink-0" />
                     <span className="text-[11.5px] font-medium leading-tight">
@@ -1194,7 +1219,97 @@ const Sidebar = memo(function Sidebar({
         </div>
       </div>
 
-      {/* Account Switcher Popover */}
+      {/* ── 1. APPLE PROFILE & ACCOUNT MENU POPOVER (Triggered by Avatar) ── */}
+      {createPortal(
+        <AnimatePresence>
+          {profileOpen && (
+            <motion.div
+              ref={profileMenuRef}
+              initial={{ opacity: 0, scale: 0.95, y: -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -6 }}
+              transition={{ type: "spring", stiffness: 450, damping: 28 }}
+              style={{ top: profileCoords.top, bottom: profileCoords.bottom, left: profileCoords.left }}
+              className="fixed z-[100] w-[230px] rounded-[22px] border border-black/10 dark:border-white/10 bg-[#f8f9fa]/95 dark:bg-[#18181c]/95 backdrop-blur-3xl p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.2),0_0_0_1px_rgba(255,255,255,0.2)] text-[13px] outline-none select-none flex flex-col gap-0.5"
+            >
+              {/* 1. Profile */}
+              <button
+                type="button"
+                onClick={() => { setProfileOpen(false); onProfile?.(); }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
+              >
+                <User size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
+                <span className="flex-1 truncate text-[13px]">Profile</span>
+              </button>
+
+              {/* 2. Community */}
+              <button
+                type="button"
+                onClick={() => { setProfileOpen(false); onView("marketplace"); }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
+              >
+                <MessageSquare size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
+                <span className="flex-1 truncate text-[13px]">Community</span>
+              </button>
+
+              {/* 3. Subscription + PRO badge */}
+              <button
+                type="button"
+                onClick={() => { setProfileOpen(false); onSettings("billing"); }}
+                className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <CreditCard size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
+                  <span className="truncate text-[13px]">Subscription</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 text-[10px] font-black tracking-wider border border-purple-500/20 flex items-center gap-0.5 shrink-0 shadow-2xs">
+                  <Zap size={9.5} className="fill-purple-600 dark:fill-purple-400" />
+                  <span>PRO</span>
+                </span>
+              </button>
+
+              {/* 4. Settings */}
+              <button
+                type="button"
+                onClick={() => { setProfileOpen(false); onSettings(); }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
+              >
+                <SlidersHorizontal size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
+                <span className="flex-1 truncate text-[13px]">Settings</span>
+              </button>
+
+              {/* Divider */}
+              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-1 mx-2" />
+
+              {/* 5. Help center */}
+              <button
+                type="button"
+                onClick={() => { setProfileOpen(false); onHelp(); }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
+              >
+                <Info size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
+                <span className="flex-1 truncate text-[13px]">Help center</span>
+              </button>
+
+              {/* 6. Sign out */}
+              <button
+                type="button"
+                onClick={async () => {
+                  if (await window.noskaConfirm?.("Are you sure you want to log out?")) onLogout?.();
+                  setProfileOpen(false);
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-rose-500/10 text-neutral-800 dark:text-neutral-200 hover:text-rose-600 dark:hover:text-rose-400 transition cursor-pointer font-medium group"
+              >
+                <LogOut size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-rose-600 dark:group-hover:text-rose-400 shrink-0" />
+                <span className="flex-1 truncate text-[13px]">Sign out</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Account Switcher / More Options Popover (Original Layout) */}
       {createPortal(
         <AnimatePresence>
           {switcherOpen && (

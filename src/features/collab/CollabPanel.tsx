@@ -10,6 +10,7 @@ interface CollabPanelProps {
   userName: string;
   userAvatar?: string;
   className?: string;
+  notificationCommentId?: string;
 }
 
 type Tab = 'people' | 'comments' | 'versions' | 'activity' | 'notifications';
@@ -35,8 +36,11 @@ function statusIcon(status: string): string {
   }
 }
 
-export function CollabPanel({ pageId, userId, userName, userAvatar, className }: CollabPanelProps) {
+export function CollabPanel({ pageId, userId, userName, userAvatar, className, notificationCommentId }: CollabPanelProps) {
   const [tab, setTab] = useState<Tab>('people');
+  useEffect(() => {
+    if (notificationCommentId) setTab('comments');
+  }, [notificationCommentId]);
 
   const perms = useDocumentPermissions(pageId, userId);
   const session = useCollabSession(pageId, userId);
@@ -498,7 +502,7 @@ function CommentCard({ comment, userId, onResolve, onUnresolve, onDelete }: {
 }) {
   const isOwn = comment.user_id === userId;
   return (
-    <div className={`group p-2.5 rounded-lg border ${comment.resolved ? 'bg-[var(--bg)] border-[var(--border)]' : 'bg-[var(--surface)] border-[var(--border)]'}`}>
+    <div data-comment-id={comment.id} className={`group p-2.5 rounded-lg border ${comment.resolved ? 'bg-[var(--bg)] border-[var(--border)]' : 'bg-[var(--surface)] border-[var(--border)]'}`}>
       <div className="flex items-center gap-2 mb-1">
         {comment.user_avatar ? (
           <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" style={{ backgroundColor: 'var(--hover)' }}>
@@ -612,8 +616,8 @@ function ActivityTab({ pageId }: { pageId: string }) {
 
 function NotificationsTab({ notifications, onMarkRead, onMarkAllRead }: {
   notifications: import('./types').CollabNotification[];
-  onMarkRead: (id: string) => Promise<void>;
-  onMarkAllRead: () => Promise<void>;
+  onMarkRead: (id: string) => Promise<boolean>;
+  onMarkAllRead: () => Promise<boolean>;
 }) {
   return (
     <div className="p-3 space-y-2">

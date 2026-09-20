@@ -62,6 +62,14 @@ export interface ProviderSendOpts {
    * protocol; unsupported providers ignore the field (text-protocol fallback).
    */
   tools?: NativeToolSpec[];
+  /** Token usage reporter for providers that return usage metadata. */
+  onUsage?: (usage: TokenUsageInfo) => void;
+}
+
+export interface TokenUsageInfo {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
 }
 
 export interface AIProvider {
@@ -238,7 +246,25 @@ export function openAiToolsPayload(tools?: NativeToolSpec[]): Record<string, any
   };
 }
 
-export function extractOpenAiToolCalls(data: any): string {
+export function extractOpenAiUsage(data: any): TokenUsageInfo {
+  const u = data?.usage;
+  if (!u) return {};
+  return { promptTokens: u.prompt_tokens, completionTokens: u.completion_tokens, totalTokens: u.total_tokens };
+}
+
+export function extractAnthropicUsage(data: any): TokenUsageInfo {
+  const u = data?.usage;
+  if (!u) return {};
+  return { promptTokens: u.input_tokens, completionTokens: u.output_tokens };
+}
+
+export function extractGeminiUsage(data: any): TokenUsageInfo {
+  const u = data?.usageMetadata;
+  if (!u) return {};
+  return { promptTokens: u.promptTokenCount, completionTokens: u.candidatesTokenCount, totalTokens: u.totalTokenCount };
+}
+
+function extractOpenAiToolCalls(data: any): string {
   const calls = data?.choices?.[0]?.message?.tool_calls;
   if (!Array.isArray(calls) || calls.length === 0) return "";
   return calls.map((c: any) => {
@@ -323,7 +349,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "mistralai/mistral-large-2407", name: "Mistral Large 2", context: 128000 }
     ],
     defaultModel: "anthropic/claude-opus-4.6",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("OpenRouter");
       const modelId = model || this.defaultModel;
       const payload: Record<string, any> = {
@@ -350,13 +376,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "OpenRouter", modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("OpenRouter", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("OpenRouter");
       const modelId = model || this.defaultModel;
       const payload: Record<string, any> = {
@@ -408,7 +435,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", context: 1048576 }
     ],
     defaultModel: "gemini-2.5-flash",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
@@ -441,13 +468,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         );
         await checkResponse(res, "Gemini", modelId);
         const data = await res.json();
+        onUsage?.(extractGeminiUsage(data));
         return (data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "") + extractGeminiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Gemini", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Gemini");
       const modelId = model || this.defaultModel;
       try {
@@ -505,7 +533,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "chatgpt-4o-latest", name: "ChatGPT 4o Latest", context: 128000 }
     ],
     defaultModel: "gpt-5.6-sol",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
       const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.includes("gpt-5") || Boolean(thinking);
@@ -534,13 +562,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "OpenAI", modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("OpenAI", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, thinking, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("OpenAI");
       const modelId = model || this.defaultModel;
       const isReasoning = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.includes("gpt-5") || Boolean(thinking);
@@ -593,7 +622,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000 }
     ],
     defaultModel: "claude-opus-5",
-    async send({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Anthropic");
       const modelId = model || this.defaultModel;
       const isAdaptiveThinking = modelId.includes("claude-3-7") || modelId.includes("5") || Boolean(thinking);
@@ -632,7 +661,7 @@ const PROVIDERS: Record<string, AIProvider> = {
         throw classifyNetworkError("Anthropic", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 4096, effort, thinking, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Anthropic");
       const modelId = model || this.defaultModel;
       const isAdaptiveThinking = modelId.includes("claude-3-7") || modelId.includes("5") || Boolean(thinking);
@@ -690,7 +719,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "llama-3.2-90b-vision-preview", name: "Llama 3.2 90B Vision", context: 128000 }
     ],
     defaultModel: "llama-3.3-70b-versatile",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Groq");
       const modelId = model || this.defaultModel;
       try {
@@ -713,13 +742,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "Groq", modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Groq", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Groq");
       const modelId = model || this.defaultModel;
       try {
@@ -763,7 +793,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "deepseek-vl2", name: "DeepSeek Vision Language 2", context: 64000 }
     ],
     defaultModel: "deepseek-chat",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("DeepSeek");
       const modelId = model || this.defaultModel;
       try {
@@ -780,13 +810,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "DeepSeek", modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("DeepSeek", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("DeepSeek");
       const modelId = model || this.defaultModel;
       try {
@@ -828,7 +859,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "mistral-embed", name: "Mistral Embed", context: 8192 }
     ],
     defaultModel: "mistral-large-latest",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Mistral");
       const modelId = model || this.defaultModel;
       try {
@@ -845,13 +876,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "Mistral", modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Mistral", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Mistral");
       const modelId = model || this.defaultModel;
       try {
@@ -893,7 +925,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF", name: "Nemotron 70B Turbo", context: 131072 }
     ],
     defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Together");
       const modelId = model || this.defaultModel;
       try {
@@ -910,13 +942,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "Together", modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Together", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("Together");
       const modelId = model || this.defaultModel;
       try {
@@ -955,7 +988,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "grok-beta", name: "Grok Beta Preview", context: 131072 }
     ],
     defaultModel: "grok-2-latest",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("xAI");
       const modelId = model || this.defaultModel;
       try {
@@ -972,13 +1005,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal);
         await checkResponse(res, "xAI", modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("xAI", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("xAI");
       const modelId = model || this.defaultModel;
       try {
@@ -1015,7 +1049,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "meta/llama-3.2-90b-vision-instruct", name: "Llama 3.2 90B Vision", context: 131072 }
     ],
     defaultModel: "nvidia/nemotron-3.5-lightning-30b-a3b",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("NVIDIA");
       const modelId = model || this.defaultModel;
       try {
@@ -1040,13 +1074,14 @@ const PROVIDERS: Record<string, AIProvider> = {
         }, signal, 45000);
         await checkResponse(res, "NVIDIA", modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("NVIDIA", modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError("NVIDIA");
       const modelId = model || this.defaultModel;
       try {
@@ -1091,7 +1126,7 @@ const PROVIDERS: Record<string, AIProvider> = {
       { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Zen)", context: 200000 }
     ],
     defaultModel: "nemotron-3.5-lightning-free",
-    async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
       const modelId = model || this.defaultModel;
       if (!modelId) {
@@ -1144,9 +1179,11 @@ const PROVIDERS: Record<string, AIProvider> = {
         await checkResponse(res, "OpenCode Zen", modelId);
         const data = await res.json();
         if (isAnthropic) {
+          onUsage?.(extractAnthropicUsage(data));
           return (data.content?.[0]?.text || "") + extractAnthropicToolCalls(data);
         }
         const choice = data.choices?.[0];
+        onUsage?.(extractOpenAiUsage(data));
         return (choice?.message?.content || choice?.message?.reasoning || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
@@ -1181,9 +1218,10 @@ const PROVIDERS: Record<string, AIProvider> = {
 
         const body = isAnthropic
           ? JSON.stringify({
+            ...anthropicToolsPayload(tools),
             model: modelId,
             max_tokens: maxTokens,
-            stream: true, ...openAiToolsPayload(tools),
+            stream: true,
             ...(system ? { system } : {}),
             messages: messages.map(m => ({ role: m.role, content: m.content }))
           })
@@ -1281,7 +1319,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model: modelId,
-            stream: true, ...openAiToolsPayload(tools),
+            stream: true,
             options: { num_predict: maxTokens, temperature: resolveTemperature(temperature, effort) },
             messages: [
               ...(system ? [{ role: "system", content: system }] : []),
@@ -1290,7 +1328,7 @@ const PROVIDERS: Record<string, AIProvider> = {
           })
         }, signal, 60000);
         await checkResponse(res, "Ollama", modelId);
-        yield* streamEventsToText(parseOllamaStream(res, signal));
+        yield* streamEventsToTextWithTools(parseOllamaStream(res, signal));
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError("Ollama", modelId, err as Error);
@@ -1432,7 +1470,7 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
     keyPlaceholder: "sk-… / API key",
     models: cfg.models.map((m) => ({ id: m.id, name: m.name || m.id, context: 128000 })),
     defaultModel: cfg.defaultModel || cfg.models[0]?.id || "",
-    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async send({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError(cfg.name);
       const modelId = model || this.defaultModel;
       try {
@@ -1452,13 +1490,14 @@ export function createCustomProvider(cfg: CustomProviderConfig): AIProvider {
         }, signal);
         await checkResponse(res, cfg.name, modelId);
         const data = await res.json();
+        onUsage?.(extractOpenAiUsage(data));
         return (data.choices?.[0]?.message?.content || "") + extractOpenAiToolCalls(data);
       } catch (err: unknown) {
         if (err instanceof AIError) throw err;
         throw classifyNetworkError(cfg.name, modelId, err as Error);
       }
     },
-    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, signal }) {
+    async *stream({ apiKey, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       if (!apiKey) throw configError(cfg.name);
       const modelId = model || this.defaultModel;
       try {

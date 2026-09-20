@@ -78,6 +78,7 @@ const ApiConsole = lazy(() => import("./features/api/ApiConsole"));
 
 import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
 import { supabase, setClerkSessionToken } from "./lib/supabase";
+import { NotificationPlatformProvider, NotificationNavigationBridge } from "./features/notifications/Provider";
 import LoginGate from "./components/auth/LoginGate";
 import DesktopAuthScreen from "./components/auth/DesktopAuthScreen";
 import { WaitlistGate } from "./components/auth/WaitlistGate";
@@ -108,8 +109,7 @@ import {
   ensurePageEntity
 } from "./utils/pageTreeOps";
 import {
-  fetchPages, fetchSettings, fetchAIChats, savePage, saveSetting, fetchUserProfile, upsertUserProfile, setOnboardingComplete,
-  detectLocationFromIp,
+  fetchPages, fetchSettings, fetchAIChats, savePage, saveSetting, fetchUserProfile, setOnboardingComplete,
   fetchPageInvites, acceptPageInvite, declinePageInvite, fetchSharedPages, updateSharedPage as updateSharedPageRemote
 } from "./lib/supabaseService";
 import type { Page, AIChat } from "./lib/supabaseService";
@@ -202,6 +202,8 @@ function AppContent() {
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState(false);
+  const [bootstrapRetry, setBootstrapRetry] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [voiceSettingsRequested, setVoiceSettingsRequested] = useState(false);
   const [voiceAgentPrompt, setVoiceAgentPrompt] = useState<{ providerId: string; providerName: string } | null>(null);
@@ -383,6 +385,7 @@ function AppContent() {
   }, [ghostWriterEnabled]);
 
   const hydrated = useRef(false);
+  const identityGeneration = useRef(0);
   // Set when logout could NOT verify its page flush reached Supabase: the
   // "pages" localStorage key is then deliberately preserved for recovery on
   // the next login, and the autosave effect must not overwrite it with the
@@ -523,14 +526,14 @@ function AppContent() {
 
   useEffect(() => {
     if (!isSignedIn) return;
-    startTriggerService({
+    return startTriggerService({
       getContext: () => {
         const get = (window as unknown as { __noskaToolContext?: () => unknown }).__noskaToolContext;
         return (get ? get() : { pages: [], actions: {} }) as never;
       },
       onNotify: showToast,
     });
-  }, [isSignedIn]);
+  }, [isSignedIn, clerkUser?.id]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -577,7 +580,38 @@ function AppContent() {
 
   useEffect(() => {
     hydrated.current = false;
+    setBootstrapError(false);
+    const generation = ++identityGeneration.current;
     let mounted = true;
+    const isCurrent = () => mounted && identityGeneration.current === generation;
+    const initialPages = pagesSnapshotRef.current;
+    const userId = isSignedIn && clerkUser ? clerkUser.id : null;
+    const previousUserId = currentUserId || (() => { try { return localStorage.getItem("noska_user_id"); } catch { return null; } })();
+    const restoreLocal = !userId || !previousUserId || previousUserId === userId;
+    if (currentUserId && currentUserId !== userId) {
+      setCurrentUserId(null);
+      setCurrentUsername(null);
+      setCurrentUserAvatar(null);
+      setCurrentUserEmail(null);
+      setSharedPages([]);
+      setPendingInvites([]);
+      setAppFlowState(userId ? "loading" : "auth");
+    }
+    const applyLoadedPages = (next: Page[]) => setPages((prev) => {
+      if (!isCurrent()) return prev;
+      if (!restoreLocal) return next;
+      const initialById = new Map(initialPages.map(p => [p.id, p]));
+      const currentById = new Map(prev.map(p => [p.id, p]));
+      const merged = next.filter(p => !initialById.has(p.id) || currentById.has(p.id))
+        .map(p => {
+          const current = currentById.get(p.id);
+          return current && (current !== initialById.get(p.id) || new Date(current.updatedAt || 0) > new Date(p.updatedAt || 0)) ? current : p;
+        });
+      for (const p of prev) {
+        if (p !== initialById.get(p.id) && !merged.some(candidate => candidate.id === p.id)) merged.push(p);
+      }
+      return merged;
+    });
     (async () => {
       const store = storageApi();
       let loadedPages: Page[] = [];
@@ -592,7 +626,7 @@ function AppContent() {
            "themeFx", "aiProvider", "nvidiaKey", "appView", "aiChats", "activeChatId",
            "stackedPageIds"].map((k) => store.get(k))
         );
-        if (!mounted) return;
+        if (!isCurrent()) return;
 
         if (pairs[0].value) {
           try { loadedPages = JSON.parse(pairs[0].value); } catch (e) { console.warn("App: failed to parse pages from storage", e); }
@@ -616,7 +650,7 @@ function AppContent() {
         loadedPages = purgeExpiredTrash(
           normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })))
         );
-        setPages(loadedPages);
+        applyLoadedPages(loadedPages);
         setAiChats(loadedChats);
 
         const firstId = loadedPages[0]?.id;
@@ -666,8 +700,8 @@ function AppContent() {
       // Clerk may report isSignedIn before useSession has produced the token
       // Supabase needs for RLS. Wait for the session before the first read.
       // Desktop pairing supplies its own Supabase session — no Clerk session.
-      if (isSignedIn && !session && !desktopIdentity) return;
-      if (!mounted) return;
+      if (isSignedIn && (!clerkUser || (!session && !desktopIdentity))) return;
+      if (!isCurrent()) return;
 
       if (session) {
         setClerkSessionToken(async () => {
@@ -683,8 +717,6 @@ function AppContent() {
         });
       }
 
-      const userId = isSignedIn && clerkUser ? clerkUser.id : null;
-
       // 2. Fetch data from Supabase (filtered by user_id if logged in)
       try {
         const [remotePages, remoteSettings] = await Promise.all([
@@ -693,15 +725,15 @@ function AppContent() {
           // those requests are expected to be rejected by Supabase RLS and
           // otherwise surface a misleading startup warning in production.
           userId ? fetchPages(userId) : Promise.resolve([]),
-          userId ? fetchSettings() : Promise.resolve({})
+          userId ? fetchSettings().catch(() => ({})) : Promise.resolve({})
         ]);
-        if (!mounted) return;
+        if (!isCurrent()) return;
         loadedPages = remotePages;
         loadedSettings = remoteSettings;
 
         // AI chats are stored 100% locally in browser localStorage / cache (private, instant, offline-first)
         try {
-          const localSavedChats = localStorage.getItem("noska_ai_chats");
+          const localSavedChats = restoreLocal ? localStorage.getItem("noska_ai_chats") : null;
           if (localSavedChats) {
             const parsed = JSON.parse(localSavedChats);
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -710,14 +742,20 @@ function AppContent() {
           }
         } catch {}
       } catch (e) {
+        if (!isCurrent()) return;
         console.warn("Supabase load failed", e);
+        if (userId) {
+          setBootstrapError(true);
+          return;
+        }
       }
 
       // 3. Merge localStorage AFTER the awaited Supabase read above — DB-first:
       // remote rows are the base, local edits/pages layer on top (covers
       // offline changes and writes not yet flushed at last logout).
-      loadedPages = await mergeLocalStoragePages(loadedPages);
-      if (!mounted) return;
+      if (!isCurrent()) return;
+      if (restoreLocal) loadedPages = await mergeLocalStoragePages(loadedPages);
+      if (!isCurrent()) return;
 
       // 4. Final normalization
       if (!userId) {
@@ -726,7 +764,7 @@ function AppContent() {
            "themeFx", "aiProvider", "nvidiaKey", "appView", "aiChats", "activeChatId",
            "stackedPageIds"].map((k) => store.get(k))
         );
-        if (!mounted) return;
+        if (!isCurrent()) return;
 
         if (loadedPages.length === 0 && pairs[0].value) {
           try { loadedPages = JSON.parse(pairs[0].value); } catch (e) { console.warn("App: failed to parse pages from storage", e); }
@@ -753,7 +791,7 @@ function AppContent() {
           normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })))
         );
         initStorageSyncBaseline(loadedPages, loadedChats);
-        setPages(loadedPages);
+        applyLoadedPages(loadedPages);
         setAiChats(loadedChats);
 
         const firstId = loadedPages[0]?.id;
@@ -841,10 +879,11 @@ function AppContent() {
       setCurrentUserId(u.id);
       try { localStorage.setItem("noska_user_id", u.id); } catch {}
       setCurrentUserEmail(u.primaryEmailAddress?.emailAddress || null);
-      loadCollabData(u.id);
+      loadCollabData(u.id, isCurrent);
 
       try {
         const profile = await fetchUserProfile(u.id);
+        if (!isCurrent()) return;
         setCurrentUsername(profile?.username ?? null);
         setCurrentUserAvatar(profile?.avatar_url || null);
         const actualAvatar = profile?.avatar_url || u.imageUrl || '👤';
@@ -875,7 +914,7 @@ function AppContent() {
           // unverified-sync logout — recovery complete, resume autosave.
           preserveLocalPages.current = false;
           if (normalized.length > 0) {
-            setPages(normalized);
+            applyLoadedPages(normalized);
             setAiChats(loadedChats);
             const deepLinkId = routeParams.pageId && normalized.some((p) => p.id === routeParams.pageId)
               ? routeParams.pageId
@@ -898,7 +937,7 @@ function AppContent() {
               blocks: textToBlocks("# Getting Started\n\nWelcome to your workspace!"),
             };
             normalized.push(defaultInitialPage);
-            setPages(normalized);
+            applyLoadedPages(normalized);
             setAiChats(loadedChats);
             setActiveId(defaultInitialPage.id);
             setStackedPageIds([defaultInitialPage.id]);
@@ -938,7 +977,7 @@ function AppContent() {
                 blocks: textToBlocks("# Mobile Projects & Roadmap\n\nTrack your priorities on the go.\n\n- [x] Setup Android test environment\n- [x] Configure GPU acceleration\n- [ ] Customize workspace layout"),
               }
             ];
-            setPages(starterPages);
+            applyLoadedPages(starterPages);
             setAiChats([]);
             setActiveId(starterPages[0].id);
             setStackedPageIds([starterPages[0].id]);
@@ -953,11 +992,12 @@ function AppContent() {
           }
         }
       } catch {
+        if (!isCurrent()) return;
         if (loadedPages && loadedPages.length > 0) {
           const normalized = normalizePages(loadedPages.map(p => ({ ...p, content: p.content || [] })));
           initStorageSyncBaseline(normalized, loadedChats);
           preserveLocalPages.current = false;
-          setPages(normalized);
+          applyLoadedPages(normalized);
           setAiChats(loadedChats);
           const deepLinkId = routeParams.pageId && normalized.some((p) => p.id === routeParams.pageId)
             ? routeParams.pageId
@@ -981,7 +1021,7 @@ function AppContent() {
               lineage: [{ action: "created" as const, timestamp: initialTimestamp, detail: "Mobile starter page" }],
               blocks: textToBlocks("# Welcome to Noska Mobile\n\nYour workspace is ready!"),
             };
-            setPages([defaultPage]);
+            applyLoadedPages([defaultPage]);
             setAiChats([]);
             setActiveId(defaultPage.id);
             setStackedPageIds([defaultPage.id]);
@@ -997,7 +1037,7 @@ function AppContent() {
       }
 
       try {
-        const localWs = localStorage.getItem("workspaceName");
+        const localWs = restoreLocal ? localStorage.getItem("workspaceName") : null;
         if (localWs) {
           const parsed = JSON.parse(localWs);
           if (parsed && typeof parsed === "string" && parsed.trim() && parsed !== "Noska") {
@@ -1031,180 +1071,7 @@ function AppContent() {
       }
     })();
     return () => { mounted = false; };
-  }, [clerkLoaded, isSignedIn, clerkUser?.id, session?.id]);
-
-  interface AuthUserData {
-    userId: string;
-    userName?: string;
-    email?: string;
-    avatarUrl?: string | null;
-  }
-
-  // Auth success handler — routes returning users straight to their
-  // workspace, and only first-time users (no profile yet, or
-  // onboarding_complete === false) to /onboarding.
-  const handleAuthSuccess = useCallback(async (userData: AuthUserData) => {
-    const uname = userData.userName || 'Workspace User';
-    realtimeCollab.initUser(userData.userId, uname, userData.avatarUrl || '👤');
-    try { localStorage.setItem("noska_user_id", userData.userId); } catch {}
-    setCurrentUserId(userData.userId);
-    setCurrentUserEmail(userData.email || null);
-    loadCollabData(userData.userId);
-
-    let existingProfile = null;
-    try {
-      existingProfile = await fetchUserProfile(userData.userId);
-      setCurrentUsername(existingProfile?.username ?? null);
-      setCurrentUserAvatar(existingProfile?.avatar_url || null);
-      const actualAvatar = existingProfile?.avatar_url || userData.avatarUrl || '👤';
-      realtimeCollab.initUser(userData.userId, existingProfile?.user_name || uname, actualAvatar);
-    } catch (e) {
-      console.warn("App: failed to fetch user profile", e);
-    }
-
-    try {
-      const location = !existingProfile?.country ? await detectLocationFromIp() : null;
-      await upsertUserProfile({
-        userId: userData.userId,
-        userName: uname,
-        email: userData.email,
-        avatarUrl: userData.avatarUrl,
-        // Preserve existing flags — pass them through only when the fetch
-        // confirmed them. If the fetch failed (existingProfile === null),
-        // upsertUserProfile omits these keys so a true onboarding_complete
-        // or custom workspace_name is never downgraded to false/default.
-        onboardingComplete: existingProfile?.onboarding_complete ?? undefined,
-        useCase: existingProfile?.use_case,
-        workspaceName: existingProfile?.workspace_name,
-        // Seed location from IP on first login so the admin panel can do
-        // city/state/area/country-wise email targeting.
-        ...location,
-      });
-    } catch (e) {
-      console.warn("App: failed to save user profile", e);
-    }
-
-    let remotePages: Page[] = [];
-    try {
-      remotePages = await fetchPages(userData.userId);
-    } catch (e) {
-      console.warn("App: failed to fetch pages for user", e);
-    }
-
-    const hasExistingData = Boolean(
-      existingProfile?.onboarding_complete || (remotePages && remotePages.length > 0)
-    );
-
-    if (hasExistingData) {
-      capture("login");
-      if (!existingProfile?.onboarding_complete) {
-        setOnboardingComplete(userData.userId, existingProfile?.use_case || null, existingProfile?.workspace_name || `${uname}'s Workspace`, existingProfile?.username).catch(() => {});
-      }
-      // Same pre-existing-account gate as the initial-mount bootstrap
-      // above — see its comment for why this can't just be folded into
-      // the onboarding wizard for these users.
-      setNeedsUsernameClaim(!existingProfile?.username && !isMobile());
-      // Returning user signing in mid-session (the initial mount bootstrap
-      // already ran before this sign-in completed) — load their data now.
-      // DB-first: fetchPages above is awaited BEFORE any localStorage read,
-      // so the workspace reflects server state and localStorage only
-      // contributes offline edits / unflushed pages from the prior session.
-      try {
-        const merged = await mergeLocalStoragePages(remotePages);
-        const normalized = normalizePages(merged.map(p => ({ ...p, content: p.content || [] })));
-        initStorageSyncBaseline(normalized, []);
-        // Merged state includes any pages preserved by an unverified-sync
-        // logout — recovery complete, resume autosave.
-        preserveLocalPages.current = false;
-        if (normalized.length > 0) {
-          setPages(normalized);
-          setActiveId(normalized[0].id);
-          setStackedPageIds([normalized[0].id]);
-        } else {
-          const initialTimestamp = now();
-          const defaultInitialPage: Page = {
-            id: uid(),
-            title: "Getting Started",
-            icon: "🚀",
-            favorite: false,
-            trashed: false,
-            tags: [],
-            parentId: null,
-            createdAt: initialTimestamp,
-            updatedAt: initialTimestamp,
-            lineage: [{ action: "created" as const, timestamp: initialTimestamp, detail: "Default starter page" }],
-            blocks: textToBlocks("# Getting Started\n\nWelcome to your workspace!"),
-          };
-          normalized.push(defaultInitialPage);
-          setPages(normalized);
-          setActiveId(defaultInitialPage.id);
-          setStackedPageIds([defaultInitialPage.id]);
-          if (userData.userId) {
-            savePage(defaultInitialPage, userData.userId).catch(() => {});
-          }
-        }
-        // AI chats are stored 100% locally on device / browser cache
-        try {
-          const localSavedChats = localStorage.getItem("noska_ai_chats");
-          if (localSavedChats) {
-            const parsed = JSON.parse(localSavedChats);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setAiChats(parsed);
-            }
-          }
-        } catch {}
-      } catch (e) {
-        console.warn("App: failed to load returning user's pages", e);
-      }
-      // Prefer the locally saved workspace name (updated live from
-      // Settings) over the profile's onboarding-time workspace_name, so
-      // a refresh after renaming doesn't revert to the old default.
-      // The bare "My Workspace" default (written by handleLogout) is
-      // skipped so a brand-new sign-in still adopts the DB profile name.
-      let wsName = null;
-      try {
-        const localWs = localStorage.getItem("workspaceName");
-        if (localWs) {
-          const parsed = JSON.parse(localWs);
-          if (parsed && typeof parsed === "string" && parsed.trim() && parsed !== "Noska" && parsed !== "My Workspace") {
-            wsName = parsed;
-          }
-        }
-      } catch {}
-      if (wsName) {
-        setWorkspaceName(wsName);
-      } else if (existingProfile?.workspace_name) {
-        setWorkspaceName(existingProfile.workspace_name);
-      }
-      setAppFlowState("workspace");
-    } else {
-      setWorkspaceName(`${uname}'s Workspace`);
-      setPages([]);
-      setAiChats([]);
-      setActiveId(null);
-      setStackedPageIds([]);
-      setAppFlowState("onboarding");
-    }
-  }, []);
-
-  // Post-OAuth routing — after the OAuth popup completes, isSignedIn
-  // becomes true but the main bootstrap effect only runs on [clerkLoaded],
-  // so the app would stay stuck on AuthPage's "Connecting..." screen.
-  // This effect bridges that gap: once the user is fully signed in and
-  // the app is waiting on the auth screen, route them into the workspace
-  // or onboarding flow.
-  useEffect(() => {
-    if (!clerkLoaded) return;
-    if (appFlowState !== "auth") return;
-    if (!isSignedIn || !clerkUser) return;
-
-    handleAuthSuccess({
-      userId: clerkUser.id,
-      userName: clerkUser.fullName || clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Workspace User',
-      email: clerkUser.primaryEmailAddress?.emailAddress,
-      avatarUrl: clerkUser.imageUrl,
-    });
-  }, [clerkLoaded, isSignedIn, clerkUser, appFlowState, handleAuthSuccess]);
+  }, [clerkLoaded, isSignedIn, clerkUser?.id, session?.id, bootstrapRetry]);
 
   // Supabase Realtime for the `pages` table: keeps an established session
   // current with writes committed by other devices/instances of the same
@@ -1374,6 +1241,8 @@ function AppContent() {
   // Logout handler — flushes pending page writes, verifies the DB sync
   // completed, clears cache/state, redirects to auth immediately
   const handleLogout = useCallback(async () => {
+    identityGeneration.current++;
+    hydrated.current = false;
     capture("logout");
 
     // 1. Immediate UI transition (0ms delay for the user)
@@ -1935,18 +1804,13 @@ function AppContent() {
     });
   };
 
-  // Loads both halves of the real sharing feature for the signed-in user:
-  // pages actually shared TO them (kept in the separate `sharedPages`
-  // array — see its declaration's comment for why), and invites still
-  // awaiting their accept/decline (Inbox's "Invites" section). Called
-  // from both bootstrap paths (initial mount + handleAuthSuccess) so a
-  // user sees pending invites/shared pages whichever path resolves.
-  const loadCollabData = useCallback(async (userId: string) => {
+  const loadCollabData = useCallback(async (userId: string, isCurrent: () => boolean) => {
     try {
       const [shared, invites] = await Promise.all([
         fetchSharedPages(userId),
         fetchPageInvites(userId, "pending"),
       ]);
+      if (!isCurrent()) return;
       setSharedPages(shared);
       setPendingInvites(invites);
     } catch (e) {
@@ -2934,6 +2798,28 @@ function AppContent() {
     if (newId) setRenameFocusId(newId);
   }, [addPage, setRenameFocusId]);
 
+  if (bootstrapError) {
+    return (
+      <div role="alert" className="flex h-full items-center justify-center bg-[var(--bg)] text-[var(--text)]">
+        <div className="flex max-w-sm flex-col items-center gap-3 p-6 text-center">
+          <h1 className="text-lg font-medium">Unable to load your pages</h1>
+          <p className="text-sm text-[var(--muted)]">Your workspace could not be loaded safely. Your existing pages have not been replaced. Please retry.</p>
+          <button
+            type="button"
+            className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm text-white"
+            onClick={() => {
+              setLoading(true);
+              setBootstrapError(false);
+              setBootstrapRetry(value => value + 1);
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--bg)] text-[var(--muted)]">
@@ -3233,7 +3119,9 @@ function AppContent() {
   }
 
   return (
-    <CompanyProvider>
+    <NotificationPlatformProvider userId={currentUserId}>
+      <NotificationNavigationBridge onPage={(pageId) => handlePageSelect(pageId)} onInbox={() => handleViewSelect("inbox")} onSearch={() => setPaletteOpen(true)} onSettings={() => { setSettingsInitialTab("notifications"); setSettingsOpen(true); }} onError={showToast} />
+      <CompanyProvider>
     <TeamProvider>
     <AnimatePresence mode="wait">
       {showDesktopSetup && (
@@ -3255,7 +3143,7 @@ function AppContent() {
           {isDesktop() ? (
             !desktopIdentity ? <DesktopAuthScreen key="desktop-auth" /> : null
           ) : (
-            <AuthPage key="auth" onAuthSuccess={handleAuthSuccess} />
+            <AuthPage key="auth" />
           )}
         </LoginGate>
       )}
@@ -3896,6 +3784,7 @@ onLineage={() => setLineageOpen(true)}
     </AnimatePresence>
     </TeamProvider>
     </CompanyProvider>
+    </NotificationPlatformProvider>
   );
 }
 

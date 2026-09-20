@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Upload, Image, Trash2 } from "lucide-react";
 import { COVER_CATEGORIES, getAllCovers } from "../../registry/covers/CoverRegistry";
+import { optimizeImage } from "../../lib/supabaseService";
 
 const TABS = [
   { id: "gradients", label: "Gradients" },
@@ -16,6 +17,7 @@ const TABS = [
 export default function CoverPicker({ open, onClose, onSelect, onRemove, currentCover, position }) {
   const [tab, setTab] = useState("gradients");
   const [search, setSearch] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const pickerRef = useRef(null);
   const searchRef = useRef(null);
 
@@ -28,6 +30,11 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
   }, [open, onClose]);
 
   const handleSelect = useCallback((cover) => {
+    if (typeof cover.value === "string" && /^\s*blob:/i.test(cover.value)) {
+      setUploadError("Temporary image URLs cannot be saved. Upload the image instead.");
+      return;
+    }
+    setUploadError("");
     onSelect?.(cover);
     onClose?.();
   }, [onSelect, onClose]);
@@ -36,18 +43,24 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
+      if (!file.type.startsWith("image/") || file.size > 2 * 1024 * 1024) {
+        setUploadError("Choose an image no larger than 2 MB.");
+        return;
+      }
+      setUploadError("");
+      const optimized = await optimizeImage(file);
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        onSelect?.({ type: "image", value: ev.target.result, label: "Uploaded image" });
-        onClose?.();
+      reader.onload = () => {
+        handleSelect({ type: "image", value: reader.result, label: "Uploaded image" });
       };
-      reader.readAsDataURL(file);
+      reader.onerror = () => setUploadError("Unable to read image. Please try again.");
+      reader.readAsDataURL(optimized);
     };
     input.click();
-  }, [onSelect, onClose]);
+  }, [handleSelect]);
 
   const currentTab = TABS.find(t => t.id === tab);
   const categoryData = tab === "upload" ? null : COVER_CATEGORIES.find(c => c.id === tab);
@@ -137,8 +150,9 @@ export default function CoverPicker({ open, onClose, onSelect, onRemove, current
             >
               <Upload size={24} />
               <span className="text-xs font-medium">Upload cover image from computer</span>
-              <span className="text-[10px]">Recommended: 1600x600 · PNG, JPG, WebP</span>
+              <span className="text-[10px]">Recommended: 1600x600 · PNG, JPG, WebP · Max 2 MB</span>
             </button>
+            {uploadError && <p role="alert" className="text-xs text-red-400">{uploadError}</p>}
             <div className="pt-1">
               <label className="text-[10px] text-[var(--muted)] block mb-1.5 font-medium">Or paste an image URL:</label>
               <input

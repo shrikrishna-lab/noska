@@ -48,6 +48,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "types", "vite.config.js"],
-  "exclude": ["node_modules", "dist", "graphify-out", "Noska Onboarding", "supabase"]
+  "include": ["src/**/*", "types/**/*", "vite.config.js"],
+  "exclude": ["node_modules", "dist", "graphify-out", "Noska Onboarding", "supabase", "admin"]
 }

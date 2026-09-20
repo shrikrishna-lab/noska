@@ -2190,9 +2190,9 @@ export function UserDetail() {
   const profile = profileRows?.[0];
 
   const { data: subscriptions } = useUserSubscriptions(id, profile?.user_id ?? undefined);
-  const { data: chats } = useUserAiChats(profile?.user_id ?? undefined);
+  const { data: chats, refetch: refreshChats, isFetching: refreshingChats } = useUserAiChats(profile?.user_id ?? undefined);
   const { data: pages } = useUserPages(profile?.user_id ?? undefined);
-  const { data: audit } = useUserAuditDetail(profile?.user_id ?? undefined);
+  const { data: audit, refetch: refreshAudit, isFetching: refreshingAudit } = useUserAuditDetail(profile?.user_id ?? undefined);
   const { data: adminMatch } = useAdminMatchByEmail(profile?.email);
   const { data: bans } = useUserBans(profile?.user_id ?? undefined, profile?.email ?? undefined);
   const { data: sessions } = useUserSessions(profile?.user_id ?? undefined);
@@ -2299,6 +2299,15 @@ export function UserDetail() {
       <div className="flex items-center justify-between gap-4">
         <Button variant="ghost" size="sm" onClick={handleBack}>
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Users
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!profile.user_id || refreshingChats || refreshingAudit}
+          onClick={() => Promise.all([refreshChats(), refreshAudit()])}
+        >
+          <RefreshCcw className={`mr-1.5 h-4 w-4 ${refreshingChats || refreshingAudit ? "animate-spin" : ""}`} />
+          Refresh chats and activity
         </Button>
         {canManage && (
           <div className="flex gap-2">

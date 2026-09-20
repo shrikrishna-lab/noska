@@ -21,6 +21,10 @@ import {
   useUserNotificationOverview,
 } from "@/lib/userNotifications";
 import { formatRelativeTime } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { hasRole } from "@/lib/rbac";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NotificationPlatform } from "./NotificationPlatform";
 
 const SEVERITY_BADGE: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
   info: "secondary",
@@ -42,6 +46,8 @@ function Kpi({ label, value, hint }: { label: string; value: string | number; hi
 }
 
 function ComposerModal({ onClose }: { onClose: () => void }) {
+  const { user } = useAuth();
+  const canSend = hasRole(user, "admin");
   const send = useSendUserNotification();
   const confirm = useConfirmDialog();
   const [title, setTitle] = useState("");
@@ -82,8 +88,12 @@ function ComposerModal({ onClose }: { onClose: () => void }) {
   };
 
   const handleSubmit = async () => {
-    if (!title.trim()) return;
-    const userIds = userIdsText.split(/[\s,]+/).filter(Boolean);
+    if (!canSend || !title.trim() || submitting || (isTest && broadcast)) return;
+    const userIds = [...new Set(userIdsText.split(/[\s,]+/).filter(Boolean))];
+    if (userIds.length > 500) {
+      toast.error("Target at most 500 users per legacy send");
+      return;
+    }
     if (!broadcast && userIds.length === 0) {
       toast.error("Add at least one target user id");
       return;
@@ -183,7 +193,7 @@ function ComposerModal({ onClose }: { onClose: () => void }) {
                   <p className="text-xs text-muted-foreground">Off = target specific users by id or email.</p>
                 </div>
               </div>
-              <Switch checked={broadcast} onCheckedChange={setBroadcast} />
+              <Switch checked={broadcast} onCheckedChange={setBroadcast} disabled={isTest || submitting} />
             </div>
 
             {!broadcast && (
@@ -215,13 +225,13 @@ function ComposerModal({ onClose }: { onClose: () => void }) {
                   Labelled “[TEST]” in every client. Broadcasts are blocked in test mode — explicit targets only.
                 </p>
               </div>
-              <Switch checked={isTest} onCheckedChange={setIsTest} />
+              <Switch checked={isTest} disabled={submitting} onCheckedChange={(checked) => { setIsTest(checked); if (checked) setBroadcast(false); }} />
             </div>
 
             <Button
               className="w-full"
               onClick={() => void handleSubmit()}
-              disabled={!title.trim() || submitting || (!broadcast && userIdsText.split(/[\s,]+/).filter(Boolean).length === 0)}
+              disabled={!canSend || !title.trim() || submitting || (isTest && broadcast) || (!broadcast && userIdsText.split(/[\s,]+/).filter(Boolean).length === 0)}
             >
               {submitting ? "Sending…" : isTest ? "Send test notification" : "Send notification"}
             </Button>
@@ -233,6 +243,22 @@ function ComposerModal({ onClose }: { onClose: () => void }) {
 }
 
 export function UserNotifications() {
+  return <div className="space-y-6">
+    <PageHeader title="User Notifications" description="Monitor platform delivery outcomes or manage existing in-app sends" />
+    <Tabs defaultValue="operations">
+      <TabsList aria-label="Notification workflows">
+        <TabsTrigger value="operations">Platform operations</TabsTrigger>
+        <TabsTrigger value="legacy">Legacy sends</TabsTrigger>
+      </TabsList>
+      <TabsContent value="operations" className="mt-5"><NotificationPlatform /></TabsContent>
+      <TabsContent value="legacy" className="mt-5"><LegacyUserNotifications /></TabsContent>
+    </Tabs>
+  </div>;
+}
+
+function LegacyUserNotifications() {
+  const { user } = useAuth();
+  const canSend = hasRole(user, "admin");
   const { data, isLoading, error } = useUserNotificationOverview();
   const deleteNotification = useDeleteUserNotification();
   const confirm = useConfirmDialog();
@@ -241,6 +267,7 @@ export function UserNotifications() {
   const recent = useMemo(() => data?.recent ?? [], [data]);
 
   const handleDelete = async (id: string, title: string) => {
+    if (!canSend) return;
     const ok = await confirm.confirm({
       title: "Delete notification?",
       description: `“${title}” is removed from every recipient's Notification Center, along with its read receipts. This is audited.`,
@@ -272,7 +299,7 @@ export function UserNotifications() {
         title="User Notifications"
         description="Deliver, monitor and manage notifications in your users' Notification Centers"
         actions={
-          <Button onClick={() => setComposing(true)}>
+          <Button disabled={!canSend} onClick={() => setComposing(true)}>
             <Send className="mr-2 h-4 w-4" /> Send notification
           </Button>
         }
@@ -340,6 +367,7 @@ export function UserNotifications() {
                           variant="ghost"
                           size="icon"
                           title="Delete"
+                          disabled={!canSend || deleteNotification.isPending}
                           onClick={() => void handleDelete(row.id, row.title)}
                         >
                           <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />

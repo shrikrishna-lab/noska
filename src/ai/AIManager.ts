@@ -19,7 +19,7 @@
  *   // To cancel: controller.abort();
  */
 
-import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, type AIProvider, type ProviderSendOpts, type NativeToolSpec } from './providers.js';
+import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, type AIProvider, type ProviderSendOpts, type NativeToolSpec, type TokenUsageInfo } from './providers.js';
 import { buildContext, buildMinimalContext } from './ContextBuilder.js';
 import { buildAgentPrompt, getAgent } from './agents.js';
 import { initializeMemory, getMemory } from './memory.js';
@@ -106,6 +106,16 @@ interface AISendConversationOpts {
 interface AIStreamOpts extends AISendOpts {
   messages?: AIConversationMessage[];
   onChunk?: (partial: string) => void;
+  /** Native function-calling schemas (providers that support streaming tools). */
+  tools?: NativeToolSpec[];
+  /** Token usage reporter — real numbers when the provider reports them,
+   * estimates otherwise. */
+  onUsage?: (usage: TokenUsageInfo) => void;
+}
+
+/** Rough token estimate (~4 chars/token) for providers that don't report usage. */
+function estimateTokens(text: string): number {
+  return Math.ceil((text || "").length / 4);
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -612,7 +622,7 @@ class AIManager {
    * the <<TOOL:name>> text protocol. If a provider rejects the tools field
    * (HTTP 400), the call retries once without it (text-protocol fallback).
    */
-  async sendRaw({ system, messages, maxTokens, effort, temperature, providerId, modelId, signal, tools }: {
+  async sendRaw({ system, messages, maxTokens, effort, temperature, providerId, modelId, signal, tools, onUsage }: {
     system?: string;
     messages: Array<{ role: string; content: string }>;
     maxTokens?: number;
@@ -622,6 +632,7 @@ class AIManager {
     modelId?: string | null;
     signal?: AbortSignal;
     tools?: NativeToolSpec[];
+    onUsage?: (usage: TokenUsageInfo) => void;
   }): Promise<string> {
     const primaryPid = providerId || this.config.activeProvider;
     if (!primaryPid) throw configError("Noska AI");
@@ -646,6 +657,7 @@ class AIManager {
           temperature,
           signal,
           tools,
+          onUsage,
         }).catch((err: unknown) => {
           if (tools?.length && isNativeToolsRejection(err)) {
             return provider.send({
@@ -658,6 +670,7 @@ class AIManager {
               effort,
               temperature,
               signal,
+              onUsage,
             });
           }
           throw err;
@@ -799,7 +812,7 @@ class AIManager {
   /**
    * Stream an AI response with cancellation, retry, and intelligence engine
    */
-  async stream({ system, prompt, messages, page, pages, agent, maxTokens, effort, thinking, temperature, onChunk, signal }: AIStreamOpts) {
+  async stream({ system, prompt, messages, page, pages, agent, maxTokens, effort, thinking, temperature, onChunk, signal, tools, onUsage }: AIStreamOpts) {
     let provider = this.getActiveProvider();
     let providerConfig = provider ? (this.config.providers[provider.id] || {}) : {};
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
@@ -901,6 +914,10 @@ class AIManager {
       try {
         let full = "";
         let firstChunk = true;
+        let providerReportedUsage = false;
+        const usageSink = onUsage
+          ? (u: TokenUsageInfo) => { providerReportedUsage = true; onUsage(u); }
+          : undefined;
         const iterator = provider.stream({
           apiKey: providerConfig.apiKey,
           baseUrl: providerConfig.baseUrl || provider.baseUrl,
@@ -912,6 +929,8 @@ class AIManager {
           thinking,
           temperature,
           signal,
+          tools,
+          onUsage: usageSink,
         });
         for await (const chunk of iterator) {
           if (signal?.aborted) break;
@@ -921,6 +940,13 @@ class AIManager {
           }
           full = chunk; // streamEventsToText yields accumulated text
           onChunk?.(full);
+        }
+        // Providers whose parsers don't surface usage get an honest estimate.
+        if (onUsage && !providerReportedUsage) {
+          onUsage({
+            promptTokens: estimateTokens(`${fullSystem}${JSON.stringify(apiMessages)}`),
+            completionTokens: estimateTokens(full),
+          });
         }
 
         // Update conversation state with response
@@ -955,6 +981,10 @@ class AIManager {
             try {
               const fbModel = this._resolveValidModel(fallbackProvider);
               let full = "";
+              let fbReportedUsage = false;
+              const fbUsageSink = onUsage
+                ? (u: TokenUsageInfo) => { fbReportedUsage = true; onUsage(u); }
+                : undefined;
               const fbIterator = fallbackProvider.stream({
                 apiKey: fallbackConfig.apiKey,
                 baseUrl: fallbackConfig.baseUrl || fallbackProvider.baseUrl,
@@ -966,11 +996,19 @@ class AIManager {
                 thinking,
                 temperature,
                 signal,
+                tools,
+                onUsage: fbUsageSink,
               });
               for await (const chunk of fbIterator) {
                 if (signal?.aborted) break;
                 full = chunk;
                 onChunk?.(full);
+              }
+              if (onUsage && !fbReportedUsage) {
+                onUsage({
+                  promptTokens: estimateTokens(`${fullSystem}${JSON.stringify(apiMessages)}`),
+                  completionTokens: estimateTokens(full),
+                });
               }
               if (full) {
                 this._conversationState.updateFromAIResponse(full);

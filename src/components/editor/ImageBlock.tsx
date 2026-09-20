@@ -53,8 +53,25 @@ interface ImageBlockProps {
 }
 
 export default function ImageBlock({
-  block, onPatch, onDelete, isLocked, pageId, pages, onNavigate, onToast
+  block: persistedBlock, onPatch: persistPatch, onDelete, isLocked, pageId, pages, onNavigate, onToast
 }: ImageBlockProps) {
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const block = localPreview ? { ...persistedBlock, text: localPreview } : persistedBlock;
+  const onPatch = (patch: Partial<ImageBlockData>) => {
+    if (typeof patch.text === "string" && /^\s*blob:/i.test(patch.text)) {
+      setLocalPreview(patch.text.trim());
+      onToast?.("Image is only available locally. Upload it again to save it.");
+      return;
+    }
+    if (patch.text !== undefined) setLocalPreview(null);
+    persistPatch(patch);
+  };
+  useEffect(() => {
+    setLocalPreview(null);
+  }, [persistedBlock.id, persistedBlock.text]);
+  useEffect(() => () => {
+    if (localPreview) URL.revokeObjectURL(localPreview);
+  }, [localPreview]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [size, setSize] = useState(block.imageSize || "large");
   const [align, setAlign] = useState(block.imageAlign || "center");
@@ -566,7 +583,7 @@ function LinkTab({ onSelect }: LinkTabProps) {
 
   const handleUrlChange = (value: string) => {
     setUrl(value);
-    if (value && /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(value)) {
+    if (value && !/^\s*blob:/i.test(value) && /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(value)) {
       setPreview(value);
     } else {
       setPreview(null);
@@ -584,6 +601,7 @@ function LinkTab({ onSelect }: LinkTabProps) {
           onKeyDown={(e) => {
             if (e.key === "Enter" && url.trim()) {
               const clean = url.trim();
+              if (/^blob:/i.test(clean)) return;
               if (!/^https?:\/\//i.test(clean)) {
                 onSelect(`https://${clean}`);
               } else {

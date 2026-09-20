@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { realtimeCollab } from '../../lib/realtimeCollab';
 import {
@@ -14,7 +14,9 @@ import { joinCollabSession, leaveCollabSession, updateSessionStatus, getActiveSe
 import { logActivity } from './activity';
 import { createVersion, getVersions, canCreateVersion } from './versions';
 import { getComments, addComment, resolveComment, unresolveComment, deleteComment } from './comments';
-import { getNotifications, getUnreadCount, markAsRead, markAllAsRead, sendNotification } from './notifications';
+import { sendNotification } from './notifications';
+import { useNotificationPlatform } from '../notifications/Provider';
+import { isArchived, isUnread } from '../notifications/types';
 import type { DocumentPermission, CollabRole, CollabSession, VersionSnapshot, PageComment, CollabNotification, CollabUser } from './types';
 import type { Block } from '../../../types/blocks';
 
@@ -272,18 +274,89 @@ export function useAutoVersion(pageId: string | null, userId: string | null, use
   }, [pageId, userId, userName, blocks]);
 }
 
+function useCoalescedRefresh<T>(identity: string | null, load: () => Promise<T>, apply: (data: T) => void, reset: () => void) {
+  const current = useRef<object | null>(null);
+  const controller = useMemo(() => {
+    let active = false;
+    let generation = 0;
+    let queued = false;
+    let pending: Promise<void> | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const token = {};
+    const isCurrent = () => active && current.current === token;
+    const refresh = (): Promise<void> => {
+      if (!identity || !isCurrent()) return Promise.resolve();
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      queued = true;
+      if (pending) return pending;
+      pending = (async () => {
+        while (queued && isCurrent()) {
+          queued = false;
+          try {
+            const requestGeneration = generation;
+            const data = await load();
+            if (isCurrent() && generation === requestGeneration) apply(data);
+          } catch (err) {
+            if (isCurrent()) console.warn("Collaboration refresh failed:", err);
+          }
+        }
+      })().finally(() => { pending = null; });
+      return pending;
+    };
+    const schedule = () => {
+      if (!identity || !isCurrent()) return;
+      if (pending) {
+        queued = true;
+      } else if (timer === null) {
+        timer = setTimeout(() => {
+          timer = null;
+          void refresh();
+        }, 100);
+      }
+    };
+    return {
+      token,
+      refresh,
+      schedule,
+      start: () => {
+        active = true;
+        reset();
+        void refresh();
+      },
+      stop: () => {
+        active = false;
+        generation++;
+        queued = false;
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+      },
+    };
+  }, [identity, load, apply, reset]);
+  current.current = controller.token;
+  useEffect(() => {
+    controller.start();
+    return controller.stop;
+  }, [controller]);
+  return controller;
+}
+
 export function useComments(pageId: string | null) {
   const [comments, setComments] = useState<PageComment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    if (!pageId) { setLoading(false); return; }
-    const data = await getComments(pageId);
+  const load = useCallback(() => getComments(pageId!), [pageId]);
+  const apply = useCallback((data: PageComment[]) => {
     setComments(data);
     setLoading(false);
+  }, []);
+  const reset = useCallback(() => {
+    setComments([]);
+    setLoading(Boolean(pageId));
   }, [pageId]);
-
-  useEffect(() => { refresh(); }, [refresh]);
+  const { refresh, schedule } = useCoalescedRefresh(pageId, load, apply, reset);
 
   // Live updates: other collaborators' comments/resolve states appear
   // instantly instead of only after a panel remount.
@@ -294,11 +367,11 @@ export function useComments(pageId: string | null) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'page_comments', filter: `page_id=eq.${pageId}` },
-        () => { refresh(); },
+        schedule,
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [pageId, refresh]);
+  }, [pageId, schedule]);
 
   const add = useCallback(async (userId: string, userName: string, content: string, blockId?: string, userAvatar?: string) => {
     if (!pageId) return null;
@@ -349,47 +422,15 @@ export function useVersions(pageId: string | null) {
   return { versions, loading, save, refresh };
 }
 
-export function useNotifications(userId: string | null) {
-  const [notifications, setNotifications] = useState<CollabNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  const refresh = useCallback(async () => {
-    if (!userId) return;
-    const [n, c] = await Promise.all([getNotifications(userId), getUnreadCount(userId)]);
-    setNotifications(n);
-    setUnreadCount(c);
-  }, [userId]);
-
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 30_000);
-    // Push-based refresh when someone mentions/replies/invites this user
-    const channel = supabase
-      .channel(`notifications:${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'collab_notifications', filter: `user_id=eq.${userId}` },
-        () => { refresh(); },
-      )
-      .subscribe();
-    return () => {
-      clearInterval(interval);
-      supabase.removeChannel(channel);
-    };
-  }, [refresh, userId]);
-
-  const markRead = useCallback(async (id: string) => {
-    await markAsRead(id);
-    await refresh();
-  }, [refresh]);
-
-  const markAllRead = useCallback(async () => {
-    if (!userId) return;
-    await markAllAsRead(userId);
-    await refresh();
-  }, [userId, refresh]);
-
-  return { notifications, unreadCount, markRead, markAllRead, refresh };
+export function useNotifications(_userId: string | null) {
+  const platform = useNotificationPlatform();
+  const notifications: CollabNotification[] = platform.notifications.filter(n => !isArchived(n)).map(n => ({
+    id: n.id, user_id: n.user_id, type: n.type, title: n.title, body: n.body || n.message || '',
+    page_id: n.page_id || undefined, comment_id: n.comment_id || (typeof n.metadata?.comment_id === 'string' ? n.metadata.comment_id : undefined),
+    from_user_id: n.actor_id || undefined, from_user_name: typeof n.metadata?.actor_name === 'string' ? n.metadata.actor_name : undefined,
+    read: !isUnread(n), created_at: n.created_at,
+  }));
+  return { ...platform, notifications };
 }
 
 /**

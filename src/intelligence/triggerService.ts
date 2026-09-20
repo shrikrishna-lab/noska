@@ -37,35 +37,96 @@ const state: TriggerServiceState = {
 };
 
 const SCHEDULE_TICK_MS = 60_000;
+let generation = 0;
+let unsubscribe: (() => void) | null = null;
+let refreshInFlight: Promise<void> | null = null;
+let refreshDirty = false;
+let definitionsGeneration: number | null = null;
+let pollingGeneration: number | null = null;
+
+function isVisible(): boolean {
+  return typeof document === "undefined" || document.visibilityState !== "hidden";
+}
+
+async function pollDefinitions(): Promise<void> {
+  if (!state.started || !isVisible() || pollingGeneration === generation) return;
+  const currentGeneration = generation;
+  pollingGeneration = currentGeneration;
+  try {
+    await refreshDefinitions();
+    while (state.started && generation === currentGeneration && refreshInFlight) await refreshInFlight;
+    if (state.started && generation === currentGeneration && definitionsGeneration === currentGeneration && !refreshDirty && isVisible()) evaluateSchedules();
+  } finally {
+    if (pollingGeneration === currentGeneration) pollingGeneration = null;
+  }
+}
+
+function handleVisibilityChange(): void {
+  if (isVisible()) void pollDefinitions();
+}
+
+export function stopTriggerService(): void {
+  state.started = false;
+  generation++;
+  refreshDirty = false;
+  definitionsGeneration = null;
+  if (state.timer !== null) clearInterval(state.timer);
+  state.timer = null;
+  unsubscribe?.();
+  unsubscribe = null;
+  if (typeof document !== "undefined") document.removeEventListener("visibilitychange", handleVisibilityChange);
+  state.agents = [];
+  state.automations = [];
+  state.getContext = null;
+  state.notify = null;
+  pollingGeneration = null;
+}
 
 /** Wire the service to app data. Call after sign-in / pages hydration. */
 export function startTriggerService(options: {
   getContext: TriggerServiceState["getContext"];
   onNotify?: (message: string) => void;
-}): void {
+}): () => void {
   state.getContext = options.getContext;
   state.notify = options.onNotify || null;
 
-  // Load definitions (fire-and-forget; refreshed every schedule tick)
-  void refreshDefinitions();
-
   if (!state.started) {
     state.started = true;
-    subscribeWorkspaceEvents(handleWorkspaceEvent);
-    state.timer = setInterval(() => {
-      void refreshDefinitions().then(() => evaluateSchedules());
-    }, SCHEDULE_TICK_MS);
+    generation++;
+    unsubscribe = subscribeWorkspaceEvents(handleWorkspaceEvent);
+    state.timer = setInterval(() => { void pollDefinitions(); }, SCHEDULE_TICK_MS);
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", handleVisibilityChange);
+    void pollDefinitions();
   }
+  const currentGeneration = generation;
+  return () => {
+    if (generation === currentGeneration) stopTriggerService();
+  };
 }
 
-export async function refreshDefinitions(): Promise<void> {
-  try {
-    const [agents, automations] = await Promise.all([fetchAgents(), fetchAutomations()]);
-    state.agents = agents;
-    state.automations = automations;
-  } catch (err) {
-    console.warn("[noska-triggers] failed to refresh definitions", err);
-  }
+export function refreshDefinitions(): Promise<void> {
+  if (!state.started) return Promise.resolve();
+  refreshDirty = true;
+  definitionsGeneration = null;
+  if (refreshInFlight) return refreshInFlight;
+  if (!isVisible()) return Promise.resolve();
+  const request = (async () => {
+    while (state.started && isVisible() && refreshDirty) {
+      const currentGeneration = generation;
+      refreshDirty = false;
+      try {
+        const [agents, automations] = await Promise.all([fetchAgents(), fetchAutomations()]);
+        if (!state.started || generation !== currentGeneration || refreshDirty) continue;
+        state.agents = agents;
+        state.automations = automations;
+        definitionsGeneration = currentGeneration;
+      } catch (err) {
+        console.warn("[noska-triggers] failed to refresh definitions", err);
+      }
+    }
+  })();
+  refreshInFlight = request.finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
 }
 
 export function getLoadedDefinitions(): { agents: NoskaAgent[]; automations: NoskaAutomation[] } {

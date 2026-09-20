@@ -61,13 +61,7 @@ interface ChatPanelMessage {
   status?: 'streaming' | 'completed' | 'cancelled' | 'error';
 }
 
-interface ToolCallResult {
-  name: string;
-  ok: boolean;
-  result?: { count?: number;[key: string]: unknown };
-  error?: string;
-  params: Record<string, unknown>;
-}
+type ToolCallResult = Awaited<ReturnType<typeof executeAllToolCalls>>[number];
 
 interface AIPanelProps {
   open: boolean;
@@ -211,27 +205,36 @@ export default function AIPanel({
 
   // Presence listener
   useEffect(() => {
-    if (!page?.id || !realtimeCollab.isJoined()) return;
+    setPresenceUsers([]);
+    if (!open || !page?.id || !realtimeCollab.isJoined()) return;
+    const joinedPageId = page.id;
     const unsubs = [
-      realtimeCollab.on("presence:sync", ({ users }) => setPresenceUsers(users)),
-      realtimeCollab.on("presence:join", ({ user }) =>
+      realtimeCollab.on("presence:sync", ({ pageId, users }) => {
+        if (pageId === joinedPageId) setPresenceUsers(users);
+      }),
+      realtimeCollab.on("presence:join", ({ pageId, user }) => {
+        if (pageId !== joinedPageId) return;
         setPresenceUsers((prev) =>
           prev.some((u) => (u as { id?: string }).id === user.id) ? prev : [...prev, user]
-        )
-      ),
-      realtimeCollab.on("presence:leave", ({ userId }) =>
+        );
+      }),
+      realtimeCollab.on("presence:leave", ({ pageId, userId }) => {
+        if (pageId !== joinedPageId) return;
         setPresenceUsers((prev) =>
           prev.filter(
             (u) =>
               (u as { userId?: string; id?: string }).userId !== userId &&
               (u as { userId?: string; id?: string }).id !== userId
           )
-        )
-      )
+        );
+      })
     ];
-    realtimeCollab.joinPage(page.id);
-    return () => unsubs.forEach((fn) => fn());
-  }, [page?.id]);
+    realtimeCollab.joinPage(joinedPageId);
+    return () => {
+      unsubs.forEach((fn) => fn());
+      realtimeCollab.leavePage(joinedPageId);
+    };
+  }, [page?.id, open]);
 
   // Save API Key / Local Provider handler
   const handleSaveApiKey = async () => {
@@ -487,7 +490,7 @@ export default function AIPanel({
                 aiProvider: providerName,
                 aiModel: activeSelectedModel,
                 aiLatencyMs: latencyMs,
-                detail: `${r.name}: ${r.result?.count || 0} blocks`
+                detail: `${r.name}: ${r.result && typeof r.result === "object" && "count" in r.result && typeof r.result.count === "number" ? r.result.count : 0} blocks`
               });
             }
           }

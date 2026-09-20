@@ -30,6 +30,9 @@ export default defineConfig({
         ? `noska@${process.env.VITE_APP_VERSION}`
         : undefined,
       telemetry: false,
+      sourcemaps: {
+        filesToDeleteAfterUpload: ["dist/assets/**/*.map", "dist/control/assets/**/*.map"],
+      },
     }),
   ],
   resolve: {

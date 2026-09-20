@@ -20,7 +20,7 @@ import {
   Tag
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
-import type { Page } from "../../lib/supabaseService";
+import { optimizeImage, type Page } from "../../lib/supabaseService";
 import { emojis } from "../../utils/helpers";
 import {
   EMOJI_BY_CATEGORY,
@@ -59,6 +59,7 @@ export default function PageIconBlock({
   const [searchQuery, setSearchQuery] = useState("");
   const [importedCategoryDraft, setImportedCategoryDraft] = useState("");
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [importedIcons, setImportedIcons] = useState<ImportedIcon[]>(getImportedIcons());
   const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const iconRef = useRef<HTMLDivElement>(null);
@@ -183,25 +184,34 @@ export default function PageIconBlock({
     onPagePatch({ icon: random });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     const catName = importedCategoryDraft.trim() || "Custom";
+    setUploadError("");
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const url = ev.target?.result as string;
-        const newIcon = addImportedIcon({
-          url,
-          name: file.name.replace(/\.[^/.]+$/, ""),
-          category: catName
+    for (const file of files) {
+      if (!file.type.startsWith("image/") || file.size > 2 * 1024 * 1024) {
+        setUploadError("Choose image files no larger than 2 MB.");
+        continue;
+      }
+      try {
+        const optimized = await optimizeImage(file, 512);
+        const url = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.onabort = () => reject(new Error("Image read cancelled"));
+          reader.readAsDataURL(optimized);
         });
+        if (/^\s*blob:/i.test(url)) throw new Error("Temporary image URL");
+        addImportedIcon({ url, name: file.name.replace(/\.[^/.]+$/, ""), category: catName });
         setImportedIcons(getImportedIcons());
         onPagePatch({ icon: url });
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch {
+        setUploadError("Unable to import image. Please try again.");
+      }
+    }
 
     setImportedCategoryDraft("");
     setShowImportDialog(false);
@@ -512,6 +522,8 @@ export default function PageIconBlock({
                     </div>
                   )}
 
+                  {uploadError && <p role="alert" className="text-xs text-red-400">{uploadError}</p>}
+
                   {/* Category Pills */}
                   {iconMode === "emojis" && (
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[10.5px]">
@@ -615,6 +627,10 @@ export default function PageIconBlock({
                           <div key={item.id} className="relative group/imp">
                             <button
                               onClick={() => {
+                                if (/^\s*blob:/i.test(item.url)) {
+                                  setUploadError("Temporary image URLs cannot be saved. Import the image again.");
+                                  return;
+                                }
                                 onPagePatch({ icon: item.url });
                                 onClose();
                               }}

@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase, supabaseAnon, setClerkSessionToken } from "../../lib/supabase";
-import { upsertUserProfile, fetchUserProfile, fetchPages, type Page } from "../../lib/supabaseService";
+import { upsertUserProfile, fetchUserProfile, hasPages } from "../../lib/supabaseService";
 import { capture, identifyUser } from "../../lib/posthog";
 import { setSentryUser } from "../../lib/sentry";
 import { clearOAuthIntent } from "../../lib/oauthIntent";
@@ -124,14 +124,12 @@ export function AuthCallbackScreen() {
           existingProfile = await fetchUserProfile(user.id);
         } catch {}
 
-        let existingPages: Page[] = [];
-        try {
-          existingPages = await fetchPages(user.id);
-        } catch {}
-
-        const isReturningUser = Boolean(
-          existingProfile?.onboarding_complete || (existingPages && existingPages.length > 0)
-        );
+        let isReturningUser = existingProfile?.onboarding_complete === true;
+        if (!isReturningUser) {
+          try {
+            isReturningUser = await hasPages(user.id);
+          } catch {}
+        }
 
         try {
           await upsertUserProfile({

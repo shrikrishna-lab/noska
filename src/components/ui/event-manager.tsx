@@ -80,6 +80,7 @@ export interface Event {
   wordCount?: number;
   isCreatedPage?: boolean;
   stressScore?: number; // 1-10 cognitive load
+  priority?: "urgent" | "high" | "medium" | "low";
   subtasks?: { id: string; title: string; done: boolean }[];
   recurring?: boolean;
 }
@@ -207,103 +208,103 @@ function getEventTheme(color: string) {
 // ── 5x7 DOT MATRIX FONT DICTIONARY (IMAGE 2 INSPIRATION) ──
 const DOT_MATRIX_FONT: Record<string, number[][]> = {
   "0": [
-    [0,1,1,1,0],
-    [1,0,0,0,1],
-    [1,0,0,1,1],
-    [1,0,1,0,1],
-    [1,1,0,0,1],
-    [1,0,0,0,1],
-    [0,1,1,1,0]
+    [0, 1, 1, 1, 0],
+    [1, 0, 0, 0, 1],
+    [1, 0, 0, 1, 1],
+    [1, 0, 1, 0, 1],
+    [1, 1, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [0, 1, 1, 1, 0]
   ],
   "1": [
-    [0,0,1,0,0],
-    [0,1,1,0,0],
-    [0,0,1,0,0],
-    [0,0,1,0,0],
-    [0,0,1,0,0],
-    [0,0,1,0,0],
-    [0,1,1,1,0]
+    [0, 0, 1, 0, 0],
+    [0, 1, 1, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 1, 1, 1, 0]
   ],
   "2": [
-    [0,1,1,1,0],
-    [1,0,0,0,1],
-    [0,0,0,0,1],
-    [0,0,0,1,0],
-    [0,0,1,0,0],
-    [0,1,0,0,0],
-    [1,1,1,1,1]
+    [0, 1, 1, 1, 0],
+    [1, 0, 0, 0, 1],
+    [0, 0, 0, 0, 1],
+    [0, 0, 0, 1, 0],
+    [0, 0, 1, 0, 0],
+    [0, 1, 0, 0, 0],
+    [1, 1, 1, 1, 1]
   ],
   "3": [
-    [0,1,1,1,0],
-    [1,0,0,0,1],
-    [0,0,0,0,1],
-    [0,0,1,1,0],
-    [0,0,0,0,1],
-    [1,0,0,0,1],
-    [0,1,1,1,0]
+    [0, 1, 1, 1, 0],
+    [1, 0, 0, 0, 1],
+    [0, 0, 0, 0, 1],
+    [0, 0, 1, 1, 0],
+    [0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [0, 1, 1, 1, 0]
   ],
   "4": [
-    [0,0,0,1,0],
-    [0,0,1,1,0],
-    [0,1,0,1,0],
-    [1,0,0,1,0],
-    [1,1,1,1,1],
-    [0,0,0,1,0],
-    [0,0,0,1,0]
+    [0, 0, 0, 1, 0],
+    [0, 0, 1, 1, 0],
+    [0, 1, 0, 1, 0],
+    [1, 0, 0, 1, 0],
+    [1, 1, 1, 1, 1],
+    [0, 0, 0, 1, 0],
+    [0, 0, 0, 1, 0]
   ],
   "5": [
-    [1,1,1,1,1],
-    [1,0,0,0,0],
-    [1,1,1,1,0],
-    [0,0,0,0,1],
-    [0,0,0,0,1],
-    [1,0,0,0,1],
-    [0,1,1,1,0]
+    [1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0],
+    [0, 0, 0, 0, 1],
+    [0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [0, 1, 1, 1, 0]
   ],
   "6": [
-    [0,1,1,1,0],
-    [1,0,0,0,0],
-    [1,1,1,1,0],
-    [1,0,0,0,1],
-    [1,0,0,0,1],
-    [1,0,0,0,1],
-    [0,1,1,1,0]
+    [0, 1, 1, 1, 0],
+    [1, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0],
+    [1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [0, 1, 1, 1, 0]
   ],
   "7": [
-    [1,1,1,1,1],
-    [0,0,0,0,1],
-    [0,0,0,1,0],
-    [0,0,1,0,0],
-    [0,1,0,0,0],
-    [0,1,0,0,0],
-    [0,1,0,0,0]
+    [1, 1, 1, 1, 1],
+    [0, 0, 0, 0, 1],
+    [0, 0, 0, 1, 0],
+    [0, 0, 1, 0, 0],
+    [0, 1, 0, 0, 0],
+    [0, 1, 0, 0, 0],
+    [0, 1, 0, 0, 0]
   ],
   "8": [
-    [0,1,1,1,0],
-    [1,0,0,0,1],
-    [1,0,0,0,1],
-    [0,1,1,1,0],
-    [1,0,0,0,1],
-    [1,0,0,0,1],
-    [0,1,1,1,0]
+    [0, 1, 1, 1, 0],
+    [1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [0, 1, 1, 1, 0],
+    [1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [0, 1, 1, 1, 0]
   ],
   "9": [
-    [0,1,1,1,0],
-    [1,0,0,0,1],
-    [1,0,0,0,1],
-    [0,1,1,1,1],
-    [0,0,0,0,1],
-    [0,0,0,0,1],
-    [0,1,1,1,0]
+    [0, 1, 1, 1, 0],
+    [1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [0, 1, 1, 1, 1],
+    [0, 0, 0, 0, 1],
+    [0, 0, 0, 0, 1],
+    [0, 1, 1, 1, 0]
   ],
   "%": [
-    [1,1,0,0,1],
-    [1,1,0,1,0],
-    [0,0,1,0,0],
-    [0,1,0,0,0],
-    [0,0,1,0,0],
-    [0,1,0,1,1],
-    [1,0,0,1,1]
+    [1, 1, 0, 0, 1],
+    [1, 1, 0, 1, 0],
+    [0, 0, 1, 0, 0],
+    [0, 1, 0, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 1, 0, 1, 1],
+    [1, 0, 0, 1, 1]
   ]
 };
 
@@ -318,48 +319,48 @@ export const DotMatrixNumber: React.FC<{
   className,
   dotColor
 }) => {
-  const str = String(value);
-  const dotSize = size === "sm" ? 2.4 : size === "lg" ? 4.4 : 3.2;
-  const gap = size === "sm" ? 1.4 : size === "lg" ? 2.2 : 1.8;
+    const str = String(value);
+    const dotSize = size === "sm" ? 2.4 : size === "lg" ? 4.4 : 3.2;
+    const gap = size === "sm" ? 1.4 : size === "lg" ? 2.2 : 1.8;
 
-  return (
-    <div className={cn("inline-flex items-center gap-2 select-none", className)}>
-      {str.split("").map((char, charIdx) => {
-        const matrix = DOT_MATRIX_FONT[char] || DOT_MATRIX_FONT["0"];
-        return (
-          <div
-            key={charIdx}
-            className="grid"
-            style={{
-              gridTemplateColumns: `repeat(5, ${dotSize}px)`,
-              gridTemplateRows: `repeat(7, ${dotSize}px)`,
-              gap: `${gap}px`
-            }}
-          >
-            {matrix.flatMap((row, r) =>
-              row.map((active, c) => (
-                <div
-                  key={`${r}-${c}`}
-                  className={cn(
-                    "rounded-full transition-all duration-200",
-                    active
-                      ? (dotColor ? "" : "bg-neutral-900 dark:bg-white") + " scale-100 shadow-[0_0_2px_rgba(0,0,0,0.4)]"
-                      : "bg-neutral-300/30 dark:bg-neutral-700/30 scale-75 opacity-20"
-                  )}
-                  style={{
-                    width: `${dotSize}px`,
-                    height: `${dotSize}px`,
-                    backgroundColor: active && dotColor ? dotColor : undefined
-                  }}
-                />
-              ))
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
+    return (
+      <div className={cn("inline-flex items-center gap-2 select-none", className)}>
+        {str.split("").map((char, charIdx) => {
+          const matrix = DOT_MATRIX_FONT[char] || DOT_MATRIX_FONT["0"];
+          return (
+            <div
+              key={charIdx}
+              className="grid"
+              style={{
+                gridTemplateColumns: `repeat(5, ${dotSize}px)`,
+                gridTemplateRows: `repeat(7, ${dotSize}px)`,
+                gap: `${gap}px`
+              }}
+            >
+              {matrix.flatMap((row, r) =>
+                row.map((active, c) => (
+                  <div
+                    key={`${r}-${c}`}
+                    className={cn(
+                      "rounded-full transition-all duration-200",
+                      active
+                        ? (dotColor ? "" : "bg-neutral-900 dark:bg-white") + " scale-100 shadow-[0_0_2px_rgba(0,0,0,0.4)]"
+                        : "bg-neutral-300/30 dark:bg-neutral-700/30 scale-75 opacity-20"
+                    )}
+                    style={{
+                      width: `${dotSize}px`,
+                      height: `${dotSize}px`,
+                      backgroundColor: active && dotColor ? dotColor : undefined
+                    }}
+                  />
+                ))
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
 export const DotSpectrumBar: React.FC<{
   percentage?: number;
@@ -374,45 +375,45 @@ export const DotSpectrumBar: React.FC<{
   rows = 5,
   className
 }) => {
-  const cols = totalCols;
-  const activeCols = explicitActiveCols !== undefined
-    ? Math.max(0, Math.min(cols, explicitActiveCols))
-    : Math.max(2, Math.min(cols, Math.round((percentage / 100) * cols)));
+    const cols = totalCols;
+    const activeCols = explicitActiveCols !== undefined
+      ? Math.max(0, Math.min(cols, explicitActiveCols))
+      : Math.max(2, Math.min(cols, Math.round((percentage / 100) * cols)));
 
-  const getDotColor = (colIdx: number) => {
-    const ratio = colIdx / cols;
-    if (ratio < 0.25) return "#10b981"; // Soft Emerald
-    if (ratio < 0.5) return "#06b6d4";  // Soft Cyan
-    if (ratio < 0.75) return "#0ea5e9"; // Soft Sky
-    return "#6366f1";                   // Soft Indigo
+    const getDotColor = (colIdx: number) => {
+      const ratio = colIdx / cols;
+      if (ratio < 0.25) return "#10b981"; // Soft Emerald
+      if (ratio < 0.5) return "#06b6d4";  // Soft Cyan
+      if (ratio < 0.75) return "#0ea5e9"; // Soft Sky
+      return "#6366f1";                   // Soft Indigo
+    };
+
+    return (
+      <div className={cn("flex flex-col gap-1 select-none", className)}>
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="flex items-center gap-1">
+            {Array.from({ length: cols }).map((_, c) => {
+              const isActive = c < activeCols;
+              const color = getDotColor(c);
+              return (
+                <div
+                  key={c}
+                  className={cn(
+                    "size-1.5 rounded-full transition-all duration-300",
+                    isActive ? "scale-100 opacity-100 shadow-[0_0_2px_currentColor]" : "scale-75 opacity-20 bg-neutral-300 dark:bg-neutral-700"
+                  )}
+                  style={{
+                    backgroundColor: isActive ? color : undefined,
+                    color: isActive ? color : undefined
+                  }}
+                />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
   };
-
-  return (
-    <div className={cn("flex flex-col gap-1 select-none", className)}>
-      {Array.from({ length: rows }).map((_, r) => (
-        <div key={r} className="flex items-center gap-1">
-          {Array.from({ length: cols }).map((_, c) => {
-            const isActive = c < activeCols;
-            const color = getDotColor(c);
-            return (
-              <div
-                key={c}
-                className={cn(
-                  "size-1.5 rounded-full transition-all duration-300",
-                  isActive ? "scale-100 opacity-100 shadow-[0_0_2px_currentColor]" : "scale-75 opacity-20 bg-neutral-300 dark:bg-neutral-700"
-                )}
-                style={{
-                  backgroundColor: isActive ? color : undefined,
-                  color: isActive ? color : undefined
-                }}
-              />
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-};
 
 export function EventManager({
   events: initialEvents = [],
@@ -787,8 +788,8 @@ export function EventManager({
       .filter(e => {
         const ed = new Date(e.startTime);
         return ed.getDate() === targetDate.getDate() &&
-               ed.getMonth() === targetDate.getMonth() &&
-               ed.getFullYear() === targetDate.getFullYear();
+          ed.getMonth() === targetDate.getMonth() &&
+          ed.getFullYear() === targetDate.getFullYear();
       })
       .map(e => ({
         ...e,
@@ -1048,8 +1049,8 @@ export function EventManager({
     return events.filter(e => {
       const ed = new Date(e.startTime);
       const isDayMatch = ed.getDate() === targetDate.getDate() &&
-                         ed.getMonth() === targetDate.getMonth() &&
-                         ed.getFullYear() === targetDate.getFullYear();
+        ed.getMonth() === targetDate.getMonth() &&
+        ed.getFullYear() === targetDate.getFullYear();
       if (!isDayMatch) return false;
       if (scheduleColorFilter && !e.color?.toLowerCase().includes(scheduleColorFilter.toLowerCase())) {
         return false;
@@ -2531,8 +2532,8 @@ export function EventManager({
                         {rebalanceStrategy === "circadian"
                           ? `🌿 Injected +${rebalanceBufferMinutes}m Buffers`
                           : rebalanceStrategy === "deepwork"
-                          ? `⚡ Compacted into ${rebalanceBlockSizeMinutes}m Sprints`
-                          : `🎯 Eliminated ${overlappingEventIds.size} Collisions`}
+                            ? `⚡ Compacted into ${rebalanceBlockSizeMinutes}m Sprints`
+                            : `🎯 Eliminated ${overlappingEventIds.size} Collisions`}
                       </span>
                     </div>
 
@@ -2961,8 +2962,8 @@ export function EventManager({
                                       isSelected
                                         ? "bg-emerald-500 dark:bg-emerald-400 shadow-2xs"
                                         : hours > 0
-                                        ? "bg-slate-300 dark:bg-slate-600 group-hover:bg-slate-400"
-                                        : "bg-slate-200/60 dark:bg-slate-700/40"
+                                          ? "bg-slate-300 dark:bg-slate-600 group-hover:bg-slate-400"
+                                          : "bg-slate-200/60 dark:bg-slate-700/40"
                                     )}
                                     style={{ height: `${heightPct}%` }}
                                   />
@@ -3462,8 +3463,8 @@ export function EventManager({
                                     hasEvent
                                       ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs"
                                       : isSelectedDay
-                                      ? "border-2 border-emerald-500 bg-emerald-500/15 dark:bg-emerald-500/25 shadow-2xs"
-                                      : "bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700"
+                                        ? "border-2 border-emerald-500 bg-emerald-500/15 dark:bg-emerald-500/25 shadow-2xs"
+                                        : "bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700"
                                   )}
                                   title={`${day.dayName} • ${row.timeLabel} ${hasEvent ? `(${matchingEvents.length} Event)` : "(Available)"}`}
                                 >
@@ -3711,8 +3712,8 @@ export function EventManager({
                     type="button"
                     onClick={() => setView(v)}
                     className={`relative px-3.5 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${isActive
-                        ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-sm"
-                        : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+                      ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-sm"
+                      : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
                       }`}
                   >
                     <span>{v}</span>
@@ -3765,8 +3766,8 @@ export function EventManager({
                   type="button"
                   onClick={() => setActiveTypeFilter(f.id as any)}
                   className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${isSelected
-                      ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 font-semibold shadow-xs"
-                      : "bg-black/[0.03] dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-400 hover:bg-black/[0.07] dark:hover:bg-white/[0.09] border border-black/[0.05] dark:border-white/[0.08]"
+                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 font-semibold shadow-xs"
+                    : "bg-black/[0.03] dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-400 hover:bg-black/[0.07] dark:hover:bg-white/[0.09] border border-black/[0.05] dark:border-white/[0.08]"
                     }`}
                 >
                   {f.label}
@@ -3906,8 +3907,8 @@ export function EventManager({
                                 type="button"
                                 onClick={e => handleToggleReminder(event, e)}
                                 className={`p-1.5 rounded-xl transition ${event.reminder
-                                    ? "text-amber-600 bg-amber-500/10 font-bold"
-                                    : "text-neutral-400 hover:text-neutral-700 opacity-0 group-hover:opacity-100"
+                                  ? "text-amber-600 bg-amber-500/10 font-bold"
+                                  : "text-neutral-400 hover:text-neutral-700 opacity-0 group-hover:opacity-100"
                                   }`}
                                 title={event.reminder ? "Reminder Active" : "Set Reminder"}
                               >
@@ -3974,10 +3975,10 @@ export function EventManager({
                     <div className="text-[9.5px]">
                       {load ? (
                         <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${load.status === "busy"
-                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 font-bold"
-                            : load.status === "moderate"
-                              ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 font-medium"
-                              : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                          ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 font-bold"
+                          : load.status === "moderate"
+                            ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 font-medium"
+                            : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
                           }`}>
                           {load.label}
                         </span>
@@ -4422,10 +4423,10 @@ export function EventManager({
                         setSelectedDayDetails(day);
                       }}
                       className={`min-h-[105px] rounded-2xl p-2.5 border transition-all cursor-pointer hover:border-blue-400 hover:shadow-md flex flex-col justify-between ${isToday
-                          ? "border-neutral-900 bg-neutral-900/[0.03] dark:border-white dark:bg-white/[0.04] ring-2 ring-neutral-900/10 dark:ring-white/10"
-                          : isCurrentMonth
-                            ? "border-black/[0.04] dark:border-white/[0.06] bg-neutral-50/50 dark:bg-neutral-800/30"
-                            : "border-transparent opacity-25 bg-transparent"
+                        ? "border-neutral-900 bg-neutral-900/[0.03] dark:border-white dark:bg-white/[0.04] ring-2 ring-neutral-900/10 dark:ring-white/10"
+                        : isCurrentMonth
+                          ? "border-black/[0.04] dark:border-white/[0.06] bg-neutral-50/50 dark:bg-neutral-800/30"
+                          : "border-transparent opacity-25 bg-transparent"
                         }`}
                     >
                       <div>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Columns,
@@ -13,6 +13,7 @@ import { useWorkspace } from "../../contexts/WorkspaceContext";
 import type { Page } from "../../lib/supabaseService";
 import Editor from "../../components/Editor";
 import PageInspector from "../../components/PageInspector";
+import { useNotificationTarget } from '../notifications/navigation';
 import { WorkspaceView } from "../../components/WorkspaceViews";
 import { PageIcon } from "../../components/PageIcon";
 import PagePickerPopover from "../../components/tabs/PagePickerPopover";
@@ -110,6 +111,11 @@ export default function PaneContainer({
     return pages.find((p) => p.id === activeTab.targetId) || sharedPages.find((p) => p.id === activeTab.targetId) || null;
   }, [activeTab, pages, sharedPages]);
 
+  const notificationTarget = useNotificationTarget(activePage?.id, isActivePane);
+  useEffect(() => {
+    if (notificationTarget?.commentId) setRightPanelOpen(true);
+  }, [notificationTarget]);
+
   // Latest pages/pages-ref for block patches. Editor sub-components fire
   // block commits from memoized closures that may predate a concurrent
   // metadata patch (e.g. Add-to-review); merging onto the freshest snapshot
@@ -141,6 +147,8 @@ export default function PaneContainer({
 
   return (
     <div
+      data-notification-page={activePage?.id}
+      data-notification-active={isActivePane ? 'true' : 'false'}
       onClick={() => {
         if (!isActivePane) setActivePaneId(paneId);
       }}
@@ -390,6 +398,7 @@ export default function PaneContainer({
               className="h-full border-l border-[var(--border)] bg-[var(--sidebar)] flex flex-col min-w-0 overflow-hidden text-xs shrink-0 select-none z-10"
             >
               <PageInspector
+                notificationCommentId={notificationTarget?.commentId}
                 page={activePage}
                 pages={pages}
                 pageId={activePage.id}

@@ -1949,39 +1949,66 @@ export function NoskaIntelligencePanel({
     ];
   }, [events, currentDate]);
 
-  const [scopeFilter, setScopeFilter] = useState<"assignees" | "priority" | "project">("assignees");
+  const [scopeFilter, setScopeFilter] = useState<"assignees" | "priority" | "project">("project");
+  const [sliderPos, setSliderPos] = useState<number>(90);
   const [activeGoalStep, setActiveGoalStep] = useState<number>(3);
+
+  // Dynamic real workspace scope counts
+  const scopeCounts = useMemo(() => {
+    const assigneeSet = new Set<string>();
+    events.forEach(e => {
+      if (e.attendees) e.attendees.forEach(a => assigneeSet.add(a));
+    });
+    const assignees = Math.max(1, assigneeSet.size || (workspaceStats?.totalUsers || 4));
+
+    const priority = events.filter(e => 
+      e.priority === "urgent" || 
+      e.priority === "high" || 
+      e.title.toLowerCase().includes("urgent") || 
+      e.title.toLowerCase().includes("priority")
+    ).length;
+
+    const projectSet = new Set<string>(events.map(e => e.category || "General"));
+    const project = Math.max(1, projectSet.size);
+
+    return { assignees, priority, project };
+  }, [events, workspaceStats]);
+
+  // Dynamic Real Workspace Task Stack (100% strictly real live tasks & events)
   const [taskStack, setTaskStack] = useState<Array<{
     id: string;
     title: string;
     subtitle: string;
     assignedAgo: string;
     type: string;
-  }>>([
-    {
-      id: "task-1",
-      title: "Send notes to Johnny",
-      subtitle: "Executive debrief on Q3 roadmap & sprint dependencies",
-      assignedAgo: "3m ago",
-      type: "New Task"
-    },
-    {
-      id: "task-2",
-      title: "Review Design System tokens",
-      subtitle: "Check contrast ratios and typography scale",
-      assignedAgo: "15m ago",
-      type: "Review"
-    },
-    {
-      id: "task-3",
-      title: "Deploy API Gateway patch",
-      subtitle: "Verify rate limiting headers & latency telemetry",
-      assignedAgo: "1h ago",
-      type: "DevOps"
-    }
-  ]);
-  const [racePoints, setRacePoints] = useState({ user: 24, peer: 30, peerName: "Lisa" });
+  }>>([]);
 
+  useEffect(() => {
+    if (events && events.length > 0) {
+      const realTasks = events
+        .filter(e => e.status !== "done")
+        .map((e) => {
+          const diffMins = Math.max(1, Math.round((Date.now() - new Date(e.startTime).getTime()) / 60000));
+          const timeAgoStr = diffMins < 60 ? `${diffMins}m ago` : `${Math.round(diffMins / 60)}h ago`;
+          return {
+            id: e.id,
+            title: e.title,
+            subtitle: e.description || `${e.category || "Workspace"} task scheduled for ${new Date(e.startTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`,
+            assignedAgo: timeAgoStr,
+            type: e.category || "Workspace Task"
+          };
+        });
+      setTaskStack(realTasks);
+    } else {
+      setTaskStack([]);
+    }
+  }, [events]);
+
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskSubtitle, setNewSubtitle] = useState("");
+
+  const [racePoints, setRacePoints] = useState({ user: 24, peer: 30, peerName: "Lisa" });
   const [isActionsDrawerOpen, setIsActionsDrawerOpen] = useState(false);
   const [attachedTiles, setAttachedTiles] = useState<Array<{
     id: string;
@@ -2400,40 +2427,55 @@ export function NoskaIntelligencePanel({
                       }}
                     />
 
-                    {/* ── CARD: FLOATING MINIMALIST PILL QUICK SCOPE BAR (Image 3) ── */}
-                    <div className="p-3.5 rounded-3xl bg-white dark:bg-[#161722] border border-black/[0.06] dark:border-white/[0.08] shadow-xs space-y-2.5">
-                      {/* Top Minimalist Slider Track with Frosted Handle */}
-                      <div className="relative h-6 px-3 rounded-full bg-neutral-100 dark:bg-neutral-800/80 border border-black/[0.04] dark:border-white/[0.05] flex items-center justify-between">
-                        <div className="h-1 w-16 rounded-full bg-neutral-300 dark:bg-neutral-600" />
-                        <motion.div
-                          whileHover={{ scale: 1.15 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="size-4 rounded-full bg-white shadow-md border border-black/10 dark:border-white/20 flex items-center justify-center cursor-grab active:cursor-grabbing"
-                        >
-                          <div className="size-1.5 rounded-full bg-neutral-400" />
-                        </motion.div>
+                    {/* ── CARD: FLOATING MINIMALIST PILL QUICK SCOPE BAR (Reference Image) ── */}
+                    <div className="p-3.5 rounded-[30px] bg-white dark:bg-[#161722] border border-slate-200/80 dark:border-slate-800 shadow-[0_4px_24px_rgba(0,0,0,0.03)] space-y-3 select-none relative">
+                      {/* Top Slider Track with Right Bead Socket */}
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative flex-1 h-8 px-4 rounded-full bg-[#f1f5f9] dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 flex items-center overflow-hidden">
+                          <div className="h-1.5 w-full rounded-full bg-[#cbd5e1] dark:bg-slate-700 relative overflow-hidden">
+                            <motion.div
+                              className="absolute top-0 bottom-0 left-0 bg-[#8da2b5] dark:bg-slate-400 rounded-full"
+                              animate={{
+                                width: scopeFilter === "assignees" ? "24%" : scopeFilter === "priority" ? "58%" : "92%"
+                              }}
+                              transition={{ type: "spring", stiffness: 420, damping: 30 }}
+                            />
+                          </div>
+                        </div>
+                        <div className="size-6 rounded-full bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-xs flex items-center justify-center shrink-0">
+                          <div className="size-2 rounded-full bg-[#8da2b5] dark:bg-slate-400" />
+                        </div>
                       </div>
 
-                      {/* Segmented Control Bar */}
-                      <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-neutral-100/80 dark:bg-neutral-900/60 border border-black/[0.03] dark:border-white/[0.04]">
+                      {/* Segmented Pill Control Bar */}
+                      <div className="grid grid-cols-3 gap-1 p-1 rounded-[22px] bg-[#f1f5f9] dark:bg-slate-900/60 border border-slate-200/40 dark:border-slate-800/40">
                         {(["assignees", "priority", "project"] as const).map((filterKey) => {
                           const isActive = scopeFilter === filterKey;
+                          const count = scopeCounts[filterKey];
                           return (
                             <button
                               key={filterKey}
                               type="button"
                               onClick={() => {
                                 setScopeFilter(filterKey);
-                                onShowToast?.(`Scope filtered by ${filterKey.charAt(0).toUpperCase() + filterKey.slice(1)}`);
+                                onShowToast?.(`Scope filtered by ${filterKey.charAt(0).toUpperCase() + filterKey.slice(1)} (${count})`);
                               }}
                               className={cn(
-                                "py-1.5 px-3 rounded-xl text-xs font-mono font-medium transition-all text-center capitalize cursor-pointer",
+                                "py-2 px-3 rounded-[18px] text-[13px] font-medium transition-all text-center capitalize cursor-pointer flex items-center justify-center gap-2",
                                 isActive
-                                  ? "bg-white dark:bg-[#1e202f] text-neutral-900 dark:text-white shadow-xs font-bold"
-                                  : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300"
+                                  ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] font-bold"
+                                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                               )}
                             >
-                              {filterKey}
+                              <span>{filterKey}</span>
+                              <span className={cn(
+                                "min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-bold flex items-center justify-center",
+                                isActive
+                                  ? "bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200"
+                                  : "bg-[#e2e8f0]/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                              )}>
+                                {count}
+                              </span>
                             </button>
                           );
                         })}
@@ -2582,12 +2624,12 @@ export function NoskaIntelligencePanel({
                       </div>
                     </div>
 
-                    {/* ── CARD: STACKED TASK DISPATCHER CARD (Image 2) ── */}
+                    {/* ── CARD: STACKED TASK DISPATCHER CARD (Reference Image) ── */}
                     {taskStack.length > 0 && (
-                      <div className="relative pt-3 pb-2 px-1">
+                      <div className="relative pt-3 pb-2 px-1 select-none">
                         {/* 3D Stack Depth Underlayers */}
-                        <div className="absolute inset-x-5 top-5 h-20 rounded-[28px] bg-neutral-200/60 dark:bg-neutral-800/40 border border-black/[0.04] dark:border-white/[0.05] shadow-xs translate-y-3 scale-[0.94] pointer-events-none" />
-                        <div className="absolute inset-x-3 top-4 h-20 rounded-[28px] bg-neutral-100/90 dark:bg-neutral-800/70 border border-black/[0.05] dark:border-white/[0.06] shadow-xs translate-y-1.5 scale-[0.97] pointer-events-none" />
+                        <div className="absolute inset-x-5 top-5 h-20 rounded-[28px] bg-slate-200/60 dark:bg-slate-800/40 border border-black/[0.04] dark:border-white/[0.05] shadow-xs translate-y-3 scale-[0.94] pointer-events-none" />
+                        <div className="absolute inset-x-3 top-4 h-20 rounded-[28px] bg-slate-100/90 dark:bg-slate-800/70 border border-black/[0.05] dark:border-white/[0.06] shadow-xs translate-y-1.5 scale-[0.97] pointer-events-none" />
 
                         {/* Top Interactive Main Card */}
                         <motion.div
@@ -2596,19 +2638,24 @@ export function NoskaIntelligencePanel({
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.9, y: 15 }}
                           transition={{ type: "spring", stiffness: 450, damping: 28 }}
-                          className="relative p-5 rounded-[28px] bg-white dark:bg-[#161722] border border-black/[0.08] dark:border-white/[0.09] shadow-xl space-y-3.5 z-10 transform-gpu"
+                          className="relative p-5 rounded-[28px] bg-white dark:bg-[#161722] border border-black/[0.08] dark:border-white/[0.09] shadow-[0_8px_30px_rgba(0,0,0,0.04)] space-y-3.5 z-10 transform-gpu"
                         >
                           {/* Top Row with Icon, Metadata, and Options */}
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="size-10 rounded-2xl bg-neutral-100 dark:bg-neutral-800/80 border border-black/[0.05] dark:border-white/[0.08] flex items-center justify-center text-neutral-700 dark:text-neutral-200 shadow-2xs">
+                              <div className="size-10 rounded-2xl bg-slate-100/90 dark:bg-slate-800/80 border border-black/[0.05] dark:border-white/[0.08] flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-2xs">
                                 <FileText size={18} strokeWidth={2.2} />
                               </div>
                               <div>
-                                <span className="text-[11px] font-semibold text-neutral-400 block">
-                                  {taskStack[0].type} • Assigned to You {taskStack[0].assignedAgo}
-                                </span>
-                                <h3 className="text-base sm:text-lg font-black text-neutral-900 dark:text-neutral-100 tracking-tight leading-tight mt-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-semibold text-slate-400 block">
+                                    {taskStack[0].type || "New Task"} • Assigned to You {taskStack[0].assignedAgo || "3m ago"}
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                    {taskStack.length} in queue
+                                  </span>
+                                </div>
+                                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight leading-tight mt-0.5">
                                   {taskStack[0].title}
                                 </h3>
                               </div>
@@ -2618,19 +2665,19 @@ export function NoskaIntelligencePanel({
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => onShowToast?.("Task options opened")}
-                                className="size-7 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
-                                title="More options"
+                                onClick={() => setIsAddingTask(prev => !prev)}
+                                className="size-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
+                                title="Add task to queue"
                               >
-                                <MoreHorizontal size={14} />
+                                <Plus size={14} />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => {
                                   setTaskStack(curr => curr.slice(1));
-                                  onShowToast?.("Dismissed from stack");
+                                  onShowToast?.("Dismissed task from queue");
                                 }}
-                                className="size-7 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 hover:text-rose-500 flex items-center justify-center transition cursor-pointer"
+                                className="size-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-500 flex items-center justify-center transition cursor-pointer"
                                 title="Dismiss task"
                               >
                                 <X size={13} />
@@ -2639,36 +2686,90 @@ export function NoskaIntelligencePanel({
                           </div>
 
                           {/* Subtitle description */}
-                          <p className="text-xs text-neutral-500 dark:text-neutral-400 pl-13 leading-relaxed">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 pl-13 leading-relaxed">
                             {taskStack[0].subtitle}
                           </p>
+
+                          {/* Add inline form if open */}
+                          {isAddingTask && (
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                if (!newTaskTitle.trim()) return;
+                                const created = {
+                                  id: `task-custom-${Date.now()}`,
+                                  title: newTaskTitle.trim(),
+                                  subtitle: newTaskSubtitle.trim() || "Workspace action item",
+                                  assignedAgo: "Just now",
+                                  type: "New Task"
+                                };
+                                setTaskStack(curr => [created, ...curr]);
+                                onShowToast?.(`Added "${newTaskTitle.trim()}" to queue`);
+                                setNewTaskTitle("");
+                                setNewSubtitle("");
+                                setIsAddingTask(false);
+                              }}
+                              className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-black/5 dark:border-white/10 space-y-2"
+                            >
+                              <input
+                                type="text"
+                                value={newTaskTitle}
+                                onChange={(e) => setNewTaskTitle(e.target.value)}
+                                placeholder="Task name (e.g. Send notes to Johnny)"
+                                autoFocus
+                                className="w-full bg-transparent text-xs font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+                              />
+                              <input
+                                type="text"
+                                value={newTaskSubtitle}
+                                onChange={(e) => setNewSubtitle(e.target.value)}
+                                placeholder="Notes or brief context"
+                                className="w-full bg-transparent text-[11px] outline-none text-slate-500 placeholder:text-slate-400"
+                              />
+                              <div className="flex justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setIsAddingTask(false)}
+                                  className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="submit"
+                                  className="px-3 py-1 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold cursor-pointer shadow-xs"
+                                >
+                                  Push to Stack
+                                </button>
+                              </div>
+                            </form>
+                          )}
 
                           {/* Bottom Dual Action Pill Buttons */}
                           <div className="flex items-center justify-between gap-3 pt-1">
                             <motion.button
                               type="button"
-                              whileHover={{ scale: 1.03 }}
-                              whileTap={{ scale: 0.96 }}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.97 }}
                               onClick={() => {
                                 setTaskStack(curr => [...curr.slice(1), curr[0]]);
                                 onShowToast?.(`🔔 Snoozed "${taskStack[0].title}" for later`);
                               }}
-                              className="flex-1 py-2.5 px-4 rounded-full bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-700/80 border border-black/[0.06] dark:border-white/[0.08] text-xs font-bold text-neutral-700 dark:text-neutral-200 flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                              className="flex-1 py-2.5 px-4 rounded-full bg-white dark:bg-slate-800/90 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/90 dark:border-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 transition shadow-2xs cursor-pointer"
                             >
-                              <Bell size={13} className="text-neutral-400" />
+                              <Bell size={13} className="text-slate-400" />
                               <span>Remind Me Later</span>
                             </motion.button>
 
                             <motion.button
                               type="button"
-                              whileHover={{ scale: 1.03 }}
-                              whileTap={{ scale: 0.96 }}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.97 }}
                               onClick={() => {
                                 const finished = taskStack[0];
                                 setTaskStack(curr => curr.slice(1));
                                 onShowToast?.(`✅ "${finished.title}" marked as done!`);
                               }}
-                              className="flex-1 py-2.5 px-4 rounded-full bg-[#1db954] hover:bg-[#1aa34a] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(29,185,84,0.35)] transition cursor-pointer"
+                              className="flex-1 py-2.5 px-4 rounded-full bg-[#1db954] hover:bg-[#1aa34a] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(29,185,84,0.32)] transition cursor-pointer"
                             >
                               <CheckCircle2 size={14} className="fill-white text-[#1db954]" />
                               <span>Mark as Done</span>

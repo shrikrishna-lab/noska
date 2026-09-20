@@ -199,28 +199,194 @@ export type PageInput = Partial<Page> & { id: string };
 
 // Optimized: Select only columns actually used by the app to reduce egress.
 // Large JSON fields (blocks, lineage) are the main egress consumers.
-const PAGE_COLUMNS = "id, title, icon, cover, parent_id, favorite, trashed, tags, hidden_from_recents, offline, is_encrypted, encrypted_blocks, iv, salt, is_locked, blocks, lineage, updated_at, created_at, user_id";
+const PAGE_COLUMNS: string = "id, title, icon, cover, parent_id, favorite, trashed, tags, hidden_from_recents, offline, is_encrypted, encrypted_blocks, iv, salt, is_locked, blocks, lineage, updated_at, created_at, user_id, visibility";
+const PAGE_MANIFEST_BATCH_SIZE = 500;
+const PAGE_BODY_BATCH_SIZE = 20;
+const PAGE_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+const PAGE_CACHE_MAX_USERS = 3;
+const pageBodyCache = new Map<string, string>();
+const pageLoads = new Map<string, Promise<string>>();
+let pageCacheGeneration = 0;
+
+type PageRevision = Pick<Tables<"pages">, "id" | "updated_at">;
+type RawPage = Tables<"pages"> & { visibility: Page["visibility"] };
+
+function isPageRevision(row: unknown): row is PageRevision {
+  if (!row || typeof row !== "object") return false;
+  const value = row as Record<string, unknown>;
+  return typeof value.id === "string" && value.id.length > 0 &&
+    (value.updated_at === null ||
+      (typeof value.updated_at === "string" && value.updated_at.length > 0 &&
+        Number.isFinite(Date.parse(value.updated_at))));
+}
+
+function requireFullPage(row: unknown, userId?: string): asserts row is RawPage {
+  if (!isPageRevision(row)) throw new Error("[supabase] invalid page revision");
+  const value = row as Record<string, unknown>;
+  if (PAGE_COLUMNS.split(", ").some((column) => !Object.hasOwn(value, column) || value[column] === undefined) ||
+    !Array.isArray(value.blocks) ||
+    (value.lineage !== null && !Array.isArray(value.lineage)) ||
+    !["private", "team", "company", "public"].includes(value.visibility as string) ||
+    (userId !== undefined && value.user_id !== userId)) {
+    throw new Error("[supabase] incomplete or invalid page body");
+  }
+}
+
+async function fetchPageListing(columns: string, userId?: string): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  const ids = new Set<string>();
+  let total: number | undefined;
+  do {
+    let query = supabase.from("pages").select(columns, { count: "exact" });
+    if (userId !== undefined) query = query.eq("user_id", userId);
+    const { data, error, count } = await query
+      .order("id", { ascending: true })
+      .range(rows.length, rows.length + PAGE_MANIFEST_BATCH_SIZE - 1);
+    if (error) throw error;
+    if (!Array.isArray(data) || !Number.isSafeInteger(count) || count < 0 ||
+      (total !== undefined && total !== count) || rows.length + data.length > count ||
+      (data.length === 0 && rows.length < count)) {
+      throw new Error("[supabase] incomplete page manifest");
+    }
+    total = count;
+    for (const row of data) {
+      if (!isPageRevision(row) || ids.has(row.id)) {
+        throw new Error("[supabase] invalid page manifest");
+      }
+      ids.add(row.id);
+      rows.push(row);
+    }
+  } while (rows.length < total);
+  return rows;
+}
+
+function rememberPageBodies(userId: string, snapshot: string): void {
+  pageBodyCache.delete(userId);
+  if (snapshot.length * 2 > PAGE_CACHE_MAX_BYTES) return;
+  pageBodyCache.set(userId, snapshot);
+  let bytes = Array.from(pageBodyCache.values()).reduce((sum, value) => sum + value.length * 2, 0);
+  while (pageBodyCache.size > PAGE_CACHE_MAX_USERS || bytes > PAGE_CACHE_MAX_BYTES) {
+    const oldest = pageBodyCache.keys().next().value;
+    bytes -= pageBodyCache.get(oldest)!.length * 2;
+    pageBodyCache.delete(oldest);
+  }
+}
+
+function invalidatePageBodies(userId?: string): void {
+  pageCacheGeneration += 1;
+  if (userId !== undefined) pageBodyCache.delete(userId);
+  else pageBodyCache.clear();
+  pageLoads.clear();
+}
+
+async function loadOwnedPageBodies(userId: string): Promise<string> {
+  const generation = pageCacheGeneration;
+  try {
+    const manifest = await fetchPageListing("id, updated_at", userId) as PageRevision[];
+    if (manifest.length === 0) {
+      pageBodyCache.delete(userId);
+      if (generation !== pageCacheGeneration) throw new Error("[supabase] pages changed during load");
+      return "[]";
+    }
+    const cached = new Map<string, RawPage>();
+    const stored = pageBodyCache.get(userId);
+    if (stored) {
+      const rows: unknown = JSON.parse(stored);
+      if (!Array.isArray(rows)) throw new Error("[supabase] invalid page cache");
+      for (const row of rows) {
+        requireFullPage(row, userId);
+        if (cached.has(row.id)) throw new Error("[supabase] invalid page cache");
+        cached.set(row.id, row);
+      }
+    }
+    const confirmed = new Map<string, RawPage>();
+    const missing: PageRevision[] = [];
+    for (const revision of manifest) {
+      const row = cached.get(revision.id);
+      if (row && revision.updated_at !== null && row.updated_at === revision.updated_at) {
+        confirmed.set(row.id, row);
+      } else {
+        missing.push(revision);
+      }
+    }
+    for (let offset = 0; offset < missing.length; offset += PAGE_BODY_BATCH_SIZE) {
+      const batch = missing.slice(offset, offset + PAGE_BODY_BATCH_SIZE);
+      const expected = new Map(batch.map((row) => [row.id, row.updated_at]));
+      const { data, error } = await supabase.from("pages")
+        .select(PAGE_COLUMNS)
+        .eq("user_id", userId)
+        .in("id", batch.map((row) => row.id))
+        .order("id", { ascending: true })
+        .limit(PAGE_BODY_BATCH_SIZE);
+      if (error) throw error;
+      if (!Array.isArray(data) || data.length !== batch.length) {
+        throw new Error("[supabase] missing page body");
+      }
+      for (const row of data) {
+        requireFullPage(row, userId);
+        if (!expected.has(row.id) || expected.get(row.id) !== row.updated_at) {
+          throw new Error("[supabase] page body does not match manifest");
+        }
+        expected.delete(row.id);
+        confirmed.set(row.id, row);
+      }
+    }
+    const rows = manifest.map(({ id }) => {
+      const row = confirmed.get(id);
+      if (!row) throw new Error("[supabase] missing page body");
+      return row;
+    });
+    const snapshot = JSON.stringify(rows);
+    if (generation !== pageCacheGeneration) throw new Error("[supabase] pages changed during load");
+    rememberPageBodies(userId, snapshot);
+    return snapshot;
+  } catch (error) {
+    if (generation === pageCacheGeneration) pageBodyCache.delete(userId);
+    throw error;
+  }
+}
+
+function mapPageSnapshot(snapshot: string): Page[] {
+  const rows = JSON.parse(snapshot) as RawPage[];
+  rows.sort((a, b) => {
+    if (a.updated_at === b.updated_at) return a.id.localeCompare(b.id);
+    if (a.updated_at === null) return -1;
+    if (b.updated_at === null) return 1;
+    return Date.parse(b.updated_at) - Date.parse(a.updated_at) || a.id.localeCompare(b.id);
+  });
+  return rows.map(mapPageFromDb);
+}
 
 export async function fetchPages(userId?: string | null): Promise<Page[]> {
-  try {
-    let query = supabase.from("pages").select(PAGE_COLUMNS);
-    if (userId) query = query.eq("user_id", userId);
-    const { data, error } = await query.order("updated_at", { ascending: false });
-    if (!error && data) {
-      return data.map(mapPageFromDb);
-    }
-    if (error) {
-      console.warn("[supabase] fetchPages PAGE_COLUMNS error, trying select(*):", error);
-    }
-  } catch (e) {
-    console.warn("[supabase] fetchPages PAGE_COLUMNS failed, falling back to select(*):", e);
+  if (!userId) {
+    const rows = await fetchPageListing(PAGE_COLUMNS);
+    for (const row of rows) requireFullPage(row);
+    return mapPageSnapshot(JSON.stringify(rows));
   }
+  let load = pageLoads.get(userId);
+  if (!load) {
+    load = loadOwnedPageBodies(userId);
+    pageLoads.set(userId, load);
+  }
+  try {
+    return mapPageSnapshot(await load);
+  } finally {
+    if (pageLoads.get(userId) === load) pageLoads.delete(userId);
+  }
+}
 
-  let query = supabase.from("pages").select("*");
-  if (userId) query = query.eq("user_id", userId);
-  const { data, error } = await query.order("updated_at", { ascending: false });
+export async function hasPages(userId: string): Promise<boolean> {
+  if (!userId) throw new Error("[supabase] refusing page existence read without an owner");
+  const { data, error } = await supabase.from("pages")
+    .select("id")
+    .eq("user_id", userId)
+    .limit(1);
   if (error) throw error;
-  return (data || []).map(mapPageFromDb);
+  if (!Array.isArray(data) || data.length > 1 ||
+    data.some((row) => !row || typeof row.id !== "string" || row.id.length === 0)) {
+    throw new Error("[supabase] invalid page existence response");
+  }
+  return data.length > 0;
 }
 
 // Paginated version - loads pages in batches to reduce egress
@@ -239,7 +405,8 @@ export async function fetchPagesPaginated(
     
     const { data, error, count } = await query
       .order("updated_at", { ascending: false })
-      .range(from, to);
+      .range(from, to)
+      .returns<RawPage[]>();
     
     if (!error && data) {
       const totalCount = count ?? 0;
@@ -278,6 +445,7 @@ export async function savePage(page: PageInput, userId: string): Promise<void> {
     .from("pages")
     .upsert(dbPage, { onConflict: "id" });
   if (error) throw error;
+  invalidatePageBodies(userId);
 }
 
 export async function savePages(pages: PageInput[], userId: string): Promise<void> {
@@ -290,6 +458,7 @@ export async function savePages(pages: PageInput[], userId: string): Promise<voi
     .from("pages")
     .upsert(dbPages, { onConflict: "id" });
   if (error) throw error;
+  invalidatePageBodies(userId);
 }
 
 /** Updates a shared page's content WITHOUT ever touching `user_id` —
@@ -309,11 +478,13 @@ export async function updateSharedPage(pageId: string, patch: PageInput, editorU
     .update(dbPatch)
     .eq("id", pageId);
   if (error) throw error;
+  invalidatePageBodies();
 }
 
 export async function deletePage(id: string): Promise<void> {
   const { error } = await supabase.from("pages").delete().eq("id", id);
   if (error) throw error;
+  invalidatePageBodies();
 }
 
 // ============ WORKSPACE SETTINGS ============
@@ -2031,17 +2202,77 @@ export async function ensureImagesBucket(): Promise<void> {
   }
 }
 
+export async function optimizeImage(file: File, maxDimension = 2048): Promise<File> {
+  if (!["image/jpeg", "image/png"].includes(file.type) ||
+    typeof document === "undefined" || typeof Image === "undefined" ||
+    typeof URL.createObjectURL !== "function" || !Number.isFinite(maxDimension) || maxDimension < 1) return file;
+
+  let objectUrl: string | undefined;
+  try {
+    if (file.type === "image/png") {
+      const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error);
+        reader.onabort = () => reject(new Error("Image read cancelled"));
+        reader.readAsArrayBuffer(file);
+      });
+      const view = new DataView(buffer);
+      if (view.byteLength < 8 || view.getUint32(0) !== 0x89504e47 || view.getUint32(4) !== 0x0d0a1a0a) return file;
+      for (let offset = 8; offset + 12 <= view.byteLength;) {
+        const length = view.getUint32(offset);
+        if (offset + 12 + length > view.byteLength) return file;
+        const type = view.getUint32(offset + 4);
+        if (type === 0x6163544c) return file;
+        if (type === 0x49444154) break;
+        offset += 12 + length;
+      }
+    }
+
+    objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Unable to decode image"));
+      image.src = objectUrl!;
+    });
+    if (!image.naturalWidth || !image.naturalHeight) return file;
+    const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.floor(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.floor(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, file.type, 0.82));
+    if (!blob || !blob.size || blob.size >= file.size) return file;
+    const ext = blob.type === "image/jpeg" ? "jpg" : blob.type === "image/png" ? "png" : null;
+    if (!ext) return file;
+    return new File([blob], `${file.name.replace(/\.[^/.]+$/, "")}.${ext}`, {
+      type: blob.type,
+      lastModified: file.lastModified,
+    });
+  } catch {
+    return file;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export async function uploadImage(file: File, userId?: string | null): Promise<string> {
-  const ext = file.name.split(".").pop() || "png";
-  const path = `${userId || "anonymous"}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const { data, error } = await supabase.storage.from(IMAGES_BUCKET).upload(path, file, {
-    cacheControl: "3600",
+  const optimized = await optimizeImage(file);
+  const ext = optimized.name.split(".").pop() || "png";
+  const uniqueId = globalThis.crypto?.randomUUID?.();
+  const path = `${userId || "anonymous"}/${uniqueId || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`}.${ext}`;
+  const { data, error } = await supabase.storage.from(IMAGES_BUCKET).upload(path, optimized, {
+    cacheControl: uniqueId ? "31536000" : "3600",
     upsert: false,
-    contentType: file.type,
+    contentType: optimized.type,
   });
   if (error) throw error;
   const {
     data: { publicUrl },
   } = supabase.storage.from(IMAGES_BUCKET).getPublicUrl(data.path);
+  if (/^\s*blob:/i.test(publicUrl)) throw new Error("Temporary image URLs cannot be saved");
   return publicUrl;
 }

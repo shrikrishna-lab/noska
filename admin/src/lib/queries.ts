@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_ENABLED, getAdminToken } from "./supabase";
-import { subscribeRealtime } from "./realtime";
+import { subscribeRealtime, subscribeRealtimeInvalidation } from "./realtime";
 import { adminApi } from "./admin-api";
 import type { SupportTicket, SupportMessage, BannedUser, DeletedAccount, DemoRequest } from "./types";
 import type { FeatureFlag, FeedbackItem, EmailCampaign, RoadmapItem, Integration, ApiKey, NotificationItem } from "./types";
@@ -128,7 +128,7 @@ export function useUserAiChats(clerkId: string | undefined) {
     queryKey: ["admin", "users", "detail", clerkId, "chats"],
     queryFn: () => adminSelect<UserAiChatRow>("ai_chats", "*", { eq: ["user_id", clerkId ?? ""], order: "updated_at desc", limit: 50 }),
     enabled: !!clerkId,
-    refetchInterval: 30000,
+    refetchInterval: false,
   });
 }
 
@@ -169,7 +169,7 @@ export function useUserAuditDetail(clerkId: string | undefined) {
       { eq: ["user_id", clerkId ?? ""], order: "created_at desc", limit: 500 },
     ),
     enabled: !!clerkId,
-    refetchInterval: 30000,
+    refetchInterval: false,
   });
 }
 
@@ -314,7 +314,8 @@ export function useUserActivity() {
     queryFn: () => adminSelect<UserActivityRow>(
       "audit_events", "id, user_id, user_name, action, created_at", { order: "created_at asc" },
     ),
-    refetchInterval: 60000,
+    refetchInterval: 300_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -335,84 +336,26 @@ export interface UserLifecycleStats {
   notReturning: number;
 }
 export function useUserLifecycle() {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return useQuery({
-    queryKey: ["admin", "user-lifecycle"],
-    queryFn: async () => {
-      const [waitlist, profiles, pages, activity] = await Promise.all([
-        adminSelect<{ status: string | null; approved_at: string | null; rejected_at: string | null }>(
-          "waitlist_entries", "status, approved_at, rejected_at",
-        ),
-        adminSelect<{ user_id: string; created_at: string | null; onboarding_complete: boolean | null }>(
-          "user_profiles", "user_id, created_at, onboarding_complete",
-        ),
-        adminSelect<{ user_id: string | null; created_at: string | null }>(
-          "pages", "user_id, created_at",
-        ),
-        adminSelect<UserActivityRow>("audit_events", "id, user_id, user_name, action, created_at"),
-      ]);
-
-      const approved = waitlist.filter((w) => ["approved", "invited", "accepted"].includes(w.status ?? "")).length;
-      const rejected = waitlist.filter((w) => w.status === "rejected").length;
-      const invited = waitlist.filter((w) => w.status === "invited").length;
-      const accepted = waitlist.filter((w) => w.status === "accepted").length;
-      const pending = waitlist.filter((w) => ["waiting", "pending"].includes(w.status ?? "")).length;
-      const accounts = profiles.length;
-      const onboardingComplete = profiles.filter((p) => p.onboarding_complete === true).length;
-      const firstPageUsers = new Set(pages.map((p) => p.user_id).filter(Boolean)).size;
-
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayKey = todayStart.toDateString();
-      const weekAgo = Date.now() - 7 * 86400000;
-      const monthAgo = Date.now() - 30 * 86400000;
-
-      const activeDays = new Map<string, Set<string>>();
-      for (const a of activity) {
-        if (!a.created_at || !a.user_id) continue;
-        const ts = new Date(a.created_at).getTime();
-        const dayKey = new Date(a.created_at).toDateString();
-        if (!activeDays.has(a.user_id)) activeDays.set(a.user_id, new Set());
-        activeDays.get(a.user_id)!.add(dayKey);
-        void ts;
+    queryKey: ["admin", "user-lifecycle", timezone],
+    queryFn: async (): Promise<UserLifecycleStats> => {
+      if (!SUPABASE_ENABLED || !supabase) {
+        return {
+          totalWaitlist: 0, approved: 0, rejected: 0, invited: 0, accepted: 0, pending: 0,
+          accounts: 0, onboardingComplete: 0, firstPageUsers: 0,
+          dau: 0, active7d: 0, active30d: 0, returning30d: 0, notReturning: 0,
+        };
       }
-
-      let dau = 0;
-      let active7d = 0;
-      let active30d = 0;
-      let returning30d = 0;
-      let notReturning = 0;
-      const profileByUserId = new Map(profiles.map((p) => [p.user_id, p]));
-      for (const [userId, days] of activeDays) {
-        const userCreated = profileByUserId.get(userId)?.created_at;
-        if (days.has(todayKey)) dau++;
-        const lastTs = Math.max(...Array.from(days).map((d) => new Date(d).getTime()));
-        if (lastTs >= weekAgo) active7d++;
-        if (lastTs >= monthAgo) active30d++;
-        if (days.size >= 2 && lastTs >= monthAgo) returning30d++;
-        // Only users who actually created an account count toward churn —
-        // waitlist signups that never logged in are not "returning" users.
-        if (!userCreated) continue;
-        if ((Date.now() - new Date(userCreated).getTime()) > 30 * 86400000 && lastTs < monthAgo) notReturning++;
-      }
-
-      return {
-        totalWaitlist: waitlist.length,
-        approved,
-        rejected,
-        invited,
-        accepted,
-        pending,
-        accounts,
-        onboardingComplete,
-        firstPageUsers,
-        dau,
-        active7d,
-        active30d,
-        returning30d,
-        notReturning,
-      };
+      const { data, error } = await supabase.rpc("admin_user_lifecycle", {
+        p_session_token: token(), p_timezone: timezone,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("Lifecycle aggregation returned no counts.");
+      return data as UserLifecycleStats;
     },
-    refetchInterval: 60000,
+    refetchInterval: 300_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -672,7 +615,8 @@ export function useWaitlist() {
   return useQuery({
     queryKey: ["admin", "waitlist"],
     queryFn: () => adminSelect<DbWaitlistEntry>("waitlist_entries", "*", { order: "position asc" }),
-    refetchInterval: 15_000,
+    refetchInterval: 300_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -680,7 +624,8 @@ export function useWaitlistCount() {
   return useQuery({
     queryKey: ["admin", "waitlist", "count"],
     queryFn: () => adminCount("waitlist_entries"),
-    refetchInterval: 15_000,
+    refetchInterval: 300_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -1370,10 +1315,20 @@ export function usePermanentDeletePage() {
 
 // ── Support Messages (Live Chat) ──
 export function useSupportMessages(ticketId: string) {
+  const [visible, setVisible] = useState(() => typeof document !== "undefined" && document.visibilityState === "visible");
+  useEffect(() => {
+    const updateVisibility = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", updateVisibility);
+    updateVisibility();
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
   return useQuery({
     queryKey: ["admin", "support-messages", ticketId],
     queryFn: () => adminSelect<SupportMessage>("support_messages", "*", { order: "created_at asc", eq: ["ticket_id", ticketId] }),
-    refetchInterval: 5000,
+    enabled: !!ticketId && visible,
+    refetchInterval: visible ? 30_000 : false,
+    refetchIntervalInBackground: false,
+    staleTime: 0,
   });
 }
 
@@ -1433,28 +1388,22 @@ export function useDeleteTicket() {
 
 export function useRealtimeInvalidate(queryKey: string[], table: string, event: "INSERT" | "UPDATE" | "DELETE" | "*" = "*") {
   const qc = useQueryClient();
-  const queryKeyRef = useRef(queryKey);
-  queryKeyRef.current = queryKey;
+  const serializedKey = JSON.stringify(queryKey);
 
   useEffect(() => {
-    return subscribeRealtime((row) => {
-      if (row.table_name !== table) return;
-      if (event !== "*" && row.event !== event) return;
-      qc.invalidateQueries({ queryKey: queryKeyRef.current });
-    });
-  }, [qc, table, event]);
+    return subscribeRealtimeInvalidation(qc, JSON.parse(serializedKey), table, event);
+  }, [qc, serializedKey, table, event]);
 }
 
 export function useRealtimeAuditFeed(limit = 20) {
   const [events, setEvents] = useState<AuditEventRow[]>([]);
-  const qc = useQueryClient();
+  useRealtimeInvalidate(["admin", "audit"], "audit_events", "INSERT");
   const limitRef = useRef(limit);
   limitRef.current = limit;
 
   useEffect(() => {
     return subscribeRealtime(async (row) => {
       if (row.table_name !== "audit_events" || row.event !== "INSERT" || !row.record_id) return;
-      qc.invalidateQueries({ queryKey: ["admin", "audit"] });
       try {
         const t = getAdminToken();
         if (!t || !supabase) return;
@@ -1474,7 +1423,7 @@ export function useRealtimeAuditFeed(limit = 20) {
         // row might have been deleted already — ignore
       }
     });
-  }, [qc]);
+  }, []);
 
   return events;
 }

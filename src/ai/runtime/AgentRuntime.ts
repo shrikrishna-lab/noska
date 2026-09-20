@@ -68,6 +68,33 @@ export interface ExecutionContext {
   events: Array<{ seq: number; type: RunEventType; step?: string; detail?: string; at: number; durationMs?: number }>;
   /** Reasoning effort applied to every model call in this run. */
   effort: "low" | "medium" | "high";
+  /** Token/cost accounting across this run's model calls. */
+  usage: {
+    modelRequests: number;
+    promptTokens: number;
+    completionTokens: number;
+    providerReported: boolean;
+  };
+}
+
+/** Per-model-call usage collector: providers may fire usage events more than
+ * once per call (e.g. Anthropic message_start + message_delta) — take the
+ * max per field within the call, then settle() sums it into the run. */
+function usageSink(context: ExecutionContext) {
+  let promptTokens = 0;
+  let completionTokens = 0;
+  return {
+    onUsage: (u: { promptTokens?: number; completionTokens?: number }) => {
+      if (u.promptTokens != null) promptTokens = Math.max(promptTokens, u.promptTokens);
+      if (u.completionTokens != null) completionTokens = Math.max(completionTokens, u.completionTokens);
+    },
+    settle: () => {
+      context.usage.modelRequests += 1;
+      context.usage.promptTokens += promptTokens;
+      context.usage.completionTokens += completionTokens;
+      if (promptTokens > 0 || completionTokens > 0) context.usage.providerReported = true;
+    },
+  };
 }
 
 function emptyRun(options: RuntimeJobOptions): RunRecord {
@@ -189,7 +216,7 @@ export class AgentRuntime {
 
     const run = emptyRun(options);
     const abort = { aborted: false };
-    const context: ExecutionContext = { run, vars: {}, abort, events: [], effort: "medium" };
+    const context: ExecutionContext = { run, vars: {}, abort, events: [], effort: "medium", usage: { modelRequests: 0, promptTokens: 0, completionTokens: 0, providerReported: false } };
     this.activeRuns.set(run.id, context);
 
     /** Record an observability event (in-memory trace + durable write). */
@@ -392,6 +419,7 @@ export class AgentRuntime {
   private async runAnswerStep(step: PlanStep, options: RuntimeJobOptions, context: ExecutionContext): Promise<{ ok: boolean; text?: string; isText?: boolean; fatal?: boolean; detail?: string }> {
     const selection = selectModel("default");
     const messages = [{ role: "user", content: this.buildUserPrompt(step.instruction || options.goal, options) }];
+    const usage = usageSink(context);
     try {
       const result = await aiManager.sendRaw({
         system: this.buildSystemPrompt(options, false, context.effort),
@@ -400,7 +428,9 @@ export class AgentRuntime {
         effort: context.effort,
         providerId: selection.providerId,
         modelId: selection.modelId,
+        onUsage: usage.onUsage,
       });
+      usage.settle();
       context.vars["ai.response"] = result;
       return { ok: true, text: stripToolCalls(result), isText: true };
     } catch (err) {
@@ -454,6 +484,7 @@ export class AgentRuntime {
       const roundStart = Date.now();
       track("MODEL_REQUEST", `round ${round + 1}`, step.label);
       let response: string;
+      const usage = usageSink(context);
       try {
         if (useStream) {
           // Invariant at call time: transcript ends with the current user
@@ -465,6 +496,8 @@ export class AgentRuntime {
             maxTokens: 2048,
             effort: context.effort,
             onChunk: (partial) => options.onLiveText?.(stripToolCalls(partial), step.id),
+            tools: toolSchemas,
+            onUsage: usage.onUsage,
           });
         } else {
           response = await aiManager.sendRaw({
@@ -475,9 +508,12 @@ export class AgentRuntime {
             providerId: selection.providerId,
             modelId: selection.modelId,
             tools: toolSchemas,
+            onUsage: usage.onUsage,
           });
         }
+        usage.settle();
       } catch (err) {
+        usage.settle();
         track("MODEL_RESPONSE", `failed: ${err instanceof Error ? err.message : "error"}`, step.label, Date.now() - roundStart);
         // If the model is unreachable, remaining steps can't run meaningfully —
         // fail the run honestly instead of reporting a false completion (#17).

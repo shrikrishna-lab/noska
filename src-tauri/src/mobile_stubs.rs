@@ -9,6 +9,26 @@
 use serde_json::{json, Value};
 
 #[tauri::command]
+pub fn set_desktop_unread_count() -> Result<(), String> {
+    Err("Desktop unread counts are not available on mobile.".into())
+}
+
+#[tauri::command]
+pub fn get_desktop_preferences() -> Result<Value, String> {
+    Err("Desktop preferences are not available on mobile.".into())
+}
+
+#[tauri::command]
+pub fn update_desktop_preferences() -> Result<Value, String> {
+    Err("Desktop preferences are not available on mobile.".into())
+}
+
+#[tauri::command]
+pub fn show_desktop_main() -> Result<(), String> {
+    Err("Desktop windows are not available on mobile.".into())
+}
+
+#[tauri::command]
 pub fn capability_check() -> Value {
     json!({
         "available": false,

@@ -5,9 +5,10 @@ import {
   Layers, Trophy, Sparkles, Users, ArrowUpRight, TrendingUp, CreditCard,
   ArrowRight, DollarSign, Calendar, ChevronRight, CheckCheck, ShieldCheck,
   Settings, Edit3, Sliders, Flame, Zap, Target, BookOpen, Wand2, RefreshCw,
-  SlidersHorizontal
+  SlidersHorizontal, Activity, Search, RotateCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TactileGlyph } from "./TactileVectorLibrary";
 
 // ── PERSISTENCE STORAGE HELPER (User-by-User & Company-by-Owner) ───────────
 export function getWorkflowUserData(userId: string = "default") {
@@ -131,84 +132,381 @@ export function saveCompanyFinanceData(companyId: string = "default", config: Pa
 }
 
 
-// ── 1. FLOATING MINIMALIST PILL QUICK SCOPE BAR (Image 3) ──────────────────
+// ── 1. FLOATING MINIMALIST PILL QUICK SCOPE BAR (Image 3 / Image 2) ────────
+export interface ScopeBreakdownItem {
+  id: string;
+  name: string;
+  count: number;
+  completed?: number;
+  icon?: string;
+  color?: string;
+}
+
 export interface QuickScopeFilterProps {
   activeScope?: "assignees" | "priority" | "project";
   onScopeChange?: (scope: "assignees" | "priority" | "project") => void;
   scopeCounts?: { assignees?: number; priority?: number; project?: number };
+  assigneeDetails?: { name: string; count: number; completed: number; pending: number };
+  priorityDetails?: { urgent: number; high: number; medium: number; low: number };
+  projectDetails?: ScopeBreakdownItem[];
+  activeHorizon?: "today" | "7d" | "30d" | "all";
+  onHorizonChange?: (horizon: "today" | "7d" | "30d" | "all") => void;
+  onFilterToggle?: (filterKey: string, active: boolean) => void;
+  onSortChange?: (sort: "urgency" | "due" | "name") => void;
+  onSelectPriorityFilter?: (priority: string) => void;
+  onSelectProjectFilter?: (projectId: string) => void;
   className?: string;
 }
 
 export function QuickScopeFilter({
   activeScope = "assignees",
   onScopeChange,
-  scopeCounts,
+  scopeCounts = { assignees: 4, priority: 0, project: 1 },
+  assigneeDetails,
+  priorityDetails = { urgent: 0, high: 0, medium: 4, low: 0 },
+  projectDetails = [],
+  activeHorizon = "all",
+  onHorizonChange,
+  onFilterToggle,
+  onSortChange,
+  onSelectPriorityFilter,
+  onSelectProjectFilter,
   className
 }: QuickScopeFilterProps) {
   const [selected, setSelected] = useState<"assignees" | "priority" | "project">(activeScope);
-  const [sliderPos, setSliderPos] = useState(selected === "assignees" ? 0 : selected === "priority" ? 50 : 100);
+  const [horizon, setHorizon] = useState<"today" | "7d" | "30d" | "all">(activeHorizon);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedPriorityChip, setSelectedPriorityChip] = useState<string | null>(null);
+  const [selectedProjectChip, setSelectedProjectChip] = useState<string | null>(null);
+  const [activeFilters, setActiveFilters] = useState<{ hideCompleted: boolean; urgentOnly: boolean; dueSoon: boolean }>({
+    hideCompleted: false,
+    urgentOnly: false,
+    dueSoon: false
+  });
+  const [sortBy, setSortBy] = useState<"urgency" | "due" | "name">("urgency");
 
   useEffect(() => {
     setSelected(activeScope);
-    setSliderPos(activeScope === "assignees" ? 0 : activeScope === "priority" ? 50 : 100);
   }, [activeScope]);
 
+  useEffect(() => {
+    setHorizon(activeHorizon);
+  }, [activeHorizon]);
+
   const handleSelect = (scope: "assignees" | "priority" | "project") => {
-    setSelected(scope);
-    setSliderPos(scope === "assignees" ? 0 : scope === "priority" ? 50 : 100);
-    onScopeChange?.(scope);
+    if (selected === scope && isDrawerOpen) {
+      setIsDrawerOpen(false);
+    } else {
+      setSelected(scope);
+      setIsDrawerOpen(true);
+      onScopeChange?.(scope);
+    }
   };
 
+  const handleHorizonClick = (h: "today" | "7d" | "30d" | "all") => {
+    setHorizon(h);
+    onHorizonChange?.(h);
+  };
+
+  const toggleFilter = (key: keyof typeof activeFilters) => {
+    setActiveFilters(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      onFilterToggle?.(key, next[key]);
+      return next;
+    });
+  };
+
+  const handlePriorityChipClick = (p: string) => {
+    const next = selectedPriorityChip === p ? null : p;
+    setSelectedPriorityChip(next);
+    onSelectPriorityFilter?.(next || "");
+  };
+
+  const handleProjectChipClick = (pId: string) => {
+    const next = selectedProjectChip === pId ? null : pId;
+    setSelectedProjectChip(next);
+    onSelectProjectFilter?.(next || "");
+  };
+
+  const activeFilterCount = 
+    (activeFilters.hideCompleted ? 1 : 0) + 
+    (activeFilters.urgentOnly ? 1 : 0) + 
+    (activeFilters.dueSoon ? 1 : 0) +
+    (selectedPriorityChip ? 1 : 0) +
+    (selectedProjectChip ? 1 : 0);
+
+  const horizonPercentage = horizon === "today" ? "25%" : horizon === "7d" ? "50%" : horizon === "30d" ? "75%" : "100%";
+
   return (
-    <div className={cn("p-3 sm:p-3.5 rounded-3xl bg-white dark:bg-[#161722] border border-black/[0.06] dark:border-white/[0.08] shadow-xs space-y-2.5 select-none", className)}>
-      {/* Top Minimalist Slider Track with Frosted Handle */}
-      <div className="relative h-6 px-3 rounded-full bg-neutral-100 dark:bg-neutral-800/80 border border-black/[0.04] dark:border-white/[0.05] flex items-center justify-between">
-        <div className="h-1 w-full rounded-full bg-neutral-200 dark:bg-neutral-700/60 relative overflow-hidden">
-          <motion.div
-            className="absolute top-0 bottom-0 left-0 bg-neutral-400 dark:bg-neutral-500 rounded-full"
-            animate={{ width: `${Math.max(15, sliderPos)}%` }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          />
+    <div className={cn("p-3 sm:p-3.5 rounded-[30px] bg-white dark:bg-[#161722] border border-slate-200/80 dark:border-slate-800 shadow-[0_4px_24px_rgba(0,0,0,0.03)] space-y-2.5 select-none relative transition-all", className)}>
+      {/* Top Slider Track with Interactive Time Horizons & Right Smart Lens Bead */}
+      <div className="flex items-center gap-2">
+        {/* Interactive Scrubbable Time Horizon Track */}
+        <div className="relative flex-1 h-8 px-2 rounded-full bg-[#f1f5f9] dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
+          {/* Animated Fill Bar */}
+          <div className="absolute inset-x-2 h-1.5 rounded-full bg-[#cbd5e1] dark:bg-slate-700 overflow-hidden pointer-events-none">
+            <motion.div
+              className="absolute top-0 bottom-0 left-0 bg-[#8da2b5] dark:bg-slate-400 rounded-full"
+              animate={{ width: horizonPercentage }}
+              transition={{ type: "spring", stiffness: 420, damping: 30 }}
+            />
+          </div>
+
+          {/* 4 Interactive Click Notches for Time Horizon */}
+          {(["today", "7d", "30d", "all"] as const).map((h, idx) => (
+            <button
+              key={h}
+              type="button"
+              onClick={() => handleHorizonClick(h)}
+              className={cn(
+                "relative z-10 size-6 rounded-full flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all",
+                horizon === h
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs scale-110"
+                  : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:scale-105"
+              )}
+              title={`Filter time horizon: ${h === "today" ? "Last 24 Hours" : h === "7d" ? "Past 7 Days" : h === "30d" ? "Past 30 Days" : "All Time"}`}
+            >
+              {h === "today" ? "24h" : h === "7d" ? "7d" : h === "30d" ? "30d" : "All"}
+            </button>
+          ))}
         </div>
-        <motion.div
-          animate={{ x: selected === "assignees" ? 0 : selected === "priority" ? 40 : 80 }}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          className="size-4 rounded-full bg-white shadow-md border border-black/10 dark:border-white/20 flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 ml-2"
+
+        {/* Smart Lens Toggle Bead (Interactive) */}
+        <button
+          type="button"
+          onClick={() => setIsDrawerOpen(prev => !prev)}
+          className={cn(
+            "size-8 rounded-full border transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-xs",
+            isDrawerOpen
+              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-slate-900 dark:border-white scale-105"
+              : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700 hover:scale-105"
+          )}
+          title={isDrawerOpen ? "Close Inspector & Filters" : "Open Scope Inspector & Smart Filters"}
         >
-          <div className="size-1.5 rounded-full bg-neutral-400" />
-        </motion.div>
+          <div className={cn(
+            "size-2.5 rounded-full transition-all",
+            isDrawerOpen ? "bg-white dark:bg-slate-900" : activeFilterCount > 0 ? "bg-emerald-500 animate-pulse ring-2 ring-emerald-500/40" : "bg-[#8da2b5] dark:bg-slate-400"
+          )} />
+        </button>
       </div>
 
-      {/* Segmented Control Bar */}
-      <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-neutral-100/80 dark:bg-neutral-900/60 border border-black/[0.03] dark:border-white/[0.04]">
+      {/* Segmented Pill Control Bar (Assignees, Priority, Project) */}
+      <div className="grid grid-cols-3 gap-1 p-1 rounded-[22px] bg-[#f1f5f9] dark:bg-slate-900/60 border border-slate-200/40 dark:border-slate-800/40">
         {(["assignees", "priority", "project"] as const).map((key) => {
           const isActive = selected === key;
-          const count = scopeCounts?.[key];
+          const count = scopeCounts?.[key] ?? (key === "assignees" ? 4 : key === "priority" ? 0 : 1);
           return (
             <button
               key={key}
               type="button"
               onClick={() => handleSelect(key)}
               className={cn(
-                "py-1.5 px-3 rounded-xl text-xs font-mono transition-all text-center capitalize cursor-pointer flex items-center justify-center gap-1.5",
+                "py-1.5 px-2.5 rounded-[18px] text-xs sm:text-[13px] font-medium transition-all text-center capitalize cursor-pointer flex items-center justify-center gap-1.5",
                 isActive
-                  ? "bg-white dark:bg-[#1e202f] text-neutral-900 dark:text-white shadow-xs font-bold"
-                  : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300"
+                  ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] font-bold"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               )}
             >
               <span>{key}</span>
-              {typeof count === "number" && (
-                <span className={cn(
-                  "text-[10px] px-1.5 py-0.2 rounded-full",
-                  isActive ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white font-bold" : "bg-neutral-200/60 dark:bg-neutral-800/60 text-neutral-400"
-                )}>
-                  {count}
-                </span>
-              )}
+              <span className={cn(
+                "min-w-[17px] h-[17px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
+                isActive
+                  ? "bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200"
+                  : "bg-[#e2e8f0]/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+              )}>
+                {count}
+              </span>
             </button>
           );
         })}
       </div>
+
+      {/* Expandable Rich Scope Inspector Drawer (Shows Assignees, Priority, Project, and Smart Filters) */}
+      <AnimatePresence>
+        {isDrawerOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -6 }}
+            animate={{ opacity: 1, height: "auto", y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -6 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 space-y-3 overflow-hidden"
+          >
+            {/* VIEW 1: ASSIGNEES BREAKDOWN */}
+            {selected === "assignees" && (
+              <div className="space-y-2 p-2.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Workspace Assignees
+                  </span>
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    {assigneeDetails?.completed ?? scopeCounts.assignees ?? 4} Done
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-6 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-[10px] flex items-center justify-center">
+                      {(assigneeDetails?.name || "You")[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-800 dark:text-slate-100">
+                        {assigneeDetails?.name || "You (Workspace Owner)"}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {assigneeDetails?.count ?? scopeCounts.assignees ?? 4} total tasks assigned
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    100% Complete
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* VIEW 2: PRIORITY BREAKDOWN WITH 1-CLICK FILTERS */}
+            {selected === "priority" && (
+              <div className="space-y-2 p-2.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Priority Breakdown
+                  </span>
+                  <span className="text-[10px] text-slate-400">Click to filter</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { label: "Urgent", key: "urgent", count: priorityDetails.urgent, color: "text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20", icon: "🔥" },
+                    { label: "High", key: "high", count: priorityDetails.high, color: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20", icon: "⚡" },
+                    { label: "Medium", key: "medium", count: priorityDetails.medium, color: "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20", icon: "📋" },
+                    { label: "Low", key: "low", count: priorityDetails.low, color: "text-slate-600 dark:text-slate-400 bg-slate-500/10 border-slate-500/20", icon: "💤" },
+                  ].map((p) => (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => handlePriorityChipClick(p.key)}
+                      className={cn(
+                        "p-2 rounded-xl border text-xs font-semibold flex items-center justify-between transition cursor-pointer",
+                        selectedPriorityChip === p.key
+                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-2xs"
+                          : `${p.color} hover:opacity-90`
+                      )}
+                    >
+                      <span className="flex items-center gap-1">
+                        <span>{p.icon}</span> <span>{p.label}</span>
+                      </span>
+                      <span className="font-bold">{p.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* VIEW 3: PROJECT / NOTEBOOK BREAKDOWN */}
+            {selected === "project" && (
+              <div className="space-y-2 p-2.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Connected Projects ({projectDetails.length || 1})
+                  </span>
+                  <span className="text-[10px] text-slate-400">Click to isolate</span>
+                </div>
+
+                <div className="space-y-1.5 max-h-[120px] overflow-y-auto [scrollbar-width:thin]">
+                  {(projectDetails.length > 0 ? projectDetails : [{ id: "general", name: "Dispatched Items / Workspace", count: scopeCounts.assignees || 4 }]).map((proj) => (
+                    <button
+                      key={proj.id}
+                      type="button"
+                      onClick={() => handleProjectChipClick(proj.id)}
+                      className={cn(
+                        "w-full p-2 rounded-xl border text-xs flex items-center justify-between transition cursor-pointer",
+                        selectedProjectChip === proj.id
+                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-2xs font-bold"
+                          : "bg-white dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      )}
+                    >
+                      <span className="truncate flex items-center gap-1.5">
+                        <FileText size={12} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{proj.name}</span>
+                      </span>
+                      <span className="text-[10.5px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 shrink-0">
+                        {proj.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* QUICK FILTERS PILL TOGGLES */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => toggleFilter("hideCompleted")}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer border flex items-center gap-1",
+                  activeFilters.hideCompleted
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-2xs"
+                    : "bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-200/70 dark:border-slate-700/60 hover:bg-slate-100"
+                )}
+              >
+                <span>👁️ Hide Done</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleFilter("urgentOnly")}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer border flex items-center gap-1",
+                  activeFilters.urgentOnly
+                    ? "bg-rose-500 text-white border-transparent shadow-2xs"
+                    : "bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-200/70 dark:border-slate-700/60 hover:bg-slate-100"
+                )}
+              >
+                <span>🔥 Urgent</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleFilter("dueSoon")}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer border flex items-center gap-1",
+                  activeFilters.dueSoon
+                    ? "bg-amber-500 text-white border-transparent shadow-2xs"
+                    : "bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-200/70 dark:border-slate-700/60 hover:bg-slate-100"
+                )}
+              >
+                <span>🕒 Due Soon</span>
+              </button>
+            </div>
+
+            {/* Quick Sort Bar */}
+            <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sort By</span>
+              <div className="flex items-center gap-1">
+                {(["urgency", "due", "name"] as const).map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setSortBy(s);
+                      onSortChange?.(s);
+                    }}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md text-[10px] font-bold capitalize cursor-pointer transition",
+                      sortBy === s
+                        ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white"
+                        : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    )}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -220,96 +518,159 @@ export interface StackedTask {
   subtitle: string;
   assignedAgo: string;
   type: string;
+  sourceType?: "user_created" | "intelligence" | "workspace_task";
+  authorName?: string;
   pageId?: string;
+  pageTitle?: string;
+  checked?: boolean;
   priority?: "urgent" | "high" | "medium" | "low";
+}
+
+export interface TaskTotalStats {
+  total: number;
+  completed: number;
+  pending: number;
+  urgent: number;
+  high?: number;
+  medium?: number;
+  low?: number;
+  projectsCount?: number;
 }
 
 export interface StackedTaskDispatcherProps {
   tasks?: StackedTask[];
+  completedTasks?: StackedTask[];
+  totalStats?: TaskTotalStats;
   userId?: string;
   onDone?: (task: StackedTask) => void;
+  onReopenTask?: (task: StackedTask) => void;
   onRemindLater?: (task: StackedTask) => void;
   onDismiss?: (task: StackedTask) => void;
-  onAddTask?: (title: string, subtitle?: string) => void;
+  onAddTask?: (title: string, subtitle?: string, priority?: "urgent" | "high" | "medium" | "low") => void;
   className?: string;
+}
+
+// Custom Receipt/Document icon matching user's reference image
+function ReceiptNoteGraphic({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="44" height="44" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M9 8C9 5.79086 10.7909 4 13 4H25C27.2091 4 29 5.79086 29 8V27.5L26 26L23 27.5L20 26L17 27.5L14 26L11 27.5L9 26V8Z"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <line x1="13.5" y1="10" x2="23.5" y2="10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="13.5" y1="14.5" x2="23.5" y2="14.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="13.5" y1="19" x2="23.5" y2="19" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="13.5" y1="23.5" x2="19" y2="23.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="28" cy="27" r="6" fill="currentColor" />
+      <path d="M28 24.2V29.8M25.2 27H30.8" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Custom Rosette/Scalloped Check Badge matching user's green button
+function RosetteCheckBadge({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 2L14.3 4.4L17.5 4.1L18.7 7.1L21.7 8.5L21.4 11.8L23.5 14.3L21.9 17.1L22.5 20.3L19.3 21L17.5 23.5L14.5 22.5L12 24L9.5 22.5L6.5 23.5L4.7 21L1.5 20.3L2.1 17.1L0.5 14.3L2.6 11.8L2.3 8.5L5.3 7.1L6.5 4.1L9.7 4.4L12 2Z"
+        fill="#15803d"
+      />
+      <path d="M8 12.5L10.5 15L16 9.5" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 export function StackedTaskDispatcher({
   tasks: initialTasks,
+  completedTasks: initialCompleted = [],
+  totalStats,
   userId = "default",
   onDone,
+  onReopenTask,
   onRemindLater,
   onDismiss,
   onAddTask,
   className
 }: StackedTaskDispatcherProps) {
-  const defaultTasks: StackedTask[] = [
-    {
-      id: "task-1",
-      title: "Send notes to Johnny",
-      subtitle: "Executive debrief on Q3 roadmap & sprint dependencies",
-      assignedAgo: "3m ago",
-      type: "New Task",
-      priority: "high"
-    },
-    {
-      id: "task-2",
-      title: "Review Design System tokens",
-      subtitle: "Check contrast ratios and typography scale",
-      assignedAgo: "15m ago",
-      type: "Review",
-      priority: "medium"
-    },
-    {
-      id: "task-3",
-      title: "Deploy API Gateway patch",
-      subtitle: "Verify rate limiting headers & latency telemetry",
-      assignedAgo: "1h ago",
-      type: "DevOps",
-      priority: "urgent"
-    }
-  ];
-
-  const [taskList, setTaskList] = useState<StackedTask[]>(() => {
-    if (initialTasks && initialTasks.length > 0) return initialTasks;
-    const saved = getWorkflowUserData(userId)?.dispatcherTasks;
-    return saved || defaultTasks;
-  });
-
+  const [localTasks, setLocalTasks] = useState<StackedTask[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newSubtitle, setNewSubtitle] = useState("");
+  const [newPriority, setNewPriority] = useState<"urgent" | "high" | "medium" | "low">("high");
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  useEffect(() => {
-    if (initialTasks && initialTasks.length > 0) {
-      setTaskList(initialTasks);
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`noska_dismissed_dispatcher_${userId}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
     }
-  }, [initialTasks]);
+  });
 
-  const current = taskList[0];
+  const taskList = useMemo(() => {
+    const rawList = initialTasks && initialTasks.length > 0
+      ? [...localTasks, ...initialTasks.filter(it => !localTasks.some(lt => lt.id === it.id))]
+      : localTasks;
+
+    return rawList.filter(t => !dismissedIds.includes(t.id));
+  }, [initialTasks, localTasks, dismissedIds]);
+
+  const totalCards = taskList.length;
+  const safeIndex = totalCards > 0 ? ((currentIndex % totalCards) + totalCards) % totalCards : 0;
+  const current = taskList[safeIndex];
 
   const handleDone = () => {
-    if (!current) return;
+    if (!current?.id) return;
     onDone?.(current);
-    const updated = taskList.slice(1);
-    setTaskList(updated);
-    saveWorkflowUserData(userId, { dispatcherTasks: updated });
+    setDismissedIds(prev => {
+      const next = [...prev, current.id];
+      try {
+        localStorage.setItem(`noska_dismissed_dispatcher_${userId}`, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    setLocalTasks(prev => prev.filter(t => t.id !== current.id));
+    if (safeIndex >= totalCards - 1) {
+      setCurrentIndex(Math.max(0, safeIndex - 1));
+    }
   };
 
-  const handleRemindLater = () => {
-    if (!current) return;
+  const handleCycleNext = () => {
+    if (totalCards <= 1) return;
     onRemindLater?.(current);
-    const updated = [...taskList.slice(1), taskList[0]];
-    setTaskList(updated);
-    saveWorkflowUserData(userId, { dispatcherTasks: updated });
+    setCurrentIndex(prev => (prev + 1) % totalCards);
+  };
+
+  const handleCyclePrev = () => {
+    if (totalCards <= 1) return;
+    setCurrentIndex(prev => (prev - 1 + totalCards) % totalCards);
+  };
+
+  const handleSelectStackIndex = (offset: number) => {
+    if (totalCards <= 1) return;
+    setCurrentIndex(prev => (prev + offset) % totalCards);
   };
 
   const handleDismiss = () => {
-    if (!current) return;
+    if (!current?.id) return;
     onDismiss?.(current);
-    const updated = taskList.slice(1);
-    setTaskList(updated);
-    saveWorkflowUserData(userId, { dispatcherTasks: updated });
+    setDismissedIds(prev => {
+      const next = [...prev, current.id];
+      try {
+        localStorage.setItem(`noska_dismissed_dispatcher_${userId}`, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    setLocalTasks(prev => prev.filter(t => t.id !== current.id));
+    if (safeIndex >= totalCards - 1) {
+      setCurrentIndex(Math.max(0, safeIndex - 1));
+    }
   };
 
   const handleCreateNew = (e: React.FormEvent) => {
@@ -318,163 +679,311 @@ export function StackedTaskDispatcher({
     const created: StackedTask = {
       id: `task-custom-${Date.now()}`,
       title: newTitle.trim(),
-      subtitle: newSubtitle.trim() || "Workspace action item",
+      subtitle: newSubtitle.trim() || "Personal deliverable created by you",
       assignedAgo: "Just now",
-      type: "Priority Item",
-      priority: "high"
+      type: "Created by You",
+      sourceType: "user_created",
+      authorName: "You",
+      priority: newPriority
     };
-    const updated = [created, ...taskList];
-    setTaskList(updated);
-    saveWorkflowUserData(userId, { dispatcherTasks: updated });
-    onAddTask?.(newTitle.trim(), newSubtitle.trim());
+    setLocalTasks(prev => [created, ...prev]);
+    setCurrentIndex(0);
+    onAddTask?.(newTitle.trim(), newSubtitle.trim(), newPriority);
     setNewTitle("");
     setNewSubtitle("");
     setIsAdding(false);
   };
 
-  if (taskList.length === 0) {
-    return (
-      <div className={cn("p-6 rounded-[28px] bg-white dark:bg-[#161722] border border-black/[0.06] dark:border-white/[0.08] shadow-xs text-center space-y-3", className)}>
-        <div className="size-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
-          <CheckCheck size={20} />
-        </div>
-        <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">All dispatched tasks clear!</h3>
-        <p className="text-xs text-neutral-500">Noska Intelligence has cleared your immediate action queue.</p>
-        <button
-          type="button"
-          onClick={() => setIsAdding(true)}
-          className="px-4 py-2 rounded-xl bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs font-bold shadow-xs cursor-pointer inline-flex items-center gap-1.5"
-        >
-          <Plus size={14} /> <span>Dispatch New Task</span>
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className={cn("relative pt-3 pb-2 px-1", className)}>
-      {/* 3D Stack Depth Underlayers */}
-      <div className="absolute inset-x-5 top-5 h-20 rounded-[28px] bg-neutral-200/60 dark:bg-neutral-800/40 border border-black/[0.04] dark:border-white/[0.05] shadow-xs translate-y-3 scale-[0.94] pointer-events-none" />
-      <div className="absolute inset-x-3 top-4 h-20 rounded-[28px] bg-neutral-100/90 dark:bg-neutral-800/70 border border-black/[0.05] dark:border-white/[0.06] shadow-xs translate-y-1.5 scale-[0.97] pointer-events-none" />
-
-      {/* Top Interactive Main Card */}
-      <motion.div
-        layout
-        key={current.id}
-        initial={{ opacity: 0, y: -10, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9, y: 15 }}
-        transition={{ type: "spring", stiffness: 450, damping: 28 }}
-        className="relative p-5 rounded-[28px] bg-white dark:bg-[#161722] border border-black/[0.08] dark:border-white/[0.09] shadow-xl space-y-3.5 z-10"
-      >
-        {/* Top Row with Icon, Metadata, and Options */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-2xl bg-neutral-100 dark:bg-neutral-800/80 border border-black/[0.05] dark:border-white/[0.08] flex items-center justify-center text-neutral-700 dark:text-neutral-200 shadow-2xs">
-              <FileText size={18} strokeWidth={2.2} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-neutral-400 block">
-                  {current.type} • Assigned to You {current.assignedAgo}
-                </span>
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                  {taskList.length} in queue
-                </span>
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-neutral-900 dark:text-neutral-100 tracking-tight leading-tight mt-0.5">
-                {current.title}
-              </h3>
-            </div>
-          </div>
-
-          {/* Options and Dismiss */}
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setIsAdding(prev => !prev)}
-              className="size-7 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
-              title="Add task to queue"
-            >
-              <Plus size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={handleDismiss}
-              className="size-7 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 hover:text-rose-500 flex items-center justify-center transition cursor-pointer"
-              title="Dismiss task"
-            >
-              <X size={13} />
-            </button>
-          </div>
-        </div>
-
-        {/* Subtitle description */}
-        <p className="text-xs text-neutral-500 dark:text-neutral-400 pl-13 leading-relaxed">
-          {current.subtitle}
-        </p>
-
-        {/* Add inline form if open */}
+    <div className={cn("relative pt-4 pb-10 select-none", className)}>
+      {/* INLINE TASK DISPATCH FORM MODAL */}
+      <AnimatePresence>
         {isAdding && (
-          <form onSubmit={handleCreateNew} className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/80 border border-black/5 dark:border-white/10 space-y-2">
+          <motion.form
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            onSubmit={handleCreateNew}
+            className="mb-5 p-4 rounded-[32px] bg-white dark:bg-[#1a1b26] border-2 border-slate-200/90 dark:border-slate-700/80 space-y-2.5 shadow-[0_12px_36px_rgba(0,0,0,0.08)] z-50 relative"
+          >
+            <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                Dispatch New Task to Stack
+              </span>
+              <div className="flex items-center gap-1">
+                {(["urgent", "high", "medium", "low"] as const).map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setNewPriority(p)}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md text-[10px] font-bold capitalize cursor-pointer transition",
+                      newPriority === p
+                        ? p === "urgent"
+                          ? "bg-rose-500 text-white"
+                          : p === "high"
+                          ? "bg-amber-500 text-white"
+                          : "bg-slate-800 text-white dark:bg-white dark:text-slate-900"
+                        : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    )}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <input
               type="text"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Task name (e.g. Prep pitch deck)"
+              placeholder="Task deliverable title..."
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 text-sm font-semibold border border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               autoFocus
-              className="w-full bg-transparent text-xs font-bold outline-none text-neutral-900 dark:text-white placeholder:text-neutral-400"
             />
             <input
               type="text"
               value={newSubtitle}
               onChange={(e) => setNewSubtitle(e.target.value)}
-              placeholder="Notes or brief context"
-              className="w-full bg-transparent text-[11px] outline-none text-neutral-500 placeholder:text-neutral-400"
+              placeholder="Context or notes (optional)..."
+              className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 text-xs border border-slate-200 dark:border-slate-700 focus:outline-hidden"
             />
-            <div className="flex justify-end gap-2 pt-1">
+
+            <div className="flex justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setIsAdding(false)}
-                className="px-2.5 py-1 text-xs text-neutral-500 hover:text-neutral-800 cursor-pointer"
+                className="px-3 py-1 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-3 py-1 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-xs font-bold cursor-pointer shadow-xs"
+                className="px-4 py-1.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold cursor-pointer shadow-xs hover:scale-102 transition"
               >
                 Push to Stack
               </button>
             </div>
-          </form>
+          </motion.form>
         )}
+      </AnimatePresence>
 
-        {/* Bottom Dual Action Pill Buttons */}
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <motion.button
+      {/* 3D STACK CONTAINER OR REAL EMPTY STATE */}
+      {totalCards === 0 || !current ? (
+        <div className="relative p-7 sm:p-8 rounded-[36px] bg-[#f8f9fa] dark:bg-[#181926] border-[3.5px] border-white dark:border-[#26283b] shadow-[0_16px_40px_-8px_rgba(0,0,0,0.07)] text-center space-y-4">
+          <div className="size-14 mx-auto rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shadow-2xs">
+            <CheckCircle2 size={28} strokeWidth={2.4} />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base sm:text-lg font-black text-neutral-900 dark:text-neutral-100">
+              All Deliverables Cleared!
+            </h3>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto">
+              Your focus queue is clear with no pending tasks. Dispatch a new task to your stack to get started.
+            </p>
+          </div>
+          <button
             type="button"
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={handleRemindLater}
-            className="flex-1 py-2.5 px-4 rounded-full bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-700/80 border border-black/[0.06] dark:border-white/[0.08] text-xs font-bold text-neutral-700 dark:text-neutral-200 flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+            onClick={() => setIsAdding(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold shadow-xs hover:scale-102 transition cursor-pointer"
           >
-            <Bell size={13} className="text-neutral-400" />
-            <span>Remind Me Later</span>
-          </motion.button>
-
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={handleDone}
-            className="flex-1 py-2.5 px-4 rounded-full bg-[#1db954] hover:bg-[#1aa34a] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(29,185,84,0.35)] transition cursor-pointer"
-          >
-            <CheckCircle2 size={14} className="fill-white text-[#1db954]" />
-            <span>Mark as Done</span>
-          </motion.button>
+            <Plus size={14} strokeWidth={2.6} />
+            <span>+ Dispatch New Task</span>
+          </button>
         </div>
-      </motion.div>
+      ) : (
+        <div className="relative">
+          {/* BEHIND LAYER 3 (Furthest Behind) */}
+          <div
+            onClick={() => handleSelectStackIndex(3)}
+            className={cn(
+              "absolute inset-x-9 top-0 h-44 rounded-[36px] bg-[#f4f6f8] dark:bg-[#181926] border-[3.5px] border-white dark:border-[#222436] shadow-[0_4px_16px_rgba(0,0,0,0.03)] translate-y-9 scale-[0.87] transition-all cursor-pointer",
+              totalCards >= 4 ? "opacity-90 hover:translate-y-9.5" : "opacity-45 pointer-events-none"
+            )}
+          />
+
+          {/* BEHIND LAYER 2 (Middle Behind) */}
+          <div
+            onClick={() => handleSelectStackIndex(2)}
+            className={cn(
+              "absolute inset-x-5.5 top-0 h-44 rounded-[36px] bg-[#f7f8fa] dark:bg-[#1b1d2c] border-[3.5px] border-white dark:border-[#25283a] shadow-[0_6px_20px_rgba(0,0,0,0.04)] translate-y-6 scale-[0.92] transition-all cursor-pointer",
+              totalCards >= 3 ? "opacity-95 hover:translate-y-6.5" : "opacity-65 pointer-events-none"
+            )}
+          />
+
+          {/* BEHIND LAYER 1 (Directly Behind Front Card) */}
+          <div
+            onClick={() => handleSelectStackIndex(1)}
+            className={cn(
+              "absolute inset-x-2.5 top-0 h-44 rounded-[36px] bg-[#fafbfc] dark:bg-[#1e2030] border-[3.5px] border-white dark:border-[#282b3e] shadow-[0_8px_24px_rgba(0,0,0,0.05)] translate-y-3 scale-[0.965] transition-all cursor-pointer",
+              totalCards >= 2 ? "opacity-100 hover:translate-y-3.5" : "opacity-80 pointer-events-none"
+            )}
+          />
+
+          {/* FRONT TOP ACTIONABLE CARD (With exact molded clay aesthetic) */}
+          <motion.div
+            key={`${current.id}-${safeIndex}`}
+            layout
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.4}
+            onDragEnd={(_, info) => {
+              if (Math.abs(info.offset.x) > 50) {
+                if (info.offset.x < 0) handleCycleNext();
+                else handleCyclePrev();
+              }
+            }}
+            initial={{ opacity: 0, y: -16, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 440, damping: 28 }}
+            className="relative z-30 p-6 sm:p-7 rounded-[36px] bg-[#f8f9fa] dark:bg-[#181926] border-[3.5px] border-white dark:border-[#26283b] shadow-[0_16px_40px_-8px_rgba(0,0,0,0.07),0_2px_8px_rgba(0,0,0,0.02),inset_0_1px_0_rgba(255,255,255,0.9)] space-y-4.5 cursor-grab active:cursor-grabbing"
+          >
+            {/* FLOATING TOP-RIGHT BUBBLE BUTTONS (Swap and Dismiss) */}
+          <div className="absolute -top-3.5 right-6 z-40 flex items-center gap-1.5 p-1 rounded-full bg-white/95 dark:bg-[#202234] border-[2px] border-white dark:border-[#2d3045] shadow-[0_4px_16px_rgba(0,0,0,0.12)] backdrop-blur-md">
+            <motion.button
+              whileTap={{ rotate: 180 }}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCycleNext();
+              }}
+              className="h-7.5 px-3 rounded-full bg-slate-900 hover:bg-indigo-600 text-white text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+              title="Swap / Cycle through stacked cards"
+            >
+              <span>Swap</span>
+              <RotateCw size={11} strokeWidth={2.6} />
+            </motion.button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDismiss();
+              }}
+              className="size-7.5 rounded-full bg-[#8e8e93] hover:bg-rose-500 text-white flex items-center justify-center transition cursor-pointer shadow-2xs"
+              title="Dismiss task from queue"
+            >
+              <X size={13} strokeWidth={2.8} />
+            </button>
+          </div>
+
+          {/* MAIN CONTENT ROW (Custom Receipt Graphic + Subtitle + Big Bold Headline) */}
+          <div className="flex items-start gap-4 pr-14">
+            <div className="text-slate-500 dark:text-slate-400 shrink-0 mt-0.5">
+              <ReceiptNoteGraphic />
+            </div>
+
+            <div className="space-y-1.5 min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                {current.sourceType === "intelligence" ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 text-[10.5px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-2xs">
+                    <TactileGlyph name="brain" className="size-3 text-purple-600 dark:text-purple-300" />
+                    <span>Noska Intelligence</span>
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[10.5px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-2xs">
+                    <TactileGlyph name="user" className="size-3 text-emerald-600 dark:text-emerald-400" />
+                    <span>{current.authorName || "Created by You"}</span>
+                  </span>
+                )}
+
+                {totalCards > 1 && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-[10.5px] font-black text-slate-700 dark:text-slate-200 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCyclePrev();
+                      }}
+                      className="hover:text-indigo-600 px-0.5 cursor-pointer font-black text-xs"
+                      title="Previous task"
+                    >
+                      ‹
+                    </button>
+                    <span className="tabular-nums">{safeIndex + 1} of {totalCards}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCycleNext();
+                      }}
+                      className="hover:text-indigo-600 px-0.5 cursor-pointer font-black text-xs"
+                      title="Next task"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+
+                {current.priority && current.priority !== "medium" && (
+                  <span className={cn(
+                    "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1",
+                    current.priority === "urgent"
+                      ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                      : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                  )}>
+                    <TactileGlyph name={current.priority === "urgent" ? "fire" : "zap"} className="size-2.5" />
+                    <span>{current.priority === "urgent" ? "Urgent" : "High Priority"}</span>
+                  </span>
+                )}
+              </div>
+
+              <h2 className="text-[20px] sm:text-[24px] font-black text-[#111827] dark:text-[#f8fafc] tracking-[-0.03em] leading-tight truncate">
+                {current.title}
+              </h2>
+
+              <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                {current.pageTitle && (
+                  <span className="font-semibold text-neutral-600 dark:text-neutral-300 flex items-center gap-1">
+                    <TactileGlyph name="folder" className="size-3 text-neutral-400" />
+                    <span>{current.pageTitle}</span>
+                  </span>
+                )}
+                {current.subtitle &&
+                 current.subtitle !== `Project: ${current.pageTitle}` &&
+                 current.subtitle !== `From page: ${current.pageTitle}` &&
+                 current.subtitle !== current.pageTitle && (
+                  <span>• {current.subtitle}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* DUAL ACTION PILL BUTTONS */}
+          <div className="flex items-center justify-between gap-3 pt-0.5">
+            {/* Left Pill: Remind Me Later (White molded clay button) */}
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCycleNext();
+              }}
+              className="flex-1 py-3 px-4 rounded-full bg-white dark:bg-[#202232] hover:bg-slate-50 dark:hover:bg-[#25283a] border border-black/[0.06] dark:border-white/[0.08] text-xs sm:text-[13.5px] font-bold text-slate-600 dark:text-slate-300 flex items-center justify-center gap-2 transition shadow-[0_4px_12px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,1)] cursor-pointer"
+            >
+              <Bell size={15} className="text-slate-500 fill-slate-500" />
+              <span>Remind Me Later</span>
+            </motion.button>
+
+            {/* Right Pill: Mark as Done (Vibrant green tactile button with rosette check badge) */}
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDone();
+              }}
+              className="flex-1 py-3 px-4 rounded-full bg-gradient-to-b from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-xs sm:text-[13.5px] font-bold flex items-center justify-center gap-2 shadow-[0_6px_20px_rgba(34,197,94,0.42),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_0_rgba(0,0,0,0.15)] transition cursor-pointer"
+            >
+              <RosetteCheckBadge />
+              <span>Mark as Done</span>
+            </motion.button>
+          </div>
+        </motion.div>
+      </div>
+      )}
     </div>
   );
 }

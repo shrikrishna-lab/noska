@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { supabase, getAdminToken, SUPABASE_ENABLED } from "@/lib/supabase";
-import { subscribeRealtime } from "@/lib/realtime";
+import { subscribeRealtime, subscribeRealtimeInvalidation } from "@/lib/realtime";
 import { useIslandNotification } from "@/components/ui/DynamicIslandNotification";
 import type { AppNotification, NotificationsResponse, NotificationFilters } from "./types";
 
@@ -458,10 +458,7 @@ export function useRealtimeNotifications() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    return subscribeRealtime((row) => {
-      if (row.table_name !== "notifications") return;
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    });
+    return subscribeRealtimeInvalidation(queryClient, ["notifications"], "notifications");
   }, [queryClient]);
 }
 

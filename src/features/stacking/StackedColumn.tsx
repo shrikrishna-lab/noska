@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useNotificationTarget } from '../notifications/navigation';
 import {
   X,
   BookOpen,
@@ -53,6 +54,10 @@ export default function StackedColumn({
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [scrollPercent, setScrollPercent] = useState(0);
   const pageText = plainText(page);
+  const notificationTarget = useNotificationTarget(page.id, isActive);
+  useEffect(() => {
+    if (notificationTarget?.commentId) setRightPanelOpen(true);
+  }, [notificationTarget]);
 
   const handleMouseDown = (e) => {
     e.preventDefault();
@@ -73,6 +78,8 @@ export default function StackedColumn({
 
   return (
     <div
+      data-notification-page={page.id}
+      data-notification-active={isActive ? 'true' : 'false'}
       className={`relative flex h-full flex-col bg-[var(--bg)] border-r border-[var(--border)] transition-shadow ${
         isActive ? "ring-1 ring-inset ring-[var(--accent)] z-10 shadow-lg" : "shadow-sm"
       } ${isResizable ? "shrink-0" : "flex-1 min-w-[360px]"}`}
@@ -187,6 +194,7 @@ export default function StackedColumn({
               className="h-full border-l border-[var(--border)] bg-[var(--sidebar)] flex flex-col min-w-0 overflow-hidden text-xs shrink-0 select-none"
             >
               <PageInspector
+                notificationCommentId={notificationTarget?.commentId}
                 page={page}
                 pages={pages}
                 pageId={page.id}

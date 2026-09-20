@@ -1003,13 +1003,16 @@ function getCollabUser(): { id: string; name: string; avatar?: string } {
 
 export default function PageInspector({
   page, pages, pageId, activeId,
-  onPatchPage, onSelect, onAskAI, onRestoreVersion, onToast,
+  onPatchPage, onSelect, onAskAI, onRestoreVersion, onToast, notificationCommentId = undefined,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [versions, setVersions] = useState([]);
   const [auditCount, setAuditCount] = useState(0);
   const [aiEvents, setAiEvents] = useState([]);
   const tabContainerRef = useRef(null);
+  useEffect(() => {
+    if (notificationCommentId) setActiveTab('collaboration');
+  }, [notificationCommentId]);
 
   const relations = useMemo(() => page ? getAllRelations(page.id, pages) : { backlinks: [], outgoing: [] }, [page, pages]);
 
@@ -1045,7 +1048,7 @@ export default function PageInspector({
         {activeTab === 'activity' && <ActivityTab page={page} pageId={pageId} />}
         {activeTab === 'collaboration' && (() => {
           const user = getCollabUser();
-          return <CollabPanel pageId={pageId} userId={user.id} userName={user.name} userAvatar={user.avatar} />;
+          return <CollabPanel pageId={pageId} userId={user.id} userName={user.name} userAvatar={user.avatar} notificationCommentId={notificationCommentId} />;
         })()}
         {activeTab === 'versions' && <VersionsTab page={page} pageId={pageId} onRestoreVersion={onRestoreVersion} />}
         {activeTab === 'audit' && <AuditTab pageId={pageId} />}

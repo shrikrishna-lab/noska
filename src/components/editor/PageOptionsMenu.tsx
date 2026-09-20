@@ -8,6 +8,9 @@ import {
 } from "lucide-react";
 import { executeCommand } from "../../core/commands/ActionExecutor";
 import type { Page } from "../../lib/supabaseService";
+import { useNotificationPlatform } from "../../features/notifications/Provider";
+import { loadPagePreference, savePagePreference } from "../../features/notifications/preferences";
+import type { PageNotificationMode } from "../../features/notifications/types";
 
 const fontOptions = [
   { id: "default", label: "Default", class: "font-sans" },
@@ -50,10 +53,9 @@ const submenus: Record<string, Submenu> = {
   notify: {
     title: "Notify me",
     items: [
-      { id: "notify-all", label: "All comments", icon: Bell },
-      { id: "notify-comments", label: "Comments", icon: Bell, active: true },
-      { id: "notify-replies", label: "Replies only", icon: Bell },
-      { id: "notify-none", label: "None", icon: Bell }
+      { id: "notify-all", label: "All activity", icon: Bell },
+      { id: "notify-mentions", label: "Mentions and replies", icon: Bell },
+      { id: "notify-muted", label: "Muted", icon: Bell }
     ]
   },
   connections: {
@@ -128,6 +130,15 @@ export default function PageOptionsMenu({
   onHistory,
   onAskAI
 }: PageOptionsMenuProps) {
+  const { userId: notificationUserId } = useNotificationPlatform();
+  const [notifyMode, setNotifyMode] = useState<PageNotificationMode | null>(null);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setNotifyMode(null);
+    if (open && notificationUserId) void loadPagePreference(notificationUserId, page.id).then(mode => { if (active) setNotifyMode(mode); }).catch(() => { if (active) onToast?.('Unable to load page notification settings.'); });
+    return () => { active = false; };
+  }, [open, notificationUserId, page.id]);
   const [search, setSearch] = useState("");
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null); // null | 'ai' | 'translate' | 'notify' | 'connections'
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -158,7 +169,7 @@ export default function PageOptionsMenu({
     { id: "wiki", icon: Globe, label: "Turn into wiki", shortcut: "" },
     { id: "analytics", icon: BarChart3, label: "Updates & analytics", shortcut: "" },
     { id: "history", icon: History, label: "Version history", shortcut: "" },
-    { id: "notify", icon: Bell, label: "Notify me › Comments", shortcut: "", submenu: true },
+    { id: "notify", icon: Bell, label: `Notify me › ${notifyBusy ? 'Saving…' : notifyMode === 'muted' ? 'Muted' : notifyMode === 'mentions' ? 'Mentions' : notifyMode === 'all' ? 'All activity' : 'Loading…'}`, shortcut: "", submenu: true },
     { id: "connections", icon: Cable, label: "Connections › None", shortcut: "", submenu: true },
   ].filter((action) => !isShared || !OWNER_ONLY_ACTION_IDS.has(action.id));
 
@@ -178,7 +189,7 @@ export default function PageOptionsMenu({
   const getVisibleItems = (): MenuItem[] => {
     if (activeSubmenu) {
       const sub = submenus[activeSubmenu];
-      return sub ? sub.items.filter(item => fuzzyMatch(search, item.label)) : [];
+      return sub ? sub.items.map(item => activeSubmenu === 'notify' ? { ...item, active: item.id === `notify-${notifyMode}` } : item).filter(item => fuzzyMatch(search, item.label)) : [];
     }
     return mainActions.filter(item => fuzzyMatch(search, item.label));
   };
@@ -202,6 +213,14 @@ export default function PageOptionsMenu({
       return;
     }
 
+    if (item.id.startsWith('notify-')) {
+      if (!notificationUserId || notifyBusy || !notifyMode) return;
+      const mode = item.id.slice(7) as PageNotificationMode;
+      const previous = notifyMode;
+      setNotifyMode(mode); setNotifyBusy(true);
+      void savePagePreference(notificationUserId, page.id, mode).then(() => onToast?.('Page notification preference saved.')).catch(() => { setNotifyMode(previous); onToast?.('Could not save notification preference.'); }).finally(() => setNotifyBusy(false));
+      return;
+    }
     const ctx = {
       page,
       onPagePatch,
