@@ -41,6 +41,7 @@ import {
   HelpCircle,
   User,
   Plus,
+  Check,
   LayoutGrid,
   type LucideIcon
 } from "lucide-react";
@@ -69,6 +70,15 @@ import {
 } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss } from "./ui";
 import { timeAgo, plainText, emojis } from "../utils/helpers";
+import {
+  listWorkspaces,
+  fetchWorkspaceQuota,
+  createWorkspace,
+  renameWorkspace,
+  WorkspaceLimitError,
+  type WorkspaceRow,
+  type WorkspaceQuota,
+} from "../features/workspaces/service";
 import PageTree from "./PageTree";
 import { selectOptionsFromEvent } from "./PageTree";
 import type { PageSelectOptions } from "./PageTree";
@@ -480,6 +490,56 @@ const Sidebar = memo(function Sidebar({
   // Anchor coordinate states for popovers
   const [switcherCoords, setSwitcherCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
   const [profileCoords, setProfileCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
+
+  // Real workspaces (plan-limited: free 1, pro 3). Pages stay account-wide;
+  // switching changes the active workspace label/context, never hides data.
+  const [myWorkspaces, setMyWorkspaces] = useState<WorkspaceRow[]>([]);
+  const [wsQuota, setWsQuota] = useState<WorkspaceQuota | null>(null);
+  const [wsLoading, setWsLoading] = useState(false);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
+    try { return localStorage.getItem("activeWorkspaceId"); } catch { return null; }
+  });
+  const refreshWorkspaces = useCallback(async () => {
+    setWsLoading(true);
+    try {
+      const [rows, quota] = await Promise.all([listWorkspaces(), fetchWorkspaceQuota()]);
+      setMyWorkspaces(rows);
+      setWsQuota(quota);
+    } catch {
+      // Offline or signed out: keep label-only mode, never break the switcher.
+    } finally {
+      setWsLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (switcherOpen) void refreshWorkspaces();
+  }, [switcherOpen, refreshWorkspaces]);
+  const switchWorkspace = useCallback((row: WorkspaceRow) => {
+    setActiveWorkspaceId(row.id);
+    try { localStorage.setItem("activeWorkspaceId", row.id); } catch {}
+    setWorkspaceName(row.name);
+    setSwitcherOpen(false);
+  }, [setWorkspaceName]);
+  const handleNewWorkspace = useCallback(async () => {
+    const name = await window.noskaPrompt?.("New workspace name:", "", "Workspace Name");
+    if (!name?.trim()) return;
+    try {
+      const row = await createWorkspace(name.trim());
+      await refreshWorkspaces();
+      switchWorkspace(row);
+      onToast?.(`Workspace "${row.name}" created.`);
+    } catch (e) {
+      if (e instanceof WorkspaceLimitError) {
+        onToast?.(e.message);
+        if (e.quota.plan !== "pro" && await window.noskaConfirm?.("Upgrade to Pro for up to 3 workspaces? Open billing settings?")) {
+          setSwitcherOpen(false);
+          onSettings("billing");
+        }
+      } else {
+        onToast?.(e instanceof Error ? e.message : "Could not create workspace.");
+      }
+    }
+  }, [refreshWorkspaces, switchWorkspace, onToast, onSettings]);
 
   // Escape key closes both popovers
   useEffect(() => {
@@ -1370,11 +1430,17 @@ const Sidebar = memo(function Sidebar({
                 <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0">
                   {workspaceName.charAt(0)}
                 </div>
-                <button
-                  onClick={async () => {
-                    const name = await window.noskaPrompt?.("Rename workspace:", workspaceName, "Workspace Name");
-                    if (name && name.trim()) setWorkspaceName(name.trim());
-                  }}
+                  <button
+                    onClick={async () => {
+                      const name = await window.noskaPrompt?.("Rename workspace:", workspaceName, "Workspace Name");
+                      if (name && name.trim()) {
+                        setWorkspaceName(name.trim());
+                        const active = myWorkspaces.find(r => r.id === activeWorkspaceId);
+                        if (active) {
+                          renameWorkspace(active.id, name.trim()).then(() => refreshWorkspaces()).catch(() => {});
+                        }
+                      }
+                    }}
                   className="flex-1 min-w-0 text-left rounded-md hover:bg-black/5 dark:hover:bg-white/10 px-1 py-0.5 -mx-1 transition cursor-pointer outline-none"
                   title="Rename workspace"
                 >
@@ -1397,6 +1463,54 @@ const Sidebar = memo(function Sidebar({
                     <Users size={13} />
                   </button>
                 </div>
+              </div>
+
+              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-0.5" />
+
+              {/* Real workspaces (plan-limited: free 1, pro 3) */}
+              <div className="px-1 pt-0.5">
+                <div className="flex items-center justify-between px-1 mb-1">
+                  <span className="text-[10.5px] font-semibold text-neutral-400 uppercase tracking-wider">
+                    Workspaces{wsQuota ? ` · ${wsQuota.used} of ${wsQuota.limit}` : ""}
+                  </span>
+                  <button
+                    onClick={handleNewWorkspace}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-neutral-500 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer outline-none"
+                    title="New workspace"
+                  >
+                    <Plus size={12} /> New
+                  </button>
+                </div>
+                {wsLoading ? (
+                  <div className="px-1 py-1 text-[11px] text-neutral-400">Loading workspaces…</div>
+                ) : myWorkspaces.length === 0 ? (
+                  <div className="px-1 py-1 text-[11px] text-neutral-400">
+                    No workspaces yet — create your first one{wsQuota && wsQuota.plan !== "pro" ? " (free accounts get 1)" : ""}.
+                  </div>
+                ) : (
+                  myWorkspaces.map(row => (
+                    <button
+                      key={row.id}
+                      onClick={() => switchWorkspace(row)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer outline-none"
+                      title={`Switch to ${row.name}`}
+                    >
+                      <span className="h-5 w-5 rounded-md bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
+                        {row.name.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="flex-1 min-w-0 truncate text-[11.5px] font-semibold text-neutral-800 dark:text-neutral-200">{row.name}</span>
+                      {row.id === activeWorkspaceId && <Check size={13} className="text-emerald-500 shrink-0" />}
+                    </button>
+                  ))
+                )}
+                {wsQuota && wsQuota.plan !== "pro" && (
+                  <button
+                    onClick={() => { setSwitcherOpen(false); onSettings("billing"); }}
+                    className="mt-1 w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-left text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition cursor-pointer outline-none"
+                  >
+                    Upgrade to Pro for up to 3 workspaces
+                  </button>
+                )}
               </div>
 
               <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-0.5" />

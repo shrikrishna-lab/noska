@@ -124,16 +124,35 @@ export function AuthCallbackScreen() {
           existingProfile = await fetchUserProfile(user.id);
         } catch {}
 
+        // One person, one profile: when this email already owns a profile
+        // under a different identity (uuid vs Clerk ID), reuse that canonical
+        // row instead of creating a duplicate keyed by the session identity.
+        let canonicalUserId = user.id;
+        if (!existingProfile && email) {
+          try {
+            const { data: emailProfile } = await supabase
+              .from("user_profiles")
+              .select("*")
+              .ilike("email", email)
+              .limit(1)
+              .maybeSingle();
+            if (emailProfile && emailProfile.user_id && emailProfile.user_id !== user.id) {
+              existingProfile = emailProfile;
+              canonicalUserId = emailProfile.user_id;
+            }
+          } catch {}
+        }
+
         let isReturningUser = existingProfile?.onboarding_complete === true;
         if (!isReturningUser) {
           try {
-            isReturningUser = await hasPages(user.id);
+            isReturningUser = await hasPages(canonicalUserId);
           } catch {}
         }
 
         try {
           await upsertUserProfile({
-            userId: user.id,
+            userId: canonicalUserId,
             userName: uname,
             email,
             avatarUrl,
