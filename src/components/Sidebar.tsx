@@ -497,6 +497,7 @@ const Sidebar = memo(function Sidebar({
   const { limit: entLimit, used: entUsed, data: entData, refresh: refreshEntitlements } = useEntitlements();
   const wsLimit = entLimit("max_workspaces");
   const wsUsed = entUsed("max_workspaces");
+  const wsPlanSlug = entData?.plan.slug ?? "free";
   const wsPlanName = entData?.plan.name ?? "Free";
   const [myWorkspaces, setMyWorkspaces] = useState<WorkspaceRow[]>([]);
   const [wsLoading, setWsLoading] = useState(false);
@@ -533,7 +534,7 @@ const Sidebar = memo(function Sidebar({
       onToast?.(gate.message || "Workspace limit reached for your plan.");
       if (gate.upgrade_required && await window.noskaConfirm?.("Upgrade your plan for more workspaces? Open billing settings?")) {
         setSwitcherOpen(false);
-        onSettings("billing");
+        onSettings("Billing");
       }
       return;
     }
@@ -548,7 +549,7 @@ const Sidebar = memo(function Sidebar({
         onToast?.(e.message);
         if (await window.noskaConfirm?.("Upgrade your plan for more workspaces? Open billing settings?")) {
           setSwitcherOpen(false);
-          onSettings("billing");
+          onSettings("Billing");
         }
       } else {
         onToast?.(e instanceof Error ? e.message : "Could not create workspace.");
@@ -1327,19 +1328,19 @@ const Sidebar = memo(function Sidebar({
                 <span className="flex-1 truncate text-[13px]">Community</span>
               </button>
 
-              {/* 3. Subscription + PRO badge */}
+              {/* 3. Subscription + live plan badge */}
               <button
                 type="button"
-                onClick={() => { setProfileOpen(false); onSettings("billing"); }}
+                onClick={() => { setProfileOpen(false); onSettings("Billing"); }}
                 className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <CreditCard size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
                   <span className="truncate text-[13px]">Subscription</span>
                 </div>
-                <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 text-[10px] font-black tracking-wider border border-purple-500/20 flex items-center gap-0.5 shrink-0 shadow-2xs">
-                  <Zap size={9.5} className="fill-purple-600 dark:fill-purple-400" />
-                  <span>PRO</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider border flex items-center gap-0.5 shrink-0 shadow-2xs ${wsPlanSlug !== "free" ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/20" : "bg-black/5 text-neutral-500 dark:text-neutral-400 border-black/10 dark:border-white/10"}`}>
+                  <Zap size={9.5} className={wsPlanSlug !== "free" ? "fill-purple-600 dark:fill-purple-400" : ""} />
+                  <span>{wsPlanName.toUpperCase()}</span>
                 </span>
               </button>
 
@@ -1520,7 +1521,7 @@ const Sidebar = memo(function Sidebar({
                 )}
                 {wsLimit !== null && wsUsed >= wsLimit && (
                   <button
-                    onClick={() => { setSwitcherOpen(false); onSettings("billing"); }}
+                    onClick={() => { setSwitcherOpen(false); onSettings("Billing"); }}
                     className="mt-1 w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-left text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition cursor-pointer outline-none"
                   >
                     Workspace limit reached — upgrade your plan for more
