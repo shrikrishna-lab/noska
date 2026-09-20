@@ -78,6 +78,7 @@ import {
   type WorkspaceRow,
 } from "../features/workspaces/service";
 import { useEntitlements } from "../hooks/billing/useEntitlements";
+import { PlanBadge } from "./billing/PlanBadge";
 import { requireLimit, trackUsage } from "../lib/billing/guards";
 import PageTree from "./PageTree";
 import { selectOptionsFromEvent } from "./PageTree";
@@ -497,7 +498,6 @@ const Sidebar = memo(function Sidebar({
   const { limit: entLimit, used: entUsed, data: entData, refresh: refreshEntitlements } = useEntitlements();
   const wsLimit = entLimit("max_workspaces");
   const wsUsed = entUsed("max_workspaces");
-  const wsPlanSlug = entData?.plan.slug ?? "free";
   const wsPlanName = entData?.plan.name ?? "Free";
   const [myWorkspaces, setMyWorkspaces] = useState<WorkspaceRow[]>([]);
   const [wsLoading, setWsLoading] = useState(false);
@@ -1338,10 +1338,7 @@ const Sidebar = memo(function Sidebar({
                   <CreditCard size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
                   <span className="truncate text-[13px]">Subscription</span>
                 </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider border flex items-center gap-0.5 shrink-0 shadow-2xs ${wsPlanSlug !== "free" ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/20" : "bg-black/5 text-neutral-500 dark:text-neutral-400 border-black/10 dark:border-white/10"}`}>
-                  <Zap size={9.5} className={wsPlanSlug !== "free" ? "fill-purple-600 dark:fill-purple-400" : ""} />
-                  <span>{wsPlanName.toUpperCase()}</span>
-                </span>
+                <PlanBadge size="sm" />
               </button>
 
               {/* 4. Settings */}
@@ -1408,7 +1405,10 @@ const Sidebar = memo(function Sidebar({
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-[var(--text)] truncate leading-none text-[12.5px]">{displayName}</div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="font-bold text-[var(--text)] truncate leading-none text-[12.5px]">{displayName}</div>
+                    <PlanBadge />
+                  </div>
                   <div className="text-[9.5px] text-[var(--text-secondary)] truncate mt-1">{displayEmail}</div>
                 </div>
                 <button
