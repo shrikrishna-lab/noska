@@ -1,3 +1,2 @@
 test-results/
 e2e-*.mjs
-!src/lib/notificationPlatform.test.ts

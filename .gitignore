@@ -99,6 +99,13 @@ dist-mobile/
 **/__tests__/
 *.test.ts
 *.test.tsx
+*.test.js
+*.test.mjs
+*_test.ts
+*.regression.mjs
+vitest.*.config.ts
+src-tauri/tests/
+supabase/tests/
 
 # Local debug and temp logs
 auth_logs.json
