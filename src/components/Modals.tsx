@@ -51,6 +51,7 @@ import NoskaAISettings from "./settings/NoskaAISettings";
 import ShortcutsSettings from "./ShortcutsSettings";
 import { BillingPromotionalTab } from "./settings/BillingPromotionalTab";
 import WidgetsSettings from "./settings/WidgetsSettings";
+import NotificationSettings from "../features/notifications/Settings";
 import SidebarCustomizer from "./customization/SidebarCustomizer";
 import { PageIcon } from "./PageIcon";
 import ApiKeysManager from "../features/api/ApiKeysManager";
@@ -476,6 +477,7 @@ export function SettingsModal({
               <div className="space-y-0.5">
                 {[
                   { id: "General", label: "General", icon: Settings },
+                  { id: "Notifications", label: "Notifications", icon: Mail },
                   { id: "Widgets", label: "Widgets & Home Screen", icon: LayoutGrid },
                   { id: "Shortcuts", label: "Shortcuts", icon: Keyboard },
                   { id: "Voice & Dictation", label: "Voice & Dictation", icon: Mic },
@@ -564,6 +566,7 @@ export function SettingsModal({
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               className="min-h-full"
             >
+              {tab === "Notifications" && <NotificationSettings />}
               {tab === "Widgets" && (
                 <WidgetsSettings onToast={(msg) => setSaveStatus(msg)} />
               )}
@@ -2214,6 +2217,15 @@ export function HelpModal({ onClose }: HelpModalProps) {
                 </p>
 
                 <div className="pt-2 flex flex-wrap gap-2.5">
+                  <button
+                    onClick={() => {
+                      onClose();
+                      window.dispatchEvent(new CustomEvent("noska:open-desktop-updater"));
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF6B4A] to-[#FFA07A] px-4 py-2 text-xs font-semibold text-white shadow-md shadow-[#FF6B4A]/20 transition hover:opacity-95 active:scale-95"
+                  >
+                    <span>⚡ Check for Updates (Orbital)</span>
+                  </button>
                   <button
                     onClick={() => {
                       onClose();
