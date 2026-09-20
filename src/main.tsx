@@ -19,7 +19,18 @@ import UpdatePrompt from "./components/desktop/UpdatePrompt";
 import App from "./App.jsx";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import ControlCenter from "./ControlCenter";
+import { EntitlementsProvider } from "./hooks/billing/useEntitlements";
 import "./index.css";
+
+// Global bridge: upgrade-required → toast (the settings modal and AIPanel
+// also surface their own upgrade UI; this guarantees feedback everywhere).
+if (typeof window !== "undefined") {
+  window.addEventListener("noska:upgrade-required", () => {
+    window.dispatchEvent(new CustomEvent("noska:toast", {
+      detail: "This feature needs a higher plan. See Pricing to upgrade.",
+    }));
+  });
+}
 
 function ScrollToTop() {
   const { pathname, search } = useLocation();
@@ -61,6 +72,8 @@ const InfoCardDemo = lazy(() => import("./components/ui/info-card-demo"));
 const NoskaWispr = lazy(() => import("./pages/marketing/NoskaWispr"));
 const SupportTicket = lazy(() => import("./pages/marketing/SupportTicket"));
 const MobileLinkRedirect = lazy(() => import("./platform/mobile/MobileLinkRedirect"));
+const BillingPage = lazy(() => import("./pages/BillingPage"));
+const BillingReturn = lazy(() => import("./pages/BillingReturn"));
 
 // /launch is a marketing funnel page — never render it inside the native app.
 function LaunchRouteGate() {
@@ -120,6 +133,7 @@ createRoot(document.getElementById("root")!).render(
         <DesktopBridge />
         <MobileBridge />
         <ScrollToTop />
+        <EntitlementsProvider>
         <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<MarketingShell><MarketingHome /></MarketingShell>} />
@@ -159,6 +173,8 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/flow" element={<NoskaWispr />} />
           <Route path="/noska-flow" element={<NoskaWispr />} />
           <Route path="/login" element={<LoginRoute />} />
+          <Route path="/settings/billing" element={<BillingPage />} />
+          <Route path="/billing/return" element={<BillingReturn />} />
           {/* ── Mobile app routes (native iOS/Android shell) ─────────────
               The authenticated product surfaces. MarketingShell redirects
               mobile users here, so the marketing site is unreachable in
@@ -184,6 +200,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/:workspaceSlug/:pageId" element={<App />} />
         </Routes>
         </Suspense>
+        </EntitlementsProvider>
         <UpdatePrompt />
         </Sentry.ErrorBoundary>
       </ClerkProvider>

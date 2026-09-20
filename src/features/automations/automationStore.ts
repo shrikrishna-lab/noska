@@ -174,6 +174,34 @@ export async function saveAutomation(a: NoskaAutomation): Promise<NoskaAutomatio
   const updated: NoskaAutomation = { ...a, updatedAt: new Date().toISOString() };
   const mirror = loadMirror();
   const idx = mirror.findIndex((x) => x.id === updated.id);
+  const isNew = idx < 0;
+  if (isNew) {
+    // ── Billing gate: automations are a paid feature (§9). Mirror-first design
+    // keeps offline working; the trg_automations_billing_limit trigger enforces
+    // server-side. On denial we keep the local copy and skip the remote upsert.
+    try {
+      const { requireFeature } = await import("../../lib/billing/guards");
+      const gate = await requireFeature("automation");
+      if (!gate.ok && !gate.transport) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("noska:upgrade-required", { detail: { feature: "automation" } }));
+          window.dispatchEvent(new CustomEvent("noska:toast", { detail: gate.message ?? "Automations need a paid plan. Saved locally only." }));
+        }
+        if (idx >= 0) mirror[idx] = updated;
+        else mirror.unshift(updated);
+        saveMirror(mirror);
+        return updated;
+      }
+    } catch (e) {
+      if (e instanceof Error && /not available|limit/i.test(e.message)) {
+        if (idx >= 0) mirror[idx] = updated;
+        else mirror.unshift(updated);
+        saveMirror(mirror);
+        return updated;
+      }
+      // Transport failure → proceed to normal save (server trigger still enforces).
+    }
+  }
   if (idx >= 0) mirror[idx] = updated;
   else mirror.unshift(updated);
   saveMirror(mirror);

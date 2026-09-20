@@ -226,10 +226,10 @@ function AppContent() {
   }, []);
 
   const [
-    { pages, sharedPages, activeId, workspaceName, pendingInvites, collapsedPages,
+    { pages, sharedPages, activeId, workspaceName, workspaceRows, activeWorkspaceId, visiblePages, pendingInvites, collapsedPages,
       renameFocusId, appView, pageMode, stackedPageIds, readingPage, focusedBlock,
       decryptionKeys, saveState, query, needsUsernameClaim, onboardingOpen, history, future },
-    { setPages, setSharedPages, setActiveId, setWorkspaceName, setPendingInvites,
+    { setPages, setSharedPages, setActiveId, setWorkspaceName, setActiveWorkspaceId, refreshWorkspaceRows, setPendingInvites,
       setCollapsedPages, setRenameFocusId, setAppView, setPageMode, setStackedPageIds,
       setReadingPage, setFocusedBlock, setDecryptionKeys, setSaveState, setQuery,
       setNeedsUsernameClaim, setOnboardingOpen, commitPages, togglePageCollapse, undo, redo }
@@ -443,13 +443,23 @@ function AppContent() {
   const isSharedActivePage = !activeOwnedMatch && !!activeSharedMatch;
   const activePage = useMemo(() =>
     activeOwnedMatch
-      || (activeSharedMatch ? withSharedPermission(activeSharedMatch) : undefined)
-      || pages.find((p) => !p.trashed),
-    [activeOwnedMatch, activeSharedMatch, pages]
+    || (activeSharedMatch ? withSharedPermission(activeSharedMatch) : undefined)
+    || visiblePages[0]
+    || pages.find((p) => !p.trashed),
+    [activeOwnedMatch, activeSharedMatch, visiblePages, pages]
   );
-  const visiblePages = useMemo(() => pages.filter((p) => !p.trashed), [pages]);
   const trashPages = useMemo(() => pages.filter((p) => p.trashed), [pages]);
   const pageText = activePage ? plainText(activePage) : "";
+
+  // Switching workspaces hides the open page: fall back to the first page
+  // of the newly visible workspace instead of a hidden one.
+  useEffect(() => {
+    if (activeId
+      && !visiblePages.some((p) => p.id === activeId)
+      && !sharedPages.some((p) => p.id === activeId)) {
+      setActiveId(null);
+    }
+  }, [visiblePages, sharedPages, activeId, setActiveId]);
 
   const toolContext = useMemo(() => ({
     currentPage: activePage,
@@ -463,6 +473,7 @@ function AppContent() {
           parentId: null, favorite: false, trashed: false,
           tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
           updatedAt: now(), blocks,
+          workspaceId: activeWorkspaceId ?? null,
           lineage: [{ action: "ai-created" as const, timestamp: now(), detail: `Created by AI: "${title}"` }]
         } as unknown as Page;
         commitPages([page, ...pages]);
@@ -508,7 +519,7 @@ function AppContent() {
       undo: () => undo(),
       redo: () => redo()
     }
-  }), [activePage, visiblePages, pages]);
+  }), [activePage, visiblePages, pages, activeWorkspaceId]);
 
   const dark = theme === "dark" || (theme === "system" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
 
@@ -2072,6 +2083,9 @@ function AppContent() {
       ],
       blocks: templateBlocks(template)
     });
+    // New pages belong to the active workspace; subpages inherit the parent.
+    const parentWs = parentId ? pages.find((p) => p.id === parentId)?.workspaceId : null;
+    next.workspaceId = parentWs || activeWorkspaceId || null;
     if (template === "blank") capture("note_created", { creation_method: "blank" });
     let nextPages = [next, ...pages];
     // Method A & C: If parentId is given, append the new page's id to the parent's content array
@@ -2226,7 +2240,8 @@ function AppContent() {
     tags: [],
     updatedAt: now(),
     lineage: [{ action: "created" as const, timestamp: now(), detail: "Page created" }],
-    blocks: [{ id: uid(), type: "text", text: "" }]
+    blocks: [{ id: uid(), type: "text", text: "" }],
+    workspaceId: activeWorkspaceId ?? null,
   });
 
   const commitNewPageDraft = (draft: Page, patch: Partial<Page> = {}): Page => {
@@ -2264,7 +2279,8 @@ function AppContent() {
       tags: [],
       updatedAt: now(),
       blocks: [{ id: uid(), type: "text", text: "" }],
-      lineage: [{ action: "created" as const, timestamp: now(), detail: "Subpage created from editor" }]
+      lineage: [{ action: "created" as const, timestamp: now(), detail: "Subpage created from editor" }],
+      workspaceId: parent.workspaceId ?? activeWorkspaceId ?? null,
     });
 
     const pageBlock = {

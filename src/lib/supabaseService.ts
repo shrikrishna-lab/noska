@@ -45,6 +45,11 @@ export interface Page {
   parentId: string | null;
   favorite: boolean;
   trashed: boolean;
+  /** Workspace row id (workspaces.id) this page belongs to. Null/empty
+   * means legacy unscoped — treated as the oldest workspace when workspace
+   * rows exist, invisible to filtering otherwise. Written on creation,
+   * preserved by duplicates, inherited by subpages. */
+  workspaceId?: string | null;
   tags: unknown[];
   // These 7 fields are always present (defaulted via `|| false`/etc.) on
   // pages that round-trip through mapPageFromDb, but App.tsx constructs
@@ -199,7 +204,7 @@ export type PageInput = Partial<Page> & { id: string };
 
 // Optimized: Select only columns actually used by the app to reduce egress.
 // Large JSON fields (blocks, lineage) are the main egress consumers.
-const PAGE_COLUMNS: string = "id, title, icon, cover, parent_id, favorite, trashed, tags, hidden_from_recents, offline, is_encrypted, encrypted_blocks, iv, salt, is_locked, blocks, lineage, updated_at, created_at, user_id, visibility";
+const PAGE_COLUMNS: string = "id, title, icon, cover, parent_id, favorite, trashed, tags, hidden_from_recents, offline, is_encrypted, encrypted_blocks, iv, salt, is_locked, blocks, lineage, updated_at, created_at, user_id, visibility, workspace_id";
 const PAGE_MANIFEST_BATCH_SIZE = 500;
 const PAGE_BODY_BATCH_SIZE = 20;
 const PAGE_CACHE_MAX_BYTES = 8 * 1024 * 1024;
@@ -209,7 +214,7 @@ const pageLoads = new Map<string, Promise<string>>();
 let pageCacheGeneration = 0;
 
 type PageRevision = Pick<Tables<"pages">, "id" | "updated_at">;
-type RawPage = Tables<"pages"> & { visibility: Page["visibility"] };
+type RawPage = Tables<"pages"> & { visibility: Page["visibility"]; workspace_id?: string | null };
 
 function isPageRevision(row: unknown): row is PageRevision {
   if (!row || typeof row !== "object") return false;
@@ -1889,6 +1894,25 @@ export async function fetchAgentById(id: string): Promise<Tables<"agents"> | nul
 
 export async function saveAgent(agent: AgentInput): Promise<Tables<"agents">> {
   requireOwner(agent?.ownerId);
+  // ── Billing gate: custom agents are a paid feature (§9). ──────────────
+  // Creating a custom agent requires the custom_agents feature. Updates skip the
+  // gate (no new capacity consumed). The trg_agents_billing_limit trigger is
+  // authoritative server-side; this pre-check is UX only.
+  if ((agent.type || "custom") === "custom") {
+    let isNew = !agent.id;
+    if (agent.id) {
+      const { data: existing } = await supabase.from("agents").select("id").eq("id", agent.id).maybeSingle();
+      isNew = !existing;
+    }
+    if (isNew) {
+      const { requireFeature } = await import("./billing/guards");
+      const gate = await requireFeature("custom_agents");
+      if (!gate.ok && !gate.transport) {
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("noska:upgrade-required", { detail: { feature: "custom_agents" } }));
+        throw new Error(gate.message ?? "Custom agents are not available on your current plan.");
+      }
+    }
+  }
   const { data, error } = await supabase
     .from("agents")
     .upsert(
@@ -2086,6 +2110,7 @@ export function mapPageFromDb(db: Tables<"pages">): Page {
     // `visibility` is a real column (20260911100000) but the generated
     // Table types predate it — read through a cast until they're regenerated.
     visibility: ((db as { visibility?: Page["visibility"] }).visibility || "private"),
+    workspaceId: ((db as { workspace_id?: string | null }).workspace_id ?? null),
     blocks: (db.blocks as unknown as Block[]) || [],
     lineage: (db.lineage as unknown as LineageEntry[]) || [],
     updatedAt: db.updated_at,
@@ -2185,9 +2210,11 @@ function mapPageToDb(page: PageInput): TablesInsert<"pages"> {
     is_locked: page.isLocked || false,
     blocks: (page.blocks as unknown as Json) || [],
     lineage: (page.lineage as unknown as Json) || [],
-    // Real column, but ahead of the generated insert types — the cast
-    // bypasses the excess-property check until types are regenerated.
+    // Real column, ahead of the generated insert types — same cast pattern
+    // as `visibility` above. Empty string preserves the legacy unscoped
+    // shape for pages created before workspaces existed.
     visibility: page.visibility || "private",
+    workspace_id: page.workspaceId || "",
   } as TablesInsert<"pages">;
 }
 

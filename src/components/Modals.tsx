@@ -2348,42 +2348,82 @@ export function CustomDialog({ open, type, title, placeholder, defaultValue, onC
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/60 backdrop-blur-md">
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 select-none">
+      {/* Backdrop */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 15 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-neutral-950/40 dark:bg-black/70 backdrop-blur-md"
+      />
+
+      {/* Modal Dialog Card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 10 }}
-        transition={SPRING_PRESETS.soft}
-        className="w-[420px] rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-2)] p-6 shadow-2xl glass-modal text-[var(--text)]"
+        exit={{ opacity: 0, scale: 0.94, y: 10 }}
+        transition={{ type: "spring", stiffness: 440, damping: 32 }}
+        className="relative w-full max-w-[420px] rounded-3xl border border-neutral-200/80 dark:border-white/10 bg-white/95 dark:bg-neutral-900/95 p-6 shadow-2xl backdrop-blur-2xl text-neutral-900 dark:text-neutral-100 flex flex-col gap-4 overflow-hidden"
       >
-        <h3 className="text-base font-bold mb-3">{title}</h3>
-        {type === "prompt" && (
-          <input
-            type="text"
-            className="w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-3.5 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)] mb-6 transition"
-            placeholder={placeholder}
-            value={value}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onConfirm(value);
-              if (e.key === "Escape") onClose();
-            }}
-            autoFocus
-          />
-        )}
-        {type === "confirm" && (
-          <p className="text-sm text-[var(--text-secondary)] mb-6">Are you sure you want to proceed?</p>
-        )}
-        <div className="flex justify-end gap-2.5">
+        {/* Subtle Ambient Glow */}
+        <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-48 h-24 bg-gradient-to-b from-amber-500/10 via-orange-500/5 to-transparent rounded-full blur-2xl pointer-events-none" />
+
+        <div className="flex items-center justify-between gap-3 relative">
+          <h3 className="text-[15px] font-bold tracking-tight text-neutral-900 dark:text-white leading-snug">
+            {title}
+          </h3>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold rounded-lg border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
+            className="h-7 w-7 rounded-full bg-neutral-100 dark:bg-white/10 hover:bg-neutral-200 dark:hover:bg-white/15 text-neutral-400 hover:text-neutral-900 dark:hover:text-white grid place-items-center transition cursor-pointer outline-none shrink-0"
+            title="Close"
+          >
+            <X size={13} />
+          </button>
+        </div>
+
+        {type === "prompt" && (
+          <div className="relative">
+            <input
+              type="text"
+              className="w-full rounded-xl border border-neutral-300/80 dark:border-white/15 bg-white dark:bg-neutral-800/80 px-3.5 py-2.5 text-[13px] font-medium text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:border-amber-500/70 focus:outline-none focus:ring-3 focus:ring-amber-500/15 transition shadow-xs"
+              placeholder={placeholder}
+              value={value}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onConfirm(value);
+                if (e.key === "Escape") onClose();
+              }}
+              autoFocus
+            />
+            {value && (
+              <button
+                type="button"
+                onClick={() => setValue("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {type === "confirm" && (
+          <p className="text-[12.5px] text-neutral-500 dark:text-neutral-400">
+            Are you sure you want to proceed?
+          </p>
+        )}
+
+        <div className="flex justify-end items-center gap-2 pt-2 border-t border-neutral-200/60 dark:border-white/[0.08]">
+          <button
+            onClick={onClose}
+            className="rounded-xl px-4 py-2 text-[12px] font-semibold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/10 transition cursor-pointer outline-none"
           >
             Cancel
           </button>
           <button
             onClick={() => onConfirm(type === "prompt" ? value : true)}
-            className="px-4 py-2 text-xs font-semibold rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-deep)] transition cursor-pointer"
+            className="rounded-xl px-4 py-2 text-[12px] font-semibold bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 hover:bg-neutral-800 dark:hover:bg-neutral-100 shadow-md transition cursor-pointer outline-none"
           >
             Confirm
           </button>

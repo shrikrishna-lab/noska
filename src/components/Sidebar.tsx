@@ -43,6 +43,16 @@ import {
   Plus,
   Check,
   LayoutGrid,
+  Pencil,
+  Layers,
+  Briefcase,
+  Rocket,
+  Globe,
+  Palette,
+  Code2,
+  Folder,
+  Heart,
+  Box,
   type LucideIcon
 } from "lucide-react";
 import {
@@ -71,7 +81,6 @@ import {
 import { IconButton, FloatingMenu, useOutsideDismiss } from "./ui";
 import { timeAgo, plainText, emojis } from "../utils/helpers";
 import {
-  listWorkspaces,
   createWorkspaceRow,
   renameWorkspace,
   WorkspaceLimitError,
@@ -79,6 +88,7 @@ import {
 } from "../features/workspaces/service";
 import { useEntitlements } from "../hooks/billing/useEntitlements";
 import { PlanBadge } from "./billing/PlanBadge";
+import { CreateWorkspaceModal } from "./workspaces/CreateWorkspaceModal";
 import { requireLimit, trackUsage } from "../lib/billing/guards";
 import PageTree from "./PageTree";
 import { selectOptionsFromEvent } from "./PageTree";
@@ -91,6 +101,7 @@ import TeamSwitcher from "./teams/TeamSwitcher";
 import { CompanySwitcher } from "./company/CompanySwitcher";
 import { JoinCompanyModal } from "./company/JoinCompanyModal";
 import { useCompany } from "../contexts/CompanyContext";
+import { useWorkspace } from "../contexts/WorkspaceContext";
 import { UserSidebarInfoCard } from "./ui/UserSidebarInfoCard";
 import {
   useSidebarCustomization,
@@ -140,6 +151,80 @@ function BudCloverIcon({ size = 18, className = "" }: { size?: number; className
       <path d="M12 16.5a2.2 2.2 0 0 0 2.2 2.2 2.2 2.2 0 0 0 2.2-2.2c0-1.8-2.2-4-4.4-4s-4.4 2.2-4.4 4a2.2 2.2 0 0 0 2.2 2.2 2.2 2.2 0 0 0 2.2-2.2z" />
       <path d="M16.5 12a2.2 2.2 0 0 0 2.2 2.2 2.2 2.2 0 0 0-2.2 2.2c-1.8 0-4-2.2-4-4.4s2.2-4.4 4-4.4a2.2 2.2 0 0 0 2.2-2.2 2.2 2.2 0 0 0-2.2-2.2z" />
     </svg>
+  );
+}
+
+const WORKSPACE_ICON_MAP: Record<string, LucideIcon> = {
+  layoutGrid: LayoutGrid,
+  grid: LayoutGrid,
+  layers: Layers,
+  sparkles: Sparkles,
+  building: Building2,
+  briefcase: Briefcase,
+  rocket: Rocket,
+  zap: Zap,
+  globe: Globe,
+  cpu: Cpu,
+  palette: Palette,
+  book: BookOpen,
+  code: Code2,
+  terminal: Terminal,
+  folder: Folder,
+  heart: Heart,
+  box: Box,
+};
+
+const WORKSPACE_THEME_BG: Record<string, string> = {
+  dark: "bg-[#18181c] dark:bg-white text-white dark:text-neutral-900",
+  emerald: "bg-gradient-to-tr from-emerald-500 to-teal-600 text-white",
+  amber: "bg-gradient-to-tr from-amber-500 to-orange-500 text-white",
+  indigo: "bg-gradient-to-tr from-indigo-500 to-violet-600 text-white",
+  rose: "bg-gradient-to-tr from-rose-500 to-pink-600 text-white",
+  violet: "bg-gradient-to-tr from-purple-500 to-fuchsia-600 text-white",
+  sky: "bg-gradient-to-tr from-sky-500 to-blue-600 text-white",
+};
+
+function WorkspaceAvatar({
+  icon,
+  color,
+  name,
+  size = "md"
+}: {
+  icon?: string;
+  color?: string;
+  name?: string;
+  size?: "sm" | "md";
+}) {
+  const outerSize = size === "md" ? "size-8.5 rounded-[13px]" : "h-8 w-8 rounded-xl";
+  const innerSize = size === "md" ? "size-6" : "h-6 w-6";
+  const iconSize = size === "md" ? 12 : 12;
+
+  const themeClass = color && WORKSPACE_THEME_BG[color]
+    ? WORKSPACE_THEME_BG[color]
+    : "bg-[#18181c] dark:bg-white text-white dark:text-neutral-900";
+
+  const renderContent = () => {
+    if (icon && WORKSPACE_ICON_MAP[icon]) {
+      const IconComp = WORKSPACE_ICON_MAP[icon];
+      return <IconComp size={iconSize} className="shrink-0 stroke-[2.2]" />;
+    }
+    if (icon && icon !== "auto" && icon !== "letter" && icon !== "default") {
+      return <span className="text-[12px] leading-none select-none">{icon}</span>;
+    }
+    if (icon === "letter") {
+      const initial = (name || "W").replace(/^["'“”]+|["'“”]+$/g, '').trim().charAt(0).toUpperCase() || "W";
+      return <span className="text-[11px] font-bold leading-none select-none">{initial}</span>;
+    }
+    // Default fallback: LayoutGrid icon to match default workspace styling
+    return <LayoutGrid size={iconSize} className="shrink-0 stroke-[2.2]" />;
+  };
+
+  return (
+    <div className={`${outerSize} bg-white dark:bg-[#222226] border border-black/[0.08] dark:border-white/10 shadow-2xs flex items-center justify-center shrink-0`}>
+      <div className={`${innerSize} rounded-full ${themeClass} flex items-center justify-center shadow-xs`}>
+        {renderContent()}
+      </div>
+    </div>
   );
 }
 
@@ -492,70 +577,100 @@ const Sidebar = memo(function Sidebar({
   const [switcherCoords, setSwitcherCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
   const [profileCoords, setProfileCoords] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 });
 
-  // Real workspaces, governed by Noska billing entitlements (max_workspaces).
-  // Pages stay account-wide; switching changes the active workspace
-  // label/context, never hides data.
+  // Real workspaces live in WorkspaceContext (single fetch, shared with App
+  // filtering); entitlements govern the plan limits here in the UI.
+  const [{ workspaceRows: myWorkspaces, activeWorkspaceId }, { setActiveWorkspaceId, refreshWorkspaceRows: refreshWorkspaces }] = useWorkspace();
   const { limit: entLimit, used: entUsed, data: entData, refresh: refreshEntitlements } = useEntitlements();
   const wsLimit = entLimit("max_workspaces");
   const wsUsed = entUsed("max_workspaces");
   const wsPlanName = entData?.plan.name ?? "Free";
-  const [myWorkspaces, setMyWorkspaces] = useState<WorkspaceRow[]>([]);
   const [wsLoading, setWsLoading] = useState(false);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
-    try { return localStorage.getItem("activeWorkspaceId"); } catch { return null; }
-  });
-  const refreshWorkspaces = useCallback(async () => {
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const refreshWorkspacesWithLoading = useCallback(async () => {
     setWsLoading(true);
     try {
-      setMyWorkspaces(await listWorkspaces());
-    } catch {
-      // Offline or signed out: keep label-only mode, never break the switcher.
+      await refreshWorkspaces();
     } finally {
       setWsLoading(false);
     }
-  }, []);
+  }, [refreshWorkspaces]);
+
   useEffect(() => {
     if (switcherOpen) {
-      void refreshWorkspaces();
+      void refreshWorkspacesWithLoading();
       void refreshEntitlements();
+    } else {
+      setRenamingWsId(null);
     }
-  }, [switcherOpen, refreshWorkspaces, refreshEntitlements]);
+  }, [switcherOpen, refreshWorkspacesWithLoading, refreshEntitlements]);
+
+  const effectiveWsCount = Math.max(wsUsed, myWorkspaces.length);
+  const isWsLimitReached = wsLimit !== null && effectiveWsCount >= wsLimit;
+
   const switchWorkspace = useCallback((row: WorkspaceRow) => {
     setActiveWorkspaceId(row.id);
-    try { localStorage.setItem("activeWorkspaceId", row.id); } catch {}
     setWorkspaceName(row.name);
     setSwitcherOpen(false);
-  }, [setWorkspaceName]);
-  const handleNewWorkspace = useCallback(async () => {
-    const name = await window.noskaPrompt?.("New workspace name:", "", "Workspace Name");
-    if (!name?.trim()) return;
-    const gate = await requireLimit("max_workspaces", 1);
-    if (!gate.ok && !gate.transport) {
-      onToast?.(gate.message || "Workspace limit reached for your plan.");
-      if (gate.upgrade_required && await window.noskaConfirm?.("Upgrade your plan for more workspaces? Open billing settings?")) {
-        setSwitcherOpen(false);
-        onSettings("Billing");
-      }
+  }, [setWorkspaceName, setActiveWorkspaceId]);
+
+  const handleNewWorkspace = useCallback(() => {
+    if (isWsLimitReached) {
+      setSwitcherOpen(false);
+      onSettings?.("Billing");
       return;
     }
-    try {
-      const row = await createWorkspaceRow(name.trim());
-      await trackUsage("max_workspaces", 1, row.id);
-      await Promise.all([refreshWorkspaces(), refreshEntitlements()]);
-      switchWorkspace(row);
-      onToast?.(`Workspace "${row.name}" created.`);
-    } catch (e) {
-      if (e instanceof WorkspaceLimitError) {
-        onToast?.(e.message);
-        if (await window.noskaConfirm?.("Upgrade your plan for more workspaces? Open billing settings?")) {
-          setSwitcherOpen(false);
-          onSettings("Billing");
-        }
-      } else {
-        onToast?.(e instanceof Error ? e.message : "Could not create workspace.");
+    setSwitcherOpen(false);
+    setCreateWorkspaceOpen(true);
+  }, [isWsLimitReached, onSettings]);
+
+  const activeWorkspace = useMemo(() => {
+    return myWorkspaces.find(w => w.id === activeWorkspaceId)
+      || myWorkspaces.find(w => w.name === workspaceName)
+      || myWorkspaces[0];
+  }, [myWorkspaces, activeWorkspaceId, workspaceName]);
+
+  const activeWorkspaceIndex = useMemo(() => {
+    const idx = myWorkspaces.findIndex(w => w.id === (activeWorkspace?.id || activeWorkspaceId));
+    return idx >= 0 ? idx : 0;
+  }, [myWorkspaces, activeWorkspace?.id, activeWorkspaceId]);
+
+  const isCurrentWorkspaceLocked = useMemo(() => {
+    return wsLimit !== null && activeWorkspaceIndex >= wsLimit;
+  }, [wsLimit, activeWorkspaceIndex]);
+
+  const handleGuardedNew = useCallback((template?: string) => {
+    if (isCurrentWorkspaceLocked) {
+      onToast?.("This workspace is locked in read-only mode because your Pro plan expired. Upgrade to add or edit documents.");
+      onSettings?.("Billing");
+      return;
+    }
+    onNew(template);
+  }, [isCurrentWorkspaceLocked, onToast, onSettings, onNew]);
+
+  const [renamingWsId, setRenamingWsId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+
+  const handleCommitRename = useCallback(async (rowId: string) => {
+    const trimmed = renameDraft.trim().replace(/^["'“”]+|["'“”]+$/g, '');
+    if (trimmed && trimmed.length > 0) {
+      if (activeWorkspaceId === rowId) {
+        setWorkspaceName(trimmed);
+      }
+      try {
+        await renameWorkspace(rowId, trimmed);
+        await refreshWorkspaces();
+      } catch {
+        // Cached change remains resilient
       }
     }
-  }, [refreshWorkspaces, switchWorkspace, onToast, onSettings, refreshEntitlements]);
+    setRenamingWsId(null);
+    setRenameDraft("");
+  }, [renameDraft, activeWorkspaceId, setWorkspaceName, refreshWorkspaces]);
+
+  const handleCancelRename = useCallback(() => {
+    setRenamingWsId(null);
+    setRenameDraft("");
+  }, []);
 
   // Escape key closes both popovers
   useEffect(() => {
@@ -706,7 +821,7 @@ const Sidebar = memo(function Sidebar({
                 onTrashPage={onTrashPage}
                 onToast={onToast}
               />
-              <NoskaNavItem icon={AnimatedPlus} label="Add new document" onClick={() => onNew("blank")} muted />
+              <NoskaNavItem icon={AnimatedPlus} label="Add new document" onClick={() => handleGuardedNew("blank")} muted />
             </NoskaSection>
           </div>
         );
@@ -909,7 +1024,7 @@ const Sidebar = memo(function Sidebar({
                   {/* 1. New Creation */}
                   {customConfig.showNewCreationButton !== false && (
                     <button
-                      onClick={() => onNew("blank")}
+                      onClick={() => handleGuardedNew("blank")}
                       className="flex h-8.5 w-8.5 items-center justify-center rounded-xl text-[#4B5563] dark:text-[#9CA3AF] hover:bg-black/5 dark:hover:bg-white/10 hover:text-[#111827] dark:hover:text-white transition duration-150 cursor-pointer outline-none"
                       title="New creation (Ctrl+P)"
                     >
@@ -1049,10 +1164,13 @@ const Sidebar = memo(function Sidebar({
                   title={`${workspaceName} • Workspaces & Account Settings`}
                 >
                   {/* Squircle App Launcher Grid Button */}
-                  <div className="size-8.5 rounded-[13px] bg-white dark:bg-neutral-800/80 border border-black/[0.08] dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.06)] flex items-center justify-center shrink-0 group-hover:scale-105 active:scale-95 transition">
-                    <div className="size-6 rounded-full bg-[#18181c] dark:bg-white flex items-center justify-center shadow-xs">
-                      <LayoutGrid size={12} className="text-white dark:text-neutral-900" />
-                    </div>
+                  <div className="group-hover:scale-105 active:scale-95 transition">
+                    <WorkspaceAvatar
+                      icon={activeWorkspace?.icon}
+                      color={activeWorkspace?.color}
+                      name={workspaceName}
+                      size="md"
+                    />
                   </div>
 
                   {/* Workspace Title & Subtitle */}
@@ -1061,10 +1179,19 @@ const Sidebar = memo(function Sidebar({
                       <span className="text-[13px] font-bold text-neutral-900 dark:text-white truncate leading-tight tracking-tight">
                         {workspaceName}
                       </span>
+                      {isCurrentWorkspaceLocked && (
+                        <span className="inline-flex items-center gap-1 text-[8.5px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded-md leading-none shrink-0">
+                          <Lock size={8.5} /> Read-only
+                        </span>
+                      )}
                       <ChevronDown size={11} className="text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 transition shrink-0" />
                     </div>
                     <div className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400 truncate leading-tight mt-0.5">
-                      {displayName ? `${displayName.replace(/^@/, '')}'s Workspace` : workspaceName}
+                      {isCurrentWorkspaceLocked
+                        ? "Plan limit exceeded · Read-only"
+                        : displayName
+                        ? `${displayName.replace(/^@/, '')}'s Workspace`
+                        : workspaceName}
                     </div>
                   </div>
                 </button>
@@ -1078,6 +1205,27 @@ const Sidebar = memo(function Sidebar({
                   <PanelLeftClose size={15} />
                 </button>
               </div>
+
+              {/* Read-only Locked Workspace Banner */}
+              {isCurrentWorkspaceLocked && (
+                <div className="mx-0.5 mb-2.5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-6 w-6 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                      <Lock size={12} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-bold leading-none truncate">Workspace Locked</div>
+                      <div className="text-[9.5px] text-amber-700/80 dark:text-amber-300/80 leading-none truncate mt-0.5">Plan limit exceeded · Read-only</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onSettings("Billing")}
+                    className="text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 px-2 py-1 rounded-lg transition cursor-pointer shrink-0 shadow-xs"
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              )}
 
               {/* Quick Navigation Capsule Row (Apple-grade fluid spring sliding capsule) */}
               {customConfig.showQuickNav !== false && filteredQuickNavItems.length > 0 && (
@@ -1382,22 +1530,22 @@ const Sidebar = memo(function Sidebar({
         document.body
       )}
 
-      {/* Account Switcher / More Options Popover (Original Layout) */}
+      {/* Account Switcher / More Options Popover (Elevated Apple-grade) */}
       {createPortal(
         <AnimatePresence>
           {switcherOpen && (
             <motion.div
               ref={switcherMenuRef}
-              initial={{ opacity: 0, scale: 0.96, y: -4 }}
+              initial={{ opacity: 0, scale: 0.95, y: -6 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -4 }}
-              transition={{ type: "spring", stiffness: 400, damping: 28 }}
+              exit={{ opacity: 0, scale: 0.95, y: -6 }}
+              transition={{ type: "spring", stiffness: 420, damping: 30 }}
               style={{ top: switcherCoords.top, bottom: switcherCoords.bottom, left: switcherCoords.left }}
-              className="fixed z-[100] w-[266px] rounded-2xl border border-white/80 dark:border-white/10 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-2xl p-3 shadow-2xl text-[12px] outline-none select-none flex flex-col gap-2"
+              className="fixed z-[100] w-[292px] rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-2xl p-2.5 shadow-2xl text-[12px] outline-none select-none flex flex-col gap-2"
             >
               {/* Signed-in account */}
-              <div className="flex items-center gap-2.5 px-1">
-                <div className="h-8.5 w-8.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-sm shadow-inner select-none shrink-0 text-[var(--text)] overflow-hidden">
+              <div className="flex items-center gap-2.5 px-2 py-1">
+                <div className="h-8 w-8 rounded-full bg-neutral-100 dark:bg-white/10 border border-black/5 dark:border-white/10 flex items-center justify-center text-sm shadow-inner select-none shrink-0 text-neutral-800 dark:text-neutral-200 overflow-hidden">
                   {isAvatarUrl ? (
                     <img src={displayAvatar} alt="Avatar" className="h-full w-full object-cover" />
                   ) : (
@@ -1406,135 +1554,242 @@ const Sidebar = memo(function Sidebar({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="font-bold text-[var(--text)] truncate leading-none text-[12.5px]">{displayName}</div>
+                    <div className="font-bold text-neutral-900 dark:text-white truncate leading-none text-[12.5px]">{displayName}</div>
                     <PlanBadge />
                   </div>
-                  <div className="text-[9.5px] text-[var(--text-secondary)] truncate mt-1">{displayEmail}</div>
+                  <div className="text-[10px] text-neutral-400 dark:text-neutral-400 truncate mt-1">{displayEmail}</div>
                 </div>
                 <button
                   onClick={async () => {
                     if (await window.noskaConfirm?.("Are you sure you want to log out?")) onLogout?.();
                     setSwitcherOpen(false);
                   }}
-                  className="h-6.5 w-6.5 rounded-md hover:bg-[var(--danger)]/10 text-[var(--muted)] hover:text-[var(--danger)] grid place-items-center transition duration-150 cursor-pointer outline-none focus:ring-1 focus:ring-[var(--danger)] shrink-0"
+                  className="h-7 w-7 rounded-lg hover:bg-rose-500/10 text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 grid place-items-center transition duration-150 cursor-pointer outline-none shrink-0"
                   title="Log out"
                 >
-                  <X size={13} />
+                  <LogOut size={13} />
                 </button>
               </div>
 
-              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-0.5" />
+              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08]" />
 
               {/* Profile */}
               <button
                 onClick={() => { setSwitcherOpen(false); onProfile?.(); }}
-                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-black/5 dark:hover:bg-white/10 transition duration-150 cursor-pointer outline-none"
+                className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-white/10 transition duration-150 cursor-pointer outline-none group"
               >
-                <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-sm shrink-0">
-                  <UserRound size={13} />
+                <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-xs shrink-0">
+                  <UserRound size={15} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-neutral-800 dark:text-neutral-200 text-[11.5px] leading-none">My Profile</div>
-                  <div className="text-[9px] text-neutral-400 mt-0.5 truncate">Edit name, photo, bio & location</div>
+                  <div className="font-semibold text-neutral-800 dark:text-neutral-200 text-[12px] leading-none group-hover:text-neutral-900 dark:group-hover:text-white">My Profile</div>
+                  <div className="text-[9.5px] text-neutral-400 mt-1 truncate">Edit name, photo, bio & location</div>
                 </div>
               </button>
 
-              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-0.5" />
+              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08]" />
 
-              {/* Workspace Rename */}
-              <div className="flex items-center gap-2.5 px-1">
-                <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0">
-                  {workspaceName.charAt(0)}
-                </div>
-                  <button
-                    onClick={async () => {
-                      const name = await window.noskaPrompt?.("Rename workspace:", workspaceName, "Workspace Name");
-                      if (name && name.trim()) {
-                        setWorkspaceName(name.trim());
-                        const active = myWorkspaces.find(r => r.id === activeWorkspaceId);
-                        if (active) {
-                          renameWorkspace(active.id, name.trim()).then(() => refreshWorkspaces()).catch(() => {});
-                        }
-                      }
-                    }}
-                  className="flex-1 min-w-0 text-left rounded-md hover:bg-black/5 dark:hover:bg-white/10 px-1 py-0.5 -mx-1 transition cursor-pointer outline-none"
-                  title="Rename workspace"
-                >
-                  <div className="font-bold text-neutral-800 dark:text-neutral-200 truncate leading-none text-[11.5px]">{workspaceName}</div>
-                  <div className="text-[9px] text-neutral-400 truncate mt-0.5">Click to rename</div>
-                </button>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  <button
-                    onClick={() => { setSwitcherOpen(false); onSettings(); }}
-                    className="h-6.5 w-6.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white grid place-items-center transition duration-150 cursor-pointer outline-none"
-                    title="Workspace settings"
-                  >
-                    <Settings size={13} />
-                  </button>
-                  <button
-                    onClick={() => { setSwitcherOpen(false); onShare?.(); }}
-                    className="h-6.5 w-6.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white grid place-items-center transition duration-150 cursor-pointer outline-none"
-                    title="Invite members / share"
-                  >
-                    <Users size={13} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-0.5" />
-
-              {/* Real workspaces, governed by plan entitlements */}
-              <div className="px-1 pt-0.5">
-                <div className="flex items-center justify-between px-1 mb-1">
-                  <span className="text-[10.5px] font-semibold text-neutral-400 uppercase tracking-wider">
-                    Workspaces{wsLimit === null ? " · Unlimited" : wsLimit !== null ? ` · ${wsUsed} of ${wsLimit}` : ""}{` · ${wsPlanName}`}
+              {/* Unified Workspaces Section */}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between px-2 pt-0.5 pb-1">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                    Workspaces{wsLimit === null ? " · Unlimited" : ` · ${effectiveWsCount} of ${wsLimit}`}
                   </span>
+                </div>
+
+                {wsLoading ? (
+                  <div className="px-2 py-2 text-[11px] text-neutral-400 flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full border-2 border-amber-500/30 border-t-amber-500 animate-spin" />
+                    Loading workspaces…
+                  </div>
+                ) : myWorkspaces.length === 0 ? (
                   <button
                     onClick={handleNewWorkspace}
-                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-neutral-500 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer outline-none"
-                    title="New workspace"
+                    className="w-full group rounded-xl border border-dashed border-neutral-300/80 dark:border-white/15 bg-neutral-50/60 dark:bg-white/[0.02] hover:bg-neutral-100/80 dark:hover:bg-white/[0.06] p-2 text-left transition-all flex items-center gap-2.5 cursor-pointer outline-none"
                   >
-                    <Plus size={12} /> New
+                    <div className="h-8 w-8 rounded-xl border border-dashed border-neutral-300 dark:border-white/20 flex items-center justify-center text-neutral-400 group-hover:text-neutral-800 dark:group-hover:text-white transition shrink-0">
+                      <Plus size={14} className="stroke-[2.5]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-neutral-800 dark:text-neutral-200 text-[12px] leading-tight">
+                        Create your first workspace
+                      </div>
+                      <div className="text-[9.5px] text-neutral-400 truncate mt-0.5">
+                        {wsLimit !== null ? `${wsPlanName} plan includes ${wsLimit} workspace` : "Unlimited workspaces"}
+                      </div>
+                    </div>
                   </button>
-                </div>
-                {wsLoading ? (
-                  <div className="px-1 py-1 text-[11px] text-neutral-400">Loading workspaces…</div>
-                ) : myWorkspaces.length === 0 ? (
-                  <div className="px-1 py-1 text-[11px] text-neutral-400">
-                    No workspaces yet — create your first one{wsLimit !== null ? ` (${wsPlanName} plan: ${wsLimit})` : ""}.
-                  </div>
                 ) : (
-                  myWorkspaces.map(row => (
-                    <button
-                      key={row.id}
-                      onClick={() => switchWorkspace(row)}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer outline-none"
-                      title={`Switch to ${row.name}`}
-                    >
-                      <span className="h-5 w-5 rounded-md bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
-                        {row.name.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="flex-1 min-w-0 truncate text-[11.5px] font-semibold text-neutral-800 dark:text-neutral-200">{row.name}</span>
-                      {row.id === activeWorkspaceId && <Check size={13} className="text-emerald-500 shrink-0" />}
-                    </button>
-                  ))
-                )}
-                {wsLimit !== null && wsUsed >= wsLimit && (
-                  <button
-                    onClick={() => { setSwitcherOpen(false); onSettings("Billing"); }}
-                    className="mt-1 w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-left text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition cursor-pointer outline-none"
-                  >
-                    Workspace limit reached — upgrade your plan for more
-                  </button>
+                  <div className="flex flex-col gap-0.5 max-h-[180px] overflow-y-auto pr-0.5">
+                    {myWorkspaces.map((row, index) => {
+                      const isLocked = wsLimit !== null && index >= wsLimit;
+                      const isActive = row.id === activeWorkspaceId;
+                      const cleanName = (row.name || "Workspace").replace(/^["'“”]+|["'“”]+$/g, '').trim() || "Workspace";
+                      const isEditing = renamingWsId === row.id;
+
+                      return (
+                        <div
+                          key={row.id}
+                          onClick={() => {
+                            if (!isEditing) {
+                              switchWorkspace(row);
+                              if (isLocked) {
+                                onToast?.(`Workspace "${cleanName}" is in read-only mode.`);
+                              }
+                            }
+                          }}
+                          className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition ${
+                            isEditing
+                              ? "bg-neutral-100 dark:bg-white/10"
+                              : isActive
+                              ? "bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white font-semibold cursor-pointer group"
+                              : "hover:bg-neutral-100/60 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer group"
+                          }`}
+                          title={isLocked ? `${cleanName} (Locked - Read Only)` : `Switch to ${cleanName}`}
+                        >
+                          {/* Squircle Card Icon */}
+                          <div className="relative shrink-0">
+                            <WorkspaceAvatar
+                              icon={row.icon}
+                              color={row.color}
+                              name={cleanName}
+                              size="sm"
+                            />
+                            {isLocked && (
+                              <div className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-amber-500 text-black flex items-center justify-center shadow-xs">
+                                <Lock size={8} strokeWidth={3} />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Name & Subtitle or Inline Input */}
+                          {isEditing ? (
+                            <div className="flex-1 min-w-0 flex items-center" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                value={renameDraft}
+                                onChange={(e) => setRenameDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void handleCommitRename(row.id);
+                                  } else if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    handleCancelRename();
+                                  }
+                                }}
+                                onBlur={() => {
+                                  void handleCommitRename(row.id);
+                                }}
+                                autoFocus
+                                className="w-full bg-white dark:bg-black/60 text-neutral-900 dark:text-white text-[12px] font-medium px-2 py-1 rounded-lg border border-neutral-300 dark:border-white/20 focus:outline-none focus:ring-1.5 focus:ring-neutral-900 dark:focus:ring-white shadow-2xs"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="truncate text-[12px] leading-tight">{cleanName}</span>
+                                {isLocked && (
+                                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded shrink-0">
+                                    Locked
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-neutral-400 truncate mt-0.5">
+                                {isLocked
+                                  ? "Read-only • Plan limit exceeded"
+                                  : isActive
+                                  ? "Active workspace"
+                                  : "Click to switch"}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Actions / Active Checkmark / Rename Pencil / Lock */}
+                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {isEditing ? (
+                              <button
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  void handleCommitRename(row.id);
+                                }}
+                                className="h-6 w-6 rounded-md bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 grid place-items-center transition cursor-pointer hover:opacity-90 shadow-2xs"
+                                title="Save name"
+                              >
+                                <Check size={12} strokeWidth={2.5} />
+                              </button>
+                            ) : isLocked ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSwitcherOpen(false);
+                                  onSettings("Billing");
+                                }}
+                                className="h-6 w-6 rounded-md hover:bg-amber-500/10 text-amber-500 grid place-items-center transition cursor-pointer"
+                                title="Workspace locked. Click to upgrade."
+                              >
+                                <Lock size={12} />
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRenamingWsId(row.id);
+                                    setRenameDraft(cleanName);
+                                  }}
+                                  className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 text-neutral-400 hover:text-neutral-800 dark:hover:text-white grid place-items-center transition cursor-pointer"
+                                  title="Rename workspace"
+                                >
+                                  <Pencil size={12} />
+                                </button>
+                                {isActive && (
+                                  <Check size={14} className="text-emerald-500 stroke-[2.5] shrink-0 mr-1" />
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {isWsLimitReached ? (
+                      <button
+                        onClick={() => { setSwitcherOpen(false); onSettings("Billing"); }}
+                        className="mt-1 flex w-full items-center justify-between gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 dark:bg-amber-500/10 dark:hover:bg-amber-500/15 px-2.5 py-2 text-left text-[11px] font-medium text-amber-800 dark:text-amber-300 transition cursor-pointer outline-none group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-7 w-7 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                            <Sparkles size={13} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold leading-none truncate">Workspace limit reached</div>
+                            <div className="text-[9.5px] text-amber-700/70 dark:text-amber-400/70 truncate mt-0.5">Upgrade for more workspaces</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 px-1.5 py-0.5 rounded-md text-amber-800 dark:text-amber-200 shrink-0">Upgrade</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleNewWorkspace}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-neutral-500 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100/60 dark:hover:bg-white/5 text-[12px] font-medium transition cursor-pointer outline-none mt-0.5 group"
+                      >
+                        <div className="h-8 w-8 rounded-xl border border-dashed border-neutral-300 dark:border-white/20 flex items-center justify-center text-neutral-400 group-hover:text-neutral-800 dark:group-hover:text-white shrink-0">
+                          <Plus size={13} className="stroke-[2.5]" />
+                        </div>
+                        <span>Create new workspace</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
-              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-0.5" />
+              <div className="h-px bg-black/[0.06] dark:bg-white/[0.08]" />
 
               {/* Theme Switcher */}
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[10.5px] font-semibold text-neutral-400 uppercase tracking-wider">Theme</span>
-                <div className="flex items-center gap-0.5 rounded-lg bg-black/5 dark:bg-white/10 p-0.5">
+              <div className="flex items-center justify-between px-2 py-0.5">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Theme</span>
+                <div className="flex items-center gap-0.5 rounded-lg bg-neutral-100 dark:bg-white/10 p-0.5">
                   {themeOptions.map(({ value, icon: Icon }) => (
                     <button
                       key={value}
@@ -1553,6 +1808,24 @@ const Sidebar = memo(function Sidebar({
         </AnimatePresence>,
         document.body
       )}
+
+      {/* Modern Create Workspace Modal */}
+      <CreateWorkspaceModal
+        isOpen={createWorkspaceOpen}
+        onClose={() => setCreateWorkspaceOpen(false)}
+        onCreated={(row) => {
+          void Promise.all([refreshWorkspaces(), refreshEntitlements()]);
+          switchWorkspace(row);
+        }}
+        onOpenBilling={() => {
+          setSwitcherOpen(false);
+          onSettings("Billing");
+        }}
+        onToast={onToast}
+        wsLimit={wsLimit}
+        wsUsed={effectiveWsCount}
+        wsPlanName={wsPlanName}
+      />
 
       {/* Interactive Sidebar Drag-to-Resize Handle */}
       {open && (

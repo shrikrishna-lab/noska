@@ -2,12 +2,18 @@ import React, { createContext, useContext, useState, useCallback, useMemo, useRe
 import { saveSetting, type Page, type AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 import type { Tables } from "../../types/supabase";
+import { listWorkspaces } from "../features/workspaces/service";
+import type { WorkspaceRow } from "../features/workspaces/service";
+import { filterPagesByWorkspace, resolveActiveWorkspaceId } from "../features/workspaces/filter";
 
 interface WorkspaceState {
   pages: Page[];
   sharedPages: Page[];
   activeId: string | null;
   workspaceName: string;
+  workspaceRows: WorkspaceRow[];
+  activeWorkspaceId: string | null;
+  visiblePages: Page[];
   pendingInvites: Tables<"page_invites">[];
   collapsedPages: Set<string>;
   renameFocusId: string | null;
@@ -30,6 +36,8 @@ interface WorkspaceActions {
   setSharedPages: React.Dispatch<React.SetStateAction<Page[]>>;
   setActiveId: React.Dispatch<React.SetStateAction<string | null>>;
   setWorkspaceName: (nameOrFn: string | ((prev: string) => string)) => void;
+  setActiveWorkspaceId: (id: string | null) => void;
+  refreshWorkspaceRows: () => Promise<void>;
   setPendingInvites: React.Dispatch<React.SetStateAction<Tables<"page_invites">[]>>;
   setCollapsedPages: React.Dispatch<React.SetStateAction<Set<string>>>;
   setRenameFocusId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -83,6 +91,48 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
   const [pendingInvites, setPendingInvites] = useState<Tables<"page_invites">[]>([]);
+
+  // Real workspace rows (plan-limited). The active workspace scopes
+  // `visiblePages` below; `pages` always stays the full account list so
+  // sync, undo history, and local persistence never lose hidden rows.
+  const [workspaceRows, setWorkspaceRows] = useState<WorkspaceRow[]>([]);
+  const [storedWorkspaceId, setStoredWorkspaceId] = useState<string | null>(() => {
+    try { return localStorage.getItem("activeWorkspaceId"); } catch { return null; }
+  });
+  const activeWorkspaceId = useMemo(
+    () => resolveActiveWorkspaceId(workspaceRows, storedWorkspaceId),
+    [workspaceRows, storedWorkspaceId],
+  );
+  const setActiveWorkspaceId = useCallback((id: string | null) => {
+    setStoredWorkspaceId(id);
+    try {
+      if (id) localStorage.setItem("activeWorkspaceId", id);
+      else localStorage.removeItem("activeWorkspaceId");
+    } catch {}
+  }, []);
+  const refreshWorkspaceRows = useCallback(async () => {
+    try {
+      const rows = await listWorkspaces();
+      setWorkspaceRows(rows);
+      setStoredWorkspaceId((prev) => {
+        const next = resolveActiveWorkspaceId(rows, prev);
+        try {
+          if (next) localStorage.setItem("activeWorkspaceId", next);
+          else localStorage.removeItem("activeWorkspaceId");
+        } catch {}
+        return next;
+      });
+    } catch {
+      // Offline or signed out: keep label-only mode, never break the app.
+    }
+  }, []);
+  useEffect(() => {
+    void refreshWorkspaceRows();
+  }, [refreshWorkspaceRows]);
+  const visiblePages = useMemo(
+    () => filterPagesByWorkspace(pages.filter((p) => !p.trashed), activeWorkspaceId, workspaceRows),
+    [pages, activeWorkspaceId, workspaceRows],
+  );
   const [collapsedPages, setCollapsedPages] = useState<Set<string>>(() => new Set());
   const [renameFocusId, setRenameFocusId] = useState<string | null>(null);
   const [appView, setAppView] = useState("page");
@@ -159,22 +209,25 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const state: WorkspaceState = useMemo(() => ({
-    pages, sharedPages, activeId, workspaceName, pendingInvites,
+    pages, sharedPages, activeId, workspaceName, workspaceRows,
+    activeWorkspaceId, visiblePages, pendingInvites,
     collapsedPages, renameFocusId, appView, pageMode, stackedPageIds,
     readingPage, focusedBlock, decryptionKeys, saveState, query,
     needsUsernameClaim, onboardingOpen, history, future,
-  }), [pages, sharedPages, activeId, workspaceName, pendingInvites,
+  }), [pages, sharedPages, activeId, workspaceName, workspaceRows,
+      activeWorkspaceId, visiblePages, pendingInvites,
       collapsedPages, renameFocusId, appView, pageMode, stackedPageIds,
       readingPage, focusedBlock, decryptionKeys, saveState, query,
       needsUsernameClaim, onboardingOpen, history, future]);
 
   const actions: WorkspaceActions = useMemo(() => ({
-    setPages, setSharedPages, setActiveId, setWorkspaceName, setPendingInvites,
+    setPages, setSharedPages, setActiveId, setWorkspaceName, setActiveWorkspaceId,
+    refreshWorkspaceRows, setPendingInvites,
     setCollapsedPages, setRenameFocusId, setAppView, setPageMode, setStackedPageIds,
     setReadingPage, setFocusedBlock, setDecryptionKeys, setSaveState, setQuery,
     setNeedsUsernameClaim, setOnboardingOpen, commitPages, togglePageCollapse,
     undo, redo,
-  }), [commitPages, togglePageCollapse, undo, redo]);
+  }), [commitPages, togglePageCollapse, undo, redo, setWorkspaceName, setActiveWorkspaceId, refreshWorkspaceRows]);
 
   return (
     <WorkspaceContext.Provider value={[state, actions]}>

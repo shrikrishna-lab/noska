@@ -18,6 +18,7 @@ import { capture } from "../lib/posthog";
 import { getAllProviders, testProviderConnection } from "../ai/providers";
 import type { Page, AIChat } from "../lib/supabaseService";
 import { recordUserAIUsage } from "../lib/supabaseService";
+import { requireFeature, requireLimit, trackUsage } from "../lib/billing/guards";
 import type { Block } from "../../types/blocks";
 
 import ChatSidebar from "./ai/ChatSidebar";
@@ -279,6 +280,19 @@ export default function AIPanel({
     async (overrideText?: string, selection?: AiModelSelection, customBaseMessages?: ChatPanelMessage[]) => {
       const text = (overrideText || prompt).trim();
       if (!text || loading) return;
+
+      // ── Billing gate (server-authoritative; this pre-check is UX only) ──
+      // ai_generation must be enabled and monthly_ai_credits must remain.
+      // Transport failures (billing backend unreachable) fail OPEN here so BYOK
+      // direct-provider calls keep working offline; server-side metering still
+      // applies wherever the backend is reachable.
+      const [featGate, limitGate] = await Promise.all([requireFeature("ai_generation"), requireLimit("monthly_ai_credits", 1)]);
+      const gate = featGate.ok ? limitGate : featGate;
+      if (!gate.ok && !gate.transport) {
+        onToast?.(gate.message ?? "AI is not available on your current plan.");
+        window.dispatchEvent(new CustomEvent("noska:upgrade-required", { detail: { feature: "ai_generation" } }));
+        return;
+      }
       setPrompt("");
 
       const baseMsgs = customBaseMessages !== undefined ? customBaseMessages : messages;
@@ -519,6 +533,9 @@ export default function AIPanel({
             completionTokens: Math.max(1, Math.round((cleanedFinalText || responseText).length / 3.8)),
             model: activeSelectedModel,
           });
+          // Meter against the billing entitlement (server-enforced, idempotent-safe)
+          void trackUsage("monthly_ai_credits", 1);
+          void trackUsage("daily_ai_requests", 1);
         }
         onChatsChange?.((prev) =>
           prev.map((c) =>
