@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import {
   Copy, Check, Terminal, ArrowRight, ShieldAlert, Zap,
 } from 'lucide-react';
@@ -8,7 +8,6 @@ import { Reveal, Stagger, staggerItem, WordReveal } from './components/Reveal';
 import { Counter } from './components/Counter';
 import { McpAtmosphere, ScrollProgress, ScrollCue } from './components/McpAtmosphere';
 import { HoldToConfirm } from './components/HoldToConfirm';
-import { CursorFollower } from './components/CursorFollower';
 import './McpLanding.css';
 
 /* ─── Real V5.1 tool catalog (group · count) ───
@@ -194,7 +193,6 @@ export default function McpLanding() {
     <div className="mcp-page">
       <McpAtmosphere />
       <ScrollProgress />
-      <CursorFollower variant="mcp" label="MCP" />
 
       {/* ══ Boot gate + hero terminal ══ */}
       <section className="mcp-hero">
@@ -337,19 +335,39 @@ export default function McpLanding() {
               <span className="mcp-stepnum">03</span>
               <b>Pick your client</b>
             </div>
-            <div className="mcp-tabs" role="tablist">
-              {CLIENT_META.map((cl) => (
-                <button key={cl.id} role="tab" aria-selected={client === cl.id}
-                  className={`mcp-tab ${client === cl.id ? 'on' : ''}`}
-                  onClick={() => setClient(cl.id)}>{cl.name}</button>
-              ))}
-            </div>
+            <LayoutGroup id="mcpClientTabs">
+              <div className="mcp-tabs" role="tablist">
+                {CLIENT_META.map((cl) => {
+                  const isSelected = client === cl.id;
+                  return (
+                    <button
+                      key={cl.id}
+                      role="tab"
+                      aria-selected={isSelected}
+                      className={`mcp-tab relative ${isSelected ? 'on' : ''}`}
+                      onClick={() => setClient(cl.id)}
+                    >
+                      {isSelected && (
+                        <motion.div
+                          layoutId="mcpActiveTabPill"
+                          className="mcp-tab-pill-active"
+                          transition={{ type: "spring", stiffness: 480, damping: 32, mass: 0.5 }}
+                        />
+                      )}
+                      <span className="relative z-10">{cl.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </LayoutGroup>
           </Reveal>
 
           <AnimatePresence mode="wait">
             <motion.div key={client + (keyInput ? '1' : '0')}
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}>
+              initial={{ opacity: 0, y: 10, scale: 0.99 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.99 }}
+              transition={{ type: "spring", stiffness: 420, damping: 28 }}>
               <div className="mcp-cfg">
                 <button className="mcp-copybtn" onClick={() => copyText(activeClient.copy)}>
                   {copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'copied' : 'copy'}
@@ -386,7 +404,13 @@ export default function McpLanding() {
           <WordReveal className="mcp-h2line" text="Every capability, one protocol." />
           <Stagger className="mcp-groups">
             {TOOL_GROUPS.map((t) => (
-              <motion.div key={t.g} className="mcp-group" variants={staggerItem}>
+              <motion.div
+                key={t.g}
+                className="mcp-group"
+                variants={staggerItem}
+                whileHover={{ y: -3, scale: 1.01 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              >
                 <header><b>{t.g}</b><span>{t.n}</span></header>
                 <div className="mcp-chips">
                   {t.tools.map((tool) => <code key={tool}>{tool}</code>)}

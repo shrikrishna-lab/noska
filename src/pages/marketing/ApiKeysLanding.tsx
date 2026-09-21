@@ -5,7 +5,6 @@ import {
   Copy, Check, EyeOff, KeyRound, ScanLine, ArrowRight,
 } from 'lucide-react';
 import { Reveal, Stagger, staggerItem } from './components/Reveal';
-import { CursorFollower } from './components/CursorFollower';
 import { HoldToConfirm } from './components/HoldToConfirm';
 import { SCOPES } from '../../features/api/apiContract';
 import './ApiKeysLanding.css';
@@ -78,8 +77,6 @@ export default function ApiKeysLanding() {
 
   return (
     <div className="api-page">
-      <CursorFollower variant="apikeys" label="API Keys" />
-
       {/* ══ Hero ══ */}
       <section className="api-hero">
         <div className="api-wrap">
@@ -275,7 +272,7 @@ export default function ApiKeysLanding() {
                 duration={1200}
                 accent="#17161B"
                 className="api-rotate-btn"
-                onComplete={() => {}}
+                onComplete={() => { }}
               />
               <ol>
                 <li>New secret generated &amp; shown <b>once</b></li>
