@@ -348,6 +348,7 @@ interface EditorProps {
   /** Locked (over-limit) workspaces render fully read-only: no typing,
    * drag, toolbars, or AI actions — import/export happen outside the editor. */
   forceReadOnly?: boolean;
+  onMoveToWorkspace?: (pageId: string, workspaceId: string) => void;
 }
 
 interface EditorCallbackContext {
@@ -501,7 +502,8 @@ export default function Editor({
   onNavigate,
   onCreateSubpage,
   onTrashPage,
-  forceReadOnly = false
+  forceReadOnly = false,
+  onMoveToWorkspace
 }: EditorProps) {
   const titleRef = useRef(null);
   const editorContainerRef = useRef(null);
@@ -1182,6 +1184,10 @@ e.currentTarget) {
                       page={page}
                       onAction={(action) => {
                         setPageMenuOpen(false);
+                        if (action.startsWith("move-to-workspace:")) {
+                          onMoveToWorkspace?.(page.id, action.slice("move-to-workspace:".length));
+                          return;
+                        }
                         switch (action) {
                           case "trash": onTrashPage?.(page.id); break;
                           case "duplicate": onDuplicateBlock?.(page.id); break;

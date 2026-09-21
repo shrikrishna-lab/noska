@@ -15,6 +15,7 @@ import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
 import { realtimeCollab } from "../lib/realtimeCollab";
 import { auditEngine } from "../lib/auditEngine";
 import { capture } from "../lib/posthog";
+import { useWorkspace } from "../contexts/WorkspaceContext";
 import { getAllProviders, testProviderConnection } from "../ai/providers";
 import type { Page, AIChat } from "../lib/supabaseService";
 import { recordUserAIUsage } from "../lib/supabaseService";
@@ -129,6 +130,7 @@ export default function AIPanel({
   const abortControllerRef = useRef<AbortController | null>(null);
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
+  const [{ activeWorkspaceId }] = useWorkspace();
   // New interaction systems
   const activity = useActivityState();
   const chatScroll = useChatScroll();
@@ -361,7 +363,8 @@ export default function AIPanel({
             pageId: page?.id ?? null,
             pageTitle: page?.title ?? null,
             collaborators: [],
-            createdAt: now()
+            createdAt: now(),
+            workspaceId: page?.workspaceId ?? activeWorkspaceId ?? null
           } as AIChat,
           ...aiChats
         ];

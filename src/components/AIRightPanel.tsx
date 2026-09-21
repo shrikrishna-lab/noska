@@ -40,6 +40,7 @@ import { saveAutomation, blankAutomation } from "../features/automations/automat
 import { refreshDefinitions } from "../intelligence/triggerService";
 import { useStreamBuffer } from "./ai/useStreamBuffer";
 import { capture } from "../lib/posthog";
+import { useWorkspace } from "../contexts/WorkspaceContext";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 import { LiquidMetalButton } from "./ui/liquid-metal-button";
@@ -249,6 +250,8 @@ export default function AIRightPanel({
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
+  const [{ activeWorkspaceId }] = useWorkspace();
+  const chatWorkspaceId = page?.workspaceId ?? activeWorkspaceId ?? null;
 
   const pageId = page?.id;
   const relations = useMemo(() => {
@@ -334,12 +337,12 @@ export default function AIRightPanel({
     let chatId = activeChatId;
     if (!chatId) {
       chatId = uid();
-      const chat = { id: chatId, name: "New Chat", messages: [], createdAt: now(), updatedAt: now(), chatType: "private" } as unknown as AIChat;
+      const chat = { id: chatId, name: "New Chat", messages: [], createdAt: now(), updatedAt: now(), chatType: "private", workspaceId: chatWorkspaceId } as unknown as AIChat;
       onChatsChange?.([...aiChats, chat]);
       onActiveChat?.(chatId);
     }
     return chatId;
-  }, [activeChatId, aiChats, onChatsChange, onActiveChat]);
+  }, [activeChatId, aiChats, onChatsChange, onActiveChat, chatWorkspaceId]);
 
   /** Live agentic run state — progress bubble + proposal card. */
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -448,7 +451,7 @@ export default function AIRightPanel({
     const existing = aiChats.find(c => c.id === chatId);
     const updatedChat: AIChat = existing
       ? { ...existing, messages: updatedMessages, updatedAt: now(), name: (existing.name === "New Chat" || !existing.name) ? text.slice(0, 36) : existing.name }
-      : { id: chatId, name: text.slice(0, 36), messages: updatedMessages, createdAt: now(), updatedAt: now(), chatType: "private" } as unknown as AIChat;
+      : { id: chatId, name: text.slice(0, 36), messages: updatedMessages, createdAt: now(), updatedAt: now(), chatType: "private", workspaceId: chatWorkspaceId } as unknown as AIChat;
     
     const chats = existing
       ? (aiChats.map(c => c.id === chatId ? updatedChat : c) as unknown as AIChat[])

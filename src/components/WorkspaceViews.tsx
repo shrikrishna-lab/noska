@@ -220,6 +220,10 @@ interface WorkspaceViewProps {
   onAcceptInvite?: (inviteId: string) => void;
   onDeclineInvite?: (inviteId: string) => void;
   workspaceName?: string;
+  /** Active workspace row id — scopes workspace-local extras (routines,
+   * reflections, custom calendar events) per workspace. Null means the
+   * legacy single-workspace shape: shared global keys. */
+  activeWorkspaceId?: string | null;
   aiChats?: AIChat[];
   onSelect: (pageId: string) => void;
   onNew: (template: string) => void;
@@ -252,6 +256,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
     onAcceptInvite,
     onDeclineInvite,
     workspaceName,
+    activeWorkspaceId = null,
     aiChats = [],
     onSelect,
     onNew,
@@ -308,6 +313,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
         onNew={onNew}
         onBlockPatch={onBlockPatch}
         onToast={onToast}
+        activeWorkspaceId={activeWorkspaceId}
       />
     );
   }
@@ -315,7 +321,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   if (view === "meetings") return <MeetingsRoute onNew={onNew} onToast={onToast} />;
   if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
   if (view === "inbox") return <><NotificationInbox /><details className="mx-auto max-w-4xl p-6"><summary className="cursor-pointer text-sm">Invitations and saved reminders</summary><InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} /></details></>;
-  if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} />;
+  if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} activeWorkspaceId={activeWorkspaceId} />;
   if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} onToast={onToast} />;
   if (view === "companyHome") return <CompanyWorkspace onBack={() => onView?.("home")} />;
   if (view === "companySettings") return <CompanyWorkspace onBack={() => onView?.("home")} />;
@@ -1648,6 +1654,7 @@ interface TasksRouteProps {
   onNew: (template: string) => void;
   onBlockPatch?: (pageId: string, blockId: string, patch: Record<string, unknown>) => void;
   onToast?: (message: string) => void;
+  activeWorkspaceId?: string | null;
 }
 
 function TasksRoute({
@@ -1658,7 +1665,8 @@ function TasksRoute({
   onSelect,
   onNew,
   onBlockPatch,
-  onToast
+  onToast,
+  activeWorkspaceId = null,
 }: TasksRouteProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'upcoming' | 'overdue' | 'completed'>('upcoming');
   const [searchQuery, setSearchQuery] = useState("");
@@ -1687,25 +1695,39 @@ function TasksRoute({
   const [reflectingEntry, setReflectingEntry] = useState<{ id: string; tag: string; title: string; prompt: string } | null>(null);
   const [reflectionText, setReflectionText] = useState("");
 
-  // Persistent Daily Routines (Image 2)
-  const routineStorageKey = `noska_daily_routines_${currentUserId || "default"}`;
+  // Persistent Daily Routines (Image 2) — namespaced per workspace so each
+  // workspace keeps its own routines; legacy global keys load once and stay
+  // under the null-workspace bucket.
+  const routineStorageKey = `noska_daily_routines_${currentUserId || "default"}${activeWorkspaceId ? `:${activeWorkspaceId}` : ""}`;
+  const DEFAULT_ROUTINES = [
+    { id: "r1", title: "Drink a glass of water", icon: "💧", iconBg: "#fff1e6", iconColor: "#ea580c", streakDays: 3, duration: "5 min", completed: false },
+    { id: "r2", title: "Meditate to relax", icon: "🧘", iconBg: "#e8f7f2", iconColor: "#16a34a", streakDays: 6, duration: "15 min", completed: true },
+    { id: "r3", title: "Stretch for 10 minutes", icon: "🤸", iconBg: "#fdf2f8", iconColor: "#db2777", streakDays: 5, duration: "10 min", completed: false },
+    { id: "r4", title: "Review sprint deliverables", icon: "📋", iconBg: "#fff7ed", iconColor: "#c2410c", streakDays: 3, duration: "8 min", completed: false },
+  ];
   const [routines, setRoutines] = useState<RoutineItem[]>(() => {
     try {
       const saved = localStorage.getItem(routineStorageKey);
       if (saved) return JSON.parse(saved);
     } catch {}
-    return [
-      { id: "r1", title: "Drink a glass of water", icon: "💧", iconBg: "#fff1e6", iconColor: "#ea580c", streakDays: 3, duration: "5 min", completed: false },
-      { id: "r2", title: "Meditate to relax", icon: "🧘", iconBg: "#e8f7f2", iconColor: "#16a34a", streakDays: 6, duration: "15 min", completed: true },
-      { id: "r3", title: "Stretch for 10 minutes", icon: "🤸", iconBg: "#fdf2f8", iconColor: "#db2777", streakDays: 5, duration: "10 min", completed: false },
-      { id: "r4", title: "Review sprint deliverables", icon: "📋", iconBg: "#fff7ed", iconColor: "#c2410c", streakDays: 3, duration: "8 min", completed: false },
-    ];
+    return DEFAULT_ROUTINES;
   });
 
+  const loadedRoutineKey = React.useRef(routineStorageKey);
   useEffect(() => {
+    if (loadedRoutineKey.current === routineStorageKey) {
+      try {
+        localStorage.setItem(routineStorageKey, JSON.stringify(routines));
+      } catch {}
+      return;
+    }
+    loadedRoutineKey.current = routineStorageKey;
     try {
-      localStorage.setItem(routineStorageKey, JSON.stringify(routines));
-    } catch {}
+      const saved = localStorage.getItem(routineStorageKey);
+      setRoutines(saved ? JSON.parse(saved) : DEFAULT_ROUTINES);
+    } catch {
+      setRoutines(DEFAULT_ROUTINES);
+    }
   }, [routines, routineStorageKey]);
 
   const [intelligenceTick, setIntelligenceTick] = useState(0);
@@ -2557,7 +2579,7 @@ function TasksRoute({
     e.preventDefault();
     if (!reflectionText.trim() || !reflectingEntry) return;
     try {
-      const key = `noska_reflections_${currentUserId || "default"}`;
+      const key = `noska_reflections_${currentUserId || "default"}${activeWorkspaceId ? `:${activeWorkspaceId}` : ""}`;
       const prev = JSON.parse(localStorage.getItem(key) || "[]");
       prev.unshift({
         id: `refl-${Date.now()}`,
@@ -5493,13 +5515,15 @@ interface CalendarRouteProps {
   onSelect: (pageId: string) => void;
   onNew: (template: string) => void;
   onToast?: (message: string) => void;
+  activeWorkspaceId?: string | null;
 }
 
-function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) {
+function CalendarRoute({ pages, onSelect, onNew, onToast, activeWorkspaceId = null }: CalendarRouteProps) {
   const { user } = useUser();
   const { isSynced } = useCalendarSync();
   const { enabled: autoPagesEnabled } = useAutoPagesInCalendarSetting();
 
+  const calendarStorageKey = calendarKeyFor(activeWorkspaceId);
   const calendarEvents: Event[] = React.useMemo(() => {
     const extractedEvents: Event[] = [];
 
@@ -5566,9 +5590,9 @@ function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) 
       });
     });
 
-    const stored = loadCalendarEvents();
+    const stored = loadCalendarEvents(calendarStorageKey);
     return [...stored, ...extractedEvents];
-  }, [pages, isSynced, autoPagesEnabled]);
+  }, [pages, isSynced, autoPagesEnabled, calendarStorageKey]);
 
   // Real Workspace Tracks derived dynamically ONLY from pages added to Calendar
   const workspaceTracks = React.useMemo(() => {
@@ -5664,15 +5688,15 @@ function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) 
         workspaceMilestones={workspaceMilestones}
         onSelectTrack={(trackId) => onSelect(trackId)}
         onEventCreate={(e) => {
-          saveCalendarEvent(e);
+          saveCalendarEvent(e, calendarStorageKey);
           onToast?.(`Event "${e.title}" scheduled`);
         }}
         onEventUpdate={(id, updated) => {
-          updateCalendarEvent(id, updated);
+          updateCalendarEvent(id, updated, calendarStorageKey);
           onToast?.("Event updated");
         }}
         onEventDelete={(id) => {
-          deleteCalendarEvent(id);
+          deleteCalendarEvent(id, calendarStorageKey);
           onToast?.("Event removed");
         }}
       />
@@ -5682,9 +5706,13 @@ function CalendarRoute({ pages, onSelect, onNew, onToast }: CalendarRouteProps) 
 
 const CALENDAR_STORAGE_KEY = "noska_calendar_events";
 
-function loadCalendarEvents(): Event[] {
+function calendarKeyFor(workspaceId?: string | null): string {
+  return workspaceId ? `${CALENDAR_STORAGE_KEY}:${workspaceId}` : CALENDAR_STORAGE_KEY;
+}
+
+function loadCalendarEvents(storageKey: string = CALENDAR_STORAGE_KEY): Event[] {
   try {
-    const raw = localStorage.getItem(CALENDAR_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return [];
     return JSON.parse(raw).map((e: any) => ({
       ...e,
@@ -5694,20 +5722,20 @@ function loadCalendarEvents(): Event[] {
   } catch { return []; }
 }
 
-function saveCalendarEvent(event: Omit<Event, "id">) {
-  const events = loadCalendarEvents();
+function saveCalendarEvent(event: Omit<Event, "id">, storageKey: string = CALENDAR_STORAGE_KEY) {
+  const events = loadCalendarEvents(storageKey);
   events.push({ ...event, id: `user-evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
-  localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
+  localStorage.setItem(storageKey, JSON.stringify(events));
 }
 
-function updateCalendarEvent(id: string, updated: Partial<Event>) {
-  const events = loadCalendarEvents().map(e => e.id === id ? { ...e, ...updated } : e);
-  localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
+function updateCalendarEvent(id: string, updated: Partial<Event>, storageKey: string = CALENDAR_STORAGE_KEY) {
+  const events = loadCalendarEvents(storageKey).map(e => e.id === id ? { ...e, ...updated } : e);
+  localStorage.setItem(storageKey, JSON.stringify(events));
 }
 
-function deleteCalendarEvent(id: string) {
-  const events = loadCalendarEvents().filter((e) => e.id !== id);
-  localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
+function deleteCalendarEvent(id: string, storageKey: string = CALENDAR_STORAGE_KEY) {
+  const events = loadCalendarEvents(storageKey).filter((e) => e.id !== id);
+  localStorage.setItem(storageKey, JSON.stringify(events));
 }
 
 // ── Shared Route ────────────────────────────────────────────────────

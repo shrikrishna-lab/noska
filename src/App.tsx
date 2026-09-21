@@ -21,7 +21,7 @@ import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { UIProvider, useUI } from "./contexts/UIContext";
 import { useEntitlements } from "./hooks/billing/useEntitlements";
 import { isWorkspaceLockedByIndex, lockedWorkspaceMessage } from "./features/workspaces/lock";
-import { filterPagesByWorkspace } from "./features/workspaces/filter";
+import { filterPagesByWorkspace, filterByWorkspace } from "./features/workspaces/filter";
 import { WorkspaceProvider, useWorkspace } from "./contexts/WorkspaceContext";
 import { AIProvider, useAI } from "./contexts/AIContext";
 import { TabProvider, useTabs } from "./contexts/TabContext";
@@ -458,6 +458,12 @@ function AppContent() {
     () => filterPagesByWorkspace(trashPages, activeWorkspaceId, workspaceRows),
     [trashPages, activeWorkspaceId, workspaceRows],
   );
+  // AI chats are per-workspace too; legacy chats without a workspace attach
+  // to the oldest one, mirroring the page rule.
+  const visibleAiChats = useMemo(
+    () => filterByWorkspace(aiChats, activeWorkspaceId, workspaceRows),
+    [aiChats, activeWorkspaceId, workspaceRows],
+  );
   const pageText = activePage ? plainText(activePage) : "";
 
   // Locked workspaces (past the plan's workspace allowance) are fully
@@ -488,6 +494,20 @@ function AppContent() {
       setActiveId(null);
     }
   }, [visiblePages, sharedPages, activeId, setActiveId]);
+  useEffect(() => {
+    if (activeChatId && !visibleAiChats.some((c) => c.id === activeChatId)) {
+      setActiveChatId(null);
+    }
+  }, [visibleAiChats, activeChatId, setActiveChatId]);
+  // Panels receive the visible slice for display, but their updates must
+  // merge back into the full account list so hidden workspaces' chats
+  // are never dropped from state. Updater functions already operate by id
+  // and apply cleanly to the full list.
+  const mergeAiChats = useCallback((prev: AIChat[], next: AIChat[] | ((prev: AIChat[]) => AIChat[])) => {
+    if (typeof next === "function") return (next as (prev: AIChat[]) => AIChat[])(prev);
+    const ids = new Set(next.map((c) => c.id));
+    return [...next, ...prev.filter((c) => !ids.has(c.id))];
+  }, []);
 
   const toolContext = useMemo(() => ({
     currentPage: activePage,
@@ -1624,6 +1644,29 @@ function AppContent() {
     const hints = new Map<string, string[]>();
     if (targetParentId) hints.set(targetParentId, siblingOrder);
     commitPages(normalizePageTree(nextPages, hints));
+  };
+
+  // Move a page (with its whole subtree, so children never strand in the
+  // old workspace) into another workspace. Blocked in locked workspaces,
+  // and never into a locked target.
+  const movePageToWorkspace = (pageId: string, workspaceId: string) => {
+    if (guardLocked()) return;
+    if (isWorkspaceLockedByIndex(workspaceRows, workspaceId, wsEntLimit)) {
+      showToast("That workspace is locked — upgrade your plan to move pages into it. Import and export still work.");
+      return;
+    }
+    const subtreeIds = getPageSubtreeIdsLocal(pageId);
+    if (!subtreeIds.size) return;
+    const timestamp = now();
+    const targetName = workspaceRows.find((w) => w.id === workspaceId)?.name || "workspace";
+    const nextPages = normalizePageTree(pages.map((p) =>
+      subtreeIds.has(p.id)
+        ? { ...p, workspaceId, updatedAt: timestamp,
+            lineage: [...(p.lineage || []), { action: "moved" as const, timestamp, detail: `Moved to "${targetName}"` }] }
+        : p
+    ));
+    commitPages(nextPages);
+    showToast(`Moved to "${targetName}".`);
   };
 
   const trashPageSubtree = (pageId: string) => {
@@ -3083,6 +3126,7 @@ function AppContent() {
         onTrashPage: handleTrashPage,
         onNewPage: (template) => addPage(template),
         locked: activeWorkspaceLocked,
+        onMoveToWorkspace: movePageToWorkspace,
       },
       needsUsernameClaim,
       claimUsername: (username) => {
@@ -3309,7 +3353,7 @@ function AppContent() {
               pages={visiblePages}
               sharedPages={sharedPages}
               pendingInvites={pendingInvites}
-              aiChats={aiChats}
+              aiChats={visibleAiChats}
               onNewPage={handleTabNewPage}
               onCopyLink={copyPageLink}
             />
@@ -3446,6 +3490,7 @@ function AppContent() {
                         onTrashPage={handleTrashPage}
                         onNewPage={(template) => addPage(template)}
                         locked={activeWorkspaceLocked}
+                        onMoveToWorkspace={movePageToWorkspace}
                       />
                     )
                   ) : (
@@ -3458,7 +3503,8 @@ function AppContent() {
                       onAcceptInvite={handleAcceptInvite}
                       onDeclineInvite={handleDeclineInvite}
                       workspaceName={workspaceName}
-                      aiChats={aiChats}
+                      activeWorkspaceId={activeWorkspaceId}
+                      aiChats={visibleAiChats}
                       onSelect={handlePageSelect}
                       onNew={(template) => template === "blank" ? openNewPage() : addPage(template)}
                       onAI={openRightPanel}
@@ -3507,9 +3553,9 @@ function AppContent() {
             apiKey={apiKey}
             aiProvider={aiProvider}
             nvidiaKey={nvidiaKey}
-            aiChats={aiChats}
+            aiChats={visibleAiChats}
             activeChatId={activeChatId}
-            onChatsChange={setAiChats}
+            onChatsChange={(next) => setAiChats((prev) => mergeAiChats(prev, next))}
             onActiveChat={setActiveChatId}
             onNewChat={startAIChat}
             onSelectChat={(id) => { setActiveChatId(id); setAiOpen(true); }}
@@ -3539,9 +3585,9 @@ function AppContent() {
             apiKey={apiKey}
             aiProvider={aiProvider}
             nvidiaKey={nvidiaKey}
-            aiChats={aiChats}
+            aiChats={visibleAiChats}
             activeChatId={activeChatId}
-            onChatsChange={setAiChats}
+            onChatsChange={(next) => setAiChats((prev) => mergeAiChats(prev, next))}
             onActiveChat={setActiveChatId}
             onNewChat={openRightPanel}
             onSelectChat={(id) => { setActiveChatId(id); setAiRightOpen(true); }}

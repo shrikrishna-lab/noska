@@ -1,5 +1,8 @@
-import type { Page } from '../../lib/supabaseService';
 import type { WorkspaceRow } from './service';
+
+export interface WorkspaceScoped {
+  workspaceId?: string | null;
+}
 
 export function isUnscopedWorkspaceId(value: unknown): boolean {
   return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
@@ -20,20 +23,28 @@ export function resolveActiveWorkspaceId(rows: WorkspaceRow[], storedId: string 
   return oldestWorkspaceId(rows);
 }
 
-function pageWorkspaceId(page: Pick<Page, 'workspaceId'>, fallbackId: string | null): string | null {
-  if (!isUnscopedWorkspaceId(page.workspaceId)) return String(page.workspaceId);
+function itemWorkspaceId(item: Pick<WorkspaceScoped, 'workspaceId'>, fallbackId: string | null): string | null {
+  if (!isUnscopedWorkspaceId(item.workspaceId)) return String(item.workspaceId);
   return fallbackId;
 }
 
-export function filterPagesByWorkspace(
-  pages: Page[],
+export function filterByWorkspace<T extends WorkspaceScoped>(
+  items: T[],
   activeId: string | null,
   rows: WorkspaceRow[],
-): Page[] {
-  if (!rows.length || !activeId) return pages;
+): T[] {
+  if (!rows.length || !activeId) return items;
   const oldest = oldestWorkspaceId(rows);
-  return pages.filter(page => {
-    const wid = pageWorkspaceId(page, oldest);
+  return items.filter(item => {
+    const wid = itemWorkspaceId(item, oldest);
     return wid === null || wid === activeId;
   });
+}
+
+export function filterPagesByWorkspace<T extends WorkspaceScoped>(
+  pages: T[],
+  activeId: string | null,
+  rows: WorkspaceRow[],
+): T[] {
+  return filterByWorkspace(pages, activeId, rows);
 }

@@ -4,10 +4,12 @@ import {
   Link2, Copy, CopyPlus, Move, Trash2, Presentation, Wifi, Type, Maximize2,
   Palette, Lock, Sparkles, FileEdit, Languages, FileDown, Upload, Globe,
   BarChart3, History, Bell, Cable, Search, X, ChevronRight, ChevronLeft, Eye,
+  FolderKanban,
   type LucideIcon
 } from "lucide-react";
 import { executeCommand } from "../../core/commands/ActionExecutor";
 import type { Page } from "../../lib/supabaseService";
+import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useNotificationPlatform } from "../../features/notifications/Provider";
 import { loadPagePreference, savePagePreference } from "../../features/notifications/preferences";
 import type { PageNotificationMode } from "../../features/notifications/types";
@@ -110,7 +112,7 @@ interface PageOptionsMenuProps {
 // never contains a shared page's id), but hiding them is what actually
 // communicates that to the person looking at the menu instead of letting
 // them click something that silently does nothing.
-const OWNER_ONLY_ACTION_IDS = new Set(["duplicate", "move-to", "trash", "lock", "readonly", "customize", "wiki"]);
+const OWNER_ONLY_ACTION_IDS = new Set(["duplicate", "move-to", "move-to-workspace", "trash", "lock", "readonly", "customize", "wiki"]);
 
 export default function PageOptionsMenu({
   open,
@@ -131,6 +133,7 @@ export default function PageOptionsMenu({
   onAskAI
 }: PageOptionsMenuProps) {
   const { userId: notificationUserId } = useNotificationPlatform();
+  const [{ workspaceRows, activeWorkspaceId }] = useWorkspace();
   const [notifyMode, setNotifyMode] = useState<PageNotificationMode | null>(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
   useEffect(() => {
@@ -153,6 +156,7 @@ export default function PageOptionsMenu({
     { id: "copy-contents", icon: Copy, label: "Copy page contents", shortcut: "" },
     { id: "duplicate", icon: CopyPlus, label: "Duplicate", shortcut: "Ctrl+D" },
     { id: "move-to", icon: Move, label: "Move to", shortcut: "Ctrl+Shift+P" },
+    ...(workspaceRows.length > 1 ? [{ id: "move-to-workspace", icon: FolderKanban, label: "Move to workspace", shortcut: "", submenu: true }] : []),
     { id: "trash", icon: Trash2, label: "Move to Trash", shortcut: "", danger: true },
     { id: "present", icon: Presentation, label: "Present (Beta)", shortcut: "Ctrl+Alt+P" },
     { id: "offline", icon: Wifi, label: "Available offline", shortcut: "", toggle: true, value: page?.offline },
@@ -187,6 +191,16 @@ export default function PageOptionsMenu({
 
   // Determine actual items shown
   const getVisibleItems = (): MenuItem[] => {
+    if (activeSubmenu === 'move-to-workspace') {
+      const currentWs = (page as Page & { workspaceId?: string | null }).workspaceId || null;
+      return workspaceRows
+        .map((row) => ({
+          id: `movews-${row.id}`,
+          label: `${row.name}${row.id === (currentWs || activeWorkspaceId) ? " ✓" : ""}`,
+          icon: FolderKanban,
+        }))
+        .filter((item) => fuzzyMatch(search, item.label));
+    }
     if (activeSubmenu) {
       const sub = submenus[activeSubmenu];
       return sub ? sub.items.map(item => activeSubmenu === 'notify' ? { ...item, active: item.id === `notify-${notifyMode}` } : item).filter(item => fuzzyMatch(search, item.label)) : [];
@@ -210,6 +224,11 @@ export default function PageOptionsMenu({
       setActiveSubmenu(item.id);
       setSearch("");
       setHighlightedIndex(-1);
+      return;
+    }
+
+    if (item.id.startsWith('movews-')) {
+      onAction?.(`move-to-workspace:${item.id.slice(7)}`);
       return;
     }
 

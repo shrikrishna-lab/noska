@@ -1257,10 +1257,10 @@ const Sidebar = memo(function Sidebar({
                           setLockedBannerHovered(false);
                           onSettings("Billing");
                         }}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 px-2.5 py-1 rounded-full transition-all shadow-[0_2px_6px_rgba(217,119,6,0.35),inset_0_1px_0_rgba(255,255,255,0.3)] cursor-pointer shrink-0"
+                        className="inline-flex items-center gap-0.5 text-[9px] font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 px-2 py-0.5 rounded-full transition-all shadow-[0_1.5px_5px_rgba(217,119,6,0.3),inset_0_1px_0_rgba(255,255,255,0.3)] cursor-pointer shrink-0"
                       >
                         <span>Upgrade</span>
-                        <ArrowUpRight size={10} strokeWidth={2.8} className="opacity-85" />
+                        <ArrowUpRight size={8} strokeWidth={2.8} className="opacity-90" />
                       </motion.button>
                     </motion.div>
 

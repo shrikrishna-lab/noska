@@ -34,6 +34,7 @@ export interface SplitWorkspaceRendererProps {
   onNewPage?: (template?: string) => void;
   /** Locked (over-limit) workspace: editors render read-only, mutations stay blocked upstream. */
   locked?: boolean;
+  onMoveToWorkspace?: (pageId: string, workspaceId: string) => void;
 }
 
 export default function SplitWorkspaceRenderer(props: SplitWorkspaceRendererProps) {

@@ -153,6 +153,64 @@ export async function createWorkspaceRow(
   return localRow;
 }
 
+export interface WorkspaceMember {
+  workspace_id: string;
+  user_id: string;
+  created_at?: string | null;
+  user_name?: string | null;
+  username?: string | null;
+}
+
+export async function listWorkspaceMembers(workspaceId: string, client: Client = supabase): Promise<WorkspaceMember[]> {
+  if (!isUuid(workspaceId)) throw new Error('Invalid workspace.');
+  const { data: members, error } = await client.from('workspace_members')
+    .select('workspace_id,user_id,created_at')
+    .eq('workspace_id', workspaceId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  const rows = (members || []) as WorkspaceMember[];
+  try {
+    const ids = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+    if (ids.length) {
+      const { data: profiles } = await client.from('user_profiles')
+        .select('user_id,user_name,username')
+        .in('user_id', ids);
+      const byId = new Map(((profiles || []) as Array<{ user_id: string; user_name?: string | null; username?: string | null }>).map(p => [p.user_id, p]));
+      for (const row of rows) {
+        const profile = byId.get(row.user_id);
+        if (profile) {
+          row.user_name = profile.user_name ?? null;
+          row.username = profile.username ?? null;
+        }
+      }
+    }
+  } catch {
+    // Names are a convenience; membership itself is authoritative.
+  }
+  return rows;
+}
+
+export async function inviteWorkspaceMember(workspaceId: string, userId: string, client: Client = supabase): Promise<void> {
+  if (!isUuid(workspaceId)) throw new Error('Invalid workspace.');
+  const target = userId.trim();
+  if (!target) throw new Error('Member is required.');
+  const me = await getAuthUserId();
+  if (!me) throw new Error('Sign in to invite members.');
+  if (target === me) throw new Error('You already belong to this workspace.');
+  const { error } = await client.from('workspace_members')
+    .upsert({ workspace_id: workspaceId, user_id: target }, { onConflict: 'workspace_id,user_id' });
+  if (error) throw error;
+}
+
+export async function removeWorkspaceMember(workspaceId: string, userId: string, client: Client = supabase): Promise<void> {
+  if (!isUuid(workspaceId)) throw new Error('Invalid workspace.');
+  const { error } = await client.from('workspace_members')
+    .delete()
+    .eq('workspace_id', workspaceId)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
 export async function renameWorkspace(id: string, name: string, client: Client = supabase): Promise<void> {
   if (!isUuid(id)) throw new Error('Invalid workspace.');
   const trimmed = name.trim().slice(0, 80);

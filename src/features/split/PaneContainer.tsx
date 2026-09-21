@@ -51,6 +51,7 @@ interface PaneContainerProps {
   onTrashPage?: (pageId: string) => void;
   onNewPage?: (template?: string) => void;
   locked?: boolean;
+  onMoveToWorkspace?: (pageId: string, workspaceId: string) => void;
 }
 
 export default function PaneContainer({
@@ -82,7 +83,8 @@ export default function PaneContainer({
   onCreateSubpage,
   onTrashPage,
   onNewPage,
-  locked = false
+  locked = false,
+  onMoveToWorkspace
 }: PaneContainerProps) {
   const {
     panes,
@@ -314,6 +316,7 @@ export default function PaneContainer({
                   page={activePage}
                   pages={pages}
                   forceReadOnly={locked}
+                  onMoveToWorkspace={onMoveToWorkspace}
                   renameFocusId={renameFocusId}
                   onRenameFocusDone={onRenameFocusDone}
                   onPagePatch={(patch) => onPagePatch?.(activePage.id, patch)}

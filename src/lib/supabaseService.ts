@@ -549,19 +549,22 @@ export interface AIChat {
   collaborators: unknown[];
   createdAt: string | null;
   updatedAt: string | null;
+  /** Workspace row id this chat belongs to. Null/empty means legacy
+   * unscoped — treated as the oldest workspace when workspace rows exist. */
+  workspaceId?: string | null;
 }
 
 export type AIChatInput = Partial<AIChat> & { id: string; title?: string };
 
 // Optimized: Select only columns needed to reduce egress from messages (large JSON)
-const AI_CHAT_COLUMNS = "id, name, pinned, archived, chat_type, page_id, page_title, created_at, updated_at";
+const AI_CHAT_COLUMNS = "id, name, pinned, archived, chat_type, page_id, page_title, created_at, updated_at, workspace_id";
 
 export async function fetchAIChats(userId?: string | null): Promise<AIChat[]> {
   let query = supabase.from("ai_chats").select(AI_CHAT_COLUMNS);
   if (userId) query = query.eq("user_id", userId);
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;
-  return (data || []).map((c) => ({
+  return (data || []).map((c: any) => ({
     id: c.id,
     name: c.name || "New chat",
     messages: [], // Load messages on-demand only
@@ -573,10 +576,11 @@ export async function fetchAIChats(userId?: string | null): Promise<AIChat[]> {
     collaborators: [], // Load on-demand only
     createdAt: c.created_at,
     updatedAt: c.updated_at,
+    workspaceId: (c as { workspace_id?: string | null }).workspace_id ?? null,
   }));
 }
 
-// Paginated version - loads chats in batches to reduce egress
+ // Paginated version - loads chats in batches to reduce egress
 const AI_CHAT_BATCH_SIZE = 10;
 
 export async function fetchAIChatsPaginated(
@@ -599,7 +603,7 @@ export async function fetchAIChatsPaginated(
   const hasMore = from + AI_CHAT_BATCH_SIZE < totalCount;
   
   return {
-    chats: (data || []).map((c) => ({
+    chats: (data || []).map((c: any) => ({
       id: c.id,
       name: c.name || "New chat",
       messages: [],
@@ -611,6 +615,7 @@ export async function fetchAIChatsPaginated(
       collaborators: [],
       createdAt: c.created_at,
       updatedAt: c.updated_at,
+      workspaceId: (c as { workspace_id?: string | null }).workspace_id ?? null,
     })),
     hasMore,
   };
@@ -632,6 +637,7 @@ export async function saveAIChat(chat: AIChatInput, userId: string): Promise<voi
         page_title: chat.pageTitle || null,
         collaborators: (chat.collaborators || []) as unknown as Json,
         user_id: userId,
+        workspace_id: chat.workspaceId || "",
       } as TablesInsert<"ai_chats">,
       { onConflict: "id" }
     );
