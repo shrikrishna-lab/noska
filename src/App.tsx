@@ -19,6 +19,9 @@ import { clearBrowserAuthState } from "./lib/desktop/browserAuth";
 import { handleShortcutEvent } from "./lib/shortcuts";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { UIProvider, useUI } from "./contexts/UIContext";
+import { useEntitlements } from "./hooks/billing/useEntitlements";
+import { isWorkspaceLockedByIndex, lockedWorkspaceMessage } from "./features/workspaces/lock";
+import { filterPagesByWorkspace } from "./features/workspaces/filter";
 import { WorkspaceProvider, useWorkspace } from "./contexts/WorkspaceContext";
 import { AIProvider, useAI } from "./contexts/AIContext";
 import { TabProvider, useTabs } from "./contexts/TabContext";
@@ -449,7 +452,32 @@ function AppContent() {
     [activeOwnedMatch, activeSharedMatch, visiblePages, pages]
   );
   const trashPages = useMemo(() => pages.filter((p) => p.trashed), [pages]);
+  // Trash is per-workspace: each workspace sees only its own deleted pages,
+  // so restoring never drops a page into a different workspace.
+  const visibleTrashPages = useMemo(
+    () => filterPagesByWorkspace(trashPages, activeWorkspaceId, workspaceRows),
+    [trashPages, activeWorkspaceId, workspaceRows],
+  );
   const pageText = activePage ? plainText(activePage) : "";
+
+  // Locked workspaces (past the plan's workspace allowance) are fully
+  // read-only: every mutation below goes through guardLocked, while import
+  // and export keep working. Reads, search, and navigation are unaffected.
+  const { limit: getEntLimit } = useEntitlements();
+  const wsEntLimit = getEntLimit("max_workspaces");
+  const activeWorkspaceLocked = useMemo(
+    () => isWorkspaceLockedByIndex(workspaceRows, activeWorkspaceId, wsEntLimit),
+    [workspaceRows, activeWorkspaceId, wsEntLimit],
+  );
+  const activeWorkspaceName = useMemo(
+    () => workspaceRows.find((w) => w.id === activeWorkspaceId)?.name ?? workspaceName,
+    [workspaceRows, activeWorkspaceId, workspaceName],
+  );
+  const guardLocked = useCallback(() => {
+    if (!activeWorkspaceLocked) return false;
+    showToast(lockedWorkspaceMessage(activeWorkspaceName));
+    return true;
+  }, [activeWorkspaceLocked, activeWorkspaceName, showToast]);
 
   // Switching workspaces hides the open page: fall back to the first page
   // of the newly visible workspace instead of a hidden one.
@@ -1221,6 +1249,7 @@ function AppContent() {
   // newly-granted page needs to actually appear somewhere.
   const handleAcceptInvite = useCallback(async (inviteId: string) => {
     if (!currentUserId) return;
+    if (guardLocked()) return;
     try {
       await acceptPageInvite(inviteId, currentUserId);
       setPendingInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
@@ -1230,10 +1259,11 @@ function AppContent() {
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Couldn't accept invite");
     }
-  }, [currentUserId]);
+  }, [currentUserId, guardLocked]);
 
   const handleDeclineInvite = useCallback(async (inviteId: string) => {
     if (!currentUserId) return;
+    if (guardLocked()) return;
     try {
       await declinePageInvite(inviteId, currentUserId);
       setPendingInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
@@ -1241,7 +1271,7 @@ function AppContent() {
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Couldn't decline invite");
     }
-  }, [currentUserId]);
+  }, [currentUserId, guardLocked]);
 
   // Replay onboarding from settings
   const handleReplayOnboarding = useCallback(() => {
@@ -1566,6 +1596,7 @@ function AppContent() {
   const getPageSubtreeIdsLocal = (pageId: string, sourcePages: Page[] = pages) => getPageSubtreeIds(pageId, sourcePages);
 
   const movePage = (pageId: string, parentId: string | null, orderedSiblingIds: string[] = []) => {
+    if (guardLocked()) return;
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
     const targetParentId = parentId || null;
@@ -1596,6 +1627,7 @@ function AppContent() {
   };
 
   const trashPageSubtree = (pageId: string) => {
+    if (guardLocked()) return;
     const subtreeIds = getPageSubtreeIdsLocal(pageId);
     if (!subtreeIds.size) return;
     const timestamp = now();
@@ -1627,6 +1659,7 @@ function AppContent() {
   };
 
   const restorePageSubtree = (pageId: string) => {
+    if (guardLocked()) return;
     const subtreeIds = getPageSubtreeIdsLocal(pageId);
     if (!subtreeIds.size) return;
     const timestamp = now();
@@ -1663,6 +1696,7 @@ function AppContent() {
   };
 
   const deletePageSubtreeForever = (pageId: string) => {
+    if (guardLocked()) return;
     const subtreeIds = getPageSubtreeIdsLocal(pageId);
     if (!subtreeIds.size) return;
     setStackedPageIds((prev) => prev.filter((id) => !subtreeIds.has(id)));
@@ -1884,7 +1918,9 @@ function AppContent() {
     });
   };
 
-  const updatePage = useCallback((id: string, patch: Partial<Page>) => {
+  const updatePage = useCallback((id: string, patch: Partial<Page>, opts?: { allowLocked?: boolean }) => {
+    // Locked workspaces are read-only (import/export bypass via allowLocked).
+    if (!opts?.allowLocked && guardLocked()) return;
     // Route to the shared-page pipeline for ANY page id that's shared-not-
     // owned (not just the active page) — a shared page can also be open
     // in a background stacked column (see stackedPageIds.map above).
@@ -2011,16 +2047,17 @@ function AppContent() {
     }
 
     commitPages(patch.parentId !== undefined || patch.content !== undefined ? normalizePageTree(nextPages) : nextPages);
-  }, [pages, sharedPages, updateSharedPage, trashPageSubtree, restorePageSubtree, closeStackedColumn, auditEngine, realtimeCollab, stampBlockAttribution, now, commitPages, normalizePageTree]);
+  }, [pages, sharedPages, updateSharedPage, trashPageSubtree, restorePageSubtree, closeStackedColumn, auditEngine, realtimeCollab, stampBlockAttribution, now, commitPages, normalizePageTree, guardLocked]);
 
-  const updateBlocks = useCallback((blocks: Block[]) => {
+  const updateBlocks = useCallback((blocks: Block[], opts?: { allowLocked?: boolean }) => {
+    if (!opts?.allowLocked && guardLocked()) return;
     const prev = pages.find(p => p.id === activePage.id);
     auditEngine.log({
       pageId: activePage.id, userId: realtimeCollab.getUser()?.userId || 'system', userName: realtimeCollab.getUser()?.userName || 'System',
       action: 'edit', blockType: null, contentBefore: { blocks: prev?.blocks }, contentAfter: { blocks }, detail: 'Blocks updated'
     });
-    updatePage(activePage.id, { blocks });
-  }, [pages, activePage, auditEngine, realtimeCollab, updatePage]);
+    updatePage(activePage.id, { blocks }, opts);
+  }, [pages, activePage, auditEngine, realtimeCollab, updatePage, guardLocked]);
 
   const openAIChat = (chatId: string | null = null) => {
     setActiveChatId(chatId);
@@ -2048,6 +2085,7 @@ function AppContent() {
   }
 
   const addPage = (template: string = "blank", parentId: string | null = null, options: AddPageOptions = {}) => {
+    if (guardLocked()) return "";
     const templateTitles: Record<string, string> = {
       standup: "Meeting Notes",
       prd: "Tasks Tracker",
@@ -2245,6 +2283,7 @@ function AppContent() {
   });
 
   const commitNewPageDraft = (draft: Page, patch: Partial<Page> = {}): Page => {
+    if (guardLocked()) return draft;
     const page = ensurePageEntity({ ...draft, ...patch });
     let nextPages = [page, ...pages.filter((p) => p.id !== page.id)];
     if (page.parentId) {
@@ -2263,6 +2302,7 @@ function AppContent() {
   };
 
   const createSubpageAtBlock = (parentPageId: string, afterBlockId: string, title: string = ""): string | null => {
+    if (guardLocked()) return null;
     const parent = pages.find((p) => p.id === parentPageId);
     if (!parent) return null;
 
@@ -2518,6 +2558,7 @@ function AppContent() {
   };
 
   const duplicatePage = (pageId: string) => {
+    if (guardLocked()) return;
     const original = pages.find((p) => p.id === pageId);
     if (!original) return;
     const idMap = new Map<string, string>();
@@ -2933,7 +2974,7 @@ function AppContent() {
   if (isMobile()) {
     const mobileController: MobileAppController = {
       visiblePages,
-      trashPages,
+      trashPages: visibleTrashPages,
       sharedPages,
       pendingInvites,
       activeId,
@@ -3031,7 +3072,7 @@ function AppContent() {
         onFocusBlock: (block) => setFocusedBlock(block),
         onReadingModePage: (p) => setReadingPage(p),
         onUnlockPage: handleUnlockPage,
-        onDeletePage: (id) => { commitPages(pages.filter((p) => p.id !== id)); },
+        onDeletePage: (id) => { if (guardLocked()) return; commitPages(pages.filter((p) => p.id !== id)); },
         onToast: showToast,
         onVoiceCapture: () => setVoiceOpen(true),
         ghostWriterEnabled,
@@ -3041,6 +3082,7 @@ function AppContent() {
         onCreateSubpage: createSubpageAtBlock,
         onTrashPage: handleTrashPage,
         onNewPage: (template) => addPage(template),
+        locked: activeWorkspaceLocked,
       },
       needsUsernameClaim,
       claimUsername: (username) => {
@@ -3209,7 +3251,7 @@ function AppContent() {
           <Sidebar
             open={sidebarOpen}
             pages={visiblePages}
-            trashCount={trashPages.length}
+            trashCount={visibleTrashPages.length}
             pendingInvitesCount={pendingInvites.length}
             activeId={activeId}
             workspaceName={workspaceName}
@@ -3391,7 +3433,7 @@ function AppContent() {
                         onFocusBlock={(block) => setFocusedBlock(block)}
                         onReadingModePage={(p) => setReadingPage(p)}
                         onUnlockPage={handleUnlockPage}
-                        onDeletePage={(id) => { commitPages(pages.filter((p) => p.id !== id)); }}
+                        onDeletePage={(id) => { if (guardLocked()) return; commitPages(pages.filter((p) => p.id !== id)); }}
                         onToast={showToast}
                         onVoiceCapture={() => setVoiceOpen(true)}
                         ghostWriterEnabled={ghostWriterEnabled}
@@ -3401,8 +3443,9 @@ function AppContent() {
                         onCreateSubpage={(pId, afterBlockId, title) =>
                           createSubpageAtBlock(pId, afterBlockId, title)
                         }
-            onTrashPage={handleTrashPage}
+                        onTrashPage={handleTrashPage}
                         onNewPage={(template) => addPage(template)}
+                        locked={activeWorkspaceLocked}
                       />
                     )
                   ) : (
@@ -3483,6 +3526,7 @@ function AppContent() {
             currentUserEmail={currentUserEmail}
             currentUserAvatar={currentUserAvatar}
             currentUserId={currentUserId}
+            locked={activeWorkspaceLocked}
           /></Suspense>
           <Suspense fallback={null}><AIRightPanel
             open={aiRightOpen}
@@ -3511,6 +3555,7 @@ function AppContent() {
             toolContext={toolContext}
             seedPrompt={aiSeedPrompt}
             onSeedConsumed={() => setAiSeedPrompt(null)}
+            locked={activeWorkspaceLocked}
           /></Suspense>
           <AnimatePresence>
             {paletteOpen && (
@@ -3622,7 +3667,7 @@ onLineage={() => setLineageOpen(true)}
               onToast={showToast}
             />
             )}
-            {trashOpen && <TrashModal key="app-trash" pages={trashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} />}
+            {trashOpen && <TrashModal key="app-trash" pages={visibleTrashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} />}
             {shareOpen && (
               <ShareModal
                 key="app-share"
@@ -3632,6 +3677,7 @@ onLineage={() => setLineageOpen(true)}
                 currentUserId={currentUserId}
                 currentUsername={currentUsername}
                 workspaceSlug={slugifyWorkspaceName(workspaceName)}
+                locked={activeWorkspaceLocked}
               />
             )}
             {helpOpen && <HelpModal key="app-help" onClose={() => setHelpOpen(false)} />}
@@ -3649,7 +3695,7 @@ onLineage={() => setLineageOpen(true)}
               {clipperOpen && (
                 <WebClipper
                   onClose={() => setClipperOpen(false)}
-                  onAppendBlocks={(blocks) => updateBlocks([...activePage.blocks, ...blocks])}
+                  onAppendBlocks={(blocks) => updateBlocks([...activePage.blocks, ...blocks], { allowLocked: true })}
                   apiKey={apiKey}
                   aiProvider={aiProvider}
                   nvidiaKey={nvidiaKey}

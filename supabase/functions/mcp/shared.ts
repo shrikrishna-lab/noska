@@ -13,11 +13,12 @@ import {
 } from "../_shared/core/runtime.ts";
 import {
   PlatformError as PurePlatformError,
-  extractId, mustId, sha256Hex,
+  extractId, mustId, sha256Hex, keyHasScope,
   blocksToMarkdown, markdownToBlocks,
   COMMANDS, commandByName,
   initialReviewState,
 } from "../_shared/core/pure.ts";
+import { classifyAuth } from "./protocol.ts";
 
 /* Service-role client (owner scoping happens in every query — see runtime.ts). */
 export const db = dbClient();
@@ -42,40 +43,69 @@ export interface KeyRow {
   user_id: string;
   scopes: string[];
   default_workspace_id: string;
+  read_only?: boolean;
+  allowed_tools?: string[];
+  /** "apikey" | "oauth" | "query" — how this request authenticated. */
+  via?: string;
 }
 
 export async function authenticate(req: Request): Promise<KeyRow> {
-  // Preferred: Authorization: Bearer nsk_…
-  // Fallback for header-less clients (ChatGPT connectors, some agent
-  // runtimes): the key may arrive as ?key= / ?api_key= on the endpoint URL.
-  // One-link connection, Notion/Supabase style — opt-in, revocable, and
-  // never logged by this function.
-  let key = await authenticateKey(req).catch(() => null);
-  if (!key) {
-    const url = new URL(req.url);
-    const raw = (url.searchParams.get("key") ?? url.searchParams.get("api_key") ?? "").trim();
-    if (raw.startsWith("nsk_")) {
-      const { data } = await dbClient().from("user_api_keys")
-        .select("*").eq("key_hash", await sha256Hex(raw)).maybeSingle();
-      const k = data as (Row & {
-        revoked_at: string | null; expires_at: string | null;
-        scopes: unknown; default_workspace_id?: string;
-      }) | null;
-      if (k && !k.revoked_at && !(k.expires_at && new Date(k.expires_at).getTime() < Date.now())) {
-        key = {
-          id: k.id as string, user_id: k.user_id as string,
-          scopes: Array.isArray(k.scopes) ? k.scopes.map(String) : [],
-          default_workspace_id: typeof k.default_workspace_id === "string" ? k.default_workspace_id : "",
-        };
-      }
+  // 1) Preferred: Authorization: Bearer nsk_… (API key)
+  // 2) OAuth: Authorization: Bearer noska_at_… (ChatGPT/Claude connectors,
+  //    third-party agents via the /oauth authorization-code flow).
+  // 3) Fallback for header-less clients (ChatGPT custom connectors, some
+  //    agent runtimes): the key may arrive as ?key= / ?api_key= on the URL.
+  //    One-link connection, Notion/Supabase style — opt-in, revocable.
+  //    The header ALWAYS wins over the query string (see classifyAuth), so
+  //    a leaked link can never override a real credential. ?key= URLs are
+  //    never logged by this function.
+  const url = new URL(req.url);
+  const auth = classifyAuth(
+    req.headers.get("Authorization"),
+    url.searchParams.get("key") ?? url.searchParams.get("api_key"),
+  );
+
+  if (auth.kind === "apikey") {
+    const key = await authenticateKey(req).catch(() => null);
+    if (key) return { ...(key as KeyRow), via: "apikey" };
+  }
+
+  // OAuth bearer (noska_at_…) — resolved against oauth_tokens.
+  if (auth.kind === "oauth") {
+    try {
+      const { oauth } = await import("../_shared/capabilities/platform.ts");
+      const principal = await oauth.authenticateOAuthToken(req);
+      return { ...(principal as unknown as KeyRow), via: "oauth" };
+    } catch {
+      // fall through to 401
     }
   }
-  if (!key) throw E.authRequired();
-  return key;
+
+  if (auth.kind === "query") {
+    const { data } = await dbClient().from("user_api_keys")
+      .select("id,user_id,scopes,default_workspace_id,read_only,allowed_tools,revoked_at,expires_at").eq("key_hash", await sha256Hex(auth.raw)).maybeSingle();
+    const k = data as (Row & {
+      revoked_at: string | null; expires_at: string | null;
+      scopes: unknown; default_workspace_id?: string;
+      read_only?: boolean; allowed_tools?: unknown;
+    }) | null;
+    if (k && !k.revoked_at && !(k.expires_at && new Date(k.expires_at).getTime() < Date.now())) {
+      return {
+        id: k.id as string, user_id: k.user_id as string,
+        scopes: Array.isArray(k.scopes) ? k.scopes.map(String) : [],
+        default_workspace_id: typeof k.default_workspace_id === "string" ? k.default_workspace_id : "",
+        read_only: k.read_only === true,
+        allowed_tools: Array.isArray(k.allowed_tools) ? (k.allowed_tools as unknown[]).map(String) : [],
+        via: "query",
+      };
+    }
+  }
+  throw E.authRequired();
 }
 
 export function requireScope(key: KeyRow, scope: string) {
-  if (!key.scopes.includes(scope)) throw E.forbidden(`Requires "${scope}".`);
+  // Alias-aware (learning:* ≡ reviews:*) — same rule as REST + policy engine.
+  if (!keyHasScope(key.scopes ?? [], scope)) throw E.forbidden(`Requires "${scope}".`);
   return key;
 }
 

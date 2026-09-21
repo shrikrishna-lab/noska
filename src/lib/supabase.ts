@@ -44,14 +44,19 @@ export async function currentAccessToken(): Promise<string | null> {
 
 function getDesktopAccessToken(): Promise<string | null> {
   const s = loadSession();
-  if (!s) return null;
-  const freshForMs = 120 * 1000;
-  if (s.expires_at - Date.now() > freshForMs) return Promise.resolve(s.access_token);
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = refreshDesktopSession().finally(() => {
-    refreshInFlight = null;
-  });
-  return refreshInFlight;
+  if (s) {
+    const freshForMs = 120 * 1000;
+    if (s.expires_at - Date.now() > freshForMs) return Promise.resolve(s.access_token);
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = refreshDesktopSession().finally(() => {
+      refreshInFlight = null;
+    });
+    return refreshInFlight;
+  }
+  // No paired session: fall back to a Clerk session in the webview if one
+  // exists, instead of reporting "signed out" while the user is logged in.
+  if (clerkGetToken) return clerkGetToken();
+  return Promise.resolve(null);
 }
 
 export const supabase = createClient<Database>(supabaseUrl || "", supabaseAnonKey || "", {

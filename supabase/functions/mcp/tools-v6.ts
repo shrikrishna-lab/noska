@@ -7,6 +7,10 @@
  * execution (agent_runs, source_kind 'ai'), and returns an honest summary.
  * ========================================================================== */
 import type { ToolDef } from "./tools.ts";
+import {
+  parseResourceUri, validateExecuteInput,
+  EXECUTE_ACTIONS, MAX_EXECUTE_STEPS, type ExecuteAction,
+} from "./protocol.ts";
 import { McpError, db, type KeyRow, type Row } from "./shared.ts";
 import { errors, blocksToMarkdown } from "../_shared/core/pure.ts";
 import * as content from "../_shared/capabilities/content.ts";
@@ -236,9 +240,7 @@ const intelligenceTools: ToolDef[] = [
 
 /* ══════════════ NOSKA_EXECUTE — controlled agentic execution (§14/§15) ══════════════ */
 
-const EXECUTE_ACTIONS = ["search", "create_page", "create_task", "update_page", "append_blocks"] as const;
-type ExecuteAction = (typeof EXECUTE_ACTIONS)[number];
-const MAX_STEPS = 12;
+const MAX_STEPS = MAX_EXECUTE_STEPS;
 
 interface ExecuteStep { action: ExecuteAction; args: Row; note?: string }
 
@@ -267,11 +269,12 @@ const executeTools: ToolDef[] = [
       required: ["goal", "steps"],
     },
     async handler(args, key) {
-      const goal = String(args.goal ?? "").slice(0, 500);
-      const steps = (Array.isArray(args.steps) ? args.steps : []) as Array<Row>;
-      if (!goal.trim()) throw errors.validation("goal is required");
-      if (!steps.length) throw errors.validation("steps must be a non-empty array");
-      if (steps.length > MAX_STEPS) throw errors.validation(`max ${MAX_STEPS} steps per execution`);
+      // Fail fast on malformed plans BEFORE persisting a run record, so
+      // invalid agent plans never leave orphan "running" executions behind.
+      const checked = validateExecuteInput(args.goal, args.steps);
+      if (!checked.ok) throw errors.validation(checked.message);
+      const goal = checked.goal;
+      const steps = checked.steps as Array<Row>;
 
       /* Durable execution record (agent_runs, source_kind 'ai'). */
       const runId = crypto.randomUUID();
@@ -385,7 +388,8 @@ export const RESOURCES = [
 ];
 
 export async function readResource(uri: string, key: KeyRow): Promise<Row> {
-  if (uri === "noska://workspace/current") {
+  const ref = parseResourceUri(uri);
+  if (ref?.kind === "workspace-current") {
     const ctx = await (await import("./tools.ts")).TOOLS.find((t) => t.name === "get-workspace-context")!;
     const result = await ctx.handler({}, key);
     return [{
@@ -393,23 +397,20 @@ export async function readResource(uri: string, key: KeyRow): Promise<Row> {
       text: JSON.stringify(result, null, 2),
     }];
   }
-  const page = /^noska:\/\/page\/([0-9a-f-]{36})$/i.exec(uri);
-  if (page) {
-    const p = await content.loadPage(key.user_id, page[1]);
+  if (ref?.kind === "page") {
+    const p = await content.loadPage(key.user_id, ref.id);
     return [{
       uri, mimeType: "text/markdown",
       text: `# ${p.title}\n\n${(await import("../_shared/core/pure.ts")).blocksToMarkdown((p.blocks ?? []) as Row[])}`,
     }];
   }
-  const agent = /^noska:\/\/agent\/([0-9a-f-]{36})$/i.exec(uri);
-  if (agent) {
-    const { data } = await db.from("agents").select("*").eq("owner_id", key.user_id).eq("id", agent[1]).maybeSingle();
+  if (ref?.kind === "agent") {
+    const { data } = await db.from("agents").select("*").eq("owner_id", key.user_id).eq("id", ref.id).maybeSingle();
     if (!data) throw errors.notFound("Agent");
     return [{ uri, mimeType: "application/json", text: JSON.stringify(data, null, 2) }];
   }
-  const auto = /^noska:\/\/automation\/([0-9a-f-]{36})$/i.exec(uri);
-  if (auto) {
-    const { data } = await db.from("automations").select("*").eq("owner_id", key.user_id).eq("id", auto[1]).maybeSingle();
+  if (ref?.kind === "automation") {
+    const { data } = await db.from("automations").select("*").eq("owner_id", key.user_id).eq("id", ref.id).maybeSingle();
     if (!data) throw errors.notFound("Automation");
     return [{ uri, mimeType: "application/json", text: JSON.stringify(data, null, 2) }];
   }

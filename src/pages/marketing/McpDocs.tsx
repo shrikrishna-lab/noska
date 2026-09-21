@@ -6,7 +6,7 @@ import {
   AlertTriangle, Copy, Check, ChevronDown, ChevronUp, ArrowLeft,
 } from 'lucide-react';
 
-/* ─── Noska MCP v4 documentation page (/docs/mcp) ─── */
+/* ─── Noska MCP v5.1 documentation page (/docs/mcp) ─── */
 
 const TOOL_GROUPS: Array<{
   id: string;
@@ -172,13 +172,13 @@ export default function McpDocs() {
           </div>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Noska MCP</h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-[var(--secondary)]">
-            Connect Claude Desktop, Cursor, ChatGPT-compatible clients or custom agents directly to your
-            Noska workspace. <strong className="text-[var(--text)]">47 tools · 9 capability groups</strong> — search,
+            Connect Claude Desktop, Cursor, ChatGPT connectors, Claude Code, Notion (via Noska integrations) or custom agents directly to your
+            Noska workspace. <strong className="text-[var(--text)]">~90 tools · 13 capability groups</strong> — search,
             read and write pages as markdown, run slash commands, manage tasks, databases, spaced-repetition
             learning, agents and automations. Permission-aware, verified, idempotent.
           </p>
           <div className="mt-6 flex flex-wrap gap-3 text-xs">
-            {[['v4.0', 'current'], ['streamable HTTP', 'transport'], ['JSON-RPC 2.0', 'protocol'], ['SHA-256 keys', 'auth']].map(([a, b]) => (
+            {[['v5.1', 'current'], ['streamable HTTP', 'transport'], ['JSON-RPC 2.0', 'protocol'], ['API key + OAuth', 'auth']].map(([a, b]) => (
               <span key={a} className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
                 <strong>{a}</strong> <span className="text-[var(--muted)]">{b}</span>
               </span>
@@ -190,7 +190,7 @@ export default function McpDocs() {
       <main className="mx-auto max-w-5xl space-y-14 px-6 py-14">
 
         <Section id="quickstart" kicker="5 minutes" title="Quick start">
-          <p><strong className="text-[var(--text)]">1.</strong> Create an API key with the scopes you need — in-app: <em>Settings → Developer</em>, or API Console → API Keys. Keys are shown once; Noska stores only SHA-256 hashes.</p>
+          <p><strong className="text-[var(--text)]">1.</strong> Create an API key with the scopes you need — in-app: <em>Settings → Developer</em>, or API Console → API Keys. Keys are shown once; Noska stores only SHA-256 hashes. Tip: the <em>Connect AI Clients (MCP)</em> panel in the same Settings tab pre-fills every snippet below with your key and tests the connection live — no manual JSON editing.</p>
           <p><strong className="text-[var(--text)]">2.</strong> Deploy the server (or point at an existing instance):</p>
           <Code>{`supabase functions deploy mcp --no-verify-jwt
 # endpoint: https://<project>.supabase.co/functions/v1/mcp`}</Code>
@@ -206,6 +206,8 @@ export default function McpDocs() {
           <ul className="list-disc space-y-1 pl-5">
             <li><strong className="text-[var(--text)]">Claude Desktop:</strong> paste into <code className="rounded bg-[var(--surface)] px-1">claude_desktop_config.json</code> and restart.</li>
             <li><strong className="text-[var(--text)]">Cursor:</strong> Settings → MCP → Add server → same URL + header.</li>
+            <li><strong className="text-[var(--text)]">ChatGPT connectors:</strong> header-less — use the one-link <code className="rounded bg-[var(--surface)] px-1">?key=nsk_…</code> URL (see “ChatGPT & header-less clients” below).</li>
+            <li><strong className="text-[var(--text)]">Notion:</strong> connect inside Noska (Settings → Integrations → Notion) — Notion tools are called server-side by agents, not by pasting Noska into Notion.</li>
             <li><strong className="text-[var(--text)]">Any other client:</strong> anything that speaks JSON-RPC 2.0 over streamable HTTP works — <code className="rounded bg-[var(--surface)] px-1">initialize</code>, then <code className="rounded bg-[var(--surface)] px-1">tools/list</code>, then <code className="rounded bg-[var(--surface)] px-1">tools/call</code>.</li>
           </ul>
           <p>Then just ask: <em>"Search my Noska for Raft, fetch that page and turn its paragraphs into study cards."</em></p>
@@ -224,7 +226,8 @@ export default function McpDocs() {
                 <li>Enter a key name — e.g. <code className="rounded bg-[var(--surface)] px-1">Claude Desktop</code>.</li>
                 <li>Pick scopes. Recommended starter set: <code className="rounded bg-[var(--surface)] px-1">pages:read</code> <code className="rounded bg-[var(--surface)] px-1">pages:write</code> <code className="rounded bg-[var(--surface)] px-1">tasks:read</code> <code className="rounded bg-[var(--surface)] px-1">tasks:write</code> <code className="rounded bg-[var(--surface)] px-1">search:read</code>. Add <code className="rounded bg-[var(--surface)] px-1">reviews:*</code> if you want study-card control.</li>
                 <li>Choose an expiry (30–90 days recommended) and click <strong className="text-[var(--text)]">Generate key</strong>.</li>
-                <li><strong className="text-[var(--text)]">Copy it immediately</strong> — it's shown once and can't be recovered.</li>
+                <li><strong className="text-[var(--text)]">Copy it immediately</strong> — it's shown once and can't be recovered. The reveal dialog offers a one-click Claude MCP config for the new key.</li>
+                <li>Scroll to <strong className="text-[var(--text)]">Connect AI Clients (MCP)</strong> in the same tab: paste the key once, pick Claude / ChatGPT / Cursor / VS Code / agents, copy the config, and hit <strong className="text-[var(--text)]">Test connection</strong> to verify live.</li>
               </ol>
             </div>
 
@@ -310,9 +313,12 @@ Linux:    ~/.config/Claude/claude_desktop_config.json`}</Code>
         </Section>
 
         <Section id="authentication" kicker="Security" title="Authentication & scopes">
-          <p>Every JSON-RPC method — including <code className="rounded bg-[var(--surface)] px-1">tools/list</code> — requires a valid key.
-          Invalid, revoked or expired keys get <strong className="text-[var(--text)]">401</strong> on all methods.</p>
-          <Code>{`Authorization: Bearer nsk_…`}</Code>
+          <p>Every JSON-RPC method — including <code className="rounded bg-[var(--surface)] px-1">tools/list</code> — requires a valid credential.
+          Three forms, in preference order:</p>
+          <Code>{`Authorization: Bearer nsk_…        # API key (preferred)
+Authorization: Bearer noska_at_…   # OAuth token (ChatGPT/Claude connectors via /oauth)
+https://<ref>.supabase.co/functions/v1/mcp?key=nsk_…   # header-less fallback`}</Code>
+          <p>OAuth discovery for connector platforms: <code className="rounded bg-[var(--surface)] px-1">/mcp/.well-known/oauth-authorization-server</code> and <code className="rounded bg-[var(--surface)] px-1">/mcp/.well-known/oauth-protected-resource</code> (RFC 8414 / RFC 9728). <code className="rounded bg-[var(--surface)] px-1">tools/list</code> only returns tools your scopes allow — read-only keys see reads only — each with <code className="rounded bg-[var(--surface)] px-1">annotations</code> so agents can gate without parsing descriptions.</p>
           <p>Keys carry fine-grained scopes enforced per tool:</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {['pages:read','pages:write','tasks:read','tasks:write','reviews:read','reviews:write','search:read','databases:read'].map((s) => (
@@ -323,6 +329,15 @@ Linux:    ~/.config/Claude/claude_desktop_config.json`}</Code>
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
             <p className="text-[13px]">All queries are scoped to the key owner at the server level. Cross-workspace access is structurally impossible — IDs belonging to another user resolve to <code>NOT_FOUND</code>, never data.</p>
           </div>
+        </Section>
+
+        <Section id="chatgpt" kicker="Connectors" title="ChatGPT & header-less clients">
+          <p>ChatGPT custom connectors cannot send an <code className="rounded bg-[var(--surface)] px-1">Authorization</code> header. Create a narrowly-scoped key, enable <code className="rounded bg-[var(--surface)] px-1">?key=…</code> one-link mode — on the <Link to="/mcp" className="underline">/mcp page</Link> or with one toggle in <em>Settings → Developer → Connect AI Clients</em> — and paste that URL into ChatGPT → Settings → Connectors → Create. The server negotiates the protocol version (<code className="rounded bg-[var(--surface)] px-1">2025-06-18</code> down to <code className="rounded bg-[var(--surface)] px-1">2024-11-05</code>) and returns <code className="rounded bg-[var(--surface)] px-1">structuredContent</code> alongside text so agent runtimes can parse results without regex. Treat one-link URLs like passwords — revoke and rotate in Settings → Developer.</p>
+          <Code>{`https://<project-ref>.supabase.co/functions/v1/mcp?key=nsk_YOUR_KEY_HERE`}</Code>
+        </Section>
+
+        <Section id="notion" kicker="Integrations" title="Notion & external MCP servers">
+          <p>The direction is reversed: Noska acts as an MCP <em>client</em> to Notion, GitHub, Slack, Gmail, Supabase, Linear and any custom Streamable-HTTP server (Settings → Integrations). Tokens are AES-GCM encrypted, probed with <code className="rounded bg-[var(--surface)] px-1">initialize → tools/list</code> before persisting, refreshed automatically, and never returned to the browser. Agents and automations call those tools server-side through the connector gateway with per-connector rate limits and scope gates.</p>
         </Section>
 
         <Section id="workflow" kicker="How the AI uses it" title="The core workflow">
@@ -435,11 +450,13 @@ curl -X POST http://127.0.0.1:8000/ \\
         <Section id="troubleshooting" kicker="Help" title="Troubleshooting">
           <div className="space-y-3">
             {[
-              ["401 AUTH_REQUIRED on everything", "Key missing/expired/revoked, or header malformed. Regenerate in Settings → Developer and update the client header."],
-              ["403 FORBIDDEN insufficient_scope", "The tool needs a scope your key doesn't have. Create a new key with that scope — scopes can't be edited after creation."],
+              ["401 AUTH_REQUIRED on everything", "Key missing/expired/revoked, or header malformed. Regenerate in Settings → Developer and update the client header. OAuth (noska_at_…) tokens expire — refresh via /oauth/refresh."],
+              ["403 FORBIDDEN insufficient_scope", "The tool needs a scope your key doesn't have. Create a new key with that scope — scopes can't be edited after creation. Note tools/list hides tools you can't call."],
+              ["404 Session expired — re-run initialize", "Your Mcp-Session-Id lapsed (24 h TTL or server restart). Re-send initialize and use the new session id."],
               ["awaiting_confirmation", "You called a RED-risk tool. Re-send with confirm:true after user approval."],
               ["NOT_FOUND for an ID that exists", "IDs only resolve inside the key owner's workspace — cross-user access intentionally returns NOT_FOUND."],
-              ["UNSUPPORTED_CAPABILITY on run-agent", "Agent/automation execution happens inside the Noska app runtime. Trigger from the Agents/Automations UI."],
+              ["ChatGPT connector shows no tools", "Use the ?key= one-link URL (ChatGPT can't send headers), and ensure the key has the scopes you need. Check /.well-known/oauth-protected-resource is reachable."],
+              ["Notion connection fails", "For token connect, paste an internal integration secret and verify the integration has access to the pages. For OAuth, ensure redirect URIs match. Test via Settings → Integrations → Test."],
               ["Client shows no tools", "Ensure --no-verify-jwt was used at deploy (API-key auth, not Supabase JWTs), and the URL ends at /functions/v1/mcp."],
             ].map(([q, a]) => (
               <details key={q} className="group rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -453,6 +470,8 @@ curl -X POST http://127.0.0.1:8000/ \\
         <Section id="changelog" kicker="History" title="Changelog">
           <div className="space-y-3">
             {[
+              ['v5.1', 'OAuth bearer (noska_at_…) + ?key= one-link, Mcp-Session-Id lifecycle, protocol negotiation (2025-06-18 → 2024-11-05), RFC 8414/9728 discovery, scope-filtered tools/list with annotations + structuredContent, batch + SSE keepalive, search/list-tasks scan budgets cut (500→200 rows), run-agent/run-automation dedupe (real V5 executors win).'],
+              ['v5.0', 'Workspaces, templates, dashboards, agent/automation execution (run/inspect/cancel/retry), webhooks, events, connections, rich task metadata.'],
               ['v4.0', 'Capability registry (47 tools / 9 groups): native slash commands, page organization (move/duplicate/tree), database views+queries, agent & automation CRUD, context snapshots, create-study-plan workflow, standalone verify, RED confirmation gate, idempotency.'],
               ['v2.0', 'Notion-style behavior: fetch-by-URL returning markdown, multi-page markdown creation, URL-or-ID resolution everywhere. Security fix: tools/list now authenticated.'],
               ['v1.0', 'Initial 8 CRUD tools over pages/tasks/reviews.'],
@@ -470,10 +489,10 @@ curl -X POST http://127.0.0.1:8000/ \\
           <KeyRound size={22} className="mx-auto mb-3 text-[var(--accent)]" />
           <h3 className="text-lg font-bold text-[var(--text)]">Ready to connect?</h3>
           <p className="mx-auto mt-1 max-w-md text-[13px] text-[var(--secondary)]">
-            Generate a scoped key and give your AI the keys to your second brain.
+            Generate a scoped key, then copy a ready-made client config from the Connect AI Clients panel — no manual JSON.
           </p>
           <Link to="/login" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#2E333C] px-6 py-2.5 text-sm font-semibold text-[#EDEBE5] transition-opacity hover:opacity-90">
-            Open Noska → Settings → Developer <Plug size={14} />
+            Open Noska → Settings → Developer → Connect AI Clients <Plug size={14} />
           </Link>
         </div>
       </main>

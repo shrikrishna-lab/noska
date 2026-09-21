@@ -221,6 +221,8 @@ interface AIRightPanelProps {
   onReplaceText?: (text: string) => void;
   onToast?: (message: string) => void;
   toolContext: ToolContextShape;
+  /** Locked (over-limit) workspace: sending is disabled, panel is read-only. */
+  locked?: boolean;
   /** Spoken command handed off from the voice agent (unknown to the
    * deterministic parser) — auto-sent through the agentic pipeline. */
   seedPrompt?: string | null;
@@ -232,7 +234,8 @@ export default function AIRightPanel({
   apiKey, aiProvider, nvidiaKey,
   aiChats = [], activeChatId, onChatsChange, onActiveChat, onNewChat,
   onSelectChat, onDeleteChat, onRenameChat, onPagePatch, onInsert,
-  onAppend, onReplaceText, onToast, toolContext, seedPrompt, onSeedConsumed
+  onAppend, onReplaceText, onToast, toolContext, seedPrompt, onSeedConsumed,
+  locked = false
 }: AIRightPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<AIChatMessage[]>([]);
@@ -244,6 +247,8 @@ export default function AIRightPanel({
   const [tokenEstimate, setTokenEstimate] = useState(0);
   const [attachments, setAttachments] = useState<unknown[]>([]);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
 
   const pageId = page?.id;
   const relations = useMemo(() => {
@@ -426,6 +431,10 @@ export default function AIRightPanel({
 
   const handleSend = useCallback(async (text: string) => {
     if (!text?.trim() || loading) return;
+    if (lockedRef.current) {
+      onToast?.("This workspace is locked and read-only — upgrade your plan to use AI. Import and export still work.");
+      return;
+    }
     const chatId = ensureActiveChat();
     const userMsg: AIChatMessage = { id: uid(), role: "user", content: text, createdAt: now() };
     const updatedMessages = [...messages, userMsg];

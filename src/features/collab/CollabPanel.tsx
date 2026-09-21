@@ -11,6 +11,9 @@ interface CollabPanelProps {
   userAvatar?: string;
   className?: string;
   notificationCommentId?: string;
+  /** Locked (over-limit) workspace: invites, comments, and access changes
+   * are disabled; lists and presence stay visible (read-only). */
+  locked?: boolean;
 }
 
 type Tab = 'people' | 'comments' | 'versions' | 'activity' | 'notifications';
@@ -36,7 +39,8 @@ function statusIcon(status: string): string {
   }
 }
 
-export function CollabPanel({ pageId, userId, userName, userAvatar, className, notificationCommentId }: CollabPanelProps) {
+export function CollabPanel({ pageId, userId, userName, userAvatar, className,
+notificationCommentId, locked = false }: CollabPanelProps) {
   const [tab, setTab] = useState<Tab>('people');
   useEffect(() => {
     if (notificationCommentId) setTab('comments');
@@ -111,6 +115,11 @@ export function CollabPanel({ pageId, userId, userName, userAvatar, className, n
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {locked && (
+          <div className="mx-3 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+            Workspace locked — collaboration is read-only. Upgrade your plan to invite, comment, or manage access.
+          </div>
+        )}
         {tab === 'people' && (
           <PeopleTab
             sessions={mergedSessions}
@@ -120,8 +129,9 @@ export function CollabPanel({ pageId, userId, userName, userAvatar, className, n
             isOwner={perms.isOwner}
             userId={userId}
             userName={userName}
-            onGrant={perms.grant}
-            onRevoke={perms.revoke}
+            onGrant={locked ? async () => {} : perms.grant}
+            onRevoke={locked ? async () => {} : perms.revoke}
+            locked={locked}
           />
         )}
         {tab === 'comments' && (
@@ -131,11 +141,11 @@ export function CollabPanel({ pageId, userId, userName, userAvatar, className, n
             userId={userId}
             userName={userName}
             userAvatar={userAvatar}
-            onAdd={comments.add}
-            onResolve={comments.resolve}
-            onUnresolve={comments.unresolve}
-            onDelete={comments.remove}
-            canComment={perms.canComment}
+            onAdd={locked ? async () => null : comments.add}
+            onResolve={locked ? async () => false : comments.resolve}
+            onUnresolve={locked ? async () => false : comments.unresolve}
+            onDelete={locked ? async () => false : comments.remove}
+            canComment={!locked && perms.canComment}
           />
         )}
         {tab === 'versions' && (
@@ -165,7 +175,7 @@ interface ResolvedInviteUser {
   username?: string;
 }
 
-function PeopleTab({ sessions, otherUsers, permission, allPermissions, isOwner, userId, userName, onGrant, onRevoke }: {
+function PeopleTab({ sessions, otherUsers, permission, allPermissions, isOwner, userId, userName, onGrant, onRevoke, locked = false }: {
   sessions: CollabSession[];
   otherUsers: CollabSession[];
   permission: DocumentPermission | null;
@@ -175,6 +185,7 @@ function PeopleTab({ sessions, otherUsers, permission, allPermissions, isOwner, 
   userName: string;
   onGrant: (userId: string, userName: string, role: CollabRole, inviterName?: string) => Promise<void>;
   onRevoke: (userId: string) => Promise<void>;
+  locked?: boolean;
 }) {
   const [inviteQuery, setInviteQuery] = useState('');
   const [resolved, setResolved] = useState<ResolvedInviteUser | null>(null);
@@ -228,7 +239,7 @@ function PeopleTab({ sessions, otherUsers, permission, allPermissions, isOwner, 
   };
 
   const handleGrant = async () => {
-    if (!resolved || inviting) return;
+    if (locked || !resolved || inviting) return;
     setInviting(true);
     try {
       await onGrant(resolved.userId, resolved.userName || resolved.username || '', inviteRole, userName);
@@ -306,9 +317,10 @@ function PeopleTab({ sessions, otherUsers, permission, allPermissions, isOwner, 
                   <p className="text-[10px] text-[var(--muted)] capitalize">{c.role}</p>
                 </div>
                 <button
-                  onClick={() => onRevoke(c.user_id)}
-                  title="Remove access — the page becomes private to them again"
-                  className="text-[10px] text-[var(--muted)] hover:text-red-400 transition-colors px-1.5 py-0.5 rounded hover:bg-[var(--hover)]"
+                  onClick={() => { if (!locked) onRevoke(c.user_id); }}
+                  disabled={locked}
+                  title={locked ? "Workspace locked — read-only" : "Remove access — the page becomes private to them again"}
+                  className="text-[10px] text-[var(--muted)] hover:text-red-400 transition-colors px-1.5 py-0.5 rounded hover:bg-[var(--hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Remove
                 </button>
@@ -318,7 +330,7 @@ function PeopleTab({ sessions, otherUsers, permission, allPermissions, isOwner, 
         </div>
       )}
 
-      {isOwner && (
+      {isOwner && !locked && (
         <div className="p-2.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] space-y-2">
           <h4 className="text-xs font-semibold text-[var(--muted)]">Invite Collaborator</h4>
           <div className="relative">
@@ -396,7 +408,7 @@ function PeopleTab({ sessions, otherUsers, permission, allPermissions, isOwner, 
           </div>
           <button
             onClick={handleGrant}
-            disabled={!resolved || inviting}
+            disabled={!resolved || inviting || locked}
             className="w-full py-1.5 bg-[var(--accent)] hover:opacity-90 text-white text-xs font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {inviting ? 'Inviting...' : 'Invite & Grant Access'}

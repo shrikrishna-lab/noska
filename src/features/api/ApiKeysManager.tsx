@@ -23,13 +23,18 @@ import {
   CheckCircle2,
   X,
   Zap,
+  Plug,
 } from "lucide-react";
 import { listApiKeys, createApiKey, revokeApiKey, rotateApiKey, deleteApiKey, type ApiKeyRecord } from "../../lib/apiKeys";
+import { getAuthUserId } from "../../lib/supabase";
 import { SCOPES, apiBase } from "./apiContract";
+import { clientConfig, mcpEndpoint } from "./mcpConnect";
+import McpConnectPanel from "./McpConnectPanel";
 import { cn } from "../../lib/utils";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "https://yxgtmzksnyarlivgxujf.supabase.co").replace(/\/$/, "");
 const API_ENDPOINT = apiBase(SUPABASE_URL);
+const MCP_ENDPOINT = mcpEndpoint(SUPABASE_URL);
 
 const EXPIRY_OPTIONS = [
   { label: "No expiration", days: null },
@@ -87,22 +92,54 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
   const [newAllowedTools, setNewAllowedTools] = useState("");
   const [revealedKey, setRevealedKey] = useState<{ raw: string; name: string } | null>(null);
   const [copiedRaw, setCopiedRaw] = useState(false);
+  const [copiedMcp, setCopiedMcp] = useState(false);
   const [copiedEndpoint, setCopiedEndpoint] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [selectedSnippetLang, setSelectedSnippetLang] = useState<"curl" | "js" | "python">("curl");
   const [confirmAction, setConfirmAction] = useState<{ kind: "revoke" | "delete"; key: ApiKeyRecord } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Fallback identity resolved from the active session token (Clerk or
+  // desktop pairing). The `userId` prop can be null even when signed in —
+  // e.g. Clerk hasn't hydrated yet in the parent, or the session is a
+  // non-Clerk (desktop/Supabase) session the parent doesn't know about.
+  const [selfId, setSelfId] = useState<string | null>(null);
+  const [identityChecked, setIdentityChecked] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const effectiveId = userId ?? selfId;
+
+  /** Last-resort identity: App persists it after every successful login. */
+  function rememberedId(): string | null {
+    try {
+      return localStorage.getItem("noska_user_id");
+    } catch {
+      return null;
+    }
+  }
 
   const refresh = useCallback(async () => {
-    if (!userId) {
+    // Re-resolve on every refresh so Retry also recovers from a late
+    // session (Clerk hydrating after the panel first rendered).
+    let id = userId;
+    if (!id) {
+      try {
+        id = await getAuthUserId();
+      } catch {
+        id = null;
+      }
+      if (!id) id = rememberedId();
+      setSelfId(id);
+    }
+    setIdentityChecked(true);
+    if (!id) {
       setLoading(false);
       setLoadError("Sign in to manage API keys.");
+      console.warn("[api-keys] no identity found (prop=null, session token=null, no remembered id).");
       return;
     }
     setLoading(true);
     setLoadError(null);
     try {
-      setKeys(await listApiKeys(userId));
+      setKeys(await listApiKeys(id));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load API keys.");
     } finally {
@@ -115,22 +152,43 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
   }, [refresh]);
 
   const handleCreate = async () => {
-    if (!userId || creating) return;
+    const id = effectiveId;
+    setCreateError(null);
+    if (!id || creating) {
+      if (!id) {
+        const msg = identityChecked
+          ? "No active session detected — sign in (or complete desktop pairing), then Retry."
+          : "Resolving your session… please try again in a moment.";
+        setCreateError(msg);
+        onToast?.(msg);
+      }
+      return;
+    }
+    const trimmedName = newName.trim();
+    if (!trimmedName) {
+      onToast?.("Give the key a name.");
+      return;
+    }
+    if (trimmedName.length > 80) {
+      onToast?.("Key name must be 80 characters or fewer.");
+      return;
+    }
     if (newScopes.length === 0) {
       onToast?.("Select at least one scope.");
       return;
     }
     setCreating(true);
     try {
-      const { record, rawKey } = await createApiKey(userId, {
-        name: newName || "Default API Key",
+      const { record, rawKey } = await createApiKey(id, {
+        name: trimmedName || "Default API Key",
         scopes: newScopes,
         expiresInDays: newExpiry,
         readOnly: newReadOnly,
-        allowedTools: newAllowedTools.split(",").map((t) => t.trim()).filter(Boolean),
+        allowedTools: newAllowedTools,
       });
       setKeys((prev) => [record, ...prev]);
       setRevealedKey({ raw: rawKey, name: record.name });
+      setTestResult(null);
       setNewName("");
       setNewScopes(["pages:read", "pages:write"]);
       setNewReadOnly(false);
@@ -138,7 +196,9 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
       setShowCreateForm(false);
       onToast?.("API key created — copy it now, it won't be shown again.");
     } catch (e) {
-      onToast?.(e instanceof Error ? e.message : "Failed to create key.");
+      const msg = e instanceof Error ? e.message : "Failed to create key.";
+      setCreateError(msg);
+      onToast?.(msg);
     } finally {
       setCreating(false);
     }
@@ -156,6 +216,17 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
     await navigator.clipboard.writeText(revealedKey.raw).catch(() => {});
     setCopiedRaw(true);
     setTimeout(() => setCopiedRaw(false), 2000);
+  };
+
+  /** One-motion Claude setup: Claude Desktop JSON with this key embedded. */
+  const copyMcpForRevealed = async () => {
+    if (!revealedKey) return;
+    await navigator.clipboard
+      .writeText(clientConfig("claude-desktop", MCP_ENDPOINT, revealedKey.raw, false).copy)
+      .catch(() => {});
+    setCopiedMcp(true);
+    onToast?.("Claude MCP config copied — paste into claude_desktop_config.json");
+    setTimeout(() => setCopiedMcp(false), 2000);
   };
 
   const copyEndpoint = async () => {
@@ -186,7 +257,7 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
   const doRevoke = async (record: ApiKeyRecord) => {
     setBusyId(record.id);
     try {
-      await revokeApiKey(record.id);
+      await revokeApiKey(record.id, effectiveId ?? undefined);
       setKeys((prev) => prev.map((k) => (k.id === record.id ? { ...k, revoked_at: new Date().toISOString() } : k)));
       onToast?.(`"${record.name}" revoked.`);
     } catch (e) {
@@ -198,15 +269,17 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
   };
 
   const doRotate = async (record: ApiKeyRecord) => {
-    if (!userId) return;
+    const id = effectiveId;
+    if (!id) return;
     setBusyId(record.id);
     try {
-      const { record: fresh, rawKey } = await rotateApiKey(userId, record);
+      const { record: fresh, rawKey } = await rotateApiKey(id, record);
       setKeys((prev) => [
         fresh,
         ...prev.map((k) => (k.id === record.id ? { ...k, revoked_at: new Date().toISOString() } : k)),
       ]);
       setRevealedKey({ raw: rawKey, name: fresh.name });
+      setTestResult(null);
       onToast?.("Rotated — old key revoked, copy the new one now.");
     } catch (e) {
       onToast?.(e instanceof Error ? e.message : "Rotation failed.");
@@ -218,7 +291,7 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
   const doDelete = async (record: ApiKeyRecord) => {
     setBusyId(record.id);
     try {
-      await deleteApiKey(record.id);
+      await deleteApiKey(record.id, effectiveId ?? undefined);
       setKeys((prev) => prev.filter((k) => k.id !== record.id));
       onToast?.("Key record deleted.");
     } catch (e) {
@@ -226,6 +299,28 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
     } finally {
       setBusyId(null);
       setConfirmAction(null);
+    }
+  };
+
+  const [testingKey, setTestingKey] = useState(false);
+  const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
+
+  /** Verifies the just-created raw key against the live gateway (GET /pages?limit=1). */
+  const testRevealedKey = async () => {
+    if (!revealedKey || testingKey) return;
+    setTestingKey(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`${API_ENDPOINT}/pages?limit=1`, {
+        headers: { Authorization: `Bearer ${revealedKey.raw}` },
+      });
+      setTestResult(res.ok ? "ok" : "fail");
+      onToast?.(res.ok ? "Key verified — gateway reachable." : `Verification failed (HTTP ${res.status}).`);
+    } catch {
+      setTestResult("fail");
+      onToast?.("Verification failed — network or CORS error.");
+    } finally {
+      setTestingKey(false);
     }
   };
 
@@ -533,7 +628,39 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
                 </div>
               </div>
 
+              {newReadOnly && newScopes.some((s) => s.endsWith(":write") || s.endsWith(":manage")) && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
+                  <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                  <span>Read-only mode will refuse write endpoints even though write scopes are selected. Remove write scopes or disable read-only.</span>
+                </div>
+              )}
+
+              {/* MCP tool allowlist (optional) */}
+              <div>
+                <label className="block text-[10px] font-semibold text-[#706c64] dark:text-white/60 mb-1">
+                  MCP tool allowlist <span className="font-normal">(optional, comma-separated — blank = all scope-permitted tools)</span>
+                </label>
+                <input
+                  value={newAllowedTools}
+                  onChange={(e) => setNewAllowedTools(e.target.value)}
+                  placeholder="e.g. search, get_page, create_task"
+                  className="w-full rounded-xl border border-[#e8e4db] dark:border-white/10 bg-white dark:bg-[#14161f] px-3.5 py-2 text-xs font-mono text-[#1c1b18] dark:text-white placeholder-[#a09c94] focus:outline-none focus:border-[#1c1b18] dark:focus:border-white/40 transition"
+                />
+              </div>
+
               {/* Bottom Action Bar */}
+              {createError && (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 px-3 py-2 text-[11px] text-rose-700 dark:text-rose-300">
+                  <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                  <span>{createError}</span>
+                </div>
+              )}
+              {!effectiveId && identityChecked && !creating && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
+                  <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                  <span>No active session detected, so key creation is disabled. Sign in (or complete desktop pairing), then press Retry in the list below.</span>
+                </div>
+              )}
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -545,7 +672,8 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
                 <button
                   type="button"
                   onClick={handleCreate}
-                  disabled={creating || !userId}
+                  disabled={creating || !effectiveId}
+                  title={!effectiveId ? "Disabled: no signed-in session detected" : "Generate a new API key"}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1c1b18] hover:bg-black text-white text-xs font-bold shadow-xs transition active:scale-[0.98] disabled:opacity-50 cursor-pointer dark:bg-white dark:text-[#1c1b18] dark:hover:bg-white/90"
                 >
                   <KeyRound size={13} />
@@ -673,6 +801,9 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
           </div>
         )}
       </div>
+
+      {/* ── Connect AI Clients (MCP) ─────────────────────── */}
+      <McpConnectPanel initialKey={revealedKey?.raw ?? null} onToast={onToast} />
 
       {/* ── Quickstart Code Snippet Box ──────────────────────── */}
       <div className="rounded-2xl bg-[#f8f6f0] dark:bg-[#181b24] border border-[#e8e4db] dark:border-white/10 p-4 shadow-sm space-y-3">
@@ -804,6 +935,27 @@ export default function ApiKeysManager({ userId, onToast }: { userId?: string | 
                   <span>{copiedRaw ? "Copied" : "Copy"}</span>
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={testRevealedKey}
+                disabled={testingKey}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2 text-xs font-semibold text-white transition cursor-pointer disabled:opacity-50"
+              >
+                <Zap size={12} />
+                <span>
+                  {testingKey ? "Verifying…" : testResult === "ok" ? "Verified ✓ — test again" : testResult === "fail" ? "Verification failed — retry" : "Test this key against the live API"}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={copyMcpForRevealed}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-400/30 px-4 py-2 text-xs font-semibold text-white transition cursor-pointer"
+              >
+                <Plug size={12} />
+                <span>{copiedMcp ? "MCP config copied ✓" : "Copy Claude MCP config for this key"}</span>
+              </button>
 
               <button
                 type="button"

@@ -92,6 +92,8 @@ interface AIPanelProps {
   currentUserEmail?: string | null;
   currentUserAvatar?: string | null;
   currentUserId?: string | null;
+  /** Locked (over-limit) workspace: sending is disabled, panel is read-only. */
+  locked?: boolean;
 }
 
 export default function AIPanel({
@@ -116,7 +118,8 @@ export default function AIPanel({
   currentUsername,
   currentUserEmail,
   currentUserAvatar,
-  currentUserId
+  currentUserId,
+  locked = false
 }: AIPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<ChatPanelMessage[]>([]);
@@ -124,6 +127,8 @@ export default function AIPanel({
   const [toolResults, setToolResults] = useState<ToolCallResult[]>([]);
   // AbortController for real cancellation of AI requests
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
   // New interaction systems
   const activity = useActivityState();
   const chatScroll = useChatScroll();
@@ -280,6 +285,10 @@ export default function AIPanel({
     async (overrideText?: string, selection?: AiModelSelection, customBaseMessages?: ChatPanelMessage[]) => {
       const text = (overrideText || prompt).trim();
       if (!text || loading) return;
+      if (lockedRef.current) {
+        onToast?.("This workspace is locked and read-only — upgrade your plan to use AI. Import and export still work.");
+        return;
+      }
 
       // ── Billing gate (server-authoritative; this pre-check is UX only) ──
       // ai_generation must be enabled and monthly_ai_credits must remain.

@@ -26,9 +26,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js";
 import {
-  authenticateKey, touchKey, PlatformError, type KeyRow,
+  authenticateKey, touchKey, audit as auditEvent, PlatformError, type KeyRow,
 } from "../_shared/core/runtime.ts";
-import { keyHasScope as keyHasScopeOf } from "../_shared/core/pure.ts";
+import { keyHasScope as keyHasScopeOf, readOnlyBlocksMethod } from "../_shared/core/pure.ts";
 import * as content from "../_shared/capabilities/content.ts";
 import * as platform from "../_shared/capabilities/platform.ts";
 import * as intel from "../_shared/capabilities/intelligence.ts";
@@ -71,6 +71,8 @@ export const SCOPES = [
   // delivery & integrations
   "webhooks:manage",
   "connections:manage",
+  // forward-compat: MCP execution scope (no REST route uses it yet)
+  "intelligence:execute",
 ] as const;
 
 type Scope = (typeof SCOPES)[number];
@@ -240,6 +242,17 @@ async function pruneHousekeeping(): Promise<void> {
     await svc.from("api_idempotency_keys").delete()
       .lt("created_at", new Date(Date.now() - IDEMPOTENCY_TTL_MS).toISOString());
     await svc.rpc("prune_api_rate_limits");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Housekeeping is sampled (~2% of requests) so every POST doesn't pay
+ * for two extra DB round-trips. Idempotency TTL is enforced on read
+ * anyway (lookupIdempotent checks created_at), so deferred pruning is safe. */
+function maybePruneHousekeeping(): void {
+  try {
+    if (Math.random() < 0.02) pruneHousekeeping();
   } catch {
     /* ignore */
   }
@@ -955,7 +968,8 @@ const routes: Array<{ method: string; pattern: RegExp; scope: Scope; handler: Ha
 
 /* Grouped search retained for the v1 search contract (grouped buckets). */
 async function runSearch(key: KeyRow, q: string, limit: number) {
-  const needle = q.toLowerCase();
+  const query = q.slice(0, 200);
+  const needle = query.toLowerCase();
   const cappedLimit = Math.min(Math.max(limit, 1), 50);
   const scanned = await content.pages.scan(key.user_id);
   const pageHits: Array<Record<string, unknown>> = [];
@@ -988,7 +1002,7 @@ async function runSearch(key: KeyRow, q: string, limit: number) {
 
   return {
     data: {
-      query: q,
+      query,
       pages: pageHits.slice(0, cappedLimit),
       blocks: blockHits.slice(0, cappedLimit),
       tasks: taskHits.slice(0, cappedLimit),
@@ -1044,8 +1058,20 @@ Deno.serve(async (req: Request) => {
         { required_scope: match.scope, key_scopes: key.scopes });
     }
 
+    // Read-only credentials: refuse every mutating method (mirrors MCP policy).
+    if (key.read_only && readOnlyBlocksMethod(method)) {
+      throw new ApiError(403, "read_only_credential",
+        "This API key is read-only; mutating methods are refused.",
+        { required_scope: match.scope });
+    }
+
     const rateHeaders = await rateLimitHeaders(key);
-    if (Object.keys(rateHeaders).length > 0) touchKey(key.id);
+    // Usage stamp must never block the response; always record it.
+    try {
+      touchKey(key.id);
+    } catch {
+      /* ignore */
+    }
 
     const pathParts = path.split("/");
 
@@ -1053,7 +1079,7 @@ Deno.serve(async (req: Request) => {
     const idemKey = req.headers.get("Idempotency-Key")?.trim();
     if (method === "POST" && idemKey) {
       if (idemKey.length > 255) throw new ApiError(400, "invalid_request", "Idempotency-Key must be at most 255 characters.");
-      pruneHousekeeping();
+      maybePruneHousekeeping();
       const cached = await lookupIdempotent(key, idemKey);
       if (cached) {
         return new Response(JSON.stringify(cached.response_body), {
@@ -1075,6 +1101,20 @@ Deno.serve(async (req: Request) => {
 
     try {
       const result = await match.handler({ req, url, key, pathParts, method });
+      // Best-effort audit for mutating calls; reads stay unlogged for volume.
+      if (method !== "GET") {
+        try {
+          auditEvent({
+            userId: key.user_id,
+            action: `api.${method.toLowerCase()}.${path.split("/")[0] || "root"}`,
+            resource: path,
+            apiKeyId: key.id,
+            surface: "api",
+          });
+        } catch {
+          /* ignore */
+        }
+      }
       return new Response(JSON.stringify(result.body), {
         status: result.status ?? 200,
         headers: { ...baseHeaders, ...rateHeaders },

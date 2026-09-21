@@ -50,6 +50,7 @@ interface PaneContainerProps {
   onCreateSubpage?: (parentPageId: string, afterBlockId: string, title: string) => string | null | undefined;
   onTrashPage?: (pageId: string) => void;
   onNewPage?: (template?: string) => void;
+  locked?: boolean;
 }
 
 export default function PaneContainer({
@@ -80,7 +81,8 @@ export default function PaneContainer({
   nvidiaKey,
   onCreateSubpage,
   onTrashPage,
-  onNewPage
+  onNewPage,
+  locked = false
 }: PaneContainerProps) {
   const {
     panes,
@@ -311,6 +313,7 @@ export default function PaneContainer({
                   key={activePage.id}
                   page={activePage}
                   pages={pages}
+                  forceReadOnly={locked}
                   renameFocusId={renameFocusId}
                   onRenameFocusDone={onRenameFocusDone}
                   onPagePatch={(patch) => onPagePatch?.(activePage.id, patch)}
@@ -403,6 +406,7 @@ export default function PaneContainer({
                 pages={pages}
                 pageId={activePage.id}
                 activeId={activePage.id}
+                locked={locked}
                 onPatchPage={(patch) => onPagePatch?.(activePage.id, patch)}
                 onSelect={handlePaneNavigate}
                 onAskAI={onAskAI}

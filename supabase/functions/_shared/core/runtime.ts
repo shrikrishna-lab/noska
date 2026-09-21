@@ -16,6 +16,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   PlatformError, errors, sha256Hex, requireScopeOf, keyHasScope,
+  keyLifecycleStatus,
   type Row,
 } from "./pure.ts";
 
@@ -33,7 +34,7 @@ export function db() {
 }
 
 /* Re-export the pure core so interface layers import from ONE place. */
-export { errors, PlatformError, requireScopeOf, keyHasScope, sha256Hex };
+export { errors, PlatformError, requireScopeOf, keyHasScope, sha256Hex, keyLifecycleStatus };
 export type { Row };
 
 /* ─── API keys ─── */
@@ -50,16 +51,15 @@ export interface KeyRow {
 export async function authenticateKey(req: Request): Promise<KeyRow> {
   const raw = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   if (!raw.startsWith("nsk_")) throw errors.authRequired();
-  const { data } = await db().from("user_api_keys").select("*").eq("key_hash", await sha256Hex(raw)).maybeSingle();
+  const { data } = await db().from("user_api_keys").select("id,user_id,scopes,default_workspace_id,read_only,allowed_tools,revoked_at,expires_at").eq("key_hash", await sha256Hex(raw)).maybeSingle();
   const k = data as (Row & {
     revoked_at: string | null; expires_at: string | null;
     scopes: unknown; default_workspace_id?: string;
   }) | null;
   if (!k) throw new PlatformError(401, "AUTH_REQUIRED", "API key not recognized.");
-  if (k.revoked_at) throw new PlatformError(401, "AUTH_REQUIRED", "This key has been revoked.");
-  if (k.expires_at && new Date(k.expires_at).getTime() < Date.now()) {
-    throw new PlatformError(401, "AUTH_REQUIRED", "This key has expired.");
-  }
+  const lifecycle = keyLifecycleStatus({ revoked_at: k.revoked_at, expires_at: k.expires_at });
+  if (lifecycle === "revoked") throw new PlatformError(401, "AUTH_REQUIRED", "This key has been revoked.");
+  if (lifecycle === "expired") throw new PlatformError(401, "AUTH_REQUIRED", "This key has expired.");
   return {
     id: k.id as string,
     user_id: k.user_id as string,

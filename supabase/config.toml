@@ -20,6 +20,17 @@ verify_jwt = false
 [functions.info-cards]
 verify_jwt = false
 
+# mcp authenticates with Noska API keys (nsk_…) or OAuth tokens (noska_at_…),
+# plus an opt-in ?key= fallback for header-less clients (ChatGPT connectors,
+# some agent runtimes). Supabase JWT gateway must not reject these before
+# the function's own auth runs. Deploy still uses --no-verify-jwt.
+[functions.mcp]
+verify_jwt = false
+
+# oauth issues/refreshes noska_at_/noska_rt_ tokens via public code exchange.
+[functions.oauth]
+verify_jwt = false
+
 # billing-webhooks is called by Razorpay (HMAC signature verified in-function).
 # Razorpay has no Supabase JWT, so the gateway must not reject it.
 [functions.billing-webhooks]

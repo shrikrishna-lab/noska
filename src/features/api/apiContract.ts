@@ -38,6 +38,7 @@ export const SCOPES: Array<{ id: string; description: string }> = [
   { id: "automations:run", description: "Trigger server-side automation runs; cancel & retry" },
   { id: "webhooks:manage", description: "Manage webhook endpoints and deliveries" },
   { id: "connections:manage", description: "View and revoke connected accounts" },
+  { id: "intelligence:execute", description: "Execute via MCP / agent runtime (advanced)" },
 ];
 
 export interface EndpointParam {

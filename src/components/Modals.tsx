@@ -1400,9 +1400,11 @@ interface ShareModalProps {
   currentUserId?: string | null;
   currentUsername?: string | null;
   workspaceSlug: string;
+  /** Locked (over-limit) workspace: invites and access changes are disabled. */
+  locked?: boolean;
 }
 
-export function ShareModal({ page, onClose, onToast, currentUserId, currentUsername, workspaceSlug }: ShareModalProps) {
+export function ShareModal({ page, onClose, onToast, currentUserId, currentUsername, workspaceSlug, locked = false }: ShareModalProps) {
   const [tab, setTab] = useState("share");
   const [usernameInput, setUsernameInput] = useState("");
   const [access, setAccess] = useState<PageInviteRole>("editor");
@@ -1531,7 +1533,7 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
   const sendInvite = async (targetUser?: UserSearchResult) => {
     const userToInvite = targetUser || selectedUser;
     const handle = (userToInvite ? userToInvite.username : usernameInput).trim().replace(/^@/, "");
-    if (!handle || !currentUserId) return;
+    if (locked || !handle || !currentUserId) return;
     setSending(true);
     setInviteError(null);
     try {
@@ -1557,7 +1559,7 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
   };
 
   const removeInvite = async (inviteId: string) => {
-    if (!currentUserId) return;
+    if (locked || !currentUserId) return;
     setSentInvites(prev => prev.filter((inv) => inv.id !== inviteId)); // optimistic
     try {
       await withdrawPageInvite(inviteId, currentUserId);
@@ -1635,6 +1637,11 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
 
         {tab === "share" ? (
           <div className="mt-4 space-y-4">
+            {locked && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                Workspace locked — sharing is read-only. Upgrade your plan to invite collaborators or change access.
+              </div>
+            )}
             {/* Invite Input Bar */}
             <div className="relative">
               <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-neutral-100/70 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.08] focus-within:border-black/20 dark:focus-within:border-white/20 transition">
@@ -1643,8 +1650,9 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
                   value={usernameInput}
                   onChange={(e) => { setUsernameInput(e.target.value); setSelectedUser(null); setInviteError(null); }}
                   onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                  onKeyDown={(e) => { if (e.key === "Enter" && usernameInput.trim() && !sending) sendInvite(); }}
-                  placeholder="Invite user or email..."
+                  onKeyDown={(e) => { if (e.key === "Enter" && usernameInput.trim() && !sending && !locked) sendInvite(); }}
+                  placeholder={locked ? "Sharing disabled while locked" : "Invite user or email..."}
+                  disabled={locked}
                   className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 outline-none border-none ring-0 focus:ring-0 focus:outline-none"
                   style={{ outline: "none", boxShadow: "none" }}
                 />
@@ -1665,7 +1673,7 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
 
                 {/* Invite Button */}
                 <button
-                  disabled={!usernameInput.trim() || !currentUserId || sending}
+                  disabled={!usernameInput.trim() || !currentUserId || sending || locked}
                   onClick={() => sendInvite()}
                   className="shrink-0 px-3.5 py-1.5 rounded-xl bg-[#E3CFB3] hover:bg-[#d8c2a2] text-neutral-900 text-xs font-semibold shadow-2xs disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer active:scale-95"
                 >

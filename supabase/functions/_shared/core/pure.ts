@@ -64,8 +64,10 @@ export const CANONICAL_SCOPES = [
   "dashboards:read",
   "dashboards:write",
   "agents:read",
+  "agents:write",
   "agents:run",
   "automations:read",
+  "automations:write",
   "automations:run",
   "webhooks:manage",
   "events:read",
@@ -93,6 +95,30 @@ export function requireScopeOf(keyScopes: string[], required: string): void {
   if (!keyHasScope(keyScopes, required)) {
     throw errors.forbidden(`Requires "${required}".`, { required_scope: required });
   }
+}
+
+/* ─── API key lifecycle + credential policy ──────────────────────────────
+ * Single decision points shared by the REST gateway and MCP, so auth
+ * behavior cannot drift between surfaces. Covered by src/test/apiKeys*. */
+
+/** Lifecycle verdict for a stored key row (revocation wins over expiry). */
+export type KeyLifecycle = "ok" | "revoked" | "expired";
+
+export function keyLifecycleStatus(
+  key: { revoked_at?: string | null; expires_at?: string | null },
+  nowMs = Date.now(),
+): KeyLifecycle {
+  if (key.revoked_at) return "revoked";
+  const exp = key.expires_at ? new Date(key.expires_at).getTime() : NaN;
+  if (Number.isFinite(exp) && (exp as number) < nowMs) return "expired";
+  return "ok";
+}
+
+/** Read-only credentials refuse every non-read method (mirrors the MCP
+ * policy's scope-based `toolIsRead` rule, expressed for HTTP verbs). */
+export function readOnlyBlocksMethod(method: string): boolean {
+  const m = method.toUpperCase();
+  return m !== "GET" && m !== "OPTIONS";
 }
 
 /* ─── ID / URL resolution ─── */
@@ -521,8 +547,11 @@ export function validatePluginManifest(input: unknown): { ok: true; manifest: Pl
       permissions,
       capabilities,
       events: Array.isArray(m.events) ? m.events.map(String) : [],
-      commands: Array.isArray(m.commands) ? (m.commands as Row[]) : [],
-      tools: Array.isArray(m.tools) ? (m.tools as Row[]) : [],
+      // Trust-boundary cast: validation above enforces the documented shape
+      // loosely (plugins may carry extra fields); the manifest type declares
+      // the contract callers may rely on. No runtime change.
+      commands: (Array.isArray(m.commands) ? m.commands : []) as PluginManifest["commands"],
+      tools: (Array.isArray(m.tools) ? m.tools : []) as PluginManifest["tools"],
       automationActions: Array.isArray(m.automationActions) ? m.automationActions.map(String) : [],
     },
   };

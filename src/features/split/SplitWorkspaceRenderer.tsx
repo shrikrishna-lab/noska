@@ -32,6 +32,8 @@ export interface SplitWorkspaceRendererProps {
   onCreateSubpage?: (parentPageId: string, afterBlockId: string, title: string) => string | null | undefined;
   onTrashPage?: (pageId: string) => void;
   onNewPage?: (template?: string) => void;
+  /** Locked (over-limit) workspace: editors render read-only, mutations stay blocked upstream. */
+  locked?: boolean;
 }
 
 export default function SplitWorkspaceRenderer(props: SplitWorkspaceRendererProps) {

@@ -6,6 +6,7 @@ import {
   requireScope, verify, blocksToMarkdown, markdownToBlocks,
   COMMANDS, commandByName, initialReviewState, type KeyRow, type Row,
 } from "./shared.ts";
+import { isTaskBlockType, validateSearchQuery } from "./protocol.ts";
 
 export interface ToolDef {
   name: string;
@@ -31,19 +32,38 @@ const contentTools: ToolDef[] = [
     description: "Search pages, block text, tasks and study cards across the user's workspace. Returns ids + URLs for chaining into fetch / update-page.",
     inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", description: "1-50, default 10" } }, required: ["query"] },
     async handler(args, key) {
-      const q = String(args.query ?? "").trim().toLowerCase();
-      if (!q) throw E.validation("query is required");
+      const checked = validateSearchQuery(args.query);
+      if (!checked.ok) throw E.validation(checked.message);
+      const q = checked.q;
       const cap = Math.min(Math.max(Number(args.limit) || 10, 1), 50);
-      const { data } = await db.from("pages").select("id,title,tags,trashed,updated_at,blocks").eq("user_id", key.user_id).order("updated_at", { ascending: false }).limit(500);
+      // Phase 1 (DB-side): title matches via ilike — indexed, no full scan.
+      // Phase 2 (bounded): block-text scan over the most recent 200 pages
+      // only (was 500). Keeps p99 low on large workspaces; titles already
+      // covered by phase 1 so recency-biased block scan is a good tradeoff.
+      const safe = q.replace(/[%_\\]/g, (c) => `\\${c}`).slice(0, 120);
+      const { data: titled } = await db.from("pages")
+        .select("id,title,updated_at").eq("user_id", key.user_id).eq("trashed", false)
+        .ilike("title", `%${safe}%`).order("updated_at", { ascending: false }).limit(cap);
       const results: Row[] = [];
+      const seen = new Set<string>();
+      for (const p of (titled ?? []) as Row[]) {
+        seen.add(String(p.id));
+        results.push({ kind: "page", id: p.id, url: pageUrl(String(p.id)), title: p.title });
+        if (results.length >= cap) return { results };
+      }
+      const { data } = await db.from("pages").select("id,title,trashed,updated_at,blocks").eq("user_id", key.user_id).eq("trashed", false).order("updated_at", { ascending: false }).limit(200);
       for (const p of (data ?? []) as Row[]) {
         if (p.trashed) continue;
-        if (String(p.title ?? "").toLowerCase().includes(q)) results.push({ kind: "page", id: p.id, url: pageUrl(String(p.id)), title: p.title });
+        const pid = String(p.id);
+        if (!seen.has(pid) && String(p.title ?? "").toLowerCase().includes(q)) {
+          seen.add(pid);
+          results.push({ kind: "page", id: p.id, url: pageUrl(String(p.id)), title: p.title });
+        }
         for (const b of ((p.blocks ?? []) as Row[])) {
           const t = typeof b.text === "string" ? b.text : "";
           if (t && t.toLowerCase().includes(q)) {
             results.push({
-              kind: b.type === "todo" ? "task" : b.review ? "study_card" : "block",
+              kind: isTaskBlockType(b.type) ? "task" : b.review ? "study_card" : "block",
               id: p.id, url: pageUrl(String(p.id)), title: p.title, matched_text: t.slice(0, 200),
             });
           }
@@ -83,7 +103,7 @@ const contentTools: ToolDef[] = [
         out.child_count = (children ?? []).length;
         out.children = (children ?? []).map((c: Row) => ({ id: c.id, title: c.title }));
         out.parent = parent ?? null;
-        out.open_tasks = blocks.filter((b) => b.type === "todo" && b.checked !== true).length;
+        out.open_tasks = blocks.filter((b) => isTaskBlockType(b.type) && b.checked !== true).length;
         out.study_cards = blocks.filter((b) => b.review).length;
       }
       return { page: out };
@@ -319,11 +339,11 @@ const taskTools: ToolDef[] = [
       const pageId = args.page_id_or_url ? extractId(args.page_id_or_url) : null;
       let q = db.from("pages").select("id,title,trashed,blocks").eq("user_id", key.user_id).eq("trashed", false);
       if (pageId) q = q.eq("id", pageId);
-      const { data } = await q.order("updated_at", { ascending: false }).limit(500);
+      const { data } = await q.order("updated_at", { ascending: false }).limit(pageId ? 5 : 200);
       const tasks: Row[] = [];
       for (const p of (data ?? []) as Row[])
         for (const b of ((p.blocks ?? []) as Row[])) {
-          if (b.type !== "todo") continue;
+          if (!isTaskBlockType(b.type)) continue;
           if (typeof args.done === "boolean" && (b.checked === true) !== args.done) continue;
           tasks.push({ id: b.id, text: b.text ?? "", checked: b.checked === true, page_id: p.id, page_title: p.title });
           if (tasks.length >= cap) return { tasks };
@@ -352,7 +372,7 @@ const taskTools: ToolDef[] = [
     async handler(args, key) {
       const page = await loadPage(key.user_id, args.page_id_or_url);
       const blocks = [...((page.blocks ?? []) as Row[])];
-      const i = blocks.findIndex((b) => b.id === args.task_id && b.type === "todo");
+      const i = blocks.findIndex((b) => b.id === args.task_id && isTaskBlockType(b.type));
       if (i === -1) throw E.notFound("Task");
       if (args.text !== undefined) blocks[i].text = String(args.text);
       if (args.checked !== undefined) blocks[i].checked = args.checked === true;
@@ -367,7 +387,7 @@ const taskTools: ToolDef[] = [
     async handler(args, key) {
       const page = await loadPage(key.user_id, args.page_id_or_url);
       const blocks = [...((page.blocks ?? []) as Row[])];
-      const i = blocks.findIndex((b) => b.id === args.task_id && b.type === "todo");
+      const i = blocks.findIndex((b) => b.id === args.task_id && isTaskBlockType(b.type));
       if (i === -1) throw E.notFound("Task");
       blocks[i].checked = true;
       await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
@@ -383,7 +403,7 @@ const taskTools: ToolDef[] = [
     async handler(args, key) {
       const page = await loadPage(key.user_id, args.page_id_or_url);
       const blocks = [...((page.blocks ?? []) as Row[])];
-      const i = blocks.findIndex((b) => b.id === args.task_id && b.type === "todo");
+      const i = blocks.findIndex((b) => b.id === args.task_id && isTaskBlockType(b.type));
       if (i === -1) throw E.notFound("Task");
       blocks[i].checked = false;
       await db.from("pages").update({ blocks }).eq("id", page.id as string).eq("user_id", key.user_id);
@@ -408,7 +428,7 @@ const taskTools: ToolDef[] = [
         try {
           const page = await loadPage(key.user_id, u.page_id_or_url);
           const blocks = [...((page.blocks ?? []) as Row[])];
-          const i = blocks.findIndex((b) => b.id === u.task_id && b.type === "todo");
+          const i = blocks.findIndex((b) => b.id === u.task_id && isTaskBlockType(b.type));
           if (i === -1) { results.push({ task_id: u.task_id, ok: false, reason: "not_found" }); continue; }
           if (u.text !== undefined) blocks[i].text = String(u.text);
           if (u.checked !== undefined) blocks[i].checked = u.checked === true;
@@ -850,8 +870,8 @@ const systemTools: ToolDef[] = [
         page: { id: page.id, url: pageUrl(String(page.id)), title: page.title, icon: page.icon, trashed: page.trashed === true },
         parent: parent ? { id: parent.id, title: parent.title } : null,
         children: children ?? [],
-        open_tasks: blocks.filter((b) => b.type === "todo" && b.checked !== true).map((b) => ({ id: b.id, text: b.text })),
-        done_tasks: blocks.filter((b) => b.type === "todo" && b.checked === true).length,
+        open_tasks: blocks.filter((b) => isTaskBlockType(b.type) && b.checked !== true).map((b) => ({ id: b.id, text: b.text })),
+        done_tasks: blocks.filter((b) => isTaskBlockType(b.type) && b.checked === true).length,
         study_card_count: blocks.filter((b) => b.review).length,
       };
     },

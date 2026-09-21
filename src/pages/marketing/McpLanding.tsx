@@ -11,19 +11,22 @@ import { HoldToConfirm } from './components/HoldToConfirm';
 import { CursorFollower } from './components/CursorFollower';
 import './McpLanding.css';
 
-/* ─── Real V5 tool catalog (group · count) ─── */
+/* ─── Real V5.1 tool catalog (group · count) ───
+ *  Mirrors supabase/functions/mcp: TOOLS (47) + TOOLS_V5 + TOOLS_V6,
+ *  deduped by name (V5 run-agent/run-automation win over V4 stubs). */
 const TOOL_GROUPS = [
-  { g: 'content', n: 12, tools: ['search', 'fetch', 'create-pages', 'update-page', 'archive-page', 'restore-page', 'duplicate-page', 'move-page', 'list-pages', 'list-child-pages', 'get-parent-page', 'get-page-tree'] },
+  { g: 'content', n: 17, tools: ['search', 'fetch', 'create-pages', 'update-page', 'archive-page', 'restore-page', 'duplicate-page', 'move-page', 'list-pages', 'list-child-pages', 'get-parent-page', 'get-page-tree', 'append-blocks', 'get-block', 'update-block', 'delete-block', 'bulk-archive-pages'] },
   { g: 'commands', n: 4, tools: ['list-commands', 'search-commands', 'get-command', 'execute-command'] },
   { g: 'tasks', n: 7, tools: ['list-tasks', 'create-task', 'update-task', 'complete-task', 'reopen-task', 'bulk-update-tasks', 'update-task-metadata'] },
   { g: 'learning', n: 5, tools: ['list-reviews', 'add-study-card', 'reschedule-review', 'get-study-progress', 'create-study-plan'] },
   { g: 'databases', n: 6, tools: ['list-databases', 'get-database', 'query-database', 'create-row', 'update-row', 'create-view'] },
-  { g: 'workspace', n: 6, tools: ['list-workspaces', 'get-workspace', 'create-workspace', 'update-workspace', 'archive-workspace', 'switch-workspace'] },
+  { g: 'workspace', n: 8, tools: ['list-workspaces', 'get-workspace', 'create-workspace', 'update-workspace', 'archive-workspace', 'switch-workspace', 'get-current-workspace', 'get-workspace-members'] },
   { g: 'templates', n: 6, tools: ['list-templates', 'get-template', 'create-template', 'create-from-template', 'update-template', 'archive-template'] },
   { g: 'dashboards', n: 5, tools: ['list-dashboards', 'get-dashboard', 'create-dashboard', 'update-dashboard', 'archive-dashboard'] },
   { g: 'agents', n: 10, tools: ['list-agents', 'get-agent', 'create-agent', 'update-agent', 'archive-agent', 'run-agent', 'inspect-agent-run', 'cancel-agent-run', 'retry-agent-run', 'list-agent-runs'] },
-  { g: 'automations', n: 10, tools: ['list-automations', 'create-automation', 'update-automation', 'archive-automation', 'run-automation', 'inspect-automation-run', 'cancel-automation-run', 'retry-automation-run', 'list-automation-runs'] },
+  { g: 'automations', n: 9, tools: ['list-automations', 'create-automation', 'update-automation', 'archive-automation', 'run-automation', 'inspect-automation-run', 'cancel-automation-run', 'retry-automation-run', 'list-automation-runs'] },
   { g: 'webhooks', n: 7, tools: ['list-webhooks', 'create-webhook', 'update-webhook', 'delete-webhook', 'rotate-webhook-secret', 'test-webhook', 'list-webhook-deliveries'] },
+  { g: 'intelligence', n: 4, tools: ['summarize-page', 'extract-tasks', 'ask-noska', 'noska_execute'] },
   { g: 'events', n: 3, tools: ['list-events', 'list-connected-accounts', 'disconnect-connected-account'] },
 ];
 const TOTAL_TOOLS = TOOL_GROUPS.reduce((a, t) => a + t.n, 0);
@@ -39,12 +42,14 @@ const CLIENT_META = [
   { id: "cursor", name: "Cursor" },
   { id: "vscode", name: "VS Code" },
   { id: "chatgpt", name: "ChatGPT & agents" },
+  { id: "notion", name: "Notion → Noska" },
+  { id: "agents", name: "Custom agents" },
   { id: "universal", name: "Any client" },
 ];
 /* Scripted session — what Claude actually speaks to Noska */
 const SESSION = [
-  { dir: 'in', body: '{ "method": "initialize" }' },
-  { dir: 'out', body: '{ "serverInfo": { "name": "noska", "version": "5.0.0" } }' },
+  { dir: 'in', body: '{ "method": "initialize", "params": { "protocolVersion": "2025-06-18" } }' },
+  { dir: 'out', body: '{ "serverInfo": { "name": "noska", "version": "5.1.0" } }' },
   { dir: 'in', body: '{ "method": "tools/list" }' },
   { dir: 'out', body: `{ "tools": [ … ${TOTAL_TOOLS} capability tools ] }` },
   { dir: 'in', body: '{ "method": "tools/call", "params": { "name": "run-agent", … } }' },
@@ -147,9 +152,27 @@ export default function McpLanding() {
         steps: [
           'ChatGPT → Settings → Connectors → Create → Add custom connector',
           'Paste the one-link URL (key included) — header-less clients need it',
-          'Any agent runtime that speaks HTTP can use the same link',
+          'OAuth apps can use noska_at_… tokens; discovery lives at /.well-known/oauth-protected-resource',
         ],
         copy: hasKey && withKeyInUrl ? url : `${url}?key=YOUR_NSK_KEY`,
+      },
+      notion: {
+        name: 'Notion → Noska',
+        steps: [
+          'Notion cannot call out to MCP servers — connect it inside Noska instead',
+          'Noska → Settings → Integrations → Notion → OAuth or paste an internal integration secret',
+          'Agents then call Notion tools server-side; mirror pages as markdown both ways',
+        ],
+        copy: 'Noska → Settings → Integrations → Notion → Connect',
+      },
+      agents: {
+        name: 'Custom agents',
+        steps: [
+          'Any runtime speaking JSON-RPC 2.0 over streamable HTTP works',
+          'Send MCP-Protocol-Version (2025-06-18, 2025-03-26 or 2024-11-05) + Bearer nsk_…',
+          'Keep the Mcp-Session-Id response header and send it back on later calls',
+        ],
+        copy: `curl -X POST "${url}" \\\n  -H "Authorization: Bearer ${hasKey ? keyInput : 'nsk_…'}" \\\n  -H "Content-Type: application/json" \\\n  -H "MCP-Protocol-Version: 2025-06-18" \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`,
       },
       universal: {
         name: 'Any client',
@@ -176,7 +199,7 @@ export default function McpLanding() {
       {/* ══ Boot gate + hero terminal ══ */}
       <section className="mcp-hero">
         <div className="mcp-wrap">
-          <Reveal><span className="mcp-eyebrow"><Terminal size={13} /> NOSKA MCP · v5.0.0 · streamable-http</span></Reveal>
+          <Reveal><span className="mcp-eyebrow"><Terminal size={13} /> NOSKA MCP · v5.1.0 · streamable-http</span></Reveal>
           <Reveal delay={0.08} blur>
             <h1 className="mcp-title">
               Your workspace,<br /><span className="mcp-green">native</span> in every AI client.
@@ -186,6 +209,7 @@ export default function McpLanding() {
             <p className="mcp-sub">
               One JSON-RPC endpoint. {TOTAL_TOOLS} verified tools. Every mutation checked
               against persisted state before Noska will say it happened.
+              The fastest setup never leaves the app: Settings → Developer → Connect AI Clients.
             </p>
           </Reveal>
 
@@ -259,9 +283,9 @@ export default function McpLanding() {
                 <span className="mcp-stepnum">01</span>
                 <div>
                   <b>Paste a key to personalize</b>
-                  <span>Stays in this tab — nothing is sent anywhere until you connect a client.</span>
+                  <span>Stays in this tab — nothing is sent anywhere until you connect a client. Faster: Settings → Developer → Connect AI Clients fills and tests everything in-app.</span>
                 </div>
-                <Link to="/docs" className="mcp-mini-link">Create a key →</Link>
+                <Link to="/docs" className="mcp-mini-link">Create a key in Settings → Developer →</Link>
               </div>
               <div className="mcp-keyrow">
                 <input

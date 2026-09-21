@@ -53,6 +53,7 @@ import {
   Folder,
   Heart,
   Box,
+  ArrowUpRight,
   type LucideIcon
 } from "lucide-react";
 import {
@@ -361,7 +362,7 @@ const Sidebar = memo(function Sidebar({
         const parsed = parseInt(saved, 10);
         if (!isNaN(parsed) && parsed >= 200 && parsed <= 480) return parsed;
       }
-    } catch {}
+    } catch { }
     return 260;
   });
   const [isResizing, setIsResizing] = useState(false);
@@ -391,7 +392,7 @@ const Sidebar = memo(function Sidebar({
       setSidebarWidth((w) => {
         try {
           localStorage.setItem("noska_sidebar_width", String(w));
-        } catch {}
+        } catch { }
         return w;
       });
     };
@@ -406,7 +407,7 @@ const Sidebar = memo(function Sidebar({
     setSidebarWidth(260);
     try {
       localStorage.setItem("noska_sidebar_width", "260");
-    } catch {}
+    } catch { }
     onToast?.("Sidebar width reset to 260px");
   }, [onToast]);
 
@@ -586,6 +587,8 @@ const Sidebar = memo(function Sidebar({
   const wsPlanName = entData?.plan.name ?? "Free";
   const [wsLoading, setWsLoading] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [lockedBannerHovered, setLockedBannerHovered] = useState(false);
+  const lockedBannerHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshWorkspacesWithLoading = useCallback(async () => {
     setWsLoading(true);
     try {
@@ -651,6 +654,12 @@ const Sidebar = memo(function Sidebar({
   const [renameDraft, setRenameDraft] = useState("");
 
   const handleCommitRename = useCallback(async (rowId: string) => {
+    if (isCurrentWorkspaceLocked) {
+      onToast?.("This workspace is locked and read-only — upgrade your plan to rename it. Import and export still work.");
+      setRenamingWsId(null);
+      setRenameDraft("");
+      return;
+    }
     const trimmed = renameDraft.trim().replace(/^["'“”]+|["'“”]+$/g, '');
     if (trimmed && trimmed.length > 0) {
       if (activeWorkspaceId === rowId) {
@@ -665,7 +674,7 @@ const Sidebar = memo(function Sidebar({
     }
     setRenamingWsId(null);
     setRenameDraft("");
-  }, [renameDraft, activeWorkspaceId, setWorkspaceName, refreshWorkspaces]);
+  }, [renameDraft, activeWorkspaceId, setWorkspaceName, refreshWorkspaces, isCurrentWorkspaceLocked, onToast]);
 
   const handleCancelRename = useCallback(() => {
     setRenamingWsId(null);
@@ -980,8 +989,8 @@ const Sidebar = memo(function Sidebar({
       {/* Outer Specular Precision Shell */}
       <div
         className={`relative flex h-full w-full flex-col ${radiusOuterClass} ${customConfig.specularBezel !== false
-            ? "p-[2px] bg-gradient-to-br from-white/95 via-[#E6EAF5]/80 via-30% to-white/95 dark:from-white/20 dark:via-white/5 dark:to-white/15 shadow-[0_2px_6px_-1px_rgba(18,18,26,0.04),0_10px_24px_-4px_rgba(18,18,26,0.06),0_24px_48px_-8px_rgba(18,18,26,0.08)] dark:shadow-[0_4px_20px_-2px_rgba(0,0,0,0.4),0_12px_36px_-6px_rgba(0,0,0,0.5)]"
-            : "p-[1px] border shadow-lg"
+          ? "p-[2px] bg-gradient-to-br from-white/95 via-[#E6EAF5]/80 via-30% to-white/95 dark:from-white/20 dark:via-white/5 dark:to-white/15 shadow-[0_2px_6px_-1px_rgba(18,18,26,0.04),0_10px_24px_-4px_rgba(18,18,26,0.06),0_24px_48px_-8px_rgba(18,18,26,0.08)] dark:shadow-[0_4px_20px_-2px_rgba(0,0,0,0.4),0_12px_36px_-6px_rgba(0,0,0,0.5)]"
+          : "p-[1px] border shadow-lg"
           } transition-all duration-200`}
         style={{
           boxShadow: customConfig.glowEffect ? `0 0 30px ${customConfig.accentColor}28` : undefined
@@ -1190,8 +1199,8 @@ const Sidebar = memo(function Sidebar({
                       {isCurrentWorkspaceLocked
                         ? "Plan limit exceeded · Read-only"
                         : displayName
-                        ? `${displayName.replace(/^@/, '')}'s Workspace`
-                        : workspaceName}
+                          ? `${displayName.replace(/^@/, '')}'s Workspace`
+                          : workspaceName}
                     </div>
                   </div>
                 </button>
@@ -1206,32 +1215,128 @@ const Sidebar = memo(function Sidebar({
                 </button>
               </div>
 
-              {/* Read-only Locked Workspace Banner */}
-              {isCurrentWorkspaceLocked && (
-                <div className="mx-0.5 mb-2.5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2 shadow-2xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-6 w-6 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
-                      <Lock size={12} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[11px] font-bold leading-none truncate">Workspace Locked</div>
-                      <div className="text-[9.5px] text-amber-700/80 dark:text-amber-300/80 leading-none truncate mt-0.5">Plan limit exceeded · Read-only</div>
-                    </div>
+              {/* Read-only Locked Workspace Banner - Apple-grade Liquid Glass Ultra-Compact Pill + Interactive Hover Info Card */}
+              <AnimatePresence>
+                {isCurrentWorkspaceLocked && (
+                  <div className="relative mx-0.5 mb-2 select-none z-30">
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, height: 0, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, height: "auto", scale: 1 }}
+                      exit={{ opacity: 0, y: -6, height: 0, scale: 0.97 }}
+                      transition={{ type: "spring", stiffness: 440, damping: 28 }}
+                      className="group relative overflow-hidden rounded-[13px] bg-gradient-to-r from-amber-500/[0.13] via-orange-500/[0.08] to-amber-500/[0.13] dark:from-amber-400/[0.15] dark:via-orange-500/[0.09] dark:to-amber-400/[0.15] border border-amber-500/25 dark:border-amber-400/30 px-2 py-1.5 shadow-[0_2px_10px_rgba(245,158,11,0.08),inset_0_1px_0_rgba(255,255,255,0.3)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl flex items-center justify-between gap-2"
+                    >
+                      {/* Subtle Apple gloss highlight sheen */}
+                      <div className="pointer-events-none absolute -inset-full top-0 bg-gradient-to-r from-transparent via-white/10 dark:via-white/[0.06] to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-out" />
+
+                      {/* Left: Glowing squircle lock icon badge + status text */}
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <div className="relative size-5.5 rounded-md bg-amber-500/20 dark:bg-amber-400/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-2xs">
+                          <Lock size={10.5} strokeWidth={2.6} />
+                          <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-amber-500 ring-1.5 ring-white dark:ring-neutral-900 animate-pulse" />
+                        </div>
+                        <span className="text-[11px] font-bold text-amber-950 dark:text-amber-100 truncate tracking-tight">
+                          Read-only Mode
+                        </span>
+                      </div>
+
+                      {/* Right: Apple-style pill button (Hovering specifically this button reveals the tooltip) */}
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.94 }}
+                        onMouseEnter={() => {
+                          if (lockedBannerHoverTimeoutRef.current) clearTimeout(lockedBannerHoverTimeoutRef.current);
+                          setLockedBannerHovered(true);
+                        }}
+                        onMouseLeave={() => {
+                          lockedBannerHoverTimeoutRef.current = setTimeout(() => setLockedBannerHovered(false), 140);
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLockedBannerHovered(false);
+                          onSettings("Billing");
+                        }}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 px-2.5 py-1 rounded-full transition-all shadow-[0_2px_6px_rgba(217,119,6,0.35),inset_0_1px_0_rgba(255,255,255,0.3)] cursor-pointer shrink-0"
+                      >
+                        <span>Upgrade</span>
+                        <ArrowUpRight size={10} strokeWidth={2.8} className="opacity-85" />
+                      </motion.button>
+                    </motion.div>
+
+                    {/* Apple-grade Floating Info Card on Hover */}
+                    <AnimatePresence>
+                      {lockedBannerHovered && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                          transition={{ type: "spring", stiffness: 480, damping: 28 }}
+                          onMouseEnter={() => {
+                            if (lockedBannerHoverTimeoutRef.current) clearTimeout(lockedBannerHoverTimeoutRef.current);
+                            setLockedBannerHovered(true);
+                          }}
+                          onMouseLeave={() => {
+                            lockedBannerHoverTimeoutRef.current = setTimeout(() => setLockedBannerHovered(false), 140);
+                          }}
+                          className="absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl border border-amber-500/25 dark:border-amber-400/30 bg-white/95 dark:bg-[#18191E]/95 backdrop-blur-2xl p-3 shadow-2xl dark:shadow-[0_16px_40px_rgba(0,0,0,0.65)] text-[11px] select-none pointer-events-auto"
+                        >
+                          {/* Header */}
+                          <div className="flex items-center justify-between pb-2 border-b border-black/[0.06] dark:border-white/[0.08]">
+                            <div className="flex items-center gap-1.5 font-bold text-neutral-900 dark:text-white text-[12px]">
+                              <Lock size={12} className="text-amber-500 stroke-[2.5]" />
+                              <span>Read-only Mode</span>
+                            </div>
+                            <span className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded-md">
+                              {wsPlanName} Plan
+                            </span>
+                          </div>
+
+                          {/* Info Description */}
+                          <div className="py-2 space-y-1.5 text-neutral-600 dark:text-neutral-300 text-[10.5px] leading-relaxed">
+                            <p>
+                              This workspace exceeds your plan limit of <strong className="text-neutral-900 dark:text-white font-semibold">{wsLimit ?? 1} active workspace{(wsLimit ?? 1) === 1 ? '' : 's'}</strong>.
+                            </p>
+                            <div className="grid grid-cols-1 gap-1 pt-0.5 text-[10px]">
+                              <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+                                <span className="size-1 rounded-full bg-amber-500 shrink-0" />
+                                <span>Editing & page creation are disabled</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
+                                <span className="size-1 rounded-full bg-neutral-400 shrink-0" />
+                                <span>Viewing and exports remain active</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* CTA Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLockedBannerHovered(false);
+                              onSettings("Billing");
+                            }}
+                            className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-[0.98] text-white font-bold text-[11px] shadow-[0_2px_10px_rgba(217,119,6,0.35),inset_0_1px_0_rgba(255,255,255,0.3)] transition-all cursor-pointer outline-none"
+                          >
+                            <Sparkles size={12} className="stroke-[2.5]" />
+                            <span>Upgrade to Unlock</span>
+                            <ArrowUpRight size={11} className="stroke-[2.5] opacity-90" />
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <button
-                    onClick={() => onSettings("Billing")}
-                    className="text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 px-2 py-1 rounded-lg transition cursor-pointer shrink-0 shadow-xs"
-                  >
-                    Upgrade
-                  </button>
-                </div>
-              )}
+                )}
+              </AnimatePresence>
 
               {/* Quick Navigation Capsule Row (Apple-grade fluid spring sliding capsule) */}
               {customConfig.showQuickNav !== false && filteredQuickNavItems.length > 0 && (
                 <div className="px-0.5 pb-2.5">
                   <LayoutGroup id="quickCapsuleNav">
-                    <div className="relative flex items-center justify-between p-1 w-full rounded-full bg-black/[0.04] dark:bg-[#16171C]/90 border border-black/[0.06] dark:border-white/[0.08] shadow-[inset_0_1px_2px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.35)] backdrop-blur-2xl select-none">
+                    <motion.div
+                      layout
+                      className="relative flex items-center justify-between p-1 w-full rounded-full bg-black/[0.04] dark:bg-[#16171C]/90 border border-black/[0.06] dark:border-white/[0.08] shadow-[inset_0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-2xl select-none"
+                    >
                       {filteredQuickNavItems.map((item) => {
                         const isHovered = hoveredQuickTab === item.id;
                         const isExpanded = hoveredQuickTab ? isHovered : item.active;
@@ -1276,12 +1381,12 @@ const Sidebar = memo(function Sidebar({
                             key={item.id}
                             type="button"
                             layout
-                            whileTap={{ scale: 0.9 }}
+                            whileTap={{ scale: 0.88 }}
                             onMouseEnter={() => setHoveredQuickTab(item.id)}
                             onMouseLeave={() => setHoveredQuickTab(null)}
                             onClick={item.onClick}
-                            transition={{ type: "spring", stiffness: 460, damping: 30, mass: 0.6 }}
-                            className={`group relative flex items-center justify-center h-7 rounded-full cursor-pointer outline-none select-none transition-colors duration-150 z-10 ${isExpanded ? "flex-[1.6] px-2.5" : "flex-1 min-w-[28px]"
+                            transition={{ type: "spring", stiffness: 480, damping: 30, mass: 0.5 }}
+                            className={`group relative flex items-center justify-center h-7 rounded-full cursor-pointer outline-none select-none transition-colors duration-200 z-10 ${isExpanded ? "flex-[1.6] px-2.5" : "flex-1 min-w-[28px]"
                               } ${item.active
                                 ? themeColors.activeText
                                 : isHovered
@@ -1290,12 +1395,12 @@ const Sidebar = memo(function Sidebar({
                               }`}
                             title={item.label}
                           >
-                            {/* Apple-style floating active pill */}
+                            {/* Apple-style floating active pill with specular highlight */}
                             {item.active && (
                               <motion.div
                                 layoutId="quickNavActiveCapsule"
-                                className="absolute inset-0 rounded-full bg-white dark:bg-[#282930] border border-black/[0.06] dark:border-white/[0.12] shadow-[0_2px_6px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.12)] -z-10"
-                                transition={{ type: "spring", stiffness: 460, damping: 30, mass: 0.6 }}
+                                className="absolute inset-0 rounded-full bg-white dark:bg-[#25262D] border border-black/[0.06] dark:border-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.1),inset_0_1px_1px_rgba(255,255,255,0.9)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.14)] -z-10"
+                                transition={{ type: "spring", stiffness: 480, damping: 30, mass: 0.5 }}
                               />
                             )}
 
@@ -1304,13 +1409,14 @@ const Sidebar = memo(function Sidebar({
                               <motion.div
                                 layoutId="quickNavHoverGhost"
                                 className="absolute inset-0 rounded-full bg-black/[0.05] dark:bg-white/[0.08] -z-10"
-                                transition={{ type: "spring", stiffness: 460, damping: 30, mass: 0.6 }}
+                                transition={{ type: "spring", stiffness: 480, damping: 30, mass: 0.5 }}
                               />
                             )}
 
+                            {/* Icon with Apple Dock micro-magnification */}
                             <motion.div
-                              whileHover={{ scale: 1.15, y: -0.5 }}
-                              transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                              whileHover={{ scale: 1.18, y: -1 }}
+                              transition={{ type: "spring", stiffness: 520, damping: 22 }}
                               className={`relative flex items-center justify-center shrink-0 ${item.active ? themeColors.activeIcon : ""
                                 }`}
                             >
@@ -1328,10 +1434,10 @@ const Sidebar = memo(function Sidebar({
                               {isExpanded && (
                                 <motion.span
                                   key="label"
-                                  initial={{ opacity: 0, scale: 0.9, x: -3 }}
+                                  initial={{ opacity: 0, scale: 0.88, x: -4 }}
                                   animate={{ opacity: 1, scale: 1, x: 0 }}
-                                  exit={{ opacity: 0, scale: 0.9, x: -3 }}
-                                  transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+                                  exit={{ opacity: 0, scale: 0.88, x: -4 }}
+                                  transition={{ type: "spring", stiffness: 480, damping: 28 }}
                                   className="whitespace-nowrap text-[11px] font-medium tracking-tight leading-none ml-1.5 flex items-center gap-1 select-none truncate"
                                 >
                                   <span className="truncate">{item.label}</span>
@@ -1344,7 +1450,7 @@ const Sidebar = memo(function Sidebar({
                           </motion.button>
                         );
                       })}
-                    </div>
+                    </motion.div>
                   </LayoutGroup>
                 </div>
               )}
@@ -1638,13 +1744,12 @@ const Sidebar = memo(function Sidebar({
                               }
                             }
                           }}
-                          className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition ${
-                            isEditing
-                              ? "bg-neutral-100 dark:bg-white/10"
-                              : isActive
+                          className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition ${isEditing
+                            ? "bg-neutral-100 dark:bg-white/10"
+                            : isActive
                               ? "bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white font-semibold cursor-pointer group"
                               : "hover:bg-neutral-100/60 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer group"
-                          }`}
+                            }`}
                           title={isLocked ? `${cleanName} (Locked - Read Only)` : `Switch to ${cleanName}`}
                         >
                           {/* Squircle Card Icon */}
@@ -1699,8 +1804,8 @@ const Sidebar = memo(function Sidebar({
                                 {isLocked
                                   ? "Read-only • Plan limit exceeded"
                                   : isActive
-                                  ? "Active workspace"
-                                  : "Click to switch"}
+                                    ? "Active workspace"
+                                    : "Click to switch"}
                               </div>
                             </div>
                           )}
@@ -1832,18 +1937,16 @@ const Sidebar = memo(function Sidebar({
         <div
           onMouseDown={startResizing}
           onDoubleClick={resetSidebarWidth}
-          className={`absolute top-0 -right-1 bottom-0 w-3 z-50 cursor-col-resize group/resizer flex items-center justify-center select-none transition-colors ${
-            isResizing ? "bg-transparent" : "hover:bg-black/5 dark:hover:bg-white/5"
-          }`}
+          className={`absolute top-0 -right-1 bottom-0 w-3 z-50 cursor-col-resize group/resizer flex items-center justify-center select-none transition-colors ${isResizing ? "bg-transparent" : "hover:bg-black/5 dark:hover:bg-white/5"
+            }`}
           title="Drag to resize sidebar · Double-click to reset (260px)"
         >
           {/* Subtle grab bar line that lights up on hover/drag */}
           <div
-            className={`h-12 w-1 rounded-full transition-all duration-150 ${
-              isResizing
-                ? "bg-[var(--accent)] scale-y-125 shadow-[0_0_10px_var(--accent)] opacity-100"
-                : "bg-black/15 dark:bg-white/20 opacity-0 group-hover/resizer:opacity-100 group-hover/resizer:bg-[var(--accent)]"
-            }`}
+            className={`h-12 w-1 rounded-full transition-all duration-150 ${isResizing
+              ? "bg-[var(--accent)] scale-y-125 shadow-[0_0_10px_var(--accent)] opacity-100"
+              : "bg-black/15 dark:bg-white/20 opacity-0 group-hover/resizer:opacity-100 group-hover/resizer:bg-[var(--accent)]"
+              }`}
           />
         </div>
       )}

@@ -39,6 +39,11 @@
        bundling — tsc here is used for type-checking only, not emitting. */
     "noEmit": true,
     "skipLibCheck": true,
+    /* Deno edge functions REQUIRE explicit ".ts" extensions on relative
+       imports; allow them in tsc too (safe: noEmit is on). Without this,
+       any src/test that imports the real supabase/* implementation for
+       integration testing fails the gate with TS5097. */
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 

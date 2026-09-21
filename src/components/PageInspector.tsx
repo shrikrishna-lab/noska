@@ -1004,6 +1004,7 @@ function getCollabUser(): { id: string; name: string; avatar?: string } {
 export default function PageInspector({
   page, pages, pageId, activeId,
   onPatchPage, onSelect, onAskAI, onRestoreVersion, onToast, notificationCommentId = undefined,
+  locked = false,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [versions, setVersions] = useState([]);
@@ -1048,7 +1049,7 @@ export default function PageInspector({
         {activeTab === 'activity' && <ActivityTab page={page} pageId={pageId} />}
         {activeTab === 'collaboration' && (() => {
           const user = getCollabUser();
-          return <CollabPanel pageId={pageId} userId={user.id} userName={user.name} userAvatar={user.avatar} notificationCommentId={notificationCommentId} />;
+          return <CollabPanel pageId={pageId} userId={user.id} userName={user.name} userAvatar={user.avatar} notificationCommentId={notificationCommentId} locked={locked} />;
         })()}
         {activeTab === 'versions' && <VersionsTab page={page} pageId={pageId} onRestoreVersion={onRestoreVersion} />}
         {activeTab === 'audit' && <AuditTab pageId={pageId} />}

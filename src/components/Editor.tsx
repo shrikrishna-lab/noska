@@ -345,6 +345,9 @@ interface EditorProps {
   onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
   onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
   onTrashPage?: (pageId: string) => void;
+  /** Locked (over-limit) workspaces render fully read-only: no typing,
+   * drag, toolbars, or AI actions — import/export happen outside the editor. */
+  forceReadOnly?: boolean;
 }
 
 interface EditorCallbackContext {
@@ -402,6 +405,7 @@ const EditorBlockList = memo(function EditorBlockList({
   pageComments, handleAddComment, handleResolveComment,
   onAskAI, onFocusBlock, ghostWriterEnabled, apiKey, aiProvider, nvidiaKey,
   onToast, onUpdatePage, onPagePatch, onCreateSubpage, onNavigate,
+  forceReadOnly = false,
 }: {
   renderedBlocks: EditorBlock[];
   page: Page;
@@ -428,6 +432,7 @@ const EditorBlockList = memo(function EditorBlockList({
   onPagePatch?: (patch: Record<string, unknown>) => void;
   onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
   onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
+  forceReadOnly?: boolean;
 }) {
   const refs = useMemo(() => createBlockRefs(blockCtx), [blockCtx]);
 
@@ -495,7 +500,8 @@ export default function Editor({
   onUpdatePage,
   onNavigate,
   onCreateSubpage,
-  onTrashPage
+  onTrashPage,
+  forceReadOnly = false
 }: EditorProps) {
   const titleRef = useRef(null);
   const editorContainerRef = useRef(null);
@@ -631,7 +637,7 @@ export default function Editor({
   const flatBlockMap = React.useMemo(() => Object.fromEntries(renderedBlocks.map(b => [b.id, b])), [renderedBlocks]);
 
   const permission = React.useMemo(() => getPagePermission(page, pages), [page, pages]);
-  const isEditable = !page.isLocked && permission === 'edit';
+  const isEditable = !forceReadOnly && !page.isLocked && permission === 'edit';
   // Privacy gate: presence UI/telemetry only for shared ("public") pages.
   // A page nobody's been invited to is private — no online list, cursors,
   // or typing indicators for anyone.
@@ -784,7 +790,7 @@ export default function Editor({
 
   const handleMouseUp = () => {
     const sel = window.getSelection();
-    if (!sel || page.isLocked) return;
+    if (!sel || page.isLocked || forceReadOnly) return;
     const text = sel.toString().trim();
     if (text.length > 0 && editorContainerRef.current) {
       const range = sel.getRangeAt(0);
@@ -958,7 +964,8 @@ export default function Editor({
         } ${page.smallText ? "noska-small-text text-xs" : ""
         }`}
         onClick={(e) => {
-          if (!page.isLocked && (page.blocks || []).length > 0 && e.target === e.currentTarget) {
+          if (!(page.isLocked || forceReadOnly) && (page.blocks || []).length > 0 && e.target === 
+e.currentTarget) {
             const lastBlock = page.blocks[page.blocks.length - 1];
             onBlocks(insertBlockAfterTree(page.blocks || [], lastBlock.id, blockFor("text", "")));
           }
@@ -966,12 +973,12 @@ export default function Editor({
       >
         <div className="mb-2 flex items-center justify-between gap-2 relative min-h-[32px]">
           <div className="flex items-center gap-2">
-            {page.isLocked && (
+            {(page.isLocked || forceReadOnly) && (
               <span className="flex items-center gap-1 rounded bg-[var(--danger)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--danger)]">
                 🔒 Locked
               </span>
             )}
-            {permission === 'view' && !page.isLocked && (
+            {permission === 'view' && !page.isLocked && !forceReadOnly && (
               <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">
                 👁 View only
               </span>
@@ -1359,7 +1366,7 @@ export default function Editor({
 
           {/* Page title row with drag handle and free movement */}
           <motion.div
-            drag={isEditable && !page.isLocked}
+            drag={isEditable && !(page.isLocked || forceReadOnly)}
             dragControls={titleDragControls}
             dragListener={false}
             dragMomentum={false}
@@ -1375,7 +1382,7 @@ export default function Editor({
             }}
             className="group/title relative flex items-start gap-1"
           >
-            {!page.isLocked && (
+            {!(page.isLocked || forceReadOnly) && (
               <div className="block-tools flex w-12 shrink-0 items-start justify-end gap-0.5 pt-2 transition z-20 opacity-0 group-hover/title:opacity-100">
                 {isEditable && (
                   <>
@@ -1385,7 +1392,7 @@ export default function Editor({
                       draggable="false"
                       title="Drag to freely reposition title"
                       onPointerDown={(e) => {
-                        if (isEditable && !page.isLocked) {
+                        if (isEditable && !(page.isLocked || forceReadOnly)) {
                           titleDragControls.start(e);
                         }
                       }}
@@ -1441,7 +1448,7 @@ export default function Editor({
             <input
               ref={titleRef}
               value={page.title}
-              readOnly={page.isLocked}
+              readOnly={page.isLocked || forceReadOnly}
               onChange={(e) => onPagePatch({ title: e.target.value })}
               style={{
                 fontSize: `${page.titleSize || 40}px`,
@@ -1506,7 +1513,8 @@ export default function Editor({
             )}
           </motion.div>
         </div>
-        {(page.blocks || []).length === 0 && <EmptyState onAdd={() => onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked} />}
+        {(page.blocks || []).length === 0 && <EmptyState onAdd={() => 
+onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked || forceReadOnly} />}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(e.active.id)} onDragEnd={handleDragEnd}>
           <SortableContext items={flatBlockIds} strategy={verticalListSortingStrategy}>
             <div
@@ -1552,6 +1560,7 @@ export default function Editor({
                 onPagePatch={onPagePatch}
                 onCreateSubpage={onCreateSubpage}
                 onNavigate={onNavigate}
+                forceReadOnly={forceReadOnly}
               />
             </div>
           </SortableContext>
@@ -1651,7 +1660,7 @@ export default function Editor({
       </div>
 
       {/* Unified Global Floating Format & Expandable AI Skills Toolbar */}
-      {selection.text && !page.isLocked && (
+      {selection.text && !(page.isLocked || forceReadOnly) && (
         <FloatingFormatToolbar
           selection={selection}
           onClose={() => setSelection({ text: "", rect: null, blockId: null })}
@@ -1965,6 +1974,7 @@ interface BlockProps {
   handleResolveComment: (commentId: string) => void;
   isSelected: boolean;
   onSelectBlock: (e: React.PointerEvent) => void;
+  forceReadOnly?: boolean;
 }
 
 const Block = memo(function Block({
@@ -2000,7 +2010,8 @@ const Block = memo(function Block({
   handleAddComment,
   handleResolveComment,
   isSelected,
-  onSelectBlock
+  onSelectBlock,
+  forceReadOnly = false
 }: BlockProps) {
   interface CaretRectLike { top: number; bottom: number; left: number; }
   const [slashOpen, setSlashOpen] = useState(false);
@@ -2044,7 +2055,7 @@ const Block = memo(function Block({
   const { suggestion, accept, dismiss } = useGhostWriter({
     blockText: block.text,
     contextBefore: index > 0 ? pages.find(p => p.blocks?.some(b => b.id === block.id))?.blocks?.slice(0, index).map(b => b.text).join("\n") || "" : "",
-    enabled: isFocused && ghostWriterEnabled && !page.isLocked,
+            enabled: isFocused && ghostWriterEnabled && !(page.isLocked || forceReadOnly),
     apiKey,
     aiProvider,
     nvidiaKey

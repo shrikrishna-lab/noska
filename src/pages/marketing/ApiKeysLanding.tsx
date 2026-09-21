@@ -291,7 +291,7 @@ export default function ApiKeysLanding() {
       <section className="api-cta">
         <Reveal blur>
           <h2>Create your first key.</h2>
-          <p>Settings → Developer → API Keys. Shown once. Scoped forever.</p>
+          <p>Settings → Developer → API Keys. Shown once. Scoped forever. Fresh keys come with a one-click Claude MCP config — and the Connect AI Clients panel copies ready-made setups for ChatGPT, Cursor, VS Code and agents.</p>
           <div className="api-cta-row">
             <Link to="/docs" className="api-btn solid">Open the docs <ArrowRight size={15} /></Link>
             <Link to="/mcp" className="api-btn ghost">Or let Claude do it → MCP</Link>
