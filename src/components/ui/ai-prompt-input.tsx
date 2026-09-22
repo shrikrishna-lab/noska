@@ -44,6 +44,7 @@ import { aiManager } from "../../ai/AIManager"
 import { getAllProviders } from "../../ai/providers"
 import { modelCatalogService, KNOWN_DEPRECATIONS, type ModelDeprecationInfo } from "../../ai/ModelCatalogService"
 import { modelRegistry } from "../../ai/models/ModelRegistry"
+import { modelCatalogSyncService } from "../../ai/models/ModelCatalogSyncService"
 import { formatDefaultDisplayName } from "../../ai/models/ModelMetadataOverrides"
 import { VoiceInput } from "./voice-input"
 import { globalVoiceController } from "../../lib/voice/voice-controller"
@@ -1426,16 +1427,30 @@ function ModelSelectorDefaultItems() {
                     <XIcon size={10} />
                   </button>
                 )}
-                {/* Real-time Live Catalog Sync Button */}
+                {/* Unified Live Catalog Sync — refreshes OpenRouter live feed,
+                    ModelRegistry (AI Workspace lists), and Settings sync snapshots */}
                 <button
                   type="button"
                   onClick={async () => {
                     setIsRefreshing(true)
-                    await modelCatalogService.fetchRealtimeCatalog(true)
-                    setIsRefreshing(false)
+                    try {
+                      const cfg = aiManager.getConfig()
+                      const keyed = getAllProviders()
+                        .filter((p) => Boolean(cfg.providers?.[p.id]?.apiKey?.trim()))
+                        .map((p) => p.id)
+                      const open = ["openrouter", "opencode_zen", "ollama", "lmstudio"]
+                      const targets = Array.from(new Set([...keyed, ...open]))
+                      await Promise.allSettled([
+                        modelCatalogService.fetchRealtimeCatalog(true),
+                        modelRegistry.refreshAll(cfg.providers as any),
+                        modelCatalogSyncService.syncAllConfigured(cfg.providers as any, targets),
+                      ])
+                    } finally {
+                      setIsRefreshing(false)
+                    }
                   }}
                   className="p-1 rounded-md text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-[#232328] transition cursor-pointer"
-                  title="Refresh live real-time models & sunset announcements across all providers"
+                  title="Sync live models across all providers (OpenRouter, Zen, NVIDIA, local…)"
                 >
                   <RotateCw size={11} className={cn(isRefreshing && "animate-spin text-purple-500")} />
                 </button>

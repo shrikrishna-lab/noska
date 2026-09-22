@@ -53,8 +53,7 @@ export class NvidiaAdapter extends BaseProviderAdapter {
       models = fallbackList.map((m) => this.normalizeModel(m)!);
     }
 
-    // Per requirement: cap NVIDIA to at most 3 curated models
-    return models.slice(0, 3);
+    return models;
   }
 
   normalizeModel(raw: any): NormalizedModel | null {

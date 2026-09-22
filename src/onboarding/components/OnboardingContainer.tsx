@@ -17,9 +17,10 @@ const TeamSizeStep = lazy(() => import("./steps/TeamSizeStep"));
 const RoleStep = lazy(() => import("./steps/RoleStep"));
 const InviteStep = lazy(() => import("./steps/InviteStep"));
 const OnboardingTemplateStep = lazy(() => import("./steps/OnboardingTemplateStep"));
+const ImportStep = lazy(() => import("./steps/ImportStep"));
 const DoneStep = lazy(() => import("./steps/DoneStep"));
 
-const stepMap = [WelcomeStep, UsernameStep, WorkspaceStep, TeamSizeStep, RoleStep, InviteStep, OnboardingTemplateStep, DoneStep];
+const stepMap = [WelcomeStep, UsernameStep, WorkspaceStep, TeamSizeStep, RoleStep, InviteStep, OnboardingTemplateStep, ImportStep, DoneStep];
 
 interface OnboardingInnerProps {
   overlay?: boolean;

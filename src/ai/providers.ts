@@ -21,6 +21,7 @@ import {
 } from './core/AIError.js';
 import {
   parseOpenAIStream,
+  parseOpenAIResponsesStream,
   parseAnthropicStream,
   parseGeminiStream,
   parseOllamaStream,
@@ -316,6 +317,104 @@ export function extractGeminiToolCalls(data: any): string {
     .filter((p: any) => p?.functionCall)
     .map((p: any) => toolMarker(String(p.functionCall.name || ""), JSON.stringify(p.functionCall.args ?? {})))
     .join("");
+}
+
+// ─── OpenCode Zen Protocol Routing ─────────────────────────────────────────
+//
+// Zen multiplexes several wire protocols on one base URL. Per the official
+// docs (https://opencode.ai/docs/zen/), model families map as:
+//   claude-*, qwen*  → POST /messages   (Anthropic Messages protocol)
+//   gpt-*, grok-*, muse-* → POST /responses (OpenAI Responses protocol)
+//   everything else (deepseek, minimax, glm, kimi, big-pickle, free
+//   models like mimo/ling/nemotron) → POST /chat/completions
+// Sending a Responses-family model to /chat/completions gets a 401
+// ("Model ... is not supported") that our error classifier then misreports
+// as an invalid API key — see GitHub anomalyco/opencode#46169.
+
+export type ZenProtocol = "anthropic_messages" | "responses" | "openai_chat";
+
+export function resolveZenProtocol(modelId: string): ZenProtocol {
+  const id = modelId.toLowerCase();
+  if (id.startsWith("claude-") || id.startsWith("qwen")) return "anthropic_messages";
+  if (id.startsWith("gpt-") || id.startsWith("grok-") || id.startsWith("muse-")) return "responses";
+  return "openai_chat";
+}
+
+export function resolveZenEndpoint(baseUrl: string, modelId: string): string {
+  const url = (baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
+  switch (resolveZenProtocol(modelId)) {
+    case "anthropic_messages": return `${url}/messages`;
+    case "responses": return `${url}/responses`;
+    default: return `${url}/chat/completions`;
+  }
+}
+
+/** Responses-API tool shape: flat {type:"function", name, ...}, not nested under `function`. */
+export function zenResponsesToolsPayload(tools?: NativeToolSpec[]): Record<string, any> | null {
+  if (!tools?.length) return null;
+  return {
+    tools: tools.map((t) => ({
+      type: "function",
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    })),
+  };
+}
+
+/** Build the JSON body for a Zen /responses (non-stream) request. */
+export function buildZenResponsesBody(opts: {
+  modelId: string;
+  system?: string;
+  messages: AIMessage[];
+  maxTokens: number;
+  temperature?: number;
+  tools?: NativeToolSpec[];
+  stream?: boolean;
+}): Record<string, any> {
+  return {
+    model: opts.modelId,
+    ...(opts.system ? { instructions: opts.system } : {}),
+    input: opts.messages.map((m) => ({ role: m.role, content: m.content })),
+    max_output_tokens: opts.maxTokens,
+    ...(typeof opts.temperature === "number" ? { temperature: opts.temperature } : {}),
+    ...(opts.stream ? { stream: true } : {}),
+    ...zenResponsesToolsPayload(opts.tools),
+  };
+}
+
+/** Extract text + tool-call markers from a non-stream Responses API body. */
+export function extractZenResponsesText(data: any): string {
+  const output = data?.output;
+  if (!Array.isArray(output)) return "";
+  let text = "";
+  let markers = "";
+  for (const item of output) {
+    if (item?.type === "message") {
+      for (const part of item.content || []) {
+        if (part?.type === "output_text") text += part.text || "";
+      }
+    } else if (item?.type === "function_call") {
+      const args =
+        typeof item.arguments === "string" && item.arguments.trim()
+          ? item.arguments
+          : JSON.stringify(item.arguments ?? {});
+      markers += toolMarker(String(item.name || ""), args);
+    }
+  }
+  return text + markers;
+}
+
+export function extractZenResponsesUsage(data: any): TokenUsageInfo {
+  const u = data?.usage;
+  if (!u) return {};
+  const total =
+    typeof u.total_tokens === "number"
+      ? u.total_tokens
+      : typeof u.input_tokens === "number" && typeof u.output_tokens === "number"
+        ? u.input_tokens + u.output_tokens
+        : undefined;
+  return { promptTokens: u.input_tokens, completionTokens: u.output_tokens, totalTokens: total };
 }
 
 // ─── Provider Definitions ───────────────────────────────────────────────────
@@ -1122,6 +1221,11 @@ const PROVIDERS: Record<string, AIProvider> = {
     keyPlaceholder: "sk-...",
     models: [
       { id: "nemotron-3.5-lightning-free", name: "Nemotron 3.5 Lightning [Free ⚡]", context: 131072 },
+      { id: "mimo-v2.6-flash-free", name: "MiMo V2.6 Flash [Free]", context: 131072 },
+      { id: "muse-spark-1.3-contributor-free", name: "Muse Spark 1.3 Contributor [Free]", context: 200000 },
+      { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash [Free]", context: 163840 },
+      { id: "mimo-v2.5-free", name: "MiMo V2.5 [Free]", context: 131072 },
+      { id: "big-pickle", name: "Big Pickle [Free]", context: 131072 },
       { id: "claude-sonnet-5", name: "Claude Sonnet 5 (Zen)", context: 200000 },
       { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Zen)", context: 200000 }
     ],
@@ -1137,8 +1241,10 @@ const PROVIDERS: Record<string, AIProvider> = {
         });
       }
       try {
-        const isAnthropic = modelId.toLowerCase().startsWith("claude-");
-        const endpoint = isAnthropic ? `${url}/messages` : `${url}/chat/completions`;
+        const protocol = resolveZenProtocol(modelId);
+        const endpoint = resolveZenEndpoint(url, modelId);
+        const isAnthropic = protocol === "anthropic_messages";
+        const isResponses = protocol === "responses";
 
         const headers: Record<string, string> = {
           "Content-Type": "application/json"
@@ -1159,16 +1265,25 @@ const PROVIDERS: Record<string, AIProvider> = {
             ...(system ? { system } : {}),
             messages: messages.map(m => ({ role: m.role, content: m.content }))
           })
-          : JSON.stringify({
-            ...openAiToolsPayload(tools),
-            model: modelId,
-            max_tokens: maxTokens,
-            temperature: resolveTemperature(temperature, effort),
-            messages: [
-              ...(system ? [{ role: "system", content: system }] : []),
-              ...messages
-            ]
-          });
+          : isResponses
+            ? JSON.stringify(buildZenResponsesBody({
+              modelId,
+              system,
+              messages,
+              maxTokens,
+              temperature: resolveTemperature(temperature, effort),
+              tools,
+            }))
+            : JSON.stringify({
+              ...openAiToolsPayload(tools),
+              model: modelId,
+              max_tokens: maxTokens,
+              temperature: resolveTemperature(temperature, effort),
+              messages: [
+                ...(system ? [{ role: "system", content: system }] : []),
+                ...messages
+              ]
+            });
 
         const res = await fetchWithTimeout(endpoint, {
           method: "POST",
@@ -1181,6 +1296,10 @@ const PROVIDERS: Record<string, AIProvider> = {
         if (isAnthropic) {
           onUsage?.(extractAnthropicUsage(data));
           return (data.content?.[0]?.text || "") + extractAnthropicToolCalls(data);
+        }
+        if (isResponses) {
+          onUsage?.(extractZenResponsesUsage(data));
+          return extractZenResponsesText(data);
         }
         const choice = data.choices?.[0];
         onUsage?.(extractOpenAiUsage(data));
@@ -1201,8 +1320,10 @@ const PROVIDERS: Record<string, AIProvider> = {
         });
       }
       try {
-        const isAnthropic = modelId.toLowerCase().startsWith("claude-");
-        const endpoint = isAnthropic ? `${url}/messages` : `${url}/chat/completions`;
+        const protocol = resolveZenProtocol(modelId);
+        const endpoint = resolveZenEndpoint(url, modelId);
+        const isAnthropic = protocol === "anthropic_messages";
+        const isResponses = protocol === "responses";
 
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -1225,16 +1346,26 @@ const PROVIDERS: Record<string, AIProvider> = {
             ...(system ? { system } : {}),
             messages: messages.map(m => ({ role: m.role, content: m.content }))
           })
-          : JSON.stringify({
-            model: modelId,
-            max_tokens: maxTokens,
-            temperature: resolveTemperature(temperature, effort),
-            stream: true, ...openAiToolsPayload(tools),
-            messages: [
-              ...(system ? [{ role: "system", content: system }] : []),
-              ...messages
-            ]
-          });
+          : isResponses
+            ? JSON.stringify(buildZenResponsesBody({
+              modelId,
+              system,
+              messages,
+              maxTokens,
+              temperature: resolveTemperature(temperature, effort),
+              tools,
+              stream: true,
+            }))
+            : JSON.stringify({
+              model: modelId,
+              max_tokens: maxTokens,
+              temperature: resolveTemperature(temperature, effort),
+              stream: true, ...openAiToolsPayload(tools),
+              messages: [
+                ...(system ? [{ role: "system", content: system }] : []),
+                ...messages
+              ]
+            });
 
         const res = await fetchWithTimeout(endpoint, {
           method: "POST",
@@ -1245,6 +1376,8 @@ const PROVIDERS: Record<string, AIProvider> = {
         await checkResponse(res, "OpenCode Zen", modelId);
         if (isAnthropic) {
           yield* streamEventsToTextWithTools(parseAnthropicStream(res, signal));
+        } else if (isResponses) {
+          yield* streamEventsToTextWithTools(parseOpenAIResponsesStream(res, signal));
         } else {
           yield* streamEventsToTextWithTools(parseOpenAIStream(res, signal));
         }
@@ -1544,7 +1677,10 @@ export function registerDynamicProviderModels(providerId: string, models: AIMode
   if (target) {
     target.models = models;
     if (!models.some(m => m.id === target.defaultModel)) {
-      target.defaultModel = models[0].id;
+      // Prefer a free model when the previous default disappears, so a full
+      // catalog sync never silently switches users onto a paid default.
+      const free = models.find(m => /-free$/i.test(m.id) || /\[free/i.test(m.name || ""));
+      target.defaultModel = (free || models[0]).id;
     }
   }
 }

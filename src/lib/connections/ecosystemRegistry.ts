@@ -27,8 +27,8 @@ export const ECOSYSTEM_CONNECTORS: EcosystemConnectorDefinition[] = [
   {
     id: "google-workspace",
     slug: "google-workspace",
-    // The gateway catalog exposes Google as two separate OAuth apps.
-    gatewaySlugs: ["gmail", "google-calendar"],
+    // The gateway catalog exposes Google as separate OAuth apps.
+    gatewaySlugs: ["gmail", "google-calendar", "google-drive", "google-sheets"],
     name: "Google Workspace",
     description: "Connect your entire Google Workspace suite to read emails, manage cloud documents, schedule events, and sync spreadsheets.",
     tagline: "Gmail · Drive · Calendar · Docs · Sheets",
@@ -222,6 +222,9 @@ export const ECOSYSTEM_CONNECTORS: EcosystemConnectorDefinition[] = [
   {
     id: "atlassian",
     slug: "atlassian",
+    // Jira + Confluence share the Atlassian Rovo MCP server, exposed as
+    // two gateway rows — either one makes this ecosystem connectable.
+    gatewaySlugs: ["jira", "confluence"],
     name: "Atlassian",
     description: "Link Jira project issues, sprint boards, velocity metrics, and Confluence documentation spaces.",
     tagline: "Jira · Confluence",
@@ -727,38 +730,6 @@ export const ECOSYSTEM_CONNECTORS: EcosystemConnectorDefinition[] = [
     ],
   },
 
-  // ── 16. Supabase ─────────────────────────────────────────────────
-  {
-    id: "supabase",
-    slug: "supabase",
-    name: "Supabase",
-    description: "Postgres database querying, table schemas, Auth user administration, and Edge Functions.",
-    tagline: "Database SQL · Auth · Storage · Edge Functions",
-    category: "Data",
-    secondaryCategories: ["Development"],
-    icon: "supabase",
-    brandColor: "#3ECF8E",
-    authModes: ["token", "oauth"],
-    defaultScopes: [],
-    websiteUrl: "https://supabase.com",
-    docsUrl: "https://supabase.com/docs",
-    services: [
-      {
-        id: "database",
-        name: "Postgres Database",
-        description: "Execute SQL queries, inspect table schemas, and manage indexes.",
-        icon: "supabase",
-        defaultEnabled: true,
-        requiredScopes: [],
-        permissions: [
-          { id: "read", label: "Query database tables", description: "Run read-only SQL queries via Noska AI", type: "read" },
-        ],
-        resourceTypes: [{ id: "project", name: "Database Project", pluralName: "Projects", icon: "database" }],
-        toolNames: ["supabase.querySql", "supabase.listTables"],
-      },
-    ],
-  },
-
   // ── 17. Airtable ─────────────────────────────────────────────────
   {
     id: "airtable",
@@ -917,37 +888,6 @@ export const ECOSYSTEM_CONNECTORS: EcosystemConnectorDefinition[] = [
     ],
   },
 
-  // ── 22. Stripe ───────────────────────────────────────────────────
-  {
-    id: "stripe",
-    slug: "stripe",
-    name: "Stripe",
-    description: "Payment transactions, customer subscriptions, invoice lifecycles, and revenue analytics.",
-    tagline: "Payments · Subscriptions · Invoices · Customers",
-    category: "Data",
-    icon: "stripe",
-    brandColor: "#635BFF",
-    authModes: ["token", "oauth"],
-    defaultScopes: ["read_only"],
-    websiteUrl: "https://stripe.com",
-    docsUrl: "https://stripe.com/docs/api",
-    services: [
-      {
-        id: "billing",
-        name: "Billing & Payments",
-        description: "Search customer subscription states and invoice balances.",
-        icon: "stripe",
-        defaultEnabled: true,
-        requiredScopes: ["read_only"],
-        permissions: [
-          { id: "read", label: "Read payment analytics", description: "Inspect subscription plans and customer records", type: "read" },
-        ],
-        resourceTypes: [{ id: "account", name: "Stripe Account", pluralName: "Accounts", icon: "credit-card" }],
-        toolNames: ["stripe.searchCustomers", "stripe.getSubscription", "stripe.listInvoices"],
-      },
-    ],
-  },
-
   // ── 23. Shopify ──────────────────────────────────────────────────
   {
     id: "shopify",
@@ -975,37 +915,6 @@ export const ECOSYSTEM_CONNECTORS: EcosystemConnectorDefinition[] = [
         ],
         resourceTypes: [{ id: "store", name: "Store", pluralName: "Stores", icon: "shopping-bag" }],
         toolNames: ["shopify.listOrders", "shopify.getProducts"],
-      },
-    ],
-  },
-
-  // ── 24. Zapier ───────────────────────────────────────────────────
-  {
-    id: "zapier",
-    slug: "zapier",
-    name: "Zapier",
-    description: "Trigger multi-app Zaps and run natural language AI actions across 6,000+ cloud tools.",
-    tagline: "Zap Triggers · NLA Actions",
-    category: "Automation",
-    icon: "zapier",
-    brandColor: "#FF4A00",
-    authModes: ["token", "oauth"],
-    defaultScopes: [],
-    websiteUrl: "https://zapier.com",
-    docsUrl: "https://platform.zapier.com",
-    services: [
-      {
-        id: "nla",
-        name: "Natural Language Actions",
-        description: "Execute third-party Zapier automation actions via AI agents.",
-        icon: "zapier",
-        defaultEnabled: true,
-        requiredScopes: [],
-        permissions: [
-          { id: "execute", label: "Execute actions", description: "Trigger configured zapier automation actions", type: "write" },
-        ],
-        resourceTypes: [{ id: "action", name: "Zapier Action", pluralName: "Actions", icon: "zap" }],
-        toolNames: ["zapier.executeAction", "zapier.listActions"],
       },
     ],
   },
@@ -1384,9 +1293,37 @@ const GATEWAY_SLUG_TO_ECOSYSTEM: ReadonlyMap<string, string> = new Map([
   ["gmail", "google-workspace"],
   ["google-calendar", "google-workspace"],
   ["google-drive", "google-workspace"],
+  ["google-sheets", "google-workspace"],
   ["notion", "notion"],
   ["github", "github"],
   ["slack", "slack"],
+  ["jira", "atlassian"],
+  ["confluence", "atlassian"],
+  ["gitlab", "gitlab"],
+  ["linear", "linear"],
+  ["figma", "figma"],
+  ["vercel", "vercel"],
+  ["sentry", "sentry"],
+  ["supabase", "supabase"],
+  ["cloudflare", "cloudflare"],
+  ["posthog", "posthog"],
+  ["stripe", "stripe"],
+  ["shopify", "shopify"],
+  ["hubspot", "hubspot"],
+  ["salesforce", "salesforce"],
+  ["intercom", "intercom"],
+  ["zendesk", "zendesk"],
+  ["zapier", "zapier"],
+  ["make", "make"],
+  ["n8n", "n8n"],
+  ["bitbucket", "bitbucket"],
+  ["clickup", "clickup"],
+  ["asana", "asana"],
+  ["discord", "discord"],
+  ["zoom", "zoom"],
+  ["dropbox", "dropbox"],
+  ["box", "box"],
+  ["airtable", "airtable"],
   ["custom-mcp", "custom-mcp"],
 ]);
 

@@ -69,14 +69,17 @@ export class OpencodeZenModelDiscovery implements ModelDiscoveryAdapter {
 
     const baseUrl = (customBaseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
 
-    // Protocol & Endpoint Mapping
+    // Protocol & Endpoint Mapping (mirrors docs/zen endpoint table):
+    //   claude-*, qwen*       → /messages   (Anthropic protocol)
+    //   gpt-*, grok-*, muse-* → /responses  (OpenAI Responses protocol)
+    //   gemini-* and the rest → /chat/completions
     let protocol: ModelWireProtocol = "openai_chat";
     let endpoint = `${baseUrl}/chat/completions`;
 
-    if (lowerId.startsWith("claude-")) {
+    if (lowerId.startsWith("claude-") || lowerId.startsWith("qwen")) {
       protocol = "anthropic_messages";
       endpoint = `${baseUrl}/messages`;
-    } else if (lowerId.includes("responses")) {
+    } else if (lowerId.startsWith("gpt-") || lowerId.startsWith("grok-") || lowerId.startsWith("muse-")) {
       protocol = "responses";
       endpoint = `${baseUrl}/responses`;
     } else if (lowerId.startsWith("gemini-")) {
@@ -191,21 +194,26 @@ export class OpencodeZenModelDiscovery implements ModelDiscoveryAdapter {
   }
 
   private getOfficialSnapshotModels(baseUrl: string): DiscoveredModel[] {
+    // Mirrors GET https://opencode.ai/zen/v1/models as of 2026-09-22.
     const rawIds = [
-      "claude-fable-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5",
+      "claude-fable-5", "claude-fable-5-1", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5",
       "claude-sonnet-5", "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4", "claude-haiku-4-5",
-      "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro", "gemini-3-flash",
-      "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano",
+      "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro", "gemini-3-flash",
+      "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano",
       "gpt-5.3-codex-spark", "gpt-5.3-codex", "gpt-5.2", "gpt-5.2-codex", "gpt-5.1", "gpt-5.1-codex-max", "gpt-5.1-codex", "gpt-5.1-codex-mini",
       "gpt-5", "gpt-5-codex", "gpt-5-nano",
-      "grok-build-0.1", "grok-4.6", "grok-4.5",
-      "muse-spark-1.2", "deepseek-v4-pro", "deepseek-v4-flash",
-      "glm-5.2", "glm-5.1", "glm-5",
+      "grok-build-0.1", "grok-4.7", "grok-4.6", "grok-4.5",
+      "muse-spark-1.3", "muse-spark-1.2",
+      "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp",
+      "glm-5.3-flash", "glm-5.3", "glm-5.2", "glm-5.1", "glm-5",
       "minimax-m3", "minimax-m2.7", "minimax-m2.5",
       "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5",
-      "qwen3.6-plus", "qwen3.5-plus", "big-pickle",
-      "deepseek-v4-flash-free", "muse-spark-1.2-contributor-free", "mimo-v2.5-free", "hy3-free",
-      "ling-3.0-flash-fin-free", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free", "laguna-s-2.1-free"
+      "qwen3.8-flash", "qwen3.6-plus", "qwen3.5-plus",
+      "jev-1.13", "big-pickle",
+      "jev-1.13-free", "deepseek-v4-flash-free",
+      "muse-spark-1.3-contributor-free", "muse-spark-1.2-contributor-free",
+      "mimo-v2.6-flash-free", "mimo-v2.5-free", "ling-3.0-flash-fin-free",
+      "nemotron-3-ultra-free", "nemotron-3.5-lightning-free"
     ];
 
     return rawIds.map(id => this.normalizeModel({ id, object: "model", owned_by: "opencode" }, baseUrl)!).filter(Boolean);

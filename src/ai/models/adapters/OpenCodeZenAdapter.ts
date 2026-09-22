@@ -1,6 +1,6 @@
 /**
  * Noska AI — OpenCode Zen Adapter
- * Curated free high-speed models (capped at 3 models per user request)
+ * Fetches the full live catalog from GET /models (public endpoint).
  */
 
 import { BaseProviderAdapter } from "./BaseAdapter";
@@ -16,41 +16,42 @@ export class OpenCodeZenAdapter extends BaseProviderAdapter {
     const apiKey = credentials.apiKey?.trim();
 
     let models: NormalizedModel[] = [];
-    if (apiKey) {
-      try {
-        const res = await this.fetchWithRetry(
-          `${baseUrl}/models`,
-          {
-            method: "GET",
-            headers: { Authorization: `Bearer ${apiKey}` },
-          },
-          { signal, timeoutMs: 5000, maxRetries: 1 }
-        );
+    // /models is a public catalog — try even without an API key so unconfigured
+    // users still see the full list (mimo, muse, etc.).
+    try {
+      const headers: Record<string, string> = {};
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+      const res = await this.fetchWithRetry(
+        `${baseUrl}/models`,
+        { method: "GET", headers },
+        { signal, timeoutMs: 8000, maxRetries: 1 }
+      );
 
-        if (res.ok) {
-          const data = await res.json();
-          const rawList = Array.isArray(data.data) ? data.data : [];
-          for (const item of rawList) {
-            const norm = this.normalizeModel(item);
-            if (norm) models.push(norm);
-          }
+      if (res.ok) {
+        const data = await res.json();
+        const rawList = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+        for (const item of rawList) {
+          const norm = this.normalizeModel(item);
+          if (norm) models.push(norm);
         }
-      } catch {
-        // Fallback to verified free models
       }
+    } catch {
+      // Fallback to verified free models below
     }
 
     if (models.length === 0) {
       const fallbackList = [
         { id: "nemotron-3.5-lightning-free", name: "Nemotron 3.5 Lightning [Free ⚡]" },
-        { id: "deepseek-r1-free", name: "DeepSeek R1 [Free ⚡]" },
-        { id: "qwen-2.5-coder-32b", name: "Qwen 2.5 Coder 32B [Free ⚡]" },
+        { id: "mimo-v2.6-flash-free", name: "MiMo V2.6 Flash [Free]" },
+        { id: "muse-spark-1.3-contributor-free", name: "Muse Spark 1.3 Contributor [Free]" },
+        { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash [Free]" },
+        { id: "mimo-v2.5-free", name: "MiMo V2.5 [Free]" },
+        { id: "big-pickle", name: "Big Pickle [Free]" },
       ];
       models = fallbackList.map((m) => this.normalizeModel(m)!);
     }
 
-    // Per requirement: cap to at most 3 models
-    return models.slice(0, 3);
+    return models;
   }
 
   normalizeModel(raw: any): NormalizedModel | null {

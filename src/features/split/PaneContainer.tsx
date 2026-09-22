@@ -50,6 +50,7 @@ interface PaneContainerProps {
   onCreateSubpage?: (parentPageId: string, afterBlockId: string, title: string) => string | null | undefined;
   onTrashPage?: (pageId: string) => void;
   onNewPage?: (template?: string) => void;
+  onImportPages?: (drafts: { title: string; icon?: string; blocks: any[]; sourceFile?: string; tags?: string[] }[]) => void;
   locked?: boolean;
   onMoveToWorkspace?: (pageId: string, workspaceId: string) => void;
 }
@@ -83,6 +84,7 @@ export default function PaneContainer({
   onCreateSubpage,
   onTrashPage,
   onNewPage,
+  onImportPages,
   locked = false,
   onMoveToWorkspace
 }: PaneContainerProps) {
@@ -361,6 +363,7 @@ export default function PaneContainer({
                     onCreateSubpage?.(activePage.id, afterBlockId, title)
                   }
                   onTrashPage={onTrashPage}
+                  onImportPages={onImportPages}
                 />
               )}
             </div>

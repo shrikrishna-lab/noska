@@ -19,6 +19,23 @@ export interface OnboardingFormData {
   teammates: OnboardingTeammate[];
   template: string;
   inviteCode: string;
+  /** Pages staged via the "Bring your notes" import step (ImportStep.tsx).
+   *  Kept in memory only — stripped before persisting to localStorage (see
+   *  OnboardingContext) since imported blocks can exceed quota. Consumed by
+   *  App.tsx's handleFinalize, which turns each entry into a real page. */
+  importedPages?: OnboardingImportedPage[];
+}
+
+/** A single page staged during onboarding import — same content as the
+ *  Import Center's ImportedPageDraft (src/features/import/importTypes.ts),
+ *  re-declared here so onboarding stays independent of the main app theme
+ *  and import UI. Blocks use the shared Block shape. */
+export interface OnboardingImportedPage {
+  title: string;
+  icon?: string;
+  blocks: import("../../types/blocks").Block[];
+  sourceFile?: string;
+  tags?: string[];
 }
 
 /** Cheap { title, icon } preview shown in LivePreviewSidebar — deliberately

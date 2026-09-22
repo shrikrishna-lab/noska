@@ -137,6 +137,11 @@ export default function AIPanel({
   const chatScroll = useChatScroll();
   const streamBuffer = useStreamBuffer();
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
+  // True while a generation is in flight — prevents the chat-sync effect from
+  // wiping the optimistic local messages (user msg + AI placeholder) when the
+  // first send flips activeChatId from null to a new id (the "first message
+  // shows nothing" bug).
+  const generatingRef = useRef(false);
   // Backwards compat: derive `loading` from activity state
   const loading = activity.isActive;
   const [activeAgent, setActiveAgent] = useState("assistant");
@@ -169,8 +174,10 @@ export default function AIPanel({
   const isConfigured = aiManager.isConfigured();
   const providers = getAllProviders();
 
-  // Sync active chat messages
+  // Sync active chat messages (skip while a stream is in flight so the
+  // first-send activeChatId flip cannot overwrite the optimistic state)
   useEffect(() => {
+    if (generatingRef.current) return;
     if (activeChatId) {
       const chat = aiChats.find((c) => c.id === activeChatId);
       if (chat?.messages?.length) {
@@ -306,6 +313,7 @@ export default function AIPanel({
         return;
       }
       setPrompt("");
+      generatingRef.current = true;
 
       const baseMsgs = customBaseMessages !== undefined ? customBaseMessages : messages;
       const userMsg: ChatPanelMessage = { role: "user", text };
@@ -393,6 +401,9 @@ export default function AIPanel({
                 text: accumulated || last.text,
                 status: 'streaming' as const,
               };
+            } else {
+              // Placeholder was wiped mid-stream — restore an AI slot so chunks stay visible.
+              next.push({ role: "ai", text: accumulated, status: 'streaming' as const });
             }
             return next;
           });
@@ -441,12 +452,24 @@ export default function AIPanel({
 
         setMessages((prev) => {
           const next = [...prev];
-          const last = { ...next[next.length - 1] };
-          last.text = responseText || last.text;
-          last.model = activeSelectedModel;
-          last.provider = providerName;
-          last.latencyMs = latencyMs;
-          next[next.length - 1] = last;
+          const last = next[next.length - 1];
+          if (last?.role === "ai") {
+            next[next.length - 1] = {
+              ...last,
+              text: responseText || last.text,
+              model: activeSelectedModel,
+              provider: providerName,
+              latencyMs,
+            };
+          } else {
+            next.push({
+              role: "ai",
+              text: responseText,
+              model: activeSelectedModel,
+              provider: providerName,
+              latencyMs,
+            });
+          }
           return next;
         });
 
@@ -496,6 +519,8 @@ export default function AIPanel({
             const last = next[next.length - 1];
             if (last?.role === "ai") {
               next[next.length - 1] = { ...last, text: cleanedFinalText };
+            } else {
+              next.push({ role: "ai", text: cleanedFinalText });
             }
             return next;
           });
@@ -575,6 +600,8 @@ export default function AIPanel({
             } else if (last?.role === "ai") {
               // Remove the placeholder if no content was generated
               next.pop();
+            } else {
+              next.push({ role: "ai", text: "Stopped.", status: 'cancelled' as const });
             }
             return next;
           });
@@ -596,6 +623,9 @@ export default function AIPanel({
           const last = next[next.length - 1];
           if (last?.role === "ai") {
             next[next.length - 1] = { ...last, text: friendly, status: 'error' as const };
+          } else {
+            // Placeholder was wiped (first-send race) — still surface the error.
+            next.push({ role: "ai", text: friendly, status: 'error' as const });
           }
           return next;
         });
@@ -603,6 +633,7 @@ export default function AIPanel({
         setExecutingTools(false);
         chatScroll.stopFollowing();
       } finally {
+        generatingRef.current = false;
         abortControllerRef.current = null;
       }
     },
@@ -1417,7 +1448,7 @@ export default function AIPanel({
               <NoskaThinkingIndicator
                 state={activity.state}
                 agentName={currentAgent.name}
-                visible={activity.isThinking || (activity.isActive && messages[messages.length - 1]?.text === "...")}
+                visible={activity.isActive}
               />
 
               {executingTools && toolResults.length > 0 && (

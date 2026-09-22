@@ -219,11 +219,12 @@ const sections: DocSection[] = [
     icon: Users,
     title: 'Workspace',
     items: [
-      { 
-        id: 'collaboration', 
+      {
+        id: 'collaboration',
         title: 'Collaboration & Teamspaces',
         children: [
           { id: 'sharing', title: 'Sharing & Permissions' },
+          { id: 'workspaces-plans-limits', title: 'Workspaces, Plans & Limits' },
           { id: 'keyboard-shortcuts', title: 'Keyboard Shortcuts Studio' },
         ]
       },
@@ -915,6 +916,45 @@ User API Key (Stored Locally)
 - **CRDT Conflict Resolution** — Microsecond-timestamped state merges guarantee zero lost paragraphs during concurrent editing.
 - **Threaded Block Comments** — Anchor discussions directly to text paragraphs, table cells, or canvas cards with \`@mentions\`.`,
   },
+  'workspaces-plans-limits': {
+    title: 'Workspaces, Plans & Limits',
+    body: `Keep completely separate bodies of work — for example \`Personal\` and \`Client Work\` — under one account. Switching workspaces changes everything you see: pages, trash, AI chats, routines, reflections, and custom calendar events.
+
+**One account, many workspaces**
+
+Limits count workspaces you **own**, per account. Workspace *members* never consume the member's own allowance — only owners do.
+
+**Plan allowances**
+
+How many workspaces each plan includes lives in your billing plan, not in this document. Your live allowance is always visible in the workspace switcher (\`used of limit · PlanName\`), in **Settings → Billing** usage meters, and on the [pricing page](/pricing). If any number below disagrees with those screens, the screens win.
+
+Paid plans generally unlock, on top of more workspaces: bigger AI credit pools, more storage, more members per workspace, and priority support — see [pricing](/pricing) for the current per-plan breakdown.
+
+**What happens at the limit**
+
+- **Creating** another workspace is blocked with a clear message and a one-tap path to Settings → Billing. The check runs twice: an instant client pre-check, and an unbypassable database backstop.
+- **Downgrading** (or a plan expiring) never deletes anything. Workspaces past the new allowance become **locked**: fully read-only with a banner and lock badges. Everything still opens, searches, and reads normally.
+- **Locked means locked**: no editing, creating, moving, trashing, restoring, sharing, inviting, commenting, renaming, or AI actions. The only things that keep working are **import and export**.
+- **Upgrading** unlocks everything instantly — locking never moves or deletes data.
+
+**Moving pages between workspaces**
+
+Page menu → **Move to workspace** moves a page *with its whole subtree*, so children never strand in the old workspace. Moving is blocked inside locked workspaces, and into locked targets. New pages land in the active workspace automatically; subpages inherit their parent; duplicates keep the source.
+
+**Members**
+
+Workspace owners can invite members by username from the members dialog in the switcher. Members can **read** the workspace's pages; editing still needs a per-page share grant. Owners can remove members, and anyone can leave. Membership changes apply immediately; in locked workspaces the dialog is read-only.
+
+**What is (and isn't) scoped per workspace**
+
+| Scoped per workspace | Global (account-wide) |
+|---|---|
+| Pages, trash, AI chats | Agents & automations (account machinery) |
+| Routines, reflections journal | Company / team spaces (separate system) |
+| Custom calendar events | Inbox reminders (shared with AI agent tools) |
+
+Pages, chats, and extras created before workspaces existed attach to the oldest workspace, so nothing ever disappears when switching.`,
+  },
   'sharing': {
     title: 'Sharing & Permissions',
     body: `Control exactly who can see and edit your content.
@@ -1100,28 +1140,31 @@ This means even if an attacker compromised the frontend code, they still couldn'
   },
   'plans': {
     title: 'Plans & Pricing',
-    body: `Noska offers plans for individuals, teams, and enterprises.
+    body: `Noska offers plans for individuals, teams, and enterprises: Free, Plus, Pro, Team, and Enterprise. Exact allowances (workspaces, AI credits, storage, members) live in each plan and are enforced automatically — your live numbers are always shown in the workspace switcher and **Settings → Billing**.
 
 **Free**
 
 - Unlimited pages and blocks
 - 33 block types
 - 7-day page history
-- 1 workspace
+- Starter workspace allowance
 - AI with your own key
 - Community support
 
-**Pro**
+**Paid plans (Plus, Pro, Team)**
 
 Everything in Free, plus:
-- Unlimited workspaces
-- Unlimited collaborators
+
+- More workspaces (per-plan allowance, visible in-app)
+- More collaborators and members
+- Bigger AI credit pools and storage
 - Full page history
 - Priority support
 
 **Enterprise**
 
 Everything in Pro, plus:
+
 - SAML/SSO
 - Audit logs
 - Custom retention policies
@@ -1129,7 +1172,7 @@ Everything in Pro, plus:
 - SLA
 - On-premise option available
 
-*Visit [noska.me/pricing](/pricing) for current pricing.*`,
+*Visit [noska.me/pricing](/pricing) for current pricing and per-plan allowances.*`,
   },
   'import-export': {
     title: 'Import & Export',

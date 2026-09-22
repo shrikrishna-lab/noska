@@ -118,6 +118,8 @@ import BacklinksPanel from "./editor/BacklinksPanel";
 import SelectionAIBar from "./editor/SelectionAIBar";
 import VersionHistoryPanel from "./editor/VersionHistoryPanel";
 import NotionAIBar from "./editor/NotionAIBar";
+import { ImportPanel } from "../features/import";
+import type { ImportedPageDraft } from "../features/import";
 import renderBlockEditor from "./editor/renderBlockEditor";
 import FloatingFormatToolbar from "./editor/FloatingFormatToolbar";
 import { ExternalUrlResolver } from "../lib/connections/urlResolver";
@@ -345,6 +347,10 @@ interface EditorProps {
   onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
   onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
   onTrashPage?: (pageId: string) => void;
+  /** Called when an import produces whole new pages (multi-file ZIP, Notion
+   *  database, "create new pages" destination). Wired by App/PaneContainer;
+   *  falls back to appending into the current page when absent (e.g. tests). */
+  onImportPages?: (drafts: ImportedPageDraft[]) => void;
   /** Locked (over-limit) workspaces render fully read-only: no typing,
    * drag, toolbars, or AI actions — import/export happen outside the editor. */
   forceReadOnly?: boolean;
@@ -502,6 +508,7 @@ export default function Editor({
   onNavigate,
   onCreateSubpage,
   onTrashPage,
+  onImportPages,
   forceReadOnly = false,
   onMoveToWorkspace
 }: EditorProps) {
@@ -575,7 +582,6 @@ export default function Editor({
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [studyGeneratorOpen, setStudyGeneratorOpen] = useState(false);
   const [moveToOpen, setMoveToOpen] = useState(false);
-  const importInputRef = useRef(null);
   const [activeCommentBlockId, setActiveCommentBlockId] = useState(null);
   const [findOpen, setFindOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -689,27 +695,30 @@ export default function Editor({
     onToast?.("Converted to wiki with Tags, Owner, Status, Verification properties and Home/All/Mine views");
   };
 
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      // readAsText below guarantees a string result, never ArrayBuffer.
-      const text = ev.target?.result as string;
-      const blocks: EditorBlock[] = [];
-      const lines = text.split("\n").filter(l => l.trim());
-      for (const line of lines) {
-        const type = line.startsWith("# ") ? "h1" : line.startsWith("## ") ? "h2" : line.startsWith("### ") ? "h3" : line.startsWith("- ") ? "bullet" : line.match(/^\d+\. /) ? "number" : line.startsWith("> ") ? "quote" : "text";
-        const content = line.replace(/^#{1,3} /, "").replace(/^- /, "").replace(/^\d+\. /, "").replace(/^> /, "");
-        blocks.push(blockFor(type, content));
-      }
-      if (blocks.length > 0) onBlocks?.(blocks);
-      onToast?.(`Imported ${blocks.length} blocks from ${file.name}`);
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-    setImportDialogOpen(false);
-  };
+  /** Import Center → current page: append or replace blocks. */
+  const handleImportAppend = useCallback((blocks: EditorBlock[], mode: "append" | "replace") => {
+    if (!blocks.length) return;
+    if (mode === "replace") onBlocks?.(blocks);
+    else onBlocks?.([...(page.blocks || []), ...blocks]);
+  }, [page.blocks, onBlocks]);
+
+  /** Import Center → brand-new pages (Notion ZIP / DB / "create new pages").
+   *  Falls back to appending when the host didn't wire onImportPages. */
+  const handleImportPages = useCallback((drafts: ImportedPageDraft[]) => {
+    if (!drafts.length) return;
+    if (onImportPages) {
+      onImportPages(drafts);
+      return;
+    }
+    const merged: EditorBlock[] = [];
+    drafts.forEach((d, i) => {
+      if (drafts.length > 1) merged.push(blockFor("h2", d.title) as EditorBlock);
+      merged.push(...(d.blocks as EditorBlock[]));
+      if (i < drafts.length - 1) merged.push(blockFor("divider") as EditorBlock);
+    });
+    onBlocks?.([...(page.blocks || []), ...merged]);
+    onToast?.(`Imported ${merged.length} blocks (page creation unavailable here)`);
+  }, [onImportPages, onBlocks, page.blocks, onToast]);
 
   // Version history data from auditEngine
   const [versionHistory, setVersionHistory] = useState([]);
@@ -1794,23 +1803,16 @@ onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked ||
         </div>
       )}
 
-      {/* Import Dialog */}
+      {/* Import Center — Notion / Notepad / files / paste */}
       {importDialogOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setImportDialogOpen(false)} />
-          <div className="relative z-10 w-[360px] rounded-xl border border-[var(--border)] bg-[var(--elevated)] shadow-2xl p-6 flex flex-col items-center gap-4">
-            <Upload size={32} className="text-[var(--muted)]" />
-            <p className="text-sm font-medium">Import Markdown</p>
-            <p className="text-[11px] text-[var(--muted)] text-center">Upload a .md file to import as blocks</p>
-            <input ref={importInputRef} type="file" accept=".md,.markdown,.txt" onChange={handleFileImport} className="hidden" />
-            <button
-              onClick={() => importInputRef.current?.click()}
-              className="rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90 transition cursor-pointer"
-            >
-              Choose File
-            </button>
-          </div>
-        </div>
+        <ImportPanel
+          open={importDialogOpen}
+          onClose={() => setImportDialogOpen(false)}
+          currentTitle={page.title || "Untitled"}
+          onAppendBlocks={handleImportAppend}
+          onImportPages={handleImportPages}
+          onToast={onToast}
+        />
       )}
 
       {/* Version History Panel */}

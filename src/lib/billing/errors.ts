@@ -26,12 +26,19 @@ const MESSAGES: Record<string, string> = {
 
 export function billingMessage(err: BillingErrorShape | { code?: string; message?: string } | unknown): string {
   if (err && typeof err === "object") {
-    const e = err as BillingErrorShape & { message?: string };
+    const e = err as BillingErrorShape & { message?: string; name?: string };
+    // Native network failures (offline, CORS, DNS, blocked requests) — never surface raw.
+    if (e.name === "TypeError" || /^failed to fetch$/i.test(e.message ?? "")) {
+      return "Couldn't reach the server. Check your connection and try again.";
+    }
     if (e.code && MESSAGES[e.code]) {
       if (e.code === "LIMIT_EXCEEDED" && typeof e.current === "number" && typeof e.limit === "number") {
         return `You've used ${e.current} of ${e.limit} allowed. Upgrade your plan or wait for the next cycle.`;
       }
       return MESSAGES[e.code];
+    }
+    if (e.code === "NOT_FOUND") {
+      return "Billing is temporarily unavailable. Please try again later.";
     }
     if (typeof e.message === "string" && e.message && !/razorpay|hmac|signature|service_role|supabase|postgres|sql/i.test(e.message)) {
       return e.message;

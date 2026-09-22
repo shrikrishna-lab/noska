@@ -142,6 +142,128 @@ export async function* parseOpenAIStream(
   }
 }
 
+// ─── OpenAI Responses SSE Parser ────────────────────────────────────────────
+
+/**
+ * Parse the OpenAI Responses API SSE stream (used by OpenCode Zen for
+ * gpt-*, grok-*, and muse-* models). Events are JSON objects with a
+ * `type` field; the `event:` line mirrors `type` but is ignored —
+ * `data.type` is authoritative.
+ */
+export async function* parseOpenAIResponsesStream(
+  response: Response,
+  signal?: AbortSignal
+): AsyncGenerator<StreamEvent> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        reader.cancel();
+        return;
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+
+        try {
+          const json = JSON.parse(payload);
+          const type = String(json.type || "");
+
+          switch (type) {
+            case "response.output_text.delta":
+              if (json.delta) {
+                yield { type: "text_delta", text: String(json.delta) };
+              }
+              break;
+
+            case "response.reasoning_text.delta":
+            case "response.reasoning_summary_text.delta": {
+              const text = json.delta ?? json.text ?? json.summary_text;
+              if (text) {
+                yield { type: "reasoning_delta", text: String(text) };
+              }
+              break;
+            }
+
+            case "response.output_item.added": {
+              const item = json.item;
+              if (item?.type === "function_call") {
+                yield {
+                  type: "tool_call_start",
+                  toolCall: {
+                    id: item.call_id || item.id,
+                    name: item.name,
+                    arguments: typeof item.arguments === "string" ? item.arguments : "",
+                  },
+                };
+              } else if (item?.type === "reasoning") {
+                // Reasoning item started — deltas follow.
+              }
+              break;
+            }
+
+            case "response.function_call_arguments.delta":
+              if (json.delta) {
+                yield {
+                  type: "tool_call_delta",
+                  toolCall: { id: json.item_id, arguments: String(json.delta) },
+                };
+              }
+              break;
+
+            case "response.completed": {
+              const u = json.response?.usage;
+              if (u) {
+                yield {
+                  type: "usage",
+                  usage: {
+                    inputTokens: u.input_tokens,
+                    outputTokens: u.output_tokens,
+                    totalTokens: u.total_tokens,
+                  },
+                };
+              }
+              yield { type: "finish", finishReason: json.response?.status || "stop" };
+              break;
+            }
+
+            case "response.failed":
+            case "error": {
+              const msg =
+                json.response?.error?.message ||
+                json.message ||
+                json.error?.message ||
+                "Responses stream error";
+              yield { type: "error", error: String(msg) };
+              break;
+            }
+          }
+        } catch {
+          // Skip malformed JSON chunks
+        }
+      }
+    }
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") return;
+    yield { type: "error", error: err instanceof Error ? err.message : "Stream read error" };
+  } finally {
+    try { reader.cancel(); } catch { /* already closed */ }
+  }
+}
+
 // ─── Anthropic SSE Parser ───────────────────────────────────────────────────
 
 /**

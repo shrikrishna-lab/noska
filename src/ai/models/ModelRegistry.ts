@@ -245,6 +245,29 @@ export class ModelRegistry {
   }
 
   /**
+   * Apply an already-fetched catalog (e.g. from Settings Sync) without a
+   * second network round-trip. Keeps Pipeline A/B in lockstep.
+   */
+  public applyDiscoveredModels(providerId: ProviderId, models: NoskaModel[]): void {
+    if (models.length === 0) return;
+    this._providerModels.set(providerId, models);
+    modelCatalogCache.set(providerId, models);
+    this._diagnostics.set(providerId, {
+      provider: providerId,
+      models,
+      fetchedCount: models.length,
+      filteredCount: models.length,
+      displayedCount: models.length,
+      newestModel: models[0]?.displayName || models[0]?.apiModelId,
+      source: "live",
+      discoveryMode: "live",
+      lastVerifiedAt: new Date().toISOString(),
+      status: "online",
+    });
+    this._notify();
+  }
+
+  /**
    * Refresh all providers using supplied config map
    */
   public async refreshAll(

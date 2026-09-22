@@ -30,7 +30,9 @@ import {
   type EndpointDoc,
 } from "./apiContract";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? "";
+import { resolvePublicSupabaseUrl } from "./mcpConnect";
+
+const SUPABASE_URL = resolvePublicSupabaseUrl(import.meta.env.VITE_SUPABASE_URL, import.meta.env.PROD);
 
 const METHOD_COLORS: Record<string, string> = {
   GET: "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/20",

@@ -454,7 +454,7 @@ export class ModelCatalogService {
 
   /**
    * Returns models for a given provider, respecting the caps:
-   * - ollama, nvidia, lmstudio, opencode_zen: capped at at most 3 models, strictly no NEW badge
+   * - ollama, nvidia, lmstudio, opencode_zen: full synced list, strictly no NEW badge
    * - openrouter: displays live synced models or base models, strictly no NEW badge
    * - direct providers: displays authentic models with at most ONE single NEW badge for the latest flagship
    */
@@ -464,9 +464,9 @@ export class ModelCatalogService {
   ): Array<{ id: string; name: string; context: number; isNew?: boolean; description?: string }> {
     const normalizedProvider = (providerId || "").toLowerCase().trim();
 
-    // 1. Hubs / Local engines capped at max 3 models, strictly NO NEW badge
+    // 1. Local engines: full list, strictly NO NEW badge
     if (["ollama", "nvidia", "lmstudio", "opencode_zen", "opencode"].includes(normalizedProvider)) {
-      return fallbackModels.slice(0, 3).map((m) => ({
+      return fallbackModels.map((m) => ({
         ...m,
         isNew: false,
       }));

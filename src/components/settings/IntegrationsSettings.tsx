@@ -30,7 +30,7 @@ import {
   EyeOff,
   Tag,
 } from "lucide-react";
-import { BrandIcon, hasBrandIcon } from "../../components/BrandIcon";
+import { BrandIcon, hasBrandIcon, normalizeBrandKey } from "../../components/BrandIcon";
 import { IntegrationRegistry } from "../../lib/connections/registry";
 import { openExternal } from "../../lib/desktop/links";
 import { ecosystemManager } from "../../lib/connections/ecosystemManager";
@@ -71,16 +71,16 @@ const CATEGORIES: EcosystemCategory[] = [
 
 // ── Authentic Brand Logo Container ──────────────────────────────
 function EcosystemLogo({ id, name, size = "md" }: { id: string; name?: string; size?: "sm" | "md" | "lg" }) {
-  const key = (id || name || "").toLowerCase().replace(/\s+/g, "-");
+  const brandKey = normalizeBrandKey(id, name);
   const sizeClasses =
     size === "sm"
       ? "h-8 w-8 rounded-xl text-xs"
       : size === "lg"
         ? "h-12 w-12 rounded-2xl text-base"
         : "h-11 w-11 rounded-2xl text-sm";
-  const iconSizeClass = size === "sm" ? "h-4 w-4" : size === "lg" ? "h-6 w-6" : "h-5 w-5";
+  const iconSizeClass = size === "sm" ? "h-4.5 w-4.5" : size === "lg" ? "h-7 w-7" : "h-6 w-6";
 
-  if (!hasBrandIcon(id, name) && !hasBrandIcon(key)) {
+  if (!hasBrandIcon(id, name)) {
     return (
       <div
         className={`grid ${sizeClasses} shrink-0 place-items-center bg-[#ede8df] text-[#1c1b18] shadow-2xs border border-[#e8e4db]`}
@@ -90,17 +90,13 @@ function EcosystemLogo({ id, name, size = "md" }: { id: string; name?: string; s
     );
   }
 
-  const tileStyle = key.includes("github")
+  const tileStyle = brandKey.includes("github")
     ? "bg-[#18181b] text-white ring-1 ring-black/10"
-    : key.includes("discord")
-      ? "bg-[#5865f2] text-white ring-1 ring-[#5865f2]/20"
-      : key.includes("figma")
-        ? "bg-[#1e1e1e] text-white ring-1 ring-black/10"
-        : key.includes("vercel")
-          ? "bg-black text-white ring-1 ring-black/10"
-          : key.includes("mcp") || key.includes("custom")
-            ? "bg-[#1c1b18] text-[#fbf9f5] ring-1 ring-black/10"
-            : "bg-white border border-[#e8e4db] text-[#1c1b18] shadow-2xs";
+    : brandKey.includes("vercel")
+      ? "bg-black text-white ring-1 ring-black/10"
+      : brandKey.includes("mcp") || brandKey.includes("custom")
+        ? "bg-[#1c1b18] text-[#fbf9f5] ring-1 ring-black/10"
+        : "bg-white border border-[#e8e4db] text-[#1c1b18] shadow-2xs";
 
   return (
     <div className={`grid ${sizeClasses} shrink-0 place-items-center ${tileStyle}`}>
@@ -623,7 +619,7 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
                                 : "bg-[#f4efe6] text-[#78716c]"
                             }`}
                           >
-                            <BrandIcon id={service.id} name={service.name} className="h-2.5 w-2.5" />
+                            <BrandIcon id={service.icon || service.id || connector.id} name={service.name || connector.name} className="h-2.5 w-2.5 shrink-0" />
                             <span>{service.name}</span>
                           </span>
                         );
@@ -725,9 +721,27 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
 
       {/* ── More Integrations (registry: defined, connectable soon) ─ */}
       {(() => {
-        const catalogSlugs = new Set(connectors.map((c) => (c.slug || c.id || "").toLowerCase()));
+        // Everything the ecosystem list already covers — def slugs/ids plus
+        // their service ids (jira/confluence live under "atlassian") and
+        // gateway slugs (drive/sheets live under "google-workspace") — so a
+        // covered provider never ALSO renders as a "coming soon" duplicate.
+        const catalogSlugs = new Set<string>();
+        for (const c of connectors) {
+          catalogSlugs.add((c.slug || c.id || "").toLowerCase());
+          for (const s of c.services ?? []) catalogSlugs.add((s.id || "").toLowerCase());
+          for (const g of (c as { gatewaySlugs?: string[] }).gatewaySlugs ?? []) {
+            catalogSlugs.add(g.toLowerCase());
+          }
+        }
+        // A provider is only "coming soon" when NEITHER the ecosystem list
+        // (above) NOR the live gateway catalog has it — otherwise a live
+        // gateway row (e.g. sentry, vercel) would render a stale Soon badge.
         const extras = IntegrationRegistry.getAll().filter(
-          (p) => !catalogSlugs.has(p.slug.toLowerCase()) && !catalogSlugs.has(p.id.toLowerCase()),
+          (p) =>
+            !catalogSlugs.has(p.slug.toLowerCase()) &&
+            !catalogSlugs.has(p.id.toLowerCase()) &&
+            !ecosystemManager.isGatewaySlugLive(p.slug) &&
+            !ecosystemManager.isGatewaySlugLive(p.id),
         );
         if (extras.length === 0) return null;
         return (
@@ -861,7 +875,7 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
                           >
                             <div className="flex items-start gap-3">
                               <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#f4efe6] text-[#1c1b18]">
-                                <BrandIcon id={service.id} name={service.name} className="h-4 w-4" />
+                                <BrandIcon id={service.icon || service.id || selectedConnectorForManage.id} name={service.name || selectedConnectorForManage.name} className="h-4 w-4" />
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
@@ -1057,7 +1071,7 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
                         {selectedConnectorForManage.services.map((s) => (
                           <div key={s.id} className="rounded-xl bg-[#fbf9f5] p-3 border border-[#e8e4db]">
                             <div className="flex items-center gap-1.5 text-xs font-semibold text-[#1c1b18]">
-                              <BrandIcon id={s.id} name={s.name} className="h-3.5 w-3.5" />
+                              <BrandIcon id={s.icon || s.id || selectedConnectorForManage.id} name={s.name || selectedConnectorForManage.name} className="h-3.5 w-3.5" />
                               <span>{s.name}</span>
                             </div>
                             <div className="mt-2 space-y-1">

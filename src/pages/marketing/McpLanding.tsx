@@ -30,8 +30,11 @@ const TOOL_GROUPS = [
 ];
 const TOTAL_TOOLS = TOOL_GROUPS.reduce((a, t) => a + t.n, 0);
 
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "https://yxgtmzksnyarlivgxujf.supabase.co").replace(/\/$/, "");
-const MCP_ENDPOINT = `${SUPABASE_URL}/functions/v1/mcp`;
+import { resolvePublicSupabaseUrl, mcpEndpoint, oneLinkUrl, isValidKeyInput } from '../../features/api/mcpConnect';
+
+const MCP_ENDPOINT = mcpEndpoint(resolvePublicSupabaseUrl(import.meta.env.VITE_SUPABASE_URL, import.meta.env.PROD));
+const PROD_MCP_ENDPOINT = mcpEndpoint('https://yxgtmzksnyarlivgxujf.supabase.co');
+const IS_LOCAL_ENDPOINT = MCP_ENDPOINT.startsWith('http://127.0.0.1') || MCP_ENDPOINT.startsWith('http://localhost');
 
 const b64url = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
@@ -96,14 +99,19 @@ export default function McpLanding() {
   const [showKey, setShowKey] = useState(false);
   const [withKeyInUrl, setWithKeyInUrl] = useState(false);
 
-  const hasKey = keyInput.startsWith('nsk_') && keyInput.length > 10;
+  const hasKey = isValidKeyInput(keyInput);
+
+  // On a local/dev build, external clients can't open 127.0.0.1 — point them
+  // at the hosted endpoint for copy-paste while keeping local testing intact.
+  const baseEndpoint = IS_LOCAL_ENDPOINT ? PROD_MCP_ENDPOINT : MCP_ENDPOINT;
+
   const personalizedLink = useMemo(() => {
-    if (hasKey && withKeyInUrl) return `${MCP_ENDPOINT}?key=${encodeURIComponent(keyInput)}`;
-    return MCP_ENDPOINT;
-  }, [hasKey, withKeyInUrl, keyInput]);
+    if (hasKey && withKeyInUrl) return oneLinkUrl(baseEndpoint, keyInput);
+    return baseEndpoint;
+  }, [baseEndpoint, hasKey, withKeyInUrl, keyInput]);
 
   const activeClient = useMemo(() => {
-    const url = personalizedLink;
+    const url = hasKey && withKeyInUrl ? oneLinkUrl(baseEndpoint, keyInput) : baseEndpoint;
     const header = hasKey && !withKeyInUrl
       ? `"Authorization": "Bearer ${keyInput}"`
       : null;
@@ -183,7 +191,7 @@ export default function McpLanding() {
       },
     };
     return meta[client] ?? meta['claude-desktop'];
-  }, [client, personalizedLink, hasKey, withKeyInUrl, keyInput]);
+  }, [client, personalizedLink, baseEndpoint, hasKey, withKeyInUrl, keyInput]);
 
   const copyText = async (text) => {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* noop */ }

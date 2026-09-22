@@ -41,12 +41,12 @@ import type {
   ConnectedAccountInfo,
   ProviderCategory,
 } from "../../lib/connections/types";
-import { BrandIcon, hasBrandIcon } from "../../components/BrandIcon";
+import { BrandIcon, hasBrandIcon, normalizeBrandKey } from "../../components/BrandIcon";
 import { openExternal } from "../../lib/desktop/links";
 
 function ProviderIconBadge({ id, name }: { id: string; name: string; brandColor?: string }) {
-  const key = (id || name || "").toLowerCase();
-  if (!hasBrandIcon(key)) {
+  const brandKey = normalizeBrandKey(id, name);
+  if (!hasBrandIcon(id, name)) {
     return (
       <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#ede8df] text-[#1c1b18] font-bold text-xs shadow-xs border border-[#e8e4db]">
         {name ? name.slice(0, 2).toUpperCase() : "?"}
@@ -54,16 +54,16 @@ function ProviderIconBadge({ id, name }: { id: string; name: string; brandColor?
     );
   }
   // Dark/brand tiles for white-mark logos; white tile for colored marks.
-  const tile = key.includes("github")
+  const tile = brandKey.includes("github")
     ? "bg-[#18181b] text-white"
-    : key.includes("discord")
-      ? "bg-[#5865f2] text-white"
-      : key.includes("figma")
-        ? "bg-[#1e1e1e] text-white"
+    : brandKey.includes("vercel")
+      ? "bg-black text-white"
+      : brandKey.includes("mcp") || brandKey.includes("custom")
+        ? "bg-[#1c1b18] text-[#fbf9f5]"
         : "bg-white border border-[#e8e4db] text-[#1c1b18]";
   return (
     <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl shadow-xs ${tile}`}>
-      <BrandIcon id={id} name={name} className="h-5 w-5" />
+      <BrandIcon id={id} name={name} className="h-5.5 w-5.5" />
     </div>
   );
 }

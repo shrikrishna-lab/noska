@@ -1186,6 +1186,22 @@ function AppContent() {
     if (formData.template) {
       result.push(starterPageForTemplate(formData.template) as unknown as Page);
     }
+    // "Bring your notes" onboarding step: staged imports become real pages
+    // alongside the template starter. Blocks were already parsed + restamped
+    // with unique ids by ImportStep; just wrap them in full page objects.
+    if (Array.isArray(formData.importedPages)) {
+      for (const draft of formData.importedPages) {
+        if (!draft || !Array.isArray(draft.blocks) || draft.blocks.length === 0) continue;
+        const timestamp = now();
+        result.push({
+          id: uid(), title: (draft.title || "Untitled").slice(0, 120), icon: draft.icon || "📝",
+          favorite: false, trashed: false, tags: Array.isArray(draft.tags) ? draft.tags : [], parentId: null,
+          createdAt: timestamp, updatedAt: timestamp,
+          lineage: [{ action: "created" as const, timestamp, detail: draft.sourceFile ? `Imported from ${draft.sourceFile} during onboarding` : "Imported during onboarding" }],
+          blocks: draft.blocks,
+        });
+      }
+    }
     if (result.length === 0) {
       // Real bug, fixed: this fallback page never set createdAt/updatedAt
       // (same gap as onboardingService.ts's basePage()), so it hit the
@@ -3125,6 +3141,33 @@ function AppContent() {
         onCreateSubpage: createSubpageAtBlock,
         onTrashPage: handleTrashPage,
         onNewPage: (template) => addPage(template),
+        onImportPages: (drafts) => {
+          if (guardLocked()) return;
+          if (!drafts?.length) return;
+          const fresh: Page[] = drafts.map((d) => ensurePageEntity({
+            id: uid(),
+            title: (d.title || "Untitled").slice(0, 120),
+            icon: d.icon || "📝",
+            cover: null,
+            parentId: null,
+            content: [],
+            favorite: false,
+            trashed: false,
+            tags: Array.isArray(d.tags) ? d.tags : [],
+            updatedAt: now(),
+            lineage: [{
+              action: "created" as const,
+              timestamp: now(),
+              detail: d.sourceFile ? `Imported from ${d.sourceFile}` : "Imported into Noska",
+            }],
+            blocks: Array.isArray(d.blocks) && d.blocks.length ? d.blocks : [{ id: uid(), type: "text", text: "" }],
+          }) as unknown as Page);
+          for (const p of fresh) p.workspaceId = activeWorkspaceId || null;
+          commitPages(normalizePageTree([...fresh, ...pages]));
+          capture("note_created", { creation_method: "import", pages: fresh.length, blocks: fresh.reduce((n, p) => n + (p.blocks?.length || 0), 0) });
+          handlePageSelect(fresh[0].id);
+          showToast(fresh.length === 1 ? `Imported “${fresh[0].title}”` : `Imported ${fresh.length} pages`);
+        },
         locked: activeWorkspaceLocked,
         onMoveToWorkspace: movePageToWorkspace,
       },

@@ -28,11 +28,11 @@ import {
 import { listApiKeys, createApiKey, revokeApiKey, rotateApiKey, deleteApiKey, type ApiKeyRecord } from "../../lib/apiKeys";
 import { getAuthUserId } from "../../lib/supabase";
 import { SCOPES, apiBase } from "./apiContract";
-import { clientConfig, mcpEndpoint } from "./mcpConnect";
+import { clientConfig, mcpEndpoint, resolvePublicSupabaseUrl } from "./mcpConnect";
 import McpConnectPanel from "./McpConnectPanel";
 import { cn } from "../../lib/utils";
 
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "https://yxgtmzksnyarlivgxujf.supabase.co").replace(/\/$/, "");
+const SUPABASE_URL = resolvePublicSupabaseUrl(import.meta.env.VITE_SUPABASE_URL, import.meta.env.PROD);
 const API_ENDPOINT = apiBase(SUPABASE_URL);
 const MCP_ENDPOINT = mcpEndpoint(SUPABASE_URL);
 

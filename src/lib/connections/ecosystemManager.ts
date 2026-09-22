@@ -243,6 +243,27 @@ class EcosystemManagerClass {
   }
 
   /**
+   * True when the gateway catalog has a live row for this slug, regardless
+   * of which ecosystem definition (if any) it belongs to. Used by surfaces
+   * that list providers outside the ecosystem registry (e.g. the settings
+   * "More integrations" section) so a live gateway row never renders a
+   * stale "coming soon" badge.
+   */
+  public isGatewaySlugLive(slug: string): boolean {
+    const key = (slug || "").toLowerCase().trim();
+    if (!key) return false;
+    if (this.catalogLoaded && this.catalog.size > 0) {
+      for (const catalogSlug of this.catalog.keys()) {
+        if (String(catalogSlug).toLowerCase() === key) return true;
+      }
+      return false;
+    }
+    // Catalog unavailable (offline / unsigned): fall back to the static
+    // ecosystem mapping so the UI doesn't flash false states.
+    return getEcosystemConnectorByGatewaySlug(slug) !== undefined;
+  }
+
+  /**
    * Get all registered ecosystem connector definitions.
    */
   public getAllDefinitions(): EcosystemConnectorDefinition[] {

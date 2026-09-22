@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Plug,
   Copy,
@@ -7,19 +7,26 @@ import {
   ExternalLink,
   Zap,
   Loader2,
+  Globe,
+  MonitorSmartphone,
 } from "lucide-react";
 import {
   MCP_CLIENTS,
   clientConfig,
+  isLoopbackUrl,
   isValidKeyInput,
   mcpEndpoint,
   oneLinkUrl,
+  resolvePublicSupabaseUrl,
   type McpClientId,
 } from "./mcpConnect";
 import { cn } from "../../lib/utils";
 
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "https://yxgtmzksnyarlivgxujf.supabase.co").replace(/\/$/, "");
-const ENDPOINT = mcpEndpoint(SUPABASE_URL);
+const ENDPOINT = mcpEndpoint(
+  resolvePublicSupabaseUrl(import.meta.env.VITE_SUPABASE_URL, import.meta.env.PROD),
+);
+const IS_LOCAL_ENDPOINT = isLoopbackUrl(ENDPOINT);
+const PROD_ENDPOINT = mcpEndpoint("https://yxgtmzksnyarlivgxujf.supabase.co");
 
 /**
  * Settings → Developer → "Connect AI Clients (MCP)".
@@ -43,6 +50,8 @@ export default function McpConnectPanel({
   const [copied, setCopied] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
+  const copyTimer = useRef<number | null>(null);
+  const testAbort = useRef<AbortController | null>(null);
 
   // A just-revealed key fills the (empty) input exactly once per key.
   useEffect(() => {
@@ -51,73 +60,111 @@ export default function McpConnectPanel({
     }
   }, [initialKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(
+    () => () => {
+      if (copyTimer.current) window.clearTimeout(copyTimer.current);
+      testAbort.current?.abort();
+    },
+    [],
+  );
+
   const hasKey = isValidKeyInput(keyInput);
-  const displayEndpoint = useMemo(
-    () => (hasKey && withKeyInUrl ? oneLinkUrl(ENDPOINT, keyInput) : ENDPOINT),
-    [hasKey, withKeyInUrl, keyInput],
+  // One-link URL only when the user opted in AND we have a key (never leak partial input).
+  const displayEndpoint = useMemo(() => {
+    if (!hasKey || !withKeyInUrl) return ENDPOINT;
+    return oneLinkUrl(ENDPOINT, keyInput);
+  }, [hasKey, withKeyInUrl, keyInput]);
+  // Bare endpoint for network tests (strip ?key=… if present).
+  const bareEndpoint = useMemo(
+    () => displayEndpoint.replace(/\?key=.*$/, ""),
+    [displayEndpoint],
   );
   const cfg = useMemo(
     () => clientConfig(client, ENDPOINT, hasKey ? keyInput : null, withKeyInUrl),
     [client, hasKey, keyInput, withKeyInUrl],
   );
 
-  const flash = (id: string) => {
+  const flash = useCallback((id: string) => {
     setCopied(id);
-    setTimeout(() => setCopied(null), 1600);
-  };
+    if (copyTimer.current) window.clearTimeout(copyTimer.current);
+    copyTimer.current = window.setTimeout(() => setCopied(null), 1600);
+  }, []);
 
-  const copyText = async (id: string, text: string, toast?: string) => {
-    await navigator.clipboard.writeText(text).catch(() => {});
-    flash(id);
-    if (toast) onToast?.(toast);
-  };
+  const copyText = useCallback(
+    async (id: string, text: string, toast?: string) => {
+      await navigator.clipboard.writeText(text).catch(() => {});
+      flash(id);
+      if (toast) onToast?.(toast);
+    },
+    [flash, onToast],
+  );
 
-  /** Live check: initialize → tools/list with the pasted key. */
-  const testConnection = async () => {
+  /** Live check: initialize → tools/list with the pasted key. Aborts on unmount. */
+  const testConnection = useCallback(async () => {
     if (!hasKey || testing) return;
     setTesting(true);
     setTestResult(null);
-    try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${keyInput}`,
-        "MCP-Protocol-Version": "2025-06-18",
-      };
-      const init = await fetch(displayEndpoint.replace(/\?key=.*$/, ""), {
+    testAbort.current?.abort();
+    const ctrl = new AbortController();
+    testAbort.current = ctrl;
+    const post = (body: unknown) =>
+      fetch(bareEndpoint, {
         method: "POST",
-        headers,
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "initialize",
-          params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "noska-settings", version: "1" } },
-        }),
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${keyInput}`,
+          "MCP-Protocol-Version": "2025-06-18",
+        },
+        body: JSON.stringify(body),
+      });
+    try {
+      const init = await post({
+        jsonrpc: "2.0",
+        id: crypto.randomUUID(),
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "noska-settings", version: "1" },
+        },
       });
       if (init.status === 401) {
-        setTestResult({ ok: false, detail: "Key rejected (401) — check it isn't revoked or expired." });
+        setTestResult({
+          ok: false,
+          detail: "Key rejected (401) — check it isn't revoked or expired.",
+        });
         return;
       }
       const initBody = await init.json().catch(() => ({}));
       const server = initBody?.result?.serverInfo?.name;
-      const list = await fetch(displayEndpoint.replace(/\?key=.*$/, ""), {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ jsonrpc: "2.0", id: crypto.randomUUID(), method: "tools/list" }),
+      const list = await post({
+        jsonrpc: "2.0",
+        id: crypto.randomUUID(),
+        method: "tools/list",
       });
       const listBody = await list.json().catch(() => ({}));
       const n = listBody?.result?.tools?.length;
       if (server === "noska" && typeof n === "number") {
-        setTestResult({ ok: true, detail: `Connected — server "${server}", ${n} tools visible to this key.` });
+        setTestResult({
+          ok: true,
+          detail: `Connected — server "${server}", ${n} tools visible to this key.`,
+        });
         onToast?.("MCP connection verified.");
       } else {
         setTestResult({ ok: false, detail: `Unexpected response (HTTP ${list.status}).` });
       }
-    } catch {
-      setTestResult({ ok: false, detail: "Network or CORS error — is the MCP function deployed?" });
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
+      setTestResult({
+        ok: false,
+        detail: "Network or CORS error — is the MCP function deployed?",
+      });
     } finally {
+      if (testAbort.current === ctrl) testAbort.current = null;
       setTesting(false);
     }
-  };
+  }, [hasKey, testing, bareEndpoint, keyInput, onToast]);
 
   return (
     <div className="rounded-2xl bg-[#f8f6f0] dark:bg-[#181b24] border border-[#e8e4db] dark:border-white/10 p-4 shadow-sm space-y-4">
@@ -217,12 +264,28 @@ export default function McpConnectPanel({
 
       {/* Step 02 — endpoint */}
       <div className="rounded-xl bg-white dark:bg-white/5 border border-[#e8e4db] dark:border-white/10 p-3 space-y-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="grid h-5 w-5 place-items-center rounded-full bg-[#1c1b18] dark:bg-white text-white dark:text-[#1c1b18] text-[10px] font-bold">2</span>
           <span className="text-xs font-bold text-[#1c1b18] dark:text-white">Copy the endpoint</span>
           {hasKey && withKeyInUrl && (
             <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-px text-[9.5px] font-bold text-amber-700 dark:text-amber-300">one-link mode</span>
           )}
+          <span
+            className={cn(
+              "flex items-center gap-1 rounded-full border px-2 py-px text-[9.5px] font-bold",
+              IS_LOCAL_ENDPOINT
+                ? "bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                : "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300",
+            )}
+            title={
+              IS_LOCAL_ENDPOINT
+                ? "Local/dev endpoint — external AI clients cannot reach 127.0.0.1"
+                : "Hosted production endpoint — reachable from any AI client"
+            }
+          >
+            {IS_LOCAL_ENDPOINT ? <MonitorSmartphone size={10} /> : <Globe size={10} />}
+            {IS_LOCAL_ENDPOINT ? "local" : "production"}
+          </span>
         </div>
         <div className="flex items-center gap-2 rounded-xl bg-[#1c1b18] px-3 py-2.5">
           <code className="flex-1 min-w-0 truncate font-mono text-[11px] text-white select-all">{displayEndpoint}</code>
@@ -235,6 +298,23 @@ export default function McpConnectPanel({
             <span>{copied === "endpoint" ? "Copied" : "Copy link"}</span>
           </button>
         </div>
+        {IS_LOCAL_ENDPOINT && (
+          <div className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-2.5 py-1.5">
+            <ShieldAlert size={13} className="mt-px shrink-0" />
+            <span>
+              You're on a local/dev URL — Claude, ChatGPT, Cursor etc. running elsewhere can't open{" "}
+              <code className="font-mono">127.0.0.1</code>. For real clients use the production endpoint:{" "}
+              <button
+                type="button"
+                onClick={() => copyText("prod-endpoint", PROD_ENDPOINT, "Production MCP endpoint copied")}
+                className="font-mono underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-200 cursor-pointer text-left break-all"
+              >
+                {PROD_ENDPOINT}
+                {copied === "prod-endpoint" ? " ✓" : ""}
+              </button>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Step 03 — client */}
@@ -317,6 +397,17 @@ export default function McpConnectPanel({
             </span>
           )}
         </div>
+
+        {cfg.requiresOneLink && hasKey && !withKeyInUrl && (
+          <button
+            type="button"
+            onClick={() => setWithKeyInUrl(true)}
+            className="flex items-center gap-1.5 w-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 transition cursor-pointer text-left"
+          >
+            <Zap size={12} className="shrink-0" />
+            {cfg.name} needs the key in the URL — enable one-link mode
+          </button>
+        )}
 
         <p className="text-[10.5px] leading-relaxed text-[#8c887f] dark:text-white/50">
           Prefer the <code className="font-mono rounded bg-[#f8f6f0] dark:bg-white/10 px-1">Authorization</code> header where the client supports it.

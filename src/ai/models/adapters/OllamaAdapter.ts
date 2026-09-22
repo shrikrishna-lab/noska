@@ -43,8 +43,7 @@ export class OllamaAdapter extends BaseProviderAdapter {
       models = fallbackList.map((m) => this.normalizeModel(m)!);
     }
 
-    // Per requirement: cap Ollama to at most 3 models
-    return models.slice(0, 3);
+    return models;
   }
 
   normalizeModel(raw: any): NormalizedModel | null {

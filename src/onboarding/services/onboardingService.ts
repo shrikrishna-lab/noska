@@ -126,9 +126,16 @@ export function createPageTree(starterPagesArray: StarterPage[]): PageTreeNode {
  * recompute on every keystroke/selection, no ids/blocks needed for display.
  */
 export function previewPagesFor(form: OnboardingFormData): OnboardingPagePreview[] {
+  const out: OnboardingPagePreview[] = [];
   if (form.template) {
     const t = TEMPLATE_CONTENT[form.template as keyof typeof TEMPLATE_CONTENT] || TEMPLATE_CONTENT["getting-started"];
-    return [{ title: t.title, icon: t.icon }];
+    out.push({ title: t.title, icon: t.icon });
+  } else {
+    out.push({ title: "Getting Started", icon: "✦" });
   }
-  return [{ title: "Getting Started", icon: "✦" }];
+  // Pages staged in the "Bring your notes" import step show up live too.
+  for (const p of form.importedPages || []) {
+    if (p?.title) out.push({ title: p.title, icon: p.icon || "📝" });
+  }
+  return out;
 }

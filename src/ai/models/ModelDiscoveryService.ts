@@ -190,8 +190,17 @@ export class ModelDiscoveryService {
   }
 
   /**
-   * Enrich raw discovered model with override metadata, capabilities, and composite ID
+   * Enrich raw discovered model with override metadata, capabilities, and composite ID.
+   * Public so sync can normalize already-fetched catalogs without a second network request.
    */
+  public enrichModel(
+    provider: ProviderId,
+    item: DiscoveredModel,
+    source: NoskaModel["source"] = "live"
+  ): NoskaModel | null {
+    return this._enrichModel(provider, item, source);
+  }
+
   private _enrichModel(
     provider: ProviderId,
     item: DiscoveredModel,

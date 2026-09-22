@@ -32,6 +32,8 @@ export interface SplitWorkspaceRendererProps {
   onCreateSubpage?: (parentPageId: string, afterBlockId: string, title: string) => string | null | undefined;
   onTrashPage?: (pageId: string) => void;
   onNewPage?: (template?: string) => void;
+  /** Import Center → create whole new pages (multi-file / Notion DB). */
+  onImportPages?: (drafts: { title: string; icon?: string; blocks: any[]; sourceFile?: string; tags?: string[] }[]) => void;
   /** Locked (over-limit) workspace: editors render read-only, mutations stay blocked upstream. */
   locked?: boolean;
   onMoveToWorkspace?: (pageId: string, workspaceId: string) => void;

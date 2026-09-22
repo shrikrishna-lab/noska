@@ -20,6 +20,10 @@ export const CONNECTOR_CATALOG: CatalogConnector[] = [
   { id: "discord", name: "Discord", category: "Communication", dashboardUrl: "https://discord.com/developers/applications" },
   { id: "figma", name: "Figma", category: "Design", dashboardUrl: "https://www.figma.com/settings" },
   { id: "google-drive", name: "Google Drive", category: "File Management", dashboardUrl: "https://console.cloud.google.com/apis/credentials" },
+  { id: "google-sheets", name: "Google Sheets", category: "File Management", dashboardUrl: "https://console.cloud.google.com/apis/credentials" },
   { id: "dropbox", name: "Dropbox", category: "File Management", dashboardUrl: "https://www.dropbox.com/developers/apps" },
   { id: "zendesk", name: "Zendesk", category: "Productivity", dashboardUrl: "https://www.zendesk.com/developer/apps/" },
+  { id: "confluence", name: "Confluence", category: "Productivity", dashboardUrl: "https://id.atlassian.com/manage-profile/apps" },
+  { id: "vercel", name: "Vercel", category: "Engineering", dashboardUrl: "https://vercel.com/account/tokens" },
+  { id: "sentry", name: "Sentry", category: "Engineering", dashboardUrl: "https://sentry.io/settings/account/api/auth-tokens" },
 ];

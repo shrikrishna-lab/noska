@@ -108,13 +108,62 @@ export function classifyProviderError(
         requestId,
       });
     }
+    if (body.includes("FreeTierError") || /free tier/i.test(body)) {
+      return new AIError({
+        type: "auth",
+        provider,
+        model,
+        statusCode,
+        retryable: false,
+        userMessage: `${provider}: Free-tier access was rejected. Make sure your API key is set in Settings → AI, or switch to a paid model.`,
+        technicalMessage: body,
+        requestId,
+      });
+    }
+    if (body.includes("Missing API key") || body.includes("missing x-noska-provider-key")) {
+      return new AIError({
+        type: "auth",
+        provider,
+        model,
+        statusCode,
+        retryable: false,
+        userMessage: `${provider}: No API key was sent with the request. Re-enter your key in Settings → AI.`,
+        technicalMessage: body,
+        requestId,
+      });
+    }
+    if (/model.{0,80}not supported|not supported.{0,80}model|unsupported model/i.test(body)) {
+      return new AIError({
+        type: "not_found",
+        provider,
+        model,
+        statusCode,
+        retryable: false,
+        userMessage: `${provider}: Model "${model}" is not available on this endpoint. Pick another model in Settings → AI.`,
+        technicalMessage: body,
+        requestId,
+      });
+    }
+    if (/invalid[\s_-]*or[\s_-]*expired[\s_-]*api[\s_-]*key|invalid[\s_-]*api[\s_-]*key|incorrect[\s_-]*api[\s_-]*key|api[\s_-]*key[\s_-]*(is[\s_-]*)?invalid|unauthorized/i.test(body) ||
+        !body.trim()) {
+      return new AIError({
+        type: "auth",
+        provider,
+        model,
+        statusCode,
+        retryable: false,
+        userMessage: `${provider}: Invalid or expired API key. Check your key in Settings → AI.`,
+        technicalMessage: body,
+        requestId,
+      });
+    }
     return new AIError({
       type: "auth",
       provider,
       model,
       statusCode,
       retryable: false,
-      userMessage: `${provider}: Invalid or expired API key. Check your key in Settings → AI.`,
+      userMessage: `${provider}: Request rejected (${statusCode}) — ${extractErrorMessage(body)}`,
       technicalMessage: body,
       requestId,
     });

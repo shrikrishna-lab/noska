@@ -11,12 +11,65 @@
 import { getProviderAdapter } from "./adapters";
 import { ModelRepository, modelRepository } from "./ModelRepository";
 import { registerDynamicProviderModels } from "../providers";
+import { modelRegistry } from "./ModelRegistry";
+import { inferModelCapabilities } from "./ModelMetadataOverrides";
 import type {
   AIModelSyncRun,
   NormalizedModel,
   ProviderCredentials,
   SyncResult,
 } from "./normalizedSchema";
+import type { ModelLifecycleStatus, NoskaModel, ProviderId } from "./types";
+
+const KNOWN_PROVIDER_IDS = new Set<string>([
+  "openrouter", "gemini", "openai", "anthropic", "groq", "deepseek",
+  "mistral", "together", "xai", "nvidia", "opencode_zen", "ollama", "lmstudio",
+]);
+
+const STATUS_TO_LIFECYCLE: Record<string, ModelLifecycleStatus> = {
+  active: "available",
+  preview: "preview",
+  deprecated: "deprecated",
+  unknown: "unknown",
+};
+
+function normalizedToNoskaModel(provider: string, m: NormalizedModel): NoskaModel {
+  const pid = provider as ProviderId;
+  const inferred = inferModelCapabilities(m.providerModelId);
+  const caps = m.capabilities;
+  return {
+    id: `${pid}/${m.providerModelId}`,
+    provider: pid,
+    displayName: m.displayName || m.providerModelId,
+    apiModelId: m.providerModelId,
+    contextWindow: m.contextWindow || 128000,
+    maxOutputTokens: m.maxOutputTokens || 8192,
+    capabilities: {
+      ...inferred,
+      streaming: caps.streaming ?? inferred.streaming,
+      reasoning: caps.reasoning ?? inferred.reasoning,
+      tools: caps.toolCalling ?? inferred.tools,
+      vision: caps.imageInput ?? inferred.vision,
+      audio: caps.audioInput ?? inferred.audio,
+      video: caps.videoInput ?? inferred.video,
+      structuredOutput: caps.structuredOutput ?? inferred.structuredOutput,
+    },
+    pricing: m.pricing
+      ? {
+          inputPer1M: m.pricing.prompt,
+          outputPer1M: m.pricing.completion,
+          cachedInputPer1M: m.pricing.cachedPrompt,
+          currency: m.pricing.currency,
+        }
+      : undefined,
+    status: STATUS_TO_LIFECYCLE[m.status] ?? "unknown",
+    source: "live",
+    description: m.description,
+    aliases: m.aliases,
+    enabled: true,
+    lastVerifiedAt: m.lastSyncedAt,
+  };
+}
 
 export interface BatchSyncSummary {
   success: boolean;
@@ -154,7 +207,7 @@ export class ModelCatalogSyncService {
    * 4. Retains last-known-good data if network/auth fails.
    * 5. Never initiates automatic intervals.
    */
-  public async syncConnection(
+  public syncConnection(
     provider: string,
     credentials: ProviderCredentials = {},
     connectionId?: string,
@@ -162,12 +215,31 @@ export class ModelCatalogSyncService {
   ): Promise<SyncResult> {
     const lockKey = (connectionId || provider).toLowerCase().trim();
 
-    // 1. Concurrent sync protection: Reuse active promise if already running
-    if (this._inFlightSyncs.has(lockKey)) {
-      return this._inFlightSyncs.get(lockKey)!;
+    // 1. Concurrent sync protection: Reuse active promise if already running.
+    // NOTE: this method is intentionally NOT async — the lock below must be
+    // set synchronously in the same tick, otherwise concurrent callers issued
+    // before the first await would each start their own upstream request.
+    const inFlight = this._inFlightSyncs.get(lockKey);
+    if (inFlight) {
+      return inFlight;
     }
 
-    const syncPromise = (async (): Promise<SyncResult> => {
+    const syncPromise = this._executeSync(lockKey, provider, credentials, connectionId, signal);
+    this._inFlightSyncs.set(lockKey, syncPromise);
+    return syncPromise;
+  }
+
+  /**
+   * Runs the actual provider sync. Only invoked after the in-flight lock
+   * has been registered in syncConnection; clears the lock on completion.
+   */
+  private async _executeSync(
+    lockKey: string,
+    provider: string,
+    credentials: ProviderCredentials,
+    connectionId?: string,
+    signal?: AbortSignal
+  ): Promise<SyncResult> {
       const startTime = Date.now();
       const runId = `sync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
@@ -191,17 +263,24 @@ export class ModelCatalogSyncService {
 
         // Dynamically register discovered models into active provider registry
         if (diff.models.length > 0) {
+          const available = diff.models.filter((m) => m.status !== "unavailable");
           registerDynamicProviderModels(
             provider,
-            diff.models
-              .filter((m) => m.status !== "unavailable")
-              .map((m) => ({
-                id: m.providerModelId,
-                name: m.displayName || m.providerModelId,
-                context: m.contextWindow || 128000,
-                description: m.description,
-              }))
+            available.map((m) => ({
+              id: m.providerModelId,
+              name: m.displayName || m.providerModelId,
+              context: m.contextWindow || 128000,
+              description: m.description,
+            }))
           );
+          // Bridge into ModelRegistry so the AI Workspace selector sees the
+          // same catalog as Settings — offline apply (no second network fetch;
+          // a refreshProvider here would double-hit the provider API and break
+          // in-flight request dedup).
+          if (KNOWN_PROVIDER_IDS.has(provider)) {
+            const noskaModels = available.map((m) => normalizedToNoskaModel(provider, m));
+            modelRegistry.applyDiscoveredModels(provider as ProviderId, noskaModels);
+          }
         }
 
         const durationMs = Date.now() - startTime;
@@ -279,10 +358,6 @@ export class ModelCatalogSyncService {
         this._inFlightSyncs.delete(lockKey);
         this._notify();
       }
-    })();
-
-    this._inFlightSyncs.set(lockKey, syncPromise);
-    return syncPromise;
   }
 
   /**

@@ -599,6 +599,33 @@ export function useIntegrationStatuses() {
         }
       };
 
+      // Live HTTP probe against the connector-gateway Edge Function —
+      // metadata route is public and must return JSON, not a 404/5xx.
+      const probeGateway = async (): Promise<void> => {
+        const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
+        if (!base) throw new Error("VITE_SUPABASE_URL not set");
+        const res = await fetch(`${base.replace(/\/$/, "")}/functions/v1/connector-gateway/`, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) throw new Error(`Gateway responded ${res.status}`);
+        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (body && typeof body === "object" && ("error" in body || "message" in body)) {
+          // Metadata route returns ok payload; error envelope means the function is up but failing.
+          if (body.error && body.error !== "ok") throw new Error(String(body.message ?? body.error));
+        }
+      };
+
+      // Real catalog health: connectors table must be readable and non-empty.
+      const probeCatalog = async (): Promise<void> => {
+        const rows = await adminSelect("connectors", "id, slug, is_active", { p_limit: 200 }).catch((err) => {
+          if (err instanceof Error && err.message.includes("TABLE_NOT_ALLOWED")) return null;
+          throw err;
+        });
+        if (rows === null) return; // allowlist missing — treat as soft-ok, stats section surfaces it
+        if (!Array.isArray(rows) || rows.length === 0) throw new Error("Connector catalog is empty");
+      };
+
       const results = await Promise.all([
         probe("Clerk", () => clerk.userCount(), "https://dashboard.clerk.com", "CLERK_SECRET_KEY not set"),
         probe(
@@ -613,6 +640,18 @@ export function useIntegrationStatuses() {
         probe("Sentry", () => sentry.issueCounts(), "https://sentry.io", "SENTRY_AUTH_TOKEN not set"),
         probe("PostHog", () => posthog.liveUsers(), "https://app.posthog.com", "POSTHOG_PERSONAL_TOKEN not set"),
         probe("Vercel", () => vercel.deployments("1"), "https://vercel.com", "VERCEL_TOKEN not set"),
+        probe(
+          "Connector Gateway",
+          probeGateway,
+          "https://supabase.com/dashboard/project/yxgtmzksnyarlivgxujf/functions",
+          "connector-gateway is not deployed or VITE_SUPABASE_URL is missing",
+        ),
+        probe(
+          "Connector Catalog",
+          probeCatalog,
+          "https://supabase.com/dashboard/project/yxgtmzksnyarlivgxujf/editor",
+          "connectors table unavailable",
+        ),
       ]);
 
       return results;

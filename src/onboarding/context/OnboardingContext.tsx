@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useCallback, useEffect, u
 import { saveOnboardingState, loadOnboardingState, clearOnboardingState } from "../services/onboardingService";
 import type { OnboardingFormData, OnboardingPagePreview, OnboardingTeammate } from "../types";
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 interface OnboardingState {
   step: number;
@@ -131,8 +131,12 @@ export function OnboardingProvider({ children, initialWorkspaceName, initialUser
       // saveOnboardingState just JSON-serializes whatever it's given (see
       // onboardingService.ts) — the persisted shape is intentionally
       // untyped there, so widen at this one call site instead of loosening
-      // OnboardingState itself.
-      saveOnboardingState(state as unknown as Record<string, unknown>);
+      // OnboardingState itself. Imported page blocks are stripped: they can
+      // be megabytes (Notion ZIPs) and would blow the localStorage quota;
+      // they live in memory only for the finalize step.
+      const { importedPages: _stripped, ...formWithoutImports } = state.form;
+      void _stripped;
+      saveOnboardingState({ ...state, form: formWithoutImports } as unknown as Record<string, unknown>);
     }
   }, [state.step, state.completed, state.skipped, state.form]);
 
