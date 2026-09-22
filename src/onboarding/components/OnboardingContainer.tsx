@@ -6,6 +6,7 @@ import { OnboardingProvider, useOnboardingContext, type OnboardingProviderProps 
 import LivePreviewSidebar from "./LivePreviewSidebar";
 import StepDots from "./StepDots";
 import OnboardingKeyframes from "./OnboardingKeyframes";
+import { isDesktop, isMobile } from "../../platform";
 
 const NoskaLogo = "/logo.png";
 
@@ -31,7 +32,7 @@ function OnboardingInner({ overlay = false }: OnboardingInnerProps) {
 
   return (
     <div
-      className="onboarding-scope fixed inset-0 z-50 flex"
+      className={`onboarding-scope fixed inset-x-0 bottom-0 ${isDesktop() && !isMobile() ? "top-7.5" : "top-0"} z-50 flex`}
       style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}
     >
       <LivePreviewSidebar step={step} />

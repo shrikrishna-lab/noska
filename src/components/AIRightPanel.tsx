@@ -44,6 +44,8 @@ import { useWorkspace } from "../contexts/WorkspaceContext";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 import { LiquidMetalButton } from "./ui/liquid-metal-button";
+import { cn } from "../lib/utils";
+import { isDesktop, isMobile } from "../platform";
 
 const SPRING = { type: "spring", stiffness: 400, damping: 28 } as const;
 const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 } as const;
@@ -773,7 +775,10 @@ export default function AIRightPanel({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12 }}
-            className="fixed inset-0 z-50 bg-[var(--bg)]/60 backdrop-blur-sm"
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-50 bg-[var(--bg)]/60 backdrop-blur-sm",
+              isDesktop() && !isMobile() ? "top-7.5" : "top-0"
+            )}
             onClick={onClose}
           />
 
@@ -782,7 +787,10 @@ export default function AIRightPanel({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0.8 }}
             transition={{ type: "spring", stiffness: 420, damping: 32 }}
-            className="fixed top-0 right-0 z-50 h-full w-[410px] max-w-[92vw] bg-[var(--panel)] text-[var(--text)] border-l border-[var(--border)] shadow-[var(--shadow-floating)] flex flex-col font-sans select-none"
+            className={cn(
+              "fixed right-0 z-50 bottom-0 w-[410px] max-w-[92vw] bg-[var(--panel)] text-[var(--text)] border-l border-[var(--border)] shadow-[var(--shadow-floating)] flex flex-col font-sans select-none",
+              isDesktop() && !isMobile() ? "top-7.5" : "top-0"
+            )}
           >
             {/* ===== MINIMALIST THEMED HEADER ===== */}
             <div className="flex items-center justify-between px-3.5 py-3 border-b border-[var(--border)] shrink-0 bg-[var(--surface)]/40 backdrop-blur-md">

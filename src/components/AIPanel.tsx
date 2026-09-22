@@ -35,6 +35,7 @@ import { useChatScroll } from "./ai/useChatScroll";
 import { useStreamBuffer } from "./ai/useStreamBuffer";
 import { ProviderIcon, type AiModelSelection } from "./ui/ai-prompt-input";
 import { cn } from "../lib/utils";
+import { isDesktop, isMobile } from "../platform";
 
 const SPRING_APPLE = { type: "spring" as const, stiffness: 440, damping: 30, mass: 0.8 };
 
@@ -746,7 +747,10 @@ export default function AIPanel({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className="fixed inset-0 z-50 flex bg-[var(--bg)] text-[var(--text)] font-sans antialiased select-none"
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-50 flex bg-[var(--bg)] text-[var(--text)] font-sans antialiased select-none",
+        isDesktop() && !isMobile() ? "top-7.5" : "top-0"
+      )}
     >
       {/* Collapsible Left Sidebar for History */}
       <AnimatePresence>
@@ -1481,7 +1485,10 @@ export default function AIPanel({
       <AnimatePresence>
         {showKeyModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4",
+              isDesktop() && !isMobile() ? "top-7.5" : "top-0"
+            )}
             onClick={() => setShowKeyModal(false)}
           >
             <motion.div

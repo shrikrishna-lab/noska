@@ -9,6 +9,7 @@ import {
   Clock,
 } from "lucide-react";
 import { IconButton } from "../../components/ui";
+import { isDesktop, isMobile } from "../../platform";
 
 // Synthesized sound helper using Web Audio API
 class AudioSynth {
@@ -311,7 +312,7 @@ export default function FocusZoom({ block, onClose, onPatch }) {
   return (
     <div
       onMouseMove={handleMouseMove}
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-between p-6 transition-all duration-300 ${themeClasses[theme]}`}
+      className={`fixed inset-x-0 bottom-0 ${isDesktop() && !isMobile() ? "top-7.5" : "top-0"} z-[100] flex flex-col items-center justify-between p-6 transition-all duration-300 ${themeClasses[theme]}`}
     >
       {/* Top Bar controls */}
       <div

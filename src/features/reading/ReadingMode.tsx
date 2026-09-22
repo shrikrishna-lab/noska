@@ -23,6 +23,7 @@ import type { Page } from "../../lib/supabaseService";
 import type { Block } from "../../../types/blocks";
 import { PageIcon } from "../../components/PageIcon";
 import { LineNavigationRail } from "../navigation/line-nav";
+import { isDesktop, isMobile } from "../../platform";
 import EmbedBlock from "../../components/editor/EmbedBlock";
 import ImageBlock from "../../components/editor/ImageBlock";
 import InteractiveBlock from "../../components/editor/interactive/InteractiveBlock";
@@ -1153,10 +1154,10 @@ export default function ReadingMode({ page, pages, onClose, onPagePatch, onSelec
   return (
     <div
       style={selectedTheme.styles}
-      className={`fixed inset-0 z-50 flex flex-col ${selectedTheme.bg} ${selectedTheme.text} transition-colors duration-200 select-text`}
+      className={`fixed inset-x-0 bottom-0 ${isDesktop() && !isMobile() ? "top-7.5" : "top-0"} z-50 flex flex-col ${selectedTheme.bg} ${selectedTheme.text} transition-colors duration-200 select-text`}
     >
       {/* Scroll Progress Bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 z-50 bg-black/10 dark:bg-white/10">
+      <div className={`fixed ${isDesktop() && !isMobile() ? "top-7.5" : "top-0"} left-0 right-0 h-1 z-50 bg-black/10 dark:bg-white/10`}>
         <div
           className="h-full bg-[var(--reading-accent)] transition-all duration-75"
           style={{ width: `${scrollProgress}%` }}

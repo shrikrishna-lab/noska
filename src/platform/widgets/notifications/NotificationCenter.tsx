@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { NotificationInbox } from '../../../features/notifications/Inbox';
+import { isDesktop, isMobile } from '../../../platform';
 import type { WidgetRuntimeContext } from '../types';
 export function NotificationCenter({ open, onClose }: { open: boolean; onClose: () => void; ctx: WidgetRuntimeContext }) {
   const panel = useRef<HTMLElement>(null);
@@ -11,7 +12,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
     return () => previous?.focus();
   }, [open]);
   if (!open) return null;
-  return <div className="fixed inset-0 z-[71] bg-black/25" onMouseDown={onClose}><aside ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Notification Center" className="absolute right-3 top-3 bottom-3 w-[480px] max-w-[calc(100vw-24px)] overflow-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-xl" onMouseDown={e => e.stopPropagation()} onKeyDown={e => {
+  return <div className={`fixed inset-x-0 bottom-0 ${isDesktop() && !isMobile() ? "top-7.5" : "top-0"} z-[71] bg-black/25`} onMouseDown={onClose}><aside ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Notification Center" className="absolute right-3 top-3 bottom-3 w-[480px] max-w-[calc(100vw-24px)] overflow-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-xl" onMouseDown={e => e.stopPropagation()} onKeyDown={e => {
     if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
     if (e.key === 'Tab') {
       const elements = [...panel.current!.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,[tabindex="0"]')];

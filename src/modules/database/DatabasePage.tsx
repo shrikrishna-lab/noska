@@ -10,6 +10,7 @@ import { operatorsForType } from "./utils/filterEngine";
 import PeekPanel from "../page/peek/PeekPanel";
 import { generateAISummary, generateAITags } from "./services/aiService";
 import type { DatabaseSchema, DatabaseRow, ViewDefinition, FilterConfig, SortConfig } from "./types/database";
+import { isDesktop, isMobile } from "../../platform";
 
 // NOTE: `Check` and `GripVertical` were imported from lucide-react in the
 // original JS but never referenced anywhere in the component body — dead
@@ -265,7 +266,7 @@ export default function DatabasePage({ database, onPatch, onOpenRow, onToast, ti
   }, [activeFilters, db.properties]);
 
   return (
-    <div className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden relative ${isFullscreen ? "fixed inset-0 z-[200] rounded-none border-0 overflow-auto" : ""}`}>
+    <div className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden relative ${isFullscreen ? `fixed inset-x-0 bottom-0 ${isDesktop() && !isMobile() ? "top-7.5" : "top-0"} z-[200] rounded-none border-0 overflow-auto` : ""}`}>
       {/* Section header row — emoji/icon + bold title above the database */}
 
       {title && (

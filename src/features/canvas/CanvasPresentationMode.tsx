@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { CanvasElementData, Connector, getCardPalette, CARD_W, CARD_H } from "./canvasStore";
 import type { Block } from "../../lib/supabaseService";
+import { isDesktop, isMobile } from "../../platform";
 
 export interface PresentationSlide {
   id: string;
@@ -141,7 +142,7 @@ export default function CanvasPresentationMode({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[#0c0d12]/95 backdrop-blur-3xl flex flex-col items-center justify-between p-6 sm:p-10 text-white select-none transition-all duration-300"
+      className={`fixed inset-x-0 bottom-0 ${isDesktop() && !isMobile() ? "top-7.5" : "top-0"} z-50 bg-[#0c0d12]/95 backdrop-blur-3xl flex flex-col items-center justify-between p-6 sm:p-10 text-white select-none transition-all duration-300`}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Top Bar */}
