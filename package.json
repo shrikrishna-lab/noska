@@ -53,7 +53,7 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@trigger.dev/resend": "^3.3.12",
-    "@trigger.dev/sdk": "^4.5.7",
+    "@trigger.dev/sdk": "^4.6.4",
     "@trigger.dev/supabase": "^3.3.12",
     "@types/jszip": "^3.4.0",
     "@types/three": "^0.186.0",
