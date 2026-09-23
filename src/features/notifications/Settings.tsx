@@ -5,7 +5,15 @@ import { deliveryCapabilities, enableWebPush, requestDesktopPermission, revokeWe
 import type { NotificationPreferences } from './types';
 import { getDesktopPreferences, updateDesktopPreferences, type DesktopPreferences } from '../../lib/desktopNotificationLifecycle';
 export default function NotificationSettings() {
-  const { userId } = useNotificationPlatform();
+  // NOTE: userId here is the resolved notification identity (null until the
+  // server links it), NOT the sign-in state — a signed-in user with a
+  // linking failure must see the real error, never "Sign in…".
+  const { userId, error: platformError } = useNotificationPlatform();
+  const retryIdentity = () => {
+    // Re-runs the provider's identity resolution without losing modal state.
+    window.dispatchEvent(new Event('online'));
+    setReload(value => value + 1);
+  };
   const identity = useRef(userId);
   identity.current = userId;
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
@@ -51,7 +59,9 @@ export default function NotificationSettings() {
   const checkbox = (key: 'enabled' | 'in_app_enabled' | 'desktop_preview' | 'desktop_sound' | 'desktop_when_focused' | 'quiet_hours_enabled', label: string) => <label className="flex items-center justify-between gap-4 py-2"><span>{label}</span><input type="checkbox" checked={preferences?.[key] ?? false} disabled={busy} onChange={e => void save({ [key]: e.target.checked })} /></label>;
   return <section className="max-w-2xl space-y-5 p-6 text-sm text-[var(--text)]"><header><h2 className="text-xl font-semibold">Notifications</h2><p className="mt-1 text-[var(--muted)]">Choose what reaches your Inbox and this device.</p></header>
     {error && <p role="alert" className="rounded border border-red-500/30 p-3">{error} <button onClick={() => setReload(value => value + 1)} className="underline">Retry</button></p>}
-    {!preferences ? <p role="status">{userId ? 'Loading preferences…' : 'Sign in to manage notifications.'}</p> : <>
+    {!preferences ? (platformError
+      ? <p role="alert">{platformError} <button onClick={retryIdentity} className="underline">Retry</button></p>
+      : <p role="status">{userId ? 'Loading preferences…' : 'Sign in to manage notifications.'}</p>) : <>
       <fieldset disabled={busy}>{checkbox('enabled', 'Enable notifications')}{checkbox('in_app_enabled', 'Show new events in Inbox')}
         <h3 className="mt-4 font-semibold">Activity</h3>{['mention', 'reply', 'comment', 'invite', 'assignment', 'reminder', 'system'].map(category => <label key={category} className="flex justify-between py-2 capitalize">{category}<input type="checkbox" checked={preferences.category_settings[category] !== false} onChange={e => void save({ category_settings: { ...preferences.category_settings, [category]: e.target.checked } })} /></label>)}
       </fieldset>

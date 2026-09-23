@@ -235,9 +235,27 @@ class EcosystemManagerClass {
     return candidates[0];
   }
 
+  /**
+   * Live OAuth readiness for an ecosystem connector. Returns:
+   * - false → the gateway row exists but its OAuth credentials are not
+   *   configured server-side (or no dynamic registration); UIs should
+   *   render "coming soon" instead of a Connect button that errors.
+   * - true → OAuth can start (or the row needs no credentials).
+   * - null → unknown (catalog not loaded / row absent / older server
+   *   without the flag) — UIs must NOT gate on this, to stay working
+   *   offline and backward compatible.
+   */
+  public isOAuthConfiguredFor(def: EcosystemConnectorDefinition): boolean | null {
+    const slug = this.resolveConnectSlug(def);
+    if (!slug) return null;
+    if (!this.catalogLoaded || this.catalog.size === 0) return null;
+    const entry = this.catalog.get(slug);
+    if (!entry || entry.oauth_configured !== false) return entry ? true : null;
+    return false;
+  }
+
   /** True when the ecosystem maps to at least one live gateway catalog row. */
-  public isProviderConnectable(providerId: string): boolean {
-    const def = getEcosystemConnector(providerId);
+  public isProviderConnectable(providerId: string): boolean {    const def = getEcosystemConnector(providerId);
     if (!def) return false;
     return this.resolveConnectSlug(def) !== null;
   }

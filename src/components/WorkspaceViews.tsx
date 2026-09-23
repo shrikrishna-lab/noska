@@ -85,6 +85,7 @@ import {
 import { TactilePriorityPicker, TactileDuePicker, isTaskOverdue } from "./ui/TaskMetaPickers";
 import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
 import MarketplacePage from "../features/marketplace/MarketplacePage";
+import SupportTicketsView from "../features/support/SupportTicketsView";
 import CreatorDashboard from "../features/creator/CreatorDashboard";
 import AgentWorkspace from "../features/agents/AgentWorkspace";
 import AutomationWorkspace from "../features/automations/AutomationWorkspace";
@@ -276,6 +277,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
 
   if (view === "daily" || view === "journal") return <DailyWorkspace onToast={onToast || (() => {})} currentUserId={currentUserId} currentUsername={userName} />;
   if (view === "marketplace") return <MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} />;
+  if (view === "support") return <SupportTicketsView onToast={onToast} />;
   if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} />;
   if (view === "agents") return <AgentWorkspace pages={pages} currentUserId={currentUserId} onToast={onToast} toolContext={toolContext} />;
   if (view === "automations") return <AutomationWorkspace onToast={onToast} />;
@@ -320,7 +322,9 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
   if (view === "meetings") return <MeetingsRoute onNew={onNew} onToast={onToast} />;
   if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
-  if (view === "inbox") return <><NotificationInbox /><details className="mx-auto max-w-4xl p-6"><summary className="cursor-pointer text-sm">Invitations and saved reminders</summary><InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} /></details></>;
+  // Inbox brings its own scroll container: the parent column is overflow-hidden,
+  // so without this wrapper tall inboxes were clipped with no way to scroll.
+  if (view === "inbox") return <div className="min-h-0 flex-1 overflow-y-auto"><NotificationInbox /><details className="mx-auto max-w-4xl p-6" open={pendingInvites.length > 0}><summary className="cursor-pointer text-sm">Invitations and saved reminders</summary><InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} /></details></div>;
   if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} activeWorkspaceId={activeWorkspaceId} />;
   if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} onToast={onToast} />;
   if (view === "companyHome") return <CompanyWorkspace onBack={() => onView?.("home")} />;

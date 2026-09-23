@@ -252,6 +252,13 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
 
   // Connect via OAuth
   const handleOAuthConnect = async (connector: EcosystemConnectorDefinition) => {
+    // Fail fast with the same "coming soon" treatment as the card badge
+    // when the gateway row exists but its credentials were never
+    // configured — instead of a raw missing-credentials error.
+    if (ecosystemManager.isOAuthConfiguredFor(connector) === false) {
+      onToast?.(`${connector.name} connection is coming soon — admin setup is still pending.`);
+      return;
+    }
     try {
       await ecosystemManager.connectEcosystem(connector.id, "oauth");
       onToast?.(`Finish connecting ${connector.name} in the browser window that just opened.`);
@@ -535,6 +542,13 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
             const isUnavailable = unavailableIds.includes(connector.id);
             const supportsToken = connector.authModes.includes("token") || connector.authModes.includes("api_key");
             const supportsOAuth = connector.authModes.includes("oauth");
+            // Live server flag: the gateway row exists but its OAuth client
+            // was never configured (no keys, no dynamic registration).
+            // Rendered as "coming soon" instead of a Connect button that
+            // would fail — but ONLY when known false; unknown (offline /
+            // older server) keeps the button to stay backward compatible.
+            // Token connect stays available regardless when supported.
+            const oauthNeedsSetup = supportsOAuth && ecosystemManager.isOAuthConfiguredFor(connector) === false;
             const enabledServicesCount = conn
               ? Object.values(conn.services).filter((s) => s.enabled && s.status === "active").length
               : 0;
@@ -689,14 +703,24 @@ export default function IntegrationsSettings({ onToast }: { onToast?: (m: string
                           </button>
                         ) : (
                           <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleOAuthConnect(connector)}
-                              className="flex items-center gap-1.5 rounded-xl bg-[#1c1b18] px-3.5 py-1.5 text-xs font-medium text-white shadow-xs hover:bg-[#33312e] active:scale-95 transition-all cursor-pointer"
-                            >
-                              <Plug className="h-3 w-3" />
-                              <span>Connect</span>
-                            </button>
+                            {oauthNeedsSetup ? (
+                              <span
+                                className="flex items-center gap-1.5 rounded-xl bg-[#ede8df] px-3 py-1.5 text-xs font-medium text-[#a8a29e] cursor-not-allowed"
+                                title="This connector isn't set up yet — coming soon."
+                              >
+                                <Lock className="h-3 w-3" />
+                                <span>Coming soon</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOAuthConnect(connector)}
+                                className="flex items-center gap-1.5 rounded-xl bg-[#1c1b18] px-3.5 py-1.5 text-xs font-medium text-white shadow-xs hover:bg-[#33312e] active:scale-95 transition-all cursor-pointer"
+                              >
+                                <Plug className="h-3 w-3" />
+                                <span>Connect</span>
+                              </button>
+                            )}
                             {supportsToken && (
                               <button
                                 type="button"

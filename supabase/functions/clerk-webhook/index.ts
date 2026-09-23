@@ -207,6 +207,21 @@ Deno.serve(async (req: Request) => {
           .update({ status: "accepted" })
           .eq("email", email.toLowerCase())
       }
+
+      // Link the notification identity so Clerk users resolve a notification
+      // user id (Settings + Inbox). Best-effort: never blocks signup when no
+      // GoTrue user shares this email yet.
+      if (email && /^user_[A-Za-z0-9]+$/.test(clerkId)) {
+        try {
+          const { data: users } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+          const match = users.users.find((u) => (u.email ?? "").toLowerCase() === email.toLowerCase())
+          if (match) {
+            await supabase.rpc("notification_register_identity", { p_clerk_sub: clerkId, p_user_id: match.id })
+          }
+        } catch (e) {
+          console.error("Failed to link notification identity:", e)
+        }
+      }
       break
     }
 
