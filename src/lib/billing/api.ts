@@ -37,7 +37,6 @@ export const OFFICIAL_PUBLIC_PLANS: PublicPlan[] = [
     metadata: { per_seat: false, custom_pricing: false },
     features: [
       { feature_key: "ai_generation", enabled: true, limit_value: null, limit_unit: null },
-      { feature_key: "monthly_ai_credits", enabled: true, limit_value: 200, limit_unit: "credits" },
       { feature_key: "max_workspaces", enabled: true, limit_value: 1, limit_unit: "workspaces" },
       { feature_key: "max_storage_mb", enabled: true, limit_value: 500, limit_unit: "mb" },
       { feature_key: "desktop_app", enabled: true, limit_value: null, limit_unit: null },
@@ -50,8 +49,8 @@ export const OFFICIAL_PUBLIC_PLANS: PublicPlan[] = [
     slug: "plus",
     description: "Everything you need to organize your work.",
     currency: "USD",
-    monthly_price: 8,
-    yearly_price: 80,
+    monthly_price: 6,
+    yearly_price: 59,
     trial_days: 14,
     badge: null,
     cta_text: "Upgrade to Plus",
@@ -60,7 +59,6 @@ export const OFFICIAL_PUBLIC_PLANS: PublicPlan[] = [
     metadata: { per_seat: false, custom_pricing: false },
     features: [
       { feature_key: "ai_generation", enabled: true, limit_value: null, limit_unit: null },
-      { feature_key: "monthly_ai_credits", enabled: true, limit_value: 1000, limit_unit: "credits" },
       { feature_key: "ai_image_analysis", enabled: true, limit_value: null, limit_unit: null },
       { feature_key: "ai_file_analysis", enabled: true, limit_value: null, limit_unit: null },
       { feature_key: "max_workspaces", enabled: true, limit_value: 3, limit_unit: "workspaces" },
@@ -74,8 +72,8 @@ export const OFFICIAL_PUBLIC_PLANS: PublicPlan[] = [
     slug: "pro",
     description: "Build with AI, agents and MCP.",
     currency: "USD",
-    monthly_price: 16,
-    yearly_price: 160,
+    monthly_price: 12,
+    yearly_price: 119,
     trial_days: 14,
     badge: "POPULAR",
     cta_text: "Upgrade to Pro",
@@ -84,7 +82,6 @@ export const OFFICIAL_PUBLIC_PLANS: PublicPlan[] = [
     metadata: { per_seat: false, custom_pricing: false },
     features: [
       { feature_key: "ai_generation", enabled: true, limit_value: null, limit_unit: null },
-      { feature_key: "monthly_ai_credits", enabled: true, limit_value: 5000, limit_unit: "credits" },
       { feature_key: "custom_agents", enabled: true, limit_value: null, limit_unit: null },
       { feature_key: "mcp_access", enabled: true, limit_value: null, limit_unit: null },
       { feature_key: "max_workspaces", enabled: true, limit_value: 10, limit_unit: "workspaces" },
@@ -98,8 +95,8 @@ export const OFFICIAL_PUBLIC_PLANS: PublicPlan[] = [
     slug: "team",
     description: "Powerful workspaces for teams.",
     currency: "USD",
-    monthly_price: 24,
-    yearly_price: 240,
+    monthly_price: 20,
+    yearly_price: 199,
     trial_days: 14,
     badge: null,
     cta_text: "Upgrade to Team",
@@ -310,6 +307,38 @@ export async function fetchMyPayments(): Promise<PaymentRow[]> {
   const { data, error } = await sb.from("billing_payments").select("*").order("created_at", { ascending: false }).limit(20);
   if (error) throw error;
   return (data ?? []) as unknown as PaymentRow[];
+}
+
+export interface ReferralTier {
+  id: string;
+  name: string;
+  type: string;
+  value: number;
+  min_referrals?: number;
+}
+
+export interface ReferralSummary {
+  code: string;
+  stats: {
+    total_referrals: number;
+    active_referrals: number;
+    rewards_earned: number;
+    ai_credits: number;
+    xp: number;
+    level: number;
+  };
+  current_tier: ReferralTier | null;
+  next_tier: (ReferralTier & { min_referrals: number }) | null;
+  rewards: Array<ReferralTier & { description: string | null; icon: string | null; color: string | null }>;
+  referred: { status: string; reward_claimed: boolean; joined_at: string } | null;
+}
+
+export async function fetchReferralSummary(): Promise<ReferralSummary> {
+  return callFn<ReferralSummary>("referrals", { method: "GET" });
+}
+
+export async function applyReferralCode(code: string): Promise<{ referrer_code: string }> {
+  return callFn("referrals", { method: "POST", body: JSON.stringify({ action: "apply", code }) });
 }
 
 export function yearlySavings(monthly: number, yearly: number): { total: number; save: number; pct: number } {

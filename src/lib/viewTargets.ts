@@ -27,6 +27,7 @@ export const VIEW_TARGETS: ViewTarget[] = [
   { id: "agents", label: "Agents", aliases: ["agents", "agent"] },
   { id: "automations", label: "Automations", aliases: ["automations", "automation", "workflows", "workflow"] },
   { id: "marketplace", label: "Marketplace", aliases: ["marketplace"] },
+  { id: "support", label: "Support Tickets", aliases: ["support", "support tickets", "helpdesk", "help desk", "ticket", "tickets"] },
   { id: "creator", label: "Creator Dashboard", aliases: ["creator", "creator dashboard"] },
   { id: "canvas", label: "Canvas", aliases: ["canvas", "whiteboard"] },
   { id: "graph", label: "Graph", aliases: ["graph", "graph view", "knowledge graph"] },

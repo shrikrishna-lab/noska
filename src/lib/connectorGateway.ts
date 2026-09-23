@@ -28,6 +28,10 @@ export interface ConnectorCatalogEntry {
   /** 'oauth' and/or 'token' — which connect flows the UI should offer. */
   auth_modes: string[];
   call_rate_limit: number;
+  /** Live server-side check: can an OAuth connect actually start (static
+   *  credentials present or dynamic registration available)? Absent
+   *  (older server) means unknown — UIs must treat that as configured. */
+  oauth_configured?: boolean;
 }
 
 export interface ConnectorConnection {

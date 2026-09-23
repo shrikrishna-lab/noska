@@ -1,8 +1,75 @@
 import React, { useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X, Check, ExternalLink } from "lucide-react";
+import {
+  X,
+  Check,
+  ExternalLink,
+  Maximize2,
+  Sparkles,
+  Zap,
+  Compass,
+  Mic,
+  Sliders,
+  Key,
+  Lock,
+  Command,
+  Rocket,
+  Wrench,
+  CheckSquare,
+  BarChart2,
+  Layers,
+  LucideIcon,
+} from "lucide-react";
 import { useReleaseNotes, type ReleaseNotes } from "@/hooks/useReleaseNotes";
 import { renderInlineMd } from "@/components/ui/MarkdownLite";
+
+/**
+ * Resolves a clean, crisp Lucide icon based on the section title keywords
+ */
+function getSectionIcon(title: string): LucideIcon {
+  const t = title.toLowerCase();
+  if (t.includes("resiz") || t.includes("handle") || t.includes("dimension") || t.includes("width")) {
+    return Maximize2;
+  }
+  if (t.includes("to-do") || t.includes("todo") || t.includes("task") || t.includes("check")) {
+    return CheckSquare;
+  }
+  if (t.includes("block") || t.includes("kpi") || t.includes("dashboard") || t.includes("widget") || t.includes("chart")) {
+    return Zap;
+  }
+  if (t.includes("spatial") || t.includes("canvas") || t.includes("whiteboard") || t.includes("graph")) {
+    return Compass;
+  }
+  if (t.includes("voice") || t.includes("dictation") || t.includes("island") || t.includes("audio") || t.includes("whisper")) {
+    return Mic;
+  }
+  if (t.includes("setting") || t.includes("studio") || t.includes("appearance") || t.includes("theme")) {
+    return Sliders;
+  }
+  if (t.includes("key") || t.includes("api") || t.includes("crypto") || t.includes("vault") || t.includes("security")) {
+    return Lock;
+  }
+  if (t.includes("hud") || t.includes("command") || t.includes("terminal") || t.includes("performance")) {
+    return Command;
+  }
+  if (t.includes("launch") || t.includes("initial") || t.includes("public")) {
+    return Rocket;
+  }
+  if (t.includes("fix") || t.includes("patch") || t.includes("update")) {
+    return Wrench;
+  }
+  return Sparkles;
+}
+
+/**
+ * Strips raw emojis, Unicode pictographs, and broken replacement characters (like )
+ */
+function cleanHeadingTitle(raw: string): string {
+  return raw
+    .replace(/^[\p{Extended_Pictographic}\p{Emoji}\p{Symbol}\uFE00-\uFE0F\uFFFD\s]+/gu, "")
+    .replace(/^[^\w\s(]+/, "") // strip any broken replacement characters or symbols
+    .trim();
+}
 
 // Floating corner popover for Release Notes — dynamically renders REAL changelog data
 // version-by-version, adapting to both Light and Dark themes.
@@ -34,8 +101,9 @@ export function ReleaseNotesModal({
     if (!notes?.body) return [];
 
     const lines = notes.body.split("\n");
-    const sections: Array<{ title?: string; items: string[]; quotes: string[] }> = [];
-    let currentSection: { title?: string; items: string[]; quotes: string[] } = {
+    const sections: Array<{ title?: string; icon: LucideIcon; items: string[]; quotes: string[] }> = [];
+    let currentSection: { title?: string; icon: LucideIcon; items: string[]; quotes: string[] } = {
+      icon: Sparkles,
       items: [],
       quotes: [],
     };
@@ -50,8 +118,10 @@ export function ReleaseNotesModal({
         if (currentSection.items.length > 0 || currentSection.quotes.length > 0 || currentSection.title) {
           sections.push(currentSection);
         }
+        const cleanedTitle = cleanHeadingTitle(headingMatch[1]);
         currentSection = {
-          title: headingMatch[1].replace(/^[🚀✨🎉🔧🐛📦⚡\s]+/, "").trim(),
+          title: cleanedTitle,
+          icon: getSectionIcon(cleanedTitle || headingMatch[1]),
           items: [],
           quotes: [],
         };
@@ -112,7 +182,7 @@ export function ReleaseNotesModal({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.95 }}
         transition={{ type: "spring", stiffness: 360, damping: 28, mass: 0.75 }}
-        className="fixed bottom-6 right-6 z-[999999] w-[380px] max-w-[calc(100vw-32px)] select-none font-sans"
+        className="fixed bottom-6 right-6 z-[999999] w-[390px] max-w-[calc(100vw-32px)] select-none font-sans"
       >
         {/* Popover card adapting to both Light and Dark themes */}
         <div className="relative flex flex-col max-h-[500px] overflow-hidden rounded-2xl border border-neutral-200/90 bg-white/95 text-neutral-900 shadow-[0_16px_45px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#14161F]/95 dark:text-[#E6E8EE] dark:shadow-[0_16px_50px_rgba(0,0,0,0.6),0_0_25px_rgba(255,140,115,0.15)]">
@@ -148,37 +218,43 @@ export function ReleaseNotesModal({
           {/* Content Body with customized scrollbar */}
           <div className="relative flex-1 overflow-y-auto px-5 py-3.5 text-[12.5px] leading-relaxed text-neutral-700 dark:text-[#D0D4E0] scrollbar-thin scrollbar-thumb-neutral-300 dark:scrollbar-thumb-white/20 scrollbar-track-transparent space-y-4">
             {parsedSections.length > 0 ? (
-              parsedSections.map((sec, secIdx) => (
-                <div key={secIdx} className="space-y-2">
-                  {sec.title && (
-                    <div className="text-[13px] font-bold text-neutral-900 dark:text-white tracking-tight">
-                      {sec.title}
-                    </div>
-                  )}
+              parsedSections.map((sec, secIdx) => {
+                const Icon = sec.icon;
+                return (
+                  <div key={secIdx} className="space-y-2">
+                    {sec.title && (
+                      <div className="flex items-center gap-2 text-[13px] font-bold text-neutral-900 dark:text-white tracking-tight">
+                        <div className="flex items-center justify-center w-5 h-5 rounded-md bg-[#FF6B4A]/10 text-[#FF6B4A] dark:bg-[#FF6B4A]/20 dark:text-[#FFA07A] shrink-0">
+                          <Icon size={12} strokeWidth={2.5} />
+                        </div>
+                        <span className="leading-snug">{sec.title}</span>
+                      </div>
+                    )}
 
-                  {sec.items.length > 0 && (
-                    <ul className="space-y-2">
-                      {sec.items.map((item, itemIdx) => (
-                        <li key={itemIdx} className="flex items-start gap-2.5 leading-relaxed">
-                          <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-400 dark:bg-[#8E92A4]" />
-                          <div className="min-w-0 flex-1 text-neutral-700 dark:text-[#D0D4E0] [&_strong]:text-neutral-900 dark:[&_strong]:text-white [&_strong]:font-semibold [&_code]:bg-neutral-100 dark:[&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-[11px]">
-                            {renderInlineMd(item, `rn-${secIdx}-${itemIdx}`)}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                    {sec.items.length > 0 && (
+                      <ul className="space-y-2">
+                        {sec.items.map((item, itemIdx) => (
+                          <li key={itemIdx} className="flex items-start gap-2.5 leading-relaxed">
+                            <span className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-400 dark:bg-[#8E92A4]" />
+                            <div className="min-w-0 flex-1 text-neutral-700 dark:text-[#D0D4E0] [&_strong]:text-neutral-900 dark:[&_strong]:text-white [&_strong]:font-semibold [&_code]:bg-neutral-100 dark:[&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-[11px]">
+                              {renderInlineMd(item, `rn-${secIdx}-${itemIdx}`)}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
 
-                  {sec.quotes.map((q, qIdx) => (
-                    <div
-                      key={qIdx}
-                      className="p-2.5 rounded-lg bg-neutral-100/70 dark:bg-white/5 border-l-2 border-[#FF6B4A] text-[11.5px] italic text-neutral-600 dark:text-neutral-400"
-                    >
-                      {renderInlineMd(q, `rn-q-${secIdx}-${qIdx}`)}
-                    </div>
-                  ))}
-                </div>
-              ))
+                    {sec.quotes.map((q, qIdx) => (
+                      <div
+                        key={qIdx}
+                        className="p-2.5 rounded-lg bg-neutral-100/70 dark:bg-white/5 border-l-2 border-[#FF6B4A] text-[11.5px] italic text-neutral-600 dark:text-neutral-400"
+                      >
+                        {renderInlineMd(q, `rn-q-${secIdx}-${qIdx}`)}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
             ) : (
               <p className="text-xs text-neutral-500 dark:text-neutral-400 py-2">
                 Version {versionTag} installed successfully.

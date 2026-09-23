@@ -1,89 +1,87 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  LifeBuoy, 
-  Send, 
-  Check, 
-  ArrowLeft, 
-  Sparkles, 
-  Bug, 
-  Lightbulb, 
-  CreditCard, 
-  Plug, 
-  Building2, 
-  AlertCircle, 
-  Paperclip, 
-  Clock, 
-  MessageSquare, 
-  ShieldCheck,
-  ExternalLink
+import {
+  Check,
+  ArrowLeft,
+  MessageSquare,
+  ExternalLink,
+  Search,
+  Loader2,
+  AlertCircle,
+  Inbox,
+  Ticket as TicketIcon,
 } from 'lucide-react';
 import { supabaseAnon } from '../../lib/supabase';
 import { isDesktop } from '../../lib/desktop/platform';
+import TicketComposerForm, {
+  DEFAULT_COMPOSER_VALUES,
+  type TicketComposerValues,
+} from '../../features/support/TicketComposerForm';
+import {
+  lookupSupportTicket,
+  requestTicketConfirmEmail,
+  type SupportMessage,
+} from '../../features/support/api';
 import './SupportTicket.css';
 
-const TICKET_CATEGORIES = [
-  { id: 'bug', label: 'Bug Report', icon: Bug, desc: 'Something is broken or behaving unexpectedly' },
-  { id: 'feature', label: 'Feature Request', icon: Lightbulb, desc: 'Idea for a new tool, canvas block or feature' },
-  { id: 'billing', label: 'Billing & Account', icon: CreditCard, desc: 'Subscriptions, invoice receipts, plan upgrades' },
-  { id: 'integration', label: 'Integrations & MCP', icon: Plug, desc: 'Google, GitHub, Slack or custom MCP server issues' },
-  { id: 'enterprise', label: 'Enterprise & SLA', icon: Building2, desc: 'Dedicated tenancy, SAML SSO, team workspaces' },
-];
-
-const PRIORITIES = [
-  { id: 'low', label: 'Low', color: 'text-neutral-500 bg-neutral-100' },
-  { id: 'medium', label: 'Medium', color: 'text-blue-600 bg-blue-50' },
-  { id: 'high', label: 'High', color: 'text-amber-600 bg-amber-50' },
-  { id: 'urgent', label: 'Urgent / Blocker', color: 'text-rose-600 bg-rose-50' },
-];
+type Mode = 'submit' | 'track';
 
 export default function SupportTicket() {
-  const [category, setCategory] = useState('bug');
-  const [priority, setPriority] = useState('medium');
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
+  const [mode, setMode] = useState<Mode>('submit');
+  const [values, setValues] = useState<TicketComposerValues>(DEFAULT_COMPOSER_VALUES);
   const [loading, setLoading] = useState(false);
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !subject || !description) {
+  const patch = (p: Partial<TicketComposerValues>) =>
+    setValues((v) => ({ ...v, ...p }));
+
+  const handleSubmit = async () => {
+    if (!values.email.trim() || !values.subject.trim() || !values.description.trim()) {
       setErrorMsg('Please fill in your email, subject, and description.');
       return;
     }
     setErrorMsg(null);
     setLoading(true);
 
-    const generatedId = `NSK-${Math.floor(100000 + Math.random() * 900000)}`;
-
     try {
-      if (supabaseAnon) {
-        await (supabaseAnon as any).from('support_tickets').insert({
-          ticket_id: generatedId,
-          email,
-          name: name || null,
-          category,
-          priority,
-          subject,
-          description,
-          platform: isDesktop() ? 'desktop' : 'web',
-          user_agent: navigator.userAgent,
-          created_at: new Date().toISOString(),
-          status: 'open',
-        });
-      }
-    } catch (err) {
-      console.warn('Support ticket submission note:', err);
-    } finally {
-      // Always succeed from user perspective
+      if (!supabaseAnon) throw new Error('Support backend is not configured in this build.');
+      // Real insert through the validated portal RPC (the table itself is
+      // rpc-only for anon, so a direct insert would silently fail).
+      const { data, error } = await supabaseAnon.rpc(
+        'support_create_ticket' as never,
+        {
+          p_subject: values.subject.trim(),
+          p_description: values.description.trim(),
+          p_category: values.category,
+          p_priority: values.priority,
+          p_email: values.email.trim(),
+          p_name: values.name.trim() || null,
+          p_platform: isDesktop() ? 'desktop' : 'web',
+          p_user_agent: navigator.userAgent,
+        } as never
+      );
+      if (error) throw error;
+      const created = data as { id: string; ticket_number: string };
+      if (!created?.ticket_number) throw new Error('Ticket creation returned no data.');
+      // Best-effort confirmation email — never blocks the success screen.
+      void requestTicketConfirmEmail(supabaseAnon, created.ticket_number, values.email.trim());
       setTimeout(() => {
         setLoading(false);
-        setTicketId(generatedId);
+        setTicketId(created.ticket_number);
       }, 500);
+    } catch (err) {
+      console.warn('Support ticket submission failed:', err);
+      const msg = err instanceof Error ? err.message : 'Submission failed. Please try again.';
+      setLoading(false);
+      setErrorMsg(
+        msg.includes('RATE_LIMITED')
+          ? 'You have submitted several tickets recently. Please wait a bit and try again.'
+          : msg.includes('INVALID_EMAIL')
+            ? 'That email address doesn\u2019t look valid.'
+            : `Could not submit the ticket: ${msg}`
+      );
     }
   };
 
@@ -94,8 +92,37 @@ export default function SupportTicket() {
           <ArrowLeft size={14} /> Back to Support Docs
         </Link>
 
+        {/* Submit / Track switcher */}
+        {!ticketId && (
+          <div className="ticket-mode-switch">
+            <button
+              type="button"
+              className={`ticket-mode-btn ${mode === 'submit' ? 'active' : ''}`}
+              onClick={() => setMode('submit')}
+            >
+              Submit a ticket
+            </button>
+            <button
+              type="button"
+              className={`ticket-mode-btn ${mode === 'track' ? 'active' : ''}`}
+              onClick={() => setMode('track')}
+            >
+              Track existing ticket
+            </button>
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
-          {ticketId ? (
+          {mode === 'track' && !ticketId ? (
+            <motion.div
+              key="track"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
+              <TicketTracker />
+            </motion.div>
+          ) : ticketId ? (
             <motion.div
               key="success"
               initial={{ opacity: 0, scale: 0.96 }}
@@ -108,7 +135,8 @@ export default function SupportTicket() {
               </div>
               <h1 className="ticket-success-title">Ticket Submitted Successfully</h1>
               <p className="ticket-success-sub">
-                Your ticket reference ID is <strong className="ticket-ref-code">{ticketId}</strong>. We've sent a confirmation email to <strong>{email}</strong>.
+                Your ticket reference ID is <strong className="ticket-ref-code">{ticketId}</strong>. A
+                confirmation email is on its way to <strong>{values.email}</strong>.
               </p>
 
               <div className="ticket-success-details-grid">
@@ -122,11 +150,11 @@ export default function SupportTicket() {
                 </div>
                 <div className="ticket-detail-item">
                   <span className="ticket-detail-label">Category</span>
-                  <span className="ticket-detail-val capitalize">{category}</span>
+                  <span className="ticket-detail-val capitalize">{values.category}</span>
                 </div>
                 <div className="ticket-detail-item">
                   <span className="ticket-detail-label">Priority</span>
-                  <span className="ticket-detail-val capitalize">{priority}</span>
+                  <span className="ticket-detail-val capitalize">{values.priority}</span>
                 </div>
               </div>
 
@@ -134,13 +162,20 @@ export default function SupportTicket() {
                 <Link to="/docs" className="ticket-btn secondary">
                   Browse Documentation
                 </Link>
+                <button
+                  type="button"
+                  className="ticket-btn primary"
+                  onClick={() => setMode('track')}
+                >
+                  <TicketIcon size={14} /> Track this ticket
+                </button>
                 <a
                   href="https://discord.gg/noska"
                   target="_blank"
                   rel="noreferrer"
-                  className="ticket-btn primary"
+                  className="ticket-btn secondary"
                 >
-                  <MessageSquare size={14} /> Join Discord Community <ExternalLink size={12} />
+                  <MessageSquare size={14} /> Join Discord <ExternalLink size={12} />
                 </a>
               </div>
             </motion.div>
@@ -149,168 +184,159 @@ export default function SupportTicket() {
               key="form"
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
               className="ticket-form-card"
             >
-              <div className="ticket-form-header">
-                <div className="ticket-header-pill">
-                  <LifeBuoy size={13} />
-                  <span>Noska Help Desk</span>
-                </div>
-                <h1 className="ticket-main-title">Submit a Support Ticket</h1>
-                <p className="ticket-main-sub">
-                  Need assistance or have feedback? Submit your request directly to our core engineering team.
-                </p>
-              </div>
-
-              {errorMsg && (
-                <div className="ticket-error-banner">
-                  <AlertCircle size={16} />
-                  <span>{errorMsg}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="ticket-form-body">
-                {/* Category Selector */}
-                <div className="ticket-field-group">
-                  <label className="ticket-field-label">Issue Category</label>
-                  <div className="ticket-categories-grid">
-                    {TICKET_CATEGORIES.map((cat) => {
-                      const Icon = cat.icon;
-                      const active = category === cat.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          className={`ticket-category-btn ${active ? 'active' : ''}`}
-                          onClick={() => setCategory(cat.id)}
-                        >
-                          <div className="ticket-cat-icon">
-                            <Icon size={16} />
-                          </div>
-                          <div className="ticket-cat-info">
-                            <p className="ticket-cat-title">{cat.label}</p>
-                            <p className="ticket-cat-desc">{cat.desc}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Email & Name Row */}
-                <div className="ticket-input-row">
-                  <div className="ticket-field-group flex-1">
-                    <label className="ticket-field-label" htmlFor="ticket-email">
-                      Your Email Address <span className="ticket-req">*</span>
-                    </label>
-                    <input
-                      id="ticket-email"
-                      type="email"
-                      placeholder="you@company.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="ticket-input"
-                      required
-                    />
-                  </div>
-                  <div className="ticket-field-group flex-1">
-                    <label className="ticket-field-label" htmlFor="ticket-name">
-                      Display Name
-                    </label>
-                    <input
-                      id="ticket-name"
-                      type="text"
-                      placeholder="Jane Doe"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="ticket-input"
-                    />
-                  </div>
-                </div>
-
-                {/* Priority Selector */}
-                <div className="ticket-field-group">
-                  <label className="ticket-field-label">Priority Level</label>
-                  <div className="ticket-priorities-row">
-                    {PRIORITIES.map((p) => {
-                      const active = priority === p.id;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className={`ticket-priority-chip ${active ? 'active' : ''}`}
-                          onClick={() => setPriority(p.id)}
-                        >
-                          <span>{p.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Subject Line */}
-                <div className="ticket-field-group">
-                  <label className="ticket-field-label" htmlFor="ticket-subject">
-                    Subject / Summary <span className="ticket-req">*</span>
-                  </label>
-                  <input
-                    id="ticket-subject"
-                    type="text"
-                    placeholder="Brief description of the issue or inquiry"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="ticket-input"
-                    required
-                  />
-                </div>
-
-                {/* Description */}
-                <div className="ticket-field-group">
-                  <label className="ticket-field-label" htmlFor="ticket-desc">
-                    Detailed Description <span className="ticket-req">*</span>
-                  </label>
-                  <textarea
-                    id="ticket-desc"
-                    rows={5}
-                    placeholder="Please include steps to reproduce, expected behavior, or specific error messages..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="ticket-textarea"
-                    required
-                  />
-                </div>
-
-                {/* Environment Pill Notice */}
-                <div className="ticket-env-notice">
-                  <ShieldCheck size={14} className="text-emerald-500" />
-                  <span>
-                    Diagnostic context ({isDesktop() ? 'Desktop App' : 'Web Browser'}) will be attached securely to expedite triage.
-                  </span>
-                </div>
-
-                {/* Submit Action */}
-                <div className="ticket-submit-row">
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
-                    type="submit"
-                    className="ticket-submit-btn"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <span>Submitting Ticket…</span>
-                    ) : (
-                      <>
-                        <span>Submit Ticket</span>
-                        <Send size={14} />
-                      </>
-                    )}
-                  </motion.button>
-                </div>
-              </form>
+              <TicketComposerForm
+                values={values}
+                onChange={patch}
+                onSubmit={handleSubmit}
+                loading={loading}
+                error={errorMsg}
+                showHeader
+                envLabel={isDesktop() ? 'Desktop App' : 'Web Browser'}
+              />
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function TicketTracker() {
+  const [number, setNumber] = useState('');
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    ticket: { ticket_number: string; subject: string; status: string; category: string; priority: string; last_update: string };
+    messages: SupportMessage[];
+  } | null>(null);
+
+  const lookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+    setError(null);
+    setResult(null);
+    setLoading(true);
+    try {
+      if (!supabaseAnon) throw new Error('Support backend is not configured in this build.');
+      const found = await lookupSupportTicket(supabaseAnon, number, email);
+      setResult(found as {
+        ticket: { ticket_number: string; subject: string; status: string; category: string; priority: string; last_update: string };
+        messages: SupportMessage[];
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Lookup failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="ticket-form-card">
+      <div className="nsticket">
+        <div className="ticket-form-header">
+          <h1 className="ticket-main-title">Track Your Ticket</h1>
+          <p className="ticket-main-sub">
+            Enter your ticket reference and the email you submitted it with.
+          </p>
+        </div>
+
+        {error && (
+          <div className="ticket-error-banner" role="alert">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={lookup} className="ticket-form-body">
+          <div className="ticket-input-row">
+            <div className="ticket-field-group flex-1">
+              <label className="ticket-field-label" htmlFor="track-number">
+                Ticket Reference <span className="ticket-req">*</span>
+              </label>
+              <input
+                id="track-number"
+                type="text"
+                placeholder="NSK-123456"
+                value={number}
+                onChange={(e) => setNumber(e.target.value.toUpperCase())}
+                className="ticket-input"
+                required
+              />
+            </div>
+            <div className="ticket-field-group flex-1">
+              <label className="ticket-field-label" htmlFor="track-email">
+                Email Address <span className="ticket-req">*</span>
+              </label>
+              <input
+                id="track-email"
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="ticket-input"
+                required
+              />
+            </div>
+          </div>
+          <div className="ticket-submit-row">
+            <button type="submit" className="ticket-submit-btn" disabled={loading}>
+              {loading ? (
+                <span>Looking up…</span>
+              ) : (
+                <>
+                  <Search size={14} /> <span>Track ticket</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+
+        {loading && (
+          <div className="ticket-track-loading">
+            <Loader2 size={18} className="animate-spin" />
+          </div>
+        )}
+
+        {result && (
+          <div className="ticket-track-result">
+            <div className="ticket-track-head">
+              <Inbox size={15} />
+              <div>
+                <p className="ticket-track-subject">{result.ticket.subject}</p>
+                <p className="ticket-track-meta">
+                  {result.ticket.ticket_number} · {result.ticket.category} · updated{' '}
+                  {new Date(result.ticket.last_update).toLocaleString()}
+                </p>
+              </div>
+              <span className={`ticket-track-status status-${result.ticket.status}`}>
+                {result.ticket.status.replace('_', ' ')}
+              </span>
+            </div>
+            <div className="ticket-track-thread">
+              {result.messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={`ticket-track-msg ${m.sender_type === 'admin' ? 'from-admin' : 'from-user'}`}
+                >
+                  {m.sender_type === 'admin' && (
+                    <p className="ticket-track-sender">{m.sender_name} · Support</p>
+                  )}
+                  <p className="ticket-track-text">{m.message}</p>
+                  <p className="ticket-track-time">
+                    {new Date(m.created_at).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="ticket-track-hint">
+              Want to reply? Sign in to your dashboard and open Support Tickets.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

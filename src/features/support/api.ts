@@ -71,6 +71,132 @@ const FRIENDLY_ERRORS: Record<string, string> = {
 export const NETWORK_ERROR_MESSAGE =
   "Couldn't reach the support backend. Check your connection and try again.";
 
+// ─── Backend self-diagnosis ──────────────────────────────────────────────────
+// When the browser can't complete a request at all (DNS/ad-blocker/VPN/wrong
+// URL/offline), the fetch just throws TypeError with no usable detail. This
+// probes each layer separately so the UI can say exactly what failed.
+
+export interface BackendDiagnosis {
+  /** API host, e.g. https://xyz.supabase.co (or "unknown"). */
+  host: string;
+  /** What the browser itself reports. */
+  online: boolean;
+  /** TCP+TLS to the host works (opaque no-cors probe). Null = not tested. */
+  hostReachable: boolean | null;
+  /** PostgREST answered an HTTP response (CORS + gateway OK). */
+  apiReachable: boolean | null;
+  /** The support RPC answered (proves function exposed + key valid). */
+  rpcReachable: boolean | null;
+  /** Human-readable next step. */
+  hint: string;
+}
+
+function supabaseUrl(): string {
+  try {
+    const url =
+      (supabase as unknown as { supabaseUrl?: unknown }).supabaseUrl ??
+      (supabase as unknown as { url?: unknown }).url;
+    return typeof url === "string" ? url.replace(/\/$/, "") : "";
+  } catch {
+    return "";
+  }
+}
+
+function anonKey(): string {
+  try {
+    const key = (supabase as unknown as { supabaseKey?: unknown }).supabaseKey;
+    return typeof key === "string" ? key : "";
+  } catch {
+    return "";
+  }
+}
+
+async function probe(url: string, init: RequestInit, timeoutMs: number): Promise<Response | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function diagnoseSupportBackend(): Promise<BackendDiagnosis> {
+  const base = supabaseUrl();
+  const online = typeof navigator === "undefined" ? true : navigator.onLine !== false;
+  const host = base || "unknown";
+  const diag: BackendDiagnosis = {
+    host,
+    online,
+    hostReachable: null,
+    apiReachable: null,
+    rpcReachable: null,
+    hint: "",
+  };
+  if (!online) {
+    diag.hint = "Your device reports no internet connection. Reconnect and retry.";
+    return diag;
+  }
+  if (!base) {
+    diag.hint = "The support backend URL is not configured in this build.";
+    return diag;
+  }
+
+  // Layer 1: can we reach the host at all? (no-cors → opaque on success)
+  try {
+    const root = await probe(base, { method: "GET", mode: "no-cors" }, 8000);
+    diag.hostReachable = root !== null && (root.type === "opaque" || root.ok);
+  } catch {
+    diag.hostReachable = false;
+  }
+  if (!diag.hostReachable) {
+    diag.hint =
+      `This device can't reach ${host} at all. This is usually a VPN, firewall, ` +
+      `custom DNS/Pi-hole, or an ad-blocker (Brave Shields is a common culprit — it blocks *.supabase.co). ` +
+      `It can also mean the backend URL in this build is wrong. Try disabling content blockers for this site.`;
+    return diag;
+  }
+
+  // Layer 2: does the API answer real (CORS + gateway) requests?
+  const apiRes = await probe(`${base}/rest/v1/`, { method: "GET" }, 8000);
+  diag.apiReachable = apiRes !== null;
+  if (!diag.apiReachable) {
+    diag.hint =
+      `The host ${host} is reachable, but API requests from the browser are blocked. ` +
+      `This points at CORS or a content blocker interfering with API calls. ` +
+      `Try an incognito window with extensions disabled.`;
+    return diag;
+  }
+
+  // Layer 3: does the support RPC itself answer (any HTTP status counts)?
+  const key = anonKey();
+  if (key) {
+    const rpcRes = await probe(
+      `${base}/rest/v1/rpc/support_open_count`,
+      {
+        method: "POST",
+        headers: { apikey: key, "Content-Type": "application/json" },
+        body: "{}",
+      },
+      8000
+    );
+    diag.rpcReachable = rpcRes !== null;
+  }
+  if (diag.rpcReachable === false) {
+    diag.hint =
+      `The API answers, but the support endpoint doesn't. The backend may be briefly unavailable — ` +
+      `wait a minute and retry. If it persists, the deployment may be missing the support functions.`;
+    return diag;
+  }
+  diag.hint =
+    diag.rpcReachable
+      ? "Backend layers all answer. The failure is likely your login session — try signing out and back in, then retry."
+      : "Backend layers answer (RPC check skipped). The failure may be transient — retry, or sign out and back in.";
+  return diag;
+}
+
 /** True for transport-level failures (offline, DNS, blocked host, timeouts). */
 export function isNetworkError(err: unknown): boolean {
   if (err == null) return false;

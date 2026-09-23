@@ -28,7 +28,7 @@ const Ctx = createContext<EntitlementsCtx>({
 const FREE_FALLBACK: EntitlementSnapshot = {
   plan: { id: "free", name: "Free", slug: "free" },
   features: {},
-  limits: { monthly_ai_credits: 200, max_workspaces: 1, max_storage_mb: 500 },
+  limits: { max_workspaces: 1, max_storage_mb: 500 },
   usage: {},
   remaining: {},
   subscription: { status: "unknown" },

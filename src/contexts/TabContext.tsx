@@ -31,6 +31,7 @@ export const VIEW_META: Record<string, { icon: string; title: string }> = {
   library: { icon: "⊞", title: "Library" },
   tasks: { icon: "✓", title: "My Tasks" },
   marketplace: { icon: "🏪", title: "Marketplace" },
+  support: { icon: "🎫", title: "Support Tickets" },
   creator: { icon: "🎨", title: "Creator Studio" },
   agents: { icon: "🤖", title: "Personal Agent" },
   chats: { icon: "💬", title: "Chats" },

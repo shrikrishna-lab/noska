@@ -272,7 +272,7 @@ export const MotionTextArea = React.forwardRef<HTMLTextAreaElement, MotionTextAr
 // ----------------------------------------------------
 // 3. Animated Backdrop & Modal
 // ----------------------------------------------------
-export function AnimatedModal({ children, onClose, wide = false }) {
+export function AnimatedModal({ children, onClose, wide = false, className = "" }) {
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
@@ -290,7 +290,7 @@ export function AnimatedModal({ children, onClose, wide = false }) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
       onMouseDown={onClose}
-      className="fixed inset-0 z-50 grid place-items-start justify-center bg-black/50 pt-[10vh] backdrop-blur-[8px] saturate-[120%] px-4"
+      className="fixed inset-0 z-50 grid place-items-start justify-center bg-black/50 pt-[8vh] backdrop-blur-[8px] saturate-[120%] px-4"
     >
       <motion.div
         initial={reducedMotion ? {} : { scale: 0.96, y: 15, opacity: 0 }}
@@ -299,8 +299,8 @@ export function AnimatedModal({ children, onClose, wide = false }) {
         transition={SPRING_PRESETS.soft}
         onMouseDown={(e) => e.stopPropagation()}
         className={`${
-          wide ? "w-[680px]" : "w-[480px]"
-        } max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] shadow-[var(--shadow-modal)]`}
+          className ? className : wide ? "w-[760px]" : "w-[480px]"
+        } max-w-[calc(100vw-32px)] overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] shadow-[var(--shadow-modal)]`}
       >
         {children}
       </motion.div>

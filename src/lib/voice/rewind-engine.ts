@@ -45,7 +45,16 @@ const rollingBuffer: RewindUtterance[] = [];
 const rewindListeners = new Set<(event: RewindEvent) => void>();
 
 /**
- * Record a freshly inserted utterance into the rolling buffer
+ * Record a freshly inserted utterance into the rolling buffer.
+ *
+ * Merges cumulative growth into the tail entry: interim streaming records
+ * every chunk ("meet" → "meeting" → "meeting at 3 pm"), and without
+ * merging, one dictated sentence fills the buffer (max 10) with fragments
+ * of itself — evicting the real previous utterance and leaving stale
+ * fragments for later corrections to hit. Same target + prefix overlap =
+ * the same utterance still being spoken, so refresh it in place.
+ * (charStart/charEnd are left from the first chunk: executeRewind locates
+ * text with lastIndexOf, never with these offsets.)
  */
 export function recordUtterance(
   targetElement: HTMLElement,
@@ -57,10 +66,26 @@ export function recordUtterance(
 ): void {
   if (!text || !text.trim()) return;
 
+  const cleanText = text.trim();
+  const tail = rollingBuffer[rollingBuffer.length - 1];
+  if (tail && tail.targetElement === targetElement && tail.text) {
+    const prev = tail.text;
+    const overlap = cleanText.startsWith(prev) || prev.startsWith(cleanText);
+    // The shorter side must be substantial: a shared single character
+    // ("a" → "actually I meant…") is two distinct utterances, not growth.
+    // Exact repeats still merge (no point storing the same text twice).
+    const shorter = Math.min(prev.length, cleanText.length);
+    if (overlap && (cleanText === prev || shorter >= 3)) {
+      if (cleanText.length >= prev.length) tail.text = cleanText;
+      tail.timestamp = Date.now();
+      return;
+    }
+  }
+
   const utterance: RewindUtterance = {
     id: `utt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     timestamp: Date.now(),
-    text: text.trim(),
+    text: cleanText,
     targetElement,
     charStart,
     charEnd,
@@ -222,21 +247,123 @@ function spliceCorrectionIntoUtterance(originalText: string, correctionText: str
   return correctionText;
 }
 
+/** Remove a buffer entry without touching the document. */
+function dropUtterance(utterance: RewindUtterance): void {
+  const idx = rollingBuffer.indexOf(utterance);
+  if (idx !== -1) rollingBuffer.splice(idx, 1);
+}
+
+/**
+ * Is this buffer entry just the trigger's own streamed echo? Interim
+ * results type trigger words into the document ("wait" → "wait I meant"
+ * → "wait I meant 4 pm") before the final arrives, so the buffer tail is
+ * the trigger itself, not the utterance to correct. Echo chunks are
+ * prefixes of the final trigger segment — while a genuine previous
+ * utterance is essentially never a prefix of it.
+ *
+ * Comparison is punctuation-insensitive: streamed interim text is
+ * unpunctuated ("wait i meant 4 pm") while the finalized segment may
+ * carry commas ("wait, I meant 4 PM"). The length guard keeps
+ * single-character entries from false-matching triggers like "actually…".
+ */
+function normalizeEchoText(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isTriggerEcho(utteranceText: string, triggerSegment: string): boolean {
+  const u = normalizeEchoText(utteranceText);
+  const t = normalizeEchoText(triggerSegment);
+  if (!u || !t) return false;
+  if (u === t) return true;
+  return u.length >= 3 && t.startsWith(u);
+}
+
+/**
+ * Does this element really implement innerText (with a setter)? Probes the
+ * prototype chain — never the instance — because blindly assigning
+ * `el.innerText = x` where unimplemented creates a throwaway own property
+ * that reads back deceptively while the real content stays untouched.
+ */
+function ceSupportsInnerText(el: HTMLElement): boolean {
+  try {
+    let proto: unknown = Object.getPrototypeOf(el);
+    while (proto) {
+      const desc = Object.getOwnPropertyDescriptor(proto, "innerText");
+      if (desc) return typeof desc.set === "function" || desc.writable === true;
+      proto = Object.getPrototypeOf(proto);
+    }
+  } catch {}
+  return false;
+}
+
+/** Write rendered text into a contentEditable element, using textContent
+ *  only where innerText is genuinely unimplemented. */
+function setEditableText(el: HTMLElement, text: string): void {
+  if (ceSupportsInnerText(el)) {
+    el.innerText = text;
+  } else {
+    el.textContent = text;
+  }
+}
+
+/** Erase a recorded utterance's text from its element (used for the
+ *  trigger's own streamed echo). Returns true when erased. */
+function eraseUtteranceText(utterance: RewindUtterance): boolean {
+  const el = utterance.targetElement;
+  const isInput = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+  const isCE = !isInput && (el.isContentEditable || el.getAttribute("contenteditable") === "true");
+  if (!isInput && !isCE) return false;
+  el.focus();
+  if (isInput) {
+    const input = el as HTMLInputElement | HTMLTextAreaElement;
+    const idx = input.value.lastIndexOf(utterance.text);
+    if (idx === -1) return false;
+    input.value = (input.value.substring(0, idx) + input.value.substring(idx + utterance.text.length)).replace(/\s{2,}/g, " ");
+    input.setSelectionRange(idx, idx);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+  const full = el.innerText || el.textContent || "";
+  const idx = full.lastIndexOf(utterance.text);
+  if (idx === -1) return false;
+  const erased = (full.substring(0, idx) + full.substring(idx + utterance.text.length)).replace(/\s{2,}/g, " ");
+  setEditableText(el, erased);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
 // ─── In-Place In-Input Rewind Execution ───────────────────────────
 
 /**
  * Execute in-place Rewind replacement on the active element.
  * Returns true if the rewind succeeded.
+ *
+ * `triggerSegment` is the raw finalized trigger utterance ("wait, I meant
+ * 4 PM"). When provided, a trailing buffer entry that is just the
+ * trigger's own streamed echo is erased from the document and dropped,
+ * so the correction targets the real previous utterance.
  */
 export function executeRewind(
   correctionResult: RewindMatchResult,
-  targetOverride?: HTMLElement | null
+  targetOverride?: HTMLElement | null,
+  triggerSegment?: string
 ): boolean {
   const settings = getVoiceSettings();
   if (settings.rewindEnabled === false) return false;
 
   const target = targetOverride || getActiveTypingElement();
-  const lastUtterance = getLastUtterance(target);
+  let lastUtterance = getLastUtterance(target);
+
+  // Strip the trigger echo first (see isTriggerEcho): without this, the
+  // streamed trigger words would be "corrected" instead of the previous
+  // utterance, and left behind in the document.
+  if (triggerSegment && lastUtterance && isTriggerEcho(lastUtterance.text, triggerSegment)) {
+    eraseUtteranceText(lastUtterance);
+    dropUtterance(lastUtterance);
+    lastUtterance = getLastUtterance(target);
+  }
   if (!lastUtterance) return false;
 
   const { isDelete, correctionText } = correctionResult;
@@ -301,7 +428,7 @@ export function executeRewind(
       }
 
       const nextText = (before + inserted + after).replace(/\s{2,}/g, " ");
-      el.innerText = nextText;
+      setEditableText(el, nextText);
 
       try {
         const sel = window.getSelection();
@@ -321,6 +448,11 @@ export function executeRewind(
   }
 
   if (success) {
+    // An erased utterance leaves a useless empty tail entry behind, which
+    // would stall chained deletes ("scratch that" twice to erase two
+    // utterances) — drop it so the next correction walks further back.
+    // Replacements stay (updated above) so chained corrections keep working.
+    if (isDelete) dropUtterance(lastUtterance);
     // Notify listeners for visual confidence aura in Voice Pill
     const event: RewindEvent = {
       originalText,

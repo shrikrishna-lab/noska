@@ -144,7 +144,9 @@ export interface FeedbackItem {
 
 export interface SupportTicket {
   id: string;
+  ticket_number: string | null;
   subject: string;
+  description: string | null;
   user_name: string;
   email: string;
   category: "billing" | "technical" | "account" | "feature" | "other";
@@ -153,7 +155,10 @@ export interface SupportTicket {
   assigned_to: string | null;
   replies: number;
   last_update: string;
-  description?: string;
+  created_at: string;
+  platform: string | null;
+  user_agent: string | null;
+  user_id: string | null;
 }
 
 export interface SupportMessage {

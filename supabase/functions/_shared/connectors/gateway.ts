@@ -82,7 +82,36 @@ function safeConnector(c: Row): Row {
     id: c.id, slug: c.slug, name: c.name, description: c.description,
     publisher: c.publisher, icon_url: c.icon_url ?? null,
     default_scopes: c.default_scopes ?? [], call_rate_limit: c.call_rate_limit,
+    // Live credential check so settings UIs can render "coming soon"
+    // instead of a Connect button that fails with a missing-credentials
+    // error. Absent oauth_config (older rows) counts as configured to
+    // stay backward compatible.
+    oauth_configured: isOAuthConfigured(
+      (c.oauth_config ?? {}) as Row,
+      Array.isArray(c.auth_modes) ? (c.auth_modes as unknown[]).map(String) : null,
+    ),
   };
+}
+
+/** True when an OAuth connect can actually start for this connector:
+ *  token-only connectors need nothing; OAuth connectors need either
+ *  static credentials (env-provided or hardcoded) or a dynamic client
+ *  registration endpoint. Only presence is checked — values stay secret. */
+function staticCredentialPresent(cfg: Row, key: string): boolean {
+  const raw = typeof cfg[key] === "string" ? (cfg[key] as string).trim() : "";
+  if (!raw) return false;
+  if (key.endsWith("_env")) return Boolean(Deno.env.get(raw)?.trim());
+  return true;
+}
+
+function isOAuthConfigured(cfg: Row, authModes: string[] | null): boolean {
+  const modes = Array.isArray(authModes) && authModes.length ? authModes : ["oauth"];
+  if (!modes.includes("oauth")) return true;
+  const hasStatic =
+    (staticCredentialPresent(cfg, "client_id_env") || staticCredentialPresent(cfg, "client_id")) &&
+    (staticCredentialPresent(cfg, "client_secret_env") || staticCredentialPresent(cfg, "client_secret"));
+  if (hasStatic) return true;
+  return typeof cfg.registration_endpoint === "string" && cfg.registration_endpoint.trim().length > 0;
 }
 
 export async function resolveConnector(idOrSlug: string): Promise<ConnectorRow> {
@@ -839,10 +868,14 @@ export async function revokeConnection(userId: string, connectionId: string): Pr
 
 export async function listConnectors(): Promise<{ connectors: Row[] }> {
   const { data, error } = await db().from("connectors").select(
-    "id,slug,name,description,publisher,icon_url,default_scopes,auth_modes,call_rate_limit",
+    "id,slug,name,description,publisher,icon_url,default_scopes,auth_modes,call_rate_limit,oauth_config",
   ).eq("is_active", true).order("name");
   if (error) throw errors.internal(error.message);
-  return { connectors: data ?? [] };
+  // oauth_config is consumed only to compute the flag — stripped before
+  // responding (safeConnector never includes it).
+  return {
+    connectors: (data ?? []).map((c) => safeConnector({ ...(c as Row), auth_modes: (c as Row).auth_modes ?? null })),
+  };
 }
 
 export async function listConnections(userId: string): Promise<{ connections: Row[] }> {

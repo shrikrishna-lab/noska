@@ -7,8 +7,8 @@ import type { InvoiceRow, PaymentRow } from "@/lib/billing/types";
 import { billingMessage } from "@/lib/billing/errors";
 import { UsageMeters } from "./UsageMeters";
 import { PricingCards } from "./PricingCards";
-import { CreditBalance } from "./CreditBalance";
-import { TopupCards } from "./TopupCards";
+// CreditBalance + TopupCards intentionally unmounted: Noska is BYOK, so AI
+// credits buy no consumable metering. Re-mount when credits back real usage.
 import { PlanBadge } from "./PlanBadge";
 
 const COUNTRIES: Array<{ code: string; label: string }> = [
@@ -194,17 +194,6 @@ export function BillingSettings() {
         <h3 className="mb-1 text-sm font-semibold dark:text-white">Billing details</h3>
         <p className="mb-3 text-xs text-neutral-500">Country controls your pricing currency. GSTIN appears on Indian invoices.</p>
         <BillingProfileForm currentCountry={data.customer?.billing_country ?? null} onSaved={async () => { await refresh(); notifyBillingChanged(); }} />
-      </div>
-
-      <div className="rounded-2xl border border-neutral-200 p-5 dark:border-white/10">
-        <h3 className="mb-3 text-sm font-semibold dark:text-white">AI credits</h3>
-        <CreditBalance />
-      </div>
-
-      <div className="rounded-2xl border border-neutral-200 p-5 dark:border-white/10">
-        <h3 className="mb-1 text-sm font-semibold dark:text-white">Buy AI credits</h3>
-        <p className="mb-3 text-xs text-neutral-500">Top-ups stack on your plan allowance and expire as shown.</p>
-        <TopupCards />
       </div>
 
       <div className="rounded-2xl border border-neutral-200 p-5 dark:border-white/10">

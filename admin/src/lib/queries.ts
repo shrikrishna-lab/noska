@@ -653,7 +653,7 @@ export function useFeedback() {
 export function useSupportTickets() {
   return useQuery({
     queryKey: ["admin", "support-tickets"],
-    queryFn: () => adminSelect<SupportTicket>("support_tickets", "*", { order: "last_update desc" }),
+    queryFn: () => adminSelect<SupportTicket>("support_tickets", "*", { order: "last_update desc", limit: 500 }),
   });
 }
 
@@ -1352,10 +1352,12 @@ export function useSendSupportMessage() {
 export function useUpdateTicketStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status, assignedTo }: { id: string; status: string; assignedTo?: string | null }) => {
+    mutationFn: async ({ id, status, assignedTo, priority }: { id: string; status?: string; assignedTo?: string | null; priority?: string }) => {
       if (!SUPABASE_ENABLED || !supabase) throw new Error("Supabase not available");
-      const updates: Record<string, unknown> = { status, last_update: new Date().toISOString() };
+      const updates: Record<string, unknown> = { last_update: new Date().toISOString() };
+      if (status !== undefined) updates.status = status;
       if (assignedTo !== undefined) updates.assigned_to = assignedTo;
+      if (priority !== undefined) updates.priority = priority;
       const { error } = await supabase.rpc("admin_update", {
         p_session_token: token(), p_table: "support_tickets", p_id: id,
         p_data: updates, p_min_role: "support",

@@ -10,7 +10,6 @@ import {
   LifeBuoy,
   Send,
   AlertCircle,
-  ShieldCheck,
   Bug,
   Lightbulb,
   CreditCard,
@@ -217,13 +216,6 @@ export default function TicketComposerForm({
             className="ticket-textarea"
             required
           />
-        </div>
-
-        <div className="ticket-env-notice">
-          <ShieldCheck size={14} className="text-emerald-500" />
-          <span>
-            Diagnostic context ({envLabel || "Web Browser"}) will be attached securely to expedite triage.
-          </span>
         </div>
 
         <div className="ticket-submit-row">

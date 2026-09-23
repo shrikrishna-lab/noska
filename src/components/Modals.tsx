@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MotionInput, SPRING_PRESETS } from "../features/motion/MotionSystem";
@@ -40,9 +40,13 @@ import {
   Plug,
   Layout,
   LayoutGrid,
-  type LucideIcon
+  type LucideIcon,
+  ChevronRight,
+  FolderTree
 } from "lucide-react";
 import { Modal, ModalHeader, IconButton, Field } from "./ui";
+import { DeleteButton } from "./ui/delete-button";
+import { RestoreButton } from "./ui/restore-button";
 import CustomProviders from "./settings/CustomProviders";
 import IntegrationsSettings from "./settings/IntegrationsSettings";
 import ConnectionsSettings from "./settings/ConnectionsSettings";
@@ -1355,34 +1359,381 @@ function SettingsNavItem({ icon: Icon, label, active, onClick }: SettingsNavItem
   );
 }
 
-interface TrashModalProps {
+export interface TrashModalProps {
   pages: Page[];
   onClose: () => void;
   onRestore: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export function TrashModal({ pages, onClose, onRestore, onDelete }: TrashModalProps) {
+interface TrashTreeNodeData {
+  page: Page;
+  children: TrashTreeNodeData[];
+  depth: number;
+}
+
+function buildTrashTree(pages: Page[]): TrashTreeNodeData[] {
+  const pageMap = new Map<string, Page>();
+  const childrenMap = new Map<string, Page[]>();
+
+  pages.forEach((p) => {
+    pageMap.set(p.id, p);
+  });
+
+  pages.forEach((p) => {
+    if (p.parentId && pageMap.has(p.parentId)) {
+      const list = childrenMap.get(p.parentId) || [];
+      list.push(p);
+      childrenMap.set(p.parentId, list);
+    }
+  });
+
+  function buildNode(page: Page, depth: number): TrashTreeNodeData {
+    const rawChildren = childrenMap.get(page.id) || [];
+    return {
+      page,
+      depth,
+      children: rawChildren.map((child) => buildNode(child, depth + 1)),
+    };
+  }
+
+  const rootNodes: TrashTreeNodeData[] = [];
+  pages.forEach((p) => {
+    // If it has no parent or its parent is not in the trashed list, it's a top-level root
+    if (!p.parentId || !pageMap.has(p.parentId)) {
+      rootNodes.push(buildNode(p, 0));
+    }
+  });
+
+  return rootNodes;
+}
+
+function countDescendants(node: TrashTreeNodeData): number {
+  let count = node.children.length;
+  for (const child of node.children) {
+    count += countDescendants(child);
+  }
+  return count;
+}
+
+function filterTrashTree(nodes: TrashTreeNodeData[], query: string): TrashTreeNodeData[] {
+  if (!query.trim()) return nodes;
+  const q = query.toLowerCase().trim();
+
+  function nodeMatches(node: TrashTreeNodeData): boolean {
+    if (node.page.title.toLowerCase().includes(q)) return true;
+    return node.children.some(nodeMatches);
+  }
+
+  return nodes
+    .filter(nodeMatches)
+    .map((node) => ({
+      ...node,
+      children: filterTrashTree(node.children, query),
+    }));
+}
+
+function TrashTreeItem({
+  node,
+  expandedMap,
+  onToggleExpand,
+  onRestore,
+  onDelete,
+  isChild = false,
+  isLastChild = false,
+}: {
+  node: TrashTreeNodeData;
+  expandedMap: Record<string, boolean>;
+  onToggleExpand: (id: string) => void;
+  onRestore: (id: string) => void;
+  onDelete: (id: string) => void;
+  isChild?: boolean;
+  isLastChild?: boolean;
+}) {
+  const { page, children, depth } = node;
+  const hasChildren = children.length > 0;
+  const isExpanded = expandedMap[page.id] ?? true;
+  const totalDescendants = hasChildren ? countDescendants(node) : 0;
+
   return (
-    <Modal onClose={onClose}>
-      <ModalHeader icon={Trash2} title="Trash" onClose={onClose} />
-      <div className="space-y-2 p-4">
-        {pages.length === 0 && <div className="text-sm text-[var(--muted)]">Trash is empty.</div>}
-        {pages.map((p) => (
-          <div key={p.id} className="flex items-center gap-2 rounded border border-[var(--border)] p-2">
-            <PageIcon icon={p.icon} size={15} fallback="📄" />
-            <span className="flex-1">
-              <span className="block">{p.title}</span>
-              {p.purgeAfter && (
-                <span className="block text-[10px] text-[var(--muted)]">
-                  Purges {new Date(p.purgeAfter).toLocaleDateString()}
+    <motion.div
+      layout="position"
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 450, damping: 30 }}
+      className="flex flex-col relative"
+    >
+      <div className="flex items-center relative">
+        {/* Rounded Elbow Branch Connector (Image 2 style) */}
+        {isChild && (
+          <div className="w-7 sm:w-8 shrink-0 relative h-10 flex items-center justify-start pointer-events-none select-none">
+            {/* Vertical trunk line */}
+            <div
+              className={`absolute left-3 top-0 w-[2px] bg-neutral-300/80 dark:bg-neutral-700/80 ${
+                isLastChild ? "h-[22px]" : "h-full"
+              }`}
+            />
+            {/* Curved elbow to the right */}
+            <div className="absolute left-3 top-0 w-3.5 sm:w-4 h-[22px] border-b-[2px] border-l-[2px] border-neutral-300/80 dark:border-neutral-700/80 rounded-bl-[10px]" />
+          </div>
+        )}
+
+        {/* Row Card */}
+        <div
+          onClick={() => {
+            if (hasChildren) onToggleExpand(page.id);
+          }}
+          className={`group relative flex-1 min-w-0 flex items-center justify-between gap-2.5 rounded-xl border border-black/[0.06] dark:border-white/[0.08] px-3 py-2 bg-[var(--surface)] hover:bg-[var(--surface-2)] hover:border-black/15 dark:hover:border-white/15 transition-all shadow-xs ${
+            hasChildren ? "cursor-pointer" : ""
+          } ${isChild ? "bg-[var(--surface)]/90" : ""}`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {/* Expand / Collapse Chevron */}
+            {hasChildren ? (
+              <motion.button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleExpand(page.id);
+                }}
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.88 }}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/10 dark:hover:bg-white/12 text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+                title={isExpanded ? "Collapse subpages" : "Expand subpages"}
+                aria-label={isExpanded ? "Collapse subpages" : "Expand subpages"}
+              >
+                <motion.div
+                  animate={{ rotate: isExpanded ? 90 : 0 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 24 }}
+                >
+                  <ChevronRight size={12} strokeWidth={2.4} />
+                </motion.div>
+              </motion.button>
+            ) : isChild ? null : (
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center">
+                <div className="h-1.5 w-1.5 rounded-full bg-[var(--muted)]/40" />
+              </div>
+            )}
+
+            {/* Page Icon */}
+            <div className="shrink-0">
+              <PageIcon icon={page.icon} size={16} fallback="📄" />
+            </div>
+
+            {/* Page Title & Badges */}
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <span className="font-semibold text-xs sm:text-[13px] text-[var(--text)] truncate">
+                {page.title || "Untitled"}
+              </span>
+
+              {hasChildren && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                  <FolderTree size={9} />
+                  <span>
+                    {totalDescendants} {totalDescendants === 1 ? "subpage" : "subpages"}
+                  </span>
                 </span>
               )}
-            </span>
-            <IconButton icon={ArchiveRestore} label="Restore" onClick={() => onRestore(p.id)} />
-            <IconButton icon={Trash2} label="Delete forever" onClick={() => onDelete(p.id)} />
+
+              {page.purgeAfter && (
+                <span className="hidden sm:inline-block text-[10.5px] text-[var(--muted)] truncate font-mono">
+                  · Purges {new Date(page.purgeAfter).toLocaleDateString()}
+                </span>
+              )}
+            </div>
           </div>
-        ))}
+
+          {/* Action Controls: Compact Animated RestoreButton + DeleteButton */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1 shrink-0"
+          >
+            <div
+              title={
+                hasChildren
+                  ? `Restore "${page.title || "Untitled"}" and ${totalDescendants} subpage${
+                      totalDescendants === 1 ? "" : "s"
+                    }`
+                  : `Restore "${page.title || "Untitled"}"`
+              }
+            >
+              <RestoreButton
+                onConfirm={() => onRestore(page.id)}
+                className="scale-[0.74] origin-right"
+              />
+            </div>
+            <div
+              title={
+                hasChildren
+                  ? `Delete "${page.title || "Untitled"}" and ${totalDescendants} subpage${
+                      totalDescendants === 1 ? "" : "s"
+                    } forever`
+                  : `Delete "${page.title || "Untitled"}" forever`
+              }
+            >
+              <DeleteButton
+                onConfirm={() => onDelete(page.id)}
+                className="scale-[0.74] origin-right"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Nested Tree Children with Continuous Branch Lines & Smooth Spring Animation */}
+      <AnimatePresence initial={false}>
+        {hasChildren && isExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+            className="relative ml-2.5 sm:ml-3 flex flex-col space-y-1.5 mt-1.5 overflow-hidden"
+          >
+            {children.map((child, index) => (
+              <TrashTreeItem
+                key={child.page.id}
+                node={child}
+                expandedMap={expandedMap}
+                onToggleExpand={onToggleExpand}
+                onRestore={onRestore}
+                onDelete={onDelete}
+                isChild={true}
+                isLastChild={index === children.length - 1}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+export function TrashModal({ pages, onClose, onRestore, onDelete }: TrashModalProps) {
+  const [search, setSearch] = useState("");
+  const treeNodes = useMemo(() => buildTrashTree(pages), [pages]);
+  const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (id: string) => {
+    setExpandedMap((prev) => ({
+      ...prev,
+      [id]: prev[id] === undefined ? false : !prev[id],
+    }));
+  };
+
+  const handleExpandAll = () => {
+    const next: Record<string, boolean> = {};
+    pages.forEach((p) => {
+      next[p.id] = true;
+    });
+    setExpandedMap(next);
+  };
+
+  const handleCollapseAll = () => {
+    const next: Record<string, boolean> = {};
+    pages.forEach((p) => {
+      next[p.id] = false;
+    });
+    setExpandedMap(next);
+  };
+
+  const filteredTree = useMemo(() => filterTrashTree(treeNodes, search), [treeNodes, search]);
+
+  const hasTrees = useMemo(
+    () => pages.some((p) => p.parentId && pages.some((parent) => parent.id === p.parentId)),
+    [pages]
+  );
+
+  return (
+    <Modal onClose={onClose} wide={true} className="w-[780px] max-w-[94vw]">
+      <ModalHeader icon={Trash2} title="Trash" onClose={onClose} />
+      <div className="flex flex-col gap-3.5 p-4 sm:p-6 max-h-[75vh] overflow-y-auto">
+        {/* Top Search & Actions Bar */}
+        {pages.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-[var(--border)]/60">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search
+                size={14}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
+              />
+              <input
+                type="text"
+                placeholder="Search trashed pages…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-9 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 pl-9 pr-8 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--text)]/40 transition-all"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)]"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold text-[var(--muted)]">
+                {pages.length} {pages.length === 1 ? "item" : "items"}
+              </span>
+
+              {hasTrees && (
+                <>
+                  <span className="text-[var(--muted)]/40">•</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleExpandAll}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
+                    >
+                      Expand All
+                    </button>
+                    <span className="text-[var(--muted)]/40">•</span>
+                    <button
+                      type="button"
+                      onClick={handleCollapseAll}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tree Stream Body */}
+        {pages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center text-[var(--muted)]">
+            <Trash2 size={36} className="mb-2 opacity-40" />
+            <p className="text-sm font-semibold text-[var(--text)]">Trash is empty</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">
+              Deleted pages will appear here before being permanently removed
+            </p>
+          </div>
+        ) : filteredTree.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center text-[var(--muted)]">
+            <Search size={24} className="mb-1.5 opacity-40" />
+            <p className="text-xs font-semibold">No trashed pages match "{search}"</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredTree.map((node) => (
+              <TrashTreeItem
+                key={node.page.id}
+                node={node}
+                expandedMap={expandedMap}
+                onToggleExpand={toggleExpand}
+                onRestore={onRestore}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </Modal>
   );

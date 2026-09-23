@@ -22,7 +22,7 @@ export async function requireFeature(feature: string): Promise<GuardResult> {
   return { ok: false, code, message: billingMessage(r), upgrade_required: true };
 }
 
-/** Pre-check a numeric limit (e.g. monthly_ai_credits, max_workspaces). */
+/** Pre-check a numeric limit (e.g. max_workspaces, max_storage_mb). */
 export async function requireLimit(feature: string, amount = 1): Promise<GuardResult> {
   const r = await checkFeature(feature, amount);
   if (r.ok) return { ok: true };

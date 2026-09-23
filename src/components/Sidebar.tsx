@@ -3,6 +3,7 @@ import type { ReactNode, ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useNotificationPlatform } from "../features/notifications/Provider";
+import { useOpenSupportTicketCount } from "../features/support/api";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { SPRING_PRESETS, StaggerContainer, StaggerItem } from "../features/motion/MotionSystem";
 import {
@@ -36,6 +37,7 @@ import {
   Zap,
   LogOut,
   Info,
+  LifeBuoy,
   SlidersHorizontal,
   Share2,
   HelpCircle,
@@ -54,6 +56,7 @@ import {
   Heart,
   Box,
   ArrowUpRight,
+  Trash2,
   type LucideIcon
 } from "lucide-react";
 import {
@@ -331,6 +334,7 @@ const Sidebar = memo(function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate();
   const { unreadCount } = useNotificationPlatform();
+  const openSupportTicketCount = useOpenSupportTicketCount();
   const { currentCompany } = useCompany()
   const [showJoinCompanyModal, setShowJoinCompanyModal] = useState(false)
   const recents = useMemo(() => [...pages]
@@ -965,9 +969,6 @@ const Sidebar = memo(function Sidebar({
               {customConfig.itemVisibility?.helpCenter !== false && (
                 <NoskaNavItem icon={AnimatedBookmark} label="Help Center" onClick={onHelp} />
               )}
-              {customConfig.itemVisibility?.trash !== false && (
-                <NoskaNavItem icon={AnimatedTrash} label={`Trash${trashCount ? ` (${trashCount})` : ""}`} ariaLabel="Open trash" onClick={onTrash} />
-              )}
             </NoskaSection>
           </div>
         );
@@ -1572,17 +1573,7 @@ const Sidebar = memo(function Sidebar({
                 <span className="flex-1 truncate text-[13px]">Profile</span>
               </button>
 
-              {/* 2. Community */}
-              <button
-                type="button"
-                onClick={() => { setProfileOpen(false); onView("marketplace"); }}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
-              >
-                <MessageSquare size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
-                <span className="flex-1 truncate text-[13px]">Community</span>
-              </button>
-
-              {/* 3. Subscription + live plan badge */}
+              {/* 2. Subscription + live plan badge */}
               <button
                 type="button"
                 onClick={() => { setProfileOpen(false); onSettings("Billing"); }}
@@ -1595,20 +1586,40 @@ const Sidebar = memo(function Sidebar({
                 <PlanBadge size="sm" />
               </button>
 
-              {/* 4. Settings */}
+              {/* 3. Support Tickets (real open-ticket badge) */}
               <button
                 type="button"
-                onClick={() => { setProfileOpen(false); onSettings(); }}
+                onClick={() => { setProfileOpen(false); onView("support"); }}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
               >
-                <SlidersHorizontal size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
-                <span className="flex-1 truncate text-[13px]">Settings</span>
+                <LifeBuoy size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
+                <span className="flex-1 truncate text-[13px]">Support Tickets</span>
+                {typeof openSupportTicketCount === "number" && openSupportTicketCount > 0 && (
+                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+                    {openSupportTicketCount > 99 ? "99+" : openSupportTicketCount}
+                  </span>
+                )}
+              </button>
+
+              {/* 4. Trash */}
+              <button
+                type="button"
+                onClick={() => { setProfileOpen(false); onTrash(); }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer text-neutral-800 dark:text-neutral-200 font-medium group"
+              >
+                <Trash2 size={16} className="text-neutral-600 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white shrink-0" />
+                <span className="flex-1 truncate text-[13px]">Trash</span>
+                {typeof trashCount === "number" && trashCount > 0 && (
+                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-neutral-200 dark:bg-white/10 px-1 text-[10px] font-bold leading-none text-neutral-700 dark:text-neutral-300">
+                    {trashCount}
+                  </span>
+                )}
               </button>
 
               {/* Divider */}
               <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-1 mx-2" />
 
-              {/* 5. Help center */}
+              {/* 6. Help center */}
               <button
                 type="button"
                 onClick={() => { setProfileOpen(false); onHelp(); }}
@@ -1618,7 +1629,7 @@ const Sidebar = memo(function Sidebar({
                 <span className="flex-1 truncate text-[13px]">Help center</span>
               </button>
 
-              {/* 6. Sign out */}
+              {/* 7. Sign out */}
               <button
                 type="button"
                 onClick={async () => {

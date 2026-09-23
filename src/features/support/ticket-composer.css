@@ -22,11 +22,23 @@
   --mkt-transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
   font-family: var(--mkt-font-sans);
-  background-color: var(--mkt-bg-primary);
+  background-color: transparent;
   color: var(--mkt-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
+}
+
+.dark .nsticket {
+  --mkt-bg-primary: #14161F;
+  --mkt-bg-secondary: rgba(255, 255, 255, 0.04);
+  --mkt-bg-tertiary: rgba(255, 255, 255, 0.08);
+  --mkt-text-primary: #FFFFFF;
+  --mkt-text-secondary: #A0A4B8;
+  --mkt-text-muted: #6B7280;
+  --mkt-border-color: rgba(255, 255, 255, 0.1);
+  --mkt-border-strong: rgba(255, 255, 255, 0.2);
+  --mkt-brand-tint: rgba(255, 107, 74, 0.12);
 }
 
 .nsticket .ticket-form-header {

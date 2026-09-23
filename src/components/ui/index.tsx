@@ -249,11 +249,12 @@ interface ModalProps {
   children: ReactNode;
   onClose?: () => void;
   wide?: boolean;
+  className?: string;
 }
 
-export function Modal({ children, onClose, wide }: ModalProps) {
+export function Modal({ children, onClose, wide, className }: ModalProps) {
   return (
-    <AnimatedModal onClose={onClose} wide={wide}>
+    <AnimatedModal onClose={onClose} wide={wide} className={className}>
       {children}
     </AnimatedModal>
   );
@@ -388,3 +389,9 @@ export { AiPromptInput, ReasoningEffortButton } from "./ai-prompt-input";
 export { LiquidMetalButton } from "./liquid-metal-button";
 export { SiriWave, default as SiriWaveDefault } from "./siri-wave";
 export type { SiriWaveProps, SiriWaveVariant } from "./siri-wave";
+export { DeleteButton, default as DeleteButtonDefault } from "./delete-button";
+export type { DeleteButtonProps } from "./delete-button";
+export { RestoreButton, default as RestoreButtonDefault } from "./restore-button";
+export type { RestoreButtonProps } from "./restore-button";
+
+

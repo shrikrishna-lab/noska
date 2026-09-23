@@ -19,7 +19,7 @@ import { useWorkspace } from "../contexts/WorkspaceContext";
 import { getAllProviders, testProviderConnection } from "../ai/providers";
 import type { Page, AIChat } from "../lib/supabaseService";
 import { recordUserAIUsage } from "../lib/supabaseService";
-import { requireFeature, requireLimit, trackUsage } from "../lib/billing/guards";
+import { requireFeature } from "../lib/billing/guards";
 import type { Block } from "../../types/blocks";
 
 import ChatSidebar from "./ai/ChatSidebar";
@@ -301,12 +301,11 @@ export default function AIPanel({
       }
 
       // ── Billing gate (server-authoritative; this pre-check is UX only) ──
-      // ai_generation must be enabled and monthly_ai_credits must remain.
-      // Transport failures (billing backend unreachable) fail OPEN here so BYOK
-      // direct-provider calls keep working offline; server-side metering still
-      // applies wherever the backend is reachable.
-      const [featGate, limitGate] = await Promise.all([requireFeature("ai_generation"), requireLimit("monthly_ai_credits", 1)]);
-      const gate = featGate.ok ? limitGate : featGate;
+      // ai_generation must be enabled. No consumption metering: Noska is
+      // BYOK — model calls run on the user's own provider key, so there is
+      // nothing to meter. Transport failures fail OPEN so direct-provider
+      // calls keep working offline.
+      const gate = await requireFeature("ai_generation");
       if (!gate.ok && !gate.transport) {
         onToast?.(gate.message ?? "AI is not available on your current plan.");
         window.dispatchEvent(new CustomEvent("noska:upgrade-required", { detail: { feature: "ai_generation" } }));
@@ -571,9 +570,8 @@ export default function AIPanel({
             completionTokens: Math.max(1, Math.round((cleanedFinalText || responseText).length / 3.8)),
             model: activeSelectedModel,
           });
-          // Meter against the billing entitlement (server-enforced, idempotent-safe)
-          void trackUsage("monthly_ai_credits", 1);
-          void trackUsage("daily_ai_requests", 1);
+          // No billing metering here (BYOK — usage is billed by the user's
+          // own provider). Token counts above feed collaboration analytics only.
         }
         onChatsChange?.((prev) =>
           prev.map((c) =>

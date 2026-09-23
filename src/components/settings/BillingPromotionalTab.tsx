@@ -1,10 +1,13 @@
 // Billing & Promotional tab — real backend-driven billing (§18).
 // Plans/billing come from billing_plans + EntitlementsProvider; coupons are
-// validated server-side at checkout (never priced in the browser).
-import React, { useState } from "react";
+// validated server-side at checkout (never priced in the browser); the
+// referral code, stats, and reward catalog come from the referrals
+// Edge Function (referral_codes / user_referrals / referral_rewards).
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditCard, Tag, Gift, Copy, Sparkles, Check, ArrowRight, ShieldCheck, Mail, Users, Zap, Award } from "lucide-react";
 import { BillingSettings } from "@/components/billing/BillingSettings";
+import { fetchReferralSummary, applyReferralCode, type ReferralSummary } from "@/lib/billing/api";
 
 interface BillingPromotionalTabProps {
   currentUsername?: string;
@@ -21,9 +24,30 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
   const [copiedReferral, setCopiedReferral] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [referral, setReferral] = useState<ReferralSummary | null>(null);
+  const [referralLoading, setReferralLoading] = useState(false);
+  const [referralError, setReferralError] = useState<string | null>(null);
+  const [inviteInput, setInviteInput] = useState("");
+  const [applyingInvite, setApplyingInvite] = useState(false);
 
-  const referralCode = (currentUsername || "noska").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const referralLink = `https://noska.app/join?ref=${referralCode}`;
+  // Real invite code + stats from the referrals function (never derived
+  // from the username — that link tracked nothing).
+  useEffect(() => {
+    let cancelled = false;
+    setReferralLoading(true);
+    fetchReferralSummary()
+      .then((s) => { if (!cancelled) { setReferral(s); setReferralError(null); } })
+      .catch(() => { if (!cancelled) setReferralError("Couldn't load your referral stats."); })
+      .finally(() => { if (!cancelled) setReferralLoading(false); });
+    // Prefill an invite code shared as ?ref=CODE.
+    try {
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      if (ref) setInviteInput(ref.trim().toUpperCase());
+    } catch { /* no window */ }
+    return () => { cancelled = true; };
+  }, []);
+
+  const referralLink = referral ? `https://noska.app/join?ref=${referral.code}` : "";
 
   const showMsg = (msg: string) => {
     if (onToast) onToast(msg);
@@ -31,12 +55,31 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
   };
 
   const handleCopyReferral = () => {
+    if (!referralLink) return;
     try {
       navigator.clipboard.writeText(referralLink);
       setCopiedReferral(true);
       showMsg("Referral link copied!");
       setTimeout(() => setCopiedReferral(false), 2500);
     } catch { /* clipboard unavailable */ }
+  };
+
+  const handleApplyInvite = async () => {
+    const target = inviteInput.trim().toUpperCase();
+    if (!target || applyingInvite) return;
+    setApplyingInvite(true);
+    try {
+      await applyReferralCode(target);
+      showMsg("Invite linked! Rewards unlock when you activate a paid plan.");
+      const s = await fetchReferralSummary();
+      setReferral(s);
+      setInviteInput("");
+    } catch (e) {
+      const msg = typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message) : "Couldn't link that code.";
+      showMsg(msg.slice(0, 160));
+    } finally {
+      setApplyingInvite(false);
+    }
   };
 
   const handleApplyCoupon = (codeToApply?: string) => {
@@ -202,17 +245,23 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
-                      Give 1 Month Free, Get 500 AI Credits
+                      Invite friends, unlock real rewards
                     </h3>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                      Share your personalized invite link with friends, creators, or your team.
+                      Share your personal invite link — tier rewards unlock as friends activate paid plans.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
                   <Sparkles size={12} className="stroke-[2.5]" />
-                  <span>500 Credits per invite</span>
+                  <span>
+                    {referralLoading && !referral ? "Loading rewards…" : referral?.next_tier
+                      ? `Next: ${referral.next_tier.name} at ${referral.next_tier.min_referrals} invites`
+                      : referral?.current_tier
+                        ? `${referral.current_tier.name} unlocked`
+                        : "Invite to unlock rewards"}
+                  </span>
                 </div>
               </div>
 
@@ -220,7 +269,7 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
               <div className="mt-5 flex flex-wrap items-center gap-2">
                 <div className="relative flex-1 min-w-[260px] flex items-center rounded-xl border border-neutral-300 dark:border-white/20 bg-neutral-50/70 dark:bg-black/40 px-3.5 py-2">
                   <span className="font-mono text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate select-all">
-                    {referralLink}
+                    {referralLoading && !referral ? "Loading your invite link…" : referralError && !referral ? referralError : referralLink}
                   </span>
                 </div>
 
@@ -286,6 +335,36 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
               </div>
             </div>
 
+            {/* Have an invite code? */}
+            <div className="rounded-2xl border border-[#e4ded3] bg-white p-5 dark:border-white/10 dark:bg-white/5">
+              <h4 className="text-sm font-bold text-neutral-900 dark:text-white">Have an invite code?</h4>
+              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                {referral?.referred
+                  ? "An invite is already linked to your account — rewards unlock on your first paid activation."
+                  : "Enter a friend's code to link your accounts."}
+              </p>
+              {!referral?.referred && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={inviteInput}
+                    onChange={(e) => setInviteInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleApplyInvite(); }}
+                    placeholder="NOSKA-XXXXXX"
+                    className="flex-1 min-w-[200px] rounded-xl border border-neutral-300 dark:border-white/20 bg-neutral-50/50 dark:bg-black/50 px-4 py-2.5 text-xs font-mono font-bold tracking-wider uppercase text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-white transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyInvite}
+                    disabled={!inviteInput.trim() || applyingInvite}
+                    className="rounded-xl bg-neutral-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-neutral-800 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-neutral-100 cursor-pointer"
+                  >
+                    {applyingInvite ? "Linking…" : "Link invite"}
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Referrals Stats Cards */}
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-3 px-1">
@@ -297,7 +376,9 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
                     <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Total Referred</span>
                     <Users size={14} className="text-neutral-400" />
                   </div>
-                  <div className="mt-2 text-2xl font-extrabold text-neutral-900 dark:text-white">0</div>
+                  <div className="mt-2 text-2xl font-extrabold text-neutral-900 dark:text-white">
+                    {referralLoading && !referral ? "–" : referral?.stats.total_referrals ?? "–"}
+                  </div>
                   <div className="mt-0.5 text-[11px] text-neutral-400">Friends invited</div>
                 </div>
 
@@ -306,7 +387,9 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
                     <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Credits Earned</span>
                     <Zap size={14} className="text-amber-500" />
                   </div>
-                  <div className="mt-2 text-2xl font-extrabold text-neutral-900 dark:text-white">0</div>
+                  <div className="mt-2 text-2xl font-extrabold text-neutral-900 dark:text-white">
+                    {referralLoading && !referral ? "–" : referral?.stats.ai_credits ?? "–"}
+                  </div>
                   <div className="mt-0.5 text-[11px] text-neutral-400">AI credits added</div>
                 </div>
 
@@ -315,11 +398,44 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
                     <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Reward Tier</span>
                     <Award size={14} className="text-emerald-500" />
                   </div>
-                  <div className="mt-2 text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">Active</div>
-                  <div className="mt-0.5 text-[11px] text-neutral-400">500 credits per friend</div>
+                  <div className="mt-2 text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                    {referralLoading && !referral ? "–" : referral?.current_tier?.name ?? "Starter"}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-neutral-400">
+                    {referral?.next_tier ? `${referral.next_tier.min_referrals} invites → ${referral.next_tier.name}` : "Top tier reached"}
+                  </div>
                 </div>
               </div>
             </div>
+
+            {/* Reward tiers (live catalog) */}
+            {referral && referral.rewards.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-3 px-1">
+                  Reward Tiers
+                </h4>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {referral.rewards.map((r) => {
+                    const unlocked = (referral.stats.total_referrals ?? 0) >= r.min_referrals;
+                    const valueLabel = r.type === "ai_credits" ? `${r.value} credits` : r.type === "pro_days" ? `${r.value} days Pro` : r.type === "xp" ? `${r.value} XP` : r.value;
+                    return (
+                      <div
+                        key={r.id}
+                        className={`rounded-2xl border p-4 dark:bg-white/5 ${unlocked ? "border-emerald-500/40 bg-emerald-50/50 dark:border-emerald-500/30" : "border-[#e4ded3] bg-white dark:border-white/10"}`}
+                      >
+                        <div className="text-xs font-bold text-neutral-900 dark:text-white">{r.name}</div>
+                        <div className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+                          {r.min_referrals} invite{r.min_referrals === 1 ? "" : "s"} • {String(valueLabel)}
+                        </div>
+                        <div className={`mt-1.5 text-[10.5px] font-bold ${unlocked ? "text-emerald-600 dark:text-emerald-400" : "text-neutral-400"}`}>
+                          {unlocked ? "Unlocked" : "Locked"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* 3-Step "How It Works" Stepper */}
             <div>
@@ -351,10 +467,10 @@ export function BillingPromotionalTab({ currentUsername = "user", onToast }: Bil
                   <div className="h-6 w-6 rounded-full bg-neutral-900 text-white dark:bg-white dark:text-black flex items-center justify-center text-[11px] font-bold mb-2.5">
                     3
                   </div>
-                  <h5 className="text-xs font-bold text-neutral-900 dark:text-white">Both earn rewards</h5>
-                  <p className="mt-1 text-[11.5px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                    You instantly receive 500 AI credits, and your friend gets exclusive trial perks.
-                  </p>
+                    <h5 className="text-xs font-bold text-neutral-900 dark:text-white">Unlock tier rewards</h5>
+                    <p className="mt-1 text-[11.5px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                      When your invite activates a paid plan, you unlock tier rewards — AI credits land instantly.
+                    </p>
                 </div>
               </div>
             </div>

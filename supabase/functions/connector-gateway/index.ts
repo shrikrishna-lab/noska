@@ -188,11 +188,23 @@ async function getClerkVerificationKey(kid: string, issuer?: string): Promise<Cr
 }
 
 /** Where providers must send users back after consent. Override with
- * CONNECTOR_OAUTH_REDIRECT_BASE for custom domains / preview URLs. */
+ * CONNECTOR_OAUTH_REDIRECT_BASE for custom domains / preview URLs.
+ *
+ * NOTE: Supabase terminates TLS at the edge, so inside the runtime
+ * req.url is often plain http even though the public URL is https. We
+ * must still send providers the public https address — Google compares
+ * redirect_uri exactly and http-vs-https alone is a
+ * redirect_uri_mismatch (seen live 2026-09-23). https is forced for every
+ * non-loopback host (Google only permits http on localhost anyway);
+ * loopback keeps its real scheme for local `supabase start` dev. */
 function callbackBase(req: Request): string {
   const override = Deno.env.get("CONNECTOR_OAUTH_REDIRECT_BASE")?.replace(/\/$/, "");
   if (override) return `${override}/connector-gateway`;
-  return `${new URL(req.url).origin}/functions/v1/connector-gateway`;
+  const url = new URL(req.url);
+  const host = url.hostname.toLowerCase();
+  const loopback = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.endsWith(".localhost");
+  const proto = loopback ? url.protocol.replace(/:$/, "") : "https";
+  return `${proto}://${url.host}/functions/v1/connector-gateway`;
 }
 
 function appRedirect(status: "connected" | "error", connectorSlug: string, message?: string): Response {

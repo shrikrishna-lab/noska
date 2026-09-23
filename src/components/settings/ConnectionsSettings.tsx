@@ -43,6 +43,7 @@ import type {
 } from "../../lib/connections/types";
 import { BrandIcon, hasBrandIcon, normalizeBrandKey } from "../../components/BrandIcon";
 import { openExternal } from "../../lib/desktop/links";
+import { connectorGateway } from "../../lib/connectorGateway";
 
 function ProviderIconBadge({ id, name }: { id: string; name: string; brandColor?: string }) {
   const brandKey = normalizeBrandKey(id, name);
@@ -79,6 +80,31 @@ export default function ConnectionsSettings({ onToast }: { onToast?: (m: string)
   const [tokenInput, setTokenInput] = useState("");
   const [tokenLabel, setTokenLabel] = useState("");
   const [showTokenModal, setShowTokenModal] = useState<IntegrationProviderDefinition | null>(null);
+
+  // Live gateway OAuth readiness by slug (lowercased). Only explicit
+  // `false` gates anything — unknown slugs / offline / older server keep
+  // working exactly as before.
+  const [oauthBlockedSlugs, setOauthBlockedSlugs] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    connectorGateway.listConnectors()
+      .then((connectors) => {
+        if (cancelled) return;
+        setOauthBlockedSlugs(new Set(
+          (connectors ?? []).filter((c) => c.oauth_configured === false).map((c) => String(c.slug || "").toLowerCase())
+        ));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  /** True when this provider's OAuth button must render as coming-soon:
+   *  gateway row exists but its credentials were never configured. */
+  const isOAuthBlocked = useCallback((provider: IntegrationProviderDefinition) => {
+    if (!provider.capabilities.oauth || oauthBlockedSlugs.size === 0) return false;
+    const keys = [provider.slug, provider.id, ...(provider.aliases ?? [])].map((s) => String(s || "").toLowerCase());
+    return keys.some((k) => k && oauthBlockedSlugs.has(k));
+  }, [oauthBlockedSlugs]);
 
   const categories = useMemo(() => ["all", ...IntegrationRegistry.getCategories()], []);
 
@@ -127,7 +153,7 @@ export default function ConnectionsSettings({ onToast }: { onToast?: (m: string)
   }, [filteredProviders, connectedAccounts]);
 
   const handleConnect = async (provider: IntegrationProviderDefinition) => {
-    if (provider.status === "coming_soon") {
+    if (provider.status === "coming_soon" || isOAuthBlocked(provider)) {
       onToast?.(`${provider.name} connection is coming soon!`);
       return;
     }
@@ -334,7 +360,7 @@ export default function ConnectionsSettings({ onToast }: { onToast?: (m: string)
                       className="px-4 py-2 rounded-xl bg-[#1c1b18] dark:bg-white text-white dark:text-[#1c1b18] text-xs font-semibold hover:bg-black dark:hover:bg-white/90 transition cursor-pointer shadow-xs active:scale-[0.98] flex items-center gap-1.5"
                     >
                       {isConnecting && <Loader2 size={12} className="animate-spin" />}
-                      <span>{prov.status === "coming_soon" ? "Coming soon" : "Connect"}</span>
+                      <span>{prov.status === "coming_soon" || isOAuthBlocked(prov) ? "Coming soon" : "Connect"}</span>
                     </button>
                   </div>
                 </div>

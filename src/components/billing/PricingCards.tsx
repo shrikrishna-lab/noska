@@ -21,8 +21,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   rbac: "Advanced RBAC", audit_logs: "Audit logs", sso: "SSO / SAML", scim: "SCIM",
   analytics: "Advanced analytics",
   custom_widgets: "Custom widgets", advanced_widgets: "Advanced widgets", api_access: "API access",
-  voice_input: "Voice input", offline_mode: "Offline mode", byok: "BYOK", premium_models: "Premium models",
-  monthly_ai_credits: "AI credits / month", daily_ai_requests: "AI requests / day",
+   voice_input: "Voice input", offline_mode: "Offline mode", byok: "BYOK",
   max_workspaces: "Workspaces", max_pages: "Pages", max_storage_mb: "Storage", max_file_size_mb: "Max file size",
   max_members: "Members", max_databases: "Databases", max_widgets: "Widgets",
   max_automations: "Automations", max_custom_agents: "Custom agents", max_mcp_calls: "MCP calls / month",
@@ -39,7 +38,6 @@ const TAGLINES: Record<string, string> = {
 function fmtLimit(key: string, v: number | null): string {
   if (v === null || v === undefined) return "Unlimited";
   if (key === "max_storage_mb") return v >= 1024 ? `${Math.round(v / 1024)} GB` : `${v} MB`;
-  if (v >= 1000 && key === "max_workspaces") return "Unlimited";
   return String(Math.round(v));
 }
 
@@ -480,7 +478,7 @@ export function PricingCards() {
                         <span className="truncate">{FEATURE_LABELS[f.feature_key] ?? f.feature_key}</span>
                       </li>
                     ))}
-                    {limitFeats.filter((f) => ["monthly_ai_credits", "max_workspaces", "max_storage_mb", "max_members"].includes(f.feature_key)).map((f) => (
+                    {limitFeats.filter((f) => ["max_workspaces", "max_storage_mb", "max_members"].includes(f.feature_key)).map((f) => (
                       <li key={f.feature_key} className="flex items-center gap-2">
                         <span className="text-emerald-500 font-bold shrink-0">✓</span>
                         <span className="truncate">{fmtLimit(f.feature_key, f.limit_value)} {FEATURE_LABELS[f.feature_key] ?? f.feature_key}</span>

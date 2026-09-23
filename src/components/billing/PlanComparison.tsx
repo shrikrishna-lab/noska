@@ -6,14 +6,12 @@ import type { PublicPlan } from "@/lib/billing/api";
 
 const ROWS: Array<{ key: string; label: string; kind: "bool" | "limit" }> = [
   { key: "ai_generation", label: "AI assistant", kind: "bool" },
-  { key: "monthly_ai_credits", label: "AI credits / month", kind: "limit" },
   { key: "ai_image_analysis", label: "Image analysis", kind: "bool" },
   { key: "ai_file_analysis", label: "File analysis", kind: "bool" },
   { key: "voice_input", label: "Voice input", kind: "bool" },
   { key: "custom_agents", label: "Custom agents", kind: "bool" },
   { key: "max_custom_agents", label: "Custom agent limit", kind: "limit" },
   { key: "agent_memory", label: "Agent memory", kind: "bool" },
-  { key: "premium_models", label: "Premium models", kind: "bool" },
   { key: "byok", label: "BYOK", kind: "bool" },
   { key: "api_access", label: "API access", kind: "bool" },
   { key: "automation", label: "Automations", kind: "bool" },
@@ -51,7 +49,6 @@ function cell(plan: PublicPlan, row: (typeof ROWS)[number]): string {
     const v = Number(f.limit_value);
     return v >= 1024 ? `${Math.round(v / 1024)} GB` : `${v} MB`;
   }
-  if (row.key === "max_workspaces" && Number(f.limit_value) >= 1000) return "Unlimited";
   return String(Math.round(Number(f.limit_value)));
 }
 

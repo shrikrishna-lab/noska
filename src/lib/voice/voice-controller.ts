@@ -308,16 +308,25 @@ class VoiceController {
             const selectedText = selection?.toString()?.trim();
 
             // 1. Signature Feature: Rewind Hands-Free Self-Correction
-            if (settings.rewindEnabled !== false) {
+            // Classify ONLY the newly-finalized segment (finalText): `raw`
+            // above is the accumulated session transcript, which can never
+            // match the anchored single-utterance trigger patterns — that
+            // is why Rewind never fired past the first utterance.
+            if (settings.rewindEnabled !== false && finalText?.trim()) {
               try {
-                const rewindResult = classifyRewindTrigger(raw);
+                const rewindResult = classifyRewindTrigger(finalText);
                 if (rewindResult.isRewind) {
-                  const rewound = executeRewind(rewindResult, activeEl);
+                  const rewound = executeRewind(rewindResult, activeEl, finalText);
                   if (rewound) {
                     const msg = rewindResult.isDelete ? "↺ Erased previous utterance" : `↺ Rewound: ${rewindResult.correctionText}`;
                     this.transcriptCallbacks.forEach((cb) => cb(msg));
                     return; // Successfully self-corrected in-place!
                   }
+                  // Trigger recognized but nothing to rewind (empty buffer):
+                  // swallow the meta-speech so "scratch that…" is never
+                  // typed into the document as content.
+                  this.transcriptCallbacks.forEach((cb) => cb("↺ Nothing to rewind yet"));
+                  return;
                 }
               } catch {
                 // If module import fails, continue smoothly

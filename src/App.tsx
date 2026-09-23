@@ -3011,6 +3011,7 @@ function AppContent() {
     library: ["⊞", "Library"],
     tasks: ["✓", "My Tasks"],
     marketplace: ["🏪", "Marketplace"],
+    support: ["🎫", "Support Tickets"],
     chats: ["#", "Chats"],
     meetings: ["*", "Meetings"],
     meetingNote: ["*", "AI meeting note"],

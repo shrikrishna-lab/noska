@@ -4,6 +4,7 @@
 // internal subscription state. Duplicates return 200 without duplicating records.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { db, webhookSignatureValid, stripeWebhookValid, transitionSubscription, blog, queueBillingEmail, billingEmailHtml } from "../_shared/billing/helpers.ts";
+import { completeReferralActivation } from "../_shared/billing/referrals.ts";
 
 function corsPublic(): Record<string, string> {
   return {
@@ -159,6 +160,7 @@ async function handleEvent(eventType: string, payload: Record<string, Record<str
         }, { onConflict: "provider_invoice_id" });
       }
       await transitionSubscription(target.id, "active", eventType === "order.paid" ? "renewed" : "activated", { provider_payment_id: paymentId });
+      await completeReferralActivation(target.user_id);
       break;
     }
     case "payment.failed": {
@@ -195,7 +197,10 @@ async function handleEvent(eventType: string, payload: Record<string, Record<str
     case "subscription.activated":
     case "subscription.charged": {
       const target = providerSubId ? await findSubByProvider(providerSubId, null) : null;
-      if (target) await transitionSubscription(target.id, "active", eventType === "subscription.charged" ? "renewed" : "activated", { provider_subscription_id: providerSubId });
+      if (target) {
+        await transitionSubscription(target.id, "active", eventType === "subscription.charged" ? "renewed" : "activated", { provider_subscription_id: providerSubId });
+        await completeReferralActivation(target.user_id);
+      }
       break;
     }
     case "subscription.cancelled":
@@ -365,6 +370,7 @@ async function fulfillStripeCheckout(obj: Record<string, unknown>): Promise<void
         issued_at: new Date().toISOString(), paid_at: new Date().toISOString(),
       }, { onConflict: "provider_invoice_id" });
       await transitionSubscription(target.id, "active", "activated", { stripe_session_id: sessionId });
+      await completeReferralActivation(target.user_id);
 }
 
 async function handleStripeFailures(eventType: string, obj: Record<string, unknown>): Promise<void> {

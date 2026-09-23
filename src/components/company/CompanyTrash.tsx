@@ -7,6 +7,8 @@ import {
 import { supabase } from "../../lib/supabase"
 import { useCompany } from "../../contexts/CompanyContext"
 import { writeAuditLog, type OrgPage } from "../../lib/company"
+import { DeleteButton } from "../ui/delete-button"
+import { RestoreButton } from "../ui/restore-button"
 
 interface TrashItem {
   id: string
@@ -181,44 +183,16 @@ export function CompanyTrash({ onRestore }: CompanyTrashProps) {
                 </div>
               </div>
 
-              {confirmDelete === item.id ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handlePermanentDelete(item)}
-                    className="px-2 py-1 rounded-lg bg-red-500 text-white text-[10px] font-semibold hover:bg-red-600 transition cursor-pointer"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(null)}
-                    className="px-2 py-1 rounded-lg bg-[var(--surface-2)] text-[var(--muted)] text-[10px] font-semibold hover:bg-[var(--surface-3)] transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleRestore(item)}
-                    disabled={restoring === item.id}
-                    className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--muted)] hover:text-green-500 transition cursor-pointer"
-                    title="Restore"
-                  >
-                    {restoring === item.id ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <RotateCcw size={12} />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(item.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--muted)] hover:text-red-500 transition cursor-pointer"
-                    title="Delete permanently"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <RestoreButton
+                  onConfirm={() => handleRestore(item)}
+                  className="scale-[0.82] origin-right"
+                />
+                <DeleteButton
+                  onConfirm={() => handlePermanentDelete(item)}
+                  className="scale-[0.82] origin-right"
+                />
+              </div>
             </motion.div>
           ))}
         </AnimatePresence>

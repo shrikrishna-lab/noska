@@ -3,8 +3,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { useUsage } from "@/hooks/billing/useEntitlements";
 import { supabase, getAuthUserId } from "@/lib/supabase";
 
+// NOTE: no AI-credit meter — Noska is BYOK (model calls run on the user's
+// own provider key), so there is no AI consumption to meter.
 const METERS: Array<{ key: string; label: string; unit?: string; usageKey?: string }> = [
-  { key: "monthly_ai_credits", label: "AI Credits" },
   { key: "max_storage_mb", label: "Storage", unit: "mb" },
   { key: "max_workspaces", label: "Workspaces", usageKey: "workspaces" },
   { key: "max_automations", label: "Automations", usageKey: "max_automations" },
@@ -14,7 +15,6 @@ const METERS: Array<{ key: string; label: string; unit?: string; usageKey?: stri
 
 function fmt(key: string, v: number, unit?: string): string {
   if (unit === "mb") return v >= 1024 ? `${(v / 1024).toFixed(1)}GB` : `${Math.round(v)}MB`;
-  if (key === "monthly_ai_credits") return v.toLocaleString("en-IN");
   return String(Math.round(v));
 }
 
