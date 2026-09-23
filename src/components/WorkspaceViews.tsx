@@ -85,7 +85,6 @@ import {
 import { TactilePriorityPicker, TactileDuePicker, isTaskOverdue } from "./ui/TaskMetaPickers";
 import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
 import MarketplacePage from "../features/marketplace/MarketplacePage";
-import SupportTicketsView from "../features/support/SupportTicketsView";
 import CreatorDashboard from "../features/creator/CreatorDashboard";
 import AgentWorkspace from "../features/agents/AgentWorkspace";
 import AutomationWorkspace from "../features/automations/AutomationWorkspace";
@@ -277,7 +276,6 @@ export function WorkspaceView(props: WorkspaceViewProps) {
 
   if (view === "daily" || view === "journal") return <DailyWorkspace onToast={onToast || (() => {})} currentUserId={currentUserId} currentUsername={userName} />;
   if (view === "marketplace") return <MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} />;
-  if (view === "support") return <SupportTicketsView onToast={onToast} />;
   if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} />;
   if (view === "agents") return <AgentWorkspace pages={pages} currentUserId={currentUserId} onToast={onToast} toolContext={toolContext} />;
   if (view === "automations") return <AutomationWorkspace onToast={onToast} />;
