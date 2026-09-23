@@ -1,0 +1,293 @@
+/* Shared support-ticket composer — pixel twin of the marketing ticket form.
+ *
+ * Same markup + same tokens as src/pages/marketing/SupportTicket.css, but
+ * scoped under .nsticket so it renders identically inside the dashboard
+ * modal (which never sits under .marketing). Single source of truth for the
+ * form UI: TicketComposerForm.tsx. */
+
+.nsticket {
+  --mkt-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --mkt-font-heading: 'Inter', system-ui, sans-serif;
+  --mkt-bg-primary: #FFFFFF;
+  --mkt-bg-secondary: #F7F5F1;
+  --mkt-bg-tertiary: #EFEBE3;
+  --mkt-text-primary: #17161B;
+  --mkt-text-secondary: #63605A;
+  --mkt-text-muted: #9A968C;
+  --mkt-border-color: #E7E2D8;
+  --mkt-border-strong: #D8D2C4;
+  --mkt-card-shadow: 0 1px 2px rgba(23, 22, 27, 0.03), 0 6px 16px rgba(23, 22, 27, 0.04);
+  --mkt-radius-lg: 20px;
+  --mkt-brand-tint: rgba(23, 22, 27, 0.05);
+  --mkt-transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  font-family: var(--mkt-font-sans);
+  background-color: var(--mkt-bg-primary);
+  color: var(--mkt-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+}
+
+.nsticket .ticket-form-header {
+  margin-bottom: 32px;
+}
+
+.nsticket .ticket-header-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  color: var(--mkt-text-secondary);
+  margin-bottom: 12px;
+}
+
+.nsticket .ticket-main-title {
+  font-family: var(--mkt-font-heading);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--mkt-text-primary);
+  margin: 0 0 8px 0;
+}
+
+.nsticket .ticket-main-sub {
+  font-size: 14.5px;
+  color: var(--mkt-text-secondary);
+  margin: 0;
+}
+
+.nsticket .ticket-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.nsticket .ticket-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.nsticket .ticket-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nsticket .ticket-field-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--mkt-text-primary);
+}
+
+.nsticket .ticket-req {
+  color: #ef4444;
+}
+
+/* Category Grid */
+.nsticket .ticket-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.nsticket .ticket-category-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--mkt-transition-fast);
+}
+
+.nsticket .ticket-category-btn:hover {
+  border-color: var(--mkt-border-strong);
+  background: var(--mkt-bg-tertiary);
+}
+
+.nsticket .ticket-category-btn.active {
+  background: var(--mkt-brand-tint);
+  border-color: var(--mkt-text-primary);
+  box-shadow: 0 0 0 2px rgba(23, 22, 27, 0.08);
+}
+
+.nsticket .ticket-cat-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--mkt-bg-primary);
+  border: 1px solid var(--mkt-border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mkt-text-primary);
+  flex-shrink: 0;
+}
+
+.nsticket .ticket-cat-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mkt-text-primary);
+  margin: 0 0 2px 0;
+}
+
+.nsticket .ticket-cat-desc {
+  font-size: 11.5px;
+  color: var(--mkt-text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Input Rows */
+.nsticket .ticket-input-row {
+  display: flex;
+  gap: 16px;
+}
+
+.nsticket .ticket-input-row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.nsticket .ticket-input,
+.nsticket .ticket-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  font-family: var(--mkt-font-sans);
+  font-size: 13.5px;
+  color: var(--mkt-text-primary);
+  outline: none;
+  transition: border-color var(--mkt-transition-fast), box-shadow var(--mkt-transition-fast);
+  box-sizing: border-box;
+}
+
+.nsticket .ticket-input:focus,
+.nsticket .ticket-textarea:focus {
+  border-color: var(--mkt-text-primary);
+  box-shadow: 0 0 0 3px var(--mkt-brand-tint);
+  background: var(--mkt-bg-primary);
+}
+
+.nsticket .ticket-textarea {
+  resize: vertical;
+  min-height: 110px;
+  line-height: 1.6;
+}
+
+/* Priorities Row */
+.nsticket .ticket-priorities-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nsticket .ticket-priority-chip {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+  color: var(--mkt-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--mkt-transition-fast);
+}
+
+.nsticket .ticket-priority-chip:hover {
+  background: var(--mkt-bg-tertiary);
+  color: var(--mkt-text-primary);
+}
+
+.nsticket .ticket-priority-chip.active {
+  background: var(--mkt-text-primary);
+  color: var(--mkt-bg-primary);
+  border-color: var(--mkt-text-primary);
+}
+
+/* Diagnostic Notice */
+.nsticket .ticket-env-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--mkt-text-muted);
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--mkt-bg-secondary);
+  border: 1px solid var(--mkt-border-color);
+}
+
+/* Submit Row */
+.nsticket .ticket-submit-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.nsticket .ticket-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(180deg, #2c2934 0%, #17161b 100%);
+  color: #ffffff;
+  font-family: var(--mkt-font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all var(--mkt-transition-fast);
+}
+
+.nsticket .ticket-submit-btn:hover {
+  background: linear-gradient(180deg, #3d3947 0%, #201e26 100%);
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.45),
+    0 6px 16px rgba(0, 0, 0, 0.22);
+}
+
+.nsticket .ticket-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+  .nsticket .ticket-categories-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nsticket .ticket-input-row {
+    flex-direction: column;
+  }
+
+  .nsticket .ticket-main-title {
+    font-size: 26px;
+  }
+}
