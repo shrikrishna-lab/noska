@@ -1,7 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Crosshair, ExternalLink, Calendar, Clock, Tag, Star } from "lucide-react";
-import { PageIcon } from "../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 
 export default function GraphInfoPanel({ page, nodePosition, onClose, onCenter }) {
   if (!page) return null;

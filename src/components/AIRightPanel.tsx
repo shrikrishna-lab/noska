@@ -9,16 +9,21 @@ import {
   Calendar, Inbox, LayoutDashboard, LayoutGrid, Hash, Users, Briefcase,
   Home, MessageSquare, History, RotateCcw, SlidersHorizontal,
   Plus, Link, Paperclip, Search, Mic, AtSign, Terminal,
-  ChevronRight, Bot, Zap, ShieldCheck, CheckCircle2, XCircle,
+  ChevronRight, Bot, Zap, ShieldCheck, CheckCircle2, XCircle, AlertCircle,
   Loader2, Clock, ArrowUp, Check, ThumbsUp, ThumbsDown, Copy,
   ArrowDownToLine, Trash2, RefreshCw, Square, Volume2, VolumeX
 } from "lucide-react";
 import { aiManager } from "../ai/AIManager";
-import { getAllProviders, getProvider } from "../ai/providers";
+import { modelRegistry } from "../ai/models/ModelRegistry";
+import { modelCatalogService } from "../ai/ModelCatalogService";
+import { getProvider } from "../ai/providers";
+import { getRealAiModels, matchesModelCategory, type AiModel, type ModelCategory } from "./ui/ai-prompt-input";
 import { getAgentList, getAgent } from "../ai/agents";
 import { uid, now, timeAgo } from "../utils/helpers";
 import { getAllRelations } from "../utils/pageLinks";
-import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
+import { hasToolCalls, stripToolCalls } from "../ai/tools";
+import { stripThinking } from "../utils/thinking";
+import { PageContextPicker } from "./ai/PageContextPicker";
 import { matchNavigationCommand, viewLabel } from "../lib/viewTargets";
 import { loadReminders, subscribeReminders } from "../lib/reminders";
 import { renderAIMarkdown } from "../utils/aiMarkdownRenderer";
@@ -27,6 +32,7 @@ import {
   classifyIntentSmart,
   isAgenticIntent,
   agentRuntime,
+  FULL_AUTO_PERMISSIONS,
   proposeAgent,
   proposeAutomation,
   describeTrigger,
@@ -34,7 +40,7 @@ import {
   getPendingApprovals,
   subscribeApprovals,
 } from "../ai/runtime";
-import type { AgentProposal, AutomationProposal, ApprovalRequest, StepProgress } from "../ai/runtime";
+import type { AgentProposal, AutomationProposal, ApprovalRequest, StepProgress, ToolContextLike } from "../ai/runtime";
 import { saveAgent, blankAgent } from "../features/agents/agentStore";
 import { saveAutomation, blankAutomation } from "../features/automations/automationStore";
 import { refreshDefinitions } from "../intelligence/triggerService";
@@ -45,7 +51,8 @@ import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block } from "../../types/blocks";
 import { LiquidMetalButton } from "./ui/liquid-metal-button";
 import { cn } from "../lib/utils";
-import { isDesktop, isMobile } from "../platform";
+import { isDockedViewport, DOCKED_PANEL_MIN_WIDTH } from "../platform";
+import { SPRING_PRESETS, useReducedMotion, motionSafe } from "../features/motion/MotionSystem";
 
 const SPRING = { type: "spring", stiffness: 400, damping: 28 } as const;
 const SPRING_STIFF = { type: "spring", stiffness: 500, damping: 35 } as const;
@@ -164,6 +171,8 @@ interface AIChatMessage {
   runId?: string;
   runSteps?: StepProgress[];
   runStatus?: "running" | "completed" | "failed" | "interrupted";
+  /** Why the run failed. Populated by the runtime; shown in the progress bubble. */
+  runErrors?: string[];
   /** Live model text streamed while the run is in progress. */
   liveText?: string;
 }
@@ -223,6 +232,8 @@ interface AIRightPanelProps {
   onAppend?: (blocks: Block[]) => void;
   onReplaceText?: (text: string) => void;
   onToast?: (message: string) => void;
+  /** Switches the active document context, driven by the page picker pill. */
+  onSelectPage?: (page: Page) => void;
   toolContext: ToolContextShape;
   /** Locked (over-limit) workspace: sending is disabled, panel is read-only. */
   locked?: boolean;
@@ -232,12 +243,42 @@ interface AIRightPanelProps {
   onSeedConsumed?: () => void;
 }
 
+  /**
+ * Live catalog, grouped by provider.
+ *
+ * This picker used to read `getAllProviders()` — the static registry in
+ * providers.ts — while the prompt-input model picker read the live
+ * ModelRegistry. The two therefore disagreed: this one could offer a retired
+ * model, and it had no notion of a model being free or of which providers are
+ * actually configured. Both now read getRealAiModels(), which is the same
+ * source the other picker uses and the only one that knows about free tiers,
+ * the OpenCode-client-only gate, and per-provider key state.
+ *
+ * Extracted so it can be tested without mounting the panel.
+ */
+export function buildProviderCatalog(models: AiModel[]) {
+  const map = new Map<string, { id: string; name: string; type: "cloud" | "local"; configured: boolean; models: AiModel[] }>();
+  for (const m of models) {
+    if (!map.has(m.providerId)) {
+      map.set(m.providerId, {
+        id: m.providerId,
+        name: m.providerName,
+        type: m.providerType,
+        configured: m.configured || m.providerType === "local",
+        models: [],
+      });
+    }
+    map.get(m.providerId)!.models.push(m);
+  }
+  return Array.from(map.values());
+}
 export default function AIRightPanel({
   open, onClose, page, pages, appView, pageMode, openPanePages = [],
   apiKey, aiProvider, nvidiaKey,
   aiChats = [], activeChatId, onChatsChange, onActiveChat, onNewChat,
   onSelectChat, onDeleteChat, onRenameChat, onPagePatch, onInsert,
   onAppend, onReplaceText, onToast, toolContext, seedPrompt, onSeedConsumed,
+  onSelectPage,
   locked = false
 }: AIRightPanelProps) {
   const [prompt, setPrompt] = useState("");
@@ -271,12 +312,15 @@ export default function AIRightPanel({
   const [showHistory, setShowHistory] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
+  /** Category filter chips, shared with the prompt-input model picker. */
+  const [modelCategory, setModelCategory] = React.useState<ModelCategory>("all");
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [aiMode, setAiMode] = useState("Inspiration");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLInputElement>(null);
+  // The composer is a <textarea> (multi-line prompts must survive newlines).
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const currentAgent = getAgent(activeAgent);
   const agents = getAgentList();
@@ -284,23 +328,82 @@ export default function AIRightPanel({
   const providerName = aiManager.getActiveProviderName();
   const modelName = aiManager.getActiveModelName();
   const activeModelId = aiManager.getActiveModel();
-  const allProviders = useMemo(() => getAllProviders(), []);
+
+  /**
+   * Re-derive the catalog whenever a provider key changes or a background
+   * discovery refresh lands.
+   *
+   * This was `useMemo(..., [])`, so getRealAiModels() ran once when the panel
+   * first mounted and never again. Adding an API key afterwards updated
+   * aiManager and re-ran model discovery, but this panel kept serving the
+   * snapshot it took at mount — so a newly configured provider stayed
+   * "Connect" and its models stayed invisible until the whole panel remounted.
+   *
+   * aiManager notifies on every setProviderConfig, and the registry notifies
+   * when refreshProvider finishes for that provider, so both ends are covered.
+   */
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setCatalogVersion((v) => v + 1);
+    const offManager = aiManager.subscribe(bump);
+    const offRegistry = modelRegistry.subscribe(bump);
+    const offCatalog = modelCatalogService.subscribe(bump);
+    return () => {
+      offManager();
+      offRegistry();
+      offCatalog();
+    };
+  }, []);
+
+  const catalogProviders = useMemo(
+    () => buildProviderCatalog(getRealAiModels()),
+    // catalogVersion is the invalidation signal for provider config + discovery.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [catalogVersion]
+  );
 
   const filteredProviders = useMemo(() => {
-    if (!modelSearch.trim()) return allProviders;
-    const q = modelSearch.toLowerCase();
-    return allProviders
+    const q = modelSearch.trim().toLowerCase();
+
+    return catalogProviders
       .map((prov) => {
-        const matchesProv = prov.name.toLowerCase().includes(q) || prov.id.toLowerCase().includes(q);
-        const matchingModels = prov.models.filter(
-          (m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
-        );
-        if (matchesProv) return prov;
-        if (matchingModels.length > 0) return { ...prov, models: matchingModels };
-        return null;
+        let scoped = prov.models;
+
+        // The Free chip is the only category that additionally requires a key.
+        // A free model behind a provider you have not configured is just a 401
+        // waiting to happen, so it is not an offer.
+        if (modelCategory === "free" && !prov.configured) return null;
+
+        scoped = scoped.filter((m) => matchesModelCategory(m, modelCategory, Boolean(q)));
+
+        if (q) {
+          const matchesProv = prov.name.toLowerCase().includes(q) || prov.id.toLowerCase().includes(q);
+          const matching = scoped.filter(
+            (m) => m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
+          );
+          if (matchesProv) return { ...prov, models: scoped };
+          if (matching.length > 0) return { ...prov, models: matching };
+          return null;
+        }
+        if (scoped.length === 0) return null;
+        return { ...prov, models: scoped };
       })
-      .filter(Boolean) as typeof allProviders;
-  }, [allProviders, modelSearch]);
+      .filter(Boolean) as typeof catalogProviders;
+  }, [catalogProviders, modelSearch, modelCategory]);
+
+  /** Counts for the chip row, so a chip that would show nothing can say so. */
+  const categoryCounts = useMemo(() => {
+    const counts = {} as Record<ModelCategory, number>;
+    for (const cat of ["ready", "free", "flagship", "reasoning", "local", "connect", "sunset"] as ModelCategory[]) {
+      counts[cat] = catalogProviders.reduce(
+        (n, p) =>
+          n +
+          (cat === "free" && !p.configured ? 0 : p.models.filter((m) => matchesModelCategory(m, cat, false)).length),
+        0
+      );
+    }
+    return counts;
+  }, [catalogProviders]);
 
   const handleSelectModel = (providerId: string, modelId: string) => {
     aiManager.setActiveProvider(providerId, modelId);
@@ -430,7 +533,9 @@ export default function AIRightPanel({
     streamBuffer.onFlush((accumulated) => {
       const targetId = streamingMsgIdRef.current;
       if (!targetId) return;
-      setMessages(prev => prev.map(m => m.id === targetId ? { ...m, content: stripToolCalls(accumulated) } : m));
+      // Strip reasoning mid-stream too, otherwise the model's <think> block
+      // flashes into view before the final render removes it.
+      setMessages(prev => prev.map(m => m.id === targetId ? { ...m, content: stripThinking(stripToolCalls(accumulated)) } : m));
     });
   }, [streamBuffer]);
 
@@ -539,7 +644,7 @@ export default function AIRightPanel({
           onProgress: (steps, r) => {
             setActiveRunId(r.id);
             setActiveSteps(steps);
-            setMessages(prev => prev.map(m => m.id === progressMsgId ? { ...m, runSteps: steps, runStatus: r.status as AIChatMessage["runStatus"], runId: r.id } : m));
+            setMessages(prev => prev.map(m => m.id === progressMsgId ? { ...m, runSteps: steps, runStatus: r.status as AIChatMessage["runStatus"], runId: r.id, runErrors: r.errors } : m));
           },
           onLiveText: (chunk) => {
             setMessages(prev => prev.map(m => m.id === progressMsgId ? { ...m, liveText: chunk } : m));
@@ -551,7 +656,7 @@ export default function AIRightPanel({
         const finalMsg: AIChatMessage = { id: uid(), role: "assistant", content: finalContent, createdAt: now(), model: modelName, provider: providerName };
         let doneMessages = [...updatedMessages, progressMsg];
         // Replace the progress bubble's status; append summary message
-        doneMessages = doneMessages.map(m => m.id === progressMsgId ? { ...m, runSteps: run.steps, runStatus: run.status as AIChatMessage["runStatus"] } : m);
+        doneMessages = doneMessages.map(m => m.id === progressMsgId ? { ...m, runSteps: run.steps, runStatus: run.status as AIChatMessage["runStatus"], runErrors: run.errors } : m);
         doneMessages = [...doneMessages, finalMsg];
         setMessages(doneMessages);
         onChatsChange?.(chats.map(c => c.id === chatId ? { ...c, messages: doneMessages, updatedAt: now() } : c) as unknown as AIChat[]);
@@ -610,7 +715,14 @@ export default function AIRightPanel({
           processedMessages = [...processedMessages, toolMsg];
           setMessages(processedMessages);
         }
-        const toolResults = await executeAllToolCalls(streamed, toolContext);
+        const toolResults = await agentRuntime.executeToolCalls(streamed, {
+          goal: text,
+          sourceId: "noska-ai",
+          sourceKind: "ai",
+          trigger: "manual",
+          permissions: FULL_AUTO_PERMISSIONS,
+          getContext: () => toolContext as unknown as ToolContextLike,
+        });
         const toolResultText = toolResults.map((r: { name: string; error?: string; result?: unknown }) => {
           const success = r.error ? `Error: ${r.error}` : JSON.stringify(r.result, null, 2);
           return `Tool: ${r.name}\nResult: ${success}`;
@@ -766,30 +878,66 @@ export default function AIRightPanel({
   const selectedText = page?.blocks?.find((b) => (b as unknown as { selected?: boolean }).selected)?.text || "";
   const currentHistory = chatHistory.slice(0, 5);
 
+  /**
+   * Docked side rail vs. full-screen sheet. Driven by viewport width and
+   * tracked live, so resizing the window switches layouts instead of pinning
+   * the wrong one from mount.
+   */
+  const [docked, setDocked] = useState(() => isDockedViewport());
+  // Apple-level polish includes honouring the OS motion preference. A 410px
+  // panel sliding in from the edge is exactly the large translation that
+  // triggers vestibular discomfort, so it collapses to a cross-fade.
+  const reducedMotion = useReducedMotion();
+  /** Which quick-action pill is currently held, for the press-scale effect. */
+  const [pressedAction, setPressedAction] = useState<string | null>(null);
+  useEffect(() => {
+    const onResize = () => setDocked(isDockedViewport());
+    window.addEventListener("resize", onResize);
+    // The value can also change without a resize (orientation, devtools dock).
+    const mq = typeof window.matchMedia === "function"
+      ? window.matchMedia(`(min-width: ${DOCKED_PANEL_MIN_WIDTH}px)`)
+      : null;
+    mq?.addEventListener?.("change", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      mq?.removeEventListener?.("change", onResize);
+    };
+  }, []);
+
   return (
     <AnimatePresence>
       {open && (
         <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.12 }}
-            className={cn(
-              "fixed inset-x-0 bottom-0 z-50 bg-[var(--bg)]/60 backdrop-blur-sm",
-              isDesktop() && !isMobile() ? "top-7.5" : "top-0"
-            )}
-            onClick={onClose}
-          />
+          {/* Tap-outside scrim — narrow viewports only.
+              On a docked layout this panel is a 410px side rail beside the
+              workspace, not a modal. The scrim covered everything with a 60%
+              dim plus backdrop-blur and swallowed every click, so you could
+              neither see nor work in your page while the AI panel was open. */}
+          {!docked && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+              className="fixed inset-x-0 bottom-0 top-0 z-50 bg-[var(--bg)]/60 backdrop-blur-sm"
+              onClick={onClose}
+            />
+          )}
 
           <motion.div
-            initial={{ x: '100%', opacity: 0.8 }}
+            initial={reducedMotion ? { opacity: 0 } : { x: '100%' }}
             animate={{ x: 0, opacity: 1 }}
-            exit={{ x: '100%', opacity: 0.8 }}
-            transition={{ type: "spring", stiffness: 420, damping: 32 }}
+            exit={reducedMotion ? { opacity: 0 } : { x: '100%' }}
+            transition={motionSafe(SPRING_PRESETS.panel, reducedMotion)}
             className={cn(
-              "fixed right-0 z-50 bottom-0 w-[410px] max-w-[92vw] bg-[var(--panel)] text-[var(--text)] border-l border-[var(--border)] shadow-[var(--shadow-floating)] flex flex-col font-sans select-none",
-              isDesktop() && !isMobile() ? "top-7.5" : "top-0"
+              "fixed right-0 z-50 bottom-0 w-[410px] max-w-[92vw] bg-[var(--panel)] text-[var(--text)] flex flex-col font-sans select-none",
+              // Material treatment: a translucent, saturated surface with a
+              // hairline edge reads as a distinct layer instead of a flat slab
+              // glued to the window edge.
+              "border-l border-[var(--border)] backdrop-blur-xl backdrop-saturate-150",
+              // Only the docked rail is inset enough to round its outer corner
+              // and float; the full-screen mobile sheet has nowhere to float.
+              docked ? "top-7.5 rounded-l-2xl shadow-[var(--shadow-floating)] overflow-hidden" : "top-0"
             )}
           >
             {/* ===== MINIMALIST THEMED HEADER ===== */}
@@ -804,7 +952,7 @@ export default function AIRightPanel({
                 <button
                   type="button"
                   onClick={() => setShowModelPicker(!showModelPicker)}
-                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--surface-2)]/70 hover:bg-[var(--hover)] border border-[var(--border)] text-[10px] font-mono text-[var(--text-secondary)] hover:text-[var(--text)] transition cursor-pointer truncate max-w-[140px]"
+                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--surface-2)]/70 hover:bg-[var(--hover)] border border-[var(--border)] text-[10px] font-mono text-[var(--text-secondary)] hover:text-[var(--text)] transition cursor-pointer truncate max-w-[140px] shrink"
                   title="Select AI Model"
                 >
                   <Cpu size={10} className="text-[var(--accent)] shrink-0" />
@@ -848,6 +996,24 @@ export default function AIRightPanel({
               </div>
             </div>
 
+            {/* ── Active document context ──
+                Its own row rather than inline in the header: the header is a
+                narrow docked column with a fixed action cluster on the right,
+                and a pill that must not truncate (so it is shrink-0) would
+                overflow straight through that cluster and collide with it. A
+                second row removes the contention entirely and gives the
+                dropdown somewhere to open without covering the header. */}
+            <div className="px-3.5 py-2 border-b border-[var(--border)] shrink-0 bg-[var(--surface)]/40 backdrop-blur-md">
+              <PageContextPicker
+                page={page}
+                pages={pages}
+                onSelectPage={onSelectPage}
+                onToast={onToast}
+                outside
+                hoverPreview={false}
+              />
+            </div>
+
             {/* ===== MODEL SELECTOR POPOVER ===== */}
             <AnimatePresence>
               {showModelPicker && (
@@ -869,6 +1035,47 @@ export default function AIRightPanel({
                     >
                       Close
                     </button>
+                  </div>
+
+                  {/* Category chips — same set and styling as the prompt-input model
+                      picker, driven by the same matchesModelCategory predicate. */}
+                  <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none text-[10px]">
+                    {[
+                      { id: "all", label: "All" },
+                      { id: "ready", label: "🟢 Ready" },
+                      { id: "free", label: "💚 Free" },
+                      { id: "flagship", label: "⭐ Best Models" },
+                      { id: "reasoning", label: "🧠 Reasoning" },
+                      { id: "local", label: "💻 Local" },
+                      { id: "connect", label: "🔌 Connect" },
+                      { id: "sunset", label: "⚠️ Sunset" },
+                    ].map((cat) => {
+                      const id = cat.id as ModelCategory;
+                      const n = id === "all" ? null : categoryCounts[id];
+                      // Grey out a chip that would render an empty list, but
+                      // keep it clickable so the empty state can explain why.
+                      const isEmpty = n === 0;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setModelCategory(id)}
+                          aria-pressed={modelCategory === id}
+                          className={cn(
+                            "px-2 py-0.5 rounded-md whitespace-nowrap transition-all cursor-pointer font-medium shrink-0",
+                            modelCategory === id
+                              ? "bg-[#1c1b18] text-white dark:bg-white dark:text-[#18181a] font-semibold shadow-xs"
+                              : "bg-[var(--surface-2)]/60 text-[var(--muted)] hover:text-[var(--text)] border border-[var(--border)]",
+                            isEmpty && modelCategory !== id && "opacity-45"
+                          )}
+                        >
+                          {cat.label}
+                          {n !== null && n > 0 && (
+                            <span className="ml-1 tabular-nums opacity-70">{n}</span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Search Bar */}
@@ -901,9 +1108,15 @@ export default function AIRightPanel({
                         <div className="grid grid-cols-1 gap-1.5">
                           {prov.models.map((m) => {
                             const isSelected = activeModelId === m.id;
-                            const isFast = /instant|mini|8b|haiku/i.test(m.id);
-                            const isHighIQ = /70b|405b|opus|large/i.test(m.id);
-                            const isReasoning = /r1|o1|reason/i.test(m.id);
+                            // Use the declared capabilities from the live catalog,
+                            // falling back to the id heuristic the old static
+                            // list required. The regexes misfired constantly —
+                            // "haiku" matched a Haiku but so did any id with
+                            // "large" in it.
+                            const isFast = m.supportsFast ?? /instant|mini|8b|flash/i.test(m.id);
+                            const isHighIQ = m.supportsThinking ?? /70b|405b|opus/i.test(m.id);
+                            const isReasoning = m.supportsThinking ?? /r1|o1|reason/i.test(m.id);
+                            const isFree = m.freeBadge === "[Free]" || m.freeBadge === "[Free • Limited]";
                             return (
                               <button
                                 key={m.id}
@@ -917,7 +1130,10 @@ export default function AIRightPanel({
                               >
                                 <div className="truncate flex-1 min-w-0 pr-2">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="truncate text-xs font-semibold text-[var(--text)]">{m.name}</span>
+                                    <span className="truncate text-xs font-semibold text-[var(--text)]">{m.label}</span>
+                                    {isFree && (
+                                      <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-medium">Free</span>
+                                    )}
                                     {isReasoning && (
                                       <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 font-medium">Reasoning</span>
                                     )}
@@ -944,8 +1160,32 @@ export default function AIRightPanel({
                       </div>
                     ))}
                     {filteredProviders.length === 0 && (
-                      <div className="py-6 text-center text-xs text-[var(--muted)]">
-                        No models matching "{modelSearch}"
+                      <div className="py-6 px-2 text-center text-xs text-[var(--muted)] space-y-1.5">
+                        {modelCategory === "free" ? (
+                          <>
+                            <p className="font-medium text-[var(--text)]">No free models with your keys set.</p>
+                            <p className="text-[10.5px] leading-relaxed">
+                              Add an API key for a provider (OpenRouter has ~19 free models) and they will
+                              appear here, grouped by provider.
+                            </p>
+                            <p className="text-[10px] opacity-70">
+                              OpenCode Zen&rsquo;s free models are excluded — OpenCode serves those only
+                              inside its own app, so they answer 403 from Noska.
+                            </p>
+                          </>
+                        ) : modelSearch ? (
+                          <p>No models matching &ldquo;{modelSearch}&rdquo;</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <p className="font-medium text-[var(--text)]">
+                              Nothing in this category yet.
+                            </p>
+                            <p className="text-[10.5px] leading-relaxed">
+                              Switch to <span className="font-medium">All</span> to see the full catalog,
+                              or add a provider key to unlock more.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -954,13 +1194,32 @@ export default function AIRightPanel({
             </AnimatePresence>
 
             {/* ===== QUICK ACTIONS PILLS ===== */}
-            <div className="px-3.5 py-2 border-b border-[var(--border)] shrink-0 bg-[var(--surface)]/20 overflow-x-auto scrollbar-none flex items-center gap-1.5">
+            {/* `mask-image` fades the trailing edge so a clipped pill reads as
+                "scroll for more" rather than as a rendering mistake — it was
+                cutting "Extract" mid-word with a hard edge. */}
+            <div
+              className="px-3.5 py-2 border-b border-[var(--border)] shrink-0 bg-[var(--surface)]/20 overflow-x-auto scrollbar-none flex items-center gap-1.5"
+              style={{
+                maskImage: "linear-gradient(to right, black 0, black calc(100% - 28px), transparent 100%)",
+                WebkitMaskImage: "linear-gradient(to right, black 0, black calc(100% - 28px), transparent 100%)",
+              }}
+            >
               {QUICK_ACTIONS.slice(0, 5).map((action) => (
                 <button
                   key={action.id}
                   type="button"
                   onClick={() => handleQuickAction(action.id)}
-                  className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/10 px-2.5 py-1 text-[11px] text-[var(--text-secondary)] hover:text-[var(--accent)] transition-all cursor-pointer shrink-0 font-medium shadow-2xs"
+                  onPointerDown={() => { if (!reducedMotion) setPressedAction(action.id); }}
+                  onPointerUp={() => setPressedAction(null)}
+                  onPointerLeave={() => setPressedAction(null)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] cursor-pointer shrink-0 font-medium shadow-2xs",
+                    "transition-[transform,background-color,border-color,color] duration-150 ease-out",
+                    pressedAction === action.id ? "scale-[0.96]" : "scale-100",
+                    "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]",
+                    "hover:border-[var(--accent)] hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50"
+                  )}
                 >
                   <action.icon size={11} className="text-[var(--accent)]" />
                   <span>{action.label}</span>
@@ -1233,13 +1492,20 @@ export default function AIRightPanel({
               <div className={`rounded-2xl border transition-all duration-200 bg-[var(--surface)] shadow-xs ${
                 prompt ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/15' : 'border-[var(--border)]'
               }`}>
-                <div className="flex items-center gap-2 px-3.5 py-2.5">
-                  <input
+                <div className="flex items-start gap-2 px-3.5 py-2.5">
+                  {/* A <textarea>, not an <input>.
+                      HTMLInputElement.value strips CR/LF per spec, so every
+                      multi-line prompt was silently flattened onto one line —
+                      verified live: a 1499-char structured prompt arrived as
+                      1487 chars with all its line breaks gone. Structure
+                      carries meaning in prompts (numbered specs, lists), so
+                      this was quietly degrading every request the user made. */}
+                  <textarea
                     ref={composerRef}
-                    type="text"
+                    rows={1}
                     value={prompt}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setPrompt(e.target.value)}
-                    onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
+                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setPrompt(e.target.value)}
+                    onKeyDown={(e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         handleSend(prompt);
@@ -1247,7 +1513,7 @@ export default function AIRightPanel({
                     }}
                     placeholder="Ask Noska AI anything..."
                     style={{ outline: "none", border: "none", boxShadow: "none", background: "transparent" }}
-                    className="flex-1 bg-transparent text-[13px] text-[var(--text)] outline-none border-none ring-0 placeholder:text-[var(--muted)]"
+                    className="flex-1 max-h-40 resize-none bg-transparent text-[13px] leading-relaxed text-[var(--text)] outline-none border-none ring-0 placeholder:text-[var(--muted)] scrollbar-thin"
                   />
 
                   <button
@@ -1306,7 +1572,7 @@ interface ChatMessageBubbleProps {
 }
 
 /** Live progress for agentic runs — concise steps, never chain-of-thought. */
-function RunProgressBubble({ steps }: { steps: StepProgress[] }) {
+function RunProgressBubble({ steps, errors }: { steps: StepProgress[]; errors?: string[] }) {
   const iconFor = (status: StepProgress["status"]) => {
     switch (status) {
       case "done": return <CheckCircle2 size={9} className="text-[var(--success)] shrink-0" />;
@@ -1327,6 +1593,21 @@ function RunProgressBubble({ steps }: { steps: StepProgress[] }) {
           </div>
         ))}
       </div>
+      {/* Why the run failed.
+          `run.errors` was collected by the runtime and then dropped on the
+          floor here — the bubble only ever received `steps`. A user whose run
+          died on a 402 or a missing key saw "Finished with issues" and nothing
+          else, with no way to tell a billing problem from a bad request. */}
+      {errors && errors.length > 0 && (
+        <div className="mt-1.5 pt-1.5 border-t border-[var(--border)] space-y-0.5">
+          {errors.map((e, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-[10px] text-[var(--danger)] leading-snug">
+              <AlertCircle size={9} className="shrink-0 mt-[2px]" />
+              <span className="break-words">{e}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1435,9 +1716,30 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
   const [copied, setCopied] = useState(false);
   const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
 
+  // Also strip here: this is the live stream, so it is the first thing to show
+  // the user and therefore the first place reasoning is visible mid-flight. The
+  // final-content path strips later, but by then it has already flashed on
+  // screen. Computed up front so the guard below can test the *stripped* value —
+  // an all-reasoning stream must not leave an empty bordered box on screen.
+  const safeLiveText = stripThinking(message.liveText ?? "");
+
+  // Resolve the body ONCE and use it for both rendering and the action bar.
+  //
+  // These were previously independent: the bar was gated on the raw
+  // `message.text || message.content`, while the body rendered the *stripped*
+  // value. So a message whose entire content was reasoning — or nothing but a
+  // stripped tool envelope — passed the truthiness check and then rendered
+  // nothing, leaving an empty bubble still offering Copy / Insert / Replace
+  // for text that did not exist.
+  const rawBody = message.html || message.text || message.content || "";
+  const safeBody = stripThinking(rawBody);
+  const bodyHtml = renderAIMarkdown(safeBody);
+  const hasBody = safeBody.replace(/<[^>]*>/g, "").trim().length > 0;
+
   // Agentic run progress bubbles render as a step list, not markdown.
   if (!isUser && message.runSteps) {
     const finished = message.runStatus && message.runStatus !== "running";
+    const completedRun = message.runStatus === "completed";
     return (
       <motion.div
         initial={{ opacity: 0, y: 6 }}
@@ -1445,8 +1747,23 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
         className="mr-auto max-w-[90%]"
         data-message-id={message.id}
       >
-        {finished ? (
-          <details className="group/run rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2.5 py-2">
+{finished ? (
+          <>
+            {/* Outside <details> on purpose. A <details> hides every child
+                except its <summary> while collapsed, so placing the reason
+                inside it meant the error was visible only after the user
+                expanded a disclosure they had no reason to suspect. */}
+            {!completedRun && message.runErrors && message.runErrors.length > 0 && (
+              <div className="mb-1.5 space-y-0.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2.5 py-2">
+                {message.runErrors.slice(0, 3).map((e, i) => (
+                  <div key={i} className="flex items-start gap-1.5 text-[10px] text-[var(--danger)] leading-snug">
+                    <AlertCircle size={9} className="shrink-0 mt-[2px]" />
+                    <span className="break-words">{e}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <details className="group/run rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2.5 py-2">
             <summary className="cursor-pointer select-none flex items-center gap-1.5 text-[10px] font-semibold text-[var(--text)]">
               {message.runStatus === "completed"
                 ? <CheckCircle2 size={10} className="text-[var(--success)]" />
@@ -1455,15 +1772,16 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
               <span className="text-[8px] text-[var(--muted)] font-normal group-open/run:hidden">— show steps</span>
             </summary>
             <div className="mt-2">
-              <RunProgressBubble steps={message.runSteps} />
+<RunProgressBubble steps={message.runSteps} errors={message.runErrors} />
             </div>
           </details>
+          </>
         ) : (
           <>
-            <RunProgressBubble steps={message.runSteps} />
-            {message.liveText?.trim() && (
+            <RunProgressBubble steps={message.runSteps} errors={message.runErrors} />
+            {safeLiveText && (
               <div className="mt-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2.5 py-2 text-[11px] leading-relaxed text-[var(--muted)] max-h-28 overflow-hidden">
-                {message.liveText.trim()}
+                {safeLiveText}
               </div>
             )}
           </>
@@ -1510,17 +1828,18 @@ function ChatMessageBubble({ message, index, total, page, onInsert, onReplaceTex
         {/* Content */}
         {isUser ? (
           <span className="whitespace-pre-wrap">{message.text || message.content}</span>
+        ) : hasBody ? (
+          <div className="ai-md-container" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
         ) : (
-          <div
-            className="ai-md-container"
-            dangerouslySetInnerHTML={{
-              __html: message.html || renderAIMarkdown(message.text || message.content || "")
-            }}
-          />
+          <div className="ai-md-container text-[var(--muted)] italic">
+            {isFirstAi
+              ? "No visible response."
+              : "The model returned only internal reasoning — nothing to show."}
+          </div>
         )}
 
         {/* Reactions + Actions Bar */}
-        {!isUser && (message.text || message.content) && message.text !== '...' && message.content !== '...' && (
+        {!isUser && hasBody && (
           <div className="mt-2 pt-1.5 border-t border-[var(--border)]/60 flex items-center gap-1.5 transition-opacity">
             <div className="flex items-center gap-0.5 bg-[var(--surface-2)]/60 p-0.5 rounded-md border border-[var(--border)]">
               <button

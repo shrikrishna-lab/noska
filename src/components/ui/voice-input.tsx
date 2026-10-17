@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Mic, Globe, ChevronUp, ChevronDown, Sparkles, ArrowRight, Check, X, AlertCircle, RefreshCw, Clock, Settings, ChevronRight, Clipboard, ClipboardPaste, Plus, ListChecks, Languages, Square, Bot, Activity } from "lucide-react";
+import { Mic, Globe, ChevronUp, ChevronDown, Sparkles, ArrowRight, Check, X, AlertCircle, RefreshCw, Clock, Settings, ChevronRight, Clipboard, ClipboardPaste, Plus, ListChecks, Languages, Square, Bot, Activity, Lock } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { cn } from "../../lib/utils";
 import { useVoiceController, globalVoiceController } from "../../lib/voice/voice-controller";
-import { getWebVoiceReadiness } from "../../lib/voice/speech-recognition";
+import { getWebVoiceReadiness, getSecureOriginAlternatives } from "../../lib/voice/speech-recognition";
 import { isDesktop } from "../../lib/desktop/platform";
 import { AUTO_LANGUAGE, HINGLISH_LANGUAGE } from "../../lib/voice/language";
 import {
@@ -272,6 +272,27 @@ export function ActivityRing({
  * chromatic fluid Bezier wave flares modulated by microphone FFT bands,
  * and dual embedded control pods (Deep Navy + Glossy White with live reactive audio arcs).
  */
+/**
+ * Tracks the OS "reduce motion" preference and reacts to it changing at
+ * runtime, so an ambient animation can be switched off without a reload.
+ */
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  return reduced;
+}
+
 export function AppleIntelligenceOrb({
   isListening,
   onToggle,
@@ -338,12 +359,15 @@ export function AppleIntelligenceOrb({
         rawPeak = 0.04;
       }
 
-      // Smooth interpolation for fluid liquid physics
+      // Smooth interpolation for fluid liquid physics. The coefficients are
+      // deliberately low: raw analyser output jumps frame to frame, and easing
+      // harder toward it makes the bars twitch. Heavy smoothing plus a
+      // frame-rate independent step is what makes the motion read as liquid.
       const s = smoothedAudio.current;
-      s.bass += (rawBass - s.bass) * 0.35;
-      s.mid += (rawMid - s.mid) * 0.35;
-      s.treble += (rawTreble - s.treble) * 0.35;
-      s.peak += (rawPeak - s.peak) * 0.4;
+      s.bass += (rawBass - s.bass) * 0.16;
+      s.mid += (rawMid - s.mid) * 0.16;
+      s.treble += (rawTreble - s.treble) * 0.16;
+      s.peak += (rawPeak - s.peak) * 0.18;
 
       // Reactive Audio Wave Arcs inside Right White Control Pod
       if (podBar1Ref.current) {
@@ -378,19 +402,33 @@ export function AppleIntelligenceOrb({
             ? "from-cyan-500/50 via-blue-500/40 to-indigo-500/50"
             : "from-cyan-500/45 via-fuchsia-500/40 to-sky-500/45";
 
+  // Honour the OS "reduce motion" setting. A looping ambient animation is
+  // exactly the kind of peripheral motion that setting exists for, and people
+  // who enable it should not be forced to watch the orb breathe.
+  const reduceMotion = usePrefersReducedMotion();
+
+  // A single long ease-in-out cycle instead of a five-keyframe
+  // scale/opacity "throb". The old [1, 1.15, 0.98, 1.12, 1] ramped up and
+  // down twice per loop, which read as a pulse rather than a glow and pulled
+  // attention away from what the user was actually doing.
+  const glowCycle = reduceMotion
+    ? { scale: 1, opacity: 0.75 }
+    : {
+        scale: [1, 1.06, 1],
+        opacity: [0.62, 0.88, 0.62],
+      };
+
   return (
     <div className={cn("relative flex flex-col items-center justify-center select-none group", className)}>
       {/* Outer Ambient Glow Reflection */}
       <motion.div
-        animate={{
-          scale: isListening ? [1, 1.15, 0.98, 1.12, 1] : [1, 1.05, 1],
-          opacity: isListening ? [0.7, 0.95, 0.75, 0.9, 0.7] : [0.35, 0.55, 0.35],
-        }}
-        transition={{
-          duration: isListening ? 2.2 : 4.0,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
+        animate={glowCycle}
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : { duration: 7.5, repeat: Infinity, ease: "easeInOut" }
+        }
+        style={{ willChange: "transform, opacity" }}
         className={cn("absolute -inset-3 rounded-[38px] bg-gradient-to-tr blur-lg pointer-events-none", glowGradient)}
       />
 
@@ -519,20 +557,28 @@ export function AppleIntelligenceOrb({
               </div>
             ) : (
               /* Standby / Mic State Audio Indicator */
-              <div className="flex items-center gap-[1.4px] relative z-10 text-[#ff3b30] h-3 justify-center">
-                <span
-                  ref={podBar1Ref}
-                  className="w-[1.4px] h-[3px] rounded-full bg-[#ff3b30] transition-[height] duration-75"
-                />
-                <span
-                  ref={podBar2Ref}
-                  className="w-[1.6px] h-[6.5px] rounded-full bg-[#ff3b30] transition-[height] duration-75"
-                />
-                <span
-                  ref={podBar3Ref}
-                  className="w-[1.4px] h-[3px] rounded-full bg-[#ff3b30] transition-[height] duration-75"
-                />
-              </div>
+              <>
+                {/* No CSS height transition on purpose: these heights are
+                    already rewritten every animation frame, and a 75ms
+                    transition on top of that leaves each bar lagging the frame
+                    it was set in — the stutter users perceive as a blink. The
+                    rAF loop does the smoothing, so the CSS easing only fights
+                    it. */}
+                <div className="flex items-center gap-[1.4px] relative z-10 text-[#ff3b30] h-3 justify-center">
+                  <span
+                    ref={podBar1Ref}
+                    className="w-[1.4px] h-[3px] rounded-full bg-[#ff3b30]"
+                  />
+                  <span
+                    ref={podBar2Ref}
+                    className="w-[1.6px] h-[6.5px] rounded-full bg-[#ff3b30]"
+                  />
+                  <span
+                    ref={podBar3Ref}
+                    className="w-[1.4px] h-[3px] rounded-full bg-[#ff3b30]"
+                  />
+                </div>
+              </>
             )}
           </button>
         </div>
@@ -1431,16 +1477,18 @@ interface VoiceAlertCapsuleProps {
   voiceError: string;
   isPermissionError: boolean;
   browserGuidance: string | null;
+  secureOriginUrl?: string | null;
   onRecover: () => void;
   onDismiss: () => void;
   isListening?: boolean;
   floatingPosition?: string;
 }
 
-function VoiceAlertCapsule({
+export function VoiceAlertCapsule({
   voiceError,
   isPermissionError,
   browserGuidance,
+  secureOriginUrl = null,
   onRecover,
   onDismiss,
   isListening = false,
@@ -1535,6 +1583,18 @@ function VoiceAlertCapsule({
 
       {/* Sleek Apple Glass Icon Actions */}
       <div className="flex items-center gap-1.5 shrink-0 pl-2.5 border-l border-black/10 dark:border-white/15">
+        {/* One-click jump to a secure origin (getUserMedia needs a secure context) */}
+        {secureOriginUrl && (
+          <a
+            href={secureOriginUrl}
+            title="Reopen on a secure origin to enable the microphone"
+            className="relative z-10 flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-[600] bg-black/8 hover:bg-black/15 dark:bg-white/10 dark:hover:bg-white/18 active:scale-95 text-[#2A1713] dark:text-[#FDE8D3] border border-black/10 dark:border-white/15 transition-all duration-200 cursor-pointer shadow-xs whitespace-nowrap"
+          >
+            <Lock size={11} strokeWidth={2.6} />
+            Open secure
+          </a>
+        )}
+
         {/* Retry Icon Button */}
         <button
           type="button"
@@ -1838,6 +1898,7 @@ export function VoiceInput({
   const isPermissionError = /permission|microphone|not-allowed|denied/i.test(voiceError);
   const browserReadiness = !isDesktop() ? getWebVoiceReadiness() : null;
   const browserGuidance = browserReadiness && !browserReadiness.ready ? browserReadiness.message : null;
+  const secureOrigin = browserReadiness?.code === "secure-context" ? getSecureOriginAlternatives()[0] ?? null : null;
 
   const handleDismissError = () => {
     setIsErrorDismissed(true);
@@ -1931,6 +1992,7 @@ export function VoiceInput({
             voiceError={voiceError}
             isPermissionError={isPermissionError}
             browserGuidance={browserGuidance}
+            secureOriginUrl={secureOrigin}
             onRecover={recoverVoice}
             onDismiss={handleDismissError}
             isListening={isListening}

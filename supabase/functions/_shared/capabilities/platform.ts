@@ -127,7 +127,7 @@ export function cleanTemplateBody(body: unknown): Row {
 
 export const templates = {
   async list(userId: string, opts: { archived?: boolean } = {}) {
-    let q = db().from("noska_templates").select("*").eq("user_id", userId);
+    let q = db().from("noska_templates").select("id,user_id,workspace_id,name,description,icon,kind,tags,archived,usage_count,created_at,updated_at").eq("user_id", userId);
     q = q.eq("archived", opts.archived ?? false);
     const { data } = await q.order("updated_at", { ascending: false });
     return { templates: data ?? [] };
@@ -287,8 +287,8 @@ export const templates = {
   },
 };
 
-async function loadOwnedV5(table: string, userId: string, id: string, label: string): Promise<Row> {
-  const { data, error } = await db().from(table).select("*").eq("user_id", userId).eq("id", id).maybeSingle();
+async function loadOwnedV5(table: string, userId: string, id: string, label: string, columns = "*"): Promise<Row> {
+  const { data, error } = await db().from(table).select(columns).eq("user_id", userId).eq("id", id).maybeSingle();
   if (error || !data) throw errors.notFound(label);
   return data as Row;
 }
@@ -297,7 +297,7 @@ async function loadOwnedV5(table: string, userId: string, id: string, label: str
 
 export const dashboards = {
   async list(userId: string, opts: { archived?: boolean } = {}) {
-    const { data } = await db().from("noska_dashboards").select("*").eq("user_id", userId)
+    const { data } = await db().from("noska_dashboards").select("id,user_id,workspace_id,name,description,icon,archived,created_at,updated_at").eq("user_id", userId)
       .eq("archived", opts.archived ?? false).order("updated_at", { ascending: false });
     return { dashboards: data ?? [] };
   },
@@ -369,7 +369,7 @@ function assertHttpsUrl(raw: string): string {
 
 export const webhooks = {
   async list(userId: string) {
-    const { data } = await db().from("noska_webhook_endpoints").select("*")
+    const { data } = await db().from("noska_webhook_endpoints").select("id,user_id,workspace_id,url,description,events,secret_hint,status,failure_count,created_at,updated_at")
       .eq("user_id", userId).order("created_at", { ascending: false });
     return { endpoints: (data ?? []).map(({ secret_encrypted: _s, ...rest }: Row) => rest) };
   },
@@ -424,7 +424,7 @@ export const webhooks = {
 
   /** New signing secret, shown once. */
   async rotateSecret(userId: string, id: string) {
-    await loadOwnedV5("noska_webhook_endpoints", userId, id, "Webhook endpoint");
+    await loadOwnedV5("noska_webhook_endpoints", userId, id, "Webhook endpoint", "id");
     const rawSecret = generateWebhookSecret();
     const { error } = await db().from("noska_webhook_endpoints").update({
       secret_encrypted: await encryptSecret(rawSecret),
@@ -438,7 +438,7 @@ export const webhooks = {
 
   /** Immediately POST a signed test event and record the delivery outcome. */
   async test(userId: string, id: string) {
-    const endpoint = await loadOwnedV5("noska_webhook_endpoints", userId, id, "Webhook endpoint");
+    const endpoint = await loadOwnedV5("noska_webhook_endpoints", userId, id, "Webhook endpoint", "id,url,workspace_id,secret_encrypted");
     const rawSecret = await decryptSecret(String(endpoint.secret_encrypted));
     const eventId = crypto.randomUUID();
     const timestamp = new Date().toISOString();
@@ -492,7 +492,7 @@ export const webhooks = {
   },
 
   async delete(userId: string, id: string) {
-    await loadOwnedV5("noska_webhook_endpoints", userId, id, "Webhook endpoint");
+    await loadOwnedV5("noska_webhook_endpoints", userId, id, "Webhook endpoint", "id");
     const { error } = await db().from("noska_webhook_endpoints").delete()
       .eq("user_id", userId).eq("id", id);
     if (error) throw errors.internal(error.message);
@@ -524,7 +524,7 @@ export const connections = {
   },
 
   async revoke(userId: string, id: string) {
-    const acc = await loadOwnedV5("connected_accounts", userId, id, "Connected account");
+    const acc = await loadOwnedV5("connected_accounts", userId, id, "Connected account", "id");
     void acc;
     const patch = { status: "revoked", revoked_at: new Date().toISOString(), encrypted_token: null, token_hint: null };
     const { error } = await db().from("connected_accounts").update(patch)
@@ -534,7 +534,7 @@ export const connections = {
   },
 
   async remove(userId: string, id: string) {
-    const acc = await loadOwnedV5("connected_accounts", userId, id, "Connected account");
+    const acc = await loadOwnedV5("connected_accounts", userId, id, "Connected account", "id");
     void acc;
     const { error } = await db().from("connected_accounts").delete().eq("user_id", userId).eq("id", id);
     if (error) throw errors.internal(error.message);
@@ -714,7 +714,7 @@ export const oauth = {
 
   /** Authorization-code flow step 2: exchange code (+ optional PKCE) for tokens. */
   async exchangeCode(input: { clientId: string; code: string; redirectUri: string; clientSecret?: string; codeVerifier?: string }) {
-    const { data: app } = await db().from("oauth_apps").select("*").eq("client_id", input.clientId).maybeSingle();
+    const { data: app } = await db().from("oauth_apps").select("id,client_id,client_secret_hash,redirect_uris,scopes,status").eq("client_id", input.clientId).maybeSingle();
     if (!app) throw errors.authRequired("Unknown client_id.");
     const appRow = app as Row;
     if (input.clientSecret) {
@@ -722,7 +722,7 @@ export const oauth = {
       if (hash !== appRow.client_secret_hash) throw errors.authRequired("Invalid client credentials.");
     }
     const codeHash = await sha256Hex(input.code);
-    const { data: codeRow } = await db().from("oauth_authorization_codes").select("*").eq("code_hash", codeHash).maybeSingle();
+    const { data: codeRow } = await db().from("oauth_authorization_codes").select("app_id,user_id,redirect_uri,scopes,code_challenge,expires_at,used_at").eq("code_hash", codeHash).maybeSingle();
     if (!codeRow) throw errors.authRequired("Invalid authorization code.");
     const c = codeRow as Row;
     if (c.used_at) throw errors.authRequired("Authorization code already used (replay rejected).");
@@ -761,7 +761,7 @@ export const oauth = {
   async authenticateOAuthToken(req: Request): Promise<KeyRow & { via: "oauth" }> {
     const raw = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
     if (!raw.startsWith("noska_at_")) throw errors.authRequired();
-    const { data } = await db().from("oauth_tokens").select("*").eq("access_token_hash", await sha256Hex(raw)).maybeSingle();
+    const { data } = await db().from("oauth_tokens").select("id,app_id,user_id,scopes,expires_at,revoked_at").eq("access_token_hash", await sha256Hex(raw)).maybeSingle();
     const t = data as Row | null;
     if (!t || t.revoked_at) throw errors.authRequired("OAuth token not recognized.");
     if (new Date(String(t.expires_at)).getTime() < Date.now()) throw errors.authRequired("OAuth token expired.");
@@ -773,7 +773,7 @@ export const oauth = {
   },
 
   async refresh(refreshToken: string) {
-    const { data } = await db().from("oauth_tokens").select("*").eq("refresh_token_hash", await sha256Hex(refreshToken)).maybeSingle();
+    const { data } = await db().from("oauth_tokens").select("id,app_id,user_id,scopes,expires_at,revoked_at").eq("refresh_token_hash", await sha256Hex(refreshToken)).maybeSingle();
     const t = data as Row | null;
     if (!t || t.revoked_at) throw errors.authRequired("Refresh token not recognized.");
     const accessToken = `noska_at_${randomToken(24)}`;

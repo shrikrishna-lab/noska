@@ -16,10 +16,9 @@ import MarketingShell from "./components/MarketingShell";
 import LoginRoute from "./components/LoginRoute";
 import DesktopShell from "./components/desktop/DesktopShell";
 import UpdatePrompt from "./components/desktop/UpdatePrompt";
-import App from "./App.jsx";
+import ProductApp from "./components/ProductApp";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 import ControlCenter from "./ControlCenter";
-import { EntitlementsProvider } from "./hooks/billing/useEntitlements";
 import "./index.css";
 
 // Global bridge: upgrade-required → toast (the settings modal and AIPanel
@@ -132,10 +131,9 @@ createRoot(document.getElementById("root")!).render(
         {!isDesktop() && !isMobile() && <Analytics />}
         <DesktopBridge />
         <MobileBridge />
-        <ScrollToTop />
-        <EntitlementsProvider>
-        <Suspense fallback={<RouteFallback />}>
-        <Routes>
+         <ScrollToTop />
+         <Suspense fallback={<RouteFallback />}>
+         <Routes>
           <Route path="/" element={<MarketingShell><MarketingHome /></MarketingShell>} />
           <Route path="/pricing" element={<MarketingShell><MarketingPricing /></MarketingShell>} />
           <Route path="/enterprise" element={<MarketingShell><MarketingEnterprise /></MarketingShell>} />
@@ -179,12 +177,12 @@ createRoot(document.getElementById("root")!).render(
               The authenticated product surfaces. MarketingShell redirects
               mobile users here, so the marketing site is unreachable in
               the app. On web/desktop these simply render the product. */}
-          <Route path="/app/home" element={<App />} />
-          <Route path="/app/search" element={<App />} />
-          <Route path="/app/inbox" element={<App />} />
-          <Route path="/app/ai" element={<App />} />
-          <Route path="/app/profile" element={<App />} />
-          <Route path="/app/page/:pageId" element={<App />} />
+          <Route path="/app/home" element={<ProductApp />} />
+          <Route path="/app/search" element={<ProductApp />} />
+          <Route path="/app/inbox" element={<ProductApp />} />
+          <Route path="/app/ai" element={<ProductApp />} />
+          <Route path="/app/profile" element={<ProductApp />} />
+          <Route path="/app/page/:pageId" element={<ProductApp />} />
           {/* Web fallback for noska:// deep links (Universal Links / App
               Links point here when the app is NOT installed). */}
           <Route path="/link/workspace/:id/page/:pageId" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
@@ -192,16 +190,15 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/link/page/:pageId" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
           <Route path="/link/task/:taskId" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
           <Route path="/link/project/:projectId" element={<Suspense fallback={<RouteFallback />}><MobileLinkRedirect /></Suspense>} />
-          <Route path="/dashboard" element={<App />} />
-          <Route path="/onboarding" element={<App />} />
-          <Route path="/waitlist" element={<App />} />
-          <Route path="/banned" element={<App />} />
-          <Route path="/:workspaceSlug" element={<App />} />
-          <Route path="/:workspaceSlug/:pageId" element={<App />} />
-        </Routes>
-        </Suspense>
-        </EntitlementsProvider>
-        <UpdatePrompt />
+          <Route path="/dashboard" element={<ProductApp />} />
+          <Route path="/onboarding" element={<ProductApp />} />
+          <Route path="/waitlist" element={<ProductApp />} />
+          <Route path="/banned" element={<ProductApp />} />
+          <Route path="/:workspaceSlug" element={<ProductApp />} />
+          <Route path="/:workspaceSlug/:pageId" element={<ProductApp />} />
+         </Routes>
+         </Suspense>
+         <UpdatePrompt />
         </Sentry.ErrorBoundary>
       </ClerkProvider>
       </PostHogProvider>

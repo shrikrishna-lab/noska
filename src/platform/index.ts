@@ -59,6 +59,24 @@ export function isWeb(): boolean {
   return !hasTauriIpc() && !isMobile();
 }
 
+/** Viewports at or above this width get the docked side-rail layout. */
+export const DOCKED_PANEL_MIN_WIDTH = 1024;
+
+/**
+ * True when the viewport is wide enough for a docked side panel.
+ *
+ * This is a *layout* question, not a platform one. The platform helpers above
+ * answer "which shell am I in" — `isDesktop()` is true only inside the Tauri
+ * desktop app, so using it to choose between a docked rail and a bottom sheet
+ * is wrong everywhere else. In the web app on a large monitor isDesktop() is
+ * false, the sheet layout was chosen, and the panel drew a full-screen
+ * `backdrop-blur` scrim over the whole workspace.
+ */
+export function isDockedViewport(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.innerWidth >= DOCKED_PANEL_MIN_WIDTH;
+}
+
 export function getPlatform(): NoskaPlatform {
   if (isAndroidUserAgent()) return "android";
   if (isIosUserAgent()) return "ios";

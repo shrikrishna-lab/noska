@@ -38,7 +38,7 @@ const INTENT_PLANS: Record<string, (goal: string) => { approach: string; steps: 
         instruction: `Before creating anything, check existing pages to avoid duplicates and gather useful context. Use search_pages if helpful.\nRequest: ${goal}\nBriefly note (1-2 sentences max) what already exists that's relevant.`,
       }),
       step("Creating content", "ai_step", {
-        instruction: `Now fulfill the creation request. Use create_page / append_blocks / add_todo / set_page_tags etc. Make the content well-structured with headings, lists, and appropriate detail.\nRequest: ${goal}`,
+        instruction: `Now fulfill the creation request. Pick the best-fitting tool and block type for the content: text, headings, lists, todos, callouts, quotes, tables, code via create_page / append_blocks / insert_block / update_block / execute_slash_command; structured records via create_database; data visuals via create_chart; layouts via create_columns / create_tabs; page metadata via add_todo / set_page_tags. Use create_interactive ONLY when the request genuinely needs an interactive app or widget (calculator, timer, tracker, game, form) — never for regular written content. Make the content well-structured with real data, headings, lists, and appropriate detail.\nRequest: ${goal}`,
       }),
       step("Verifying result", "tool", { toolName: "get_workspace_stats" }),
     ],
@@ -50,7 +50,7 @@ const INTENT_PLANS: Record<string, (goal: string) => { approach: string; steps: 
         instruction: `Read the target page(s) to understand their current state before editing. Use get_page_content.\nEdit request: ${goal}\nState briefly what you found.`,
       }),
       step("Applying edits", "ai_step", {
-        instruction: `Apply the edit now using update_block / append_blocks / insert_block / replace_content / rename_page as appropriate. Preserve the author's voice.\nEdit request: ${goal}`,
+        instruction: `Apply the edit now using update_block / append_blocks / insert_block / replace_content / rename_page and the best-fitting block tools for the content: create_database for structured data, create_chart for visuals, create_columns / create_tabs for layouts, execute_slash_command for other native blocks. Use create_interactive ONLY when the edit genuinely needs an interactive app or widget — never for regular written content. Preserve the author's voice and use real data.\nEdit request: ${goal}`,
       }),
       step("Verifying changes", "tool", { toolName: "get_page_content" }),
     ],

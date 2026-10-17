@@ -103,19 +103,30 @@ export function classifyProviderError(
         model,
         statusCode,
         retryable: false,
-        userMessage: `${provider}: No credits on account for this model. Select a [Free] model (like Nemotron 3.5 Lightning [Free]) or add credits at ${provider === "OpenCode Zen" ? "opencode.ai/zen" : "provider console"}.`,
+        userMessage: `${provider}: No credits on account for this model. Add credits at ${provider === "OpenCode Zen" ? "opencode.ai/zen" : "the provider console"}, then retry.`,
         technicalMessage: body,
         requestId,
       });
     }
     if (body.includes("FreeTierError") || /free tier/i.test(body)) {
+      // Verified against the live API: every "*-free" model except space-bunny-free
+      // (and big-pickle) returns
+      // 403 {"type":"error","error":{"type":"FreeTierError","message":"OpenCode's
+      // free tier can only be used from within OpenCode"}}
+      // The Zen docs confirm this is intentional — the free models "are
+      // available on OpenCode for a limited time" as a feedback programme.
+      // The key is valid and present, so telling the user to re-enter it sends
+      // them in circles; say what is actually true instead.
+      const gatedForThirdParty = /can only be used from within opencode/i.test(body);
       return new AIError({
         type: "auth",
         provider,
         model,
         statusCode,
         retryable: false,
-        userMessage: `${provider}: Free-tier access was rejected. Make sure your API key is set in Settings → AI, or switch to a paid model.`,
+        userMessage: gatedForThirdParty
+          ? `${provider}: OpenCode's free tier models are served only inside the OpenCode app, so "${model}" cannot be called from Noska even with a valid API key. Pick a model that is not marked [Free], or add credit at ${provider === "OpenCode Zen" ? "opencode.ai/zen" : "the provider console"}.`
+          : `${provider}: Free-tier access was rejected. Make sure your API key is set in Settings → AI, or switch to a paid model.`,
         technicalMessage: body,
         requestId,
       });
@@ -132,7 +143,7 @@ export function classifyProviderError(
         requestId,
       });
     }
-    if (/model.{0,80}not supported|not supported.{0,80}model|unsupported model/i.test(body)) {
+    if (/model.{0,120}not supported|not supported.{0,120}model|unsupported model|unknown model|no such model|model.{0,60}not found|model.{0,60}does not exist/i.test(body)) {
       return new AIError({
         type: "not_found",
         provider,
@@ -182,6 +193,43 @@ export function classifyProviderError(
     });
   }
 
+  // Verified against the live API: a retired model returns
+  // 410 {"type":"error","error":{"type":"ModelDeprecated", ...},
+  //       "metadata":{"model":"...","replacement":"..."}}
+  // The replacement id is machine-readable — surface it instead of a dead end.
+  if (statusCode === 410 || body.includes("ModelDeprecated")) {
+    const replacement = extractJsonString(body, "replacement") ||
+      (body.includes("mimo-v2.6-flash-free") ? "mimo-v2.6-flash-free" : null);
+    return new AIError({
+      type: "not_found",
+      provider,
+      model,
+      statusCode,
+      retryable: false,
+      userMessage: replacement
+        ? `${provider}: Model "${model}" has been retired. Switch to "${replacement}" in Settings → AI.`
+        : `${provider}: Model "${model}" has been retired and is no longer available. Pick another model in Settings → AI.`,
+      technicalMessage: body,
+      requestId,
+    });
+  }
+
+  // Verified against the live API: 402 "Upstream request failed: Insufficient
+  // account funds". Without this branch it fell through to the generic 4xx
+  // handler and surfaced as a vague "Request rejected".
+  if (statusCode === 402 || /insufficient (account )?funds|insufficient_quota|payment required/i.test(body)) {
+    return new AIError({
+      type: "auth",
+      provider,
+      model,
+      statusCode,
+      retryable: false,
+      userMessage: `${provider}: Your account has no credit available for "${model}". Add credit at ${provider === "OpenCode Zen" ? "opencode.ai/zen" : "the provider console"}, then retry.`,
+      technicalMessage: body,
+      requestId,
+    });
+  }
+
   if (statusCode === 429) {
     const isFreeLimit = body.includes("FreeUsageLimitError") || body.includes("free");
     return new AIError({
@@ -220,7 +268,10 @@ export function classifyProviderError(
         model,
         statusCode,
         retryable: false,
-        userMessage: `${provider}: Model "${model}" is temporarily unavailable upstream. Try Nemotron 3.5 Lightning (Free) or Laguna S 2.1 (Free).`,
+        // Do not steer users toward a [Free] model here: verified against the
+        // live API, Zen's free tier is reserved for the OpenCode client and
+        // answers 403 from anywhere else.
+        userMessage: `${provider}: Model "${model}" is not currently served by this provider. Pick another model in Settings → AI.`,
         technicalMessage: body,
         requestId,
       });
@@ -337,6 +388,17 @@ export function configError(provider: string): AIError {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/** Pull a string field out of a JSON error body without throwing on non-JSON. */
+function extractJsonString(body: string, field: string): string | null {
+  try {
+    const json = JSON.parse(body);
+    const value = json?.[field] ?? json?.metadata?.[field] ?? json?.error?.[field];
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Try to extract a readable error message from JSON or text bodies */
 function extractErrorMessage(body: string): string {

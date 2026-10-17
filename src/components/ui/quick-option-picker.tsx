@@ -217,7 +217,10 @@ export const OptionPicker: FC<OptionPickerProps> = ({
                 role="menu"
                 aria-label="Visibility options"
               >
-                <div className="relative flex min-w-max gap-1.5 rounded-full border border-neutral-200/80 bg-[#F3F3F3] p-1.5 py-1 shadow-2xl whitespace-nowrap dark:border-neutral-700 dark:bg-neutral-800">
+                <div className={cn(
+                  "relative flex min-w-max rounded-full border border-neutral-200/80 bg-[#F3F3F3] shadow-2xl whitespace-nowrap dark:border-neutral-700 dark:bg-neutral-800",
+                  isSmall ? "gap-1 p-1" : "gap-1.5 p-1.5 py-1"
+                )}>
                   {data.map((option, index) => {
                     const isActive = selected.id === option.id;
                     const isFirst = index === 0;
@@ -241,8 +244,8 @@ export const OptionPicker: FC<OptionPickerProps> = ({
                         title={`Set as ${option.label}`}
                         aria-label={`Select ${option.label}`}
                         className={cn(
-                          "relative flex items-center gap-2 font-semibold transition-all duration-200 cursor-pointer",
-                          isSmall ? "px-3 py-1.5 text-[12px]" : "px-4 py-2.5 text-[14px]",
+                          "relative flex items-center font-semibold transition-all duration-200 cursor-pointer",
+                          isSmall ? "gap-1.5 px-2.5 py-1 text-[11px]" : "gap-2 px-4 py-2.5 text-[14px]",
                           roundedClasses,
                           isActive
                             ? "bg-[#FEFEFE] text-[#010101] shadow-sm dark:bg-neutral-700 dark:text-white"
@@ -250,7 +253,7 @@ export const OptionPicker: FC<OptionPickerProps> = ({
                         )}
                       >
                         <motion.span className="shrink-0 flex items-center">
-                          <IconComp size={isSmall ? 14 : 18} />
+                          <IconComp size={isSmall ? 12 : 18} />
                         </motion.span>
                         <span className="font-semibold relative z-10">
                           {option.label}
@@ -261,7 +264,8 @@ export const OptionPicker: FC<OptionPickerProps> = ({
 
                   <div
                     className={cn(
-                      "absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-neutral-200/80 bg-[#F3F3F3] dark:border-neutral-700 dark:bg-neutral-800",
+                      "absolute left-1/2 -translate-x-1/2 rotate-45 border-neutral-200/80 bg-[#F3F3F3] dark:border-neutral-700 dark:bg-neutral-800",
+                      isSmall ? "h-2 w-2" : "h-2.5 w-2.5",
                       coords.placement === 'top'
                         ? "-bottom-1 border-r border-b"
                         : "-top-1 border-l border-t"

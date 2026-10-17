@@ -8,6 +8,8 @@
 //   parentId   → permission chain (single upward pointer)
 // ═══════════════════════════════════════════════════════════════
 
+import { PLAIN_LANGUAGE } from './codeLanguage';
+
 /** Generic tree-node shape every function in this file actually operates
  * on. This is deliberately NOT the real `Block` union from
  * types/blocks.ts — that union describes the richer, helpers.js-authored
@@ -133,7 +135,7 @@ export const BLOCK_TYPES: Record<string, BlockTypeDef> = {
   divider:       { label: 'Divider',       icon: '—', props: {} },
   image:         { label: 'Image',         icon: '🖼', props: { url: '', caption: '' } },
   database:      { label: 'Database',      icon: '🗄', props: { view: 'table', properties: [], rows: [] } },
-  code:          { label: 'Code',          icon: '</>', props: { richText: [], language: 'plain' } },
+  code:          { label: 'Code',          icon: '</>', props: { richText: [], language: PLAIN_LANGUAGE } },
   link_to_page:  { label: 'Link to page',  icon: '🔗', props: { targetPageId: '', title: '', icon: '🔗' } },
   synced_block:  { label: 'Synced block',  icon: '🔄', props: { sourceBlockId: '' } },
   template_button: { label: 'Template button', icon: '🧩', props: { templateBlocks: [] } },
@@ -364,6 +366,25 @@ interface PermissionCheckable {
   id: string;
   parentId?: string | null;
   permission?: string;
+  /**
+   * Set on pages shared *to* this user by an owner (see `fetchSharedPages`).
+   * Absent means the page is the user's own, which is always editable.
+   *
+   * This was previously ignored, so every shared page resolved to 'edit' and a
+   * viewer or commenter could type into blocks. The server rejected the write
+   * (RLS requires `can_edit`), but the editor still behaved as if the change
+   * had landed — edits looked accepted and then silently reverted.
+   */
+  sharedRole?: string | null;
+}
+
+// Only an explicit editor (or co-owner) grant may write page content.
+// `viewer` and `commenter` are read-only for the body; commenting goes through
+// page_comments, not the page itself. Co-owner carries the same content rights
+// as editor — its extra powers (sharing, trash, lock, collaborators) are
+// page-level actions, gated separately by the SQL grants.
+function roleAllowsEdit(sharedRole: string | null | undefined): boolean {
+  return sharedRole === "editor" || sharedRole === "co-owner";
 }
 
 // Walk parentId chain to determine if a page is read-only.
@@ -371,6 +392,7 @@ interface PermissionCheckable {
 export function getPagePermission(page: PermissionCheckable | null | undefined, pages: PermissionCheckable[]): "edit" | "view" {
   if (!page) return 'edit';
   if (page.permission === 'view') return 'view';
+  if (page.sharedRole && !roleAllowsEdit(page.sharedRole)) return 'view';
   if (page.parentId) {
     const parent = pages.find(p => p.id === page.parentId);
     if (parent) return getPagePermission(parent, pages);

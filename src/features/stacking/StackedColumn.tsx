@@ -15,7 +15,7 @@ import { timeAgo, plainText } from "../../utils/helpers";
 import { UnlockPagePrompt } from "../encryption/Encryption";
 import { SPRING_PRESETS } from "../motion/MotionSystem";
 import { auditEngine } from "../../lib/auditEngine";
-import { PageIcon } from "../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 
 
 export default function StackedColumn({

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Trash2, RotateCcw, FileText, FolderKanban, Clock, Loader2,
@@ -172,7 +173,7 @@ export function CompanyTrash({ onRestore }: CompanyTrashProps) {
               exit={{ opacity: 0, x: -8, height: 0 }}
               className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--surface)] border border-[var(--border)]/50 hover:border-[var(--border)] transition-all"
             >
-              <span className="text-[13px]">{item.icon || (item.type === "page" ? "📄" : "📁")}</span>
+              <PageIcon icon={item.icon} size={13} fallback={item.type === "page"  ? "📄" : "📁"} />
               <div className="flex-1 min-w-0">
                 <div className="text-[12px] font-medium text-[var(--text)] truncate">{item.title}</div>
                 <div className="text-[10px] text-[var(--muted)] flex items-center gap-1">

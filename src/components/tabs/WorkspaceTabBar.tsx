@@ -5,9 +5,10 @@ import { useTabs, type WorkspaceTab, VIEW_META } from "../../contexts/TabContext
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import type { Page } from "../../lib/supabaseService";
 import { PageIcon } from "../PageIcon";
-import NewTabModal from "./NewTabModal";
-import TabHoverPreview from "./TabHoverPreview";
 import PagePickerPopover from "./PagePickerPopover";
+
+const NewTabModal = React.lazy(() => import("./NewTabModal"));
+const TabHoverPreview = React.lazy(() => import("./TabHoverPreview"));
 import { usePresence } from "../../hooks/usePresence";
 import CollabPresenceBar from "../collab/CollabPresenceBar";
 import { HoverMarqueeText } from "../ui/HoverMarqueeText";
@@ -503,21 +504,23 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
       {/* Tab Hover Preview — Notion-style with real page content */}
       <AnimatePresence>
         {preview && previewMeta && (
-          <TabHoverPreview
-            panelRef={previewRef}
-            tab={preview.tab}
-            icon={previewMeta.icon}
-            title={previewMeta.title}
-            breadcrumb={previewMeta.breadcrumb}
-            page={previewMeta.page}
-            pages={pages}
-            sharedPages={sharedPages}
-            pendingInvites={pendingInvites}
-            aiChats={aiChats}
-            anchor={preview.anchor}
-            onMouseEnter={keepPreview}
-            onMouseLeave={cancelPreview}
-          />
+          <React.Suspense fallback={null}>
+            <TabHoverPreview
+              panelRef={previewRef}
+              tab={preview.tab}
+              icon={previewMeta.icon}
+              title={previewMeta.title}
+              breadcrumb={previewMeta.breadcrumb}
+              page={previewMeta.page}
+              pages={pages}
+              sharedPages={sharedPages}
+              pendingInvites={pendingInvites}
+              aiChats={aiChats}
+              anchor={preview.anchor}
+              onMouseEnter={keepPreview}
+              onMouseLeave={cancelPreview}
+            />
+          </React.Suspense>
         )}
       </AnimatePresence>
 
@@ -604,27 +607,29 @@ export const WorkspaceTabBar = memo(function WorkspaceTabBar({
       </AnimatePresence>
 
       {/* New Tab Switcher Modal with Live Preview */}
-      <NewTabModal
-        open={newTabModalOpen}
-        onClose={() => setNewTabModalOpen(false)}
-        pages={pages}
-        sharedPages={sharedPages}
-        pendingInvites={pendingInvites}
-        aiChats={aiChats}
-        onOpenPageInNewTab={(pageId) => {
-          openTab("page", pageId, { inNewTab: true, makeActive: true });
-        }}
-        onNewPageInNewTab={(template) => {
-          onNewPage(template);
-        }}
-        onStartChatInNewTab={() => {
-          openTab("view", "chats", { inNewTab: true, makeActive: true });
-        }}
-        onOpenViewInNewTab={(viewId) => {
-          openTab("view", viewId, { inNewTab: true, makeActive: true });
-        }}
-        onCopyLink={onCopyLink}
-      />
+      <React.Suspense fallback={null}>
+        <NewTabModal
+          open={newTabModalOpen}
+          onClose={() => setNewTabModalOpen(false)}
+          pages={pages}
+          sharedPages={sharedPages}
+          pendingInvites={pendingInvites}
+          aiChats={aiChats}
+          onOpenPageInNewTab={(pageId) => {
+            openTab("page", pageId, { inNewTab: true, makeActive: true });
+          }}
+          onNewPageInNewTab={(template) => {
+            onNewPage(template);
+          }}
+          onStartChatInNewTab={() => {
+            openTab("view", "chats", { inNewTab: true, makeActive: true });
+          }}
+          onOpenViewInNewTab={(viewId) => {
+            openTab("view", viewId, { inNewTab: true, makeActive: true });
+          }}
+          onCopyLink={onCopyLink}
+        />
+      </React.Suspense>
 
       {/* Context Menu */}
       <AnimatePresence>

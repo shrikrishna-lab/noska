@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import { Link as LinkIcon, FileText, Search, X, ArrowRight } from "lucide-react"
 import { useCompany } from "../../contexts/CompanyContext"
@@ -72,7 +73,7 @@ export function PageLinker({ onSelect }: PageLinkerProps) {
                     }}
                     className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--surface-2)] transition cursor-pointer text-left"
                   >
-                    <span className="text-sm">{page.icon || "📄"}</span>
+                    <PageIcon icon={page.icon} size={14} fallback="📄" />
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-medium text-[var(--text)] truncate">{page.title || "Untitled"}</p>
                       <p className="text-[9px] text-[var(--muted)] capitalize">{page.visibility}</p>

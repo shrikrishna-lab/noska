@@ -114,10 +114,23 @@ export function TeamBookmarks({ teamId }: TeamBookmarksProps) {
         {bookmarks.map(b => (
           <div key={b.id} className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--surface-2)] transition group">
             {getFavicon(b.url) ? (
-              <img src={getFavicon(b.url)!} alt="" className="w-4 h-4" />
-            ) : (
-              <Bookmark size={12} className="text-[var(--muted)]" />
-            )}
+              // onError swaps in the Bookmark fallback: the ternary only guarded
+              // getFavicon() *throwing*, never a failed favicon request, so a
+              // dead 404 rendered a broken-image glyph. object-contain because
+              // site favicons are not square.
+              <img
+                src={getFavicon(b.url)!}
+                alt=""
+                loading="lazy"
+                className="w-4 h-4 object-contain shrink-0"
+                onError={(e) => {
+                  const img = e.currentTarget as HTMLImageElement;
+                  img.style.visibility = "hidden";
+                  img.nextElementSibling?.classList.remove("hidden");
+                }}
+              />
+            ) : null}
+            <Bookmark size={12} className={`text-[var(--muted)] shrink-0 ${getFavicon(b.url) ? "hidden" : ""}`} />
             <div className="flex-1 min-w-0">
               <a href={b.url} target="_blank" rel="noopener" className="text-[11px] font-semibold text-[var(--text)] hover:text-[var(--accent)] truncate block">
                 {b.title}

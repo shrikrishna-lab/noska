@@ -35,3 +35,6 @@ verify_jwt = false
 # Razorpay has no Supabase JWT, so the gateway must not reject it.
 [functions.billing-webhooks]
 verify_jwt = false
+
+[functions.api-v1]
+verify_jwt = false

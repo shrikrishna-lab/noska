@@ -12,9 +12,9 @@
 // ============================================================================
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js";
 import { errors, PlatformError, sha256Hex } from "../_shared/core/pure.ts";
-import { oauth as oauthCap, db as dbClient } from "../_shared/capabilities/platform.ts";
+import { db as dbClient } from "../_shared/core/runtime.ts";
+import { oauth as oauthCap } from "../_shared/capabilities/platform.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
     if (action === "authorize") {
       const userId = await requireUserJwt(req);
       const clientId = String(body.client_id ?? "");
-      const { data: app } = await dbClient().from("oauth_apps").select("*").eq("client_id", clientId).maybeSingle();
+      const { data: app } = await dbClient().from("oauth_apps").select("id,status,redirect_uris,scopes").eq("client_id", clientId).maybeSingle();
       if (!app) return json({ error: "invalid_client", message: "Unknown client_id." }, 401);
 
       const scopes = Array.isArray(body.scopes)

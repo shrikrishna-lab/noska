@@ -45,6 +45,7 @@ export interface NoskaAutomation {
 }
 
 const MIRROR_KEY = "noska_automations";
+const AUTOMATION_COLUMNS = "id,owner_id,workspace_id,name,description,icon,trigger_config,conditions,steps,permissions,status,last_run_at,run_count,created_at,updated_at,timezone,next_run_at,missed_policy,timeout_ms,max_retries,last_status,failure_streak,health";
 
 // ─── Mapping ───────────────────────────────────────────────────────────────
 
@@ -115,19 +116,22 @@ function automationToInsert(a: NoskaAutomation): Record<string, unknown> {
   };
 }
 
-// ─── Mirror ────────────────────────────────────────────────────────────────
+const memoryMirror: NoskaAutomation[] = [];
 
 function loadMirror(): NoskaAutomation[] {
   try {
     const raw = localStorage.getItem(MIRROR_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.map(rowToAutomation) : [];
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(rowToAutomation);
   } catch {
-    return [];
+    /* fallback to memory mirror */
   }
+  return [...memoryMirror];
 }
 
 function saveMirror(list: NoskaAutomation[]): void {
+  memoryMirror.length = 0;
+  memoryMirror.push(...list);
   try {
     localStorage.setItem(MIRROR_KEY, JSON.stringify(list));
   } catch { /* best-effort */ }
@@ -160,7 +164,9 @@ export function blankAutomation(partial: Partial<NoskaAutomation> = {}): NoskaAu
 
 export async function fetchAutomations(): Promise<NoskaAutomation[]> {
   try {
-    const { data, error } = await supabase.from("automations").select("*").order("created_at", { ascending: false });
+    const { data, error } = await (supabase.from("automations" as any) as any)
+      .select(AUTOMATION_COLUMNS)
+      .order("created_at", { ascending: false });
     if (!error && data && data.length > 0) {
       const list = (data as unknown as AutomationRow[]).map(rowToAutomation);
       saveMirror(list);

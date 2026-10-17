@@ -1,0 +1,117 @@
+- generic [ref=e677]:
+  - generic [ref=e678]:
+    - generic [ref=e680]:
+      - textbox "Search workspace, tasks, notes..." [ref=e681]
+      - generic: Ctrl + Space
+    - generic [ref=e682]:
+      - button "Switch grid layout" [ref=e683] [cursor=pointer]
+      - button "Filter view" [ref=e689] [cursor=pointer]
+      - button "New" [ref=e692] [cursor=pointer]
+  - generic [ref=e695] [cursor=pointer]:
+    - generic [ref=e696]:
+      - generic [ref=e697]: 📖
+      - generic [ref=e698]:
+        - generic [ref=e699]:
+          - heading "Today's Daily Journal & Flow" [level=3] [ref=e700]
+          - generic [ref=e701]:
+            - generic [ref=e702]: 🔥
+            - text: Active
+        - paragraph [ref=e703]: Capture today's reflection, complete tasks, track streaks, and view shared team check-ins.
+    - button "Open Journal" [ref=e704]
+  - generic [ref=e709]:
+    - generic [ref=e713] [cursor=pointer]:
+      - generic [ref=e714]: "0"
+      - generic [ref=e715]: Total tasks
+    - generic [ref=e724] [cursor=pointer]:
+      - generic [ref=e725]: "0"
+      - generic [ref=e726]: Completed
+    - generic [ref=e734] [cursor=pointer]:
+      - generic [ref=e735]: "0"
+      - generic [ref=e736]: Pending
+    - generic [ref=e745] [cursor=pointer]:
+      - generic [ref=e746]: "0"
+      - generic [ref=e747]: High Priority
+  - generic [ref=e752]:
+    - generic [ref=e753]:
+      - heading "Today's tasks" [level=2] [ref=e754]
+      - button "View more" [ref=e755] [cursor=pointer]
+    - generic [ref=e757]: No tasks scheduled for today. Create a to-do block in any page to track action items here.
+  - generic [ref=e774]:
+    - generic [ref=e775] [cursor=pointer]:
+      - generic [ref=e776]:
+        - heading "Milestone Roadmap" [level=2] [ref=e777]
+        - generic [ref=e778]:
+          - generic [ref=e779]: View Data
+          - button "Customize milestone roadmap" [ref=e784]
+      - generic [ref=e788]:
+        - generic [ref=e789]: Sprint & Funding goal
+        - generic [ref=e796]:
+          - generic [ref=e797]: Primary Milestone Target
+          - generic [ref=e802]: Stretch goals
+      - generic [ref=e807]:
+        - generic [ref=e808]:
+          - button "1" [ref=e809]
+          - button "2" [ref=e811]
+          - button "3" [ref=e813]
+          - button "4" [ref=e815]
+          - button "Launch" [ref=e817]
+        - generic [ref=e819]:
+          - generic [ref=e820]: Create Project
+          - generic [ref=e821]: Add Media
+          - generic [ref=e822]: (Set Goals)
+          - generic [ref=e823]: Team
+          - generic [ref=e824]: Launch
+      - generic [ref=e829]:
+        - strong [ref=e830]: "Tip:"
+        - text: Break the milestone into steps you can finish in one sitting.
+    - generic [ref=e831] [cursor=pointer]:
+      - generic [ref=e832]:
+        - generic [ref=e833]: Progress goals
+        - generic [ref=e838]:
+          - generic [ref=e839]: Inspect Info
+          - button "Customize goal metric" [ref=e844]
+      - generic [ref=e848]:
+        - button "Add +5K Words Written" [ref=e850]
+        - generic [ref=e852]:
+          - generic [ref=e853]:
+            - generic [ref=e854]: Words Written
+            - heading "487" [level=3] [ref=e855]
+          - generic [ref=e856]: +5K
+    - generic [ref=e859]:
+      - generic [ref=e860]:
+        - generic [ref=e861]: Habit Streak Race
+        - button "Customize streak challenger" [ref=e864] [cursor=pointer]
+      - generic [ref=e868]:
+        - generic [ref=e869]:
+          - generic [ref=e870]: 👩‍💼
+          - generic [ref=e872]: "Your partner: 0 pts"
+        - generic [ref=e873]:
+          - generic [ref=e874]: 👨‍💻
+          - generic [ref=e876]: "You: 0 pts"
+      - paragraph [ref=e877]:
+        - text: With
+        - strong [ref=e878]: engaging challenges
+        - text: and a
+        - strong [ref=e879]: social leaderboard
+        - text: ", our habit tracker lets you compete with teammates, making it fun and motivating to"
+        - strong [ref=e880]: reach your goals together
+        - text: .
+      - generic [ref=e881]:
+        - generic [ref=e882]: "Weekly Challenge #1"
+        - button "+ Log Habit (+5)" [ref=e889] [cursor=pointer]
+  - generic [ref=e890]:
+    - generic [ref=e891]:
+      - generic [ref=e892]:
+        - heading "Good evening, Test Workspace" [level=1] [ref=e894]
+        - paragraph [ref=e895]: Your personal hub — high-velocity productivity, AI agents & ambient focus.
+      - generic [ref=e896]:
+        - button "Synchronize All Providers & Widgets" [ref=e897] [cursor=pointer]
+        - button "AI Dashboard" [ref=e903] [cursor=pointer]
+        - button "Notification Center" [ref=e908] [cursor=pointer]
+        - button "Restore default layout" [ref=e912] [cursor=pointer]
+        - button "Add Widget" [ref=e916] [cursor=pointer]
+    - button "Dashboard Filters" [ref=e921]
+    - generic [ref=e925]:
+      - paragraph [ref=e932]: Your dashboard is empty
+      - paragraph [ref=e933]: Add widgets to track tasks, AI agents, focus sprints, and daily habits in one place.
+      - button "Add widget" [ref=e934] [cursor=pointer]

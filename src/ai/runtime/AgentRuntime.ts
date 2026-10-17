@@ -147,6 +147,54 @@ function snapshotWorkspace(getContext: (() => ToolContextLike) | undefined): Wor
   }
 }
 
+/**
+ * Token budgets to try, largest first.
+ *
+ * A provider that bills against a prepaid balance rejects the *whole* request
+ * when `max_tokens` exceeds what the account can still afford, rather than
+ * truncating. Observed live on OpenRouter:
+ *
+ *   "You requested up to 2048 tokens, but can only afford 115."
+ *
+ * That is not a hard failure for the user — it is a request that was too
+ * greedy. Stepping the budget down gets a real answer instead of an empty
+ * run, which is the difference between "free tier is broken" and "free tier
+ * gave a shorter reply".
+ */
+const TOKEN_BUDGET_LADDER = [2048, 1024, 512, 256];
+
+/** True when the provider refused specifically because max_tokens was too large. */
+export function isTokenBudgetRejection(err: unknown): boolean {
+  if (!err) return false;
+  const anyErr = err as { status?: number; statusCode?: number; message?: string };
+  const status = anyErr.status ?? anyErr.statusCode;
+  const message = String(anyErr.message ?? "");
+  if (status !== 402 && !/402/.test(message)) return false;
+  return /max_tokens|more credits|can only afford|token budget|context_length/i.test(message);
+}
+
+/**
+ * Runs `call`, stepping the token budget down when the provider rejects the
+ * request for being over budget. Any other error propagates immediately — a
+ * bad key or a network fault is not improved by asking again.
+ */
+export async function callWithTokenFallback<T>(
+  call: (maxTokens: number) => Promise<T>,
+  ladder: number[] = TOKEN_BUDGET_LADDER
+): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < ladder.length; i++) {
+    try {
+      return await call(ladder[i]);
+    } catch (err) {
+      lastError = err;
+      if (!isTokenBudgetRejection(err)) throw err;
+      if (i === ladder.length - 1) throw err;
+    }
+  }
+  throw lastError;
+}
+
 export class AgentRuntime {
   private activeRuns = new Map<string, ExecutionContext>();
   private delegationDepth = 0;
@@ -340,6 +388,82 @@ export class AgentRuntime {
     }
   }
 
+  async executeToolCalls(text: string, options: RuntimeJobOptions): Promise<Array<{ name: string; ok: boolean; result?: unknown; error?: string; params: Record<string, unknown>; verified?: boolean; runId: string }>> {
+    const run = emptyRun(options);
+    const abort = { aborted: false };
+    const context: ExecutionContext = { run, vars: {}, abort, events: [], effort: "medium", usage: { modelRequests: 0, promptTokens: 0, completionTokens: 0, providerReported: false } };
+    this.activeRuns.set(run.id, context);
+    const progress: StepProgress = { stepId: "tools", label: "Executing tools", status: "running" };
+    run.steps.push(progress);
+    const emit = () => {
+      upsertRun({ ...run });
+      options.onProgress?.([...run.steps], { ...run });
+    };
+    const track = (type: RunEventType, detail?: string, step?: string, durationMs?: number) => {
+      const event = { seq: context.events.length + 1, type, step, detail, at: Date.now(), durationMs };
+      context.events.push(event);
+      void recordRunEvent({ runId: run.id, seq: event.seq, type, step, durationMs, metadata: detail ? { detail } : undefined });
+    };
+
+    try {
+      track("RUN_STARTED", options.goal.slice(0, 200), "tools");
+      const calls = parseToolCalls(text);
+      for (const call of calls) {
+        if (abort.aborted) {
+          run.status = "interrupted";
+          break;
+        }
+        const started = Date.now();
+        track("TOOL_REQUESTED", undefined, call.name);
+        const before = snapshotWorkspace(options.getContext);
+        const record = await this.gatedExecute(call.name, call.params, options, context);
+        const after = snapshotWorkspace(options.getContext);
+        if (record.ok) {
+          const verified = verifyToolCall(record, call.params, (record as ToolCallRecord & { rawResult?: unknown }).rawResult, before, after);
+          record.verified = verified;
+          if (!verified) {
+            record.ok = false;
+            record.error = "could not be verified";
+            context.run.errors.push(`Verification could not confirm the effect of ${record.name}.`);
+          }
+        }
+        context.run.toolCalls.push(record);
+        if (record.ok) {
+          context.run.affectedResources.push(...collectAffectedResources(
+            [{ name: record.name, ok: true }],
+            [call.params],
+            [(record as ToolCallRecord & { rawResult?: unknown }).rawResult]
+          ));
+        }
+        track(record.ok ? "TOOL_COMPLETED" : "TOOL_FAILED", record.ok ? record.resultSummary : record.error, call.name, Date.now() - started);
+        emit();
+      }
+      if (run.status === "running") run.status = context.run.errors.length > 0 ? "failed" : "completed";
+      progress.status = run.status === "completed" ? "done" : run.status === "interrupted" ? "skipped" : "failed";
+      run.finishedAt = now();
+      run.durationMs = new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime();
+      run.summary = `${run.status === "completed" ? "Completed" : "Finished"} — ${run.toolCalls.length} tool call${run.toolCalls.length === 1 ? "" : "s"}.`;
+      track(run.status === "failed" ? "RUN_FAILED" : "RUN_COMPLETED", run.summary, "tools", run.durationMs);
+      emit();
+      void persistRunRemote({ ...run });
+      return calls.map((call, index) => {
+        const record = context.run.toolCalls[index];
+        const raw = (record as ToolCallRecord & { rawResult?: unknown })?.rawResult;
+        return {
+          name: call.name,
+          ok: Boolean(record?.ok),
+          result: raw,
+          error: record?.error,
+          params: call.params,
+          verified: record?.verified,
+          runId: run.id,
+        };
+      });
+    } finally {
+      this.activeRuns.delete(run.id);
+    }
+  }
+
   private buildSummary(run: RunRecord, finalText: string): string {
     const changed = run.affectedResources.length;
     const parts: string[] = [];
@@ -384,7 +508,7 @@ export class AgentRuntime {
     if (allowTools && options.sourceKind === "agent") {
       system += `\n\n## Delegation (multi-agent)\nYou may invoke another persisted agent as a specialist:\n<<TOOL:run_agent>>{"agent_name":"Weekly Reporter","instruction":"compile this week's numbers"}<</TOOL>>\nThe delegate runs with its own permissions. Use it only when a named specialist is genuinely needed — approval may be required.`;
     }
-    if (allowTools) system += `\n\n${getToolInstructions({ compact: true })}`;
+    if (allowTools) system += `\n\n${getToolInstructions({ compact: true, imageGeneration: aiManager.supportsImageGeneration() })}`;
     // Same reasoning protocol the chat path applies — agentic steps get the
     // effort chosen for this run (high for plan/analyze/organize work).
     system += buildReasoningDirective(effort || "medium");
@@ -421,15 +545,17 @@ export class AgentRuntime {
     const messages = [{ role: "user", content: this.buildUserPrompt(step.instruction || options.goal, options) }];
     const usage = usageSink(context);
     try {
-      const result = await aiManager.sendRaw({
-        system: this.buildSystemPrompt(options, false, context.effort),
-        messages,
-        maxTokens: 2048,
-        effort: context.effort,
-        providerId: selection.providerId,
-        modelId: selection.modelId,
-        onUsage: usage.onUsage,
-      });
+      const result = await callWithTokenFallback((maxTokens) =>
+        aiManager.sendRaw({
+          system: this.buildSystemPrompt(options, false, context.effort),
+          messages,
+          maxTokens,
+          effort: context.effort,
+          providerId: selection.providerId,
+          modelId: selection.modelId,
+          onUsage: usage.onUsage,
+        })
+      );
       usage.settle();
       context.vars["ai.response"] = result;
       return { ok: true, text: stripToolCalls(result), isText: true };
@@ -469,7 +595,7 @@ export class AgentRuntime {
     // Native function calling: providers that support it get the schemas in
     // the request; unsupported ones ignore the field and follow the text
     // protocol already present in the system prompt.
-    const toolSchemas = getToolSchemas();
+    const toolSchemas = getToolSchemas({ imageGeneration: aiManager.supportsImageGeneration() });
     // Interactive runs stream the model's text live while the step runs.
     // Tool calls still parse from the final text via the marker protocol;
     // background runs keep non-streaming sendRaw (native tool calling).
@@ -489,27 +615,31 @@ export class AgentRuntime {
         if (useStream) {
           // Invariant at call time: transcript ends with the current user
           // message (the task on round 0, tool results afterwards).
-          response = await aiManager.stream({
-            system: this.buildSystemPrompt(options, true, undefined),
-            messages: transcript.slice(0, -1),
-            prompt: transcript[transcript.length - 1].content,
-            maxTokens: 2048,
-            effort: context.effort,
-            onChunk: (partial) => options.onLiveText?.(stripToolCalls(partial), step.id),
-            tools: toolSchemas,
-            onUsage: usage.onUsage,
-          });
+          response = await callWithTokenFallback((maxTokens) =>
+            aiManager.stream({
+              system: this.buildSystemPrompt(options, true, undefined),
+              messages: transcript.slice(0, -1),
+              prompt: transcript[transcript.length - 1].content,
+              maxTokens,
+              effort: context.effort,
+              onChunk: (partial) => options.onLiveText?.(stripToolCalls(partial), step.id),
+              tools: toolSchemas,
+              onUsage: usage.onUsage,
+            })
+          );
         } else {
-          response = await aiManager.sendRaw({
-            system: this.buildSystemPrompt(options, true, context.effort),
-            messages: transcript,
-            maxTokens: 2048,
-            effort: context.effort,
-            providerId: selection.providerId,
-            modelId: selection.modelId,
-            tools: toolSchemas,
-            onUsage: usage.onUsage,
-          });
+          response = await callWithTokenFallback((maxTokens) =>
+            aiManager.sendRaw({
+              system: this.buildSystemPrompt(options, true, context.effort),
+              messages: transcript,
+              maxTokens,
+              effort: context.effort,
+              providerId: selection.providerId,
+              modelId: selection.modelId,
+              tools: toolSchemas,
+              onUsage: usage.onUsage,
+            })
+          );
         }
         usage.settle();
       } catch (err) {

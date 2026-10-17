@@ -105,6 +105,7 @@ export interface Page {
   smallText?: boolean;
   pageBg?: string | null;
   pageMeshBg?: string | null;
+  pageTexture?: string | null;
   coverHeight?: number;
   coverPosition?: string;
   iconSize?: number;
@@ -186,7 +187,7 @@ export interface Page {
    * owned page. Read by App.tsx to keep shared pages out of the owner-
    * scoped `pages` array / auto-save pipeline, and by the UI to show a
    * "Shared with you" indicator and gate owner-only actions. */
-  sharedRole?: "editor" | "commenter" | "viewer";
+  sharedRole?: "editor" | "co-owner" | "commenter" | "viewer";
 
   /** Real `pages` column (see 20260911100000 migration). Controls who can
    * open the page and whether collab surfaces (presence, cursors, online
@@ -194,6 +195,13 @@ export interface Page {
    * collaborators; 'public' = any signed-in user can open it (view mode)
    * and presence is on. 'team'/'company' exist for org workspaces. */
   visibility?: "private" | "team" | "company" | "public";
+
+  /** Real `pages.link_access` column (20260926182431). How the *link* behaves
+   * for somebody who is not already a collaborator:
+   *   'restricted' — they must request access and the owner approves
+   *   'view'       — they can read it, no collaboration
+   *   'fork'       — they get an independent copy, no collaboration */
+  linkAccess?: "restricted" | "view" | "fork";
 }
 
 /** Loose partial input accepted by savePage/savePages/mapPageToDb — pages
@@ -204,7 +212,7 @@ export type PageInput = Partial<Page> & { id: string };
 
 // Optimized: Select only columns actually used by the app to reduce egress.
 // Large JSON fields (blocks, lineage) are the main egress consumers.
-const PAGE_COLUMNS: string = "id, title, icon, cover, parent_id, favorite, trashed, tags, hidden_from_recents, offline, is_encrypted, encrypted_blocks, iv, salt, is_locked, blocks, lineage, updated_at, created_at, user_id, visibility, workspace_id";
+const PAGE_COLUMNS = "id, title, icon, cover, parent_id, favorite, trashed, tags, hidden_from_recents, offline, is_encrypted, encrypted_blocks, iv, salt, is_locked, blocks, lineage, updated_at, created_at, user_id, visibility, workspace_id, link_access" as const;
 const PAGE_MANIFEST_BATCH_SIZE = 500;
 const PAGE_BODY_BATCH_SIZE = 20;
 const PAGE_CACHE_MAX_BYTES = 8 * 1024 * 1024;
@@ -214,7 +222,11 @@ const pageLoads = new Map<string, Promise<string>>();
 let pageCacheGeneration = 0;
 
 type PageRevision = Pick<Tables<"pages">, "id" | "updated_at">;
-type RawPage = Tables<"pages"> & { visibility: Page["visibility"]; workspace_id?: string | null };
+type RawPage = Tables<"pages"> & {
+  visibility: Page["visibility"];
+  workspace_id?: string | null;
+  link_access?: Page["linkAccess"];
+};
 
 function isPageRevision(row: unknown): row is PageRevision {
   if (!row || typeof row !== "object") return false;
@@ -228,7 +240,11 @@ function isPageRevision(row: unknown): row is PageRevision {
 function requireFullPage(row: unknown, userId?: string): asserts row is RawPage {
   if (!isPageRevision(row)) throw new Error("[supabase] invalid page revision");
   const value = row as Record<string, unknown>;
-  if (PAGE_COLUMNS.split(", ").some((column) => !Object.hasOwn(value, column) || value[column] === undefined) ||
+  // `link_access` arrived after the body cache shipped and has a database
+  // default, so a row without it is still a valid page — mapPageFromDb falls
+  // back to the restrictive "restricted" mode.
+  const required = PAGE_COLUMNS.split(", ").filter((column) => column !== "link_access");
+  if (required.some((column) => !Object.hasOwn(value, column) || value[column] === undefined) ||
     !Array.isArray(value.blocks) ||
     (value.lineage !== null && !Array.isArray(value.lineage)) ||
     !["private", "team", "company", "public"].includes(value.visibility as string) ||
@@ -380,6 +396,32 @@ export async function fetchPages(userId?: string | null): Promise<Page[]> {
   }
 }
 
+/**
+ * One page, by id. Used right after a share link resolves — a fresh fork, or
+ * an access approval that just landed — where re-reading the whole workspace
+ * would be wasteful. Returns null when RLS hides the row.
+ *
+ * Queried through a deliberately loose builder: the generated Database types
+ * predate `link_access` (and `visibility`), so the typed builder rejects the
+ * column list outright. Same escape hatch the rest of this file uses.
+ */
+type LoosePageRowQuery = {
+  eq(column: string, value: string): LoosePageRowQuery;
+  maybeSingle(): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+};
+
+export async function fetchPageById(pageId: string, userId?: string | null): Promise<Page | null> {
+  if (!pageId) return null;
+  const table = supabase.from("pages") as unknown as { select(columns: string): LoosePageRowQuery };
+  let query = table.select(PAGE_COLUMNS).eq("id", pageId);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw new Error(`[supabase] ${error.message}`);
+  if (!data) return null;
+  requireFullPage(data, userId ?? undefined);
+  return mapPageFromDb(data as unknown as Tables<"pages">);
+}
+
 export async function hasPages(userId: string): Promise<boolean> {
   if (!userId) throw new Error("[supabase] refusing page existence read without an owner");
   const { data, error } = await supabase.from("pages")
@@ -403,43 +445,17 @@ export async function fetchPagesPaginated(
 ): Promise<{ pages: Page[]; hasMore: boolean }> {
   const from = page * PAGE_BATCH_SIZE;
   const to = from + PAGE_BATCH_SIZE - 1;
-
-  try {
-    let query = supabase.from("pages").select(PAGE_COLUMNS, { count: "exact" });
-    if (userId) query = query.eq("user_id", userId);
-    
-    const { data, error, count } = await query
-      .order("updated_at", { ascending: false })
-      .range(from, to)
-      .returns<RawPage[]>();
-    
-    if (!error && data) {
-      const totalCount = count ?? 0;
-      const hasMore = from + PAGE_BATCH_SIZE < totalCount;
-      return {
-        pages: data.map(mapPageFromDb),
-        hasMore,
-      };
-    }
-  } catch (e) {
-    console.warn("[supabase] fetchPagesPaginated failed with PAGE_COLUMNS, falling back to select(*):", e);
-  }
-
-  let query = supabase.from("pages").select("*", { count: "exact" });
+  let query = supabase.from("pages").select(PAGE_COLUMNS, { count: "exact" });
   if (userId) query = query.eq("user_id", userId);
-  
   const { data, error, count } = await query
     .order("updated_at", { ascending: false })
-    .range(from, to);
-  
+    .range(from, to)
+    .returns<RawPage[]>();
   if (error) throw error;
-  
   const totalCount = count ?? 0;
-  const hasMore = from + PAGE_BATCH_SIZE < totalCount;
-  
   return {
-    pages: (data || []).map(mapPageFromDb),
-    hasMore,
+    pages: (data ?? []).map(mapPageFromDb),
+    hasMore: from + PAGE_BATCH_SIZE < totalCount,
   };
 }
 
@@ -709,11 +725,11 @@ export interface UserAIUsageStats {
 export async function fetchUserAIStats(userId: string): Promise<UserAIUsageStats | null> {
   if (!userId) return null;
   const client = supabase as any;
-  const { data, error } = await client
-    .from("user_ai_usage_stats")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
+   const { data, error } = await client
+     .from("user_ai_usage_stats")
+     .select("user_id,total_sessions,total_messages,total_tokens,prompt_tokens,completion_tokens,active_days,current_streak,longest_streak,favorite_model,model_distribution,hourly_distribution,daily_activity,total_cost,avg_latency_ms,last_active_at")
+     .eq("user_id", userId)
+     .maybeSingle();
   if (error && error.code !== "42P01") return null;
   if (!data) return null;
 
@@ -853,7 +869,7 @@ export interface AIMemoryEntry {
 export async function fetchAIMemory(): Promise<Record<string, unknown>> {
   const { data, error } = await supabase
     .from("ai_memory")
-    .select("*")
+    .select("key,value")
     .order("importance", { ascending: false });
   if (error) {
     if (error.code === "42P01") return {};
@@ -1224,11 +1240,11 @@ export async function searchUsersByUsername(query: string, limit = 6, excludeUse
 export async function fetchUserProfile(userId: string): Promise<Tables<"user_profiles"> | null> {
   const { data, error } = await supabase
     .from("user_profiles")
-    .select("*")
+    .select("user_id,user_name,username,workspace_name,onboarding_complete,use_case,avatar_url,bio,country,state,city,postal_code,role,preferences,email,created_at,updated_at")
     .eq("user_id", userId)
     .maybeSingle();
   if (error && error.code !== "42P01") return null;
-  return data || null;
+  return data as Tables<"user_profiles"> | null;
 }
 
 /** Fields a user can edit from their own Profile view (self-service,
@@ -1400,7 +1416,7 @@ export async function setOnboardingComplete(
 // accepted invite here is what actually creates the page_permissions row
 // (see acceptPageInvite below).
 
-export type PageInviteRole = "editor" | "commenter" | "viewer";
+export type PageInviteRole = "editor" | "co-owner" | "commenter" | "viewer";
 
 export interface SendPageInviteInput {
   pageId: string;
@@ -1476,25 +1492,35 @@ export async function sendPageInvite(input: SendPageInviteInput): Promise<Tables
  * `status` filter defaults to pending-only (what the Inbox actually needs
  * to show accept/decline actions for); pass `"all"` for a full history. */
 export async function fetchPageInvites(userId: string, status: "pending" | "all" = "pending"): Promise<Tables<"page_invites">[]> {
-  let query = supabase.from("page_invites").select("*").eq("invitee_user_id", userId);
+  let query = supabase.from("page_invites")
+    .select("id,page_id,page_title,inviter_user_id,inviter_username,invitee_user_id,invitee_username,role,status,created_at,responded_at")
+    .eq("invitee_user_id", userId);
   if (status === "pending") query = query.eq("status", "pending");
   const { data, error } = await query.order("created_at", { ascending: false });
   if (error && error.code !== "42P01") return [];
-  return data || [];
+  return (data || []) as Tables<"page_invites">[];
 }
 
 /** Invites this user has sent that are still pending — lets the Share
  * modal show "invite already pending" instead of silently re-sending. */
 export async function fetchSentPageInvites(userId: string, pageId?: string): Promise<Tables<"page_invites">[]> {
-  let query = supabase.from("page_invites").select("*").eq("inviter_user_id", userId).eq("status", "pending");
+  let query = supabase.from("page_invites")
+    .select("id,page_id,page_title,inviter_user_id,inviter_username,invitee_user_id,invitee_username,role,status,created_at,responded_at")
+    .eq("inviter_user_id", userId)
+    .eq("status", "pending");
   if (pageId) query = query.eq("page_id", pageId);
   const { data, error } = await query.order("created_at", { ascending: false });
   if (error && error.code !== "42P01") return [];
-  return data || [];
+  return (data || []) as Tables<"page_invites">[];
 }
 
-const INVITE_ROLE_CAPS: Record<PageInviteRole, { can_view: boolean; can_edit: boolean; can_comment: boolean }> = {
+// `co-owner` mirrors the SQL grants in the co-owner migration: everything an
+// editor can do, plus the ability to change sharing, trash/lock and manage
+// collaborators. `can_delete` stays false — deleting the page remains the
+// owner's alone, which is also what the RLS check on page_permissions enforces.
+const INVITE_ROLE_CAPS: Record<PageInviteRole, { can_view: boolean; can_edit: boolean; can_comment: boolean; can_share?: boolean; can_manage_collaborators?: boolean }> = {
   editor: { can_view: true, can_edit: true, can_comment: true },
+  "co-owner": { can_view: true, can_edit: true, can_comment: true, can_share: true, can_manage_collaborators: true },
   commenter: { can_view: true, can_edit: false, can_comment: true },
   viewer: { can_view: true, can_edit: false, can_comment: false },
 };
@@ -1508,8 +1534,8 @@ export async function acceptPageInvite(inviteId: string, userId: string): Promis
   requireOwner(userId);
   const { data: invite, error: fetchError } = await supabase
     .from("page_invites")
-    .select("*")
-    .eq("id", inviteId)
+     .select("id,page_id,page_title,inviter_user_id,inviter_username,invitee_user_id,invitee_username,role,status,created_at,responded_at")
+     .eq("id", inviteId)
     .eq("invitee_user_id", userId)
     .single();
   if (fetchError) throw fetchError;
@@ -1536,11 +1562,11 @@ export async function acceptPageInvite(inviteId: string, userId: string): Promis
     .from("page_invites")
     .update({ status: "accepted", responded_at: new Date().toISOString() } as Tables<"page_invites">)
     .eq("id", inviteId)
-    .eq("invitee_user_id", userId)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+     .eq("invitee_user_id", userId)
+     .select("id,page_id,page_title,inviter_user_id,inviter_username,invitee_user_id,invitee_username,role,status,created_at,responded_at")
+     .single();
+   if (error) throw error;
+   return data as Tables<"page_invites">;
 }
 
 export async function declinePageInvite(inviteId: string, userId: string): Promise<void> {
@@ -1591,7 +1617,7 @@ export async function fetchSharedPages(userId: string): Promise<Page[]> {
   // a grant is not readable it simply drops out below (fetch returns only
   // rows RLS lets us see).
   if (pageIds.length > 0) {
-    const { data: dbPages, error } = await supabase.from("pages").select("*").in("id", pageIds);
+    const { data: dbPages, error } = await (supabase.from("pages" as any) as any).select(PAGE_COLUMNS).in("id", pageIds);
     if (error) throw error;
     for (const db of dbPages || []) {
       byId.set(db.id, {
@@ -1611,7 +1637,7 @@ export async function fetchSharedPages(userId: string): Promise<Page[]> {
   // and anything already fetched via a grant.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: publicPages, error: publicError } = await (supabase.from("pages" as any) as any)
-    .select("*")
+    .select(PAGE_COLUMNS)
     .eq("visibility", "public");
   if (!publicError) {
     for (const db of (publicPages || []) as Array<{ id: string; visibility?: string } & Record<string, unknown>>) {
@@ -1647,21 +1673,21 @@ export interface CreatorProfileInput {
 export async function fetchCreatorProfile(userId: string): Promise<Tables<"creator_profiles"> | null> {
   const { data, error } = await supabase
     .from("creator_profiles")
-    .select("*")
+    .select("id,user_id,display_name,photo_url,cover_url,bio,links,payout_account_id,payout_status,created_at,updated_at")
     .eq("user_id", userId)
     .maybeSingle();
   if (error && error.code !== "42P01") return null;
-  return data || null;
+  return data as Tables<"creator_profiles"> | null;
 }
 
 export async function fetchCreatorProfileById(id: string): Promise<Tables<"creator_profiles"> | null> {
   const { data, error } = await supabase
     .from("creator_profiles")
-    .select("*")
+    .select("id,user_id,display_name,photo_url,cover_url,bio,links,payout_account_id,payout_status,created_at,updated_at")
     .eq("id", id)
     .maybeSingle();
   if (error && error.code !== "42P01") return null;
-  return data || null;
+  return data as Tables<"creator_profiles"> | null;
 }
 
 export async function upsertCreatorProfile(profile: CreatorProfileInput): Promise<Tables<"creator_profiles"> | null> {
@@ -1728,7 +1754,7 @@ export async function fetchMarketplaceTemplates(
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
   let query = supabase.from("marketplace_templates").select(
-    "id, title, description, category, template_type, price, owner_id, status, add_count, rating, rating_count, tags, icon, cover_image, author_name, created_at, updated_at"
+    "id,owner_id,title,description,category,language,price,status,screenshots,video_url,source_page_id,template_type,access_locked,add_count,rating,rating_count,created_at,updated_at"
   );
   if (filters.status) query = query.eq("status", filters.status);
   else query = query.eq("status", "published");
@@ -1747,11 +1773,11 @@ export async function fetchMarketplaceTemplates(
 export async function fetchTemplateById(id: string): Promise<Tables<"marketplace_templates"> | null> {
   const { data, error } = await supabase
     .from("marketplace_templates")
-    .select("*")
+    .select("id,owner_id,title,description,category,language,price,status,screenshots,video_url,source_page_id,template_type,access_locked,add_count,rating,rating_count,created_at,updated_at")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
-  return data;
+  return data as unknown as Tables<"marketplace_templates">;
 }
 
 export async function saveMarketplaceTemplate(
@@ -1807,11 +1833,12 @@ export interface TemplateAdditionInput {
 export async function fetchTemplateAdditions(userId: string): Promise<Tables<"template_additions">[]> {
   const { data, error } = await supabase
     .from("template_additions")
-    .select("*")
+    .select("id,template_id,workspace_id,added_by_user_id,price_paid,status,refund_eligible_until,added_at")
     .eq("added_by_user_id", userId)
-    .order("added_at", { ascending: false });
+    .order("added_at", { ascending: false })
+    .limit(100);
   if (error) throw error;
-  return data || [];
+  return (data || []) as Tables<"template_additions">[];
 }
 
 export async function saveTemplateAddition(
@@ -1842,7 +1869,7 @@ export async function requestRefund(
   additionId: string,
   reason?: string
 ): Promise<Tables<"template_refunds">> {
-  const addition = await supabase.from("template_additions").select("*").eq("id", additionId).single();
+  const addition = await supabase.from("template_additions").select("template_id,added_by_user_id").eq("id", additionId).single();
   if (addition.error) throw addition.error;
   const { data, error } = await supabase
     .from("template_refunds")
@@ -1883,17 +1910,21 @@ export interface AgentInput {
 }
 
 export async function fetchAgents(filters: AgentFilters = {}): Promise<Tables<"agents">[]> {
-  let query = supabase.from("agents").select("*");
+  let query = supabase.from("agents")
+    .select("id,owner_id,workspace_id,name,type,description,icon,instructions,model,status,credit_cap_per_run,credit_cap_per_month,config,created_at,updated_at");
   if (filters.ownerId) query = query.eq("owner_id", filters.ownerId);
   if (filters.workspaceId) query = query.eq("workspace_id", filters.workspaceId);
   if (filters.type) query = query.eq("type", filters.type);
   const { data, error } = await query.order("created_at", { ascending: false });
   if (error) throw error;
-  return data || [];
+  return (data || []) as Tables<"agents">[];
 }
 
 export async function fetchAgentById(id: string): Promise<Tables<"agents"> | null> {
-  const { data, error } = await supabase.from("agents").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("agents")
+    .select("id,owner_id,workspace_id,name,type,description,icon,instructions,model,status,credit_cap_per_run,credit_cap_per_month,config,created_at,updated_at")
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -1959,9 +1990,11 @@ export interface AgentTriggerInput {
 }
 
 export async function fetchAgentTriggers(agentId: string): Promise<Tables<"agent_triggers">[]> {
-  const { data, error } = await supabase.from("agent_triggers").select("*").eq("agent_id", agentId);
+  const { data, error } = await supabase.from("agent_triggers")
+    .select("id,agent_id,type,config,created_at")
+    .eq("agent_id", agentId);
   if (error) throw error;
-  return data || [];
+  return (data || []) as Tables<"agent_triggers">[];
 }
 
 export async function saveAgentTrigger(trigger: AgentTriggerInput): Promise<Tables<"agent_triggers">> {
@@ -1998,9 +2031,11 @@ export interface AgentAccessGrantInput {
 }
 
 export async function fetchAgentAccessGrants(agentId: string): Promise<Tables<"agent_access_grants">[]> {
-  const { data, error } = await supabase.from("agent_access_grants").select("*").eq("agent_id", agentId);
+  const { data, error } = await supabase.from("agent_access_grants")
+    .select("id,agent_id,resource_type,resource_id,level,created_at")
+    .eq("agent_id", agentId);
   if (error) throw error;
-  return data || [];
+  return (data || []) as Tables<"agent_access_grants">[];
 }
 
 export async function saveAgentAccessGrant(
@@ -2047,11 +2082,12 @@ export interface AgentRunLogInput {
 export async function fetchAgentRunLogs(agentId: string): Promise<Tables<"agent_run_logs">[]> {
   const { data, error } = await supabase
     .from("agent_run_logs")
-    .select("*")
+    .select("id,agent_id,triggered_by,started_at,finished_at,steps_taken,credits_used,resources_read,resources_written,status")
     .eq("agent_id", agentId)
-    .order("started_at", { ascending: false });
+    .order("started_at", { ascending: false })
+    .limit(100);
   if (error) throw error;
-  return data || [];
+  return (data || []) as Tables<"agent_run_logs">[];
 }
 
 export async function saveAgentRunLog(log: AgentRunLogInput): Promise<Tables<"agent_run_logs">> {
@@ -2116,6 +2152,7 @@ export function mapPageFromDb(db: Tables<"pages">): Page {
     // `visibility` is a real column (20260911100000) but the generated
     // Table types predate it — read through a cast until they're regenerated.
     visibility: ((db as { visibility?: Page["visibility"] }).visibility || "private"),
+    linkAccess: ((db as { link_access?: Page["linkAccess"] }).link_access || "restricted"),
     workspaceId: ((db as { workspace_id?: string | null }).workspace_id ?? null),
     blocks: (db.blocks as unknown as Block[]) || [],
     lineage: (db.lineage as unknown as LineageEntry[]) || [],
@@ -2221,6 +2258,9 @@ function mapPageToDb(page: PageInput): TablesInsert<"pages"> {
     // shape for pages created before workspaces existed.
     visibility: page.visibility || "private",
     workspace_id: page.workspaceId || "",
+    // Real column from 20260926182431; defaults to the restrictive mode so a
+    // page is never accidentally exposed by an older client.
+    link_access: page.linkAccess || "restricted",
   } as TablesInsert<"pages">;
 }
 

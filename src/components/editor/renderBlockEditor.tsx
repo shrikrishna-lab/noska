@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { isEmojiIcon } from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, ChevronDown, ChevronRight, Trash2, Globe, ExternalLink, Sparkles, GripHorizontal, FileText, Plus } from "lucide-react";
 import { TextArea } from "../ui";
@@ -27,6 +28,23 @@ import BlockResizer from "./BlockResizer";
 import { PlayfulTodoList } from "../ui/playful-todolist";
 import { TactileTaskList } from "../ui/TactileTaskList";
 import { Checkbox } from "../ui/checkbox";
+import { resolveTextColor, resolveBgColor } from "../../utils/colors";
+
+/**
+ * Text + background colour for a block, as a style object.
+ *
+ * The two resolvers are separate because "Brown" exists in both palettes with
+ * different hexes, and because an unresolvable value must be dropped rather
+ * than handed to the DOM as an invalid declaration.
+ */
+function blockColorStyle(block: { color?: string; bgColor?: string }): React.CSSProperties {
+  const style: React.CSSProperties = {};
+  const fg = resolveTextColor(block.color);
+  const bg = resolveBgColor(block.bgColor);
+  if (fg) style.color = fg;
+  if (bg) style.backgroundColor = bg;
+  return style;
+}
 
 const NON_RESIZABLE_BLOCK_TYPES = new Set([
   "text",
@@ -192,7 +210,7 @@ function renderBlockCore(
             >
               <option value="">Select a page to link…</option>
               {pages.filter((p) => !p.trashed).map((p) => (
-                <option key={p.id} value={p.id}>{p.icon ? `${p.icon} ` : ""}{p.title || "Untitled"}</option>
+                <option key={p.id} value={p.id}>{isEmojiIcon(p.icon) ? p.icon + " " : ""}{p.title || "Untitled"}</option>
               ))}
             </select>
           </div>
@@ -286,6 +304,7 @@ function renderBlockCore(
         </div>
         <div className="flex-1 min-w-0 relative">
           <RichTextEditor
+            style={blockColorStyle(block)}
             ref={ref}
             richText={richText}
             onRichTextChange={(rt, pt) => onPatch({
@@ -441,6 +460,7 @@ function renderBlockCore(
           </button>
           <div className="flex-1 min-w-0">
             <RichTextEditor
+              style={blockColorStyle(block)}
               ref={ref}
               richText={richText}
               onRichTextChange={(rt, pt) => onPatch({
@@ -703,10 +723,16 @@ function renderBlockCore(
     const richText = block.properties?.richText != null
       ? block.properties.richText
       : markdownToRichText(block.text || '');
-    return (
-      <div className="flex gap-2">
-        <span className="pt-1.5 text-[var(--secondary)]">•</span>
+return (
+      // `items-baseline` aligns the marker with the first line of text on the
+      // typographic baseline. The previous `pt-1.5` on the marker was a magic
+      // 6px nudge that happened to look right at one font size and drifted at
+      // others, and it broke entirely for the taller first line of a
+      // multi-line item.
+      <div className="flex gap-2 items-baseline">
+        <span className="text-[var(--secondary)] select-none">•</span>
         <RichTextEditor
+          style={blockColorStyle(block)}
           ref={ref}
           as="div"
           richText={richText}
@@ -728,10 +754,11 @@ function renderBlockCore(
     const richText = block.properties?.richText != null
       ? block.properties.richText
       : markdownToRichText(block.text || '');
-    return (
-      <div className="flex gap-2">
-        <span className="pt-1.5 text-[var(--secondary)]">{index + 1}.</span>
+return (
+      <div className="flex gap-2 items-baseline">
+        <span className="text-[var(--secondary)] select-none tabular-nums">{index + 1}.</span>
         <RichTextEditor
+          style={blockColorStyle(block)}
           ref={ref}
           as="div"
           richText={richText}
@@ -931,6 +958,7 @@ function renderBlockCore(
       <div className={cls}>
         {isFocused || !block.text ? (
           <RichTextEditor
+            style={blockColorStyle(block)}
             ref={ref}
             value={block.text}
             onChange={(text) => onPatch({ text })}
@@ -970,6 +998,7 @@ function renderBlockCore(
         </button>
         <div className="flex-1">
           <RichTextEditor
+            style={blockColorStyle(block)}
             ref={ref}
             richText={richText}
             onRichTextChange={(rt, pt) => onPatch({
@@ -1057,6 +1086,7 @@ function renderBlockCore(
       : markdownToRichText(block.text || '');
     return (
       <RichTextEditor
+        style={blockColorStyle(block)}
         ref={ref}
         richText={richText}
         onRichTextChange={(rt, pt) => onPatch({
@@ -1081,6 +1111,7 @@ function renderBlockCore(
     return (
       <div className="border-l-[3px] border-[var(--accent)] pl-4 py-2 my-2 rounded-r-lg bg-[var(--callout)]">
         <RichTextEditor
+          style={blockColorStyle(block)}
           ref={ref}
           richText={richText}
           onRichTextChange={(rt, pt) => onPatch({
@@ -1106,6 +1137,7 @@ function renderBlockCore(
     const headingTag = block.type;
     return (
       <RichTextEditor
+        style={blockColorStyle(block)}
         ref={ref}
         as={headingTag}
         richText={richText}
@@ -1135,18 +1167,13 @@ function renderBlockCore(
         onBlur={onBlur}
         readOnly={isLocked}
         className={`${cls} ${showFormatted ? 'opacity-0' : ''}`}
-        style={{
-          ...(block.color && block.color !== 'default' ? { color: block.color } : {}),
-          ...(block.bgColor ? { backgroundColor: block.bgColor } : {})
-        }}
+        style={blockColorStyle(block)}
         placeholder={placeholderFor(block.type)}
       />
       {showFormatted && (
         <div
           className="absolute inset-0 cursor-text"
-          style={{
-            ...(block.bgColor ? { backgroundColor: block.bgColor } : {})
-          }}
+          style={{ ...(resolveBgColor(block.bgColor) ? { backgroundColor: resolveBgColor(block.bgColor) } : {}) }}
           onMouseDown={(e) => {
             e.preventDefault();
             ref.current?.focus();
@@ -1155,10 +1182,7 @@ function renderBlockCore(
         >
           <div
             className={cls}
-            style={{
-              ...(block.color && block.color !== 'default' ? { color: block.color } : {}),
-              ...(block.bgColor ? { backgroundColor: block.bgColor } : {})
-            }}
+            style={blockColorStyle(block)}
             dangerouslySetInnerHTML={{ __html: renderInlineMarkdown(block.text) }}
           />
         </div>
@@ -1232,6 +1256,7 @@ function CalloutBlock({ block, cls, isLocked, onPatch, onKeyDown, onFocus, onBlu
           )}
         </div>
         <RichTextEditor
+          style={blockColorStyle(block)}
           ref={innerRef}
           richText={richText}
           onRichTextChange={(rt, pt) => onPatch({
@@ -1301,12 +1326,46 @@ export default function renderBlockEditor(
 
   if (!content) return null;
 
+  // Applied here, at the single exit, rather than inside individual branches.
+  //
+  // `renderBlockCore` has ~40 block-type branches and each one returned early;
+  // only the trailing generic text branch ever applied block.color, so picking
+  // a colour on a todo, callout, bullet, heading, toggle or code block saved
+  // the value and displayed nothing. Both the Text and Background tabs looked
+  // broken for every type except plain text.
+  const colorStyle = blockColorStyle(block);
+  const tinted = (node: React.ReactNode) => {
+    const fg = colorStyle.color;
+    const bg = colorStyle.backgroundColor;
+    if (!fg && !bg) return node;
+    // Colour-only: `display: contents` generates no box at all, so the colour
+    // still inherits down to the text but the block's own layout is completely
+    // untouched. A real wrapper div here became an extra flex item and
+    // collapsed bullet/numbered rows, squeezing the marker and the text into
+    // each other.
+    if (fg && !bg) {
+      return (
+        <div className="contents" style={{ color: fg }}>
+          {node}
+        </div>
+      );
+    }
+    // A background needs a real box to paint onto. `w-full` keeps it filling
+    // the row the way the original block root did, rather than sizing to its
+    // content and dragging the row narrower.
+    return (
+      <div style={colorStyle} className="w-full rounded-[3px]">
+        {node}
+      </div>
+    );
+  };
+
   const registryItem = BlockRegistry.find((r) => r.type === block.type);
   const isEmbed = registryItem?.category === "Embeds";
 
   if (isBlockResizable(block.type) || isEmbed) {
     const enableHeight = !["callout", "bookmark", "file", "audio", "block-equation", "equation"].includes(block.type);
-    return (
+    return tinted(
       <BlockResizer
         width={block.width}
         height={block.height || (block.type === "interactive" || block.type === "html" ? 420 : undefined)}
@@ -1320,5 +1379,5 @@ export default function renderBlockEditor(
     );
   }
 
-  return content;
+  return tinted(content);
 }

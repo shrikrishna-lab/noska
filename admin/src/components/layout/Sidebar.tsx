@@ -73,12 +73,12 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
             <div className="flex h-14 items-center gap-2 border-b px-4">
               {!collapsed && (
                 <Link to="/" className="flex items-center gap-2 font-bold tracking-tight">
-                  <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Noska" className="h-7 w-7 rounded-lg" />
+                  <img src={`${import.meta.env.BASE_URL}logo-128.webp`} alt="Noska" className="h-7 w-7 rounded-lg" />
                   <span>Noska Admin</span>
                 </Link>
               )}
               {collapsed && (
-                <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Noska" className="mx-auto h-7 w-7 rounded-lg" />
+                <img src={`${import.meta.env.BASE_URL}logo-128.webp`} alt="Noska" className="mx-auto h-7 w-7 rounded-lg" />
               )}
               <Button variant="ghost" size="icon" className="ml-auto hidden md:flex" onClick={onToggle}>
                 {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}

@@ -148,7 +148,7 @@ export default function ImageBlock({
       <div className="my-2">
         {block.text ? (
           <div className={`relative ${alignClass}`} style={maxWidthStyle}>
-            <img src={block.text} alt="" className="w-full rounded-lg" loading="lazy" />
+            <img src={block.text} alt="" className="w-full rounded-lg" loading="lazy" decoding="async" />
             {block.caption && (
               <p className="mt-1 text-center text-xs text-[var(--muted)]">{block.caption}</p>
             )}
@@ -175,8 +175,9 @@ export default function ImageBlock({
                 alt={block.caption || ""}
                 className="w-full"
                 style={{ display: "block" }}
-                loading="lazy"
-                onLoad={(e) => {
+                 loading="lazy"
+                 decoding="async"
+                 onLoad={(e) => {
                   const img = e.currentTarget;
                   setNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
                 }}

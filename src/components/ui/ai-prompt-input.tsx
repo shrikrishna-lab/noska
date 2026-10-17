@@ -18,6 +18,7 @@ import {
   TelescopeIcon,
   UnplugIcon,
   UploadIcon,
+  Image as ImageIcon,
   XIcon,
   Key,
   Laptop,
@@ -41,11 +42,12 @@ import { createPortal } from "react-dom"
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { aiManager } from "../../ai/AIManager"
-import { getAllProviders } from "../../ai/providers"
+import { getAllProviders, stripProviderPrefix } from "../../ai/providers"
 import { modelCatalogService, KNOWN_DEPRECATIONS, type ModelDeprecationInfo } from "../../ai/ModelCatalogService"
 import { modelRegistry } from "../../ai/models/ModelRegistry"
 import { modelCatalogSyncService } from "../../ai/models/ModelCatalogSyncService"
 import { formatDefaultDisplayName } from "../../ai/models/ModelMetadataOverrides"
+import { isZenApiAccessible, looksFreeTier, ZEN_CLIENT_ONLY_NOTICE, ZEN_CLIENT_ONLY_CONDITION } from "../../ai/models/providers/zenAvailability"
 import { VoiceInput } from "./voice-input"
 import { globalVoiceController } from "../../lib/voice/voice-controller"
 import { AdaptiveSlider, AdaptiveReasoningSlider } from "./adaptive-slider"
@@ -199,14 +201,17 @@ export type AiModel = {
   configured: boolean
   requiresKey: boolean
   description?: string
-  status?: "active" | "deprecating" | "discontinued"
+  status?: "active" | "deprecating" | "discontinued" | "unavailable"
   sunsetDate?: string
   deprecationReason?: string
   suggestedReplacement?: string
+  /** Why this model cannot be selected, shown in the Unavailable badge tooltip. */
+  unavailableReason?: string
   efforts?: AiModelEffort[]
   contexts?: Array<string | number>
   supportsFast?: boolean
   supportsThinking?: boolean
+  supportsImageGeneration?: boolean
   defaultEffort?: AiModelEffort
   defaultContext?: string | number
   defaultFast?: boolean
@@ -214,6 +219,45 @@ export type AiModel = {
   disabled?: boolean
   freeBadge?: string
   freeAccessConditions?: string[]
+}
+
+export type ModelCategory =
+  | "all" | "ready" | "free" | "flagship" | "reasoning" | "local" | "connect" | "sunset"
+
+/**
+ * Single source of truth for category filtering, shared by the flat "All
+ * Models" list and the provider-scoped list.
+ *
+ * These two used to diverge: the provider-scoped list ignored categories
+ * entirely (so the filter chips did nothing once a provider was picked) and it
+ * only excluded `discontinued` models — not `unavailable` ones. That meant
+ * OpenCode Zen's free models, which are served only inside the OpenCode app and
+ * answer 403 to everyone else, were still shown as selectable when browsing by
+ * provider even though the flat list hid them.
+ */
+export function matchesModelCategory(m: AiModel, category: ModelCategory, searching: boolean): boolean {
+  const isLocal = m.providerType === "local"
+  const isReady = m.configured
+  const isUnavailable = m.status === "unavailable"
+  const isDead = m.status === "discontinued"
+  const isUnusable = isDead || isUnavailable
+
+  // Unusable models stay hidden in the normal tabs, but searching or opening
+  // Sunset surfaces them so the user can see why they cannot be chosen.
+  if (category !== "sunset" && isUnusable && !searching) return false
+
+  if (category === "ready") return isReady && !isUnusable
+  if (category === "connect") return !isReady && !isUnusable
+  if (category === "local") return isLocal
+  if (category === "sunset") return m.status === "discontinued" || m.status === "deprecating" || isUnavailable
+  if (category === "free") {
+    // Free means genuinely callable for free: [Free] and [Free • Limited] only.
+    // "[Unavailable]" must NOT match — those cannot be used at all.
+    return !isUnusable && (m.freeBadge === "[Free]" || m.freeBadge === "[Free • Limited]")
+  }
+  if (category === "flagship") return !isUnusable && (m.supportsThinking || m.supportsFast || m.providerType === "cloud")
+  if (category === "reasoning") return !isUnusable && Boolean(m.supportsThinking)
+  return true
 }
 
 export type AiModelSelection = {
@@ -280,6 +324,11 @@ export function isModelFast(modelId: string): boolean {
   return false
 }
 
+export function isImageGenerationModel(modelId: string): boolean {
+  const id = modelId.toLowerCase()
+  return /dall-e|gpt-image|imagen|flux|sdxl|text-to-image/.test(id)
+}
+
 /** Fallback local models for Ollama / LM Studio if no local daemon is currently reporting */
 const DEFAULT_LOCAL_MODELS = {
   ollama: [
@@ -294,6 +343,19 @@ const DEFAULT_LOCAL_MODELS = {
 }
 
 /** Generates real models populated from the dynamic ModelRegistry & live catalog */
+
+/**
+ * True for a Zen model id that Zen will not serve to a plain API client.
+ * Belt-and-braces alongside the `free_limited` flag discovery sets: this also
+ * catches ids coming from the provider's static `models` array or a persisted
+ * selection that never went through discovery. Those ids are bare
+ * ("mimo-v2.6-flash-free"), so the provider has to be matched separately.
+ */
+function isZenClientOnlyModel(providerId: string, modelId: string): boolean {
+  if (!/^opencode(_zen)?$/i.test(String(providerId || ""))) return false;
+  const bare = stripProviderPrefix(String(modelId || ""));
+  return looksFreeTier(bare) && !isZenApiAccessible(bare);
+}
 export function getRealAiModels(): AiModel[] {
   try {
     const registryModels = modelRegistry.getAllModels()
@@ -307,6 +369,18 @@ export function getRealAiModels(): AiModel[] {
         if (seenIds.has(m.id)) continue
         seenIds.add(m.id)
 
+        // A model priced "free" is not necessarily callable from here. OpenCode
+        // Zen serves its free tier only to the OpenCode client and answers
+        // 403 FreeTierError to any other API caller, so discovery marks those
+        // `free_limited` (see ai/models/providers/zenAvailability.ts).
+        //
+        // These are surfaced, not silently dropped: Zen's own catalogue lists
+        // ten of them, so hiding them outright leaves the user wondering where
+        // the free models went. They are marked Unavailable and filtered out
+        // of the pickable lists, but stay findable by search and keep a red
+        // badge explaining why they cannot be used.
+        const isUnavailable = m.freeAccess?.status === "free_limited"
+
         const statusEntry = statuses.find(p => p.id === m.provider)
         const isLocal = m.provider === "ollama" || m.provider === "lmstudio" || m.source === "local" || m.localState?.available
         const isConfigured = statusEntry ? statusEntry.configured : false
@@ -315,6 +389,8 @@ export function getRealAiModels(): AiModel[] {
         let freeBadge: string | undefined = undefined
         if (isLocal) {
           freeBadge = "[Local]"
+        } else if (isUnavailable) {
+          freeBadge = "[Unavailable]"
         } else if (m.freeAccess?.isFree) {
           freeBadge = m.freeAccess.conditions?.some(c => c.toLowerCase().includes("rate limit"))
             ? "[Free • Limited]"
@@ -331,14 +407,20 @@ export function getRealAiModels(): AiModel[] {
           requiresKey: !isLocal,
           freeBadge,
           freeAccessConditions: m.freeAccess?.conditions,
-          status: m.status === "shutdown" ? "discontinued" : m.status === "deprecated" ? "deprecating" : "active",
-          description: m.description || (isLocal
-            ? `Runs locally on your device via ${formatDefaultDisplayName(m.provider)} (100% private, offline).`
-            : `${statusEntry?.name || m.provider} · ${isConfigured ? "Key configured" : "API key required"} (${ctxStr} token context window).`),
+          status: isUnavailable
+            ? "unavailable"
+            : m.status === "shutdown" ? "discontinued" : m.status === "deprecated" ? "deprecating" : "active",
+          unavailableReason: isUnavailable ? ZEN_CLIENT_ONLY_NOTICE : undefined,
+          description: isUnavailable
+            ? `${statusEntry?.name || m.provider} · ${ZEN_CLIENT_ONLY_NOTICE}`
+            : m.description || (isLocal
+              ? `Runs locally on your device via ${formatDefaultDisplayName(m.provider)} (100% private, offline).`
+              : `${statusEntry?.name || m.provider} · ${isConfigured ? "Key configured" : "API key required"} (${ctxStr} token context window).`),
           efforts: ["high", "medium", "low"],
           contexts: [ctxStr],
           supportsFast: m.capabilities.streaming,
           supportsThinking: m.capabilities.reasoning,
+          supportsImageGeneration: m.capabilities.imageGeneration,
           defaultEffort: m.capabilities.reasoning ? "high" : "medium",
           defaultContext: ctxStr,
           defaultFast: true,
@@ -363,6 +445,10 @@ export function getRealAiModels(): AiModel[] {
         const isDeepThink = m.id.toLowerCase().includes("r1") || m.id.toLowerCase().includes("pro") || m.id.toLowerCase().includes("opus") || m.id.toLowerCase().includes("o1") || m.id.toLowerCase().includes("o3") || m.id.toLowerCase().includes("thinking")
         const isFast = isModelFast(m.id)
         const dep = modelCatalogService.getDeprecationInfo(m.id)
+        // Same rule as the registry path: a static entry that Zen will 403 is
+        // surfaced as Unavailable rather than dropped, so a stale localStorage
+        // config cannot reintroduce a dead id *or* make it vanish silently.
+        const isUnavailable = isZenClientOnlyModel(p.id, m.id)
 
         list.push({
           id: m.id,
@@ -372,17 +458,25 @@ export function getRealAiModels(): AiModel[] {
           providerType: isLocal ? "local" : "cloud",
           configured: p.configured,
           requiresKey: !isLocal,
-          status: dep?.isDiscontinued ? "discontinued" : dep?.isDeprecating ? "deprecating" : "active",
+          status: isUnavailable
+            ? "unavailable"
+            : dep?.isDiscontinued ? "discontinued" : dep?.isDeprecating ? "deprecating" : "active",
           sunsetDate: dep?.sunsetDate,
           deprecationReason: dep?.reason,
           suggestedReplacement: dep?.suggestedReplacement,
-          description: isLocal
-            ? `Runs locally on your device via ${p.name} (100% private, offline).`
-            : `${p.name} · ${p.configured ? "Key configured" : "API key required"} (${ctxStr} token context window).`,
+          unavailableReason: isUnavailable ? ZEN_CLIENT_ONLY_NOTICE : undefined,
+          freeBadge: isUnavailable ? "[Unavailable]" : undefined,
+          freeAccessConditions: isUnavailable ? [ZEN_CLIENT_ONLY_CONDITION] : undefined,
+          description: isUnavailable
+            ? `${p.name} · ${ZEN_CLIENT_ONLY_NOTICE}`
+            : isLocal
+              ? `Runs locally on your device via ${p.name} (100% private, offline).`
+              : `${p.name} · ${p.configured ? "Key configured" : "API key required"} (${ctxStr} token context window).`,
           efforts: ["high", "medium", "low"],
           contexts: [ctxStr],
           supportsFast: isFast,
           supportsThinking: isDeepThink,
+          supportsImageGeneration: isImageGenerationModel(m.id),
           defaultEffort: "high",
           defaultContext: ctxStr,
           defaultFast: isFast,
@@ -668,9 +762,11 @@ function ModelLabelParts({
   const mods: string[] = []
   if (selection.fast && !selection.thinking) mods.push("Fast")
   if (selection.thinking) mods.push("Thinking")
+  if (model.supportsImageGeneration) mods.push("Image")
 
   return (
     <span className={cn("flex min-w-0 items-center gap-1.5", className)}>
+      {model.supportsImageGeneration && <ImageIcon size={11} className="shrink-0 text-fuchsia-500" />}
       <span className="text-foreground truncate font-medium">{model.label}</span>
       {model.freeBadge && (
         <span
@@ -678,8 +774,11 @@ function ModelLabelParts({
             "text-[9px] px-1 py-0.2 rounded font-medium shrink-0",
             model.freeBadge === "[Local]"
               ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20"
-              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+              : model.freeBadge === "[Unavailable]"
+                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
           )}
+          title={model.unavailableReason || undefined}
         >
           {model.freeBadge}
         </span>
@@ -1300,7 +1399,7 @@ function ModelSelectorDefaultItems() {
     useModelSelectorContext("ModelSelectorDefaultItems")
 
   const [activeTab, setActiveTab] = React.useState<"providers" | "models">("models")
-  const [modelCategory, setModelCategory] = React.useState<"all" | "ready" | "flagship" | "reasoning" | "local" | "connect" | "sunset">("all")
+  const [modelCategory, setModelCategory] = React.useState<ModelCategory>("all")
   const [selectedProviderId, setSelectedProviderId] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
 
@@ -1357,27 +1456,7 @@ function ModelSelectorDefaultItems() {
         m.id.toLowerCase().includes(search.toLowerCase())
       if (!matchSearch) return false
 
-      const isLocal = m.providerType === "local"
-      const isReady = m.configured
-      const id = m.id.toLowerCase()
-      const isDead = m.status === "discontinued"
-
-      // In active tabs, hide models whose sunset has already passed unless explicitly searching or viewing the Sunset tab
-      if (modelCategory !== "sunset" && isDead && !search) {
-        return false
-      }
-
-      if (modelCategory === "ready") return isReady && !isDead
-      if (modelCategory === "connect") return !isReady && !isDead
-      if (modelCategory === "local") return isLocal
-      if (modelCategory === "sunset") return m.status === "discontinued" || m.status === "deprecating"
-      if (modelCategory === "flagship") {
-        return !isDead && (m.supportsThinking || m.supportsFast || m.providerType === "cloud")
-      }
-      if (modelCategory === "reasoning") {
-        return !isDead && Boolean(m.supportsThinking)
-      }
-      return true
+      return matchesModelCategory(m, modelCategory, Boolean(search))
     })
   }, [models, search, modelCategory])
 
@@ -1385,12 +1464,15 @@ function ModelSelectorDefaultItems() {
   const activeProviderModels = React.useMemo(() => {
     if (!selectedProvider) return []
     return selectedProvider.models.filter((m) => {
-      if (search) {
-        return m.label.toLowerCase().includes(search.toLowerCase()) || m.id.toLowerCase().includes(search.toLowerCase())
-      }
-      return m.status !== "discontinued"
+      const matchSearch =
+        m.label.toLowerCase().includes(search.toLowerCase()) ||
+        m.id.toLowerCase().includes(search.toLowerCase())
+      if (!matchSearch) return false
+      // Same predicate as the flat list, so the chips work here too and gated
+      // models stay hidden instead of showing up as selectable.
+      return matchesModelCategory(m, modelCategory, Boolean(search))
     })
-  }, [selectedProvider, search])
+  }, [selectedProvider, search, modelCategory])
 
   return (
     <div
@@ -1488,12 +1570,15 @@ function ModelSelectorDefaultItems() {
             )}
           </div>
 
-          {/* Category Filter Chips for Models Tab */}
-          {!selectedProvider && activeTab === "models" && (
+          {/* Category Filter Chips — also shown while browsing a single provider.
+              They used to be hidden whenever a provider was selected, so
+              picking a provider silently disabled every filter. */}
+          {(!selectedProvider || activeTab === "models") && (
             <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none text-[10px]">
               {[
                 { id: "all", label: "All" },
                 { id: "ready", label: "🟢 Ready" },
+                { id: "free", label: "💚 Free" },
                 { id: "flagship", label: "⭐ Best Models" },
                 { id: "reasoning", label: "🧠 Reasoning" },
                 { id: "local", label: "💻 Local" },
@@ -1504,6 +1589,7 @@ function ModelSelectorDefaultItems() {
                   key={cat.id}
                   type="button"
                   onClick={() => handleCategoryClick(cat.id)}
+                  aria-pressed={modelCategory === cat.id}
                   className={cn(
                     "px-2 py-0.5 rounded-md whitespace-nowrap transition-all cursor-pointer font-medium",
                     modelCategory === cat.id
@@ -1743,9 +1829,13 @@ function ModelSelectorItem({ model }: { model: AiModel }) {
                 "text-[9px] px-1.5 py-0.2 rounded font-medium shrink-0 tracking-tight",
                 model.freeBadge === "[Local]"
                   ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20"
-                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                  : model.freeBadge === "[Unavailable]"
+                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                    : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
               )}
-              title={model.freeAccessConditions?.join(", ") || (model.freeBadge === "[Local]" ? "Local execution on your device" : "Free API access")}
+              title={model.unavailableReason
+                || model.freeAccessConditions?.join(", ")
+                || (model.freeBadge === "[Local]" ? "Local execution on your device" : "Free API access")}
             >
               {model.freeBadge}
             </span>
@@ -1754,8 +1844,15 @@ function ModelSelectorItem({ model }: { model: AiModel }) {
 
         {/* Right: Ready/Connect/Sunset Badge, Context Window, Fast, Info, Effort Chevron */}
         <div className="flex items-center gap-1 shrink-0">
-          {/* Discontinued / Sunset Notice Badges */}
-          {model.status === "discontinued" ? (
+          {/* Discontinued / Sunset / Unavailable Notice Badges */}
+          {model.status === "unavailable" ? (
+            <span
+              className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-semibold shrink-0"
+              title={model.unavailableReason || "This model cannot be called from Noska."}
+            >
+              Unavailable
+            </span>
+          ) : model.status === "discontinued" ? (
             <span
               className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-semibold shrink-0"
               title={model.sunsetDate ? `Retired on ${model.sunsetDate}. Migration: ${model.suggestedReplacement || "N/A"}` : "Discontinued by provider"}

@@ -2,6 +2,28 @@ import { supabase, getAdminToken } from "@/lib/supabase";
 
 type Service = "monitoring-sentry" | "monitoring-posthog" | "monitoring-resend" | "monitoring-vercel" | "monitoring-clerk";
 
+type ServiceCooldown = {
+  message: string;
+  until: number;
+};
+
+const SERVICE_COOLDOWN_MS = 5 * 60 * 1000;
+const serviceCooldowns = new Map<Service, ServiceCooldown>();
+
+function getServiceCooldown(service: Service): ServiceCooldown | null {
+  const cooldown = serviceCooldowns.get(service);
+  if (!cooldown) return null;
+  if (cooldown.until <= Date.now()) {
+    serviceCooldowns.delete(service);
+    return null;
+  }
+  return cooldown;
+}
+
+function setServiceCooldown(service: Service, message: string) {
+  serviceCooldowns.set(service, { message, until: Date.now() + SERVICE_COOLDOWN_MS });
+}
+
 export function isSupabaseAvailable(): boolean {
   return supabase !== null;
 }
@@ -10,9 +32,32 @@ export function isAuthenticated(): boolean {
   return !!getAdminToken();
 }
 
+async function readFunctionErrorMessage(context: unknown): Promise<string> {
+  const response = context as Response | undefined;
+  if (!response) return "";
+
+  let raw = "";
+  try {
+    const source = typeof response.clone === "function" ? response.clone() : response;
+    raw = await source.text();
+  } catch {
+    return "";
+  }
+
+  try {
+    const body = JSON.parse(raw) as { error?: unknown };
+    return typeof body.error === "string" ? body.error : raw;
+  } catch {
+    return raw;
+  }
+}
+
 async function invokeService<T>(service: Service, params: Record<string, string>): Promise<T> {
   const token = getAdminToken();
   if (!token) throw new Error("No admin session");
+
+  const cooldown = getServiceCooldown(service);
+  if (cooldown) throw new Error(cooldown.message);
 
   const { data, error: fnError } = await supabase!.functions.invoke(service, {
     method: "POST",
@@ -21,24 +66,17 @@ async function invokeService<T>(service: Service, params: Record<string, string>
   });
 
   if (fnError) {
-    // supabase-js wraps non-2xx responses in FunctionsHttpError whose message
-    // is generic — read the status and error payload off the wrapped response.
     const ctx = (fnError as { context?: Response }).context;
     const status = typeof ctx?.status === "number" ? ctx.status : 0;
-    let fnMessage = "";
-    if (ctx && typeof ctx.json === "function") {
-      try {
-        const body = (await ctx.clone().json()) as { error?: string };
-        fnMessage = body.error ?? "";
-      } catch { /* body wasn't JSON */ }
-    }
-    if (status === 503 || fnMessage.includes("not configured") || fnMessage.includes("Not configured")) {
-      throw new Error("SERVICE_NOT_CONFIGURED");
-    }
-    // PostHog personal API keys are created with explicit scopes — a 403
-    // permission_denied means the key exists but lacks query:read.
+    const fnMessage = await readFunctionErrorMessage(ctx);
+
     if (fnMessage.includes("missing required scope")) {
+      setServiceCooldown(service, "POSTHOG_TOKEN_MISSING_SCOPE");
       throw new Error("POSTHOG_TOKEN_MISSING_SCOPE");
+    }
+    if (status === 503 || fnMessage.toLowerCase().includes("not configured")) {
+      setServiceCooldown(service, "SERVICE_NOT_CONFIGURED");
+      throw new Error("SERVICE_NOT_CONFIGURED");
     }
     if (fnMessage) throw new Error(fnMessage);
     throw fnError;

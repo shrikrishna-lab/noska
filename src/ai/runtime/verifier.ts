@@ -43,6 +43,14 @@ export function verifyToolCall(
     case "duplicate_page": {
       return afterCount > beforeCount;
     }
+    case "image_generate": {
+      const pageId = resolvePageId(params, before);
+      const imageUrl = String((result as { imageUrl?: string })?.imageUrl || "");
+      if (!pageId || !imageUrl) return false;
+      return (after.pages.find((page) => page.id === pageId)?.blocks || []).some(
+        (block) => block.type === "image" && String(block.text || "") === imageUrl
+      );
+    }
     case "append_blocks": {
       const pageId = resolvePageId(params, before);
       if (!pageId) return !!((result as { count?: number })?.count);
@@ -59,10 +67,19 @@ export function verifyToolCall(
       );
       return hasTodo;
     }
-    case "insert_block": {
+    case "insert_block":
+    case "execute_slash_command":
+    case "create_database":
+    case "create_chart":
+    case "create_columns":
+    case "create_tabs":
+    case "create_interactive": {
       const pageId = resolvePageId(params, before);
-      if (!pageId) return false;
-      return blockCount(pageId, after) !== null && blockCount(pageId, after)! >= blockCount(pageId, before)!;
+      if (!pageId) return true;
+      const b = blockCount(pageId, before);
+      const a = blockCount(pageId, after);
+      if (b === null || a === null) return true;
+      return a >= b;
     }
     case "replace_content": {
       const pageId = resolvePageId(params, before);
@@ -102,9 +119,16 @@ export function collectAffectedResources(records: Array<{ name: string; ok: bool
       case "create_page_from_template":
         affected.push({ type: "page", id: String(res?.pageId || ""), title: String(res?.title || ""), change: "created" });
         break;
+      case "image_generate":
       case "append_blocks":
       case "replace_content":
       case "insert_block":
+      case "execute_slash_command":
+      case "create_database":
+      case "create_chart":
+      case "create_columns":
+      case "create_tabs":
+      case "create_interactive":
       case "update_block":
       case "delete_blocks":
       case "rename_page":
@@ -121,6 +145,12 @@ export function collectAffectedResources(records: Array<{ name: string; ok: bool
         break;
       case "remember_preference":
         affected.push({ type: "agent", id: "memory", change: `remembered ${String(params[i]?.key || "")}` });
+        break;
+      case "manage_agent":
+        affected.push({ type: "agent", id: String((res as any)?.id || params[i]?.id || ""), title: String((res as any)?.name || ""), change: String(params[i]?.action || "modified") });
+        break;
+      case "manage_automation":
+        affected.push({ type: "automation", id: String((res as any)?.id || params[i]?.id || ""), title: String((res as any)?.name || ""), change: String(params[i]?.action || "modified") });
         break;
       default:
         break;

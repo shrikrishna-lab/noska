@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffe
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, ChevronRight, Star } from "lucide-react";
 import { getFilteredCommands, getAllCommands, type NormalizedCommand } from "../../core/commands/CommandRegistry";
-import * as Icons from "lucide-react";
+import { LucideIcon } from "../PageIcon";
 import SlashCommandPreviewPanel from "./SlashCommandPreviewPanel";
 
 const CATEGORIES_ORDER = [
@@ -41,13 +41,7 @@ interface RenderIconProps {
 }
 
 function RenderIcon({ iconName, size = 14, className = "" }: RenderIconProps) {
-  // Cast: lucide-react's namespace import isn't indexable by an arbitrary
-  // string at the type level, but every icon name we pass here comes from
-  // command.icon, a runtime-validated string key into the same module.
-  // Same pattern as SlashCommandPreviewPanel.tsx's RenderIcon.
-  const IconComponent = (Icons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>)[iconName];
-  if (!IconComponent) return null;
-  return <IconComponent size={size} className={`shrink-0 ${className}`} />;
+  return <LucideIcon name={iconName} size={size} className={className} />;
 }
 
 function getFavorites(): string[] {

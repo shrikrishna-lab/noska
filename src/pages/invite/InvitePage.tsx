@@ -196,7 +196,7 @@ export function InvitePage() {
         >
           <div className="w-16 h-16 mb-8 bg-white border border-slate-200/80 flex items-center justify-center p-3.5 shrink-0 rounded-2xl shadow-lg animate-pulse-subtle">
             <img
-              src="/logo.png"
+              src="/logo-256.webp"
               alt="Noska Logo"
               className="w-full h-full object-contain pointer-events-none select-none"
             />

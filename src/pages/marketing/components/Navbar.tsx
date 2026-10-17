@@ -53,7 +53,7 @@ export default function Navbar() {
             <div className="liquid-glass-nav-left">
               <Link to="/" className="liquid-glass-nav-brand">
                 <div className="liquid-glass-nav-gem">
-                  <img src="/logo.png?v=2" alt="Noska Logo" className="liquid-glass-nav-logo-img" />
+                  <img src="/logo-256.webp?v=2" alt="Noska Logo" className="liquid-glass-nav-logo-img" />
                 </div>
                 <span className="liquid-glass-nav-brand-text">Noska</span>
               </Link>

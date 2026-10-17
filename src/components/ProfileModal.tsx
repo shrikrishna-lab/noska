@@ -10,6 +10,7 @@ import {
   uploadImage, ensureImagesBucket
 } from "../lib/supabaseService";
 import { getProfileCardGradient } from "../lib/profileCardGradient";
+import { canonicalWebOrigin } from "../lib/share/origin";
 import { pickImageFile } from "../lib/filePicker";
 
 interface ProfileModalProps {
@@ -148,7 +149,8 @@ export default function ProfileModal({
 
   const handleShareProfile = async () => {
     const handle = currentUsername || "user";
-    const shareUrl = `${window.location.origin}/@${handle}`;
+    // Canonical origin: the desktop shell's own origin is not openable by anyone else.
+    const shareUrl = `${canonicalWebOrigin()}/@${handle}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopiedShare(true);

@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 import { motion } from "framer-motion";
-import { PageIcon } from "../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 import { Star } from "lucide-react";
 import { NODE_VARIANTS } from "./GraphAnimations";
 import { getPageCluster } from "./GraphLegend";

@@ -103,9 +103,9 @@ export function MilestonesWidget({ ctx }: WidgetProps) {
 
 export function SprintVelocityWidget({ ctx }: WidgetProps) {
   const allTasks = useMemo(() => collectTasks(ctx.pages), [ctx.pages]);
-  const total = allTasks.length || 18;
-  const done = allTasks.filter((t) => t.checked).length || 12;
-  const percent = Math.round((done / total) * 100);
+  const total = allTasks.length;
+  const done = allTasks.filter((t) => t.checked).length;
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
     <div className="flex h-full flex-col justify-between p-2 select-none">

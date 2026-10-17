@@ -494,7 +494,7 @@ export default function Download() {
           className="dlp-dock"
         >
           <span className="dlp-dock-logo">
-            <img src="/logo.png?v=2" alt="" />
+            <img src="/logo-256.webp?v=2" alt="" />
           </span>
           <a href="#get" className="dlp-dock-cta">
             Download Noska — free

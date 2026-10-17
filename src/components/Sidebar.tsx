@@ -93,6 +93,7 @@ import {
 import { useEntitlements } from "../hooks/billing/useEntitlements";
 import { PlanBadge } from "./billing/PlanBadge";
 import { CreateWorkspaceModal } from "./workspaces/CreateWorkspaceModal";
+import { UserAvatar } from "./UserAvatar";
 import { requireLimit, trackUsage } from "../lib/billing/guards";
 import PageTree from "./PageTree";
 import { selectOptionsFromEvent } from "./PageTree";
@@ -239,6 +240,13 @@ interface RealtimeCollabLike {
 interface SidebarProps {
   open: boolean;
   pages: Page[];
+  /**
+   * Pages other people shared with this user. Listed under "Shared Space" so a
+   * grant is visible in the sidebar itself, not only inside the Collaboration
+   * Hub panel — the two lists come from the same `fetchSharedPages` source, so
+   * a revocation drops the entry from both.
+   */
+  sharedPages?: Page[];
   trashCount: number;
   activeId: string | null;
   workspaceName: string;
@@ -291,6 +299,7 @@ interface SidebarProps {
 const Sidebar = memo(function Sidebar({
   open,
   pages,
+  sharedPages = [],
   trashCount,
   pendingInvitesCount = 0,
   activeId,
@@ -344,6 +353,13 @@ const Sidebar = memo(function Sidebar({
     [pages]);
 
   const rootPageIds = useMemo(() => pages.filter(p => !p.parentId).map(p => p.id), [pages]);
+
+  // Shared pages are flat from the reader's point of view — the owner owns the
+  // hierarchy, so nesting is not ours to render or reorder here.
+  const sharedRootIds = useMemo(
+    () => sharedPages.filter(p => !p.trashed && !p.hiddenFromRecents).map(p => p.id),
+    [sharedPages],
+  );
 
   // Real display identity, sourced from App.tsx's actual signed-in state
   // (currentUsername/currentUserEmail, backed by the real Supabase auth
@@ -854,6 +870,27 @@ const Sidebar = memo(function Sidebar({
         return (
           <div key="sharedSpace">
             <NoskaSection title="Shared Space" defaultExpanded={true}>
+              {sharedRootIds.length > 0 && (
+                <div className="mb-1">
+                  <div className="px-2 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                    Shared with you
+                  </div>
+                  <PageTree
+                    content={sharedRootIds}
+                    allBlocks={sharedPages}
+                    activeId={activeId}
+                    collapsedPages={collapsedPages}
+                    onToggleCollapse={onToggleCollapse}
+                    onSelect={onSelect}
+                    onPatchPage={onPatchPage}
+                    onRenamePage={onRenamePage}
+                    onRemoveFromRecents={onRemoveFromRecents}
+                    onCopyLink={onCopyLink}
+                    onToast={onToast}
+                    emptyMessage="No pages shared with you yet"
+                  />
+                </div>
+              )}
               {customConfig.itemVisibility?.collabHub !== false && (
                 <NoskaNavItem
                   icon={Users}
@@ -1142,13 +1179,12 @@ const Sidebar = memo(function Sidebar({
                 className="group relative flex h-8.5 w-8.5 items-center justify-center rounded-full hover:scale-105 transition cursor-pointer outline-none"
                 title={`${displayName} (${displayEmail})`}
               >
-                <div className="h-7 w-7 rounded-full bg-gradient-to-tr from-amber-500 via-orange-400 to-amber-300 shadow-xs ring-1 ring-white/80 dark:ring-black/40 flex items-center justify-center text-[10px] text-white font-bold overflow-hidden">
-                  {isAvatarUrl ? (
-                    <img src={displayAvatar} alt="Avatar" className="h-full w-full object-cover" />
-                  ) : (
-                    <span>{displayAvatar || "👤"}</span>
-                  )}
-                </div>
+                <UserAvatar
+                  name={displayName}
+                  avatar={displayAvatar}
+                  size={28}
+                  className="ring-1 ring-white/80 dark:ring-black/40 shadow-xs"
+                />
               </button>
             </div>
           ) : (
@@ -1662,13 +1698,12 @@ const Sidebar = memo(function Sidebar({
             >
               {/* Signed-in account */}
               <div className="flex items-center gap-2.5 px-2 py-1">
-                <div className="h-8 w-8 rounded-full bg-neutral-100 dark:bg-white/10 border border-black/5 dark:border-white/10 flex items-center justify-center text-sm shadow-inner select-none shrink-0 text-neutral-800 dark:text-neutral-200 overflow-hidden">
-                  {isAvatarUrl ? (
-                    <img src={displayAvatar} alt="Avatar" className="h-full w-full object-cover" />
-                  ) : (
-                    <span>{displayAvatar || "👤"}</span>
-                  )}
-                </div>
+                <UserAvatar
+                  name={displayName}
+                  avatar={displayAvatar}
+                  size={32}
+                  className="border border-black/5 dark:border-white/10 shadow-inner select-none shrink-0"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <div className="font-bold text-neutral-900 dark:text-white truncate leading-none text-[12.5px]">{displayName}</div>

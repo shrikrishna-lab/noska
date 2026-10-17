@@ -122,6 +122,11 @@ export interface WidgetDefinition {
   capabilities?: string[];
   supportedDataSources?: string[];
   supportedActions?: WidgetActionDefinition[];
+  /** Human-readable provenance shown by the widget explain modal. */
+  explain?: {
+    dataSource: string;
+    formula: string;
+  };
   component: ComponentType<WidgetProps>;
 }
 

@@ -9,12 +9,12 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { isUnauthorizedError, triggerSessionExpired } from "@/lib/session-expired";
 import { Shell } from "@/components/layout/Shell";
 import { RouteGuard } from "@/components/layout/RouteGuard";
-import { Dashboard } from "@/pages/Dashboard";
-import { Forbidden } from "@/pages/Forbidden";
-import { RoleDashboard } from "@/pages/RoleDashboard";
 import { Login } from "@/pages/Login";
+import { Forbidden } from "@/pages/Forbidden";
 import { Loader2 } from "lucide-react";
 
+const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const RoleDashboard = lazy(() => import("@/pages/RoleDashboard").then((m) => ({ default: m.RoleDashboard })));
 const Analytics = lazy(() => import("@/pages/Analytics").then((m) => ({ default: m.Analytics })));
 const UserFunnel = lazy(() => import("@/pages/UserFunnel"));
 const Waitlist = lazy(() => import("@/pages/Waitlist").then((m) => ({ default: m.Waitlist })));
@@ -163,11 +163,11 @@ export default function App() {
             <DialogProvider>
               <ErrorBoundary>
                 <Routes>
-                  <Route path="/403" element={<Forbidden />} />
+                  <Route path="/403" element={<Suspense fallback={<PageLoading />}><Forbidden /></Suspense>} />
                   <Route element={<AuthGate><Shell /></AuthGate>}>
                     <Route element={<RouteGuard />}>
-                      <Route index element={<Dashboard />} />
-                      <Route path="my-dashboard" element={<RoleDashboard />} />
+                       <Route index element={<Suspense fallback={<PageLoading />}><Dashboard /></Suspense>} />
+                       <Route path="my-dashboard" element={<Suspense fallback={<PageLoading />}><RoleDashboard /></Suspense>} />
                       <Route path="analytics" element={<Suspense fallback={<PageLoading />}><Analytics /></Suspense>} />
                       <Route path="user-funnel" element={<Suspense fallback={<PageLoading />}><UserFunnel /></Suspense>} />
                       <Route path="waitlist" element={<Suspense fallback={<PageLoading />}><Waitlist /></Suspense>} />

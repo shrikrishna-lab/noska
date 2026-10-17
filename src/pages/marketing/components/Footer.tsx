@@ -83,7 +83,7 @@ export default function Footer() {
               <div className="liquid-glass-brand-col">
                 <Link to="/" className="liquid-glass-logo-link">
                   <div className="liquid-glass-logo-badge">
-                    <img src="/logo.png" alt="Noska Logo" className="liquid-glass-logo-img" />
+                    <img src="/logo-256.webp" alt="Noska Logo" className="liquid-glass-logo-img" />
                   </div>
                   <span className="liquid-glass-logo-text">Noska</span>
                 </Link>

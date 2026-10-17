@@ -102,7 +102,7 @@ function computePageStats(page: any): PageStats | Record<string, undefined> {
   return { words, chars, paragraphs, headings, readingTime, images, codeBlocks, tables, todos: todos.length, checkedTodos, blocks: blocks.length };
 }
 
-function computeKnowledgeScore(page, pages, relations, versionsCount, auditCount, aiEvents, stats) {
+function computeKnowledgeScore(page, pages, relations, versionsCount, auditCount, aiEventCount, stats) {
   if (!page) return { score: 0, metrics: [] };
   let total = 0;
   const metrics = [];
@@ -136,8 +136,8 @@ function computeKnowledgeScore(page, pages, relations, versionsCount, auditCount
   metrics.push({ label: `Versions (${versionsCount})`, pass: versionsCount > 0, weight: 10, detail: versionsCount > 0 ? `${versionsCount} saved versions` : 'No versions saved' });
   if (versionsCount > 0) total += 10;
 
-  const hasAI = (aiEvents || []).length > 0;
-  metrics.push({ label: `AI Activity (${(aiEvents || []).length})`, pass: hasAI, weight: 6, detail: hasAI ? `${aiEvents.length} AI interactions` : 'No AI interactions' });
+  const hasAI = aiEventCount > 0;
+  metrics.push({ label: `AI Activity (${aiEventCount})`, pass: hasAI, weight: 6, detail: hasAI ? `${aiEventCount} AI interactions` : 'No AI interactions' });
   if (hasAI) total += 6;
 
   metrics.push({ label: `Audit (${auditCount} events)`, pass: auditCount > 0, weight: 4, detail: auditCount > 0 ? `${auditCount} audit events` : 'No audit events' });
@@ -184,7 +184,7 @@ function SectionHeader({ icon: Icon, label, count }: SectionHeaderProps) {
   );
 }
 
-function OverviewTab({ page, pages, relations, versionsCount, auditCount, aiEvents, knowledge }) {
+function OverviewTab({ page, pages, relations, versionsCount, auditCount, knowledge }) {
   const stats = useMemo(() => computePageStats(page), [page]);
 
   if (!page) return null;
@@ -1009,7 +1009,7 @@ export default function PageInspector({
   const [activeTab, setActiveTab] = useState('overview');
   const [versions, setVersions] = useState([]);
   const [auditCount, setAuditCount] = useState(0);
-  const [aiEvents, setAiEvents] = useState([]);
+  const [aiEventCount, setAiEventCount] = useState(0);
   const tabContainerRef = useRef(null);
   useEffect(() => {
     if (notificationCommentId) setActiveTab('collaboration');
@@ -1019,29 +1019,29 @@ export default function PageInspector({
 
   useEffect(() => {
     if (!pageId) return;
-    Promise.all([
-      auditEngine.getPageVersions(pageId),
-      auditEngine.getPageAudit(pageId, { limit: 1 }),
-      auditEngine.getAIEvents(pageId, 5),
-    ]).then(([vers, audit, ai]) => {
-      setVersions(vers || []);
-      setAuditCount(audit?.length || 0);
-      setAiEvents(ai || []);
-    }).catch(() => {});
+     Promise.all([
+       auditEngine.getPageVersions(pageId),
+       auditEngine.getPageAudit(pageId, { limit: 1 }),
+       auditEngine.getAuditSummary(pageId),
+     ]).then(([vers, audit, summary]) => {
+       setVersions(vers || []);
+       setAuditCount(audit?.length || 0);
+       setAiEventCount(summary?.aiCount || 0);
+     }).catch(() => {});
   }, [pageId]);
 
   const stats = useMemo(() => computePageStats(page), [page]);
 
   const knowledge = useMemo(() => {
     if (!page) return { score: 0, metrics: [] };
-    return computeKnowledgeScore(page, pages, relations, versions.length, auditCount, aiEvents, stats);
-  }, [page, pages, relations, versions.length, auditCount, aiEvents, stats]);
+    return computeKnowledgeScore(page, pages, relations, versions.length, auditCount, aiEventCount, stats);
+  }, [page, pages, relations, versions.length, auditCount, aiEventCount, stats]);
 
   return (
     <div className="flex flex-col h-full text-[var(--text)]">
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
       <div ref={tabContainerRef} className="flex-1 overflow-y-auto scrollbar-thin">
-        {activeTab === 'overview' && <OverviewTab page={page} pages={pages} relations={relations} versionsCount={versions.length} auditCount={auditCount} aiEvents={aiEvents} knowledge={knowledge} />}
+        {activeTab === 'overview' && <OverviewTab page={page} pages={pages} relations={relations} versionsCount={versions.length} auditCount={auditCount} knowledge={knowledge} />}
         {activeTab === 'stats' && <StatsTab page={page} />}
         {activeTab === 'details' && <DetailsTab page={page} pages={pages} />}
         {activeTab === 'properties' && <PropertiesTab page={page} pages={pages} onPatchPage={onPatchPage} />}

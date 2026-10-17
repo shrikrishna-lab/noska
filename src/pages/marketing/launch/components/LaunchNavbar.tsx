@@ -74,7 +74,7 @@ export function LaunchNavbar() {
     <nav className={`nl-navbar ${scrolled ? 'nl-scrolled' : ''}`}>
       <div className="nl-container nl-navbar-inner">
         <a href="#nl-top" onClick={scrollTo('nl-top')} className="nl-navbar-logo">
-          <img src="/logo.png" alt="Noska" />
+          <img src="/logo-256.webp" alt="Noska" />
           <span>Noska</span>
         </a>
 

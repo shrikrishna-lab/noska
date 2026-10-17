@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import PageIcon from "../PageIcon";
+import { SPRING_PRESETS, useReducedMotion, motionSafe } from "@/features/motion/MotionSystem";
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, MessageSquare, Pin, Archive, ArchiveRestore,
@@ -81,6 +83,10 @@ function ChatItem({
   const [menuView, setMenuView] = useState<'main' | 'project'>('main');
   const [openUpward, setOpenUpward] = useState(false);
   const [name, setName] = useState(chat.name || 'Conversation');
+  const [pressed, setPressed] = useState(false);
+  // Apple-level polish includes honouring the OS motion preference; the sidebar
+  // previously ran every transition regardless.
+  const reducedMotion = useReducedMotion();
 
   const handleRename = () => {
     if (name.trim() && name !== chat.name) {
@@ -103,15 +109,34 @@ function ChatItem({
     setMenuView('main');
   };
 
-  return (
+return (
     <div className="relative group px-1 py-0.5">
-      <div
+      {/* Was a clickable <div>: not focusable, no keyboard activation, and no
+          way to show a focus ring — so the chat list was unreachable without a
+          mouse. Now a real button with press feedback and explicit transition
+          properties (transition-all animates every property, including layout
+          ones, which is what causes the jank on long lists). */}
+      <button
+        type="button"
         onClick={() => onSelect(chat.id)}
-        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl cursor-pointer text-left transition-all duration-150 select-none ${
+        aria-current={active ? "true" : undefined}
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl cursor-pointer text-left select-none
+          transition-[background-color,border-color,color,transform] duration-150 ease-out
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50
+          ${pressed ? "scale-[0.98]" : "scale-100"}
+          ${
           active
             ? 'bg-[var(--accent)]/12 border border-[var(--accent)]/30 text-[var(--text)] font-semibold'
             : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] border border-transparent'
         }`}
+        onPointerDown={() => { if (!reducedMotion) setPressed(true); }}
+        onPointerUp={() => setPressed(false)}
+        onPointerLeave={() => setPressed(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(chat.id); }
+          if (e.key === "F2") { e.preventDefault(); setRenaming(true); }
+        }}
+        onDoubleClick={() => setRenaming(true)}
       >
         <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 text-xs ${
           active ? 'text-[var(--accent)] font-bold' : 'text-[var(--muted)]'
@@ -140,16 +165,19 @@ function ChatItem({
           )}
         </div>
 
-        {/* Action Menu Trigger */}
+{/* Action Menu Trigger. opacity-0 group-hover:opacity-100 hid this from
+            keyboard users entirely — focusing it via Tab left it invisible.
+            group-focus-within restores it whenever the row has focus. */}
         <button
           type="button"
           onClick={handleToggleMenu}
-          className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shrink-0"
+          className="p-1 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 transition-opacity cursor-pointer shrink-0"
           title="More options"
+          aria-label={`More options for ${chat.name || "Conversation"}`}
         >
           <MoreHorizontal size={13} />
         </button>
-      </div>
+      </button>
 
       {/* Side-by-Side Floating Context Menu */}
       <AnimatePresence>
@@ -336,12 +364,16 @@ function getSafePageTitle(title?: string | null): string {
   return t || 'Untitled';
 }
 
+/**
+ * Page icon for the chat sidebar list.
+ *
+ * Was a third copy of the URL/lucide/text decision — this one used
+ * `object-contain` where AIPanel's twin used `object-cover`, and neither
+ * understood the `lucide:` prefix, so identifiers leaked as visible text.
+ * Defers to the single PageIcon implementation.
+ */
 function renderPageIcon(icon?: string | null) {
-  if (!icon) return <span className="text-xs shrink-0">📄</span>;
-  if (icon.startsWith('data:') || icon.startsWith('http://') || icon.startsWith('https://')) {
-    return <img src={icon} alt="" className="w-3.5 h-3.5 object-contain inline-block rounded-xs shrink-0" />;
-  }
-  return <span className="text-xs shrink-0">{icon}</span>;
+  return <PageIcon icon={icon} size={14} fallback={<span className="text-xs leading-none shrink-0">📄</span>} />;
 }
 
 export default function ChatSidebar({
@@ -371,6 +403,7 @@ export default function ChatSidebar({
   userEmail,
   userId
 }: ChatSidebarProps) {
+  const reducedMotion = useReducedMotion();
   const [projectsOpen, setProjectsOpen] = useState(true);
   const [pinnedOpen, setPinnedOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
@@ -415,8 +448,20 @@ export default function ChatSidebar({
     return groups;
   }, [filteredChats]);
 
-  return (
-    <div className="flex flex-col h-full bg-[#faf9f6] dark:bg-[#141416] border-r border-[#e8e4db] dark:border-white/10 select-none text-[#1c1b18] dark:text-[#ececec] w-full">
+return (
+    <motion.div
+      // The sidebar previously appeared with no transition at all, which is the
+      // other half of why it never felt native: everything inside animated
+      // (hover, press) but the surface itself did not arrive. A short slide on
+      // the inline axis only — not a scale, which would distort the type.
+      initial={reducedMotion ? { opacity: 0 } : { opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={motionSafe({ type: "spring", stiffness: 400, damping: 40, mass: 1 }, reducedMotion)}
+      className="flex flex-col h-full bg-[#faf9f6] dark:bg-[#141416] border-r border-[#e8e4db] dark:border-white/10 select-none text-[#1c1b18] dark:text-[#ececec] w-full overflow-hidden"
+      // A docked rail reads as a distinct material layer when its surface is
+      // slightly translucent and saturated rather than an opaque slab.
+      style={{ backdropFilter: "blur(20px) saturate(150%)", WebkitBackdropFilter: "blur(20px) saturate(150%)" }}
+    >
       {/* 1. Clean Noska AI Header */}
       <div className="px-3.5 py-3 border-b border-[#e8e4db] dark:border-white/10 shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -435,7 +480,7 @@ export default function ChatSidebar({
         <button
           type="button"
           onClick={onNew}
-          className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-[#1c1b18] dark:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors cursor-pointer group"
+          className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-[#1c1b18] dark:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 motion-reduce:transition-none cursor-pointer group"
         >
           <div className="flex items-center gap-2.5">
             <div className="w-5 h-5 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
@@ -450,7 +495,7 @@ export default function ChatSidebar({
         <button
           type="button"
           onClick={onOpenAgentMenu}
-          className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-[#1c1b18] dark:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-colors cursor-pointer group"
+          className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-[#1c1b18] dark:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 motion-reduce:transition-none cursor-pointer group"
         >
           <div className="flex items-center gap-2.5">
             <div className="w-5 h-5 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
@@ -475,24 +520,42 @@ export default function ChatSidebar({
               <button
                 type="button"
                 onClick={() => setProjectsOpen(!projectsOpen)}
-                className="flex items-center gap-1 text-[11px] font-semibold text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white transition-colors cursor-pointer"
+className="flex items-center gap-1 text-[11px] font-semibold text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 rounded-md px-1 -mx-1"
+                aria-expanded={projectsOpen}
               >
                 <span>Projects</span>
-                <ChevronDown size={12} className={`transition-transform duration-200 ${projectsOpen ? '' : '-rotate-90'}`} />
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${projectsOpen ? '' : '-rotate-90'}`}
+                />
               </button>
 
               <button
                 type="button"
                 onClick={onNewPage}
-                className="p-1 rounded-md text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition cursor-pointer"
+                className="p-1 rounded-md text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10 transition-[background-color,color,transform] duration-150 ease-out active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 cursor-pointer"
                 title="New project document"
+                aria-label="New project document"
               >
                 <Plus size={12} />
               </button>
             </div>
 
-            {projectsOpen && (
-              <div className="space-y-0.5 max-h-48 overflow-y-auto scrollbar-thin">
+            {/* Was `{projectsOpen && …}` — an instant mount/unmount, so the
+                chevron rotated while the content snapped, which is the tell
+                that a collapse is not native-feeling. Animating height keeps the
+                motion continuous in both directions. */}
+            <AnimatePresence initial={false}>
+              {projectsOpen && (
+                <motion.div
+                  key="projectsOpen"
+                  initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                  transition={motionSafe(SPRING_PRESETS.panel, reducedMotion)}
+                  style={{ overflow: "hidden" }}
+                >
+                <div className="space-y-0.5 max-h-48 overflow-y-auto scrollbar-thin">
                 {pages.map((p) => {
                   const safeTitle = getSafePageTitle(p.title);
                   return (
@@ -510,9 +573,11 @@ export default function ChatSidebar({
                       <span className="truncate">{safeTitle}</span>
                     </button>
                   );
-                })}
+})}
               </div>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
@@ -521,8 +586,9 @@ export default function ChatSidebar({
           <div className="space-y-1">
             <button
               type="button"
-              onClick={() => setPinnedOpen(!pinnedOpen)}
-              className="w-full flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white transition-colors cursor-pointer"
+onClick={() => setPinnedOpen(!pinnedOpen)}
+              aria-expanded={pinnedOpen}
+              className="w-full flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 rounded-lg"
             >
               <span className="flex items-center gap-1">
                 <span>Pinned</span>
@@ -531,7 +597,16 @@ export default function ChatSidebar({
               <span className="text-[10px] font-mono">{pinnedChats.length}</span>
             </button>
 
-            {pinnedOpen && (
+            <AnimatePresence initial={false}>
+              {pinnedOpen && (
+                <motion.div
+                  key="pinnedOpen"
+                  initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                  transition={motionSafe(SPRING_PRESETS.panel, reducedMotion)}
+                  style={{ overflow: "hidden" }}
+                >
               <div className="space-y-0.5">
                 {pinnedChats.map((c) => (
                   <ChatItem
@@ -548,7 +623,9 @@ export default function ChatSidebar({
                   />
                 ))}
               </div>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
@@ -557,22 +634,28 @@ export default function ChatSidebar({
           <div className="flex items-center justify-between px-2 py-1 relative">
             <button
               type="button"
-              onClick={() => setHistoryOpen(!historyOpen)}
-              className="flex items-center gap-1 text-[11px] font-semibold text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white transition-colors cursor-pointer"
+onClick={() => setHistoryOpen(!historyOpen)}
+              aria-expanded={historyOpen}
+              className="flex items-center gap-1 text-[11px] font-semibold text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 rounded-md px-1 -mx-1"
             >
-              <span>Chats and tasks</span>
-              <ChevronDown size={12} className={`transition-transform duration-200 ${historyOpen ? '' : '-rotate-90'}`} />
+<span>Chats and tasks</span>
+              <ChevronDown
+                size={12}
+                className={`transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${historyOpen ? '' : '-rotate-90'}`}
+              />
             </button>
 
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setShowSearch(!showSearch)}
-                className={`p-1 rounded-md transition cursor-pointer ${
+                className={`p-1 rounded-md transition-[background-color,color,transform] duration-150 ease-out active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 cursor-pointer ${
                   showSearch
                     ? 'text-[var(--accent)] bg-[var(--accent)]/15'
                     : 'text-[#706c64] dark:text-[#a09c94] hover:text-[#1c1b18] dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-white/10'
                 }`}
+                aria-expanded={showSearch}
+                aria-label="Search conversations"
                 title="Search conversations"
               >
                 <Search size={12} />
@@ -697,7 +780,16 @@ export default function ChatSidebar({
             </div>
           )}
 
-          {historyOpen && (
+            <AnimatePresence initial={false}>
+              {historyOpen && (
+                <motion.div
+                  key="historyOpen"
+                  initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                  transition={motionSafe(SPRING_PRESETS.panel, reducedMotion)}
+                  style={{ overflow: "hidden" }}
+                >
             <div className="space-y-2.5 pt-0.5">
               {Object.keys(grouped).length === 0 ? (
                 <div className="text-center py-6 text-xs text-[#a09c94]">
@@ -724,10 +816,12 @@ export default function ChatSidebar({
                       />
                     ))}
                   </div>
-                ))
+))
               )}
             </div>
-          )}
+                </motion.div>
+              )}
+            </AnimatePresence>
         </div>
       </div>
 
@@ -800,6 +894,6 @@ export default function ChatSidebar({
         userEmail={realEmail}
         userId={userId}
       />
-    </div>
+    </motion.div>
   );
 }

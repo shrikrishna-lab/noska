@@ -153,7 +153,7 @@ export default function Changelog() {
             EgressMonitor.logEvent('query', 'changelog_entries');
             const { data: result, error } = await (supabaseAnon as any)
               .from('changelog_entries')
-              .select('*')
+              .select('id,title,description,tag,version,published_at,created_at')
               .eq('published', true)
               .order('created_at', { ascending: false });
             if (error) throw error;

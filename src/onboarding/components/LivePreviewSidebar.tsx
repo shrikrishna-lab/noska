@@ -6,7 +6,7 @@ import { previewPagesFor } from "../services/onboardingService";
 
 // Served from /public — reference the same logo the real Sidebar uses
 // (src/components/Sidebar.jsx), not a duplicated asset.
-const NoskaLogo = "/logo.png";
+const NoskaLogo = "/logo-256.webp";
 
 const SIDEBAR_STEPS = ["Username", "Workspace", "Your role", "Invite team", "Template"];
 

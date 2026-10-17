@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import * as Icons from "lucide-react";
+import { LucideIcon } from "../PageIcon";
 import BlockPreviewIllustration from "./BlockPreviewIllustration";
 import type { NormalizedCommand } from "../../core/commands/CommandRegistry";
 
@@ -11,12 +11,7 @@ interface RenderIconProps {
 }
 
 function RenderIcon({ iconName, size = 14, className = "" }: RenderIconProps) {
-  // Cast: lucide-react's namespace import isn't indexable by an arbitrary
-  // string at the type level, but every icon name we pass here comes from
-  // command.icon, a runtime-validated string key into the same module.
-  const IconComponent = (Icons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>)[iconName];
-  if (!IconComponent) return null;
-  return <IconComponent size={size} className={`shrink-0 ${className}`} />;
+  return <LucideIcon name={iconName} size={size} className={className} />;
 }
 
 /**

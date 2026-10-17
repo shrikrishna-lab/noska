@@ -44,7 +44,7 @@ export function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 p-4">
       <Card className="w-full max-w-sm shadow-xl">
         <CardHeader className="space-y-1 text-center">
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Noska" className="mx-auto mb-2 h-12 w-12 rounded-xl" />
+          <img src={`${import.meta.env.BASE_URL}logo-128.webp`} alt="Noska" width={48} height={48} decoding="async" className="mx-auto mb-2 h-12 w-12 rounded-xl" />
           <CardTitle className="text-2xl">{isSetup ? "Setup Admin" : "Admin Login"}</CardTitle>
           <CardDescription>
             {isSetup

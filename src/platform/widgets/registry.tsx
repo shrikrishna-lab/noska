@@ -107,6 +107,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     defaultConfig: { showOverdue: true, sortBy: "priority" },
     configSchema: MY_TASKS_CONFIG_SCHEMA,
     enabledByDefault: true,
+    explain: {
+      dataSource: "Todo blocks across your pages, including shared pages",
+      formula: "Overdue = due date before today and not completed · Due today = due date is today",
+    },
     component: MyTasksWidget,
   },
   {
@@ -118,6 +122,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Todo blocks with a due date on your pages",
+      formula: "Grouped by day: overdue, today, tomorrow, then the next 7 days",
+    },
     component: UpcomingTasksWidget,
   },
   {
@@ -129,6 +137,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Pages sorted by last opened or edited timestamp",
+      formula: "Most recent workspace activity first",
+    },
     component: RecentPagesWidget,
   },
   {
@@ -153,6 +165,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "small",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Your daily check-ins stored on this device",
+      formula: "Consecutive days with a completed check-in · streak shields cover missed days",
+    },
     component: StreakTrackerWidget,
   },
   {
@@ -175,6 +191,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "small",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Page Lineage events recorded today",
+      formula: "100 − 3 × today's tracked activity events (min 20), plus break boosts",
+    },
     component: VitalityBatteryWidget,
   },
   {
@@ -186,6 +206,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Habits you check off in this widget today",
+      formula: "Checked habits ÷ total habits for today",
+    },
     component: HabitMatrixWidget,
   },
   {
@@ -197,6 +221,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "small",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Page Lineage event timestamps",
+      formula: "Tracked workspace events per day for the last 7 days",
+    },
     component: ActivityGraphWidget,
   },
   {
@@ -208,6 +236,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: false,
+    explain: {
+      dataSource: "Pages, todo blocks and Lineage activity (last 7 days)",
+      formula: "Pages touched, tasks completed and active days as ratios of 7-day targets",
+    },
     component: ProgressRingsWidget,
   },
 
@@ -232,6 +264,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Pages updated in the last 24h and open todo blocks",
+      formula: "Documents changed now, open tasks, overdue tasks (due before today) and blockers",
+    },
     component: AiInsightsWidget,
   },
   {
@@ -243,6 +279,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "small",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Todo completion and due dates across your pages",
+      formula: "Completion share minus overdue penalty (capped at 40%) · shows — when no tasks exist",
+    },
     component: AiWorkspaceHealthWidget,
   },
   {
@@ -276,6 +316,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "small",
     enabledByDefault: false,
+    explain: {
+      dataSource: "user_ai_usage_stats for your signed-in account",
+      formula: "Requests, tokens, latency and top model recorded by your AI usage",
+    },
     component: AiUsageWidget,
   },
 
@@ -289,6 +333,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "small",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Todo blocks across your pages",
+      formula: "Completed todos ÷ total todos · delta compares the previous period",
+    },
     component: WorkspaceKpiWidget,
   },
   {
@@ -300,6 +348,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Page updatedAt timestamps",
+      formula: "Pages updated per day over the last 7 days",
+    },
     component: TaskVelocityChartWidget,
   },
   {
@@ -311,6 +363,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: false,
+    explain: {
+      dataSource: "Todo blocks grouped by page or favorite project",
+      formula: "Share of completed todos per project grouping",
+    },
     component: ProjectDistributionDonutWidget,
   },
   {
@@ -444,6 +500,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large", "wide"],
     defaultSize: "medium",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Pages, task counts and favorites in your workspace",
+      formula: "Live counts — no cached or sample numbers",
+    },
     component: WorkspaceOverviewWidget,
   },
   {
@@ -455,6 +515,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large", "wide"],
     defaultSize: "wide",
     enabledByDefault: false,
+    explain: {
+      dataSource: "Page Lineage events across your workspace",
+      formula: "Most recent tracked events first",
+    },
     component: RecentActivityWidget,
   },
   {
@@ -466,6 +530,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "small",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Pages you marked as favorite",
+      formula: "Live list sorted by favorite order",
+    },
     component: FavoritesWidget,
   },
   {
@@ -525,6 +593,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: true,
+    explain: {
+      dataSource: "Checked todos across all pages",
+      formula: "Checked todos ÷ total todos for the current sprint window",
+    },
     component: SprintVelocityWidget,
   },
   {
@@ -536,6 +608,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "medium",
     enabledByDefault: false,
+    explain: {
+      dataSource: "Todo completion across your project pages",
+      formula: "Completed todos ÷ total todos per project, with health flag thresholds",
+    },
     component: ProjectProgressWidget,
   },
   {
@@ -547,6 +623,10 @@ const DEFINITIONS: WidgetDefinition[] = [
     supportedSizes: ["small", "medium", "large"],
     defaultSize: "small",
     enabledByDefault: false,
+    explain: {
+      dataSource: "Todo blocks with due dates in your projects",
+      formula: "Next due todo and completion counts per project",
+    },
     component: MilestonesWidget,
   },
 

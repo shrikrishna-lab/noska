@@ -62,8 +62,7 @@ export class OpenAIModelDiscovery implements ModelDiscoveryAdapter {
       lowerId.includes("embedding") ||
       lowerId.includes("moderation") ||
       lowerId.includes("whisper") ||
-      lowerId.includes("tts") ||
-      lowerId.includes("dall-e") ||
+       lowerId.includes("tts") ||
       lowerId.includes("babbage") ||
       lowerId.includes("davinci") ||
       lowerId.includes("curie") ||
@@ -83,6 +82,7 @@ export class OpenAIModelDiscovery implements ModelDiscoveryAdapter {
 
     // Detect reasoning and multimodal capabilities dynamically
     const isReasoning = lowerId.startsWith("o1") || lowerId.startsWith("o3") || lowerId.startsWith("o-") || lowerId.includes("reasoning");
+    const isImageGen = lowerId.includes("dall-e") || lowerId.includes("gpt-image");
     const isVision = lowerId.includes("4o") || lowerId.includes("vision") || lowerId.includes("turbo") || lowerId.includes("omni") || !lowerId.includes("mini");
 
     return {
@@ -93,13 +93,13 @@ export class OpenAIModelDiscovery implements ModelDiscoveryAdapter {
       maxOutputTokens: override?.maxOutputTokens || (isReasoning ? 100000 : 16384),
       createdAt: raw.created ? raw.created * 1000 : undefined,
       capabilities: override?.capabilities || {
-        streaming: true,
+        streaming: !isImageGen,
         reasoning: isReasoning,
-        tools: true,
-        vision: isVision,
+        tools: !isImageGen,
+        vision: isVision && !isImageGen,
         audio: false,
         video: false,
-        imageGeneration: false,
+        imageGeneration: isImageGen,
         structuredOutput: true,
         mcp: true,
         agentMode: true,
@@ -125,7 +125,9 @@ export class OpenAIModelDiscovery implements ModelDiscoveryAdapter {
       "o1-mini",
       "gpt-4o",
       "gpt-4o-mini",
-      "chatgpt-4o-latest"
+      "chatgpt-4o-latest",
+      "gpt-image-1",
+      "dall-e-3"
     ];
 
     return rawIds.map(id => this.normalizeModel({ id, object: "model" })!).filter(Boolean);

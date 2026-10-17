@@ -103,8 +103,6 @@ posthog-js
 @sentry/react
 @sentry/vite-plugin
 @trigger.dev/sdk
-@trigger.dev/supabase
-@trigger.dev/resend
 @react-email/components
 resend
 ```

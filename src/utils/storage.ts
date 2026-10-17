@@ -7,12 +7,14 @@ const dirtyPagesMap = new Map<string, any>();
 let isSavingPages = false;
 let pageSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let pageRetryCount = 0;
+let lastPagesSnapshot: string | null = null;
 
 const syncedChatsMap = new Map<string, string>();
 const dirtyChatsMap = new Map<string, any>();
 let isSavingChats = false;
 let chatSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let chatRetryCount = 0;
+let lastChatsSnapshot: string | null = null;
 
 function getUserId(): string | null {
   try {
@@ -182,6 +184,8 @@ export function discardPendingSyncWrites() {
   if (chatSyncTimer) { clearTimeout(chatSyncTimer); chatSyncTimer = null; }
   dirtyPagesMap.clear();
   dirtyChatsMap.clear();
+  lastPagesSnapshot = null;
+  lastChatsSnapshot = null;
 }
 
 /**
@@ -213,7 +217,11 @@ export function storageApi() {
       return { value: localStorage.getItem(key) };
     },
     async set(key: string, value: string) {
+      if (key === "pages" && value === lastPagesSnapshot) return { ok: true };
+      if (key === "aiChats" && value === lastChatsSnapshot) return { ok: true };
       localStorage.setItem(key, value);
+      if (key === "pages") lastPagesSnapshot = value;
+      if (key === "aiChats") lastChatsSnapshot = value;
 
       const userId = getUserId();
       if (!userId) return { ok: true };

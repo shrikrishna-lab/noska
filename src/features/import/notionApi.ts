@@ -1,4 +1,5 @@
 import { blockFor } from "../../utils/helpers";
+import { normalizeCodeLanguage } from "../../utils/codeLanguage";
 import type { Block } from "../../../types/blocks";
 import type { ImportedPageDraft } from "./importTypes";
 import { ensureUniqueTitles, mapWithConcurrency } from "./parsers";
@@ -126,7 +127,7 @@ function notionBlockToNoska(nb: any): Block[] {
     }
     case "code": {
       const b: any = blockFor("code", richTextToPlain(nb.code?.rich_text));
-      if (nb.code?.language) b.language = nb.code.language;
+      if (nb.code?.language) b.language = normalizeCodeLanguage(nb.code.language);
       push(b);
       break;
     }

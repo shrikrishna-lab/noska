@@ -34,7 +34,6 @@ import Sidebar from "./components/Sidebar";
 import { LineNavigationRail } from "./features/navigation/line-nav";
 import Topbar from "./components/Topbar";
 import Editor from "./components/Editor";
-import { WorkspaceView, NewPageOverlay } from "./components/WorkspaceViews";
 import LoadingScreen from "./components/auth/LoadingScreen";
 import RingLoader from "./components/auth/RingLoader";
 import DesktopSetupAnimation from "./components/desktop/DesktopSetupAnimation";
@@ -45,12 +44,8 @@ import { starterPageForTemplate } from "./onboarding/services/onboardingService"
 import CommandPalette from "./components/CommandPalette";
 import { TeamProvider } from "./lib/TeamContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
-import { SettingsModal, TrashModal, ShareModal, HelpModal, CustomDialog } from "./components/Modals";
-import ProfileModal from "./components/ProfileModal";
-import FocusZoom from "./features/focus/FocusZoom";
 import StackedColumn from "./features/stacking/StackedColumn";
 import SplitWorkspaceRenderer from "./features/split/SplitWorkspaceRenderer";
-import ReadingMode from "./features/reading/ReadingMode";
 import { motion, AnimatePresence } from "framer-motion";
 import { encryptData, decryptData } from "./features/encryption/Encryption";
 import { aiManager } from "./ai/AIManager";
@@ -79,8 +74,40 @@ const CoThinking = lazy(() => import("./features/collab/CoThinking"));
 const LockPageModal = lazy(() => import("./features/encryption/Encryption").then(m => ({ default: m.LockPageModal })));
 const ApiConsole = lazy(() => import("./features/api/ApiConsole"));
 
+// Surfaces below the first workspace paint. The default product landing is a
+// page (the editor), so the dashboard views, settings sheet, trash/share/help
+// modals and reading surfaces are all interaction-deferred. Splitting them out
+// of the App chunk cuts roughly a megabyte of minified JS from startup; each is
+// warmed during idle (below) so the first open still feels instant.
+const WorkspaceView = lazy(() => import("./components/WorkspaceViews").then(m => ({ default: m.WorkspaceView })));
+const NewPageOverlay = lazy(() => import("./components/WorkspaceViews").then(m => ({ default: m.NewPageOverlay })));
+const SettingsModal = lazy(() => import("./components/Modals").then(m => ({ default: m.SettingsModal })));
+const TrashModal = lazy(() => import("./components/Modals").then(m => ({ default: m.TrashModal })));
+const ShareModal = lazy(() => import("./components/Modals").then(m => ({ default: m.ShareModal })));
+const HelpModal = lazy(() => import("./components/Modals").then(m => ({ default: m.HelpModal })));
+const CustomDialog = lazy(() => import("./components/Modals").then(m => ({ default: m.CustomDialog })));
+const ProfileModal = lazy(() => import("./components/ProfileModal"));
+const FocusZoom = lazy(() => import("./features/focus/FocusZoom"));
+const ReadingMode = lazy(() => import("./features/reading/ReadingMode"));
+
+// Warm the deferred chunks once the browser is idle. The 6s timeout keeps the
+// work from being starved forever on busy pages, and `requestIdleCallback`
+// guarantees it never competes with first paint or first input.
+const warmDeferredSurfaces = () => {
+  void import("./components/WorkspaceViews").catch(() => {});
+  void import("./components/Modals").catch(() => {});
+  void import("./components/ProfileModal").catch(() => {});
+  void import("./features/focus/FocusZoom").catch(() => {});
+  void import("./features/reading/ReadingMode").catch(() => {});
+};
+if (typeof requestIdleCallback !== "undefined") {
+  requestIdleCallback(warmDeferredSurfaces, { timeout: 6000 });
+} else {
+  setTimeout(warmDeferredSurfaces, 3500);
+}
+
 import { useAuth, useUser, useClerk, useSession } from "@clerk/react";
-import { supabase, setClerkSessionToken } from "./lib/supabase";
+import { supabase, setClerkSessionToken, currentAccessToken } from "./lib/supabase";
 import { NotificationPlatformProvider, NotificationNavigationBridge } from "./features/notifications/Provider";
 import LoginGate from "./components/auth/LoginGate";
 import DesktopAuthScreen from "./components/auth/DesktopAuthScreen";
@@ -105,17 +132,22 @@ import {
   slugifyWorkspaceName
 } from "./utils/helpers";
 import { storageApi, initStorageSyncBaseline, flushStorageSyncVerified, discardPendingSyncWrites } from "./utils/storage";
-import { subscribeToPages } from "./lib/pagesRealtime";
+import { subscribeToPages, subscribeToPagePermissions } from "./lib/pagesRealtime";
 import {
   normalizePages,
   getPageSubtreeIds,
   ensurePageEntity
 } from "./utils/pageTreeOps";
 import {
-  fetchPages, fetchSettings, fetchAIChats, savePage, saveSetting, fetchUserProfile, setOnboardingComplete,
+  fetchPages, fetchPageById, fetchSettings, fetchAIChats, savePage, saveSetting, fetchUserProfile, setOnboardingComplete,
   fetchPageInvites, acceptPageInvite, declinePageInvite, fetchSharedPages, updateSharedPage as updateSharedPageRemote
 } from "./lib/supabaseService";
 import type { Page, AIChat } from "./lib/supabaseService";
+import { buildPageLink } from "./lib/share/origin";
+import { hasLocalTestCredentials, signInAsLocalTestUser } from "./lib/devLocalAuth";
+import type { LinkAccess as PageLinkAccess } from "./lib/share/access";
+import { getPageAccessInfo, forkPage, type PageAccessInfo } from "./lib/share/access";
+import PageAccessGate from "./components/PageAccessGate";
 import type { Block, LineageEntry } from "../types/blocks";
 import type { OnboardingFormData, OnboardingPagePreview } from "./onboarding/types";
 
@@ -198,6 +230,24 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const routeParams = useParams();
+  // Share links the signed-in user cannot open yet. Declared up here because
+  // the URL-sync effect below must know about them before it rewrites the path.
+  const routePageId = routeParams.pageId || null;
+  // Read by the bootstrap effect below *after* its awaits, by which point the
+  // router has matched the route. Reading `routeParams.pageId` directly there
+  // captured the pre-match value (undefined), so a deep link looked like "no
+  // page in the URL" and the restored last-open page won instead.
+  const routePageIdRef = useRef<string | null>(null);
+  routePageIdRef.current = routePageId;
+  const [pendingSharedPageId, setPendingSharedPageId] = useState<string | null>(null);
+  // Page ids the gate has already resolved (forked, or handed over) so the
+  // overlay does not immediately re-open behind the editor.
+  const gateDismissedRef = useRef<Set<string>>(new Set());
+  const [forkBusy, setForkBusy] = useState(false);
+  // Mirrors of `activeId` / `pages` for the realtime callbacks above, which
+  // must not re-subscribe every time the active page changes.
+  const activeIdRef = useRef<string | null>(null);
+  const pagesRef = useRef<Page[]>([]);
   const [appFlowState, setAppFlowState] = useState<"loading" | "auth" | "onboarding" | "workspace">("loading");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const { notes: releaseNotes, dismiss: dismissReleaseNotes } = useReleaseNotes();
@@ -237,6 +287,28 @@ function AppContent() {
       setReadingPage, setFocusedBlock, setDecryptionKeys, setSaveState, setQuery,
       setNeedsUsernameClaim, setOnboardingOpen, commitPages, togglePageCollapse, undo, redo }
   ] = useWorkspace();
+
+  // A share link can point at a page this user cannot open. Resolved here —
+  // immediately after useWorkspace() and therefore before the URL-sync effect
+  // further down — so the sync knows to leave the path alone and the gate can
+  // take it over instead of the visitor being dropped into their own workspace.
+  const routePageIsMine = useMemo(
+    () => !!routePageId && pages.some((p) => p.id === routePageId),
+    [routePageId, pages],
+  );
+  const routePageIsShared = useMemo(
+    () => !!routePageId && sharedPages.some((p) => p.id === routePageId),
+    [routePageId, sharedPages],
+  );
+  const gatePageId = routePageId
+    && !routePageIsMine
+    && !routePageIsShared
+    && !gateDismissedRef.current.has(routePageId)
+    // Wait for the first load to settle, not for a non-empty page list:
+    // somebody following a share link may have zero pages of their own.
+    && !loading
+    ? routePageId
+    : null;
 
   const [
     { sidebarOpen, paletteOpen, settingsOpen, settingsInitialTab, templateOpen,
@@ -398,12 +470,20 @@ function AppContent() {
   // before flushing so edits made inside the autosave debounce window
   // (< 500ms before logout) still reach the dirty queue.
   const pagesSnapshotRef = useRef<Page[]>([]);
+  const persistedPagesRef = useRef<Page[] | null>(null);
+  const persistedDecryptionKeysRef = useRef<typeof decryptionKeys | null>(null);
   pagesSnapshotRef.current = pages;
   // A deep-link page is an initial navigation request, not a permanent
   // selection lock. This ref prevents the route-sync effect from reapplying
   // the URL page every time pages change (for example when a recent/favorite
   // page is edited or a new page is created).
   const appliedRoutePageRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+  useEffect(() => {
+    pagesRef.current = pages;
+  }, [pages]);
 
   // Real bug, fixed: this used to match `activeId` against ANY page
   // regardless of trashed status, so trashing the active page (with no
@@ -632,6 +712,18 @@ function AppContent() {
           return null;
         }
       });
+      // Realtime authorizes its connection once, at join time. Channels created
+      // before this effect ran joined anonymously, and because RLS applies to
+      // `postgres_changes`, every event for a private row was filtered out —
+      // subscriptions looked healthy ("SUBSCRIBED") but delivered nothing.
+      // Pushing the token onto the realtime client re-authorizes existing
+      // channels so live updates actually arrive after sign-in.
+      session.getToken({ template: "supabase" })
+        .then(async (token) => {
+          const resolved = token || (await session.getToken());
+          if (resolved) await supabase.realtime.setAuth(resolved);
+        })
+        .catch((e) => console.warn("App: realtime auth failed", e));
     } else {
       setClerkSessionToken(() => Promise.resolve(null));
     }
@@ -644,10 +736,22 @@ function AppContent() {
     let mounted = true;
     const isCurrent = () => mounted && identityGeneration.current === generation;
     const initialPages = pagesSnapshotRef.current;
+    // Dev-only local identity (TEST_MODE + explicit credentials). Established
+    // here so the single hydration path below serves it too, rather than
+    // duplicating the fetch/apply sequence in a parallel branch.
+    const localIdentityPromise = TEST_MODE && hasLocalTestCredentials()
+      ? signInAsLocalTestUser().catch((err) => {
+        console.error("App: local test sign-in failed", err);
+        return null;
+      })
+      : Promise.resolve(null);
     const userId = isSignedIn && clerkUser ? clerkUser.id : null;
     const previousUserId = currentUserId || (() => { try { return localStorage.getItem("noska_user_id"); } catch { return null; } })();
     const restoreLocal = !userId || !previousUserId || previousUserId === userId;
-    if (currentUserId && currentUserId !== userId) {
+    // Switch-identity teardown applies to Clerk sessions only. Under TEST_MODE
+    // the identity comes from local credentials and `userId` stays null, so
+    // comparing against it would tear the session down on every re-run.
+    if (!TEST_MODE && currentUserId && currentUserId !== userId) {
       setCurrentUserId(null);
       setCurrentUsername(null);
       setCurrentUserAvatar(null);
@@ -677,9 +781,11 @@ function AppContent() {
       let loadedSettings: Record<string, unknown> = {};
       let loadedChats: AIChat[] = [];
 
-      // ⚠️ TEST MODE: skip all Supabase calls and load exclusively from localStorage.
+      // ⚠️ TEST MODE: localStorage-only harness. Used when no explicit local
+      // credentials are configured; with them the normal authenticated path
+      // below runs instead so real rows and real RLS are exercised.
       // TEST_MODE is forced off against the production project (see envGuard.js).
-      if (TEST_MODE) {
+      if (TEST_MODE && !hasLocalTestCredentials()) {
         const pairs = await Promise.all(
           ["pages", "activeId", "workspaceName", "theme", "sidebarOpen", "apiKey",
            "themeFx", "aiProvider", "nvidiaKey", "appView", "aiChats", "activeChatId",
@@ -713,7 +819,17 @@ function AppContent() {
         setAiChats(loadedChats);
 
         const firstId = loadedPages[0]?.id;
-        if (pairs[1].value) {
+        // A URL that names a page wins over the restored "last page you had
+        // open". Without this, deep-linking to a shared page — which is not in
+        // `loadedPages` because it is not owned — got overwritten by the saved
+        // id, and the URL-sync effect had already marked the route as applied,
+        // so the user landed on an unrelated page while the address bar still
+        // showed the shared one. The route-sync effect below resolves the
+        // deep-linked page instead.
+        const routeWins = !!routePageIdRef.current;
+        if (routeWins) {
+          // Intentionally leave activeId alone; the route-sync effect sets it.
+        } else if (pairs[1].value) {
           const savedId = JSON.parse(pairs[1].value);
           if (loadedPages.some((p) => p.id === savedId)) {
             setActiveId(savedId);
@@ -755,14 +871,21 @@ function AppContent() {
       }
 
       // 1. Check session FIRST — determines user isolation (Clerk replaces Supabase auth)
-      if (!clerkLoaded) return;
+      // Dev-only local identity: establish it and use it as this session's
+      // user so the reads below are owner-scoped and RLS-backed, exactly like a
+      // Clerk session. There is no Clerk user in this mode.
+      const localIdentity = await localIdentityPromise;
+      if (!isCurrent()) return;
+      if (!localIdentity && !clerkLoaded) return;
       // Clerk may report isSignedIn before useSession has produced the token
       // Supabase needs for RLS. Wait for the session before the first read.
       // Desktop pairing supplies its own Supabase session — no Clerk session.
-      if (isSignedIn && (!clerkUser || (!session && !desktopIdentity))) return;
+      if (!localIdentity && isSignedIn && (!clerkUser || (!session && !desktopIdentity))) return;
       if (!isCurrent()) return;
 
-      if (session) {
+      const effectiveUserId = localIdentity?.userId ?? userId;
+
+      if (session && !localIdentity) {
         setClerkSessionToken(async () => {
           try {
             const token = await session.getToken({ template: "supabase" });
@@ -776,6 +899,14 @@ function AppContent() {
         });
       }
 
+      // Same reason as the effect above: realtime authorizes at join time, so a
+      // channel that joined before the JWT existed silently receives nothing
+      // for RLS-protected rows. Re-authorizing here covers the local/dev sign-in
+      // path, which does not go through Clerk's session effect.
+      currentAccessToken()
+        .then((token) => (token ? supabase.realtime.setAuth(token) : null))
+        .catch((e) => console.warn("App: realtime auth failed", e));
+
       // 2. Fetch data from Supabase (filtered by user_id if logged in)
       try {
         const [remotePages, remoteSettings] = await Promise.all([
@@ -783,8 +914,8 @@ function AppContent() {
           // owner-scoped tables before Clerk has supplied a session token;
           // those requests are expected to be rejected by Supabase RLS and
           // otherwise surface a misleading startup warning in production.
-          userId ? fetchPages(userId) : Promise.resolve([]),
-          userId ? fetchSettings().catch(() => ({})) : Promise.resolve({})
+          effectiveUserId ? fetchPages(effectiveUserId) : Promise.resolve([]),
+          effectiveUserId ? fetchSettings().catch(() => ({})) : Promise.resolve({})
         ]);
         if (!isCurrent()) return;
         loadedPages = remotePages;
@@ -803,7 +934,7 @@ function AppContent() {
       } catch (e) {
         if (!isCurrent()) return;
         console.warn("Supabase load failed", e);
-        if (userId) {
+        if (effectiveUserId) {
           setBootstrapError(true);
           return;
         }
@@ -817,7 +948,7 @@ function AppContent() {
       if (!isCurrent()) return;
 
       // 4. Final normalization
-      if (!userId) {
+      if (!effectiveUserId) {
         const pairs = await Promise.all(
           ["pages", "activeId", "workspaceName", "theme", "sidebarOpen", "apiKey",
            "themeFx", "aiProvider", "nvidiaKey", "appView", "aiChats", "activeChatId",
@@ -855,7 +986,11 @@ function AppContent() {
 
         const firstId = loadedPages[0]?.id;
 
-        if (pairs[1].value) {
+        // Same deep-link precedence as the DB-first path above: a URL naming a
+        // page outranks the restored last-open page.
+        if (routePageIdRef.current) {
+          // Left to the route-sync effect.
+        } else if (pairs[1].value) {
           const savedId = JSON.parse(pairs[1].value);
           if (loadedPages.some((p) => p.id === savedId)) {
             setActiveId(savedId);
@@ -930,6 +1065,54 @@ function AppContent() {
       }
 
       // 4. Authenticated user: use fetched data (already filtered by user_id)
+      // Dev-only local identity takes the same path, minus Clerk.
+      if (localIdentity) {
+        const localProfile = await fetchUserProfile(localIdentity.userId).catch(() => null);
+        if (!isCurrent()) return;
+        const localName = localProfile?.user_name || localIdentity.email.split("@")[0] || "Workspace User";
+        setCurrentUserId(localIdentity.userId);
+        setCurrentUsername(localProfile?.username ?? localIdentity.email.split("@")[0]);
+        setCurrentUserAvatar(localProfile?.avatar_url ?? "👤");
+        setCurrentUserEmail(localIdentity.email);
+        try { localStorage.setItem("noska_user_id", localIdentity.userId); } catch {}
+        if (localProfile?.workspace_name) setWorkspaceName(localProfile.workspace_name);
+        realtimeCollab.initUser(localIdentity.userId, localName, localProfile?.avatar_url ?? "👤");
+        loadCollabData(localIdentity.userId, isCurrent);
+
+        // Apply the fetched rows the same way the authenticated path does —
+        // otherwise the session is live but the workspace stays empty.
+        const localNormalized = purgeExpiredTrash(
+          normalizePages(loadedPages.map((p) => ({ ...p, content: p.content || [] }))),
+        );
+        initStorageSyncBaseline(localNormalized, loadedChats);
+        preserveLocalPages.current = false;
+        if (localNormalized.length > 0) {
+          applyLoadedPages(localNormalized);
+          setAiChats(loadedChats);
+          // A deep link outranks the fallback. `localNormalized` only holds owned
+          // pages, so a shared page in the URL is never in it. In that case
+          // `activeId` is deliberately left unset: setting a provisional page
+          // here made the URL-sync effect rewrite the address bar to it as soon
+          // as the shared page resolved, destroying the deep link and landing
+          // the user on an unrelated page. The route-sync effect sets it once
+          // the page turns up in `pages`/`sharedPages`; if it never does,
+          // `gatePageId` raises the access gate instead of a blank editor.
+          const deepLink = routePageIdRef.current;
+          const deepLinkIsOwned = !!deepLink && localNormalized.some((p) => p.id === deepLink);
+          if (deepLinkIsOwned) {
+            setActiveId(deepLink!);
+            setStackedPageIds([deepLink!]);
+          } else if (!deepLink) {
+            setActiveId(localNormalized[0].id);
+            setStackedPageIds([localNormalized[0].id]);
+          }
+        }
+        hydrated.current = true;
+        setLoading(false);
+        setAppFlowState("workspace");
+        return;
+      }
+
       const u = clerkUser;
       if (!u) { setAppFlowState("auth"); return; }
       const uname = u.fullName || u.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Workspace User';
@@ -1164,6 +1347,61 @@ function AppContent() {
       },
     });
   }, [currentUserId, appFlowState]);
+
+  // Supabase Realtime for `page_permissions`: keeps "Shared with you" in step
+  // with the owner. An approval drops the page into the list without a reload,
+  // and — the case that used to leave a stale entry behind — an owner removing
+  // a collaborator removes the page from *that* user's list. The subscription is
+  // filtered to rows for this user, so the owner's own state never changes as a
+  // side effect of someone else's grant or revocation.
+  //
+  // The payload is deliberately not trusted: `page_permissions.user_id` stores
+  // the Clerk subject, which is not always the JWT `sub`, so the list is
+  // refetched instead of patched from the event.
+  useEffect(() => {
+    if (!currentUserId) return;
+    let inFlight = false;
+
+    const refresh = () => {
+      if (inFlight) return;
+      inFlight = true;
+      void fetchSharedPages(currentUserId)
+        .then((shared) => {
+          setSharedPages(shared);
+          // If the page just lost is the one open, the gate has to take over
+          // again — otherwise the user keeps editing a page they can no
+          // longer read.
+          const activeShared = shared.some((p) => p.id === activeIdRef.current);
+          if (!activeShared && activeIdRef.current && !pagesRef.current.some((p) => p.id === activeIdRef.current)) {
+            gateDismissedRef.current.delete(activeIdRef.current);
+            setPendingSharedPageId(activeIdRef.current);
+          }
+        })
+        .catch((e) => console.warn("App: failed to refresh shared pages", e))
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+
+    const unsubscribe = subscribeToPagePermissions(currentUserId, { onPermissionsChanged: refresh });
+
+    // Realtime is the fast path, not the only one. A websocket that joined
+    // before the session token was available, or a dropped connection, would
+    // otherwise leave a revoked page sitting in the list. Re-checking whenever
+    // the tab becomes active guarantees the list matches what the server will
+    // actually let the user open.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [currentUserId]);
 
   // Build starter pages (local state, no DB dependency). The onboarding
   // flow lets the user pick one starter template — build that page, falling
@@ -1405,47 +1643,35 @@ function AppContent() {
 
   useEffect(() => {
     if (!hydrated.current) return;
+    const pagesChanged = persistedPagesRef.current !== pages || persistedDecryptionKeysRef.current !== decryptionKeys;
     setSaveState("Saving...");
     const t = setTimeout(async () => {
       const store = storageApi();
-      const serializedPages = await Promise.all(
-        pages.map(async (p) => {
-          if (p.isEncrypted) {
-            const passphrase = decryptionKeys[p.id];
-            if (passphrase) {
-              try {
-                const { encryptedBlocks, iv, salt } = await encryptData(JSON.stringify(p.blocks || []), passphrase);
-                return {
-                  ...p,
-                  blocks: [],
-                  isLocked: true,
-                  encryptedBlocks,
-                  iv,
-                  salt
-                };
-              } catch (e) {
-                console.error("Autosave encryption error", e);
-              }
-            }
-            return {
-              ...p,
-              blocks: [],
-              isLocked: true
-            };
-          }
-          return p;
-        })
-      );
-
       const safeStringify = (val: unknown, fallback: string = "[]") => {
         try { return JSON.stringify(val); } catch (e) { console.warn("Safe stringify failed:", (e as Error).message); return fallback; }
       };
+      const pageWrite = pagesChanged && !preserveLocalPages.current
+        ? (async () => {
+            const serializedPages = await Promise.all(pages.map(async (p) => {
+              if (p.isEncrypted) {
+                const passphrase = decryptionKeys[p.id];
+                if (passphrase) {
+                  try {
+                    const { encryptedBlocks, iv, salt } = await encryptData(JSON.stringify(p.blocks || []), passphrase);
+                    return { ...p, blocks: [], isLocked: true, encryptedBlocks, iv, salt };
+                  } catch (e) {
+                    console.error("Autosave encryption error", e);
+                  }
+                }
+                return { ...p, blocks: [], isLocked: true };
+              }
+              return p;
+            }));
+            await store.set("pages", safeStringify(serializedPages));
+          })()
+        : Promise.resolve();
       await Promise.all([
-        // After an unverified-sync logout, "pages" holds the recovery copy of
-        // the user's data — don't clobber it with this post-logout empty state.
-        ...(preserveLocalPages.current
-          ? []
-          : [store.set("pages", safeStringify(serializedPages))]),
+        pageWrite,
         store.set("activeId", safeStringify(activeId, '""')),
         store.set("workspaceName", safeStringify(workspaceName, '""')),
         store.set("theme", safeStringify(theme, '"dark"')),
@@ -1459,6 +1685,10 @@ function AppContent() {
         store.set("activeChatId", safeStringify(activeChatId, "null")),
         store.set("stackedPageIds", safeStringify(stackedPageIds))
       ]);
+      if (pagesChanged && !preserveLocalPages.current) {
+        persistedPagesRef.current = pages;
+        persistedDecryptionKeysRef.current = decryptionKeys;
+      }
       setSaveState("Saved");
     }, 500);
     return () => clearTimeout(t);
@@ -1513,11 +1743,28 @@ function AppContent() {
         if (!matches) navigate(expected, { replace: true });
         return;
       }
+      // A share link the user cannot open yet belongs to the access gate.
+      // Rewriting it to the local workspace slug here would discard the page
+      // id and drop the visitor into their own workspace, losing the request
+      // or fork action entirely.
+      if (gatePageId) return;
+      // Same protection during bootstrap, when `gatePageId` is still false
+      // because it also requires `loading` to have finished. Without this the
+      // effect rewrote the path to whatever page the bootstrap had provisionally
+      // selected, destroying the deep link before the shared page (or the gate)
+      // had a chance to resolve it.
+      if (
+        routePageId &&
+        !pages.some((p) => p.id === routePageId) &&
+        !sharedPages.some((p) => p.id === routePageId)
+      ) {
+        return;
+      }
       const slug = slugifyWorkspaceName(workspaceName);
       const nextPath = activeId ? `/${slug}/${activeId}` : `/${slug}`;
       if (location.pathname !== nextPath) navigate(nextPath, { replace: true });
     }
-  }, [appFlowState, activeId, workspaceName, location.pathname, ticketPending]);
+  }, [appFlowState, activeId, workspaceName, location.pathname, ticketPending, gatePageId, routePageId, pages, sharedPages]);
 
   // Desktop: skip the decorative startup splash entirely — land straight on
   // pairing (signed out) or let the workspace bootstrap take over.
@@ -1863,23 +2110,32 @@ function AppContent() {
     }
   }, [setAppView, setActiveId, setStackedPageIds]);
 
+  // A link can point at a page the signed-in user cannot open. Previously the
+  // route silently fell through to `visiblePages[0]`, so the recipient landed on
+  // an unrelated page with no explanation. The route id is now held aside and
+  // resolved by `page_access_info`, which either opens the page or raises the
+  // access gate (request / fork).
   useEffect(() => {
-    const routePageId = routeParams.pageId || null;
-    if (!routePageId) {
+    if (gatePageId && gatePageId !== pendingSharedPageId) setPendingSharedPageId(gatePageId);
+    if (!gatePageId && pendingSharedPageId) setPendingSharedPageId(null);
+  }, [gatePageId, pendingSharedPageId]);
+
+  useEffect(() => {
+    const id = routeParams.pageId || null;
+    if (!id) {
       appliedRoutePageRef.current = null;
       return;
     }
     if (
-      appliedRoutePageRef.current !== routePageId &&
-      pages.length > 0 &&
-      pages.some((p) => p.id === routePageId)
+      appliedRoutePageRef.current !== id &&
+      (pages.some((p) => p.id === id) || sharedPages.some((p) => p.id === id))
     ) {
-      appliedRoutePageRef.current = routePageId;
-      setActiveId(routePageId);
+      appliedRoutePageRef.current = id;
+      setActiveId(id);
       setAppView("page");
-      setStackedPageIds((prev) => (prev.includes(routePageId) ? prev : [routePageId]));
+      setStackedPageIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     }
-  }, [routeParams.pageId, pages, setActiveId, setAppView, setStackedPageIds]);
+  }, [routeParams.pageId, pages, sharedPages, setActiveId, setAppView, setStackedPageIds]);
 
   const navigateToChildPage = useCallback((pageId: string, options: PageSelectOptions = {}) => {
     if (options.altKey || options.sidePeek) {
@@ -1921,6 +2177,62 @@ function AppContent() {
       console.warn("App: failed to load shared pages/invites", e);
     }
   }, []);
+
+  /**
+   * Called after the access gate resolves — a fresh fork, or an approval that
+   * just landed. Pulls the caller's pages again and opens the page so the gate
+   * can hand over to the real editor.
+   */
+  const adoptGrantedPage = useCallback(async (pageId: string) => {
+    gateDismissedRef.current.add(pageId);
+    // The gate is keyed on the id in the URL, which is still the page that was
+    // shared — not the page just granted or forked. Without dismissing that id
+    // too, `gatePageId` stays truthy, the overlay never goes away and the URL
+    // sync effect keeps bailing out, leaving the recipient on the gate.
+    if (routePageId) gateDismissedRef.current.add(routePageId);
+    setPendingSharedPageId(null);
+    try {
+      // Two different shapes can arrive here:
+      //  - an approved collaborator: the page belongs to somebody else and
+      //    arrives through `sharedPages`, never through the owner-scoped read
+      //  - a fork: the caller now owns it, so it belongs in `pages`
+      // Refresh the shared set first and branch on where the page shows up.
+      if (currentUserId) {
+        const shared = await fetchSharedPages(currentUserId);
+        setSharedPages(shared);
+        if (!shared.some((p) => p.id === pageId)) {
+          const page = await fetchPageById(pageId, currentUserId);
+          if (page) setPages((prev) => (prev.some((p) => p.id === page.id) ? prev : [...prev, page]));
+        }
+        await loadCollabData(currentUserId, () => true);
+      }
+    } catch (e) {
+      console.warn("App: failed to load the page after access was granted", e);
+    }
+    setAppView("page");
+    setActiveId(pageId);
+    setStackedPageIds((prev) => (prev.includes(pageId) ? prev : [...prev, pageId]));
+  }, [currentUserId, loadCollabData, routePageId, setActiveId, setAppView, setStackedPageIds]);
+
+  /**
+   * Fork from the Topbar's "Make a copy", used on a published page in fork mode
+   * that the visitor can already read (so the access gate is not shown). Reuses
+   * the same RPC and the same adoption path as the gate, so the copy lands in
+   * `pages` and becomes the active page.
+   */
+  const handleForkFromTopbar = useCallback(async () => {
+    if (!currentUserId || !activePage) return;
+    setForkBusy(true);
+    try {
+      const result = await forkPage(activePage.id, { workspaceId: activeWorkspaceId });
+      await adoptGrantedPage(result.pageId);
+      showToast(`Copied to your workspace as "${result.title}"`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not create a copy.");
+    } finally {
+      setForkBusy(false);
+    }
+  }, [activePage, activeWorkspaceId, adoptGrantedPage, currentUserId, showToast]);
 
   // Stamps real user attribution (replacing the "Krishna Handibag"
   // hardcoded fallback in Editor.tsx/BlockContextMenu.tsx) onto any block
@@ -2831,17 +3143,11 @@ function AppContent() {
 
   const copyPageLink = async (pageId: string) => {
     const targetPage = pages.find((p) => p.id === pageId) || (activePage?.id === pageId ? activePage : null);
-    const isPublic = targetPage?.visibility === "public";
+    const linkAccess = (targetPage as { linkAccess?: PageLinkAccess } | null)?.linkAccess ?? "restricted";
     const slug = slugifyWorkspaceName(workspaceName);
-    const url = `${window.location.origin}/${slug}/${pageId}`;
-
-    if (!isPublic) {
-      console.warn(`[Page Access] Cannot copy link: Page "${targetPage?.title || 'Untitled'}" (${pageId}) is Private (not in Public).`);
-      showToast("This page is Private. Set page to Public to copy and share link.");
-      return;
-    }
-
-    console.log(`[Page Access] Public page link copied for "${targetPage?.title || 'Untitled'}": ${url}`);
+    // Always the real web origin: inside the desktop shell `location.origin`
+    // is `tauri.localhost`, which nobody else can open.
+    const url = buildPageLink(slug, pageId);
 
     let copied = false;
     if (navigator.clipboard?.writeText) {
@@ -2865,11 +3171,17 @@ function AppContent() {
       } catch {}
     }
 
-    if (copied) {
-      showToast("Public link copied to clipboard");
-    } else {
+    if (!copied) {
       showToast("Could not copy link");
+      return;
     }
+    showToast(
+      linkAccess === "fork"
+        ? "Link copied — anyone with it can take their own copy"
+        : linkAccess === "view"
+          ? "Link copied — anyone with it can view"
+          : "Link copied — others will need to request access",
+    );
   };
 
 
@@ -3186,7 +3498,7 @@ function AppContent() {
             {loading ? (
               isSignedIn ? (
                 <div className="mobile-auth-screen mobile-auth-screen--center" data-testid="mobile-loading">
-                  <img src="/logo.png" alt="Noska" className="mobile-auth-logo" style={{ width: 52, height: 52 }} />
+                  <img src="/logo-256.webp" alt="Noska" className="mobile-auth-logo" style={{ width: 52, height: 52 }} />
                   <div className="mobile-auth-loading">
                     <span className="mobile-spinner" aria-hidden />
                     <p>Loading your workspace…</p>
@@ -3223,6 +3535,7 @@ function AppContent() {
               <MobileWorkspaceApp />
             )}
             {settingsOpen && (
+              <Suspense fallback={null}>
               <SettingsModal
                 key="mobile-settings"
                 initialTab={settingsInitialTab}
@@ -3257,6 +3570,7 @@ function AppContent() {
                 currentUserEmail={currentUserEmail}
                 onUsernameChanged={setCurrentUsername}
               />
+              </Suspense>
             )}
           </MobileControllerContext.Provider>
         </TeamProvider>
@@ -3339,6 +3653,7 @@ function AppContent() {
           <Sidebar
             open={sidebarOpen}
             pages={visiblePages}
+            sharedPages={sharedPages}
             trashCount={visibleTrashPages.length}
             pendingInvitesCount={pendingInvites.length}
             activeId={activeId}
@@ -3430,6 +3745,8 @@ function AppContent() {
               onRemoveEncryption={handleRemoveEncryption}
               onVisibilityChange={(visibility) => updatePage(activePage.id, { visibility })}
               onToggleCalendar={() => updatePage(activePage.id, { inCalendar: !activePage.inCalendar })}
+              onFork={activeSharedMatch && activePage.linkAccess === "fork" ? handleForkFromTopbar : undefined}
+              forkBusy={forkBusy}
               onToast={showToast}
             />
 
@@ -3538,6 +3855,7 @@ function AppContent() {
                       />
                     )
                   ) : (
+                    <Suspense fallback={<div className="flex-1 grid place-items-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--accent)]" /></div>}>
                     <WorkspaceView
                       view={appView}
                       pages={visiblePages}
@@ -3572,12 +3890,14 @@ function AppContent() {
                       onView={(view) => setAppView(view)}
                       toolContext={toolContext}
                     />
+                    </Suspense>
                   )}
                 </motion.div>
               </AnimatePresence>
             </div>
           </main>
           {newPageOpen && newPageDraft && (
+            <Suspense fallback={null}>
             <NewPageOverlay
               page={newPageDraft}
               onClose={() => finishNewPage("close")}
@@ -3588,6 +3908,7 @@ function AppContent() {
               onAction={finishNewPage}
               onToast={showToast}
             />
+            </Suspense>
           )}
           <Suspense fallback={null}><AIPanel
             open={aiOpen}
@@ -3621,6 +3942,7 @@ function AppContent() {
           <Suspense fallback={null}><AIRightPanel
             open={aiRightOpen}
             onClose={() => setAiRightOpen(false)}
+            onSelectPage={(p) => setActiveId(p.id)}
             page={activePage}
             pages={visiblePages}
             appView={appView}
@@ -3702,6 +4024,7 @@ onLineage={() => setLineageOpen(true)}
               />
             )}
             {settingsOpen && (
+              <Suspense fallback={null}>
               <SettingsModal
                 key="app-settings"
                 initialTab={settingsInitialTab}
@@ -3736,8 +4059,10 @@ onLineage={() => setLineageOpen(true)}
                 currentUserEmail={currentUserEmail}
                 onUsernameChanged={setCurrentUsername}
               />
+              </Suspense>
             )}
             {profileOpen && (
+            <Suspense fallback={null}>
             <ProfileModal
               key="app-profile"
               open={profileOpen}
@@ -3756,21 +4081,38 @@ onLineage={() => setLineageOpen(true)}
               }}
               onToast={showToast}
             />
+            </Suspense>
             )}
-            {trashOpen && <TrashModal key="app-trash" pages={visibleTrashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} />}
+            {trashOpen && <Suspense fallback={null}><TrashModal key="app-trash" pages={visibleTrashPages} onClose={() => setTrashOpen(false)} onRestore={restorePageSubtree} onDelete={deletePageSubtreeForever} /></Suspense>}
+            {pendingSharedPageId && (
+              <PageAccessGate
+                key={`page-gate-${pendingSharedPageId}`}
+                pageId={pendingSharedPageId}
+                currentUserId={currentUserId}
+                workspaceId={activeWorkspaceId}
+                onGranted={adoptGrantedPage}
+                onClose={() => {
+                  gateDismissedRef.current.add(pendingSharedPageId);
+                  setPendingSharedPageId(null);
+                }}
+              />
+            )}
             {shareOpen && (
+              <Suspense fallback={null}>
               <ShareModal
                 key="app-share"
                 page={activePage}
                 onClose={() => setShareOpen(false)}
                 onToast={showToast}
+                onVisibilityChange={(pageId, visibility) => updatePage(pageId, { visibility })}
                 currentUserId={currentUserId}
                 currentUsername={currentUsername}
                 workspaceSlug={slugifyWorkspaceName(workspaceName)}
                 locked={activeWorkspaceLocked}
               />
+              </Suspense>
             )}
-            {helpOpen && <HelpModal key="app-help" onClose={() => setHelpOpen(false)} />}
+            {helpOpen && <Suspense fallback={null}><HelpModal key="app-help" onClose={() => setHelpOpen(false)} /></Suspense>}
             
             {/* Phase 3-5 Feature Modals */}
             <Suspense fallback={null}>
@@ -3854,6 +4196,7 @@ onLineage={() => setLineageOpen(true)}
               )}
             </Suspense>
             {dialogState.open && (
+              <Suspense fallback={null}>
               <CustomDialog
                 key="app-dialog"
                 open={dialogState.open}
@@ -3870,9 +4213,11 @@ onLineage={() => setLineageOpen(true)}
                   setDialogState((prev) => ({ ...prev, open: false }));
                 }}
               />
+              </Suspense>
             )}
           </AnimatePresence>
           {focusedBlock && (
+            <Suspense fallback={null}>
             <FocusZoom
               block={focusedBlock}
               onClose={() => setFocusedBlock(null)}
@@ -3881,8 +4226,10 @@ onLineage={() => setLineageOpen(true)}
                 setFocusedBlock((prev) => ({ ...prev, ...patch }));
               }}
             />
+            </Suspense>
           )}
           {readingPage && (
+            <Suspense fallback={null}>
             <ReadingMode
               page={readingPage}
               pages={visiblePages}
@@ -3899,6 +4246,7 @@ onLineage={() => setLineageOpen(true)}
                 setReadingPage((prev) => prev && prev.id === id ? { ...prev, ...patch } : prev);
               }}
             />
+            </Suspense>
           )}
         </motion.div>
       )}

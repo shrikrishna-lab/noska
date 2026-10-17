@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import * as Icons from "lucide-react";
+import { Check, LayoutGrid } from "lucide-react";
+import { LucideIcon } from "@/components/PageIcon";
 import { LAYOUTS } from "./graphLayouts";
 
 /**
@@ -17,7 +18,7 @@ export default function GraphLayoutMenu({ activeLayout, onApply }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const ActiveIcon = Icons[LAYOUTS.find((l) => l.id === activeLayout)?.icon] || Icons.LayoutGrid;
+  const activeIconName = LAYOUTS.find((l) => l.id === activeLayout)?.icon || "LayoutGrid";
 
   return (
     <div className="relative" ref={ref}>
@@ -31,7 +32,7 @@ export default function GraphLayoutMenu({ activeLayout, onApply }) {
             : "bg-[var(--surface)]/50 border-[var(--border)] text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:border-[var(--secondary)]"
         }`}
       >
-        <ActiveIcon size={14} />
+        <LucideIcon name={activeIconName} size={14} fallback={<LayoutGrid size={14} />} />
       </button>
 
       <AnimatePresence>
@@ -45,7 +46,6 @@ export default function GraphLayoutMenu({ activeLayout, onApply }) {
           >
             <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Arrange as</div>
             {LAYOUTS.map((l) => {
-              const Icon = Icons[l.icon] || Icons.LayoutGrid;
               const active = l.id === activeLayout;
               return (
                 <button
@@ -55,9 +55,9 @@ export default function GraphLayoutMenu({ activeLayout, onApply }) {
                     active ? "bg-[var(--accent)]/12 text-[var(--accent)] font-medium" : "text-[var(--text)] hover:bg-[var(--hover)]"
                   }`}
                 >
-                  <Icon size={14} className="shrink-0" />
+                  <LucideIcon name={l.icon} size={14} className="shrink-0" fallback={<LayoutGrid size={14} className="shrink-0" />} />
                   {l.label}
-                  {active && <Icons.Check size={13} className="ml-auto" />}
+                  {active && <Check size={13} className="ml-auto" />}
                 </button>
               );
             })}

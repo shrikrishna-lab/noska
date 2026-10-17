@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
-import { NotificationInbox } from "../features/notifications/Inbox";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useNotificationPlatform } from "../features/notifications/Provider";
+import { requestNotificationOpen } from "../features/notifications/navigation";
+import { isArchived, isUnread, type NotificationRecord } from "../features/notifications/types";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarDays,
@@ -53,6 +55,7 @@ import {
   Clock,
   CheckCheck,
   RotateCcw,
+  RotateCw,
   Tag,
   Mail,
   Users,
@@ -83,14 +86,6 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { TactilePriorityPicker, TactileDuePicker, isTaskOverdue } from "./ui/TaskMetaPickers";
-import MeetingWorkspace from "../features/meeting/MeetingWorkspace";
-import MarketplacePage from "../features/marketplace/MarketplacePage";
-import SupportTicketsView from "../features/support/SupportTicketsView";
-import CreatorDashboard from "../features/creator/CreatorDashboard";
-import AgentWorkspace from "../features/agents/AgentWorkspace";
-import AutomationWorkspace from "../features/automations/AutomationWorkspace";
-import CommandCenter from "./ai/CommandCenter";
-import DailyWorkspace from "../features/daily/DailyWorkspace";
 import { PageIcon } from "./PageIcon";
 import { IconButton, Modal, ModalHeader, PearlButton } from "./ui";
 import { GlassKpiCard } from "./ui/GlassKpiCard";
@@ -116,12 +111,11 @@ import {
 import type { BentoVectorType } from "./ui/TactileVectorLibrary";
 import { recordUserActivity, analyzeUserPatterns, type IntelligenceReport } from "../lib/noskaIntelligence";
 import { TeamInvitation } from "./ui/team-invitation";
-import { EventManager, type Event } from "./ui/event-manager";
+import type { Event } from "./ui/event-manager";
 import { useUser } from "@clerk/react";
 import { MeetingScheduler } from "./ui/meeting-scheduler";
 import { useTeams } from "../lib/TeamContext";
 import { useCompany } from "../contexts/CompanyContext";
-import MonthCalendar from "./MonthCalendar";
 import { plainText, timeAgo, covers, uid, blockFor } from "../utils/helpers";
 import { loadReminders, saveReminders, subscribeReminders } from "../lib/reminders";
 import { useCalendarSync, useAutoPagesInCalendarSetting } from "../lib/calendarSync";
@@ -130,10 +124,35 @@ import { curateWorkspace } from "../utils/curator";
 import type { Page, AIChat } from "../lib/supabaseService";
 import type { Block, LineageEntry } from "../../types/blocks";
 import type { Tables } from "../../types/supabase";
-import { CompanyHome } from "./company/CompanyHome";
-import { CompanySettings } from "./company/CompanySettings";
 import { CompanyWorkspace } from "./company/CompanyWorkspace";
 import { WidgetDashboard } from "../platform/widgets";
+
+// ── On-demand feature surfaces ──────────────────────────────────────────
+// Every view below is reachable only from WorkspaceView's `view` switch, so
+// none of them is needed to paint the default dashboard. Loading them with
+// the module kept the entire workspace (calendar/company/agents/marketplace/
+// support/…) inside the eagerly-parsed App chunk; these dynamic imports put
+// each behind its own chunk that only downloads when the view is opened.
+const MeetingWorkspace = React.lazy(() => import("../features/meeting/MeetingWorkspace"));
+const MarketplacePage = React.lazy(() => import("../features/marketplace/MarketplacePage"));
+const SupportTicketsView = React.lazy(() => import("../features/support/SupportTicketsView"));
+const CreatorDashboard = React.lazy(() => import("../features/creator/CreatorDashboard"));
+const AgentWorkspace = React.lazy(() => import("../features/agents/AgentWorkspace"));
+const AutomationWorkspace = React.lazy(() => import("../features/automations/AutomationWorkspace"));
+const CommandCenter = React.lazy(() => import("./ai/CommandCenter"));
+const DailyWorkspace = React.lazy(() => import("../features/daily/DailyWorkspace"));
+const EventManager = React.lazy(() =>
+  import("./ui/event-manager").then((m) => ({ default: m.EventManager }))
+);
+const MonthCalendar = React.lazy(() => import("./MonthCalendar"));
+
+function ViewLoadingFallback() {
+  return (
+    <div className="flex-1 grid place-items-center p-10">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--accent)]" />
+    </div>
+  );
+}
 import {
   GoalStepperCard,
   SocialHabitRaceCard,
@@ -275,13 +294,13 @@ export function WorkspaceView(props: WorkspaceViewProps) {
 
   const userName = (window.realtimeCollab as RealtimeCollabLike | undefined)?.getUser?.()?.userName || "Workspace Creator";
 
-  if (view === "daily" || view === "journal") return <DailyWorkspace onToast={onToast || (() => {})} currentUserId={currentUserId} currentUsername={userName} />;
-  if (view === "marketplace") return <MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} />;
-  if (view === "support") return <SupportTicketsView onToast={onToast} />;
-  if (view === "creator") return <CreatorDashboard pages={pages} onToast={onToast} />;
-  if (view === "agents") return <AgentWorkspace pages={pages} currentUserId={currentUserId} onToast={onToast} toolContext={toolContext} />;
-  if (view === "automations") return <AutomationWorkspace onToast={onToast} />;
-  if (view === "commandCenter") return <CommandCenter onToast={onToast} onNavigate={(v) => onView?.(v)} />;
+  if (view === "daily" || view === "journal") return <React.Suspense fallback={<ViewLoadingFallback />}><DailyWorkspace onToast={onToast || (() => {})} currentUserId={currentUserId} currentUsername={userName} /></React.Suspense>;
+  if (view === "marketplace") return <React.Suspense fallback={<ViewLoadingFallback />}><MarketplacePage pages={pages} onDuplicate={onDuplicate || (() => {})} onToast={onToast} /></React.Suspense>;
+  if (view === "support") return <React.Suspense fallback={<ViewLoadingFallback />}><SupportTicketsView onToast={onToast} /></React.Suspense>;
+  if (view === "creator") return <React.Suspense fallback={<ViewLoadingFallback />}><CreatorDashboard pages={pages} onToast={onToast} /></React.Suspense>;
+  if (view === "agents") return <React.Suspense fallback={<ViewLoadingFallback />}><AgentWorkspace pages={pages} currentUserId={currentUserId} onToast={onToast} toolContext={toolContext} /></React.Suspense>;
+  if (view === "automations") return <React.Suspense fallback={<ViewLoadingFallback />}><AutomationWorkspace onToast={onToast} /></React.Suspense>;
+  if (view === "commandCenter") return <React.Suspense fallback={<ViewLoadingFallback />}><CommandCenter onToast={onToast} onNavigate={(v) => onView?.(v)} /></React.Suspense>;
   if (view === "library") return <LibraryRoute pages={pages} sharedPages={sharedPages} workspaceName={workspaceName} onSelect={onSelect} onNew={onNew} />;
   if (view === "tasks") {
     const tasks: TaskItem[] = pages.flatMap((page) => {
@@ -322,13 +341,14 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   if (view === "chats") return <ChatsRoute aiChats={aiChats} onAI={onAI} onOpenChat={onOpenChat} />;
   if (view === "meetings") return <MeetingsRoute onNew={onNew} onToast={onToast} />;
   if (view === "meetingNote") return <MeetingNoteRoute onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages} />;
-  // Inbox brings its own scroll container: the parent column is overflow-hidden,
-  // so without this wrapper tall inboxes were clipped with no way to scroll.
-  if (view === "inbox") return <div className="min-h-0 flex-1 overflow-y-auto"><NotificationInbox /><details className="mx-auto max-w-4xl p-6" open={pendingInvites.length > 0}><summary className="cursor-pointer text-sm">Invitations and saved reminders</summary><InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} /></details></div>;
+  // The rich Inbox route owns its scroll container (RouteShell) and merges
+  // the live notification platform with invites + reminders.
+  if (view === "inbox") return <InboxRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} pendingInvites={pendingInvites} onAcceptInvite={onAcceptInvite} onDeclineInvite={onDeclineInvite} />;
   if (view === "calendar") return <CalendarRoute pages={pages} onSelect={onSelect} onNew={onNew} onToast={onToast} activeWorkspaceId={activeWorkspaceId} />;
   if (view === "shared") return <SharedRoute sharedPages={sharedPages} onNew={onNew} onSelect={onSelect} onToast={onToast} />;
-  if (view === "companyHome") return <CompanyWorkspace onBack={() => onView?.("home")} />;
-  if (view === "companySettings") return <CompanyWorkspace onBack={() => onView?.("home")} />;
+  if (view === "companyHome" || view === "companySettings") {
+    return <React.Suspense fallback={<ViewLoadingFallback />}><CompanyWorkspace onBack={() => onView?.("home")} /></React.Suspense>;
+  }
 
   return <HomeDashboardRoute {...props} />;
 }
@@ -441,11 +461,11 @@ function HomeDashboardRoute({
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActive, setFilterActive] = useState(false);
 
-  // Formulate metrics matching the user's reference mockup
-  const totalTasksCount = tasks.length > 0 ? tasks.length : 7;
-  const completedTasksCount = tasks.length > 0 ? tasks.filter(t => t.checked).length : 2;
-  const pendingTasksCount = tasks.length > 0 ? tasks.filter(t => !t.checked).length : 5;
-  const highPriorityCount = tasks.length > 0 ? (tasks.filter(t => !t.checked && (t.text?.toLowerCase().includes("urgent") || t.text?.toLowerCase().includes("high") || t.text?.toLowerCase().includes("proposal"))).length || 2) : 2;
+  // Real workspace task metrics — derived from live pages, never fabricated.
+  const totalTasksCount = tasks.length;
+  const completedTasksCount = tasks.filter(t => t.checked).length;
+  const pendingTasksCount = tasks.filter(t => !t.checked).length;
+  const highPriorityCount = tasks.filter(t => !t.checked && (t.text?.toLowerCase().includes("urgent") || t.text?.toLowerCase().includes("high") || t.text?.toLowerCase().includes("proposal"))).length;
 
   // Calculate real workspace word count across all active document blocks
   const totalWorkspaceWords = React.useMemo(() => {
@@ -458,16 +478,12 @@ function HomeDashboardRoute({
         }
       });
     });
-    return words > 0 ? words : 14280;
+    return words;
   }, [pages]);
 
-  // Formulate Today's tasks for GlassTaskSection
+  // Today's tasks — strictly from real workspace to-do blocks.
   const todayTasksList = React.useMemo(() => {
-    const sourceTasks = tasks.length > 0 ? tasks : [
-      { id: "task-1", text: "Submit project proposal", checked: true, priority: "high", pageTitle: "Project Roadmap", pageIcon: "🚀", pageId: pages[0]?.id || "" },
-      { id: "task-2", text: "Review UI design mockups", checked: false, priority: "medium", pageTitle: "Design System", pageIcon: "🎨", pageId: pages[0]?.id || "" },
-      { id: "task-3", text: "Draft quarterly roadmap update", checked: false, priority: "low", pageTitle: "Company Strategy", pageIcon: "📊", pageId: pages[0]?.id || "" }
-    ];
+    const sourceTasks = tasks;
 
     const list = sourceTasks.map((t) => ({
       id: `${t.pageId || 'p'}-${t.id}`,
@@ -528,7 +544,7 @@ function HomeDashboardRoute({
                   Today's Daily Journal & Flow
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10.5px] font-bold flex items-center gap-1">
-                  <span className="animate-pulse">🔥</span> Active
+                  {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                 </span>
               </div>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
@@ -600,7 +616,7 @@ function HomeDashboardRoute({
           />
           <SocialHabitRaceCard
             userId={currentUserId}
-            userPoints={completedTasksCount * 5 + 14}
+            userPoints={completedTasksCount * 5}
             onLogHabit={() => onToast?.("Habit streak logged! +5 points")}
           />
         </div>
@@ -1451,7 +1467,7 @@ export function CategorizedWorkspaceLibrary({
                               : "bg-[var(--surface)] text-[var(--secondary)] border border-[var(--border)] hover:bg-[var(--surface-2)]"
                           }`}
                         >
-                          <span>{team.icon || "👥"}</span>
+                          <span><PageIcon icon={team.icon} size={18} fallback="👥" /></span>
                           <span>{team.name}</span>
                           <span className="rounded-full bg-black/10 dark:bg-white/15 px-1 py-0.2 text-[10px] font-bold">{count}</span>
                         </button>
@@ -4281,7 +4297,7 @@ interface MeetingNoteRouteProps {
 }
 
 function MeetingNoteRoute({ onNew, onAI, onToast, apiKey, aiProvider, nvidiaKey, pages }: MeetingNoteRouteProps) {
-  return <MeetingWorkspace onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages || []} />;
+  return <React.Suspense fallback={<ViewLoadingFallback />}><MeetingWorkspace onNew={onNew} onAI={onAI} onToast={onToast} apiKey={apiKey} aiProvider={aiProvider} nvidiaKey={nvidiaKey} pages={pages || []} /></React.Suspense>;
 }
 
 const INBOX_STORAGE_KEY = 'noska_inbox_reminders';
@@ -4308,6 +4324,127 @@ function saveInboxReminders(reminders: InboxReminder[]): void {
 }
 
 
+function InboxNotificationRow({ record, pending, selectable = false, selected = false, onOpen, onToggleRead, onToggleArchive, onToggleSelect }: {
+  record: NotificationRecord;
+  pending: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onOpen: (id: string) => void;
+  onToggleRead: (record: NotificationRecord) => void;
+  onToggleArchive: (record: NotificationRecord) => void;
+  onToggleSelect?: (id: string) => void;
+}) {
+  const unread = isUnread(record);
+  const archived = isArchived(record);
+  return (
+    <motion.div
+      data-notification-row
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const rows = [...(e.currentTarget.closest("[data-notification-feed]")?.querySelectorAll<HTMLElement>("[data-notification-row]") || [])];
+          rows[rows.indexOf(e.currentTarget) + (e.key === "ArrowDown" ? 1 : -1)]?.focus();
+        }
+        if (e.key === "Enter") onOpen(record.id);
+        if (e.key === "r") onToggleRead(record);
+        if (e.key === "e") onToggleArchive(record);
+        if (e.key === " ") { e.preventDefault(); onToggleSelect?.(record.id); }
+      }}
+      className={`group flex items-start gap-3.5 rounded-2xl border p-3.5 hover:shadow-xs transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+        selected
+          ? "border-indigo-500/40 bg-indigo-500/[0.06] dark:bg-indigo-500/[0.08]"
+          : "border-black/[0.04] dark:border-white/[0.06] bg-white/60 dark:bg-white/[0.04] hover:bg-white/90 dark:hover:bg-white/[0.08] hover:border-black/10 dark:hover:border-white/15"
+      }`}
+    >
+      {selectable && (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={selected}
+          aria-label={`Select ${record.title}`}
+          onClick={() => onToggleSelect?.(record.id)}
+          className={`mt-1 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center transition cursor-pointer ${
+            selected ? "border-indigo-500 bg-indigo-500 text-white" : "border-slate-300 dark:border-slate-600 text-transparent hover:border-indigo-400"
+          }`}
+        >
+          <Check size={10} strokeWidth={3.5} />
+        </button>
+      )}
+      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? "bg-indigo-500 shadow-[0_0_0_3px_rgba(99,102,241,0.15)]" : "bg-black/10 dark:bg-white/10"}`} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <button
+            onClick={() => onOpen(record.id)}
+            className={`text-left text-xs sm:text-sm leading-relaxed text-[var(--text)] truncate ${unread ? "font-semibold" : "font-medium"}`}
+          >
+            {record.title}
+          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {record.priority === "urgent" && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40">Urgent</span>
+            )}
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize bg-black/[0.04] dark:bg-white/[0.06] text-[var(--muted)] border border-black/[0.05] dark:border-white/[0.08]">{record.category}</span>
+          </div>
+        </div>
+        {(record.body || record.message) && (
+          <p className="mt-1 text-xs text-[var(--secondary)] leading-relaxed line-clamp-2">{record.body || record.message}</p>
+        )}
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-[var(--muted)]">
+          <time dateTime={record.created_at} title={new Date(record.created_at).toLocaleString()}>{timeAgo(record.created_at)}</time>
+          <div className="flex items-center gap-2 opacity-80 group-hover:opacity-100 transition">
+            <button disabled={pending} onClick={() => onToggleRead(record)} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer disabled:opacity-40">{unread ? "Mark read" : "Mark unread"}</button>
+            <span>·</span>
+            <button disabled={pending} onClick={() => onToggleArchive(record)} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer disabled:opacity-40">{archived ? "Restore" : "Archive"}</button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+const NOTIFICATION_HISTORY_ORDER = ["Today", "Yesterday", "Earlier this week", "This month", "Older"] as const;
+
+function notificationHistoryLabel(createdAt: string): string {
+  const time = new Date(createdAt).getTime();
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (time >= startOfToday) return "Today";
+  if (time >= startOfToday - 86_400_000) return "Yesterday";
+  if (time >= startOfToday - 7 * 86_400_000) return "Earlier this week";
+  if (time >= startOfToday - 30 * 86_400_000) return "This month";
+  return "Older";
+}
+
+function groupNotificationsByDate(records: NotificationRecord[]): Array<[string, NotificationRecord[]]> {
+  const groups = new Map<string, NotificationRecord[]>();
+  for (const record of records) {
+    const key = notificationHistoryLabel(record.created_at);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(record); else groups.set(key, [record]);
+  }
+  return NOTIFICATION_HISTORY_ORDER.filter(key => groups.has(key)).map(key => [key, groups.get(key)!]);
+}
+
+const NOTIFICATION_TYPE_FILTERS: Array<{ value: string; label: string; match: (n: NotificationRecord) => boolean }> = [
+  { value: "all", label: "All types", match: () => true },
+  { value: "mentions", label: "Mentions", match: n => n.type === "mention" || n.category === "mention" },
+  { value: "comments", label: "Comments", match: n => ["comment", "reply", "reaction"].includes(n.type) || n.category === "comment" },
+  { value: "tasks", label: "Tasks", match: n => n.category === "task" || n.entity_type === "task" || n.type === "assignment" },
+  { value: "reminders", label: "Reminders", match: n => n.type === "reminder" || n.type === "reminder.due" || n.category === "reminder" },
+  { value: "invites", label: "Invites", match: n => n.category === "invite" || n.type === "invite" },
+  { value: "ai", label: "AI & automation", match: n => n.category === "ai" || n.category === "automation" || n.type.startsWith("agent.run") || n.type.startsWith("automation.run") },
+  { value: "workspace", label: "Workspace", match: n => ["workspace", "broadcast", "system", "integration"].includes(n.category) },
+];
+
+function matchesNotificationType(record: NotificationRecord, filter: string): boolean {
+  return NOTIFICATION_TYPE_FILTERS.find(option => option.value === filter)?.match(record) ?? true;
+}
+
 interface InboxRouteProps {
   pages?: Page[];
   onSelect?: (pageId: string) => void;
@@ -4329,8 +4466,13 @@ function InboxRoute({
 }: InboxRouteProps) {
   const [reminders, setReminders] = useState<InboxReminder[]>(loadInboxReminders);
   const [respondingId, setRespondingId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"all" | "invites" | "reminders" | "archived">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "notifications" | "invites" | "reminders" | "archived">("all");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
+  const platform = useNotificationPlatform();
   const [isAddingReminder, setIsAddingReminder] = useState(false);
   const [newReminderText, setNewReminderText] = useState("");
   const [newReminderDate, setNewReminderDate] = useState("");
@@ -4394,14 +4536,50 @@ function InboxRoute({
 
   const activeReminders = reminders.filter(r => !r.dismissed);
   const archivedReminders = reminders.filter(r => r.dismissed);
+  const activeNotifications = useMemo(() => platform.notifications.filter(n => !isArchived(n)), [platform.notifications]);
+  const archivedNotifications = useMemo(() => platform.notifications.filter(isArchived), [platform.notifications]);
+  const unreadNotifications = useMemo(() => platform.notifications.filter(isUnread), [platform.notifications]);
   const totalInvites = teamInvites.length + pendingInvites.length;
-  const totalActiveItems = activeReminders.length + totalInvites;
+  const totalActiveItems = activeReminders.length + totalInvites + activeNotifications.length;
+  const completedCount = archivedReminders.length + archivedNotifications.length;
 
   const filterQuery = searchQuery.trim().toLowerCase();
+  const matchesQuery = (text: string | null | undefined) => !filterQuery || (text || "").toLowerCase().includes(filterQuery);
   const filteredTeamInvites = teamInvites.filter(t => !filterQuery || t.teams?.name?.toLowerCase().includes(filterQuery) || t.inviter_user_id?.toLowerCase().includes(filterQuery));
   const filteredPageInvites = pendingInvites.filter(p => !filterQuery || p.page_title?.toLowerCase().includes(filterQuery) || p.inviter_username?.toLowerCase().includes(filterQuery));
   const filteredReminders = activeReminders.filter(r => !filterQuery || r.text.toLowerCase().includes(filterQuery));
   const filteredArchived = archivedReminders.filter(r => !filterQuery || r.text.toLowerCase().includes(filterQuery));
+  const filteredNotifications = (unreadOnly ? unreadNotifications : activeNotifications)
+    .filter(n => matchesNotificationType(n, typeFilter))
+    .filter(n => matchesQuery(`${n.title} ${n.body || n.message || ""}`));
+  const filteredArchivedNotifications = archivedNotifications
+    .filter(n => matchesNotificationType(n, typeFilter))
+    .filter(n => matchesQuery(`${n.title} ${n.body || n.message || ""}`));
+  const visibleNotifications = activeTab === "all" ? filteredNotifications.slice(0, 6) : filteredNotifications;
+  const notificationsFilterActive = unreadOnly || typeFilter !== "all";
+
+  const searchEmpty = Boolean(searchQuery) && (
+    activeTab === "all" ? filteredTeamInvites.length + filteredPageInvites.length + filteredReminders.length + filteredNotifications.length === 0
+      : activeTab === "notifications" ? filteredNotifications.length === 0
+      : activeTab === "invites" ? filteredTeamInvites.length + filteredPageInvites.length === 0
+      : activeTab === "reminders" ? filteredReminders.length === 0
+      : filteredArchived.length + filteredArchivedNotifications.length === 0
+  );
+
+  const toggleNotificationRead = (n: NotificationRecord) => { void platform.mark({ ids: [n.id], read: isUnread(n) }); };
+  const toggleNotificationArchived = (n: NotificationRecord) => { void platform.mark({ ids: [n.id], archived: !isArchived(n) }); };
+  const toggleNotificationSelection = (id: string) => setSelectedNotifications(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const exitBulkMode = () => { setBulkMode(false); setSelectedNotifications(new Set()); };
+  const bulkMarkNotifications = async (change: { read?: boolean; archived?: boolean }) => {
+    const ids = [...selectedNotifications];
+    if (!ids.length) return;
+    if (await platform.mark({ ids, ...change })) {
+      exitBulkMode();
+      onToast?.(change.archived ? "Selected notifications archived." : "Selected notifications updated.");
+    }
+  };
+
+  useEffect(() => { setBulkMode(false); setSelectedNotifications(new Set()); }, [activeTab]);
 
   const formatDueDateStatus = (dateStr?: string) => {
     if (!dateStr) return null;
@@ -4421,6 +4599,16 @@ function InboxRoute({
       subtitle="Realtime notifications, team invitations & synchronized tasks"
       actions={
         <div className="flex items-center gap-2.5">
+          {platform.countReady && platform.unreadCount > 0 && (
+            <button
+              onClick={() => void platform.markAllRead()}
+              disabled={platform.pending}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] border border-black/[0.06] dark:border-white/[0.08] rounded-xl transition cursor-pointer disabled:opacity-40"
+            >
+              <CheckCheck size={13} className="text-indigo-500" />
+              <span>Mark all read</span>
+            </button>
+          )}
           {activeReminders.length > 0 && (
             <button
               onClick={() => {
@@ -4471,7 +4659,7 @@ function InboxRoute({
             onClick={() => setActiveTab("reminders")}
           />
           <GlassKpiCard
-            count={archivedReminders.length}
+            count={completedCount}
             label="Completed"
             variant="green"
             badgeIcon={<CheckCircle2 size={16} />}
@@ -4530,9 +4718,10 @@ function InboxRoute({
           <div className="flex items-center gap-1 p-1 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] overflow-x-auto scrollbar-none">
             {[
               { id: "all" as const, label: "All Items", count: totalActiveItems },
+              { id: "notifications" as const, label: "Notifications", count: unreadNotifications.length },
               { id: "invites" as const, label: "Invitations", count: totalInvites },
               { id: "reminders" as const, label: "Reminders", count: activeReminders.length },
-              { id: "archived" as const, label: "Completed", count: archivedReminders.length },
+              { id: "archived" as const, label: "Completed", count: completedCount },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -4578,6 +4767,148 @@ function InboxRoute({
 
         {/* Content Feed */}
         <div className="space-y-5">
+          {/* Live Notifications */}
+          {(activeTab === "all" || activeTab === "notifications") && (platform.loading || platform.error || filteredNotifications.length > 0 || (unreadOnly && activeNotifications.length > 0) || (activeTab === "notifications" && activeNotifications.length === 0)) && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                  <Bell size={13} className="text-indigo-500" />
+                  <span>Notifications{unreadNotifications.length > 0 ? ` · ${unreadNotifications.length} unread` : ""}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {filteredNotifications.length > 0 && (
+                    <button
+                      onClick={() => (bulkMode ? exitBulkMode() : setBulkMode(true))}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition cursor-pointer ${bulkMode ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300" : "border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] text-slate-500 hover:text-slate-900 dark:hover:text-white"}`}
+                    >
+                      {bulkMode ? "Cancel" : "Select"}
+                    </button>
+                  )}
+                  <select
+                    value={typeFilter}
+                    onChange={e => setTypeFilter(e.target.value)}
+                    aria-label="Filter notifications by type"
+                    className="rounded-lg border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-[#15171e] px-2 py-1 text-[11px] font-medium text-slate-500 dark:text-slate-300 outline-none cursor-pointer"
+                  >
+                    {NOTIFICATION_TYPE_FILTERS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  {(unreadNotifications.length > 0 || unreadOnly) && (
+                    <button
+                      onClick={() => setUnreadOnly(v => !v)}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition cursor-pointer ${unreadOnly ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300" : "border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] text-slate-500 hover:text-slate-900 dark:hover:text-white"}`}
+                    >
+                      Unread only
+                    </button>
+                  )}
+                  <button
+                    onClick={() => void platform.refresh()}
+                    disabled={platform.loading}
+                    title="Refresh notifications"
+                    className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-black/[0.05] dark:hover:bg-white/[0.06] disabled:opacity-40 transition cursor-pointer"
+                  >
+                    <RotateCw size={13} className={platform.loading ? "animate-spin" : ""} />
+                  </button>
+                </div>
+              </div>
+              {platform.error && (
+                <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/5 p-3.5 text-xs text-[var(--text)]">
+                  {platform.error} <button className="underline cursor-pointer" onClick={() => void platform.refresh()}>Retry</button>
+                </div>
+              )}
+              {platform.loading && !platform.notifications.length && (
+                <p role="status" className="py-10 text-center text-xs text-[var(--muted)]">Loading notifications…</p>
+              )}
+              {bulkMode && filteredNotifications.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/[0.04] p-3 text-xs">
+                  <label className="flex items-center gap-2 font-medium text-[var(--secondary)] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      aria-label="Select loaded notifications"
+                      checked={visibleNotifications.length > 0 && visibleNotifications.every(n => selectedNotifications.has(n.id))}
+                      onChange={e => setSelectedNotifications(new Set(e.target.checked ? visibleNotifications.map(n => n.id) : []))}
+                    />
+                    Select loaded
+                  </label>
+                  <span className="text-[var(--muted)]">{selectedNotifications.size} selected</span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <button disabled={!selectedNotifications.size || platform.pending} onClick={() => void bulkMarkNotifications({ read: true })} className="rounded-lg px-2.5 py-1 font-medium hover:bg-black/[0.05] dark:hover:bg-white/[0.08] disabled:opacity-40 cursor-pointer transition">Mark read</button>
+                    <button disabled={!selectedNotifications.size || platform.pending} onClick={() => void bulkMarkNotifications({ read: false })} className="rounded-lg px-2.5 py-1 font-medium hover:bg-black/[0.05] dark:hover:bg-white/[0.08] disabled:opacity-40 cursor-pointer transition">Mark unread</button>
+                    <button disabled={!selectedNotifications.size || platform.pending} onClick={() => void bulkMarkNotifications({ archived: true })} className="rounded-lg px-2.5 py-1 font-medium hover:bg-black/[0.05] dark:hover:bg-white/[0.08] disabled:opacity-40 cursor-pointer transition">Archive</button>
+                    <button onClick={exitBulkMode} className="rounded-lg border border-black/[0.06] dark:border-white/[0.08] px-2.5 py-1 font-medium text-[var(--secondary)] hover:text-[var(--text)] cursor-pointer transition">Done</button>
+                  </div>
+                </div>
+              )}
+              {activeTab === "all" && !platform.error && !platform.loading && filteredNotifications.length === 0 && activeNotifications.length > 0 && (
+                <p className="py-8 text-center text-xs text-[var(--muted)]">No notifications match this view.</p>
+              )}
+              {!platform.error && visibleNotifications.length > 0 && (
+                <div data-notification-feed className="rounded-3xl border border-white/60 dark:border-white/10 bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-2xl p-4 sm:p-6 shadow-xl space-y-4">
+                  {groupNotificationsByDate(visibleNotifications).map(([label, records]) => (
+                    <div key={label} className="space-y-2.5">
+                      <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">{label}</p>
+                      {records.map(n => (
+                        <InboxNotificationRow
+                          key={n.id}
+                          record={n}
+                          pending={platform.pending}
+                          selectable={bulkMode}
+                          selected={selectedNotifications.has(n.id)}
+                          onOpen={requestNotificationOpen}
+                          onToggleRead={toggleNotificationRead}
+                          onToggleArchive={toggleNotificationArchived}
+                          onToggleSelect={toggleNotificationSelection}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {activeTab === "all" && filteredNotifications.length > visibleNotifications.length && (
+                <button
+                  onClick={() => setActiveTab("notifications")}
+                  className="w-full rounded-2xl border border-[var(--border)] p-2.5 text-xs font-medium text-[var(--secondary)] hover:text-[var(--text)] hover:bg-black/[0.02] dark:hover:bg-white/[0.04] transition cursor-pointer"
+                >
+                  View all {filteredNotifications.length} notifications
+                </button>
+              )}
+              {activeTab === "notifications" && platform.hasMore && (
+                <button
+                  disabled={platform.loadingMore}
+                  onClick={() => void platform.loadMore()}
+                  className="w-full rounded-2xl border border-[var(--border)] p-2.5 text-xs font-medium text-[var(--secondary)] hover:text-[var(--text)] hover:bg-black/[0.02] dark:hover:bg-white/[0.04] transition disabled:opacity-40 cursor-pointer"
+                >
+                  {platform.loadingMore ? "Loading…" : "Load older notifications"}
+                </button>
+              )}
+              {activeTab === "notifications" && visibleNotifications.length > 0 && (
+                <p className="text-center text-[10px] text-[var(--muted)]">Keyboard: ↑↓ move · Enter open · Space select · R read/unread · E archive/restore</p>
+              )}
+              {activeTab === "notifications" && !searchQuery && !platform.error && !platform.loading && filteredNotifications.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
+                  <div className="h-14 w-14 rounded-2xl bg-indigo-500/10 text-indigo-500 grid place-items-center mb-3.5 shadow-xs"><Bell size={24} /></div>
+                  <h4 className="text-base font-bold text-[var(--text)]">
+                    {notificationsFilterActive ? "No matching notifications" : "You're all caught up"}
+                  </h4>
+                  <p className="text-xs text-[var(--secondary)] max-w-sm mt-1 leading-relaxed">
+                    {notificationsFilterActive
+                      ? "No notifications match the active filters. Reset them to browse your full history."
+                      : "Mentions, task updates and workspace activity will appear here in real time."}
+                  </p>
+                  {notificationsFilterActive && activeNotifications.length > 0 && (
+                    <button
+                      onClick={() => { setUnreadOnly(false); setTypeFilter("all"); }}
+                      className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90 shadow-sm transition active:scale-95 cursor-pointer"
+                    >
+                      Reset filters
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Realtime Team Invitations */}
           {(activeTab === "all" || activeTab === "invites") && filteredTeamInvites.length > 0 && (
             <div className="space-y-3">
@@ -4638,7 +4969,7 @@ function InboxRoute({
           )}
 
           {/* Tab Empty: Invitations */}
-          {activeTab === "invites" && filteredTeamInvites.length === 0 && filteredPageInvites.length === 0 && (
+          {activeTab === "invites" && !searchQuery && filteredTeamInvites.length === 0 && filteredPageInvites.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
               <div className="h-14 w-14 rounded-2xl bg-indigo-500/10 text-indigo-500 grid place-items-center mb-3.5 shadow-xs"><Mail size={24} /></div>
               <h4 className="text-base font-bold text-[var(--text)]">No pending invitations</h4>
@@ -4717,7 +5048,7 @@ function InboxRoute({
           )}
 
           {/* Tab Empty: Reminders */}
-          {activeTab === "reminders" && filteredReminders.length === 0 && (
+          {activeTab === "reminders" && !searchQuery && filteredReminders.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
               <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-500 grid place-items-center mb-3.5 shadow-xs"><Clock3 size={24} /></div>
               <h4 className="text-base font-bold text-[var(--text)]">No active reminders</h4>
@@ -4730,39 +5061,74 @@ function InboxRoute({
           {activeTab === "archived" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--muted)] px-1">
-                <span>Completed History ({filteredArchived.length})</span>
+                <span>Completed History ({filteredArchived.length + filteredArchivedNotifications.length})</span>
                 {filteredArchived.length > 0 && (
                   <button onClick={() => { setReminders(prev => prev.filter(r => !r.dismissed)); onToast?.("Cleared completed history."); }}
                     className="text-xs text-red-500 hover:underline cursor-pointer">Clear all history</button>
                 )}
               </div>
-              {filteredArchived.length === 0 ? (
+              {filteredArchived.length === 0 && filteredArchivedNotifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
                   <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 text-emerald-500 grid place-items-center mb-3.5 shadow-xs"><CheckCircle2 size={24} /></div>
                   <h4 className="text-base font-bold text-[var(--text)]">No completed items</h4>
                   <p className="text-xs text-[var(--secondary)] max-w-sm mt-1 leading-relaxed">Completed reminders and notifications will be safely archived here for your records.</p>
                 </div>
               ) : (
-                <div className="grid gap-2.5">
-                  {filteredArchived.map((rem) => (
-                    <div key={rem.id} className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/50 p-4">
-                      <div className="flex items-center gap-3 min-w-0 opacity-60">
-                        <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
-                        <span className="text-xs font-medium text-[var(--text)] line-through truncate">{rem.text}</span>
+                <>
+                  {filteredArchived.length > 0 && (
+                    <div className="grid gap-2.5">
+                      {filteredArchived.map((rem) => (
+                        <div key={rem.id} className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/50 p-4">
+                          <div className="flex items-center gap-3 min-w-0 opacity-60">
+                            <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
+                            <span className="text-xs font-medium text-[var(--text)] line-through truncate">{rem.text}</span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <button onClick={() => restoreReminder(rem.id)} className="flex items-center gap-1.5 text-xs text-[var(--accent)] hover:underline cursor-pointer font-medium"><RotateCcw size={12} /><span>Restore</span></button>
+                            <button onClick={() => deleteReminderPermanently(rem.id)} className="text-xs text-[var(--muted)] hover:text-red-500 cursor-pointer p-1"><Trash2 size={13} /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {filteredArchivedNotifications.length > 0 && (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--muted)] px-1">
+                        <span className="flex items-center gap-2"><Bell size={13} className="text-indigo-500" />Archived notifications ({filteredArchivedNotifications.length})</span>
+                        <button
+                          onClick={() => void platform.mark({ ids: filteredArchivedNotifications.map(n => n.id), archived: false })}
+                          disabled={platform.pending}
+                          className="text-xs font-semibold normal-case tracking-normal text-[var(--accent)] hover:underline cursor-pointer disabled:opacity-40"
+                        >
+                          Restore all
+                        </button>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <button onClick={() => restoreReminder(rem.id)} className="flex items-center gap-1.5 text-xs text-[var(--accent)] hover:underline cursor-pointer font-medium"><RotateCcw size={12} /><span>Restore</span></button>
-                        <button onClick={() => deleteReminderPermanently(rem.id)} className="text-xs text-[var(--muted)] hover:text-red-500 cursor-pointer p-1"><Trash2 size={13} /></button>
+                      <div data-notification-feed className="rounded-3xl border border-white/60 dark:border-white/10 bg-white/70 dark:bg-[#15171e]/70 backdrop-blur-2xl p-4 sm:p-6 shadow-xl space-y-4">
+                        {groupNotificationsByDate(filteredArchivedNotifications).map(([label, records]) => (
+                          <div key={label} className="space-y-2.5">
+                            <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">{label}</p>
+                            {records.map(n => (
+                              <InboxNotificationRow
+                                key={n.id}
+                                record={n}
+                                pending={platform.pending}
+                                onOpen={requestNotificationOpen}
+                                onToggleRead={toggleNotificationRead}
+                                onToggleArchive={toggleNotificationArchived}
+                              />
+                            ))}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
           )}
 
           {/* Search Empty State */}
-          {searchQuery && (filteredTeamInvites.length + filteredPageInvites.length + filteredReminders.length + (activeTab === "archived" ? filteredArchived.length : 0)) === 0 && (
+          {searchEmpty && (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)]/30">
               <Search size={24} className="text-[var(--muted)] mb-2.5" />
               <h4 className="text-base font-bold text-[var(--text)]">No results found</h4>
@@ -4772,7 +5138,7 @@ function InboxRoute({
           )}
 
           {/* Zero-Inbox Minimalist Empty State */}
-          {!searchQuery && activeTab === "all" && (filteredTeamInvites.length + filteredPageInvites.length + filteredReminders.length) === 0 && (
+          {!searchQuery && activeTab === "all" && totalActiveItems === 0 && !platform.loading && !platform.error && (
             <motion.div
               initial={{ opacity: 0, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -5052,7 +5418,7 @@ interface PageCardProps {
 }
 
 function CalendarGrid({ pages, onSelect }: { pages: Page[]; onSelect: (pageId: string) => void }) {
-  return <MonthCalendar pages={pages} onSelect={onSelect} />;
+  return <React.Suspense fallback={<ViewLoadingFallback />}><MonthCalendar pages={pages} onSelect={onSelect} /></React.Suspense>;
 }
 
 function PageCard({ page, onSelect, scopeInfo, showScopeBadge = true }: PageCardProps) {
@@ -5684,6 +6050,7 @@ function CalendarRoute({ pages, onSelect, onNew, onToast, activeWorkspaceId = nu
 
   return (
     <RouteShell title="Schedule" subtitle="Timetable, events & daily workspace calendar">
+      <React.Suspense fallback={<ViewLoadingFallback />}>
       <EventManager
         events={calendarEvents}
         defaultView="week"
@@ -5704,6 +6071,7 @@ function CalendarRoute({ pages, onSelect, onNew, onToast, activeWorkspaceId = nu
           onToast?.("Event removed");
         }}
       />
+      </React.Suspense>
     </RouteShell>
   );
 }

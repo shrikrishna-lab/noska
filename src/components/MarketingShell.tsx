@@ -12,7 +12,7 @@ import { useAuth } from "@clerk/react";
 import { useLocation, Navigate } from "react-router-dom";
 import { isDesktop } from "../lib/desktop/platform";
 import { isMobile } from "../platform";
-import App from "../App.jsx";
+import ProductApp from "./ProductApp";
 import MarketingLayout from "../pages/marketing/MarketingLayout";
 
 export function RouteFallbackSpinner() {
@@ -30,7 +30,7 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
   if (isDesktop() || isMobile()) {
     // Native shells: the product IS the app — deep-link a marketing URL
     // straight into the workspace.
-    return <App />;
+    return <ProductApp />;
   }
   if (!isLoaded) {
     return <RouteFallbackSpinner />;

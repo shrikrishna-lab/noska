@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import { useTeams } from "../../lib/TeamContext"
 import { fetchTeamInvites } from "../../lib/teams"
@@ -110,7 +111,7 @@ export default function TeamSettingsModal({ teamId, onClose }: Props) {
         <div className="flex items-center justify-between border-b border-[var(--border)]/70 px-6 py-4 bg-[var(--surface-2)]/30">
           <div className="flex items-center gap-3 min-w-0">
             <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--surface-2)] border border-[var(--border)] text-2xl shadow-xs shrink-0">
-              {team.icon || "👥"}
+              <PageIcon icon={team.icon} size={20} fallback="👥" />
             </div>
             <div className="min-w-0">
               <div className="font-bold text-base text-[var(--text)] tracking-tight truncate">{team.name}</div>

@@ -106,6 +106,12 @@ export default function TicketComposerForm({
         </div>
       )}
 
+      {envLabel && (
+        <p className="ticket-env-note" style={{ fontSize: 11, opacity: 0.65, margin: "2px 0 0" }}>
+          Diagnostic context ({envLabel})
+        </p>
+      )}
+
       {error && (
         <div className="ticket-error-banner" role="alert">
           <AlertCircle size={16} />

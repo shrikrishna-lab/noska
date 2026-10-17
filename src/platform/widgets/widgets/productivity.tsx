@@ -3,6 +3,7 @@
  * Recent Pages, and Sticky Note / Quick Brain Dump.
  */
 import React, { useMemo, useState } from "react";
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
@@ -316,7 +317,7 @@ export function RecentPagesWidget({ ctx, size }: WidgetProps) {
             className="w-full flex items-center justify-between p-2 rounded-xl border border-black/[0.05] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-all cursor-pointer text-left"
           >
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm shrink-0">{p.icon || "📄"}</span>
+              <PageIcon icon={p.icon} size={14} fallback="📄" />
               <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate">
                 {p.title || "Untitled Page"}
               </span>
@@ -344,7 +345,7 @@ export function StickyNoteWidget({ ctx }: WidgetProps) {
   const [colorIndex, setColorIndex] = useState(0);
   const [noteText, setNoteText] = useState(() => {
     try {
-      return localStorage.getItem("noska_quick_sticky_note") || "💡 Brain dump: Architecting new visual widgets with spring physics & ambient lighting.";
+      return localStorage.getItem("noska_quick_sticky_note") || "";
     } catch {
       return "";
     }

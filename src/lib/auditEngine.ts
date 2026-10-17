@@ -200,11 +200,11 @@ class AuditEngine {
     try {
       const { data } = await supabase
         .from("page_versions")
-        .select("*")
-        .eq("page_id", pageId)
+         .select("id,page_id,version_number,title,description,user_id,user_name,created_at")
+         .eq("page_id", pageId)
         .order("version_number", { ascending: false })
-        .limit(50);
-      return data || [];
+         .limit(50);
+       return (data || []) as Tables<"page_versions">[];
     } catch (e) {
       console.warn("auditEngine: getPageVersions failed", e);
       return [];
@@ -251,7 +251,7 @@ class AuditEngine {
     versionId: string
   ): Promise<{ blocks: unknown; title: string | null; pageSnapshot: unknown } | null> {
     try {
-      const { data: version } = await supabase.from("page_versions").select("*").eq("id", versionId).single();
+      const { data: version } = await supabase.from("page_versions").select("blocks,title,page_snapshot").eq("id", versionId).single();
       if (!version) return null;
       return { blocks: version.blocks, title: version.title, pageSnapshot: version.page_snapshot };
     } catch (e) {
@@ -262,7 +262,9 @@ class AuditEngine {
 
   async getPermissions(pageId: string): Promise<PagePermissionRow[]> {
     try {
-      const { data } = await supabase.from("page_permissions").select("*").eq("page_id", pageId);
+      const { data } = await supabase.from("page_permissions")
+        .select("id,page_id,user_id,user_name,role,can_view,can_edit,can_comment,can_share,can_delete,can_audit,can_manage_collaborators,can_export,can_use_ai,created_at,updated_at")
+        .eq("page_id", pageId);
       return data || [];
     } catch (e) {
       console.warn("auditEngine: getPermissions failed", e);

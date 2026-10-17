@@ -42,7 +42,7 @@ export default function MobileLinkRedirect() {
   if (!isSignedIn && !hasNativeSession) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white px-6 text-center">
-        <img src="/logo.png" alt="Noska" className="h-12" />
+        <img src="/logo-256.webp" alt="Noska" className="h-12" />
         <h1 className="text-xl font-bold text-gray-900">Open in Noska</h1>
         <p className="max-w-sm text-sm text-gray-500">
           This link opens in the Noska app. Sign in on the web, or install the

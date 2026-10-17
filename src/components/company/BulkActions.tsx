@@ -1,4 +1,5 @@
 import React, { useState } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import {
   CheckSquare, Square, Trash2, Copy, FolderInput, Lock, Unlock,
@@ -90,7 +91,7 @@ export function BulkActions({
                     onClick={() => { handleAction(() => onBulkMove(ids, team.id)); setShowMove(false) }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[11px] text-[var(--text)] transition cursor-pointer"
                   >
-                    <span>{team.icon || "👥"}</span>
+                    <span><PageIcon icon={team.icon} size={18} fallback="👥" /></span>
                     {team.name}
                   </button>
                 ))}

@@ -54,7 +54,7 @@ export default function DesktopAuthScreen() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-6 select-none">
         <div className="text-center" data-testid="desktop-auth-success">
-          <img src="/logo.png" alt="Noska" className="h-14 mx-auto mb-6" />
+          <img src="/logo-256.webp" alt="Noska" className="h-14 mx-auto mb-6" />
           <h1 className="text-xl font-bold text-slate-900">Signed in successfully</h1>
           <div className="flex items-center justify-center gap-2 mt-4">
             <Spinner />
@@ -75,7 +75,7 @@ export default function DesktopAuthScreen() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-6 select-none">
         <div className="w-full max-w-md text-center" data-testid="desktop-auth-waiting">
-          <img src="/logo.png" alt="Noska" className="h-14 mx-auto mb-8" />
+          <img src="/logo-256.webp" alt="Noska" className="h-14 mx-auto mb-8" />
           <h1 className="text-2xl font-bold text-slate-900">Continue in browser</h1>
           <p className="text-sm text-slate-500 mt-3 max-w-xs mx-auto">
             Your browser has been opened to securely sign in to Noska.
@@ -122,7 +122,7 @@ export default function DesktopAuthScreen() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-6 select-none">
         <div className="w-full max-w-md text-center" data-testid="desktop-auth-resumable">
-          <img src="/logo.png" alt="Noska" className="h-14 mx-auto mb-8" />
+          <img src="/logo-256.webp" alt="Noska" className="h-14 mx-auto mb-8" />
           <h1 className="text-2xl font-bold text-slate-900">Continue signing in?</h1>
           <p className="text-sm text-slate-500 mt-3">
             You started signing in to Noska in your browser but it didn't finish.
@@ -167,7 +167,7 @@ export default function DesktopAuthScreen() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-6 select-none">
         <div className="w-full max-w-md text-center" data-testid="desktop-auth-error">
-          <img src="/logo.png" alt="Noska" className="h-14 mx-auto mb-8" />
+          <img src="/logo-256.webp" alt="Noska" className="h-14 mx-auto mb-8" />
           <h1 className="text-xl font-bold text-slate-900">{title}</h1>
           <p className="text-sm text-slate-500 mt-3">{detail}</p>
           <div className="flex items-center justify-center gap-3 mt-8">
@@ -196,7 +196,7 @@ export default function DesktopAuthScreen() {
       >
         <div className="w-16 h-16 mb-7 bg-white border border-slate-200/80 flex items-center justify-center p-3.5 shrink-0 rounded-2xl shadow-lg">
           <img
-            src="/logo.png"
+            src="/logo-256.webp"
             alt="Noska Logo"
             className="w-full h-full object-contain pointer-events-none select-none"
           />

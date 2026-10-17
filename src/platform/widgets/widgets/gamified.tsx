@@ -29,6 +29,7 @@ import {
   Target
 } from "lucide-react";
 import type { WidgetProps } from "../types";
+import { collectTasks } from "../shared";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -69,7 +70,7 @@ function writeJson<T>(key: string, value: T): void {
 // ── 1. Streak Tracker (Noska 3D Flame & Confetti) ─────────────────────────────
 
 export function StreakTrackerWidget({ size }: WidgetProps) {
-  const [streak, setStreak] = useState(() => readNum("noska_streak_days", 5));
+  const [streak, setStreak] = useState(() => readNum("noska_streak_days", 0));
   const [doneToday, setDoneToday] = useState(() => readNum("noska_streak_done_today", 0) === 1);
   const [showBurst, setShowBurst] = useState(false);
 
@@ -85,6 +86,9 @@ export function StreakTrackerWidget({ size }: WidgetProps) {
   };
 
   const dayIndex = (new Date().getDay() + 6) % 7; // Monday-first
+  // Shields mark only the days actually covered by the current streak.
+  const coveredStart = doneToday ? dayIndex - streak + 1 : dayIndex - streak;
+  const coveredEnd = doneToday ? dayIndex : dayIndex - 1;
 
   return (
     <div className="relative flex h-full flex-col items-center justify-between p-2 select-none">
@@ -177,9 +181,8 @@ export function StreakTrackerWidget({ size }: WidgetProps) {
       {/* Monday-Sunday Weekly Shields */}
       <div className="flex items-center gap-1.5 py-1">
         {WEEK_DAYS.map((d, i) => {
-          const isPast = i < dayIndex;
           const isToday = i === dayIndex;
-          const isCompleted = isPast || (isToday && doneToday);
+          const isCompleted = i >= Math.max(0, coveredStart) && i <= coveredEnd;
 
           return (
             <div key={i} className="flex flex-col items-center gap-0.5">
@@ -381,8 +384,29 @@ export function FocusTimerWidget({ size }: WidgetProps) {
 
 // ── 3. Vitality / Cognitive Energy Battery ───────────────────────────────────
 
-export function VitalityBatteryWidget({ size }: WidgetProps) {
-  const [vitality, setVitality] = useState(() => readNum("noska_vitality_score", 88));
+export function VitalityBatteryWidget({ size, ctx }: WidgetProps) {
+  const todayKey = new Date().toDateString();
+
+  // Real signal: workspace activity events produced today (edits, creates,
+  // task updates) drain estimated energy; micro-breaks recharge it.
+  const todayEvents = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const startMs = start.getTime();
+    let count = 0;
+    for (const page of ctx.pages) {
+      if (page.trashed) continue;
+      for (const event of page.lineage ?? []) {
+        const ts = new Date(event.timestamp).getTime();
+        if (!isNaN(ts) && ts >= startMs) count += 1;
+      }
+    }
+    return count;
+  }, [ctx.pages]);
+
+  const baseVitality = Math.max(20, 100 - todayEvents * 3);
+  const [boost, setBoost] = useState(() => readNum(`noska_vitality_boost_${todayKey}`, 0));
+  const vitality = Math.min(100, baseVitality + boost);
 
   // Determine mood status based on vitality level
   const statusInfo = useMemo(() => {
@@ -394,9 +418,9 @@ export function VitalityBatteryWidget({ size }: WidgetProps) {
   const StatusIcon = statusInfo.icon;
 
   const boostEnergy = () => {
-    const next = Math.min(100, vitality + 10);
-    setVitality(next);
-    writeNum("noska_vitality_score", next);
+    const nextBoost = Math.min(100 - baseVitality, boost + 10);
+    setBoost(nextBoost);
+    writeNum(`noska_vitality_boost_${todayKey}`, nextBoost);
   };
 
   return (
@@ -427,7 +451,7 @@ export function VitalityBatteryWidget({ size }: WidgetProps) {
           </motion.div>
         </div>
         <p className="mt-1.5 text-[10.5px] text-neutral-400 dark:text-neutral-500 leading-tight">
-          Paced by focus sprints, page edits & break rhythms.
+          Estimated from today's workspace activity — breaks recharge it.
         </p>
       </div>
 
@@ -455,8 +479,8 @@ interface HabitItem {
 }
 
 const DEFAULT_HABITS: HabitItem[] = [
-  { id: "h1", name: "Deep Focus 25m", iconName: "brain", done: true },
-  { id: "h2", name: "Write Daily Journal", iconName: "book", done: true },
+  { id: "h1", name: "Deep Focus 25m", iconName: "brain", done: false },
+  { id: "h2", name: "Write Daily Journal", iconName: "book", done: false },
   { id: "h3", name: "Hydrate & Move", iconName: "water", done: false },
   { id: "h4", name: "Review Architecture", iconName: "code", done: false },
 ];
@@ -525,16 +549,40 @@ export function HabitMatrixWidget({ size }: WidgetProps) {
 
 // ── 5. Activity Graph Widget (7-Day Bar Charts) ──────────────────────────────
 
-export function ActivityGraphWidget({ size }: WidgetProps) {
+export function ActivityGraphWidget({ size, ctx }: WidgetProps) {
+  // Real data: workspace activity events per day over the last 7 days,
+  // bucketed from page lineage timestamps.
   const bars = useMemo(() => {
-    const dayIndex = (new Date().getDay() + 6) % 7;
-    return WEEK_DAYS.map((d, i) => {
-      const seed = Number(new Date().toDateString().slice(8, 10)) * 7 + i;
-      const base = 25 + ((seed * 37) % 60);
-      return { d, value: i <= dayIndex ? base : 0, future: i > dayIndex };
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 6);
+    const buckets = Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      return {
+        d: day.toLocaleDateString("en-US", { weekday: "narrow" }),
+        dayStart: day.getTime(),
+        value: 0,
+        isToday: i === 6,
+      };
     });
-  }, []);
-  const max = Math.max(...bars.map((b) => b.value), 40);
+    for (const page of ctx.pages) {
+      if (page.trashed) continue;
+      for (const event of page.lineage ?? []) {
+        const ts = new Date(event.timestamp).getTime();
+        if (isNaN(ts)) continue;
+        for (const bucket of buckets) {
+          if (ts >= bucket.dayStart && ts < bucket.dayStart + 86400000) {
+            bucket.value += 1;
+            break;
+          }
+        }
+      }
+    }
+    return buckets;
+  }, [ctx.pages]);
+  const max = Math.max(...bars.map((b) => b.value), 1);
+  const hasData = bars.some((b) => b.value > 0);
 
   return (
     <div className="flex h-full flex-col justify-between p-2 select-none">
@@ -543,30 +591,37 @@ export function ActivityGraphWidget({ size }: WidgetProps) {
         <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
       </div>
 
-      <div className="flex flex-1 items-end justify-between gap-1.5 pt-3 pb-1">
-        {bars.map((b, i) => (
-          <div key={i} className="flex flex-1 flex-col items-center gap-1.5">
-            <motion.div
-              initial={{ height: 0 }}
-              animate={{ height: `${Math.max((b.value / max) * 100, b.future ? 4 : 10)}%` }}
-              transition={{ type: "spring", stiffness: 140, damping: 18, delay: i * 0.05 }}
-              className={`w-full max-w-[20px] rounded-t-lg transition-all ${
-                b.future
-                  ? "bg-black/[0.04] dark:bg-white/[0.06]"
-                  : "bg-gradient-to-t from-indigo-500 via-purple-500 to-cyan-400 shadow-2xs"
-              }`}
-              style={{ minHeight: 4 }}
-            />
-            <span className={`text-[9.5px] font-bold ${b.future ? "text-neutral-300 dark:text-neutral-600" : "text-neutral-500 dark:text-neutral-400"}`}>
-              {b.d}
-            </span>
-          </div>
-        ))}
-      </div>
+      {hasData ? (
+        <div className="flex flex-1 items-end justify-between gap-1.5 pt-3 pb-1">
+          {bars.map((b, i) => (
+            <div key={i} className="flex flex-1 flex-col items-center gap-1.5" title={`${b.value} activity event${b.value === 1 ? "" : "s"}`}>
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: `${Math.max((b.value / max) * 100, b.value > 0 ? 12 : 4)}%` }}
+                transition={{ type: "spring", stiffness: 140, damping: 18, delay: i * 0.05 }}
+                className={`w-full max-w-[20px] rounded-t-lg transition-all ${
+                  b.value > 0
+                    ? "bg-gradient-to-t from-indigo-500 via-purple-500 to-cyan-400 shadow-2xs"
+                    : "bg-black/[0.04] dark:bg-white/[0.06]"
+                } ${b.isToday ? "ring-1 ring-indigo-400/60" : ""}`}
+                style={{ minHeight: 4 }}
+              />
+              <span className={`text-[9.5px] font-bold ${b.isToday ? "text-indigo-500 dark:text-indigo-400" : "text-neutral-500 dark:text-neutral-400"}`}>
+                {b.d}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="my-auto py-3 text-center">
+          <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">No activity in the last 7 days</p>
+          <p className="mt-0.5 text-[10px] text-neutral-400 dark:text-neutral-500">Edit pages, complete tasks or create content to fill this graph.</p>
+        </div>
+      )}
 
-      {size !== "small" && (
+      {size !== "small" && hasData && (
         <p className="text-[10px] text-neutral-400 dark:text-neutral-500 text-center">
-          Touchpoints across documents, canvas & tasks
+          Activity events across documents, canvas & tasks
         </p>
       )}
     </div>
@@ -575,12 +630,34 @@ export function ActivityGraphWidget({ size }: WidgetProps) {
 
 // ── 6. Progress Rings Widget (Noska Activity Rings) ─────────────────────────
 
-export function ProgressRingsWidget({ size }: WidgetProps) {
-  const goals = [
-    { label: "Pages", value: 0.85, color: "#8B5CF6" },
-    { label: "Tasks", value: 0.65, color: "#10B981" },
-    { label: "Focus", value: 0.45, color: "#F59E0B" },
-  ];
+export function ProgressRingsWidget({ size, ctx }: WidgetProps) {
+  // Real progress: pages touched this week, tasks completed, active days.
+  const goals = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 6);
+    const startMs = start.getTime();
+    const activePages = ctx.pages.filter((p) => !p.trashed);
+    const touched = new Set<string>();
+    const days = new Set<number>();
+    for (const page of activePages) {
+      const ts = new Date(page.updatedAt).getTime();
+      if (!isNaN(ts) && ts >= startMs) touched.add(page.id);
+      for (const event of page.lineage ?? []) {
+        const eventTs = new Date(event.timestamp).getTime();
+        if (isNaN(eventTs) || eventTs < startMs) continue;
+        touched.add(page.id);
+        days.add(Math.floor(eventTs / 86400000));
+      }
+    }
+    const tasks = collectTasks(ctx.pages);
+    const done = tasks.filter((t) => t.checked).length;
+    return [
+      { label: "Pages", value: activePages.length > 0 ? Math.min(1, touched.size / activePages.length) : 0, color: "#8B5CF6" },
+      { label: "Tasks", value: tasks.length > 0 ? Math.min(1, done / tasks.length) : 0, color: "#10B981" },
+      { label: "Active days", value: Math.min(1, days.size / 7), color: "#F59E0B" },
+    ];
+  }, [ctx.pages]);
   const box = size === "small" ? 96 : 108;
   const stroke = 8.5;
   const r = box / 2 - stroke;

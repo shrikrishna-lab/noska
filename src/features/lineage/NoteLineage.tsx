@@ -14,7 +14,7 @@ import {
   RotateCcw,
   Clock
 } from "lucide-react";
-import { PageIcon } from "../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 
 /* ─── Icon mapping for lineage events ─── */
 

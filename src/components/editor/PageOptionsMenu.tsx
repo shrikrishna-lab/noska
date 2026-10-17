@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import {
   Link2, Copy, CopyPlus, Move, Trash2, Presentation, Wifi, Type, Maximize2,
   Palette, Lock, Sparkles, FileEdit, Languages, FileDown, Upload, Globe,
   BarChart3, History, Bell, Cable, Search, X, ChevronRight, ChevronLeft, Eye,
-  FolderKanban,
+  FolderKanban, Check,
   type LucideIcon
 } from "lucide-react";
 import { executeCommand } from "../../core/commands/ActionExecutor";
@@ -15,9 +15,28 @@ import { loadPagePreference, savePagePreference } from "../../features/notificat
 import type { PageNotificationMode } from "../../features/notifications/types";
 
 const fontOptions = [
-  { id: "default", label: "Default", class: "font-sans" },
-  { id: "serif", label: "Serif", class: "font-serif" },
-  { id: "mono", label: "Mono", class: "font-mono" }
+  { id: "default", label: "Default", class: "font-sans", sample: "Ag" },
+  { id: "serif", label: "Serif", class: "font-serif", sample: "Ag" },
+  { id: "mono", label: "Mono", class: "font-mono", sample: "Ag" }
+];
+
+const PAGE_COLORS = [
+  { id: "default", name: "System Adaptive", value: null, isLight: true },
+  { id: "obsidian", name: "Obsidian Pitch", value: "#000000", isLight: false },
+  { id: "midnight", name: "Midnight Indigo", value: "#141829", isLight: false },
+  { id: "fjord", name: "Glacial Deep", value: "#0b253a", isLight: false },
+  { id: "violet", name: "Velvet Violet", value: "#26153b", isLight: false },
+  { id: "crimson", name: "Royal Wine", value: "#330e15", isLight: false },
+  { id: "forest", name: "Kyoto Forest", value: "#122618", isLight: false },
+  { id: "slate", name: "Smoked Slate", value: "#1e2229", isLight: false },
+  { id: "ivory", name: "Warm Ivory", value: "#FAF7F2", isLight: true },
+  { id: "glacier", name: "Glacier Ice", value: "#F0FAFF", isLight: true },
+  { id: "sage", name: "Botanical Sage", value: "#F0F7F2", isLight: true },
+  { id: "rose", name: "Dusty Rose", value: "#FFF0F3", isLight: true },
+  { id: "sand", name: "Desert Sand", value: "#FFF8EB", isLight: true },
+  { id: "lavender", name: "Dusk Lavender", value: "#F5F0FF", isLight: true },
+  { id: "cotton", name: "Pure Cotton", value: "#FFFFFF", isLight: true },
+  { id: "crema", name: "Espresso Crema", value: "#211611", isLight: false }
 ];
 
 interface SubmenuItem {
@@ -103,16 +122,28 @@ interface PageOptionsMenuProps {
   onAskAI?: () => void;
 }
 
-// Page-management actions that only make sense for the actual owner of a
-// page — hidden (not just disabled) when `page.sharedRole` is set, i.e.
-// this page was opened via a share grant rather than owned. Functionally
-// most of these already no-op for a shared page today (App.tsx's
-// updateSharedPage() explicitly refuses `trashed`/`parentId` patches, and
-// trash/duplicate/move operate on the owner-scoped `pages` array which
-// never contains a shared page's id), but hiding them is what actually
-// communicates that to the person looking at the menu instead of letting
-// them click something that silently does nothing.
-const OWNER_ONLY_ACTION_IDS = new Set(["duplicate", "move-to", "move-to-workspace", "trash", "lock", "readonly", "customize", "wiki"]);
+const OWNER_ONLY_ACTION_IDS = new Set([
+  "duplicate",
+  "move-to",
+  "move-to-workspace",
+  "trash",
+  "lock",
+  "readonly",
+  "customize",
+  "wiki"
+]);
+
+function formatShortcut(shortcut?: string): string | null {
+  if (!shortcut) return null;
+  const isMac = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+  if (isMac) {
+    return shortcut
+      .replace(/Ctrl\+/gi, "⌘")
+      .replace(/Alt\+/gi, "⌥")
+      .replace(/Shift\+/gi, "⇧");
+  }
+  return shortcut;
+}
 
 export default function PageOptionsMenu({
   open,
@@ -136,14 +167,27 @@ export default function PageOptionsMenu({
   const [{ workspaceRows, activeWorkspaceId }] = useWorkspace();
   const [notifyMode, setNotifyMode] = useState<PageNotificationMode | null>(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
+  const dragControls = useDragControls();
+
   useEffect(() => {
     let active = true;
     setNotifyMode(null);
-    if (open && notificationUserId) void loadPagePreference(notificationUserId, page.id).then(mode => { if (active) setNotifyMode(mode); }).catch(() => { if (active) onToast?.('Unable to load page notification settings.'); });
-    return () => { active = false; };
-  }, [open, notificationUserId, page.id]);
+    if (open && notificationUserId) {
+      void loadPagePreference(notificationUserId, page.id)
+        .then((mode) => {
+          if (active) setNotifyMode(mode);
+        })
+        .catch(() => {
+          if (active) onToast?.("Unable to load page notification settings.");
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [open, notificationUserId, page.id, onToast]);
+
   const [search, setSearch] = useState("");
-  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null); // null | 'ai' | 'translate' | 'notify' | 'connections'
+  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -156,7 +200,9 @@ export default function PageOptionsMenu({
     { id: "copy-contents", icon: Copy, label: "Copy page contents", shortcut: "" },
     { id: "duplicate", icon: CopyPlus, label: "Duplicate", shortcut: "Ctrl+D" },
     { id: "move-to", icon: Move, label: "Move to", shortcut: "Ctrl+Shift+P" },
-    ...(workspaceRows.length > 1 ? [{ id: "move-to-workspace", icon: FolderKanban, label: "Move to workspace", shortcut: "", submenu: true }] : []),
+    ...(workspaceRows.length > 1
+      ? [{ id: "move-to-workspace", icon: FolderKanban, label: "Move to workspace", shortcut: "", submenu: true }]
+      : []),
     { id: "trash", icon: Trash2, label: "Move to Trash", shortcut: "", danger: true },
     { id: "present", icon: Presentation, label: "Present (Beta)", shortcut: "Ctrl+Alt+P" },
     { id: "offline", icon: Wifi, label: "Available offline", shortcut: "", toggle: true, value: page?.offline },
@@ -164,7 +210,7 @@ export default function PageOptionsMenu({
     { id: "full-width", icon: Maximize2, label: "Full width", shortcut: "", toggle: true, value: page?.fullWidth },
     { id: "customize", icon: Palette, label: "Customize page", shortcut: "" },
     { id: "lock", icon: Lock, label: "Lock page", shortcut: "", toggle: true, value: page?.isLocked },
-    { id: "readonly", icon: Eye, label: "Read-only", shortcut: "", toggle: true, value: page?.permission === 'view' },
+    { id: "readonly", icon: Eye, label: "Read-only", shortcut: "", toggle: true, value: page?.permission === "view" },
     { id: "ai", icon: Sparkles, label: "Use with AI", shortcut: "", submenu: true },
     { id: "suggest", icon: FileEdit, label: "Suggest edits", shortcut: "" },
     { id: "translate", icon: Languages, label: "Translate", shortcut: "", submenu: true },
@@ -173,8 +219,24 @@ export default function PageOptionsMenu({
     { id: "wiki", icon: Globe, label: "Turn into wiki", shortcut: "" },
     { id: "analytics", icon: BarChart3, label: "Updates & analytics", shortcut: "" },
     { id: "history", icon: History, label: "Version history", shortcut: "" },
-    { id: "notify", icon: Bell, label: `Notify me › ${notifyBusy ? 'Saving…' : notifyMode === 'muted' ? 'Muted' : notifyMode === 'mentions' ? 'Mentions' : notifyMode === 'all' ? 'All activity' : 'Loading…'}`, shortcut: "", submenu: true },
-    { id: "connections", icon: Cable, label: "Connections › None", shortcut: "", submenu: true },
+    {
+      id: "notify",
+      icon: Bell,
+      label: `Notify me › ${
+        notifyBusy
+          ? "Saving…"
+          : notifyMode === "muted"
+          ? "Muted"
+          : notifyMode === "mentions"
+          ? "Mentions"
+          : notifyMode === "all"
+          ? "All activity"
+          : "Loading…"
+      }`,
+      shortcut: "",
+      submenu: true
+    },
+    { id: "connections", icon: Cable, label: "Connections › None", shortcut: "", submenu: true }
   ].filter((action) => !isShared || !OWNER_ONLY_ACTION_IDS.has(action.id));
 
   // Helper fuzzy matching
@@ -191,21 +253,29 @@ export default function PageOptionsMenu({
 
   // Determine actual items shown
   const getVisibleItems = (): MenuItem[] => {
-    if (activeSubmenu === 'move-to-workspace') {
+    if (activeSubmenu === "move-to-workspace") {
       const currentWs = (page as Page & { workspaceId?: string | null }).workspaceId || null;
       return workspaceRows
         .map((row) => ({
           id: `movews-${row.id}`,
           label: `${row.name}${row.id === (currentWs || activeWorkspaceId) ? " ✓" : ""}`,
-          icon: FolderKanban,
+          icon: FolderKanban
         }))
         .filter((item) => fuzzyMatch(search, item.label));
     }
     if (activeSubmenu) {
       const sub = submenus[activeSubmenu];
-      return sub ? sub.items.map(item => activeSubmenu === 'notify' ? { ...item, active: item.id === `notify-${notifyMode}` } : item).filter(item => fuzzyMatch(search, item.label)) : [];
+      return sub
+        ? sub.items
+            .map((item) =>
+              activeSubmenu === "notify"
+                ? { ...item, active: item.id === `notify-${notifyMode}` }
+                : item
+            )
+            .filter((item) => fuzzyMatch(search, item.label))
+        : [];
     }
-    return mainActions.filter(item => fuzzyMatch(search, item.label));
+    return mainActions.filter((item) => fuzzyMatch(search, item.label));
   };
 
   const filtered = getVisibleItems();
@@ -227,19 +297,27 @@ export default function PageOptionsMenu({
       return;
     }
 
-    if (item.id.startsWith('movews-')) {
+    if (item.id.startsWith("movews-")) {
       onAction?.(`move-to-workspace:${item.id.slice(7)}`);
       return;
     }
 
-    if (item.id.startsWith('notify-')) {
+    if (item.id.startsWith("notify-")) {
       if (!notificationUserId || notifyBusy || !notifyMode) return;
       const mode = item.id.slice(7) as PageNotificationMode;
       const previous = notifyMode;
-      setNotifyMode(mode); setNotifyBusy(true);
-      void savePagePreference(notificationUserId, page.id, mode).then(() => onToast?.('Page notification preference saved.')).catch(() => { setNotifyMode(previous); onToast?.('Could not save notification preference.'); }).finally(() => setNotifyBusy(false));
+      setNotifyMode(mode);
+      setNotifyBusy(true);
+      void savePagePreference(notificationUserId, page.id, mode)
+        .then(() => onToast?.("Page notification preference saved."))
+        .catch(() => {
+          setNotifyMode(previous);
+          onToast?.("Could not save notification preference.");
+        })
+        .finally(() => setNotifyBusy(false));
       return;
     }
+
     const ctx = {
       page,
       onPagePatch,
@@ -262,30 +340,33 @@ export default function PageOptionsMenu({
     }
   };
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlightedIndex((i) => Math.min(i + 1, filtered.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlightedIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (highlightedIndex >= 0 && filtered[highlightedIndex]) {
-        handleAction(filtered[highlightedIndex]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIndex((i) => Math.min(i + 1, filtered.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightedIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (highlightedIndex >= 0 && filtered[highlightedIndex]) {
+          handleAction(filtered[highlightedIndex]);
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        if (activeSubmenu) {
+          setActiveSubmenu(null);
+          setSearch("");
+          setHighlightedIndex(-1);
+        } else {
+          onClose();
+        }
       }
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      if (activeSubmenu) {
-        setActiveSubmenu(null);
-        setSearch("");
-        setHighlightedIndex(-1);
-      } else {
-        onClose();
-      }
-    }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, highlightedIndex, activeSubmenu]);
+    [filtered, highlightedIndex, activeSubmenu]
+  );
 
   useEffect(() => {
     if (highlightedIndex >= 0 && listRef.current) {
@@ -309,107 +390,199 @@ export default function PageOptionsMenu({
     <AnimatePresence>
       {open && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: -6 }}
+          drag
+          dragControls={dragControls}
+          dragListener={false}
+          dragMomentum={false}
+          dragElastic={0.06}
+          initial={{ opacity: 0, scale: 0.94, y: -8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: -3 }}
-          transition={{ type: "spring", stiffness: 380, damping: 26 }}
-          style={{ width: 300 }}
-          className="flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--elevated)] shadow-[var(--shadow-floating)] z-[120] max-h-[min(560px,calc(100vh-32px))]"
+          exit={{
+            opacity: 0,
+            scale: 0.95,
+            y: -6,
+            transition: { duration: 0.16, ease: [0.32, 0, 0.67, 0] }
+          }}
+          transition={{ type: "spring", stiffness: 420, damping: 28, mass: 0.75 }}
+          style={{ width: 320, transformOrigin: "top right", willChange: "transform, opacity" }}
+          className="apple-liquid-glass flex flex-col overflow-hidden rounded-2xl z-[120] max-h-[min(600px,calc(100vh-32px))] select-none border border-black/10 dark:border-white/15 shadow-2xl"
         >
-          {/* Header Bar with Submenu Back Action */}
-          <div className="flex items-center border-b border-[var(--border)] px-1.5 py-1 bg-[var(--hover)]">
-            {activeSubmenu && (
-              <button
-                onClick={() => {
-                  setActiveSubmenu(null);
-                  setSearch("");
+          {/* ─── Apple Header Bar & Drag Handle ─── */}
+          <div
+            onPointerDown={(e) => {
+              if ((e.target as HTMLElement).closest("button, input")) return;
+              dragControls.start(e);
+            }}
+            className="flex flex-col px-3.5 pt-2 pb-2 border-b border-black/[0.05] dark:border-white/[0.08] cursor-grab active:cursor-grabbing select-none"
+            title="Drag to reposition menu"
+          >
+            {/* Apple Floating Window Grab Capsule */}
+            <div
+              className="w-10 h-1 rounded-full bg-black/20 dark:bg-white/25 mx-auto mb-1.5 transition-colors group-hover:bg-black/30 dark:group-hover:bg-white/40 cursor-grab active:cursor-grabbing"
+              title="Drag to reposition menu"
+            />
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {activeSubmenu ? (
+                  <button
+                    onClick={() => {
+                      setActiveSubmenu(null);
+                      setSearch("");
+                      setHighlightedIndex(-1);
+                    }}
+                    className="group -ml-1 flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#0066FF] dark:text-[#4791FF] hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer"
+                  >
+                    <ChevronLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
+                    <span>Back</span>
+                  </button>
+                ) : (
+                  <span className="text-[13px] font-semibold tracking-tight text-[var(--text)]">
+                    Page options
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={onClose}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer"
+                  title="Close (Esc)"
+                >
+                  <X size={13} strokeWidth={2.5} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Apple Search Pill Bar ─── */}
+          <div className="px-3 pt-2.5 pb-2 border-b border-black/[0.05] dark:border-white/[0.08]">
+            <div className="relative flex items-center bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] focus-within:bg-black/[0.06] dark:focus-within:bg-white/[0.09] focus-within:ring-2 focus-within:ring-[#0066FF]/35 rounded-xl px-2.5 py-1.5 transition-all">
+              <Search size={13} className="text-[var(--muted)] shrink-0 mr-2" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
                   setHighlightedIndex(-1);
                 }}
-                className="p-1 rounded text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer mr-1"
-              >
-                <ChevronLeft size={16} />
-              </button>
-            )}
-            <span className="flex-1 text-xs font-semibold text-[var(--secondary)] pl-1.5">
-              {activeSubmenu ? submenus[activeSubmenu].title : "Page options"}
-            </span>
+                onKeyDown={handleKeyDown}
+                placeholder={activeSubmenu ? "Search submenu..." : "Search actions & settings..."}
+                className="w-full bg-transparent text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)] font-normal"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="w-4 h-4 rounded-full bg-black/10 dark:bg-white/20 flex items-center justify-center text-[var(--text)] hover:scale-110 active:scale-90 transition cursor-pointer"
+                >
+                  <X size={10} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Search Input */}
-          <div className="relative border-b border-[var(--border)]">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-            <input
-              ref={searchRef}
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setHighlightedIndex(-1); }}
-              onKeyDown={handleKeyDown}
-              placeholder={activeSubmenu ? "Search submenu..." : "Search actions..."}
-              className="w-full bg-transparent px-8 py-2 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-            />
-            {search && (
-              <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] cursor-pointer">
-                <X size={13} />
-              </button>
-            )}
-          </div>
-
-          {/* Font segment control (only on top-level and when search is empty) */}
+          {/* ─── Typography & Page Color Controls (Top Level Only) ─── */}
           {!activeSubmenu && !search && (
             <>
-            <div className="border-b border-[var(--border)] bg-[var(--surface)] p-2 flex flex-col gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] px-1">Typography</span>
-              <div className="grid grid-cols-3 gap-1 bg-[var(--surface)] p-1 rounded-lg border border-[var(--border)]">
-                {fontOptions.map((f) => {
-                  const isActive = (page?.fontStyle || "default") === f.id;
-                  return (
-                    <button
-                      key={f.id}
-                      onClick={() => onPagePatch?.({ fontStyle: f.id })}
-                      className={`flex flex-col items-center justify-center rounded-md py-1.5 px-1 cursor-pointer transition ${
-                        isActive
-                          ? "bg-[var(--hover)] border border-[var(--border-strong)] text-[var(--accent)]"
-                          : "text-[var(--secondary)] hover:text-[var(--text)] hover:bg-[var(--hover)]"
-                      }`}
-                    >
-                      <span className={`text-base font-bold mb-0.5 ${f.class} ${isActive ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
-                        Ag
-                      </span>
-                      <span className="text-[9px] font-medium tracking-tight">{f.label}</span>
-                    </button>
-                  );
-                })}
+              {/* Apple Segmented Typography Control */}
+              <div className="px-3 py-2.5 border-b border-black/[0.05] dark:border-white/[0.08] flex flex-col gap-1.5">
+                <div className="flex items-center justify-between px-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                    Typography
+                  </span>
+                  <span className="text-[9.5px] text-[var(--muted)] capitalize">
+                    {page?.fontStyle || "default"}
+                  </span>
+                </div>
+                <div className="relative p-1 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06] grid grid-cols-3 gap-1">
+                  {fontOptions.map((f) => {
+                    const isActive = (page?.fontStyle || "default") === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        onClick={() => onPagePatch?.({ fontStyle: f.id })}
+                        className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-lg cursor-pointer transition-colors duration-150 select-none ${
+                          isActive
+                            ? "text-[var(--text)]"
+                            : "text-[var(--muted)] hover:text-[var(--text)]"
+                        }`}
+                      >
+                        {isActive && (
+                          <motion.div
+                            layoutId="active-font-pill"
+                            className="absolute inset-0 bg-white dark:bg-[#20242C] shadow-[0_2px_8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.12)] rounded-lg -z-10"
+                            transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                          />
+                        )}
+                        <span className={`text-[17px] font-semibold leading-none mb-1 ${f.class}`}>
+                          {f.sample}
+                        </span>
+                        <span className="text-[9.5px] font-medium tracking-tight">{f.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <div className="border-b border-[var(--border)] bg-[var(--surface)] p-2 flex flex-col gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] px-1">Page Color</span>
-              <div className="grid grid-cols-8 gap-1.5 px-1 py-1">
-                {[
-                  null,
-                  "#1a1a2e", "#16213e", "#0f3460", "#533483",
-                  "#3d0000", "#1b4332", "#2d3436", "#180a20",
-                  "#fff3e0", "#fce4ec", "#e8f5e9", "#e3f2fd",
-                  "#fff8e1", "#f3e5f5", "#e0f2f1", "#fbe9e7",
-                ].map((color) => (
-                  <button
-                    key={color ?? "default"}
-                    onClick={() => onPagePatch?.({ pageBg: color })}
-                    className={`h-6 w-6 rounded-full border-2 transition-all cursor-pointer ${
-                      (page?.pageBg ?? null) === color
-                        ? "border-[var(--accent)] scale-110"
-                        : "border-[var(--border)] hover:border-[var(--border-strong)]"
-                    }`}
-                    style={color ? { background: color } : { background: "var(--bg)", borderStyle: "dashed" }}
-                    title={color ?? "Default"}
-                  />
-                ))}
+              {/* Apple Curated Page Color Palette */}
+              <div className="px-3 py-2.5 border-b border-black/[0.05] dark:border-white/[0.08] flex flex-col gap-2">
+                <div className="flex items-center justify-between px-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                    Page Color
+                  </span>
+                  <span className="text-[9.5px] text-[var(--muted)]">
+                    {page?.pageBg ? "Custom Mood" : "System Adaptive"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-8 gap-2 py-0.5 place-items-center">
+                  {PAGE_COLORS.map((color) => {
+                    const isSelected = (page?.pageBg ?? null) === color.value;
+                    const isDefault = color.value === null;
+                    return (
+                      <motion.button
+                        key={color.id}
+                        whileHover={{ scale: 1.18 }}
+                        whileTap={{ scale: 0.92 }}
+                        onClick={() => {
+                          onPagePatch?.({ pageBg: color.value });
+                          onToast?.(`Page color: ${color.name}`);
+                        }}
+                        className={`group relative h-6 w-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                          isSelected
+                            ? "ring-2 ring-offset-2 ring-offset-[var(--surface-1)] ring-[#0066FF] dark:ring-[var(--accent)] shadow-sm"
+                            : "hover:shadow-md"
+                        }`}
+                        style={{
+                          background: isDefault
+                            ? "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9) 0%, rgba(225,235,245,0.7) 100%)"
+                            : color.value!
+                        }}
+                        title={color.name}
+                      >
+                        {/* 0.5px subtle inner lighting rim */}
+                        <div className="absolute inset-0 rounded-full border border-black/10 dark:border-white/15 pointer-events-none" />
+
+                        {isDefault && !isSelected && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-[var(--muted)]/50" />
+                        )}
+
+                        {isSelected && (
+                          <Check
+                            size={11}
+                            strokeWidth={3}
+                            className={isDefault || color.isLight ? "text-neutral-900" : "text-white"}
+                          />
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
             </>
           )}
 
-          {/* Action List (Scrollable middle container) */}
-          <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-none py-1">
+          {/* ─── Action Items List (Smooth Apple Menu Items) ─── */}
+          <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-none py-1.5 px-1.5 space-y-0.5">
             {filtered.length === 0 ? (
               <div className="px-3 py-8 text-center text-xs text-[var(--muted)]">No actions found</div>
             ) : (
@@ -418,49 +591,99 @@ export default function PageOptionsMenu({
                 const isSelected = highlightedIndex === idx;
 
                 return (
-                  <button
+                  <motion.button
                     key={item.id}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleAction(item)}
                     onMouseEnter={() => setHighlightedIndex(idx)}
-                    className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                      isItemDanger ? "text-[var(--danger)] hover:bg-[var(--danger)]/10" : "text-[var(--text)]"
-                    } ${isSelected ? "bg-[var(--hover)]" : ""}`}
+                    className={`group flex w-full items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left text-xs transition-colors cursor-pointer select-none ${
+                      isItemDanger
+                        ? "text-red-500 hover:bg-red-500/10 active:bg-red-500/15"
+                        : isSelected
+                        ? "bg-black/[0.06] dark:bg-white/[0.09] text-[var(--text)]"
+                        : "text-[var(--text)] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                    }`}
                   >
-                    <item.icon size={13} className={`shrink-0 ${isItemDanger ? "text-[var(--danger)]" : "text-[var(--secondary)]"}`} />
-                    <span className="flex-1 truncate">{item.label}</span>
+                    <div
+                      className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                        isItemDanger
+                          ? "text-red-500"
+                          : "text-[var(--secondary)] group-hover:text-[var(--text)]"
+                      }`}
+                    >
+                      <item.icon size={14} strokeWidth={2} />
+                    </div>
 
+                    <span className="flex-1 truncate font-medium text-[12px]">{item.label}</span>
+
+                    {/* Apple iOS Spring Toggle */}
                     {"toggle" in item && item.toggle && (
-                      <span className={`flex h-3.5 w-6 shrink-0 items-center rounded-full p-0.5 transition-colors ${item.value ? "bg-[var(--accent)]" : "bg-[var(--border)]"}`}>
-                        <span className={`h-2.5 w-2.5 rounded-full bg-[var(--text)] shadow-sm transition-transform ${item.value ? "translate-x-2.5" : "translate-x-0"}`} />
+                      <div
+                        className={`relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ease-out ${
+                          item.value
+                            ? "bg-[#0066FF] shadow-[0_0_8px_rgba(0,102,255,0.35)]"
+                            : "bg-black/15 dark:bg-white/20"
+                        }`}
+                      >
+                        <motion.span
+                          layout
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          className={`block h-3.5 w-3.5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] ${
+                            item.value ? "translate-x-3.5" : "translate-x-0"
+                          }`}
+                        />
+                      </div>
+                    )}
+
+                    {/* Apple Keycap Shortcut */}
+                    {"shortcut" in item && item.shortcut && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-black/[0.04] dark:bg-white/[0.06] text-[var(--muted)] tracking-wider">
+                        {formatShortcut(item.shortcut)}
                       </span>
                     )}
-                    {"shortcut" in item && item.shortcut && (
-                      <span className="text-[9px] text-[var(--muted)] font-mono">{item.shortcut}</span>
-                    )}
+
+                    {/* Apple Submenu Chevron */}
                     {"submenu" in item && item.submenu && (
-                      <ChevronRight size={12} className="text-[var(--muted)]" />
+                      <ChevronRight
+                        size={13}
+                        className="text-[var(--muted)] group-hover:translate-x-0.5 transition-transform"
+                      />
                     )}
-                  </button>
+                  </motion.button>
                 );
               })
             )}
           </div>
 
-          {/* Footer (Fixed container) */}
-          <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex flex-col gap-1 text-[10px] text-[var(--muted)]">
-            <div className="flex justify-between items-center text-[9px] uppercase tracking-wider text-[var(--muted)] border-b border-[var(--border)] pb-1 mb-1">
-              <span>Close menu</span>
-              <kbd className="px-1 rounded bg-[var(--hover)] border border-[var(--border)] font-mono">esc</kbd>
+          {/* ─── Apple Inspector Footer ─── */}
+          <div className="border-t border-black/[0.05] dark:border-white/[0.08] px-3.5 py-2.5 bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-between text-[10.5px] text-[var(--muted)]">
+            <div className="flex flex-col gap-0.5 min-w-0 pr-2">
+              <div className="flex items-center gap-1.5 truncate">
+                {wordCount !== undefined && (
+                  <span className="font-medium text-[var(--text)]">{wordCount} words</span>
+                )}
+                {wordCount !== undefined && lastEditedAt && (
+                  <span className="text-[var(--muted)]/50">•</span>
+                )}
+                {lastEditedAt && (
+                  <span className="truncate">{formatTimeAgo(lastEditedAt)}</span>
+                )}
+              </div>
+              {lastEditedBy && (
+                <div className="text-[9.5px] text-[var(--muted)] truncate">
+                  By {lastEditedBy}
+                </div>
+              )}
             </div>
-            {wordCount !== undefined && (
-              <div className="truncate">Word count: <span className="text-[var(--secondary)] font-medium">{wordCount} words</span></div>
-            )}
-            {lastEditedBy && (
-              <div className="truncate">Last edited by: <span className="text-[var(--secondary)] font-medium">{lastEditedBy}</span></div>
-            )}
-            {lastEditedAt && (
-              <div>Edited: <span className="text-[var(--secondary)] font-medium">{formatTimeAgo(lastEditedAt)}</span></div>
-            )}
+
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[9px] uppercase tracking-wider font-semibold text-[var(--muted)]">
+                Close
+              </span>
+              <kbd className="px-1.5 py-0.5 rounded-md text-[9px] font-mono bg-black/[0.05] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.1] text-[var(--muted)] shadow-2xs">
+                esc
+              </kbd>
+            </div>
           </div>
         </motion.div>
       )}

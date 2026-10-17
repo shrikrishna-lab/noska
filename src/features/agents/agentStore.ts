@@ -114,19 +114,22 @@ function agentToInsert(agent: NoskaAgent): Record<string, unknown> {
   };
 }
 
-// ─── Mirror ────────────────────────────────────────────────────────────────
+const memoryAgents: NoskaAgent[] = [];
 
 export function loadMirrorAgents(): NoskaAgent[] {
   try {
     const raw = localStorage.getItem(MIRROR_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.map(rowToAgent) : [];
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(rowToAgent);
   } catch {
-    return [];
+    /* fallback to memory mirror */
   }
+  return [...memoryAgents];
 }
 
 function saveMirrorAgents(agents: NoskaAgent[]): void {
+  memoryAgents.length = 0;
+  memoryAgents.push(...agents);
   try {
     localStorage.setItem(MIRROR_KEY, JSON.stringify(agents));
   } catch { /* best-effort */ }
@@ -172,7 +175,9 @@ export function cloneAgent(source: NoskaAgent, overrides: Partial<NoskaAgent> = 
 
 export async function fetchAgents(): Promise<NoskaAgent[]> {
   try {
-    const { data, error } = await supabase.from("agents").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("agents")
+      .select("id,name,description,icon,instructions,status,model,config,created_at,updated_at")
+      .order("created_at", { ascending: false });
     if (!error && data && data.length > 0) {
       const agents = (data as unknown as AgentRow[]).map(rowToAgent);
       saveMirrorAgents(agents);
@@ -517,7 +522,9 @@ export async function fetchAgentsUnified(): Promise<AgentRowLike[]> {
   for (const a of loadMirrorAgents()) unified.set(a.id, agentToRowLike(a));
   // Remote rows win where present (they carry legacy-column state too)
   try {
-    const { data, error } = await supabase.from("agents").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("agents")
+      .select("id,name,description,icon,instructions,status,model,config,created_at,updated_at")
+      .order("created_at", { ascending: false });
     if (!error && data) {
       for (const raw of data as unknown as Array<Record<string, unknown>>) {
         const asNoska = rowToAgent(raw as unknown as AgentRow);

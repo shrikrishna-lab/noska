@@ -1,6 +1,7 @@
 // Centralized entitlement hooks (§31). UI presentation only — backend is authoritative.
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { fetchEntitlements } from "@/lib/billing/api";
+import { currentAccessToken } from "@/lib/supabase";
 import type { EntitlementSnapshot } from "@/lib/billing/types";
 
 interface EntitlementsCtx {
@@ -39,8 +40,40 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const timer = useRef<number | null>(null);
+  const hydrateTimer = useRef<number | null>(null);
+  const hydrateRetries = useRef(0);
+
+  const applyLocalFallback = useCallback(() => {
+    // Offline / signed out: use cached snapshot marked unknown, else free fallback
+    try {
+      const raw = sessionStorage.getItem("noska:entitlements");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { snap: EntitlementSnapshot };
+        setData({ ...parsed.snap, subscription: { ...parsed.snap.subscription, status: parsed.snap.subscription.status === "active" ? "unknown_cached" : parsed.snap.subscription.status } });
+      } else setData((d) => d ?? FREE_FALLBACK);
+    } catch { setData((d) => d ?? FREE_FALLBACK); }
+  }, []);
 
   const refresh = useCallback(async () => {
+    // The provider mounts before Clerk has hydrated (and stays mounted for
+    // signed-out visitors), so `currentAccessToken()` can legitimately be null.
+    // Calling the edge function then is a guaranteed 401 on every mount, focus
+    // and 5-minute poll. Skip the request and use the offline snapshot instead.
+    const token = await currentAccessToken().catch(() => null);
+    if (!token) {
+      setError(null);
+      applyLocalFallback();
+      setLoading(false);
+      // Clerk may still be hydrating. Retry a couple of times locally (no
+      // network) so a signed-in user isn't stuck on the free fallback until
+      // the next window focus or the 5-minute poll.
+      hydrateRetries.current += 1;
+      if (hydrateRetries.current <= 3) {
+        hydrateTimer.current = window.setTimeout(refresh, 1500 * hydrateRetries.current);
+      }
+      return;
+    }
+    hydrateRetries.current = 0;
     try {
       const snap = await fetchEntitlements();
       setData(snap);
@@ -48,18 +81,11 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
       try { sessionStorage.setItem("noska:entitlements", JSON.stringify({ at: Date.now(), snap })); } catch { /* ignore */ }
     } catch (e) {
       setError(e);
-      // Offline: use cached snapshot marked unknown, else free fallback
-      try {
-        const raw = sessionStorage.getItem("noska:entitlements");
-        if (raw) {
-          const parsed = JSON.parse(raw) as { snap: EntitlementSnapshot };
-          setData({ ...parsed.snap, subscription: { ...parsed.snap.subscription, status: parsed.snap.subscription.status === "active" ? "unknown_cached" : parsed.snap.subscription.status } });
-        } else setData((d) => d ?? FREE_FALLBACK);
-      } catch { setData((d) => d ?? FREE_FALLBACK); }
+      applyLocalFallback();
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyLocalFallback]);
 
   useEffect(() => {
     refresh();
@@ -72,6 +98,7 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("noska:billing-changed", onBilling);
       if (timer.current) window.clearInterval(timer.current);
+      if (hydrateTimer.current) window.clearTimeout(hydrateTimer.current);
     };
   }, [refresh]);
 

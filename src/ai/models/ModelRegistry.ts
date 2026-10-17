@@ -72,12 +72,23 @@ export class ModelRegistry {
     return this._providerModels.get(providerId) || [];
   }
 
-  /**
-   * Get latest up to 10 models for a provider (all for OpenCode Zen)
-   */
+/**
+    * Get latest up to 10 models for a provider (all for OpenCode Zen)
+    *
+    * Models flagged `free_limited` are excluded for OpenCode Zen: Zen serves
+    * its free models only to the OpenCode client and answers 403 FreeTierError
+    * to any other API caller, so offering them just produces a failure. See
+    * providers/zenAvailability.ts for the verified evidence.
+    */
   public getLatestModelsForProvider(providerId: ProviderId, max: number = 10): NoskaModel[] {
-    const list = this.getModelsForProvider(providerId).filter(m => m.status !== "shutdown" && m.status !== "deprecated");
-    if (providerId === "opencode_zen") return list;
+    let list = this.getModelsForProvider(providerId).filter(m => m.status !== "shutdown" && m.status !== "deprecated");
+    if (providerId === "opencode_zen") {
+      const callable = list.filter(m => m.freeAccess?.status !== "free_limited");
+      // Only narrow the list when something is actually gated, so a provider
+      // whose catalog carries no freeAccess metadata is unaffected.
+      if (callable.length > 0) list = callable;
+      return list;
+    }
     return list.slice(0, max);
   }
 

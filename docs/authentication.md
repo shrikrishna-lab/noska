@@ -231,3 +231,31 @@ export function hasRole(user: AdminUser | null, minimum: AdminRole): boolean {
 | `VITE_SUPABASE_ANON_KEY` | Both SPAs | Yes |
 | `SUPABASE_SERVICE_ROLE_KEY` | Edge Functions, Trigger.dev | Yes |
 | `VITE_ADMIN_DEMO` | Admin SPA | Optional (dev only) |
+
+### Troubleshooting: Google "Error 400: redirect_uri_mismatch"
+
+Google renders this error, not Noska code. Two different flows produce it:
+
+**A. Sign-in (Clerk).** Flow: app → Clerk → Google → Clerk
+(`https://<clerk-domain>/v1/oauth_callback`) → app `/sso-callback`. Google
+rejects the request when that Clerk callback URL is missing from the Google
+Cloud OAuth client's **Authorized redirect URIs**. Fix: copy the exact URI
+from Clerk Dashboard → SSO → Google (or from Google's "error details" link
+on the failing page) and add it to Google Cloud Console → APIs & Services →
+Credentials → the OAuth client (verify it is the same Client ID Clerk is
+configured with). Common triggers: recreated Clerk instance, `pk_test_` →
+`pk_live_` switch, new custom domain, or custom Google credentials without
+updated redirect lists.
+
+**B. Gmail / Calendar / Drive / Sheets connectors (connector-gateway).**
+The gateway sends
+`https://<project-ref>.supabase.co/functions/v1/connector-gateway/callback`
+(secrets `CONNECTOR_*_CLIENT_ID/SECRET`, base overridable via
+`CONNECTOR_OAUTH_REDIRECT_BASE`). Checklist: (1) Google's "error details"
+prints the exact `redirect_uri` sent — diff it byte-for-byte with the
+registered URI (live incident 2026-09-23: the gateway sent `http://…`
+because Supabase terminates TLS at the edge and `req.url` inside the
+runtime is plain http — one letter, total mismatch; fixed in
+`callbackBase()` by forcing https off-loopback); (2) confirm the Console
+page is the same client ID the connector env vars point at; (3) retest in
+fresh incognito (never the back button) after a few minutes.

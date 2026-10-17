@@ -8,7 +8,7 @@ import StepDots from "./StepDots";
 import OnboardingKeyframes from "./OnboardingKeyframes";
 import { isDesktop, isMobile } from "../../platform";
 
-const NoskaLogo = "/logo.png";
+const NoskaLogo = "/logo-256.webp";
 
 const WelcomeStep = lazy(() => import("./steps/WelcomeStep"));
 const UsernameStep = lazy(() => import("./steps/UsernameStep"));

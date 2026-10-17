@@ -21,7 +21,7 @@ import {
 import { plainText, renderInlineMarkdown } from "../../utils/helpers";
 import type { Page } from "../../lib/supabaseService";
 import type { Block } from "../../../types/blocks";
-import { PageIcon } from "../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 import { LineNavigationRail } from "../navigation/line-nav";
 import { isDesktop, isMobile } from "../../platform";
 import EmbedBlock from "../../components/editor/EmbedBlock";

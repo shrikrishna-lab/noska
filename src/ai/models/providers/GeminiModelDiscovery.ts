@@ -61,10 +61,9 @@ export class GeminiModelDiscovery implements ModelDiscoveryAdapter {
 
     // Exclude embedding, aqa, text-only legacy, or experimental image generation
     if (
-      lowerId.includes("embedding") ||
-      lowerId.includes("aqa") ||
-      lowerId.includes("imagen") ||
-      lowerId.includes("1.0")
+       lowerId.includes("embedding") ||
+       lowerId.includes("aqa") ||
+       lowerId.includes("1.0")
     ) {
       return null;
     }
@@ -73,10 +72,11 @@ export class GeminiModelDiscovery implements ModelDiscoveryAdapter {
     const methods: string[] = Array.isArray(raw.supportedGenerationMethods)
       ? raw.supportedGenerationMethods
       : [];
-    if (methods.length > 0 && !methods.includes("generateContent")) {
+    if (methods.length > 0 && !methods.includes("generateContent") && !methods.includes("predict") && !methods.includes("generateImage")) {
       return null;
     }
 
+    const isImageGen = lowerId.includes("imagen") || lowerId.includes("image") || methods.includes("predict") || methods.includes("generateImage");
     const inputTokens = typeof raw.inputTokenLimit === "number" ? raw.inputTokenLimit : 1048576;
     const outputTokens = typeof raw.outputTokenLimit === "number" ? raw.outputTokenLimit : 8192;
 
@@ -109,14 +109,14 @@ export class GeminiModelDiscovery implements ModelDiscoveryAdapter {
       freeAccess,
       description: raw.description ? String(raw.description).slice(0, 200) : undefined,
       capabilities: {
-        streaming: true,
-        reasoning: isReasoning,
-        tools: true,
-        vision: true,
-        audio: true,
-        video: true,
-        imageGeneration: false,
-        structuredOutput: true,
+        streaming: !isImageGen,
+        reasoning: isReasoning && !isImageGen,
+        tools: !isImageGen,
+        vision: !isImageGen,
+        audio: !isImageGen,
+        video: !isImageGen,
+        imageGeneration: isImageGen,
+        structuredOutput: !isImageGen,
         mcp: true,
         agentMode: true,
       },
@@ -137,7 +137,8 @@ export class GeminiModelDiscovery implements ModelDiscoveryAdapter {
       { name: "models/gemini-2.5-flash", displayName: "Gemini 2.5 Flash", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 65536 },
       { name: "models/gemini-2.5-pro", displayName: "Gemini 2.5 Pro", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 2097152, outputTokenLimit: 65536 },
       { name: "models/gemini-2.0-flash", displayName: "Gemini 2.0 Flash", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 8192 },
-      { name: "models/gemini-2.0-flash-lite", displayName: "Gemini 2.0 Flash Lite", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 8192 }
+      { name: "models/gemini-2.0-flash-lite", displayName: "Gemini 2.0 Flash Lite", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 8192 },
+      { name: "models/gemini-2.5-flash-image", displayName: "Gemini 2.5 Flash Image", supportedGenerationMethods: ["generateContent"], inputTokenLimit: 1048576, outputTokenLimit: 8192 }
     ];
 
     return rawModels.map(raw => this.normalizeModel(raw)!).filter(Boolean);

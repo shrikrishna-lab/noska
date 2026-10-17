@@ -6,7 +6,7 @@ import { DEFAULT_CHANGELOG_ENTRIES } from "@/lib/changelogDefaults";
 // Per-version "What's New" release notes system:
 // After the Noska desktop app updates, the release notes for the new version
 // are fetched from multi-tiered sources (cached update payload, GitHub releases,
-// latest.json CDN manifest, Supabase changelog, and built-in fallbacks) and
+// Supabase changelog, and built-in fallbacks) and
 // displayed in a dedicated What's New modal.
 //
 // Crucial Rule: Release notes stay visible until the user explicitly dismisses them.
@@ -21,8 +21,6 @@ const GH_RELEASES_LIST_API =
   "https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases?per_page=30";
 const GH_RELEASE_TAG_API =
   "https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases/tags/";
-const GH_LATEST_MANIFEST_URL =
-  "https://github.com/shrikrishna-lab/noska-desktop-releases/releases/latest/download/latest.json";
 
 export interface ReleaseNotes {
   version: string; // normalized "vX.Y.Z"
@@ -185,30 +183,7 @@ async function fetchNotesFor(version: string): Promise<ReleaseNotes | null> {
     }
   }
 
-  // Tier 2: Try GitHub static CDN latest.json manifest (Zero rate limit)
-  try {
-    const res = await fetch(GH_LATEST_MANIFEST_URL, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
-    if (res.ok) {
-      const manifest = await res.json();
-      if (manifest?.notes && manifest.notes.trim()) {
-        const manifestVer = normalizeVersion(manifest.version || version);
-        return {
-          version: manifestVer,
-          title: `What's new in ${manifestVer}`,
-          body: manifest.notes,
-          url: `https://github.com/shrikrishna-lab/noska-desktop-releases/releases/tag/desktop-${manifestVer}`,
-          publishedAt: manifest.pub_date,
-        };
-      }
-    }
-  } catch {
-    // try next tier
-  }
-
-  // Tier 3: Supabase published changelog_entries table
+  // Tier 2: Supabase published changelog_entries table
   try {
     const { data: entries } = await (supabaseAnon as any)
       .from("changelog_entries")
@@ -241,7 +216,7 @@ async function fetchNotesFor(version: string): Promise<ReleaseNotes | null> {
     // try next tier
   }
 
-  // Tier 4: Built-in DEFAULT_CHANGELOG_ENTRIES fallback
+  // Tier 3: Built-in DEFAULT_CHANGELOG_ENTRIES fallback
   if (DEFAULT_CHANGELOG_ENTRIES && DEFAULT_CHANGELOG_ENTRIES.length > 0) {
     const localMatch =
       DEFAULT_CHANGELOG_ENTRIES.find(

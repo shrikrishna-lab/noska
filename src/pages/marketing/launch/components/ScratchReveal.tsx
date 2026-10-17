@@ -321,7 +321,7 @@ export function ScratchReveal({
               <div className="nl-scratch-under-reveal" aria-hidden="true">
                 <div className="nl-scratch-under-card">
                   <div className="nl-scratch-under-icon">
-                    <img src="/logo.png" alt="Noska" style={{ width: 24, height: 24, borderRadius: 6 }} />
+                    <img src="/logo-256.webp" alt="Noska" style={{ width: 24, height: 24, borderRadius: 6 }} />
                   </div>
                   <div className="nl-scratch-under-badge">VIP TICKET DISPENSER</div>
                   <h4 className="nl-scratch-under-title">EARLY ACCESS UNLOCKED</h4>

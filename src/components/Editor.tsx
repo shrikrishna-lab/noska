@@ -23,16 +23,21 @@ import { capture } from "../lib/posthog";
  * flattenEditorBlocks, not part of the real stored block shape. */
 type EditorBlock = BlockType & { _depth?: number };
 
-const DragGhostBlock = React.memo(function DragGhostBlock({ block }: { block: EditorBlock }) {
+const DragGhostBlock = React.memo(function DragGhostBlock({ block }: { block?: EditorBlock }) {
+  if (!block) return null;
   return (
     <motion.div
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      className="flex items-center gap-2 rounded-lg border border-[var(--accent)]/50 bg-[var(--elevated)] px-3 py-2 text-sm text-[var(--text)] shadow-xl backdrop-blur-sm"
-      style={{ width: 200 }}
+      initial={{ scale: 0.94, opacity: 0, y: 4 }}
+      animate={{ scale: 1.02, opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 450, damping: 28 }}
+      className="flex items-center gap-2.5 rounded-xl border border-black/[0.08] dark:border-white/[0.14] bg-white/95 dark:bg-[#1c1c1e]/95 px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-100 shadow-[0_20px_40px_-8px_rgba(0,0,0,0.35),0_0_0_1px_rgba(14,165,233,0.3)] backdrop-blur-2xl ring-1 ring-sky-500/25 pointer-events-none"
+      style={{ width: 220 }}
     >
-      <GripVertical size={14} className="text-[var(--muted)] shrink-0" />
-      <span className="truncate font-medium">{block.text || block.type || "Block"}</span>
+      <GripVertical size={14} className="text-sky-500 shrink-0" />
+      <span className="truncate flex-1">{block.text || block.type || "Block"}</span>
+      <span className="rounded-md bg-sky-500/10 dark:bg-sky-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wider shrink-0">
+        {block.type || "text"}
+      </span>
     </motion.div>
   );
 });
@@ -57,8 +62,64 @@ import {
 import { AnimatedSparkle } from "./ui/icons";
 import { IconButton, FloatingMenu, useOutsideDismiss, TextArea } from "./ui";
 import { emojis, covers, blockFor, getPagePermission, renderInlineMarkdown, softDelete, getDescendants, turnInto, uid } from "../utils/helpers";
+import { PLAIN_LANGUAGE } from "../utils/codeLanguage";
 import { richTextToPlainText, plainTextToRichText } from "../utils/richText";
 import { globalVoiceController } from "../lib/voice/voice-controller";
+
+const FlowQuickButton = React.memo(function FlowQuickButton({ onToast, compact = false }: { onToast?: (msg: string) => void; compact?: boolean }) {
+  const [isListening, setIsListening] = useState(() => globalVoiceController.getIsListening());
+
+  useEffect(() => {
+    return globalVoiceController.subscribe((state) => {
+      setIsListening(state.isListening);
+    });
+  }, []);
+
+  return (
+    <motion.button
+      whileHover={compact ? undefined : { scale: 1.15, y: -1 }}
+      whileTap={compact ? undefined : { scale: 0.9 }}
+      transition={{ type: "spring", stiffness: 450, damping: 25 }}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await globalVoiceController.toggle();
+          const err = globalVoiceController.getError?.() || null;
+          if (err) {
+            onToast?.(`Flow error: ${err.message}`);
+          }
+        } catch (err: any) {
+          onToast?.(`Flow failed: ${err?.message || "Unknown error"}`);
+        }
+      }}
+      className={
+        compact
+          ? `relative grid h-6 w-6 place-items-center rounded-[6px] transition-all cursor-pointer ${
+              isListening
+                ? "bg-rose-500 text-white"
+                : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-black/5 dark:hover:bg-white/10"
+            }`
+          : `group/flow relative flex items-center justify-center w-7 h-7 rounded-lg transition-colors cursor-pointer ${
+              isListening
+                ? "bg-rose-500 text-white shadow-[0_0_12px_rgba(244,63,94,0.5)]"
+                : "text-neutral-500 hover:text-purple-600 dark:text-neutral-400 dark:hover:text-purple-400 hover:bg-black/[0.06] dark:hover:bg-white/[0.1]"
+            }`
+      }
+      title={isListening ? "Listening... Click to stop" : "Flow Voice Assistant (Ctrl+Shift+Space)"}
+      aria-label="Flow Voice Assistant"
+    >
+      <Mic
+        size={compact ? 13.5 : 16}
+        strokeWidth={2.2}
+        className={`transition-transform duration-200 ${isListening ? "animate-pulse" : compact ? "" : "group-hover/flow:scale-110"}`}
+      />
+      {isListening && (
+        <span className={`absolute border border-rose-400 animate-ping opacity-75 pointer-events-none ${compact ? "inset-0 rounded-[6px]" : "-inset-0.5 rounded-lg"}`} />
+      )}
+    </motion.button>
+  );
+});
 
 // Searchable emoji catalog for the /emoji picker (keyword-indexed).
 const EMOJI_CATALOG = [
@@ -101,6 +162,7 @@ const TypedSlashCommandMenu = SlashCommandMenu as unknown as React.ForwardRefExo
 } & React.RefAttributes<HTMLElement>>;
 import PageOptionsMenu from "./editor/PageOptionsMenu";
 import CustomizePanel from "./editor/CustomizePanel";
+import { getPageTextureOverlayStyle } from "../features/customization/pageTexture";
 import IconPicker from "../modules/ui/IconPicker";
 import CoverPicker from "../modules/ui/CoverPicker";
 import CoverContextMenu from "../modules/ui/CoverContextMenu";
@@ -109,7 +171,9 @@ import { executeCommand } from "../core/commands/ActionExecutor";
 import CollabPresenceBar from "./collab/CollabPresenceBar";
 import { realtimeCollab } from "../lib/realtimeCollab";
 import CommentThread from "./comments/CommentThread";
-import { usePageIsShared } from "../features/collab/hooks";
+import NewCommentIsland, { pickUnseenComments } from "./comments/NewCommentIsland";
+import type { NewCommentInfo } from "./comments/NewCommentIsland";
+import { usePageIsShared, useComments } from "../features/collab/hooks";
 import Breadcrumbs from "./Breadcrumbs";
 import { usePresence } from "../hooks/usePresence";
 import CommandPalette from "./CommandPalette";
@@ -118,8 +182,11 @@ import BacklinksPanel from "./editor/BacklinksPanel";
 import SelectionAIBar from "./editor/SelectionAIBar";
 import VersionHistoryPanel from "./editor/VersionHistoryPanel";
 import NotionAIBar from "./editor/NotionAIBar";
-import { ImportPanel } from "../features/import";
 import type { ImportedPageDraft } from "../features/import";
+
+const ImportPanel = React.lazy(() =>
+  import("../features/import").then((m) => ({ default: m.ImportPanel }))
+);
 import renderBlockEditor from "./editor/renderBlockEditor";
 import FloatingFormatToolbar from "./editor/FloatingFormatToolbar";
 import { ExternalUrlResolver } from "../lib/connections/urlResolver";
@@ -354,6 +421,7 @@ interface EditorProps {
   /** Locked (over-limit) workspaces render fully read-only: no typing,
    * drag, toolbars, or AI actions — import/export happen outside the editor. */
   forceReadOnly?: boolean;
+  canComment?: boolean;
   onMoveToWorkspace?: (pageId: string, workspaceId: string) => void;
 }
 
@@ -410,9 +478,11 @@ const EditorBlockList = memo(function EditorBlockList({
   blockCtx,
   handlePointerDown, activeCommentBlockId, setActiveCommentBlockId,
   pageComments, handleAddComment, handleResolveComment,
+  onOpenCommentThread, commentPopoverPos, handleDeleteComment,
   onAskAI, onFocusBlock, ghostWriterEnabled, apiKey, aiProvider, nvidiaKey,
   onToast, onUpdatePage, onPagePatch, onCreateSubpage, onNavigate,
   forceReadOnly = false,
+  canComment = true,
 }: {
   renderedBlocks: EditorBlock[];
   page: Page;
@@ -428,6 +498,9 @@ const EditorBlockList = memo(function EditorBlockList({
   pageComments: Array<Record<string, unknown>>;
   handleAddComment: (comment: Record<string, unknown>) => void;
   handleResolveComment: (commentId: string) => void;
+  onOpenCommentThread: (blockId: string, anchor: DOMRect) => void;
+  commentPopoverPos: { top: number; left: number } | null;
+  handleDeleteComment: (commentId: string) => void;
   onAskAI?: () => void;
   onFocusBlock?: (blockId: string | null) => void;
   ghostWriterEnabled?: boolean;
@@ -440,6 +513,7 @@ const EditorBlockList = memo(function EditorBlockList({
   onCreateSubpage?: (blockId: string, text: string) => string | null | undefined;
   onNavigate?: (pageId: string, options?: { altKey?: boolean }) => void;
   forceReadOnly?: boolean;
+  canComment?: boolean;
 }) {
   const refs = useMemo(() => createBlockRefs(blockCtx), [blockCtx]);
 
@@ -451,6 +525,7 @@ const EditorBlockList = memo(function EditorBlockList({
       page={page}
       pages={pages}
       isSelected={selectedBlockIds.has(block.id)}
+      canComment={canComment}
       onSelectBlock={(e) => handlePointerDown(e, block.id, index)}
       onPatch={(patch) => refs.onBlockPatch(block.id, patch)}
       onAdd={(type, text, customId) => refs.onAddBlock(type, text, block.id, customId)}
@@ -479,6 +554,9 @@ const EditorBlockList = memo(function EditorBlockList({
       pageComments={pageComments}
       handleAddComment={handleAddComment}
       handleResolveComment={handleResolveComment}
+      onOpenCommentThread={onOpenCommentThread}
+      commentPopoverPos={commentPopoverPos}
+      handleDeleteComment={handleDeleteComment}
     />
   ));
 });
@@ -510,6 +588,7 @@ export default function Editor({
   onTrashPage,
   onImportPages,
   forceReadOnly = false,
+  canComment: _canCommentProp,
   onMoveToWorkspace
 }: EditorProps) {
   const titleRef = useRef(null);
@@ -526,7 +605,8 @@ export default function Editor({
   }
   const [selection, setSelection] = useState<SelectionState>({ text: "", rect: null, blockId: null, selStart: 0, selEnd: 0 });
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
-  const [pageMenuPos, setPageMenuPos] = useState({ top: 0, left: 0 });
+  const [pageMenuPos, setPageMenuPos] = useState<{ top: number; right: number }>({ top: 38, right: 12 });
+  const pageMenuBtnRef = useRef<HTMLButtonElement>(null);
   const [schedulePageOpen, setSchedulePageOpen] = useState(false);
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [scheduleTime, setScheduleTime] = useState("10:00");
@@ -593,7 +673,7 @@ export default function Editor({
   const titleMenuBtnRef = useRef<HTMLButtonElement>(null);
   const titleDragControls = useDragControls();
   const handleClearOpenSlash = useCallback(() => setOpenSlashForBlockId(null), []);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const {
     selectedBlockIds, selectionMode, selectionRect, containerRef,
@@ -645,7 +725,115 @@ export default function Editor({
   const flatBlockMap = React.useMemo(() => Object.fromEntries(renderedBlocks.map(b => [b.id, b])), [renderedBlocks]);
 
   const permission = React.useMemo(() => getPagePermission(page, pages), [page, pages]);
-  const isEditable = !forceReadOnly && !page.isLocked && permission === 'edit';
+  // A viewer or commenter on somebody else's page cannot write page content.
+  // `getPagePermission` already resolves that from `sharedRole`; folding it
+  // into `forceReadOnly` reuses every existing read-only gate (title input,
+  // block content, resize handles, add/delete affordances) instead of leaving
+  // the page looking editable while the server rejects the write.
+  const effectiveReadOnly = forceReadOnly || permission === 'view';
+  const isEditable = !effectiveReadOnly && !page.isLocked;
+
+  // Commenting is a separate capability from editing: a viewer must not edit
+  // content, but neither should it be offered a comment box it cannot use. The
+  // `page_comment_insert` policy routes through `can_comment`, which is false
+  // for a viewer, so leaving the composer visible just invited a guaranteed
+  // failure. Existing comments stay readable — anyone with page access may read
+  // them (`page_comment_read`).
+  const canComment = page.sharedRole ? page.sharedRole !== "viewer" : true;
+
+  // Comments now live in the `page_comments` table (role-gated by RLS,
+  // pushed to every collaborator via postgres_changes realtime) — the inline
+  // threads share the exact same data as the Collab side panel. Legacy
+  // comments historically embedded in `page.comments`
+  // (pages.tags.__pageMeta) are merged in read-only for continuity, so
+  // nothing anyone wrote before this switch disappears.
+  const {
+    comments: dbComments,
+    loading: dbCommentsLoading,
+    add: addDbComment,
+    resolve: resolveDbComment,
+    remove: removeDbComment,
+  } = useComments(page.id);
+
+  const dbCommentIds = React.useMemo(() => new Set(dbComments.map(c => c.id)), [dbComments]);
+
+  const allComments = React.useMemo(() => {
+    const legacy = (page.comments || []).filter((c: any) => c.id && !dbCommentIds.has(c.id));
+    const mapped = dbComments.map(c => ({
+      id: c.id,
+      blockId: c.block_id || "",
+      pageId: c.page_id,
+      text: c.content,
+      userId: c.user_id,
+      userName: c.user_name,
+      userAvatar: c.user_avatar,
+      verified: true,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+      resolvedAt: c.resolved ? (c.resolved_at || c.updated_at) : null,
+      resolvedBy: c.resolved_by || null,
+    }));
+    return [...legacy, ...mapped];
+  }, [dbComments, page.comments, dbCommentIds]);
+
+  // Collab-only "new comment" surface — deliberately NOT a notification.
+  // While this page is open, unseen comments from collaborators queue up and
+  // surface as a Dynamic-Island-style pill over the viewport (see the portal
+  // near the end of the render). The first load per page seeds `seen` so page
+  // history never replays as "new"; switching pages reseeds from scratch.
+  const [newCommentQueue, setNewCommentQueue] = React.useState<NewCommentInfo[]>([]);
+  const seenCommentIdsRef = React.useRef<{ pageId: string; ids: Set<string> }>({
+    pageId: "",
+    ids: new Set(),
+  });
+
+  React.useEffect(() => {
+    if (dbCommentsLoading) return;
+    // Mid page-switch the previous page's rows can still be in state; ignore
+    // them until the hook resets and loads rows for the current page.
+    if (dbComments.some((c) => c.page_id !== page.id)) return;
+    const seen = seenCommentIdsRef.current;
+    if (seen.pageId !== page.id) {
+      seenCommentIdsRef.current = { pageId: page.id, ids: new Set(dbComments.map((c) => c.id)) };
+      setNewCommentQueue([]);
+      return;
+    }
+    const fresh = pickUnseenComments(dbComments, seen.ids, realtimeCollab.getUser()?.userId, page.id);
+    dbComments.forEach((c) => seen.ids.add(c.id));
+    if (fresh.length) {
+      setNewCommentQueue((queue) => {
+        const known = new Set(queue.map((q) => q.id));
+        return [...queue, ...fresh.filter((f) => !known.has(f.id))].slice(-20);
+      });
+    }
+  }, [dbComments, dbCommentsLoading, page.id]);
+
+  // Click-to-create on the empty space below the last block. The editor had no
+  // way to add a block from dead space — only Enter, the + menu or "/" — so
+  // clicking the blank area did nothing and read as "the page is broken".
+  // Gated on `isEditable` (not merely `!page.isLocked`) so viewer/commenter
+  // grants stay fully inert: they can neither see this target nor mutate the
+  // owner's page through it.
+  const handleClickEmptySpace = useCallback(() => {
+    if (!isEditable) return;
+    const next = blockFor("text", "");
+    onBlocks([...(page.blocks || []), next]);
+    // Wait for the new block to mount before moving the caret into it. An empty
+    // text block renders as a contenteditable div, not a <textarea> (the
+    // textarea only appears once the block has content), so match both or the
+    // caret never lands and the click looks like it did nothing.
+    setTimeout(() => {
+      const root = document.querySelector(`[data-block-id="${next.id}"]`);
+      const el = root?.querySelector<HTMLTextAreaElement | HTMLElement>(
+        'textarea, [contenteditable="true"]'
+      );
+      if (!el) return;
+      el.focus();
+      if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    }, 30);
+  }, [isEditable, onBlocks, page.blocks]);
   // Privacy gate: presence UI/telemetry only for shared ("public") pages.
   // A page nobody's been invited to is private — no online list, cursors,
   // or typing indicators for anyone.
@@ -724,6 +912,7 @@ export default function Editor({
   const [versionHistory, setVersionHistory] = useState([]);
 
   const handleDragEnd = useCallback((event) => {
+    setActiveId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const flat = flattenEditorBlocks(page?.blocks || []);
@@ -734,20 +923,86 @@ export default function Editor({
     onBlocks(reordered.map(b => { const { _depth, ...rest } = b; return rest; }));
   }, [page?.blocks, onBlocks]);
 
-  const handleAddComment = useCallback((comment) => {
-    const existing = page.comments || [];
-    onPagePatch?.({ comments: [...existing, comment] });
-    capture("comment_added", { surface: comment.blockId === "__title__" ? "title" : "block" });
-    onToast?.("Comment added");
-  }, [page.comments, onPagePatch, onToast]);
+  const handleAddComment = useCallback(async (comment) => {
+    const user = realtimeCollab.getUser();
+    const userId = comment.userId && comment.userId !== "local" ? comment.userId : (user?.userId || "local");
+    const userName = comment.userName || user?.userName || "Anonymous";
+    const created = await addDbComment(
+      userId,
+      userName,
+      comment.text,
+      comment.blockId,
+      comment.userAvatar || user?.userAvatar,
+    );
+    if (created) {
+      capture("comment_added", { surface: comment.blockId === "__title__" ? "title" : "block" });
+    } else {
+      onToast?.("Couldn't post the comment — you may not have comment access on this page");
+    }
+  }, [addDbComment, onToast]);
 
-  const handleResolveComment = useCallback((commentId) => {
+  const handleResolveComment = useCallback(async (commentId) => {
+    if (dbCommentIds.has(commentId)) {
+      const user = realtimeCollab.getUser();
+      const ok = await resolveDbComment(commentId, user?.userName || "You");
+      onToast?.(ok ? "Comment resolved" : "Couldn't resolve the comment");
+      return;
+    }
+    // Legacy local comment (still only in pages.tags.__pageMeta JSON).
     const existing = page.comments || [];
     onPagePatch?.({
       comments: existing.map(c => c.id === commentId ? { ...c, resolvedAt: new Date().toISOString(), resolvedBy: "You" } : c)
     });
     onToast?.("Comment resolved");
-  }, [page.comments, onPagePatch, onToast]);
+  }, [dbCommentIds, resolveDbComment, page.comments, onPagePatch, onToast]);
+
+  const handleDeleteComment = useCallback(async (commentId) => {
+    if (dbCommentIds.has(commentId)) {
+      const ok = await removeDbComment(commentId);
+      onToast?.(ok ? "Comment deleted" : "Couldn't delete the comment");
+      return;
+    }
+    const existing = page.comments || [];
+    onPagePatch?.({ comments: existing.filter(c => c.id !== commentId) });
+    onToast?.("Comment deleted");
+  }, [dbCommentIds, removeDbComment, page.comments, onPagePatch, onToast]);
+
+  // Thread popovers render through a body portal anchored to the comment
+  // button. In-place rendering lived inside transformed/stacked block
+  // toolbars, so the panel got clipped and painted under sibling blocks —
+  // page text bled through the glass card and the click-catcher missed.
+  const [commentPopoverPos, setCommentPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const openCommentThread = useCallback((blockId: string, anchor: DOMRect) => {
+    const width = 360;
+    const gap = 8;
+    let left = anchor.right + gap;
+    if (left + width > window.innerWidth - 16) {
+      left = Math.max(16, anchor.left - width - gap);
+    }
+    const estHeight = Math.min(430, window.innerHeight - 32);
+    let top = anchor.top - 6;
+    if (top + estHeight > window.innerHeight - 16) top = window.innerHeight - 16 - estHeight;
+    if (top < 16) top = 16;
+    setCommentPopoverPos({ top, left });
+    setActiveCommentBlockId(blockId);
+  }, []);
+
+  // Island click → jump to the comment's anchor and open its real thread.
+  // Title and page-level comments anchor to the title input; block comments
+  // scroll their block into view (instantly, so the measured rect matches the
+  // final position) and open the popover right there.
+  const openIslandComment = React.useCallback((comment: NewCommentInfo) => {
+    setNewCommentQueue((queue) => queue.filter((q) => q.id !== comment.id));
+    const isTitleAnchored = !comment.blockId || comment.blockId === "__title__";
+    const anchorEl = isTitleAnchored
+      ? (titleRef.current as HTMLElement | null)
+      : document.querySelector<HTMLElement>(`[data-block-id="${window.CSS.escape(comment.blockId)}"]`);
+    anchorEl?.scrollIntoView({ block: "center" });
+    const rect =
+      anchorEl?.getBoundingClientRect() ??
+      new DOMRect(window.innerWidth / 2 - 120, 140, 240, 28);
+    openCommentThread(comment.blockId, rect);
+  }, [openCommentThread]);
   const loadVersionHistory = React.useCallback(() => {
     try {
       const auditKey = `audit_${page.id}`;
@@ -801,7 +1056,7 @@ export default function Editor({
 
   const handleMouseUp = () => {
     const sel = window.getSelection();
-    if (!sel || page.isLocked || forceReadOnly) return;
+    if (!sel || page.isLocked || effectiveReadOnly) return;
     const text = sel.toString().trim();
     if (text.length > 0 && editorContainerRef.current) {
       const range = sel.getRangeAt(0);
@@ -835,6 +1090,11 @@ export default function Editor({
     }
   };
 
+  const isDarkCanvas = typeof document !== "undefined"
+    ? document.documentElement.classList.contains("dark") || document.documentElement.getAttribute("data-theme") === "dark"
+    : false;
+  const pageTextureStyle = getPageTextureOverlayStyle(page.pageTexture, isDarkCanvas, page.pageBg);
+
   return (
     <section
       ref={editorContainerRef}
@@ -852,19 +1112,28 @@ export default function Editor({
           sendCursor(e.clientX - rect.left, e.clientY - rect.top + e.currentTarget.scrollTop);
         }
       }}
-      className={`min-h-0 flex-1 overflow-y-auto scrollbar-thin relative transition-all duration-200 ${
-        page.fontStyle === "serif"
+      className={`min-h-0 flex-1 overflow-y-auto scrollbar-thin relative transition-all duration-200 ${page.fontStyle === "serif"
           ? "font-serif"
           : page.fontStyle === "mono"
-          ? "font-mono"
-          : page.fontStyle === "handwriting"
-          ? "font-serif italic"
-          : page.fontStyle === "display"
-          ? "font-sans uppercase font-bold tracking-wide"
-          : "font-sans"
-      }`}
+            ? "font-mono"
+            : page.fontStyle === "handwriting"
+              ? "font-serif italic"
+              : page.fontStyle === "display"
+                ? "font-sans uppercase font-bold tracking-wide"
+                : "font-sans"
+        }`}
       style={page.pageBg ? { background: page.pageBg } : undefined}
     >
+      {/* Tone-matched Page Texture Layer */}
+      {pageTextureStyle && (
+        <div className="pointer-events-none sticky top-0 left-0 w-full h-0 z-0 overflow-visible">
+          <div
+            className="w-full h-screen pointer-events-none transition-opacity duration-300"
+            style={pageTextureStyle}
+          />
+        </div>
+      )}
+
       {/* Ambient Canvas Mesh Overlay */}
       {page.pageMeshBg && (
         <div
@@ -876,16 +1145,324 @@ export default function Editor({
       {/* Live cursors from other collaborators */}
       <CursorOverlay pageId={page.id} />
 
+      {/* ─── Pinned Viewport Corner Toolbar: Left Upper Corner Breadcrumbs & Right Upper Corner Actions ─── */}
+      <div className="sticky top-0 left-0 right-0 w-full z-20 pointer-events-none flex items-center justify-between px-3 sm:px-5 py-2">
+        {/* Left Upper Corner: Compact Breadcrumbs & Status Badges */}
+        <div className="flex items-center gap-1.5 min-w-0 max-w-[60%] pointer-events-auto">
+          <Breadcrumbs pageId={page.id} pages={pages} onNavigate={onNavigate} />
+          {/* "Locked" is an owner-set property; a viewer/commenter being
+              read-only is a permission outcome and must not be dressed up as
+              a lock, so the two badges stay mutually exclusive. */}
+          {page.isLocked && (
+            <span className="flex items-center gap-1 rounded-md bg-[var(--danger)]/10 px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-[var(--danger)] shrink-0">
+              🔒 Locked
+            </span>
+          )}
+          {!page.isLocked && effectiveReadOnly && (
+            <span className="flex items-center gap-1 rounded-md bg-[var(--accent)]/10 px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-[var(--accent)] shrink-0">
+              👁 View only
+            </span>
+          )}
+          {page.sharedRole && (
+            <span className="flex items-center gap-1 rounded-md bg-[var(--accent)]/10 px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-[var(--accent)] shrink-0" title="Shared with you — you are not the owner of this page">
+              🤝 Shared {page.sharedRole === "editor" ? "· can edit" : page.sharedRole === "commenter" ? "· can comment" : "· view only"}
+            </span>
+          )}
+        </div>
+
+        {/* Right Upper Corner: Compact Action Buttons (Calendar & Page Options) */}
+        <div className="flex items-center gap-1 shrink-0 ml-auto pointer-events-auto">
+          {pageIsShared && users.length > 0 && (
+            <CollabPresenceBar
+              users={users}
+              ownStatus={ownStatus}
+              pageId={page.id}
+              onStatusChange={(s) => setOwnStatus(s)}
+            />
+          )}
+          <div className="relative flex items-center">
+            <div
+              ref={pageOptionsRef}
+              className="flex items-center p-0.5 rounded-[9px] bg-black/[0.04] dark:bg-white/[0.06] backdrop-blur-md border border-black/[0.04] dark:border-white/[0.08] shadow-2xs gap-0.5"
+            >
+              {isEditable && (
+                <button
+                  ref={titleMenuBtnRef}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTitleCustomizerOpen((prev) => !prev);
+                  }}
+                  className="grid h-6 w-6 place-items-center rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-black/5 dark:hover:bg-white/10 active:scale-92 transition-all cursor-pointer select-none"
+                  title="Customize Title (Size, Font, Color, Style)"
+                  aria-label="Customize title"
+                >
+                  <Menu size={14} strokeWidth={2.2} />
+                </button>
+              )}
+              {isEditable && page.cover && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const pickerW = 360;
+                      let left = rect.left;
+                      if (left + pickerW > window.innerWidth - 16) {
+                        left = Math.max(16, window.innerWidth - pickerW - 16);
+                      }
+                      setCoverPickerPos({ top: rect.bottom + 6, left });
+                      setCoverPickerOpen((o) => !o);
+                    }}
+                    className={`relative grid h-6 w-6 place-items-center rounded-[6px] transition-all cursor-pointer ${
+                      coverPickerOpen
+                        ? "bg-black/[0.08] dark:bg-white/[0.15] text-amber-600 dark:text-amber-400"
+                        : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-black/5 dark:hover:bg-white/10"
+                    }`}
+                    title="Change cover"
+                    aria-label="Change cover"
+                  >
+                    <Image size={13.5} strokeWidth={2.2} />
+                    <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-emerald-500" />
+                  </button>
+                  <FlowQuickButton compact onToast={onToast} />
+                </>
+              )}
+              <button
+                onClick={() => setSchedulePageOpen(true)}
+                className="grid h-6 w-6 place-items-center rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-black/5 dark:hover:bg-white/10 active:scale-92 transition-all cursor-pointer"
+                title="Schedule this page / Add to Calendar"
+              >
+                <Calendar size={13.5} strokeWidth={2.2} />
+              </button>
+              <button
+                ref={pageMenuBtnRef}
+                onClick={() => {
+                  if (!pageMenuOpen) {
+                    const rect = pageMenuBtnRef.current?.getBoundingClientRect();
+                    const margin = 12;
+                    const right = rect ? Math.max(margin, window.innerWidth - rect.right) : margin;
+                    let top = (rect?.bottom ?? 0) + 6;
+                    const maxMenuH = 560;
+                    if (top + maxMenuH > window.innerHeight - margin) {
+                      top = Math.max(margin, (rect?.top ?? top) - maxMenuH);
+                    }
+                    setPageMenuPos({ top, right });
+                  }
+                  setPageMenuOpen(!pageMenuOpen);
+                }}
+                className="grid h-6 w-6 place-items-center rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-black/5 dark:hover:bg-white/10 active:scale-92 transition-all cursor-pointer"
+                title="Page options"
+              >
+                <MoreHorizontal size={14} strokeWidth={2.2} />
+              </button>
+            </div>
+            {isEditable && (
+              <PageTitleCustomizer
+                page={page}
+                isEditable={isEditable}
+                onPagePatch={onPagePatch}
+                open={titleCustomizerOpen}
+                onClose={() => setTitleCustomizerOpen(false)}
+                anchorRef={titleMenuBtnRef}
+              />
+            )}
+            {schedulePageOpen && createPortal(
+              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSchedulePageOpen(false)} />
+                <div className="relative z-10 w-full max-w-md rounded-3xl border border-[var(--border)] bg-[var(--elevated)] p-6 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+                    <div className="flex items-center gap-2">
+                      <div className="size-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
+                        <Calendar size={16} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[var(--text)]">Schedule Page in Calendar</h3>
+                        <p className="text-[11px] text-[var(--muted)]">Plan focus sessions, reviews, and deadlines</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSchedulePageOpen(false)}
+                      className="rounded-lg p-1 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-semibold text-[var(--muted)]">Page Document</label>
+                      <div className="mt-1 px-3 py-2 rounded-xl bg-[var(--surface)] text-xs font-bold text-[var(--text)] border border-[var(--border)] truncate">
+                        {page.title || "Untitled Document"}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--muted)]">Target Date</label>
+                        <input
+                          type="date"
+                          value={scheduleDate}
+                          onChange={(e) => setScheduleDate(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--muted)]">Start Time</label>
+                        <input
+                          type="time"
+                          value={scheduleTime}
+                          onChange={(e) => setScheduleTime(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--muted)]">Duration</label>
+                        <select
+                          value={scheduleDurationHours}
+                          onChange={(e) => setScheduleDurationHours(Number(e.target.value))}
+                          className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                        >
+                          <option value={0.5}>30 minutes</option>
+                          <option value={1}>1 hour (Deep Focus)</option>
+                          <option value={1.5}>1.5 hours</option>
+                          <option value={2}>2 hours (Intensive)</option>
+                          <option value={3}>3 hours</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--muted)]">Category</label>
+                        <select
+                          value={scheduleCategory}
+                          onChange={(e) => setScheduleCategory(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                        >
+                          <option value="Tasks">Deep Focus / Task</option>
+                          <option value="Review">Spaced Repetition</option>
+                          <option value="Document">Knowledge Milestone</option>
+                          <option value="Meeting">Discussion</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
+                    <button
+                      onClick={() => setSchedulePageOpen(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        const [hours, mins] = scheduleTime.split(":").map(Number);
+                        const start = new Date(scheduleDate);
+                        start.setHours(hours || 10, mins || 0, 0, 0);
+                        const end = new Date(start.getTime() + scheduleDurationHours * 3600000);
+
+                        const newEvt = {
+                          id: `page-sched-${page.id}-${Date.now()}`,
+                          title: page.title || "Untitled Document",
+                          description: `Dedicated focus & work block on: ${page.title || "Document"}`,
+                          startTime: start,
+                          endTime: end,
+                          color: scheduleCategory === "Review" ? "amber" : "blue",
+                          category: scheduleCategory,
+                          status: "confirmed",
+                          pageId: page.id,
+                          isCreatedPage: true,
+                          timeSpentMinutes: Math.round(scheduleDurationHours * 60)
+                        };
+
+                        try {
+                          const raw = localStorage.getItem("noska_calendar_events");
+                          const existing = raw ? JSON.parse(raw) : [];
+                          existing.push(newEvt);
+                          localStorage.setItem("noska_calendar_events", JSON.stringify(existing));
+                          window.dispatchEvent(new Event("storage"));
+                        } catch (err) {
+                          console.error(err);
+                        }
+
+                        setSchedulePageOpen(false);
+                        onToast?.(`Scheduled "${page.title || "Document"}" in Calendar!`);
+                      }}
+                      className="px-5 py-2 rounded-xl bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-xs font-semibold shadow-md transition cursor-pointer"
+                    >
+                      Add to Calendar
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
+            {pageMenuOpen && createPortal(
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setPageMenuOpen(false)} />
+                <div
+                  className="fixed z-50"
+                  style={{ top: pageMenuPos.top, right: pageMenuPos.right }}
+                >
+                  <PageOptionsMenu
+                    open={pageMenuOpen}
+                    onClose={() => setPageMenuOpen(false)}
+                    page={page}
+                    onAction={(action) => {
+                      setPageMenuOpen(false);
+                      if (action.startsWith("move-to-workspace:")) {
+                        onMoveToWorkspace?.(page.id, action.slice("move-to-workspace:".length));
+                        return;
+                      }
+                      switch (action) {
+                        case "trash": onTrashPage?.(page.id); break;
+                        case "duplicate": onDuplicateBlock?.(page.id); break;
+                        case "present": setPresentationMode(true); break;
+                        case "suggest": setSuggestEdits(v => !v); onToast?.(`Suggest edits ${!suggestEdits ? "ON" : "OFF"}`); break;
+                        case "move-to": setMoveToOpen(true); break;
+                        case "customize": setCustomizeOpen(true); break;
+                        case "import": setImportDialogOpen(true); break;
+                        case "export": handleExport(); break;
+                        case "wiki": handleWikiConversion(); break;
+                        case "history": setHistoryOpen(true); break;
+                        case "analytics": setAnalyticsOpen(true); break;
+                        case "ai": onAskAI?.(); break;
+                        default: break;
+                      }
+                    }}
+                    wordCount={wordCount}
+                    lastEditedBy={page?.lastEditedBy || realtimeCollab.getUser()?.userName || "Workspace User"}
+                    lastEditedAt={page?.lastEditedAt || page?.updatedAt}
+                    onPagePatch={onPagePatch}
+                    onToast={onToast}
+                    onTrash={onTrashPage}
+                    onDuplicatePage={() => onDuplicateBlock?.(page.id)}
+                    onImport={() => setImportDialogOpen(true)}
+                    onExport={handleExport}
+                    onAnalytics={() => setAnalyticsOpen(true)}
+                    onHistory={() => setHistoryOpen(true)}
+                    onAskAI={onAskAI}
+                  />
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Cover Banner — full width of editor container or constrained by coverSize without viewport overflow */}
       {Boolean(page.cover) && (
         <div
           className={`transition-all duration-300 relative group/banner select-none overflow-hidden ${!page.coverSize || page.coverSize === "full"
-              ? "w-full"
-              : page.coverSize === "wide"
-                ? "max-w-5xl mx-auto rounded-b-xl"
-                : page.coverSize === "small"
-                  ? "max-w-[480px] mx-auto rounded-b-xl"
-                  : "max-w-[720px] mx-auto rounded-b-xl"
+            ? "w-full"
+            : page.coverSize === "wide"
+              ? "max-w-5xl mx-auto rounded-b-xl"
+              : page.coverSize === "small"
+                ? "max-w-[480px] mx-auto rounded-b-xl"
+                : "max-w-[720px] mx-auto rounded-b-xl"
             } ${isRepositioningCover ? "ring-2 ring-blue-500/60 cursor-grab active:cursor-grabbing" : ""
             }`}
           style={{
@@ -893,11 +1470,11 @@ export default function Editor({
             ...(typeof page.cover === "string" && (page.cover.includes("gradient(") || page.cover.startsWith("#") || page.cover.startsWith("rgb") || page.cover.startsWith("hsl"))
               ? { background: page.cover }
               : {
-                  backgroundImage: page.cover ? `url(${page.cover})` : undefined,
-                  backgroundPosition: isRepositioningCover && coverDragYPercent !== null ? `center ${coverDragYPercent}%` : (page.coverPosition || "center"),
-                  backgroundSize: "cover",
-                  backgroundRepeat: "no-repeat"
-                }),
+                backgroundImage: page.cover ? `url(${page.cover})` : undefined,
+                backgroundPosition: isRepositioningCover && coverDragYPercent !== null ? `center ${coverDragYPercent}%` : (page.coverPosition || "center"),
+                backgroundSize: "cover",
+                backgroundRepeat: "no-repeat"
+              }),
             filter: page.coverOverlay ? `brightness(${page.coverBrightness || 100}%)` : "none",
             ...(page.coverParallax ? { backgroundAttachment: "fixed" } : {})
           }}
@@ -964,276 +1541,23 @@ export default function Editor({
         </div>
       )}
 
-      <div className={`mx-auto ${page.cover ? "pt-4 pb-10" : "py-10"} transition-all duration-200 relative z-10 ${
-          page.fullWidth
-            ? "max-w-full px-8"
-            : page.pageWidth === "wide"
+      <div className={`mx-auto ${page.cover ? "pt-4 pb-10" : "pt-4 pb-10 sm:pt-5 sm:pb-12"} transition-all duration-200 relative z-10 ${page.fullWidth
+          ? "max-w-full px-8"
+          : page.pageWidth === "wide"
             ? "max-w-[960px] px-12"
             : page.pageWidth === "compact"
-            ? "max-w-[580px] px-8"
-            : "max-w-[720px] px-16"
+              ? "max-w-[580px] px-8"
+              : "max-w-[720px] px-16"
         } ${page.smallText ? "noska-small-text text-xs" : ""
         }`}
         onClick={(e) => {
-          if (!(page.isLocked || forceReadOnly) && (page.blocks || []).length > 0 && e.target === 
-e.currentTarget) {
+          if (!(page.isLocked || effectiveReadOnly) && (page.blocks || []).length > 0 && e.target ===
+            e.currentTarget) {
             const lastBlock = page.blocks[page.blocks.length - 1];
             onBlocks(insertBlockAfterTree(page.blocks || [], lastBlock.id, blockFor("text", "")));
           }
         }}
       >
-        <div className="mb-2 flex items-center justify-between gap-2 relative min-h-[32px]">
-          <div className="flex items-center gap-2">
-            {(page.isLocked || forceReadOnly) && (
-              <span className="flex items-center gap-1 rounded bg-[var(--danger)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--danger)]">
-                🔒 Locked
-              </span>
-            )}
-            {permission === 'view' && !page.isLocked && !forceReadOnly && (
-              <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">
-                👁 View only
-              </span>
-            )}
-            {page.sharedRole && (
-              <span className="flex items-center gap-1 rounded bg-[var(--accent)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]" title="Shared with you — you are not the owner of this page">
-                🤝 Shared {page.sharedRole === "editor" ? "· can edit" : page.sharedRole === "commenter" ? "· can comment" : "· view only"}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 ml-auto">
-            {/* Live collaboration presence — only when someone else is actually
-                on this page; the solo state is covered by the top bar's
-                Collab pill (WorkspaceJoinBar) so we don't show it twice. */}
-            {pageIsShared && users.length > 0 && (
-              <CollabPresenceBar
-                users={users}
-                ownStatus={ownStatus}
-                pageId={page.id}
-                onStatusChange={(s) => setOwnStatus(s)}
-              />
-            )}
-            <div className="relative flex items-center">
-              <div ref={pageOptionsRef} className="flex items-center">
-                <button
-                  onClick={() => setSchedulePageOpen(true)}
-                  className="grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
-                  title="Schedule this page / Add to Calendar"
-                >
-                  <Calendar size={17} />
-                </button>
-                <button
-                  onClick={() => {
-                    if (!pageMenuOpen) {
-                      const rect = pageOptionsRef.current?.getBoundingClientRect();
-                      const menuW = 300;
-                      const margin = 8;
-                      let left = (rect?.left ?? 0) - menuW + 32;
-                      if (left + menuW > window.innerWidth - margin) {
-                        left = Math.max(margin, window.innerWidth - menuW - margin);
-                      }
-                      if (left < margin) left = margin;
-                      let top = (rect?.bottom ?? 0) + 4;
-                      const maxMenuH = 560;
-                      if (top + maxMenuH > window.innerHeight - margin) {
-                        top = Math.max(margin, (rect?.top ?? top) - maxMenuH);
-                      }
-                      setPageMenuPos({ top, left });
-                    }
-                    setPageMenuOpen(!pageMenuOpen);
-                  }}
-                  className="grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer"
-                  title="Page options"
-                >
-                  <MoreHorizontal size={18} />
-                </button>
-              </div>
-              {schedulePageOpen && createPortal(
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSchedulePageOpen(false)} />
-                  <div className="relative z-10 w-full max-w-md rounded-3xl border border-[var(--border)] bg-[var(--elevated)] p-6 shadow-2xl space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
-                      <div className="flex items-center gap-2">
-                        <div className="size-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
-                          <Calendar size={16} />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-[var(--text)]">Schedule Page in Calendar</h3>
-                          <p className="text-[11px] text-[var(--muted)]">Plan focus sessions, reviews, and deadlines</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setSchedulePageOpen(false)}
-                        className="rounded-lg p-1 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs font-semibold text-[var(--muted)]">Page Document</label>
-                        <div className="mt-1 px-3 py-2 rounded-xl bg-[var(--surface)] text-xs font-bold text-[var(--text)] border border-[var(--border)] truncate">
-                          {page.title || "Untitled Document"}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs font-semibold text-[var(--muted)]">Target Date</label>
-                          <input
-                            type="date"
-                            value={scheduleDate}
-                            onChange={(e) => setScheduleDate(e.target.value)}
-                            className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-[var(--muted)]">Start Time</label>
-                          <input
-                            type="time"
-                            value={scheduleTime}
-                            onChange={(e) => setScheduleTime(e.target.value)}
-                            className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs font-semibold text-[var(--muted)]">Duration</label>
-                          <select
-                            value={scheduleDurationHours}
-                            onChange={(e) => setScheduleDurationHours(Number(e.target.value))}
-                            className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
-                          >
-                            <option value={0.5}>30 minutes</option>
-                            <option value={1}>1 hour (Deep Focus)</option>
-                            <option value={1.5}>1.5 hours</option>
-                            <option value={2}>2 hours (Intensive)</option>
-                            <option value={3}>3 hours</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-[var(--muted)]">Category</label>
-                          <select
-                            value={scheduleCategory}
-                            onChange={(e) => setScheduleCategory(e.target.value)}
-                            className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
-                          >
-                            <option value="Tasks">Deep Focus / Task</option>
-                            <option value="Review">Spaced Repetition</option>
-                            <option value="Document">Knowledge Milestone</option>
-                            <option value="Meeting">Discussion</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
-                      <button
-                        onClick={() => setSchedulePageOpen(false)}
-                        className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--text)] transition cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => {
-                          const [hours, mins] = scheduleTime.split(":").map(Number);
-                          const start = new Date(scheduleDate);
-                          start.setHours(hours || 10, mins || 0, 0, 0);
-                          const end = new Date(start.getTime() + scheduleDurationHours * 3600000);
-
-                          const newEvt = {
-                            id: `page-sched-${page.id}-${Date.now()}`,
-                            title: page.title || "Untitled Document",
-                            description: `Dedicated focus & work block on: ${page.title || "Document"}`,
-                            startTime: start,
-                            endTime: end,
-                            color: scheduleCategory === "Review" ? "amber" : "blue",
-                            category: scheduleCategory,
-                            status: "confirmed",
-                            pageId: page.id,
-                            isCreatedPage: true,
-                            timeSpentMinutes: Math.round(scheduleDurationHours * 60)
-                          };
-
-                          try {
-                            const raw = localStorage.getItem("noska_calendar_events");
-                            const existing = raw ? JSON.parse(raw) : [];
-                            existing.push(newEvt);
-                            localStorage.setItem("noska_calendar_events", JSON.stringify(existing));
-                            window.dispatchEvent(new Event("storage"));
-                          } catch (err) {
-                            console.error(err);
-                          }
-
-                          setSchedulePageOpen(false);
-                          onToast?.(`Scheduled "${page.title || "Document"}" in Calendar!`);
-                        }}
-                        className="px-5 py-2 rounded-xl bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-xs font-semibold shadow-md transition cursor-pointer"
-                      >
-                        Add to Calendar
-                      </button>
-                    </div>
-                  </div>
-                </div>,
-                document.body
-              )}
-              {pageMenuOpen && createPortal(
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setPageMenuOpen(false)} />
-                  <div
-                    className="fixed z-50"
-                    style={{ top: pageMenuPos.top, left: pageMenuPos.left }}
-                  >
-                    <PageOptionsMenu
-                      open={pageMenuOpen}
-                      onClose={() => setPageMenuOpen(false)}
-                      page={page}
-                      onAction={(action) => {
-                        setPageMenuOpen(false);
-                        if (action.startsWith("move-to-workspace:")) {
-                          onMoveToWorkspace?.(page.id, action.slice("move-to-workspace:".length));
-                          return;
-                        }
-                        switch (action) {
-                          case "trash": onTrashPage?.(page.id); break;
-                          case "duplicate": onDuplicateBlock?.(page.id); break;
-                          case "present": setPresentationMode(true); break;
-                          case "suggest": setSuggestEdits(v => !v); onToast?.(`Suggest edits ${!suggestEdits ? "ON" : "OFF"}`); break;
-                          case "move-to": setMoveToOpen(true); break;
-                          case "customize": setCustomizeOpen(true); break;
-                          case "import": setImportDialogOpen(true); break;
-                          case "export": handleExport(); break;
-                          case "wiki": handleWikiConversion(); break;
-                          case "history": setHistoryOpen(true); break;
-                          case "analytics": setAnalyticsOpen(true); break;
-                          case "ai": onAskAI?.(); break;
-                          default: break;
-                        }
-                      }}
-                      wordCount={wordCount}
-                      lastEditedBy={page?.lastEditedBy || realtimeCollab.getUser()?.userName || "Workspace User"}
-                      lastEditedAt={page?.lastEditedAt || page?.updatedAt}
-                      onPagePatch={onPagePatch}
-                      onToast={onToast}
-                      onTrash={onTrashPage}
-                      onDuplicatePage={() => onDuplicateBlock?.(page.id)}
-                      onImport={() => setImportDialogOpen(true)}
-                      onExport={handleExport}
-                      onAnalytics={() => setAnalyticsOpen(true)}
-                      onHistory={() => setHistoryOpen(true)}
-                      onAskAI={onAskAI}
-                    />
-                  </div>
-                </>,
-                document.body
-              )}
-            </div>
-          </div>
-        </div>
-        <Breadcrumbs pageId={page.id} pages={pages} onNavigate={onNavigate} />
         <AnimatePresence>
           {findOpen && (
             <motion.div
@@ -1284,38 +1608,61 @@ e.currentTarget) {
         </AnimatePresence>
         {/* Page header and title container with hover controls */}
         <div className="group/header relative mb-5">
-          {/* Hover-revealed action bar: Change cover, Add/Change icon, Voice capture */}
+          {/* Hover-revealed action bar: Change cover, Add/Change icon, Voice capture (Icon-only without drawer) */}
           {isEditable && (
-            <div className="relative z-30 flex items-center gap-2 mb-2 min-h-[30px] opacity-0 group-hover/header:opacity-100 transition-opacity duration-150 select-none pointer-events-none group-hover/header:pointer-events-auto">
+            <div
+              className={`relative z-30 flex items-center gap-1 mb-2 min-h-[30px] select-none transition-all duration-200 ${
+                coverPickerOpen
+                  ? "opacity-100 pointer-events-auto translate-y-0"
+                  : "opacity-0 group-hover/header:opacity-100 group-focus-within/header:opacity-100 transition-all duration-200 group-hover/header:translate-y-0 translate-y-1 pointer-events-none group-hover/header:pointer-events-auto"
+              }`}
+            >
               {!page.icon && (
-                <button
-                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
+                <motion.button
+                  whileHover={{ scale: 1.15, y: -1 }}
+                  whileTap={{ scale: 0.9 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 25 }}
                   onClick={() => {
                     onPagePatch({ icon: "📝" });
                     setTitleEmojiOpen(true);
                   }}
+                  className="group/icon flex items-center justify-center w-7 h-7 rounded-lg text-neutral-500 hover:text-sky-600 dark:text-neutral-400 dark:hover:text-sky-400 hover:bg-black/[0.06] dark:hover:bg-white/[0.1] transition-colors cursor-pointer"
+                  title="Add icon"
+                  aria-label="Add icon"
                 >
-                  <span>Add icon</span>
-                </button>
+                  <Smile size={16} strokeWidth={2.2} className="transition-transform duration-200 group-hover/icon:rotate-12 group-hover/icon:scale-110" />
+                </motion.button>
               )}
+
               <div className="relative pointer-events-auto">
-                <button
-                  ref={coverBtnRef}
-                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const pickerW = 360;
-                    let left = rect.left;
-                    if (left + pickerW > window.innerWidth - 16) {
-                      left = Math.max(16, window.innerWidth - pickerW - 16);
-                    }
-                    setCoverPickerPos({ top: rect.bottom + 6, left });
-                    setCoverPickerOpen((o) => !o);
-                  }}
-                >
-                  <span>{page.cover ? "Change cover" : "Add cover"}</span>
-                </button>
+                {!page.cover && (
+                  <motion.button
+                    ref={coverBtnRef}
+                    whileHover={{ scale: 1.15, y: -1 }}
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ type: "spring", stiffness: 450, damping: 25 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const pickerW = 360;
+                      let left = rect.left;
+                      if (left + pickerW > window.innerWidth - 16) {
+                        left = Math.max(16, window.innerWidth - pickerW - 16);
+                      }
+                      setCoverPickerPos({ top: rect.bottom + 6, left });
+                      setCoverPickerOpen((o) => !o);
+                    }}
+                    className={`group/cover relative flex items-center justify-center w-7 h-7 rounded-lg transition-colors cursor-pointer ${
+                      coverPickerOpen
+                        ? "bg-black/[0.08] dark:bg-white/[0.15] text-amber-600 dark:text-amber-400 shadow-xs"
+                        : "text-neutral-500 hover:text-amber-600 dark:text-neutral-400 dark:hover:text-amber-400 hover:bg-black/[0.06] dark:hover:bg-white/[0.1]"
+                    }`}
+                    title="Add cover"
+                    aria-label="Add cover"
+                  >
+                    <Image size={16} strokeWidth={2.2} className="transition-transform duration-200 group-hover/cover:scale-110" />
+                  </motion.button>
+                )}
                 <CoverPicker
                   open={coverPickerOpen}
                   onClose={() => setCoverPickerOpen(false)}
@@ -1325,6 +1672,7 @@ e.currentTarget) {
                   position={coverPickerPos}
                 />
               </div>
+
               {coverMenuOpen && createPortal(
                 <CoverContextMenu
                   open={coverMenuOpen}
@@ -1345,26 +1693,8 @@ e.currentTarget) {
                 />,
                 document.body
               )}
-              <button
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer transition pointer-events-auto"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    await globalVoiceController.toggle();
-                    const err = globalVoiceController.getError?.() || null;
-                    if (err) {
-                      onToast?.(`Flow error: ${err.message}`);
-                    }
-                  } catch (err: any) {
-                    onToast?.(`Flow failed: ${err?.message || "Unknown error"}`);
-                  }
-                }}
-                title="Toggle Flow (Ctrl+Shift+Space)"
-              >
-                <Mic size={12} />
-                <span>Flow</span>
-              </button>
+
+              {!page.cover && <FlowQuickButton onToast={onToast} />}
             </div>
           )}
 
@@ -1381,7 +1711,7 @@ e.currentTarget) {
 
           {/* Page title row with drag handle and free movement */}
           <motion.div
-            drag={isEditable && !(page.isLocked || forceReadOnly)}
+            drag={isEditable && !(page.isLocked || effectiveReadOnly)}
             dragControls={titleDragControls}
             dragListener={false}
             dragMomentum={false}
@@ -1397,8 +1727,8 @@ e.currentTarget) {
             }}
             className="group/title relative flex items-start gap-1"
           >
-            {!(page.isLocked || forceReadOnly) && (
-              <div className="block-tools flex w-12 shrink-0 items-start justify-end gap-0.5 pt-2 transition z-20 opacity-0 group-hover/title:opacity-100">
+            {!(page.isLocked || effectiveReadOnly) && (
+              <div className="block-tools flex w-[68px] shrink-0 items-center justify-end gap-0.5 pt-1.5 transition z-20 opacity-0 group-hover/title:opacity-100">
                 {isEditable && (
                   <>
                     <button
@@ -1407,12 +1737,12 @@ e.currentTarget) {
                       draggable="false"
                       title="Drag to freely reposition title"
                       onPointerDown={(e) => {
-                        if (isEditable && !(page.isLocked || forceReadOnly)) {
+                        if (isEditable && !(page.isLocked || effectiveReadOnly)) {
                           titleDragControls.start(e);
                         }
                       }}
                     >
-                      <GripVertical size={15} />
+                      <GripVertical size={14} />
                     </button>
                     <button
                       className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--accent)] cursor-pointer transition"
@@ -1424,46 +1754,57 @@ e.currentTarget) {
                         setOpenSlashForBlockId(nextId);
                       }}
                     >
-                      <Plus size={15} />
+                      <Plus size={14} />
                     </button>
                   </>
                 )}
-                {/* Comment on title */}
+                {/* Comment on title — shown to viewers too when a thread
+                    already exists, so they can read it (readOnly hides the
+                    composer; RLS lets anyone with page access read). */}
+                {(canComment || allComments.some(c => c.blockId === "__title__")) && (
                 <div className="relative">
                   <button
-                    onClick={(e) => { e.stopPropagation(); setActiveCommentBlockId(activeCommentBlockId === "__title__" ? null : "__title__"); }}
-                    className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${(page.comments || []).some(c => c.blockId === "__title__" && !c.resolvedAt)
-                        ? "text-[var(--accent)] opacity-100"
-                        : "text-[var(--muted)] opacity-0 group-hover/title:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (activeCommentBlockId === "__title__") setActiveCommentBlockId(null);
+                      else openCommentThread("__title__", e.currentTarget.getBoundingClientRect());
+                    }}
+                    className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${allComments.some(c => c.blockId === "__title__" && !c.resolvedAt)
+                      ? "text-[var(--accent)] opacity-100"
+                      : "text-[var(--muted)] opacity-0 group-hover/title:opacity-100"
                       } hover:bg-[var(--hover)]`}
                     aria-label="Toggle comments on title"
                   >
-                    <MessageCircle size={13} />
+                    <MessageCircle size={14} />
                   </button>
-                  {activeCommentBlockId === "__title__" && (
+                  {activeCommentBlockId === "__title__" && commentPopoverPos && createPortal(
                     <>
                       <div className="fixed inset-0 z-[150]" onClick={() => setActiveCommentBlockId(null)} />
-                      <div className="absolute top-0 left-full ml-2 z-[160]">
+                      <div className="fixed z-[160]" style={{ top: commentPopoverPos.top, left: commentPopoverPos.left }}>
                         <CommentThread
-                          comments={(page.comments || []).filter(c => c.blockId === "__title__")}
+                          comments={allComments}
                           blockId="__title__"
                           pageId={page.id}
                           onAddComment={handleAddComment}
-                          onResolveComment={handleResolveComment}
+                          onResolveComment={canComment ? handleResolveComment : undefined}
+                          onDeleteComment={canComment ? handleDeleteComment : undefined}
                           onClose={() => setActiveCommentBlockId(null)}
                           pages={pages}
                           onNavigate={onNavigate}
+                          readOnly={!canComment}
                         />
                       </div>
-                    </>
+                    </>,
+                    document.body,
                   )}
                 </div>
+                )}
               </div>
             )}
             <input
               ref={titleRef}
               value={page.title}
-              readOnly={page.isLocked || forceReadOnly}
+              readOnly={page.isLocked || effectiveReadOnly}
               onChange={(e) => onPagePatch({ title: e.target.value })}
               style={{
                 fontSize: `${page.titleSize || 40}px`,
@@ -1498,39 +1839,15 @@ e.currentTarget) {
                   }
                   : {})
               }}
-              className="flex-1 min-w-0 bg-transparent leading-tight text-[var(--text)] outline-none placeholder:text-[var(--muted)] mt-1 transition-all"
+              className="flex-1 min-w-0 bg-transparent leading-tight text-[var(--text)] outline-none placeholder:text-[var(--muted)] mt-1 transition-[color,letter-spacing,opacity] duration-150"
               placeholder="Untitled"
               aria-label="Page title"
             />
-            {isEditable && (
-              <div className="relative shrink-0 mt-2 flex items-center z-30 pointer-events-auto">
-                <button
-                  ref={titleMenuBtnRef}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setTitleCustomizerOpen((prev) => !prev);
-                  }}
-                  className="h-8 w-8 rounded-lg hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] grid place-items-center transition cursor-pointer select-none opacity-60 hover:opacity-100 z-30 pointer-events-auto"
-                  title="Customize Title (Size, Font, Color, Style)"
-                >
-                  <Menu size={18} />
-                </button>
-                <PageTitleCustomizer
-                  page={page}
-                  isEditable={isEditable}
-                  onPagePatch={onPagePatch}
-                  open={titleCustomizerOpen}
-                  onClose={() => setTitleCustomizerOpen(false)}
-                  anchorRef={titleMenuBtnRef}
-                />
-              </div>
-            )}
           </motion.div>
         </div>
-        {(page.blocks || []).length === 0 && <EmptyState onAdd={() => 
-onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked || forceReadOnly} />}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(e.active.id)} onDragEnd={handleDragEnd}>
+        {(page.blocks || []).length === 0 && <EmptyState onAdd={() =>
+          onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked || effectiveReadOnly} />}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(e.active.id)} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
           <SortableContext items={flatBlockIds} strategy={verticalListSortingStrategy}>
             <div
               ref={containerRef}
@@ -1561,9 +1878,12 @@ onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked ||
                 handlePointerDown={handlePointerDown}
                 activeCommentBlockId={activeCommentBlockId}
                 setActiveCommentBlockId={setActiveCommentBlockId}
-                pageComments={page.comments || []}
+                pageComments={allComments}
                 handleAddComment={handleAddComment}
                 handleResolveComment={handleResolveComment}
+                onOpenCommentThread={openCommentThread}
+                commentPopoverPos={commentPopoverPos}
+                handleDeleteComment={handleDeleteComment}
                 onAskAI={onAskAI}
                 onFocusBlock={onFocusBlock}
                 ghostWriterEnabled={ghostWriterEnabled}
@@ -1575,8 +1895,17 @@ onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked ||
                 onPagePatch={onPagePatch}
                 onCreateSubpage={onCreateSubpage}
                 onNavigate={onNavigate}
-                forceReadOnly={forceReadOnly}
+                forceReadOnly={effectiveReadOnly}
+                canComment={canComment}
               />
+              {isEditable && (
+                <div
+                  aria-hidden="true"
+                  data-noska-click-empty="true"
+                  onClick={handleClickEmptySpace}
+                  className="h-40 cursor-text"
+                />
+              )}
             </div>
           </SortableContext>
           <DragOverlay>
@@ -1675,7 +2004,7 @@ onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked ||
       </div>
 
       {/* Unified Global Floating Format & Expandable AI Skills Toolbar */}
-      {selection.text && !(page.isLocked || forceReadOnly) && (
+      {selection.text && !(page.isLocked || effectiveReadOnly) && (
         <FloatingFormatToolbar
           selection={selection}
           onClose={() => setSelection({ text: "", rect: null, blockId: null })}
@@ -1805,14 +2134,16 @@ onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked ||
 
       {/* Import Center — Notion / Notepad / files / paste */}
       {importDialogOpen && (
-        <ImportPanel
-          open={importDialogOpen}
-          onClose={() => setImportDialogOpen(false)}
-          currentTitle={page.title || "Untitled"}
-          onAppendBlocks={handleImportAppend}
-          onImportPages={handleImportPages}
-          onToast={onToast}
-        />
+        <React.Suspense fallback={null}>
+          <ImportPanel
+            open={importDialogOpen}
+            onClose={() => setImportDialogOpen(false)}
+            currentTitle={page.title || "Untitled"}
+            onAppendBlocks={handleImportAppend}
+            onImportPages={handleImportPages}
+            onToast={onToast}
+          />
+        </React.Suspense>
       )}
 
       {/* Version History Panel */}
@@ -1938,6 +2269,21 @@ onBlocks([blockFor("text", "")])} onBlocks={onBlocks} disabled={page.isLocked ||
         onPagePatch={onPagePatch}
         onToast={onToast}
       />
+
+      {/* Collab-only "new comment" Dynamic Island. Portaled to <body> so the
+          editor's transformed ancestors can't trap the fixed positioning. */}
+      {createPortal(
+        <AnimatePresence>
+          {newCommentQueue.length > 0 && (
+            <NewCommentIsland
+              comments={newCommentQueue}
+              onOpen={openIslandComment}
+              onDismiss={() => setNewCommentQueue([])}
+            />
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </section>
   );
 }
@@ -1980,9 +2326,13 @@ interface BlockProps {
   pageComments: Array<Record<string, unknown>>;
   handleAddComment: (comment: Record<string, unknown>) => void;
   handleResolveComment: (commentId: string) => void;
+  onOpenCommentThread: (blockId: string, anchor: DOMRect) => void;
+  commentPopoverPos: { top: number; left: number } | null;
+  handleDeleteComment: (commentId: string) => void;
   isSelected: boolean;
   onSelectBlock: (e: React.PointerEvent) => void;
   forceReadOnly?: boolean;
+  canComment?: boolean;
 }
 
 const Block = memo(function Block({
@@ -2017,9 +2367,13 @@ const Block = memo(function Block({
   pageComments,
   handleAddComment,
   handleResolveComment,
+  onOpenCommentThread,
+  commentPopoverPos,
+  handleDeleteComment,
   isSelected,
   onSelectBlock,
-  forceReadOnly = false
+  forceReadOnly = false,
+  canComment = true
 }: BlockProps) {
   interface CaretRectLike { top: number; bottom: number; left: number; }
   const [slashOpen, setSlashOpen] = useState(false);
@@ -2052,6 +2406,13 @@ const Block = memo(function Block({
   } | null>(null);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    if (isDragging) {
+      isDraggingRef.current = true;
+    }
+  }, [isDragging]);
 
   const blockPermission = React.useMemo(() => getPagePermission(page, pages), [page, pages]);
 
@@ -2063,7 +2424,7 @@ const Block = memo(function Block({
   const { suggestion, accept, dismiss } = useGhostWriter({
     blockText: block.text,
     contextBefore: index > 0 ? pages.find(p => p.blocks?.some(b => b.id === block.id))?.blocks?.slice(0, index).map(b => b.text).join("\n") || "" : "",
-            enabled: isFocused && ghostWriterEnabled && !(page.isLocked || forceReadOnly),
+    enabled: isFocused && ghostWriterEnabled && !(page.isLocked || blockPermission === 'view'),
     apiKey,
     aiProvider,
     nvidiaKey
@@ -2631,6 +2992,16 @@ const Block = memo(function Block({
     embed: "block w-full"
   };
 
+  const toolMarginTop = {
+    h1: "mt-7",
+    h2: "mt-5",
+    h3: "mt-4",
+    h4: "mt-3",
+    quote: "mt-3.5",
+    code: "mt-3.5",
+    callout: "mt-4"
+  }[block.type] || "mt-0";
+
   return (
     <motion.div
       ref={setNodeRef}
@@ -2638,7 +3009,7 @@ const Block = memo(function Block({
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
       style={{ transform: CSS.Transform.toString(transform), transition, paddingLeft: `${(block._depth || 0) * 24}px` }}
-      className={`noska-block group relative flex gap-1 rounded py-1 hover:bg-[var(--hover)]/55 ${isDragging ? "opacity-30" : ""} ${isSelected ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)]/40" : ""}`}
+      className={`noska-block group relative flex items-start gap-1 rounded-xl px-1.5 py-0.5 transition-colors hover:bg-[var(--hover)]/55 ${isDragging ? "opacity-30" : ""} ${isSelected ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)]/40" : ""}`}
       data-block-id={block.id}
       data-selected={isSelected ? "true" : undefined}
       role="listitem"
@@ -2655,22 +3026,38 @@ const Block = memo(function Block({
           during live UI QA, same class of bug already fixed for the block
           context menu. Comment indicator intentionally stays available. */}
       {!page.isLocked && (
-        <div className={`block-tools flex w-12 shrink-0 items-start justify-end gap-0.5 pt-1 transition z-20 ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+        <div className={`block-tools flex h-[26px] w-[68px] shrink-0 items-center justify-end gap-0.5 transition z-20 ${toolMarginTop} ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
           {blockPermission !== 'view' && (
             <>
               {/* Grip handle (@dnd-kit) */}
               <button
                 ref={menuButtonRef}
+                type="button"
                 {...attributes}
                 {...listeners}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  listeners?.onPointerDown?.(e);
+                }}
                 className="grid h-6 w-5 place-items-center rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] hover:scale-110 active:scale-90 cursor-grab active:cursor-grabbing transition-transform touch-none"
                 aria-label="Block options and drag reorder"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (isDraggingRef.current) {
+                    isDraggingRef.current = false;
+                    return;
+                  }
                   setBlockContextOpen((open) => !open);
                 }}
+                onPointerUp={() => {
+                  if (isDraggingRef.current) {
+                    setTimeout(() => {
+                      isDraggingRef.current = false;
+                    }, 120);
+                  }
+                }}
               >
-                <GripVertical size={15} />
+                <GripVertical size={14} />
               </button>
 
               {/* Plus action button */}
@@ -2690,7 +3077,7 @@ const Block = memo(function Block({
                     }
                   }}
                 >
-                  <Plus size={15} />
+                  <Plus size={14} />
                 </motion.button>
                 <div className="absolute top-8 left-1/2 -translate-x-1/2 hidden group-hover/plus:block bg-[var(--elevated)] border border-[var(--border-strong)] text-[var(--text)] text-[10px] py-1.5 px-2.5 rounded-lg shadow-xl pointer-events-none z-50 leading-normal min-w-[150px] text-center select-none font-medium">
                   <div><strong>Click</strong> <span className="text-[var(--text-secondary)] font-normal">to add below</span></div>
@@ -2700,36 +3087,48 @@ const Block = memo(function Block({
             </>
           )}
 
-          {/* Comment indicator */}
+          {/* Comment indicator — shown to viewers too when a thread already
+              exists so they can read it (the composer is hidden readOnly).
+              There is no point showing a bare affordance to someone who
+              can neither read existing comments nor write new ones. */}
+          {(canComment || (pageComments || []).some(c => c.blockId === block.id)) && (
           <div className="relative">
             <button
-              onClick={(e) => { e.stopPropagation(); setActiveCommentBlockId(activeCommentBlockId === block.id ? null : block.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (activeCommentBlockId === block.id) setActiveCommentBlockId(null);
+                else onOpenCommentThread(block.id, e.currentTarget.getBoundingClientRect());
+              }}
               className={`grid h-6 w-5 place-items-center rounded cursor-pointer transition ${(pageComments || []).some(c => c.blockId === block.id && !c.resolvedAt)
-                  ? "text-[var(--accent)] opacity-100"
-                  : "text-[var(--muted)] opacity-0 group-hover:opacity-100"
+                ? "text-[var(--accent)] opacity-100"
+                : "text-[var(--muted)] opacity-0 group-hover:opacity-100"
                 } hover:bg-[var(--hover)]`}
               aria-label="Toggle comments"
             >
-              <MessageCircle size={13} />
+              <MessageCircle size={14} />
             </button>
-            {activeCommentBlockId === block.id && (
+            {activeCommentBlockId === block.id && commentPopoverPos && createPortal(
               <>
                 <div className="fixed inset-0 z-[150]" onClick={() => setActiveCommentBlockId(null)} />
-                <div className="absolute top-0 left-full ml-2 z-[160]">
+                <div className="fixed z-[160]" style={{ top: commentPopoverPos.top, left: commentPopoverPos.left }}>
                   <CommentThread
                     comments={pageComments || []}
                     blockId={block.id}
                     pageId={page.id}
                     onAddComment={handleAddComment}
-                    onResolveComment={handleResolveComment}
+                    onResolveComment={canComment ? handleResolveComment : undefined}
+                    onDeleteComment={canComment ? handleDeleteComment : undefined}
                     onClose={() => setActiveCommentBlockId(null)}
                     pages={pages}
                     onNavigate={onNavigate}
+                    readOnly={!canComment}
                   />
                 </div>
-              </>
+              </>,
+              document.body,
             )}
           </div>
+          )}
         </div>
       )}
 
@@ -2757,7 +3156,9 @@ const Block = memo(function Block({
           pages,
           () => setIsFocused(true),
           () => setIsFocused(false),
-          page.isLocked,
+          // `page.isLocked` alone would leave a viewer's blocks editable —
+          // the renderer's `readOnly` gates all key off this one flag.
+          page.isLocked || blockPermission === 'view',
           isFocused,
           onNavigate,
           () => setImagePickerOpen(true),
@@ -3023,7 +3424,7 @@ const Block = memo(function Block({
           />
         )}
 
-        <FloatingMenu open={blockContextOpen} anchorRef={menuButtonRef} onClose={() => setBlockContextOpen(false)} width={260}>
+        <FloatingMenu open={blockContextOpen} anchorRef={menuButtonRef} onClose={() => setBlockContextOpen(false)} width={280} unstyled>
           <BlockContextMenu
             open={blockContextOpen}
             onClose={() => setBlockContextOpen(false)}
@@ -3099,7 +3500,7 @@ const Block = memo(function Block({
                   if (payload === "toggle") props.collapsed = false;
                   if (payload === "callout") { props.icon = props.icon || "💡"; props.tone = "info"; }
                   if (payload === "code") {
-                    newBlock.properties = { text: richTextToPlainText(props.richText as import("../utils/richText").RichTextSpan[] | undefined), language: "plain" };
+                    newBlock.properties = { text: richTextToPlainText(props.richText as import("../utils/richText").RichTextSpan[] | undefined), language: PLAIN_LANGUAGE };
                     delete props.richText;
                   }
                   if (block.type === "code") {

@@ -1,4 +1,5 @@
 import React, { useState } from "react"
+import { isEmojiIcon } from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import {
   FileText, Plus, X, Loader2, Lock, Users, Building2, Globe,
@@ -252,7 +253,7 @@ export function CompanyPageCreator({ open, onClose, onPageCreated, teams }: Comp
                     >
                       <option value="">Select team...</option>
                       {teams.map(t => (
-                        <option key={t.id} value={t.id}>{t.icon} {t.name}</option>
+                        <option key={t.id} value={t.id}>{isEmojiIcon(t.icon) ? t.icon : ""} {t.name}</option>
                       ))}
                     </select>
                   </div>

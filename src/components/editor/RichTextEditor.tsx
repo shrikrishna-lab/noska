@@ -64,6 +64,8 @@ interface RichTextModeProps {
   onBlur?: (e: React.FocusEvent) => void;
   onPasteUrl?: (url: string) => void;
   as?: React.ElementType;
+  /** See MarkdownModeProps.style — the element sets its own text colour. */
+  style?: React.CSSProperties;
 }
 
 const RichTextMode = React.forwardRef<HTMLElement, RichTextModeProps>(function RichTextMode({
@@ -76,7 +78,8 @@ const RichTextMode = React.forwardRef<HTMLElement, RichTextModeProps>(function R
   onFocus,
   onBlur,
   onPasteUrl,
-  as: WrapperComponent = "div"
+  as: WrapperComponent = "div",
+  style
 }: RichTextModeProps, forwardedRef) {
   const divRef = useRef<HTMLElement | null>(null);
   const isInternal = useRef(false);
@@ -106,6 +109,16 @@ const RichTextMode = React.forwardRef<HTMLElement, RichTextModeProps>(function R
 
   useLayoutEffect(() => {
     if (!divRef.current || isComposing) return;
+
+    // Never rewrite the DOM out from under an element the user is typing in.
+    // Real bug (found in live QA): an empty text block renders as a bare
+    // contenteditable with no committed `richText` yet. Keystrokes land in the
+    // DOM and `handleInput` patches upward, but if that patch hasn't round-
+    // tripped into the `richText` prop by the time this effect runs, the
+    // comparison below differs and the effect resets innerHTML to the empty
+    // prop value — silently deleting what the user just typed. Focusing is the
+    // reliable signal that the DOM is the source of truth, so defer to it.
+    if (document.activeElement === divRef.current) return;
 
     const targetHtml = syncFromRichText();
     const currentHtml = divRef.current.innerHTML;
@@ -291,7 +304,7 @@ const RichTextMode = React.forwardRef<HTMLElement, RichTextModeProps>(function R
       onCompositionEnd={handleCompositionEnd}
       data-placeholder={isEmpty ? placeholder : undefined}
       className={`rich-text-editor outline-none whitespace-pre-wrap break-words [&:empty:before]:content-[attr(data-placeholder)] [&:empty:before]:text-[var(--muted)] [&:empty:before]:pointer-events-none ${className}`}
-      style={{ minHeight: "1.5em", cursor: "text" }}
+      style={{ minHeight: "1.5em", cursor: "text", ...style }}
     />
   );
 });
@@ -306,6 +319,15 @@ interface MarkdownModeProps {
   onFocus?: (e: React.FocusEvent) => void;
   onBlur?: (e: React.FocusEvent) => void;
   onPasteUrl?: (url: string) => void;
+  /**
+   * Inline style for the editing surface.
+   *
+   * Needed because the editor sets its own `text-[var(--text)]/90` utility on
+   * this element. Block colour is applied by inheritance from a wrapper, and a
+   * class on the element itself beats an inherited value — so the colour
+   * silently did nothing until it was passed through here.
+   */
+  style?: React.CSSProperties;
 }
 
 const MarkdownMode = React.forwardRef<HTMLDivElement, MarkdownModeProps>(function MarkdownMode({
@@ -317,7 +339,8 @@ const MarkdownMode = React.forwardRef<HTMLDivElement, MarkdownModeProps>(functio
   onKeyDown,
   onFocus,
   onBlur,
-  onPasteUrl
+  onPasteUrl,
+  style
 }: MarkdownModeProps, forwardedRef) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const isInternal = useRef(false);
@@ -489,7 +512,7 @@ const MarkdownMode = React.forwardRef<HTMLDivElement, MarkdownModeProps>(functio
       onBlur={handleBlur}
       data-placeholder={isEmpty ? placeholder : undefined}
       className={`outline-none whitespace-pre-wrap break-words [&:empty:before]:content-[attr(data-placeholder)] [&:empty:before]:text-[var(--muted)] [&:empty:before]:pointer-events-none ${className}`}
-      style={{ minHeight: "1.5em", cursor: "text" }}
+      style={{ minHeight: "1.5em", cursor: "text", ...style }}
     />
   );
 });

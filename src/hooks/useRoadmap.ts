@@ -26,7 +26,7 @@ export function useRoadmap() {
 
     const { data: itemsData } = await supabaseAnon
       .from('roadmap_items' as never)
-      .select('*')
+      .select('id,title,description,status,priority,progress,eta,owner,labels,category,target_version,created_at,sort_order')
       .order('sort_order')
       .order('created_at', { ascending: false }) as { data: RoadmapItem[] | null };
 

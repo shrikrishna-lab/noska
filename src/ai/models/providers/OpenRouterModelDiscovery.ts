@@ -100,6 +100,7 @@ export class OpenRouterModelDiscovery implements ModelDiscoveryAdapter {
     const modality = String(raw.architecture?.modality || "");
     const supportedParams: string[] = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : [];
 
+    const isImageGen = modality.includes("text->image") || lowerId.includes("image-generation") || lowerId.includes("flux") || lowerId.includes("imagen") || lowerId.includes("dall-e");
     const isReasoning =
       raw.architecture?.instruct_type === "thinking" ||
       supportedParams.includes("reasoning") ||
@@ -135,13 +136,13 @@ export class OpenRouterModelDiscovery implements ModelDiscoveryAdapter {
       createdAt: raw.created ? raw.created * 1000 : undefined,
       description: raw.description ? String(raw.description).slice(0, 200) : undefined,
       capabilities: {
-        streaming: true,
-        reasoning: isReasoning,
-        tools: supportsTools,
-        vision: isVision,
+        streaming: !isImageGen,
+        reasoning: isReasoning && !isImageGen,
+        tools: supportsTools && !isImageGen,
+        vision: isVision && !isImageGen,
         audio: modality.includes("audio"),
         video: modality.includes("video"),
-        imageGeneration: false,
+        imageGeneration: isImageGen,
         structuredOutput: true,
         mcp: true,
         agentMode: true,

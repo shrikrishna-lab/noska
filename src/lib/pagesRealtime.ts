@@ -63,3 +63,61 @@ export function subscribeToPages(userId: string, handlers: PagesRealtimeHandlers
     void supabase.removeChannel(channel);
   };
 }
+
+/** Handlers for `page_permissions` rows belonging to `userId`. */
+export interface PagePermissionsRealtimeHandlers {
+  /**
+   * A grant was created or changed for this user. The handler is expected to
+   * refetch rather than trust the payload: `page_permissions.user_id` holds the
+   * Clerk subject while the JWT `sub` may be the auth uuid, so matching on the
+   * subscription filter alone is not reliable across both representations.
+   */
+  onPermissionsChanged: () => void;
+}
+
+/**
+ * Subscribe to `page_permissions` INSERT/UPDATE/DELETE for the given user.
+ *
+ * This is what keeps the shared-page list honest in both directions:
+ *   - an approval granted by an owner lands in the collaborator's list without
+ *     a reload;
+ *   - a revocation (owner removing a collaborator) drops the page from the
+ *     revoked user's list, and because it only fires for rows belonging to
+ *     `userId` it never touches the owner's own state.
+ *
+ * `page_permissions` is in the `supabase_realtime` publication and Realtime
+ * respects RLS, so the token only receives rows it may read.
+ */
+export function subscribeToPagePermissions(
+  userId: string,
+  handlers: PagePermissionsRealtimeHandlers,
+): () => void {
+  type PermRow = Record<string, any>;
+  const channel: RealtimeChannel = supabase
+    .channel(`page_permissions:user:${userId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "page_permissions",
+        filter: `user_id=eq.${userId}`,
+      },
+      (_payload: RealtimePostgresChangesPayload<PermRow>) => {
+        try {
+          handlers.onPermissionsChanged();
+        } catch (e) {
+          console.warn("[pagesRealtime] failed to process permission change:", e);
+        }
+      },
+    )
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.warn(`[pagesRealtime] permissions channel for user ${userId}: ${status}`);
+      }
+    });
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}

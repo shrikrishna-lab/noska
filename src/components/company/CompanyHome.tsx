@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion } from "framer-motion"
 import {
   Building2, Users, FileText, Clock, Star, Plus, ArrowRight,
@@ -216,7 +217,7 @@ export function CompanyHome({ onViewSelect }: CompanyHomeProps) {
                   className="flex items-center gap-3 p-3.5 rounded-2xl bg-[var(--surface-2)]/60 hover:bg-[var(--surface-2)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-all cursor-pointer text-left"
                 >
                   <div className="w-9 h-9 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-base shrink-0 shadow-2xs">
-                    {team.icon || "👥"}
+                    <PageIcon icon={team.icon} size={18} fallback="👥" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold text-[var(--text)] truncate">{team.name}</div>

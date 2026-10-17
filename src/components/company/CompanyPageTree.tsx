@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import {
   ChevronRight, ChevronDown, FileText, FolderOpen, Plus,
@@ -113,7 +114,7 @@ export function CompanyPageTree({ onNavigateToPage, onStarPage, starredPages }: 
           </button>
 
           {/* Page icon */}
-          <span className="text-[13px] shrink-0">{node.icon || "📄"}</span>
+          <PageIcon icon={node.icon} size={13} fallback="📄" />
 
           {/* Title */}
           <div

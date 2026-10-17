@@ -7,9 +7,14 @@ const BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 async function callFn<T>(fn: string, init: RequestInit & { query?: string } = {}): Promise<T> {
   const token = await currentAccessToken();
+  // An empty `Authorization: Bearer ` is guaranteed to fail the edge
+  // function's auth check with 401. Omit the header entirely so the gateway
+  // reports the real reason (missing/expired session) in logs instead of us
+  // shipping a request that can only ever 401.
+  const auth: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   const res = await fetch(`${BASE}/${fn}${init.query ?? ""}`, {
     ...init,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}`, ...(init.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...auth, ...(init.headers ?? {}) },
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw data;
@@ -136,41 +141,66 @@ export const OFFICIAL_PUBLIC_PLANS: PublicPlan[] = [
   },
 ];
 
+const PUBLIC_PLANS_CACHE_TTL = 5 * 60 * 1000;
+const publicPlansCache = new Map<string, { expiresAt: number; plans: PublicPlan[] }>();
+const publicPlansLoads = new Map<string, Promise<PublicPlan[]>>();
+
 export async function fetchPublicPlans(displayCurrency?: string): Promise<PublicPlan[]> {
+  const cacheKey = (displayCurrency ?? "").toUpperCase();
+  const cached = publicPlansCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.plans;
+  const pending = publicPlansLoads.get(cacheKey);
+  if (pending) return pending;
+
+  const load = (async () => {
+    try {
+      const { supabase } = await import("../supabase");
+      if (!supabase) return OFFICIAL_PUBLIC_PLANS;
+      const sb = supabase as unknown as { from(t: string): any };
+      const { data: plans, error } = await sb
+        .from("billing_plans")
+        .select("id,name,slug,description,currency,monthly_price,yearly_price,trial_days,badge,cta_text,is_highlighted,display_order,metadata")
+        .eq("status", "active")
+        .eq("is_public", true)
+        .order("display_order", { ascending: true });
+      if (error || !plans || plans.length === 0) return OFFICIAL_PUBLIC_PLANS;
+      const list = plans as unknown as BillingPlan[];
+      const { data: feats } = await sb
+        .from("billing_plan_features")
+        .select("plan_id,feature_key,enabled,limit_value,limit_unit")
+        .in("plan_id", list.map((p) => p.id));
+      const byPlan = new Map<string, PublicPlan["features"]>();
+      for (const f of (feats ?? []) as Array<{ plan_id: string } & PublicPlan["features"][number]>) {
+        if (!byPlan.has(f.plan_id)) byPlan.set(f.plan_id, []);
+        byPlan.get(f.plan_id)!.push(f);
+      }
+      let priced = list.map((p) => ({ ...p, features: byPlan.get(p.id) ?? [] }));
+      const cur = cacheKey;
+      if (cur) {
+        const { data: rows } = await sb
+          .from("billing_plan_prices")
+          .select("plan_id,monthly_price,yearly_price")
+          .eq("currency", cur)
+          .eq("is_active", true);
+        const byId = new Map(((rows ?? []) as Array<{ plan_id: string; monthly_price: number; yearly_price: number }>).map((r) => [r.plan_id, r]));
+        priced = priced.map((p) => {
+          const r = byId.get(p.id);
+          return r ? { ...p, currency: cur, monthly_price: Number(r.monthly_price), yearly_price: Number(r.yearly_price) } : p;
+        });
+      }
+      return priced.length > 0 ? priced : OFFICIAL_PUBLIC_PLANS;
+    } catch {
+      return OFFICIAL_PUBLIC_PLANS;
+    }
+  })();
+
+  publicPlansLoads.set(cacheKey, load);
   try {
-    const { supabase } = await import("../supabase");
-    if (!supabase) return OFFICIAL_PUBLIC_PLANS;
-    const sb = supabase as unknown as { from(t: string): any };
-    const { data: plans, error } = await sb
-      .from("billing_plans")
-      .select("*")
-      .eq("status", "active")
-      .eq("is_public", true)
-      .order("display_order", { ascending: true });
-    if (error || !plans || plans.length === 0) return OFFICIAL_PUBLIC_PLANS;
-    const list = plans as unknown as BillingPlan[];
-    const { data: feats } = await sb
-      .from("billing_plan_features")
-      .select("plan_id,feature_key,enabled,limit_value,limit_unit")
-      .in("plan_id", list.map((p) => p.id));
-    const byPlan = new Map<string, PublicPlan["features"]>();
-    for (const f of (feats ?? []) as Array<{ plan_id: string } & PublicPlan["features"][number]>) {
-      if (!byPlan.has(f.plan_id)) byPlan.set(f.plan_id, []);
-      byPlan.get(f.plan_id)!.push(f);
-    }
-    let priced = list.map((p) => ({ ...p, features: byPlan.get(p.id) ?? [] }));
-    const cur = (displayCurrency ?? "").toUpperCase();
-    if (cur) {
-      const { data: rows } = await sb.from("billing_plan_prices").select("*").eq("currency", cur).eq("is_active", true);
-      const byId = new Map(((rows ?? []) as Array<{ plan_id: string; monthly_price: number; yearly_price: number }>).map((r) => [r.plan_id, r]));
-      priced = priced.map((p) => {
-        const r = byId.get(p.id);
-        return r ? { ...p, currency: cur, monthly_price: Number(r.monthly_price), yearly_price: Number(r.yearly_price) } : p;
-      });
-    }
-    return priced.length > 0 ? priced : OFFICIAL_PUBLIC_PLANS;
-  } catch {
-    return OFFICIAL_PUBLIC_PLANS;
+    const plans = await load;
+    publicPlansCache.set(cacheKey, { expiresAt: Date.now() + PUBLIC_PLANS_CACHE_TTL, plans });
+    return plans;
+  } finally {
+    publicPlansLoads.delete(cacheKey);
   }
 }
 

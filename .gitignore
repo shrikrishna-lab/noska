@@ -46,6 +46,7 @@ test-page.cjs
 *.cjs
 *.log
 *.pem
+.certs/
 *.cer
 *.pfx
 *.keystore

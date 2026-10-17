@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import { FolderInput, Loader2, ChevronRight, Check, X, Building2, Users } from "lucide-react"
 import { supabase } from "../../lib/supabase"
@@ -112,7 +113,7 @@ export function PageMover({ pageId, currentTeamId, onMoved, size = "md" }: PageM
                       disabled={loading || currentTeamId === team.id}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-[var(--surface-2)] transition text-left cursor-pointer disabled:opacity-50"
                     >
-                      <span className="text-sm">{team.icon || "👥"}</span>
+                      <PageIcon icon={team.icon} size={14} fallback="👥" />
                       <span className="flex-1 text-[12px] text-[var(--text)] truncate">{team.name}</span>
                       {currentTeamId === team.id && <Check size={12} className="text-[var(--accent)]" />}
                     </button>

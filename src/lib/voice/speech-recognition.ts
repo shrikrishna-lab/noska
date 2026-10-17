@@ -46,7 +46,7 @@ export function getWebVoiceReadiness(): WebVoiceReadiness {
     return {
       ready: false,
       code: "secure-context",
-      message: `Microphone is blocked on unencrypted HTTP (${hostname}). Open via http://localhost:5176 or HTTPS to enable.`,
+      message: `Microphone is blocked on unencrypted HTTP (${hostname}). Use HTTPS, or open this page on ${secureOriginLabel()} to enable it.`,
     };
   }
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -56,6 +56,33 @@ export function getWebVoiceReadiness(): WebVoiceReadiness {
     return { ready: false, code: "speech-recognition-unavailable", message: "Live web dictation is supported in Chrome or Edge. Use the Noska desktop app for local Whisper." };
   }
   return { ready: true, code: "ready", message: "Ready" };
+}
+
+/** Short human label for the secure fallback origin on this port. */
+function secureOriginLabel(): string {
+  if (typeof window === "undefined") return "http://localhost";
+  const { port, pathname, search, hash } = window.location;
+  const suffix = `${pathname}${search}${hash}`;
+  return `http://localhost${port ? `:${port}` : ""}${suffix}`;
+}
+
+/**
+ * Secure origins this page can be reopened on, most useful first.
+ * `getUserMedia` is only granted in a secure context, so an insecure
+ * dev origin has to be swapped for a trusted one without changing the page.
+ */
+export function getSecureOriginAlternatives(): string[] {
+  if (typeof window === "undefined") return [];
+  const { protocol, hostname, port, pathname, search, hash } = window.location;
+  const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".localhost");
+  if (window.isSecureContext || isLoopback) return [];
+  const suffix = `${pathname}${search}${hash}`;
+  const portPart = port ? `:${port}` : "";
+  return [
+    `https://${hostname}${portPart}${suffix}`,
+    `http://localhost${portPart}${suffix}`,
+    `http://127.0.0.1${portPart}${suffix}`,
+  ];
 }
 
 export function createBrowserSpeechRecognition(

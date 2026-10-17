@@ -276,8 +276,14 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
         {/* Background Image — High quality, sharp, no blur */}
         <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
           <img 
-            src="/waitlist-bg.png" 
-            alt="Background" 
+             src="/waitlist-bg.webp"
+             srcSet="/waitlist-bg-512.webp 512w, /waitlist-bg.webp 1024w"
+             sizes="100vw"
+             width={1024}
+             height={573}
+             fetchPriority="high"
+             decoding="async"
+             alt="Background"
             style={{
               width: '100%', height: '100%', objectFit: 'cover',
               imageRendering: 'auto'
@@ -463,7 +469,7 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
             boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)',
             padding: 10
           }}>
-            <img src="/logo.png" alt="Noska Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <img src="/logo-256.webp" alt="Noska Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
         </div>
 
@@ -541,7 +547,7 @@ export function WaitlistGate({ children, enabled = true }: { children: React.Rea
           boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)',
           padding: 10
         }}>
-          <img src="/logo.png" alt="Noska Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          <img src="/logo-256.webp" alt="Noska Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
         <span style={{
           position: 'absolute', top: 0, right: 0,

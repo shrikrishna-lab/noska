@@ -20,6 +20,8 @@ export interface AIPrimitiveProps {
   title?: string;
   summaryText?: string;
   healthScore?: number;
+  /** Optional factual sub-line for health mode (e.g. "12/20 tasks complete · 3 overdue"). */
+  detailText?: string;
   insights?: AIInsightItem[];
   size?: WidgetSize;
   onAskAI?: (prompt: string) => void;
@@ -29,8 +31,9 @@ export interface AIPrimitiveProps {
 export function AIPrimitive({
   mode,
   title,
-  summaryText = "AI is actively synthesizing your workspace tasks, document updates, and active sprints.",
-  healthScore = 88,
+  summaryText = "No summary available yet.",
+  healthScore,
+  detailText,
   insights = [],
   size = "medium",
   onAskAI,
@@ -51,8 +54,21 @@ export function AIPrimitive({
 
   // 1. Health Diagnostic Mode
   if (mode === "health") {
-    const isGood = healthScore >= 80;
-    const isModerate = healthScore >= 60 && healthScore < 80;
+    const hasScore = typeof healthScore === "number" && Number.isFinite(healthScore);
+    const score = hasScore ? Math.max(0, Math.min(100, healthScore)) : 0;
+    const isGood = hasScore && score >= 80;
+    const isModerate = hasScore && score >= 60 && score < 80;
+    const strokeColor = !hasScore ? "#a3a3a3" : isGood ? "#10b981" : isModerate ? "#f59e0b" : "#ef4444";
+    const statusLabel = !hasScore ? "No data yet" : isGood ? "Healthy" : isModerate ? "Needs Attention" : "At Risk";
+    const statusCopy =
+      detailText ??
+      (!hasScore
+        ? "Task data will appear here once your workspace has todos."
+        : isGood
+        ? "Completion and overdue balance look healthy."
+        : isModerate
+        ? "Some open or overdue tasks need attention."
+        : "Several tasks are overdue or incomplete — worth a review.");
 
     return (
       <div className="flex h-full w-full flex-col justify-between p-3 select-none font-sans">
@@ -77,25 +93,29 @@ export function AIPrimitive({
                 cy="32"
                 r="26"
                 fill="none"
-                stroke={isGood ? "#10b981" : isModerate ? "#f59e0b" : "#ef4444"}
+                stroke={strokeColor}
                 strokeWidth="6"
-                strokeDasharray={`${(healthScore / 100) * 163.3} 163.3`}
+                strokeDasharray={`${(score / 100) * 163.3} 163.3`}
                 strokeLinecap="round"
                 className="transition-all duration-700"
               />
             </svg>
-            <span className="absolute text-sm font-bold text-neutral-900 dark:text-white font-mono">{healthScore}%</span>
+            <span className="absolute text-sm font-bold text-neutral-900 dark:text-white font-mono">{hasScore ? `${score}%` : "—"}</span>
           </div>
 
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-1 text-xs font-bold text-neutral-800 dark:text-neutral-200">
-              {isGood ? <CheckCircle2 size={13} className="text-emerald-500" /> : <AlertCircle size={13} className="text-amber-500" />}
-              <span>{isGood ? "Optimal Velocity" : "Attention Required"}</span>
+              {isGood ? (
+                <CheckCircle2 size={13} className="text-emerald-500" />
+              ) : hasScore ? (
+                <AlertCircle size={13} className="text-amber-500" />
+              ) : (
+                <HelpCircle size={13} className="text-neutral-400" />
+              )}
+              <span>{statusLabel}</span>
             </div>
             <p className="text-[10.5px] text-neutral-500 dark:text-neutral-400 leading-snug line-clamp-2">
-              {isGood
-                ? "All sprint goals on track. Overdue task ratio is below 4%."
-                : "3 overdue milestone blockers identified in project tasks."}
+              {statusCopy}
             </p>
           </div>
         </div>

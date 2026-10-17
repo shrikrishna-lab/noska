@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, X, Star, Clock, Upload, Grid3x3, Heart, Sparkles } from "lucide-react";
+import { Search, X, Star, Clock, Upload, Grid3x3, Heart, Sparkles, FileText } from "lucide-react";
 import {
   EMOJI_BY_CATEGORY, EMOJI_ICONS, getRecentIcons, getFavoriteIcons,
   addRecentIcon, toggleFavoriteIcon, isFavoriteIcon, subscribe,
   searchEmojis, getEmojiDescription, LUCIDE_ICON_NAMES, ICON_MAP,
 } from "../../registry/icons/IconRegistry";
+import { PageIcon, LucideIcon } from "@/components/PageIcon";
 
 const TABS = [
   { id: "emoji", label: "Emoji", icon: "😊" },
@@ -194,7 +195,10 @@ export default function IconPicker({ open, onClose, onSelect, currentIcon, posit
                 }`}
                 title={name}
               >
-                <span className="text-[11px] font-medium truncate px-1">{name}</span>
+                {/* Rendered the lucide *name* as text — ICON_MAP was imported
+                    for exactly this and never used, so the picker showed
+                    identifiers where users expected glyphs. */}
+                <LucideIcon name={name} size={16} fallback={<FileText size={16} className="text-[var(--muted)]" />} />
               </button>
             ))}
           </div>
@@ -208,11 +212,16 @@ export default function IconPicker({ open, onClose, onSelect, currentIcon, posit
               <div className="grid grid-cols-8 gap-1">
                 {recentIcons.map((icon, i) => (
                   <button
-                    key={`${icon}-${i}`}
+                    key={`${icon.slice(0, 40)}-${i}`}
                     onClick={() => handleSelect(icon)}
-                    className="flex items-center justify-center h-9 rounded-lg text-lg hover:bg-[var(--hover)] transition cursor-pointer"
+                    className="flex items-center justify-center h-9 rounded-lg text-lg leading-none hover:bg-[var(--hover)] transition cursor-pointer"
+                    title={icon.length > 40 ? "Uploaded icon" : icon}
                   >
-                    {icon.length <= 2 ? icon : <span className="text-[10px] truncate">{icon}</span>}
+                    {/* Was `icon.length <= 2 ? icon : <span>{icon}</span>`.
+                        These lists hold values written by handleUpload, which
+                        are full data-URLs — so a single uploaded icon rendered
+                        ~200KB of base64 as visible text in a 36px button. */}
+                    <PageIcon icon={icon} size={20} fallback={<FileText size={16} className="text-[var(--muted)]" />} />
                   </button>
                 ))}
               </div>
@@ -228,11 +237,12 @@ export default function IconPicker({ open, onClose, onSelect, currentIcon, posit
               <div className="grid grid-cols-8 gap-1">
                 {favoriteIcons.map((icon, i) => (
                   <button
-                    key={`${icon}-${i}`}
+                    key={`${icon.slice(0, 40)}-${i}`}
                     onClick={() => handleSelect(icon)}
-                    className="flex items-center justify-center h-9 rounded-lg text-lg hover:bg-[var(--hover)] transition cursor-pointer"
+                    className="flex items-center justify-center h-9 rounded-lg text-lg leading-none hover:bg-[var(--hover)] transition cursor-pointer"
+                    title={icon.length > 40 ? "Uploaded icon" : icon}
                   >
-                    {icon.length <= 2 ? icon : <span className="text-[10px] truncate">{icon}</span>}
+                    <PageIcon icon={icon} size={20} fallback={<FileText size={16} className="text-[var(--muted)]" />} />
                   </button>
                 ))}
               </div>

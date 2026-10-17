@@ -4,10 +4,11 @@ import { NotificationStore, type NotificationTransport } from './store';
 import { isUuid, type NotificationRecord } from './types';
 
 export const notificationClient: SupabaseClient = supabase;
+const NOTIFICATION_COLUMNS = 'id,user_id,title,message,body,type,category,severity,priority,deduplication_key,status,read_at,archived_at,created_at,updated_at,page_id,action_url,actor_id,entity_type,entity_id,grouping_key,is_read,is_archived,metadata';
 export const notificationTransport: NotificationTransport = {
   async list(userId, cursor) {
     if (!isUuid(userId)) throw new Error('Sign in to view notifications.');
-    let query = notificationClient.from('notifications').select('*').eq('user_id', userId)
+    let query = notificationClient.from('notifications').select(NOTIFICATION_COLUMNS).eq('user_id', userId)
       .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(40);
     if (cursor) {
       if (!isUuid(cursor.id) || !Number.isFinite(Date.parse(cursor.created_at))) throw new Error('Invalid notification cursor.');

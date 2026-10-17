@@ -12,10 +12,15 @@ import { useTabs, type WorkspaceTab, VIEW_META } from "../../contexts/TabContext
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import type { Page } from "../../lib/supabaseService";
 import Editor from "../../components/Editor";
+import ApprovalBar from "../../components/share/ApprovalBar";
 import PageInspector from "../../components/PageInspector";
 import { useNotificationTarget } from '../notifications/navigation';
-import { WorkspaceView } from "../../components/WorkspaceViews";
-import { PageIcon } from "../../components/PageIcon";
+// Dashboard-style tabs render the workspace views; keeping the import dynamic
+// means the (large) views bundle is not part of the editor startup path.
+const WorkspaceView = React.lazy(() =>
+  import("../../components/WorkspaceViews").then((m) => ({ default: m.WorkspaceView }))
+);
+import { PageIcon } from "@/components/PageIcon";
 import PagePickerPopover from "../../components/tabs/PagePickerPopover";
 import { UnlockPagePrompt } from "../encryption/Encryption";
 import { SPRING_PRESETS } from "../motion/MotionSystem";
@@ -313,6 +318,16 @@ export default function PaneContainer({
                   onToast={onToast}
                 />
               ) : (
+                <>
+                {/* Publishing gate. `sharedRole` is only populated for pages
+                    shared TO this user, so its absence identifies the owner —
+                    the same signal `getPagePermission` already relies on. */}
+                <ApprovalBar
+                  pageId={activePage.id}
+                  isOwner={!activePage.sharedRole}
+                  active={isActivePane}
+                  onToast={onToast}
+                />
                 <Editor
                   key={activePage.id}
                   page={activePage}
@@ -365,6 +380,7 @@ export default function PaneContainer({
                   onTrashPage={onTrashPage}
                   onImportPages={onImportPages}
                 />
+                </>
               )}
             </div>
           ) : (
@@ -384,15 +400,17 @@ export default function PaneContainer({
           )
         ) : (
           <div className="flex-1 overflow-y-auto min-w-0">
-            <WorkspaceView
-              view={activeTab?.targetId || "home"}
-              pages={pages}
-              currentUserId={currentUserId}
-              onSelect={handlePaneNavigate}
-              onNew={(template) => onNewPage?.(template)}
-              onAI={() => onAskAI?.()}
-              onToast={onToast}
-            />
+            <React.Suspense fallback={<div className="flex-1 grid place-items-center p-10"><div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--accent)]" /></div>}>
+              <WorkspaceView
+                view={activeTab?.targetId || "home"}
+                pages={pages}
+                currentUserId={currentUserId}
+                onSelect={handlePaneNavigate}
+                onNew={(template) => onNewPage?.(template)}
+                onAI={() => onAskAI?.()}
+                onToast={onToast}
+              />
+            </React.Suspense>
           </div>
         )}
 

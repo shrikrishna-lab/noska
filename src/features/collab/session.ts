@@ -3,6 +3,8 @@ import { realtimeCollab } from '../../lib/realtimeCollab';
 import type { CollabSession } from './types';
 import { logActivity } from './activity';
 
+const SESSION_COLUMNS = 'id,page_id,user_id,user_name,user_avatar,user_color,status,current_block_id,last_activity,started_at,updated_at';
+
 let currentSessionPageId: string | null = null;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -26,8 +28,8 @@ export async function joinCollabSession(pageId: string, userId: string): Promise
       last_activity: new Date().toISOString(),
       started_at: new Date().toISOString(),
     })
-    .select()
-    .single();
+     .select(SESSION_COLUMNS)
+     .single();
 
   if (error) {
     console.warn('joinCollabSession error:', error);
@@ -93,8 +95,8 @@ export async function getActiveSessions(pageId: string): Promise<CollabSession[]
 
   const { data, error } = await supabase
     .from('collaboration_sessions')
-    .select('*')
-    .eq('page_id', pageId)
+     .select(SESSION_COLUMNS)
+     .eq('page_id', pageId)
     .gte('last_activity', staleThreshold)
     .order('started_at', { ascending: true });
 

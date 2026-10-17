@@ -5,6 +5,7 @@ import { useOnboarding } from "../../hooks/useOnboarding";
 import { PrimaryBtn, SecondaryBtn } from "../Buttons";
 import { supabase } from "../../../lib/supabase";
 import { uid } from "../../../utils/helpers";
+import { canonicalWebOrigin } from "../../../lib/share/origin";
 
 export default function InviteStep() {
   const { form, setFormField, next, back } = useOnboarding();
@@ -56,7 +57,7 @@ export default function InviteStep() {
   const codeStr = inviteCode.current || "";
 
   const copyLink = () => {
-    const link = `${window.location.origin}/invite/${codeStr}`;
+    const link = `${canonicalWebOrigin()}/invite/${codeStr}`;
     navigator.clipboard?.writeText(link).catch(() => {});
     setCopied(true);
     persistInviteCode();

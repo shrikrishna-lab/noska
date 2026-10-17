@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import { Star, FileText, FolderKanban, Loader2, X } from "lucide-react"
 import { useCompany } from "../../contexts/CompanyContext"
@@ -112,7 +113,7 @@ export function CompanyFavorites({ onNavigateToPage, onNavigateToProject }: Comp
                 className="group flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-[var(--surface-2)] transition-all cursor-pointer"
                 onClick={() => onNavigateToPage?.(page.id)}
               >
-                <span className="text-[13px]">{page.icon || "📄"}</span>
+                <PageIcon icon={page.icon} size={13} fallback="📄" />
                 <span className="flex-1 text-[12px] font-medium text-[var(--text)] truncate">
                   {page.title || "Untitled"}
                 </span>

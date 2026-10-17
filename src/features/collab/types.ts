@@ -144,8 +144,8 @@ export interface VersionSnapshot {
   page_id: string;
   version_number: number;
   title: string;
-  blocks: Block[];
-  page_snapshot: Record<string, unknown>;
+  blocks?: Block[];
+  page_snapshot?: Record<string, unknown>;
   user_id: string;
   user_name: string;
   description: string;

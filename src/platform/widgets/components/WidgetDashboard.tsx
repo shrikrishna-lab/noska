@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { WidgetEngineProvider, useWidgetEngine } from "../engine";
+import { timeAgo } from "../../../utils/helpers";
 import { NotificationProvider, useNotifications } from "../notifications/engine";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { WidgetGrid } from "./WidgetGrid";
@@ -197,13 +198,17 @@ function DashboardBody({ ctx }: { ctx: WidgetRuntimeContext }) {
 
   const handleExplain = (instance: WidgetInstance) => {
     const def = getWidgetDefinition(instance.widgetId);
+    const latest = ctx.pages.reduce((acc, p) => {
+      const t = new Date(p.updatedAt).getTime();
+      return isNaN(t) ? acc : Math.max(acc, t);
+    }, 0);
     setExplaining({
       title: def?.name || "Widget Metric",
-      metricValue: "Active",
-      dataSource: "Workspace Database & Tasks",
-      filterSummary: filters.projectId ? `Project: ${filters.projectId}` : "All Active Workspace Data",
-      calculationFormula: "Sum of completed tasks divided by total active tasks in sprint timeframe",
-      lastUpdatedText: "Just now (realtime sync)",
+      metricValue: "Live",
+      dataSource: def?.explain?.dataSource || "Your live workspace — pages, tasks, activity & AI stats (realtime-synced)",
+      filterSummary: filters.projectId ? `Project scope: ${filters.projectId}` : "None — all workspace data included",
+      calculationFormula: def?.explain?.formula || "Computed live from workspace data — no sample or placeholder values",
+      lastUpdatedText: latest > 0 ? `Realtime · last workspace update ${timeAgo(new Date(latest).toISOString())}` : "Realtime sync · no workspace updates yet",
     });
   };
 
@@ -214,7 +219,16 @@ function DashboardBody({ ctx }: { ctx: WidgetRuntimeContext }) {
     ctx.actions.onToast?.(`Applied ${name} dashboard! ✨`);
   };
 
-  const streakDays = 5; // dynamic fallback
+  // Real streak state — written by the Streak Tracker widget's daily check-in.
+  const streakDays = (() => {
+    try {
+      const raw = localStorage.getItem("noska_streak_days");
+      const n = raw ? Number(raw) : 0;
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    } catch {
+      return 0;
+    }
+  })();
 
   return (
     <div className="space-y-4 pb-8 select-none font-sans">
@@ -229,9 +243,11 @@ function DashboardBody({ ctx }: { ctx: WidgetRuntimeContext }) {
             <h1 className="text-base font-extrabold tracking-tight text-neutral-900 dark:text-white">
               {getGreeting(ctx.currentUserName)}
             </h1>
-            <span className="flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/30 px-2 py-0.5 text-[10.5px] font-bold text-amber-700 dark:text-amber-300 shadow-2xs">
-              <Flame size={12} className="text-amber-500" fill="currentColor" /> {streakDays}d Streak
-            </span>
+            {streakDays > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/30 px-2 py-0.5 text-[10.5px] font-bold text-amber-700 dark:text-amber-300 shadow-2xs">
+                <Flame size={12} className="text-amber-500" fill="currentColor" /> {streakDays}d Streak
+              </span>
+            )}
             {!online && (
               <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
                 Offline

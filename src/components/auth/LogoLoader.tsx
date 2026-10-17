@@ -27,7 +27,7 @@ export default function LogoLoader({ className = "" }) {
         className="relative z-10 w-16 h-16 md:w-20 md:h-20"
       >
         <img
-          src="/logo.png"
+          src="/logo-256.webp"
           alt="Noska Logo"
           className="w-full h-full object-contain pointer-events-none select-none"
         />

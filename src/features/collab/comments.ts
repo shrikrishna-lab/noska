@@ -3,12 +3,14 @@ import type { PageComment } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fromComments = () => (supabase.from('page_comments' as any));
+const COMMENT_COLUMNS = 'id,page_id,block_id,user_id,user_name,user_avatar,content,parent_comment_id,resolved,resolved_by,resolved_at,mentions,reactions,created_at,updated_at';
 
 export async function getComments(pageId: string, blockId?: string): Promise<PageComment[]> {
   let query = fromComments()
-    .select('*')
-    .eq('page_id', pageId)
-    .order('created_at', { ascending: true });
+    .select(COMMENT_COLUMNS)
+     .eq('page_id', pageId)
+     .order('created_at', { ascending: true })
+     .limit(200);
 
   if (blockId) {
     query = query.eq('block_id', blockId);

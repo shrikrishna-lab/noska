@@ -6,7 +6,7 @@ import {
   computeDegrees,
   type MetricType
 } from "./graphLayouts";
-import { PageIcon } from "../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 import {
   Sliders,
   Sparkles,

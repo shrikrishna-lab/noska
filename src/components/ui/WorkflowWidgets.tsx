@@ -998,9 +998,9 @@ export interface GoalStepperCardProps {
 }
 
 export function GoalStepperCard({
-  title = "You're almost there!",
+  title = "Milestone Roadmap",
   userId = "default",
-  initialStep = 3,
+  initialStep = 1,
   onStepClick,
   className
 }: GoalStepperCardProps) {
@@ -1040,12 +1040,12 @@ export function GoalStepperCard({
     setIsEditing(false);
   };
 
-  // Noska Intelligence Dynamic AI Tip
+  // Practical milestone guidance — generic advice, no invented metrics.
   const aiTips = [
-    "Sprint velocity is 28% higher in morning focus blocks.",
-    "Completing 'Set Goals' unlocks automated team delegation.",
-    "Use round milestone targets to protect cognitive focus.",
-    "You're 1 step away from launching your sprint initiative! 🚀"
+    "Break the milestone into steps you can finish in one sitting.",
+    "Finish the smallest next step to keep momentum going.",
+    "Assign one owner per step so progress never stalls.",
+    "Ship the launch step first, then iterate with real feedback.",
   ];
   const currentTip = aiTips[Math.min(activeStep - 1, aiTips.length - 1)] || aiTips[0];
 
@@ -1190,7 +1190,7 @@ export function GoalStepperCard({
       <div className="p-2.5 rounded-full bg-emerald-500/[0.07] border border-emerald-500/20 text-center flex items-center justify-center gap-1.5">
         <Sparkles size={13} className="text-emerald-500 shrink-0" />
         <span className="text-xs font-medium text-emerald-800 dark:text-emerald-300">
-          <strong className="font-bold">Noska AI Tip:</strong> {currentTip}
+          <strong className="font-bold">Tip:</strong> {currentTip}
         </span>
       </div>
     </div>
@@ -1212,7 +1212,7 @@ export function GoalStepperCard({
                   </div>
                   <div>
                     <h3 className="font-bold text-base">{cardTitle} • Milestone Telemetry</h3>
-                    <p className="text-xs text-neutral-400">Live sprint progress and goal metrics</p>
+                    <p className="text-xs text-neutral-400">Your saved roadmap stages and progress</p>
                   </div>
                 </div>
                 <button
@@ -1286,9 +1286,9 @@ export interface SocialHabitRaceCardProps {
 }
 
 export function SocialHabitRaceCard({
-  userPoints = 24,
-  peerPoints = 30,
-  peerName = "Lisa",
+  userPoints = 0,
+  peerPoints = 0,
+  peerName = "Your partner",
   userId = "default",
   onLogHabit,
   className
@@ -1300,16 +1300,17 @@ export function SocialHabitRaceCard({
     peer: savedData?.peerPoints ?? peerPoints
   });
   const [activePeerName, setActivePeerName] = useState(savedData?.peerName ?? peerName);
-  const [challengeNumber, setChallengeNumber] = useState(savedData?.challengeNumber ?? 4);
+  const [challengeNumber] = useState(savedData?.challengeNumber ?? 1);
   const [isCustomizing, setIsCustomizing] = useState(false);
 
   const handleLog = () => {
+    // Only the user's own points change on log — the peer lane is moved
+    // solely by manual customization, never invented client-side.
     const updatedUser = points.user + 5;
-    const updatedPeer = points.peer + (Math.random() > 0.6 ? 2 : 0);
-    const newPoints = { user: updatedUser, peer: updatedPeer };
+    const newPoints = { user: updatedUser, peer: points.peer };
     setPoints(newPoints);
     saveWorkflowUserData(userId, {
-      habitRace: { userPoints: updatedUser, peerPoints: updatedPeer, peerName: activePeerName, challengeNumber }
+      habitRace: { userPoints: updatedUser, peerPoints: points.peer, peerName: activePeerName, challengeNumber }
     });
     onLogHabit?.();
   };
@@ -1336,7 +1337,7 @@ export function SocialHabitRaceCard({
       {/* Top Header Row with Settings Icon */}
       <div className="flex items-center justify-between pt-1">
         <span className="text-[11px] font-bold text-amber-900/60 dark:text-amber-200/60 flex items-center gap-1">
-          <Flame size={12} className="text-amber-500" /> Live Teammate Race
+          <Flame size={12} className="text-amber-500" /> Habit Streak Race
         </span>
         <button
           type="button"
@@ -1533,7 +1534,7 @@ export interface ProgressGoalsCardProps {
 }
 
 export function ProgressGoalsCard({
-  initialCount = 20500,
+  initialCount = 0,
   realCount,
   label = "Steps",
   badgeLabel = "Progress goals",
@@ -1545,7 +1546,7 @@ export function ProgressGoalsCard({
   const savedData = getWorkflowUserData(userId)?.progressGoal;
 
   const [metricMode, setMetricMode] = useState<"steps" | "words" | "tasks" | "focus">(
-    savedData?.metricMode ?? "steps"
+    savedData?.metricMode ?? (typeof realCount === "number" ? "words" : "steps")
   );
   const [targetVal, setTargetVal] = useState<number>(savedData?.targetVal ?? 25000);
   const [boostVal, setBoostVal] = useState<number>(savedData?.boostVal ?? stepBoost);
@@ -1579,7 +1580,9 @@ export function ProgressGoalsCard({
 
   const handleSelectMode = (mode: "steps" | "words" | "tasks" | "focus") => {
     setMetricMode(mode);
-    const newCount = mode === "words" && realCount ? realCount : mode === "tasks" ? (realCount || 14) : mode === "focus" ? 180 : 20500;
+    // Only "words" has a real workspace source; other modes start at 0 and
+    // are tracked manually with the boost button — never pre-filled.
+    const newCount = mode === "words" && typeof realCount === "number" ? realCount : 0;
     setCount(newCount);
     saveWorkflowUserData(userId, {
       progressGoal: { count: newCount, metricMode: mode, targetVal, boostVal }

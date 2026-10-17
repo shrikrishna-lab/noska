@@ -1,7 +1,7 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { colorForOption } from "../../utils/optionColors";
-import { PageIcon } from "../../../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
 export interface ListViewProps {

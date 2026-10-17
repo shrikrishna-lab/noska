@@ -2,6 +2,9 @@ import { supabase } from '../../lib/supabase';
 import type { Block } from '../../../types/blocks';
 import type { VersionSnapshot } from './types';
 
+const VERSION_LIST_COLUMNS = 'id,page_id,version_number,title,description,user_id,user_name,created_at';
+const VERSION_COLUMNS = `${VERSION_LIST_COLUMNS},blocks,page_snapshot`;
+
 export async function createVersion(pageId: string, userId: string, userName: string, blocks: Block[], title?: string, description?: string): Promise<VersionSnapshot | null> {
   // version_number is NOT NULL + unique per page — derive the next number
   // first (retry once if a concurrent insert wins the race on the unique index)
@@ -26,8 +29,8 @@ export async function createVersion(pageId: string, userId: string, userName: st
         title: title || 'Version',
         description: description || null,
       } as any)
-      .select()
-      .single();
+       .select(VERSION_COLUMNS)
+       .single();
 
     if (!error) return data as unknown as VersionSnapshot;
     const isUniqueRace = typeof (error as { code?: string }).code === 'string' && (error as { code?: string }).code!.startsWith('23');
@@ -42,8 +45,8 @@ export async function createVersion(pageId: string, userId: string, userName: st
 export async function getVersions(pageId: string, limit = 50, offset = 0): Promise<VersionSnapshot[]> {
   const { data, error } = await supabase
     .from('page_versions')
-    .select('*')
-    .eq('page_id', pageId)
+     .select(VERSION_LIST_COLUMNS)
+     .eq('page_id', pageId)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -54,8 +57,8 @@ export async function getVersions(pageId: string, limit = 50, offset = 0): Promi
 export async function getVersionById(versionId: string): Promise<VersionSnapshot | null> {
   const { data, error } = await supabase
     .from('page_versions')
-    .select('*')
-    .eq('id', versionId)
+     .select(VERSION_COLUMNS)
+     .eq('id', versionId)
     .single();
 
   if (error || !data) return null;

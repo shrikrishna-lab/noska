@@ -11,7 +11,7 @@ import { Navigate } from "react-router-dom";
 import { isDesktop } from "../lib/desktop/platform";
 import { isMobile } from "../platform";
 import { getDesktopIdentity } from "../lib/desktop/pairing";
-import App from "../App.jsx";
+import ProductApp from "./ProductApp";
 import DesktopAuthScreen from "./auth/DesktopAuthScreen";
 import MobileAuthScreen from "../platform/mobile/MobileAuthScreen";
 import { RouteFallbackSpinner } from "./MarketingShell";
@@ -20,7 +20,7 @@ export default function LoginRoute({ children }: { children?: ReactNode }) {
   const { isLoaded, isSignedIn } = useAuth();
 
   if (isDesktop()) {
-    if (getDesktopIdentity()) return children ?? <App />;
+    if (getDesktopIdentity()) return children ?? <ProductApp />;
     return isMobile() ? <MobileAuthScreen /> : <DesktopAuthScreen />;
   }
   if (!isLoaded) {
@@ -29,6 +29,6 @@ export default function LoginRoute({ children }: { children?: ReactNode }) {
   if (isSignedIn) {
     return <Navigate to="/dashboard" replace />;
   }
-  // Signed out: render the real login experience (<App /> auth flow).
-  return children ?? <App />;
+  // Signed out: render the real login experience (<ProductApp /> auth flow).
+  return children ?? <ProductApp />;
 }

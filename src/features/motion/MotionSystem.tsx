@@ -7,8 +7,31 @@ export const SPRING_PRESETS = {
   soft: { type: "spring", stiffness: 120, damping: 18, mass: 1 },
   stiff: { type: "spring", stiffness: 350, damping: 28, mass: 0.8 },
   bouncy: { type: "spring", stiffness: 220, damping: 12, mass: 0.7 },
-  gentle: { type: "spring", stiffness: 90, damping: 16, mass: 1.2 }
+  gentle: { type: "spring", stiffness: 90, damping: 16, mass: 1.2 },
+  /**
+   * Tuned to match the feel of a system side panel: a firm initial impulse
+   * that settles without overshoot. `stiff` above overshoots slightly and
+   * `gentle` is slow enough to read as lag on a 410px rail, which is why
+   * surfaces that slide in from an edge had been hand-rolling their own
+   * spring constants instead of using a shared token.
+   */
+  panel: { type: "spring", stiffness: 400, damping: 40, mass: 1 },
+  /** Micro-interaction for press/release on tappable controls. */
+  press: { type: "spring", stiffness: 700, damping: 34, mass: 0.6 },
 } as const;
+
+/** Cross-fade used when content swaps without a directional slide. */
+export const FADE_TRANSITION = { duration: 0.18, ease: [0.16, 1, 0.3, 1] } as const;
+
+/**
+ * Resolve a transition, collapsing to an instant cross-fade when the user has
+ * asked for reduced motion. Framer Motion animates `opacity` fine, but a
+ * spring-driven `x` translate is exactly the kind of large motion that
+ * triggers vestibular discomfort.
+ */
+export function motionSafe<T extends object>(transition: T, reduced: boolean): T | { duration: number } {
+  return reduced ? { duration: 0.01 } : transition;
+}
 
 // Check if user prefers reduced motion
 export function useReducedMotion() {

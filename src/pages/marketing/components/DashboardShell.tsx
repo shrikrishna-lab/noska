@@ -75,7 +75,7 @@ function DashSidebar() {
     <aside className="dash-sidebar">
       <div className="dash-sidebar-header">
         <button className="dash-ws-btn" tabIndex={-1}>
-          <span className="dash-logo-box"><img src="/logo.png" alt="" /></span>
+          <span className="dash-logo-box"><img src="/logo-256.webp" alt="" /></span>
           <span className="dash-ws-info">
             <span className="dash-ws-name">My Workspace</span>
           </span>

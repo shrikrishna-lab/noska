@@ -9,6 +9,7 @@
 // - Native touch responsiveness with 60fps hardware acceleration
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import PageIcon from "@/components/PageIcon";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -88,7 +89,7 @@ function RecentsCarousel({ pages, onOpen }: { pages: Page[]; onOpen: (id: string
             <div className="mobile-recents-card__cover" style={{ background: getCoverStyle(p, idx) }} />
             <div className="mobile-recents-card__body">
               <span className="mobile-recents-card__icon" aria-hidden>
-                {p.icon || "📝"}
+                <PageIcon icon={p.icon} size={18} fallback="📝" />
               </span>
               <span className="mobile-recents-card__title">{p.title || "Untitled"}</span>
               <span className="mobile-recents-card__time">{timeAgo(p.updatedAt)}</span>
@@ -156,7 +157,7 @@ function PageTreeItem({
         </button>
 
         <span className="mobile-tree-icon" aria-hidden>
-          {page.icon || "📄"}
+          <PageIcon icon={page.icon} size={16} fallback="📄" />
         </span>
 
         <span className="mobile-tree-title">{page.title || "Untitled"}</span>
@@ -432,7 +433,7 @@ function SearchScreen({ openPage, onBack }: { openPage: (id: string) => void; on
               openPage(p.id);
             }}
           >
-            <span className="mobile-search-row__icon">{p.icon || "📄"}</span>
+            <PageIcon icon={p.icon} size={16} fallback="📄" />
             <div className="mobile-search-row__body">
               <span className="mobile-search-row__title">{p.title || "Untitled"}</span>
               <span className="mobile-search-row__meta">{timeAgo(p.updatedAt)}</span>

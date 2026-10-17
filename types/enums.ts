@@ -122,4 +122,7 @@ export type LineageAction =
   // edits and any bulk block-add through the same code path). Found via
   // grep during Phase 4 Tier 2 (App.tsx conversion); missing from the
   // original enum sweep.
-  | "ai_generated";
+  | "ai_generated"
+  // Written by the `fork_page` RPC on the root of a copy, alongside a human
+  // readable `detail`. It is the marker the forked-page badge keys off.
+  | "forked";

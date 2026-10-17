@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState } from "react";
 
 const BG_VIDEO_URL = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260419_065931_e3ca7b53-d32e-4ad5-81de-dc9d6fcfda6d.mp4";
+const BG_LOCAL_URL = "/auth-bg.webm";
+const BG_POSTER_URL = "/auth-bg-poster.webp";
 
 export default function AuthBackground() {
   const wrapperRef = useRef(null);
@@ -8,6 +10,15 @@ export default function AuthBackground() {
   const offCanvasRef = useRef(null);
   
   const [webglSupported, setWebglSupported] = useState(true);
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+    if (reducedMotion || saveData) return;
+    const timer = window.setTimeout(() => setVideoSrc(BG_LOCAL_URL), 800);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const sizeRef = useRef({ width: 400, height: 300 });
   const dprRef = useRef(1);
@@ -142,14 +153,24 @@ export default function AuthBackground() {
     }
 
     let animationId;
+    if (!videoSrc) return;
     let videoEl = document.createElement("video");
     videoEl.crossOrigin = "anonymous";
-    videoEl.src = BG_VIDEO_URL;
+    videoEl.src = videoSrc;
     videoEl.muted = true;
     videoEl.loop = true;
     videoEl.playsInline = true;
     videoEl.autoplay = true;
     videoEl.setAttribute("playsinline", "");
+    videoEl.poster = BG_POSTER_URL;
+
+    const handleVideoError = () => {
+      if (videoSrc !== BG_LOCAL_URL) return;
+      videoEl.src = BG_VIDEO_URL;
+      videoEl.load();
+    };
+
+    videoEl.addEventListener("error", handleVideoError);
 
     let tex, program, uTime, uMouse, uStrength, uSpeed, uResolution, uWake, uWakeCount, uMaskRadius;
     let startTime = Date.now();
@@ -411,26 +432,36 @@ export default function AuthBackground() {
       try {
         videoEl.pause();
       } catch (e) {}
+      videoEl.removeEventListener("error", handleVideoError);
       videoEl.removeAttribute("src");
       videoEl.load();
       gl = null;
     };
-  }, []);
+  }, [videoSrc]);
 
   if (!webglSupported) {
     return (
       <div
         ref={wrapperRef}
         className="absolute inset-0 w-full h-full overflow-hidden z-0 select-none bg-[#f8fafc]"
+        style={videoSrc ? undefined : {
+          backgroundImage: `url(${BG_POSTER_URL})`,
+          backgroundPosition: "center",
+          backgroundSize: "cover",
+        }}
       >
         <video
-          src={BG_VIDEO_URL}
+          poster={BG_POSTER_URL}
           muted
           loop
           playsInline
-          autoPlay
+          autoPlay={Boolean(videoSrc)}
+          preload="metadata"
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        />
+        >
+          {videoSrc && <source src={BG_LOCAL_URL} type="video/webm" />}
+          {videoSrc && <source src={BG_VIDEO_URL} type="video/mp4" />}
+        </video>
       </div>
     );
   }
@@ -439,6 +470,11 @@ export default function AuthBackground() {
     <div
       ref={wrapperRef}
       className="absolute inset-0 w-full h-full overflow-hidden z-0 select-none bg-[#f8fafc]"
+      style={videoSrc ? undefined : {
+        backgroundImage: `url(${BG_POSTER_URL})`,
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+      }}
     >
       <canvas
         ref={canvasRef}

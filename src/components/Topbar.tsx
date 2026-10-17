@@ -5,6 +5,7 @@ import {
   Link2,
   Sparkles,
   Globe,
+  GitFork,
   FileText,
   LayoutGrid,
   Network,
@@ -31,6 +32,7 @@ import { TbLockFilled } from "react-icons/tb";
 import WorkspaceJoinBar from "./collab/WorkspaceJoinBar";
 import type { Page } from "../lib/supabaseService";
 import { PageIcon } from "./PageIcon";
+import { ForkedBadge } from "./share/ForkedBadge";
 import { usePageIsShared } from "../features/collab/hooks";
 import { useCalendarSync, useCalendarTopbarSetting } from "../lib/calendarSync";
 
@@ -63,6 +65,14 @@ interface TopbarProps {
   onRemoveEncryption?: (pageId: string) => void;
   onVisibilityChange?: (visibility: "private" | "team" | "company" | "public") => void;
   onToggleCalendar?: () => void;
+  /**
+   * Offered on somebody else's published page when the owner set the link to
+   * fork mode. A published page is readable, so the access gate never appears
+   * for it — this is where a visitor actually gets their own copy.
+   */
+  onFork?: () => void;
+  /** True while a fork is in flight, so the button can't be double-fired. */
+  forkBusy?: boolean;
   onToast?: (msg: string) => void;
 }
 
@@ -129,6 +139,8 @@ const Topbar = memo(function Topbar({
   onRemoveEncryption,
   onVisibilityChange,
   onToggleCalendar,
+  onFork,
+  forkBusy,
   onToast,
 }: TopbarProps) {
   const { isSynced, toggle } = useCalendarSync();
@@ -151,12 +163,26 @@ const Topbar = memo(function Topbar({
   const pageIsShared = isOwner ? (sharedViaPerms || visibility === "public") : true;
   const isPrivate = visibility === "private" && isOwner && !sharedViaPerms;
   const isPageView = !appView || appView === "page";
+  // Forking is offered only when the owner has published the page and set the
+  // link to fork mode — and never on a page the viewer already owns.
+  const canFork = !isOwner && page?.linkAccess === "fork" && visibility === "public";
 
   const VIS_OPTIONS: { value: "private" | "public"; label: string; description: string; Icon: LucideIcon }[] = [
     { value: "private", label: "Private", description: "Only you and people you invite", Icon: AnimatedLock as unknown as LucideIcon },
     { value: "public", label: "Public", description: "Anyone in this workspace can open and view it", Icon: Globe },
   ];
   const CurrentVisIcon = visibility === "public" ? Globe : (AnimatedLock as unknown as React.FC<{ size?: number }>);
+
+  // A private page is still shareable — privacy governs discovery, not
+  // collaboration. Describe what the link actually does instead of implying
+  // it cannot be shared.
+  const linkHint = visibility === "public"
+    ? "Copy public link — anyone signed in can read"
+    : page?.linkAccess === "fork"
+      ? "Copy link — anyone with it can take their own copy"
+      : page?.linkAccess === "view"
+        ? "Copy link — anyone with it can view"
+        : "Copy link — others will need to request access";
 
   return (
     <header className="flex h-11 shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg)] px-3">
@@ -168,6 +194,9 @@ const Topbar = memo(function Topbar({
             className="text-[13px] text-[var(--text)] font-medium"
           />
         </div>
+        {/* Marks a page that came from forking someone else's shared page, so it
+            is never mistaken for something written from scratch. */}
+        <ForkedBadge lineage={page.lineage} size={11} emphasis="plain" />
         {isPageView && (
           <OptionPicker
             options={[
@@ -292,6 +321,25 @@ const Topbar = memo(function Topbar({
             <ChevronDown size={11} className="opacity-60" />
           </motion.button>
 
+          {/* Published + fork mode, viewed by someone who does not own it:
+              the visitor can read it, so the access gate is not shown and this
+              is where they take their own copy. */}
+          {canFork && onFork && (
+            <motion.button
+              type="button"
+              onClick={onFork}
+              disabled={forkBusy}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.95 }}
+              transition={SPRING_TRANSITION}
+              className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--hover)] border border-transparent hover:border-[var(--border)] transition-colors shrink-0 cursor-pointer shadow-2xs select-none disabled:opacity-50 disabled:cursor-default"
+              title="Get your own copy — your changes stay on your side"
+            >
+              <GitFork size={13} />
+              <span>Make a copy</span>
+            </motion.button>
+          )}
+
           <motion.button
             type="button"
             onClick={onCopyLink}
@@ -303,8 +351,8 @@ const Topbar = memo(function Topbar({
                 ? "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
                 : "text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
             }`}
-            title={visibility === "public" ? "Copy public link" : "Copy link (Page is Private)"}
-            aria-label={visibility === "public" ? "Copy public link" : "Copy link (Page is Private)"}
+            title={linkHint}
+            aria-label={linkHint}
           >
             <Link2 size={15} />
           </motion.button>

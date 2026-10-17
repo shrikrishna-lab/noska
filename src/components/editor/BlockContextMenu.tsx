@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import {
   Search, X, ChevronRight, ChevronLeft, Link2, Copy, Move, Trash2, FileEdit, Sparkles, Check,
   Type, Heading1, Heading2, Heading3, Heading4, List, ListChecks, CheckSquare, Quote, MessageSquare, Code,
-  Palette, MessageCircle, Play, Square, Brain
+  Palette, MessageCircle, Play, Square, Brain, GripVertical
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { TEXT_COLORS, BG_COLORS } from "../../utils/colors";
 import type { Block } from "../../../types/blocks";
 import type { Page } from "../../lib/supabaseService";
+import { buildPageLink } from "../../lib/share/origin";
 
 /** Single flexible shape covering every item type this menu's
  * `getVisibleItems()` can produce (main actions, block-type entries,
@@ -80,6 +81,7 @@ export default function BlockContextMenu({
   onToast
 }: BlockContextMenuProps) {
   const [search, setSearch] = useState("");
+  const dragControls = useDragControls();
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [colorTab, setColorTab] = useState("text");
@@ -175,11 +177,15 @@ export default function BlockContextMenu({
 
     if (activeSubmenu === "color" && item.colorInfo) {
       const colName = item.colorInfo.name.toLowerCase();
+      // Send the hex, not the name. renderBlockEditor applies block.color /
+      // block.bgColor straight into a style object, and `color: "brown"` is not
+      // valid CSS — the browser dropped the declaration and the menu looked
+      // like it had done nothing. colorInfo.value is the palette hex.
       if (colorTab === "bg") {
-        onAction?.("bgColor", colName === "none" ? undefined : colName);
+        onAction?.("bgColor", colName === "none" ? undefined : item.colorInfo.value);
         onToast?.(`Block background color set to ${item.colorInfo.name}`);
       } else {
-        onAction?.("color", colName === "default" ? undefined : colName);
+        onAction?.("color", colName === "default" ? undefined : item.colorInfo.value);
         onToast?.(`Block color updated to ${item.colorInfo.name}`);
       }
       onClose();
@@ -195,7 +201,7 @@ export default function BlockContextMenu({
 
     if (item.id === "copy-link") {
       const slug = window.location.pathname.split('/').filter(Boolean)[0] || 'workspace';
-      navigator.clipboard.writeText(`${window.location.origin}/${slug}/${pages[0]?.id || ""}`);
+      navigator.clipboard.writeText(buildPageLink(slug, pages[0]?.id || ""));
       onToast?.("Block deep link copied!");
     }
 
@@ -240,170 +246,211 @@ export default function BlockContextMenu({
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " at " + date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   };
 
+  if (!open) return null;
+
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: -6 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: -3 }}
-          transition={{ type: "spring", stiffness: 420, damping: 28 }}
-          style={{ width: 268 }}
-          className="flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]/95 backdrop-blur-xl shadow-[0_20px_45px_-12px_rgba(0,0,0,0.25)] z-[120] max-h-[480px]"
-        >
-          {/* Header Bar */}
-          <div className="flex items-center border-b border-[var(--border)] px-2 py-1.5 bg-[var(--surface-3)]/60">
-            {activeSubmenu && (
-              <button
-                onClick={() => {
-                  setActiveSubmenu(null);
-                  setSearch("");
-                  setHighlightedIndex(-1);
-                }}
-                className="p-1 rounded-lg text-[var(--secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition cursor-pointer mr-1"
-              >
-                <ChevronLeft size={15} />
-              </button>
-            )}
-            <span className="flex-1 text-[11px] font-semibold text-[var(--text-secondary)] pl-1">
-              {activeSubmenu === "turn-into" ? "Turn block into..." : activeSubmenu === "color" ? "" : activeSubmenu === "move-to" ? "Move block to page..." : "Block actions"}
-            </span>
-          </div>
-
-          {/* Color submenu header with tabs + custom picker */}
-          {activeSubmenu === "color" && (
-            <div className="border-b border-[var(--border)] px-2.5 py-2.5 flex flex-col gap-2">
-              <div className="flex items-center gap-1 p-0.5 rounded-xl bg-[var(--surface-3)] border border-[var(--border)]">
-                <button
-                  onClick={() => setColorTab("text")}
-                  className={`flex-1 py-1 text-[10px] font-semibold rounded-lg transition cursor-pointer ${
-                    colorTab === "text" ? "bg-[var(--surface-2)] text-[var(--text)] shadow-xs" : "text-[var(--secondary)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  Text
-                </button>
-                <button
-                  onClick={() => setColorTab("bg")}
-                  className={`flex-1 py-1 text-[10px] font-semibold rounded-lg transition cursor-pointer ${
-                    colorTab === "bg" ? "bg-[var(--surface-2)] text-[var(--text)] shadow-xs" : "text-[var(--secondary)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  Background
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={customColor}
-                  onChange={(e) => setCustomColor(e.target.value)}
-                  className="w-7 h-7 rounded-lg border border-[var(--border)] cursor-pointer p-0 bg-transparent shrink-0"
-                />
-                <button
-                  onClick={() => {
-                    const val = customColor;
-                    if (colorTab === "bg") {
-                      onAction?.("bgColor", val);
-                      onToast?.(`Block background color set to custom`);
-                    } else {
-                      onAction?.("color", val);
-                      onToast?.(`Block color set to custom`);
-                    }
-                    onClose();
-                  }}
-                  className="flex-1 py-1 px-2 text-[10px] font-semibold text-[var(--text)] bg-[var(--surface-3)] hover:bg-[var(--surface-4)] border border-[var(--border)] rounded-lg transition cursor-pointer shadow-2xs"
-                >
-                  Apply custom color
-                </button>
-              </div>
-            </div>
+    <motion.div
+      drag
+      dragControls={dragControls}
+      dragListener={false}
+      dragMomentum={false}
+      dragElastic={0}
+      style={{ width: 280 }}
+      className="flex flex-col overflow-hidden rounded-[18px] border border-black/[0.08] dark:border-white/[0.12] bg-white/98 dark:bg-[#1a1b20]/98 backdrop-blur-3xl shadow-[0_24px_56px_-8px_rgba(0,0,0,0.28),0_8px_20px_-4px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_28px_64px_-10px_rgba(0,0,0,0.85),0_10px_24px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.12)] max-h-[500px] select-none text-[var(--text)] font-sans"
+    >
+      {/* Header Bar - Draggable Handle */}
+      <div
+        onPointerDown={(e) => {
+          if (!(e.target as HTMLElement).closest("button")) {
+            dragControls.start(e);
+          }
+        }}
+        className="flex items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] px-3.5 py-2.5 bg-black/[0.015] dark:bg-white/[0.02] cursor-grab active:cursor-grabbing touch-none select-none"
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {activeSubmenu && (
+            <button
+              onClick={() => {
+                setActiveSubmenu(null);
+                setSearch("");
+                setHighlightedIndex(-1);
+              }}
+              className="w-5 h-5 rounded-md flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer mr-0.5"
+            >
+              <ChevronLeft size={13} strokeWidth={2.5} />
+            </button>
           )}
+          <span className="text-[12px] font-semibold text-neutral-800 dark:text-neutral-200 tracking-tight truncate flex items-center gap-1.5">
+            {!activeSubmenu && (
+              <span
+                className="cursor-grab active:cursor-grabbing text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 p-0.5 -ml-1 rounded transition-colors flex items-center"
+                title="Drag to reposition menu"
+              >
+                <GripVertical size={13} className="shrink-0" />
+              </span>
+            )}
+            <span className="cursor-grab active:cursor-grabbing">
+              {activeSubmenu === "turn-into" ? "Turn block into..." : activeSubmenu === "color" ? "Block Colors" : activeSubmenu === "move-to" ? "Move block to page..." : "Block actions"}
+            </span>
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-5 h-5 rounded-full flex items-center justify-center text-neutral-400 hover:text-neutral-800 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer"
+          title="Close (Esc)"
+          aria-label="Close"
+        >
+          <X size={11} strokeWidth={2.5} />
+        </button>
+      </div>
 
-          {/* Search */}
-          <div className="relative border-b border-[var(--border)]">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+      {/* Color submenu header with tabs + custom picker */}
+      {activeSubmenu === "color" && (
+        <div className="border-b border-black/[0.06] dark:border-white/[0.08] p-2.5 flex flex-col gap-2 bg-black/[0.015] dark:bg-white/[0.02]">
+          <div className="flex items-center gap-1 p-0.5 rounded-[10px] bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
+            <button
+              onClick={() => setColorTab("text")}
+              className={`flex-1 py-1 text-[10px] font-semibold rounded-[8px] transition cursor-pointer ${
+                colorTab === "text"
+                  ? "bg-white dark:bg-[#282a32] text-neutral-900 dark:text-white shadow-xs"
+                  : "text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-white"
+              }`}
+            >
+              Text
+            </button>
+            <button
+              onClick={() => setColorTab("bg")}
+              className={`flex-1 py-1 text-[10px] font-semibold rounded-[8px] transition cursor-pointer ${
+                colorTab === "bg"
+                  ? "bg-white dark:bg-[#282a32] text-neutral-900 dark:text-white shadow-xs"
+                  : "text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-white"
+              }`}
+            >
+              Background
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
             <input
-              ref={searchRef}
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setHighlightedIndex(-1); }}
-              onKeyDown={handleKeyDown}
-              placeholder="Search actions..."
-              className="w-full bg-transparent px-8 py-2 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+              type="color"
+              value={customColor}
+              onChange={(e) => setCustomColor(e.target.value)}
+              className="w-7 h-7 rounded-lg border border-black/[0.08] dark:border-white/[0.12] cursor-pointer p-0 bg-transparent shrink-0"
             />
-            {search && (
-              <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] cursor-pointer">
-                <X size={13} />
-              </button>
-            )}
+            <button
+              onClick={() => {
+                const val = customColor;
+                if (colorTab === "bg") {
+                  onAction?.("bgColor", val);
+                  onToast?.(`Block background color set to custom`);
+                } else {
+                  onAction?.("color", val);
+                  onToast?.(`Block color set to custom`);
+                }
+                onClose();
+              }}
+              className="flex-1 py-1 px-2 text-[10.5px] font-semibold text-neutral-800 dark:text-neutral-200 bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] rounded-lg transition cursor-pointer shadow-2xs"
+            >
+              Apply custom color
+            </button>
           </div>
-
-          {/* List Area */}
-          <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-none py-1">
-            {filtered.length === 0 ? (
-              <div className="px-3 py-8 text-center text-xs text-[var(--muted)]">No actions found</div>
-            ) : (
-              filtered.map((item, idx) => {
-                const isSelected = highlightedIndex === idx;
-
-                // Group Section Header / Divider Rendering
-                const showHeader = !activeSubmenu && item.section && (idx === 0 || mainActions[idx - 1]?.section !== item.section);
-                const showDivider = !activeSubmenu && item.group && idx > 0 && mainActions[idx - 1]?.group !== item.group;
-
-                return (
-                  <React.Fragment key={item.id}>
-                    {showHeader && (
-                      <div className="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)] border-b border-[var(--border)] mb-1">
-                        {item.section}
-                      </div>
-                    )}
-                    {showDivider && (
-                      <div className="my-1 border-t border-[var(--border)]" />
-                    )}
-
-                    <button
-                      onClick={() => handleAction(item)}
-                      onMouseEnter={() => setHighlightedIndex(idx)}
-                      className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                        item.danger ? "text-[var(--danger)] hover:bg-[var(--danger)]/10" : "text-[var(--text)]"
-                      } ${isSelected ? "bg-[var(--hover)]" : ""}`}
-                    >
-                      {activeSubmenu === "color" && item.colorInfo ? (
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-[var(--border)]" style={{ backgroundColor: item.colorInfo.bg }}>
-                          <span style={{ color: item.colorInfo.value }} className="text-[10px] font-bold">T</span>
-                        </span>
-                      ) : activeSubmenu === "move-to" ? (
-                        <span className="text-sm">📄</span>
-                      ) : (
-                        item.icon && <item.icon size={13} className={`shrink-0 ${item.danger ? "text-[var(--danger)]" : "text-[var(--secondary)]"}`} />
-                      )}
-
-                      <span className="flex-1 truncate">{item.label}</span>
-
-                      {item.badge && (
-                        <span className="rounded bg-[var(--accent)]/10 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-[var(--accent)] mr-1">
-                          {item.badge}
-                        </span>
-                      )}
-
-                      {item.shortcut && (
-                        <span className="text-[9px] text-[var(--muted)] font-mono">{item.shortcut}</span>
-                      )}
-                      {item.submenu && (
-                        <ChevronRight size={12} className="text-[var(--muted)] font-bold" />
-                      )}
-                    </button>
-                  </React.Fragment>
-                );
-              })
-            )}
-          </div>
-
-          {/* Fixed Footer */}
-          <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex flex-col gap-0.5 text-[10px] text-[var(--muted)]">
-            <div className="truncate">Last edited by <span className="text-[var(--secondary)] font-medium">{lastEditedBy || "Workspace User"}</span></div>
-            <div>{formatTimeAgo(lastEditedAt)}</div>
-          </div>
-        </motion.div>
+        </div>
       )}
-    </AnimatePresence>
+
+      {/* Search */}
+      <div className="p-2 border-b border-black/[0.05] dark:border-white/[0.06]">
+        <div className="relative flex items-center w-full px-2.5 py-1.5 rounded-[10px] bg-black/[0.035] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.08] transition-all focus-within:ring-2 focus-within:ring-sky-500/30 focus-within:bg-white dark:focus-within:bg-[#202228] focus-within:border-sky-500/40">
+          <Search size={13} className="text-neutral-400 dark:text-neutral-500 shrink-0" strokeWidth={2.2} />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setHighlightedIndex(-1); }}
+            onKeyDown={handleKeyDown}
+            placeholder="Search actions..."
+            className="w-full bg-transparent px-1.5 text-[12px] text-neutral-900 dark:text-white outline-none placeholder:text-neutral-400 dark:placeholder:text-neutral-500 font-normal leading-tight"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-pointer">
+              <X size={11} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* List Area */}
+      <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-none py-1 px-1.5 space-y-0.5">
+        {filtered.length === 0 ? (
+          <div className="px-3 py-8 text-center text-xs text-neutral-400">No actions found</div>
+        ) : (
+          filtered.map((item, idx) => {
+            const isSelected = highlightedIndex === idx;
+
+            // Group Section Header / Divider Rendering
+            const showHeader = !activeSubmenu && item.section && (idx === 0 || mainActions[idx - 1]?.section !== item.section);
+            const showDivider = !activeSubmenu && item.group && idx > 0 && mainActions[idx - 1]?.group !== item.group;
+
+            return (
+              <React.Fragment key={item.id}>
+                {showHeader && (
+                  <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 select-none">
+                    {item.section}
+                  </div>
+                )}
+                {showDivider && (
+                  <div className="my-1 mx-2 h-[1px] bg-black/[0.05] dark:border-white/[0.07] bg-black/[0.05] dark:bg-white/[0.07]" />
+                )}
+
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleAction(item)}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  className={`group flex w-full items-center gap-2.5 px-2.5 py-1.5 rounded-[10px] text-left text-[12px] font-medium transition-all duration-150 cursor-pointer select-none ${
+                    item.danger
+                      ? isSelected
+                        ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                        : "text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
+                      : isSelected
+                        ? "bg-black/[0.05] dark:bg-white/[0.09] text-neutral-900 dark:text-white shadow-2xs"
+                        : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.035] dark:hover:bg-white/[0.06] hover:text-neutral-900 dark:hover:text-white"
+                  }`}
+                >
+                  {activeSubmenu === "color" && item.colorInfo ? (
+                    <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border border-black/10 dark:border-white/15" style={{ backgroundColor: item.colorInfo.bg }}>
+                      <span style={{ color: item.colorInfo.value }} className="text-[9.5px] font-bold">T</span>
+                    </span>
+                  ) : activeSubmenu === "move-to" ? (
+                    <span className="text-sm">📄</span>
+                  ) : (
+                    item.icon && <item.icon size={14} strokeWidth={2} className={`shrink-0 ${item.danger ? "text-rose-500" : "text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-700 dark:group-hover:text-neutral-200"}`} />
+                  )}
+
+                  <span className="flex-1 truncate">{item.label}</span>
+
+                  {item.badge && (
+                    <span className="rounded bg-sky-500/15 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 text-[8.5px] font-semibold uppercase tracking-wider mr-1">
+                      {item.badge}
+                    </span>
+                  )}
+
+                  {item.shortcut && (
+                    <kbd className="ml-auto text-[9.5px] font-mono font-medium tracking-tight px-1.5 py-0.5 rounded-[5px] bg-black/[0.04] dark:bg-white/[0.08] text-neutral-400 dark:text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300 border border-black/[0.05] dark:border-white/[0.08] shadow-2xs leading-none shrink-0">
+                      {item.shortcut}
+                    </kbd>
+                  )}
+                  {item.submenu && (
+                    <ChevronRight size={13} strokeWidth={2.4} className="ml-auto text-neutral-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  )}
+                </motion.button>
+              </React.Fragment>
+            );
+          })
+        )}
+      </div>
+
+      {/* Fixed Footer */}
+      <div className="border-t border-black/[0.06] dark:border-white/[0.08] bg-black/[0.015] dark:bg-white/[0.02] px-3.5 py-2 flex items-center justify-between text-[10px] text-neutral-400 dark:text-neutral-500 select-none">
+        <div className="truncate">Last edited by <span className="text-neutral-600 dark:text-neutral-300 font-medium">{lastEditedBy || "Workspace User"}</span></div>
+        <div className="shrink-0 ml-2">{formatTimeAgo(lastEditedAt)}</div>
+      </div>
+    </motion.div>
   );
 }

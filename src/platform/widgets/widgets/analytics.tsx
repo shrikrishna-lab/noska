@@ -1,97 +1,135 @@
 /**
  * Noska Widget Platform — Analytics & Personal Widgets.
- * Powered by reusable ChartPrimitive and MetricPrimitive.
+ * Powered by reusable ChartPrimitive and MetricPrimitive. Every workspace
+ * metric here is derived from live page data (ctx) — never fabricated.
  */
-import React, { useState } from "react";
-import { Sun, CloudRain, Quote, Calculator, TrendingUp, Layers, CheckCircle2, Copy } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { CheckCircle2, Sun, Quote, Copy } from "lucide-react";
 import { ChartPrimitive } from "../primitives/ChartPrimitive";
 import { MetricPrimitive } from "../primitives/MetricPrimitive";
+import { WidgetEmpty } from "../components/WidgetFrame";
+import { collectProjects, collectTasks } from "../shared";
 import type { WidgetProps } from "../types";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DONUT_COLORS = ["#6366f1", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899"];
 
 // ── 1. Workspace KPI Metric Widget ──────────────────────────────────────────
 
-export function WorkspaceKpiWidget({ size, onExplain }: WidgetProps) {
+export function WorkspaceKpiWidget({ size, onExplain, ctx }: WidgetProps) {
+  const tasks = useMemo(() => collectTasks(ctx.pages), [ctx.pages]);
+  const done = tasks.filter((t) => t.checked).length;
+  const total = tasks.length;
+  const open = total - done;
+  const percent = total > 0 ? (done / total) * 100 : 0;
+
   return (
     <MetricPrimitive
-      label="Completed Tasks This Week"
-      value="48"
-      secondaryValue="54"
-      progressPercent={88.8}
-      delta={{ value: "+18%", isPositive: true, periodText: "vs last week" }}
+      label="Completed Tasks"
+      value={done}
+      secondaryValue={total}
+      progressPercent={percent}
       icon={CheckCircle2}
       accentColor="#10b981"
       size={size}
+      statusText={total === 0 ? "No tasks yet" : `${open} open · live from workspace`}
       onExplain={onExplain}
     />
   );
 }
 
-// ── 2. Sprint Velocity Chart Widget ─────────────────────────────────────────
+// ── 2. Daily Activity Chart Widget ──────────────────────────────────────────
 
-export function TaskVelocityChartWidget({ size }: WidgetProps) {
+export function TaskVelocityChartWidget({ size, ctx }: WidgetProps) {
+  const data = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 6);
+    const buckets = Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      return {
+        label: day.toLocaleDateString("en-US", { weekday: "short" }),
+        dayStart: day.getTime(),
+        value: 0,
+      };
+    });
+    for (const page of ctx.pages) {
+      if (page.trashed) continue;
+      const ts = new Date(page.updatedAt).getTime();
+      if (isNaN(ts)) continue;
+      for (const bucket of buckets) {
+        if (ts >= bucket.dayStart && ts < bucket.dayStart + DAY_MS) {
+          bucket.value += 1;
+          break;
+        }
+      }
+    }
+    return buckets.map(({ label, value }) => ({ label, value }));
+  }, [ctx.pages]);
+
+  const total = data.reduce((acc, d) => acc + d.value, 0);
+  if (total === 0) {
+    return (
+      <WidgetEmpty
+        title="No page activity yet"
+        hint="Pages you update each day will chart here."
+      />
+    );
+  }
+
   return (
     <ChartPrimitive
-      title="Daily Velocity Points"
+      title="Pages Updated Per Day"
       type="bar"
       size={size}
       accentColor="#6366f1"
-      data={[
-        { label: "Mon", value: 12 },
-        { label: "Tue", value: 18 },
-        { label: "Wed", value: 15 },
-        { label: "Thu", value: 24 },
-        { label: "Fri", value: 21 },
-        { label: "Sat", value: 8 },
-        { label: "Sun", value: 14 },
-      ]}
+      data={data}
     />
   );
 }
 
 // ── 3. Project Distribution Donut Widget ────────────────────────────────────
 
-export function ProjectDistributionDonutWidget({ size }: WidgetProps) {
+export function ProjectDistributionDonutWidget({ size, ctx }: WidgetProps) {
+  const projects = useMemo(() => collectProjects(ctx.pages), [ctx.pages]);
+
+  if (projects.length === 0) {
+    return (
+      <WidgetEmpty
+        title="No project data"
+        hint="Pages with database rows will chart their row distribution here."
+      />
+    );
+  }
+
   return (
     <ChartPrimitive
-      title="Work by Project"
+      title="Rows by Project"
       type="donut"
       size={size}
-      totalLabel="Total Tasks"
+      totalLabel="Total Rows"
       accentColor="#6366f1"
-      data={[
-        { label: "Noska Core", value: 34, color: "#6366f1" },
-        { label: "Mobile App", value: 22, color: "#10b981" },
-        { label: "AI Engine", value: 16, color: "#8b5cf6" },
-        { label: "Marketing", value: 12, color: "#f59e0b" },
-      ]}
+      data={projects.map((p, i) => ({
+        label: p.pageTitle,
+        value: p.total,
+        color: DONUT_COLORS[i % DONUT_COLORS.length],
+      }))}
     />
   );
 }
 
 // ── 4. Weather Widget ───────────────────────────────────────────────────────
+// No weather provider is connected yet — show an honest empty state instead
+// of invented conditions.
 
-export function WeatherWidget({ size }: WidgetProps) {
+export function WeatherWidget(_props: WidgetProps) {
   return (
-    <div className="flex h-full w-full flex-col justify-between p-3 select-none font-sans">
-      <div className="flex items-center justify-between text-neutral-500">
-        <span className="text-xs font-semibold">San Francisco</span>
-        <span className="text-[10.5px] text-neutral-400">Partly Cloudy</span>
-      </div>
-
-      <div className="flex items-center gap-3 my-auto">
-        <div className="size-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-          <Sun size={24} />
-        </div>
-        <div>
-          <span className="text-2xl font-bold text-neutral-900 dark:text-white font-mono">68°F</span>
-          <p className="text-[10px] text-neutral-400">H: 72° L: 56° • Humidity: 45%</p>
-        </div>
-      </div>
-
-      <div className="text-[10px] text-neutral-400 pt-1 border-t border-black/[0.04] dark:border-white/[0.06]">
-        Updated just now
-      </div>
-    </div>
+    <WidgetEmpty
+      icon={<Sun size={18} className="text-amber-500" />}
+      title="Weather isn't connected"
+      hint="Connect a weather source to see live local conditions here."
+    />
   );
 }
 

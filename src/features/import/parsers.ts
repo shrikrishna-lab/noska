@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { blockFor, uid } from "../../utils/helpers";
+import { PLAIN_LANGUAGE, normalizeCodeLanguage } from "../../utils/codeLanguage";
 import type { Block } from "../../../types/blocks";
 import type { ImportedPageDraft, ParsedImport } from "./importTypes";
 
@@ -65,12 +66,12 @@ export function markdownToBlocks(md: string): Block[] {
   const lines = md.split("\n");
   const blocks: Block[] = [];
   let inCode = false;
-  let codeLang = "plain";
+  let codeLang = PLAIN_LANGUAGE;
   let codeBuf: string[] = [];
 
   const pushCode = () => {
     const b: any = blockFor("code", codeBuf.join("\n").replace(/\n$/, ""));
-    if (codeLang && codeLang !== "```") b.language = codeLang;
+    if (codeLang && codeLang !== "```") b.language = normalizeCodeLanguage(codeLang);
     blocks.push(b);
   };
 
@@ -84,7 +85,7 @@ export function markdownToBlocks(md: string): Block[] {
         inCode = false;
       } else {
         inCode = true;
-        codeLang = fence[1] || "plain";
+        codeLang = fence[1] || PLAIN_LANGUAGE;
         codeBuf = [];
       }
       continue;
@@ -232,8 +233,8 @@ export function htmlToBlocks(html: string): Block[] {
         case "pre": {
           const code = el.querySelector("code");
           const b: any = blockFor("code", (code?.textContent || el.textContent || "").replace(/\n$/, ""));
-          const cls = code?.className?.match(/language-(\w+)/);
-          if (cls) b.language = cls[1];
+          const cls = code?.className?.match(/language-([\w+#.-]+)/);
+          if (cls) b.language = normalizeCodeLanguage(cls[1]);
           blocks.push(b);
           break;
         }

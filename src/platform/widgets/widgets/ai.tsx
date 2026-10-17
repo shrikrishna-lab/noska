@@ -11,6 +11,7 @@ import type { NoskaAgent } from "../../../features/agents/agentStore";
 import { fetchUserAIStats, type UserAIUsageStats } from "../../../lib/supabaseService";
 import { AnimatedCount, WidgetEmpty, WidgetError, WidgetLoading, WidgetPermissionRequired, WidgetStat } from "../components/WidgetFrame";
 import { AIPrimitive } from "../primitives/AIPrimitive";
+import { collectTasks } from "../shared";
 import type { WidgetProps } from "../types";
 
 interface AiJob {
@@ -98,11 +99,8 @@ export function AiNeuralHubWidget({ ctx }: WidgetProps) {
           <div>
             <div className="text-xs font-bold text-neutral-900 dark:text-white flex items-center gap-1.5">
               <span>Neural Co-Pilot</span>
-              <span className="text-[8.5px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1 py-0.2 rounded border border-indigo-500/20 uppercase tracking-wider">
-                Online
-              </span>
             </div>
-            <p className="text-[10px] text-neutral-400 dark:text-neutral-500">Autonomous context-aware engine</p>
+            <p className="text-[10px] text-neutral-400 dark:text-neutral-500">Context-aware workspace assistant</p>
           </div>
         </div>
 
@@ -214,7 +212,10 @@ export function AiActivityWidget({ size, ctx }: WidgetProps) {
               <Bot size={13} className="text-indigo-500 shrink-0" />
               <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate">{j.name}</span>
             </div>
-            <span className="flex size-2 rounded-full bg-emerald-500 shadow-2xs" />
+            <span
+              className={`flex size-2 rounded-full shadow-2xs ${j.failureStreak > 0 ? "bg-amber-500" : j.active ? "bg-emerald-500" : "bg-neutral-400"}`}
+              title={j.failureStreak > 0 ? `Failing (${j.failureStreak} in a row)` : j.active ? "Active" : "Paused"}
+            />
           </div>
         ))}
       </div>
@@ -295,16 +296,27 @@ export function AiUsageWidget({ ctx }: WidgetProps) {
     );
   }
 
-  const s = stats as unknown as Record<string, unknown>;
-  const requests = Number(s.total_requests ?? s.requests ?? 142);
-  const tokens = Number(s.total_tokens ?? s.tokens ?? 48200);
+  const requests = stats.totalMessages;
+  const tokens = stats.totalTokens;
+  const engine = stats.favoriteModel || "—";
+  const isActive = stats.totalMessages > 0;
 
   return (
     <div className="grid h-full grid-cols-2 content-center gap-3 p-1">
-      <WidgetStat label="Requests" value={<AnimatedCount value={requests} />} />
+      <WidgetStat label="Messages" value={<AnimatedCount value={requests} />} />
       <WidgetStat label="Tokens" value={tokens > 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens} tone="accent" />
-      <WidgetStat label="Engine" value="Claude 3.7" />
-      <WidgetStat label="Status" value={<span className="flex items-center gap-1 text-emerald-500">Active <CheckCircle2 size={13} /></span>} tone="success" />
+      <WidgetStat label="Engine" value={engine} />
+      <WidgetStat
+        label="Status"
+        value={
+          isActive ? (
+            <span className="flex items-center gap-1 text-emerald-500">Active <CheckCircle2 size={13} /></span>
+          ) : (
+            <span className="text-neutral-400">No activity</span>
+          )
+        }
+        tone={isActive ? "success" : "default"}
+      />
     </div>
   );
 }
@@ -312,11 +324,34 @@ export function AiUsageWidget({ ctx }: WidgetProps) {
 // ── 5. AI Workspace Insights ───────────────────────────────────────────────
 
 export function AiInsightsWidget({ size, onExplain, ctx }: WidgetProps) {
+  const summaryText = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 86_400_000;
+    let modified24h = 0;
+    for (const page of ctx.pages) {
+      if (page.trashed) continue;
+      const ts = new Date(page.updatedAt).getTime();
+      if (!isNaN(ts) && now - ts <= dayMs) modified24h += 1;
+    }
+    const tasks = collectTasks(ctx.pages);
+    const open = tasks.filter((t) => !t.checked);
+    const overdue = open.filter((t) => t.due && new Date(t.due).getTime() < now).length;
+    const docPart =
+      modified24h > 0
+        ? `${modified24h} document${modified24h === 1 ? "" : "s"} modified in the last 24h`
+        : "No documents modified in the last 24h";
+    const taskPart =
+      open.length > 0
+        ? `${open.length} open task${open.length === 1 ? "" : "s"}${overdue > 0 ? ` · ${overdue} overdue` : ""}`
+        : "No open tasks · all caught up";
+    return `${docPart}. ${taskPart}.`;
+  }, [ctx.pages]);
+
   return (
     <AIPrimitive
       mode="summary"
       title="AI Workspace Insights"
-      summaryText="3 documents modified in the last 24h. Project velocity is up +18% following the sprint backlog refinement."
+      summaryText={summaryText}
       size={size}
       onAskAI={(prompt) => {
         ctx.actions.onAI();
@@ -329,11 +364,26 @@ export function AiInsightsWidget({ size, onExplain, ctx }: WidgetProps) {
 
 // ── 6. AI Workspace Health Diagnostic ───────────────────────────────────────
 
-export function AiWorkspaceHealthWidget({ size, onExplain }: WidgetProps) {
+export function AiWorkspaceHealthWidget({ size, onExplain, ctx }: WidgetProps) {
+  const health = useMemo(() => {
+    const tasks = collectTasks(ctx.pages);
+    const total = tasks.length;
+    if (total === 0) return { score: 100, detail: "No tasks yet — add todos to get a live health score." };
+    const done = tasks.filter((t) => t.checked).length;
+    const now = Date.now();
+    const overdue = tasks.filter((t) => !t.checked && t.due && new Date(t.due).getTime() < now).length;
+    const completion = done / total;
+    const overduePenalty = Math.min(0.4, (overdue / total) * 0.8);
+    const score = Math.max(0, Math.round((completion - overduePenalty) * 100));
+    const detail = `${done}/${total} tasks complete${overdue > 0 ? ` · ${overdue} overdue` : " · nothing overdue"}`;
+    return { score, detail };
+  }, [ctx.pages]);
+
   return (
     <AIPrimitive
       mode="health"
-      healthScore={92}
+      healthScore={health.score}
+      detailText={health.detail}
       size={size}
       onExplain={onExplain}
     />

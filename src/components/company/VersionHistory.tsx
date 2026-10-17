@@ -34,21 +34,26 @@ export function VersionHistory({ pageId, open, onClose, onRestore }: VersionHist
       try {
         const { data } = await supabase
           .from("page_versions" as any)
-          .select("*")
+          .select("id,page_id,title,user_id,user_name,created_at")
           .eq("page_id", pageId)
-          .order("edited_at", { ascending: false })
+          .order("created_at", { ascending: false })
           .limit(50)
 
         if (data) {
-          const userIds = [...new Set(data.map((v: any) => v.edited_by).filter(Boolean))]
+          const userIds = [...new Set(data.map((v: any) => v.user_id).filter(Boolean))]
           const { data: profiles } = userIds.length > 0
             ? await supabase.from("user_profiles").select("user_id, user_name").in("user_id", userIds)
             : { data: [] }
 
           const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]))
           const enriched = data.map((v: any) => ({
-            ...v,
-            user_name: profileMap.get(v.edited_by)?.user_name || "Unknown",
+            id: v.id,
+            page_id: v.page_id,
+            title: v.title,
+            blocks: null,
+            edited_by: v.user_id,
+            edited_at: v.created_at,
+            user_name: profileMap.get(v.user_id)?.user_name || v.user_name || "Unknown",
           }))
           setVersions(enriched)
         }
@@ -61,11 +66,18 @@ export function VersionHistory({ pageId, open, onClose, onRestore }: VersionHist
   const handleRestore = async (version: Version) => {
     setRestoring(version.id)
     try {
+      const { data: snapshot } = await supabase
+        .from("page_versions" as any)
+        .select("title,blocks")
+        .eq("id", version.id)
+        .maybeSingle()
+      if (!snapshot) return
+      const full = { ...version, title: (snapshot as any).title, blocks: (snapshot as any).blocks }
       await supabase
         .from("pages" as any)
-        .update({ title: version.title, blocks: version.blocks } as any)
+        .update({ title: full.title, blocks: full.blocks } as any)
         .eq("id", pageId)
-      onRestore?.(version)
+      onRestore?.(full)
       onClose()
     } catch {}
     finally { setRestoring(null) }

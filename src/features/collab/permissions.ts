@@ -1,6 +1,8 @@
 import { supabase } from '../../lib/supabase';
 import type { DocumentPermission, CollabRole, PageInvite } from './types';
 
+const PERMISSION_COLUMNS = 'id,page_id,user_id,user_name,role,can_view,can_edit,can_comment,can_share,can_delete,can_audit,can_manage_collaborators,can_export,can_use_ai,created_at,updated_at';
+const INVITE_COLUMNS = 'id,page_id,page_title,inviter_user_id,inviter_username,invitee_user_id,invitee_username,role,status,created_at,responded_at';
 const ROLE_HIERARCHY: Record<CollabRole, number> = {
   owner: 100,
   admin: 80,
@@ -33,7 +35,7 @@ export function canPerformAction(permission: DocumentPermission | null, action: 
 export async function getUserPermission(pageId: string, userId: string): Promise<DocumentPermission | null> {
   const { data, error } = await supabase
     .from('page_permissions')
-    .select('*')
+    .select(PERMISSION_COLUMNS)
     .eq('page_id', pageId)
     .eq('user_id', userId)
     .single();
@@ -45,7 +47,7 @@ export async function getUserPermission(pageId: string, userId: string): Promise
 export async function getPagePermissions(pageId: string): Promise<DocumentPermission[]> {
   const { data, error } = await supabase
     .from('page_permissions')
-    .select('*')
+    .select(PERMISSION_COLUMNS)
     .eq('page_id', pageId);
 
   if (error || !data) return [];
@@ -129,7 +131,7 @@ export async function respondToInvite(inviteId: string, accept: boolean): Promis
 export async function getPageInvites(pageId: string): Promise<PageInvite[]> {
   const { data, error } = await supabase
     .from('page_invites')
-    .select('*')
+    .select(INVITE_COLUMNS)
     .eq('page_id', pageId)
     .eq('status', 'pending');
 
@@ -140,7 +142,7 @@ export async function getPageInvites(pageId: string): Promise<PageInvite[]> {
 export async function getUserPendingInvites(userId: string): Promise<PageInvite[]> {
   const { data, error } = await supabase
     .from('page_invites')
-    .select('*')
+    .select(INVITE_COLUMNS)
     .eq('invitee_user_id', userId)
     .eq('status', 'pending');
 

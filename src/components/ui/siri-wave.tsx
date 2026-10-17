@@ -20,109 +20,104 @@ const VERTEX_SHADER = `attribute vec2 aPos; void main(){ gl_Position=vec4(aPos,0
 const WAVE_SHADER = `precision highp float;
 uniform vec2 iResolution; uniform float iTime;
 const float PI = 3.14159265359;
-const float AMPLITUDE   = 0.30;
-const float FREQ        = 1.15;
-const float ABER_FREQ   = 1.05;
-const float SPEED       = 2.2;
-const float WAVE_SCALE  = 0.62;
-const float ABERRATION  = 2.4;
-const float THICKNESS   = 2.6;
-const float INTENSITY   = 2.2;
-const float FALLOFF     = 1.6;
-const float EDGE_MASK   = 0.38;
-const float EDGE_INSET  = 0.0;
-const float BAND_FILL   = 32000.0;
-const float BAND_THICK  = 0.07;
-const float SOFTNESS    = 2.8;
-const float LOW_AMP     = 5.5;
-const float LOW_INT     = 1.4;
-const float MID_ABER    = 0.75;
-const float MID_ABAMP   = 0.05;
-const float MID_BAND    = 22.0;
-const float MID_SOFT    = 0.45;
-const float HIGH_ABER   = 0.45;
-const float HIGH_ABAMP  = 0.05;
-const float RESOLVED    = 1.0;
-const float UNRES_SCALE = 0.14;
 
-// High-end Apple Siri Aurora color palette with silky soft gradients
+// Tuned to read as one slow, liquid ribbon rather than a strobing waveform.
+//
+// Every value below was reduced from a far more aggressive original, and the
+// three structural changes matter most:
+//   1. No "band" term. A sharp 1/(d+thickness) band drawn around each wave
+//      line produced hard vertical streaks that flickered as the line swept.
+//   2. No mod() wrap on time. \`mod(t, N)\` jumped discontinuously every N
+//      seconds, which read as a blink in the middle of otherwise calm motion.
+//   3. One slow breathing envelope instead of three beating sines, so the
+//      amplitude no longer pulses at multiple incommensurate rates.
+const float AMPLITUDE   = 0.22;
+const float FREQ        = 0.80;   // was 1.15 — fewer crests across the orb
+const float ABER_FREQ   = 0.74;   // was 1.05
+const float SPEED       = 0.55;   // was 2.20 — much slower travel
+const float WAVE_SCALE  = 0.62;
+const float ABERRATION  = 0.50;   // was 2.40 — the main source of shimmer
+const float THICKNESS   = 1.60;   // was 2.60
+const float INTENSITY   = 4.20;   // was 2.20
+const float FALLOFF     = 1.55;
+const float EDGE_MASK   = 0.40;
+const float SOFTNESS    = 4.00;   // was 2.80 — wide, velvet falloff
+const float BREATHE_RATE = 0.34;  // ~18s per cycle
+
+// High-end Apple Siri Aurora palette. The hue phase advances mainly across x
+// and only drifts very slowly with time, so the colour never strobes.
 vec3 getSiriPalette(int s, float t, float xN){
-    float phase = mod(float(s) * 0.25 + t * 0.08 + xN * 0.15, 1.0);
+    float phase = fract(float(s) * 0.25 + xN * 0.10 + t * 0.014);
     vec3 c1 = vec3(1.00, 0.12, 0.52); // Ethereal Raspberry Hot Pink
     vec3 c2 = vec3(0.68, 0.22, 1.00); // Luminous Velvet Violet / Indigo
     vec3 c3 = vec3(0.00, 0.82, 1.00); // Electric Cyan Sky
     vec3 c4 = vec3(0.12, 0.96, 0.72); // Soft Emerald Mint
-    vec3 c5 = vec3(1.00, 0.70, 0.28); // Warm Solar Amber Peach
-    
+
     if(phase < 0.25) return mix(c1, c2, phase / 0.25);
     if(phase < 0.50) return mix(c2, c3, (phase - 0.25) / 0.25);
     if(phase < 0.75) return mix(c3, c4, (phase - 0.50) / 0.25);
-    return mix(c4, c5, (phase - 0.75) / 0.25);
+    return mix(c4, c1, (phase - 0.75) / 0.25);
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord){
     vec2 R = iResolution.xy;
-    float aspect = R.x / R.y;
+    float aspect = R.x / max(R.y, 1.0);
     vec2 p = (fragCoord + 0.5) * 2.0 / R - 1.0;
     p.x *= aspect;
     float yScreen = p.y;
     p /= max(WAVE_SCALE, 0.1);
 
-    float t   = iTime;
-    float low  = clamp(0.45 + 0.45*sin(t*0.8)*sin(t*0.37+1.0), 0.0, 1.0);
-    float mid  = clamp(0.40 + 0.40*sin(t*1.7+2.0)*sin(t*0.53), 0.0, 1.0);
-    float high = clamp(0.30 + 0.30*sin(t*2.9+4.0)*sin(t*0.71+2.0), 0.0, 1.0);
+    float t = iTime;
 
-    float res   = clamp(RESOLVED, 0.0, 1.0);
-    float drift = mod(t, 20.0*PI) * SPEED;
+    // Single slow envelope. Keeping it monotone and slow is what makes the
+    // motion read as breathing rather than pulsing.
+    float breathe = 0.5 + 0.5 * sin(t * BREATHE_RATE);
 
-    float xN  = p.x / max(aspect, 1.0);
-    float env = cos(PI*0.5 * min(abs(0.9*xN), 1.0));
+    float xN = p.x / max(aspect, 1.0);
+    float env = cos(PI * 0.5 * min(abs(0.9 * xN), 1.0));
     env *= env;
 
-    float A1    = AMPLITUDE + 0.01*low*LOW_AMP;
-    float A2    = A1 + mid*MID_ABAMP + high*HIGH_ABAMP;
-    float AB    = (ABERRATION + mid*MID_ABER + high*HIGH_ABER)*res;
-    float th    = mix(0.1, 0.01*THICKNESS, res);
-    float inten = mix(0.1, 0.01*(INTENSITY + low*LOW_INT), res);
-    float soft  = 0.01*res*max(0.0, SOFTNESS + mid*MID_SOFT);
+    float A1  = AMPLITUDE * (0.92 + 0.16 * breathe);
+    float AB  = ABERRATION * (0.88 + 0.24 * breathe);
+    float th  = 0.010 * THICKNESS;
+    float inten = 0.010 * (INTENSITY + 0.35 * breathe);
+    float soft  = 0.010 * max(SOFTNESS, 1.0);
 
-    float dUnres = max(length(p) - mix(0.14, UNRES_SCALE, res), 0.0);
-    float yMain = A1 * env * res * sin(p.x*FREQ + drift);
+    // Continuous phase: never wraps, so there is no periodic jump.
+    float drift = t * SPEED;
+    float yMain = A1 * env * sin(p.x * FREQ + drift);
 
-    float bandFillTh = max(BAND_THICK, 1e-4);
-    float bandAmt    = 1e-4 * BAND_FILL * inten;
     vec3 num = vec3(0.0), den = vec3(0.0);
     for(int s = 0; s < 4; s++){
         vec3 hue = getSiriPalette(s, t, xN);
         den += hue;
-        float ab = mix(-AB, AB, float(s)/3.0);
-        float yL = A2 * env * res * sin(p.x*ABER_FREQ + drift + ab);
-        float d   = mix(dUnres, abs(p.y - yL), res);
-        float lor = mix(1.0/(1.0 + (0.02*d)*(0.02*d)), 1.0, res);
-        float line = inten / (sqrt(d*d + soft*soft) + th);
-        float lo = min(yMain, yL), hi = max(yMain, yL);
-        float dBand = max(0.0, max(p.y - hi, lo - p.y));
-        float band  = bandAmt / (dBand + bandFillTh);
-        num += hue * lor * (line + band);
+        float ab = mix(-AB, AB, float(s) / 3.0);
+        float yL = A1 * env * sin(p.x * ABER_FREQ + drift + ab);
+        float d  = abs(p.y - yL);
+        float line = inten / (sqrt(d * d + soft * soft) + th);
+        num += hue * line;
     }
     vec3 col = num / den;
 
-    float dM    = mix(dUnres, abs(p.y - yMain), res);
-    float lorM  = mix(1.0/(1.0 + (0.02*dM)*(0.02*dM)), 1.0, res);
-    float boost = (1.0 - res) * (14.0*low + 4.0);
-    col += 0.55 * inten * (lorM + boost) / (sqrt(dM*dM + soft*soft) + th);
+    float dM   = abs(p.y - yMain);
+    col += 0.35 * inten / (sqrt(dM * dM + soft * soft) + th);
 
-    // Soft velvety tone-mapping
-    col = pow(max(col, 0.0), vec3(1.35));
-    float emT = clamp((abs(yScreen) - 1.0 + EDGE_INSET) / (-max(EDGE_MASK, 1e-4)), 0.0, 1.0);
-    float em  = emT*emT*(3.0 - 2.0*emT);
-    float gauss = exp(-pow(xN*FALLOFF, 2.0));
-    col *= mix(1.0, em*gauss, res);
-    col *= res;
+    // Soft highlight rolloff. A hard clamp made every crest that crossed 1.0
+    // pop to flat white and then drop back, which read as a blink.
+    col = vec3(1.0) - exp(-col * 1.35);
 
-    // Silk smooth transparency curve
-    float alpha = clamp(max(max(col.r, col.g), col.b) * 2.0, 0.0, 1.0);
+    float emT = clamp((abs(yScreen) - 1.0) / (-max(EDGE_MASK, 1e-4)), 0.0, 1.0);
+    float em  = emT * emT * (3.0 - 2.0 * emT);
+    float gauss = exp(-pow(xN * FALLOFF, 2.0));
+    col *= mix(1.0, em * gauss, 1.0);
+
+    // Smoothstep instead of a linear clamp: transparency ramps in gradually,
+    // so the ribbon fades in and out without a visible edge popping.
+    float peak = max(max(col.r, col.g), col.b);
+    float alpha = smoothstep(0.0, 1.0, peak * 2.2);
+    // The context is created with premultipliedAlpha:false and blends
+    // SRC_ALPHA/ONE_MINUS_SRC_ALPHA, so colour must NOT be pre-multiplied —
+    // doing both dims the whole ribbon by alpha twice.
     fragColor = vec4(col, alpha);
 }
 void main(){ mainImage(gl_FragColor, gl_FragCoord.xy); }`;
@@ -352,17 +347,23 @@ export function SiriWave({
 
     let curW = 0;
     let curH = 0;
+    // Backing-store scale. The orb is ~110 CSS px wide; at 1x that is far too
+    // few pixels for a shader with four overlapping wave lines, so it aliased
+    // into the hard vertical spikes. Rasterise at device resolution instead.
+    let pixelRatio = 1;
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const w = rect.width || canvas.clientWidth || (typeof width === "number" ? width : size) || 280;
       const h = rect.height || canvas.clientHeight || (typeof height === "number" ? height : size) || 120;
-      const dimW = Math.max(32, Math.round(w * renderScale));
-      const dimH = Math.max(32, Math.round(h * renderScale));
+      const dpr = Math.min(3, Math.max(1, (typeof window !== "undefined" ? window.devicePixelRatio : 1) || 1));
+      const dimW = Math.max(32, Math.round(w * renderScale * dpr));
+      const dimH = Math.max(32, Math.round(h * renderScale * dpr));
 
       if (curW !== dimW || curH !== dimH) {
         curW = dimW;
         curH = dimH;
+        pixelRatio = dpr;
         canvas.width = dimW;
         canvas.height = dimH;
         gl.viewport(0, 0, dimW, dimH);
@@ -376,18 +377,25 @@ export function SiriWave({
     });
     resizeObserver.observe(canvas);
 
-    const start = typeof performance !== "undefined" ? performance.now() : Date.now();
     let raf = 0;
+    let last = performance.now();
+    // Smoothed clock. requestAnimationFrame is throttled in background tabs, so
+    // the raw elapsed time jumps by seconds on the first frame after the tab
+    // becomes visible again — the wave visibly teleports. Advancing by a
+    // clamped delta keeps motion continuous across those gaps.
+    let clock = 0;
     const frame = () => {
-      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      const t = (now - start) / 1000;
+      const now = performance.now();
+      const delta = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = now;
+      clock += delta;
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform2f(uResolution, curW, curH);
-      gl.uniform1f(uTime, t);
+      gl.uniform1f(uTime, clock);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       raf = requestAnimationFrame(frame);
     };
-    frame();
+    raf = requestAnimationFrame(frame);
 
     return () => {
       cancelAnimationFrame(raf);
@@ -397,6 +405,7 @@ export function SiriWave({
       gl.deleteShader(fs);
       gl.deleteBuffer(buffer);
     };
+    // `pixelRatio` is only read inside `resize`, which the observer re-runs.
   }, [variant, size, width, height, renderScale]);
 
   return (

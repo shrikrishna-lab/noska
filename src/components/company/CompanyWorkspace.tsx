@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Building2, Users, FileText, Settings, Shield, Clock, ArrowLeft,
@@ -597,7 +598,7 @@ export function CompanyWorkspace({ onBack }: CompanyWorkspaceProps) {
               companyTeams.map((team) => (
                 <SidebarNavItem
                   key={team.id}
-                  icon={() => <span className="text-sm leading-none">{team.icon || "👥"}</span>}
+                  icon={() => <PageIcon icon={team.icon} size={14} fallback="👥" />}
                   label={team.name}
                   active={view === "teamHome" && selectedTeamId === team.id}
                   onClick={() => handleTeamClick(team.id)}
@@ -1006,7 +1007,7 @@ function DashboardView({ company, member, members, teams, pages, projects, activ
               <div className="space-y-1.5 mt-4">
                 {recentPages.map((page) => (
                   <div key={page.id} className="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl hover:bg-[var(--surface-2)]/70 border border-transparent hover:border-[var(--border)]/60 transition-all cursor-pointer group">
-                    <span className="text-lg leading-none">{page.icon || "📝"}</span>
+                    <PageIcon icon={page.icon} size={18} fallback="📝" />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs sm:text-sm font-semibold text-[var(--text)] truncate">{page.title}</div>
                       <div className="text-[10.5px] text-[var(--muted)]">
@@ -1090,7 +1091,7 @@ function DashboardView({ company, member, members, teams, pages, projects, activ
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-[var(--surface-2)]/70 border border-transparent hover:border-[var(--border)]/60 transition-all cursor-pointer text-left group"
                   >
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shadow-2xs border border-[var(--border)]/60" style={{ backgroundColor: (team.color || "#6366f1") + "20" }}>
-                      {team.icon || "👥"}
+                      <PageIcon icon={team.icon} size={18} fallback="👥" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs sm:text-sm font-semibold text-[var(--text)] truncate">{team.name}</div>
@@ -1182,7 +1183,7 @@ function MyWorkView({ company, pages, projects }: {
             <div className="space-y-1.5">
               {myPages.map((page) => (
                 <div key={page.id} className="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl hover:bg-[var(--surface-2)]/70 border border-transparent hover:border-[var(--border)]/60 transition cursor-pointer">
-                  <span className="text-lg leading-none">{page.icon || "📝"}</span>
+                  <PageIcon icon={page.icon} size={18} fallback="📝" />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs sm:text-sm font-semibold text-[var(--text)] truncate">{page.title}</div>
                     <div className="text-[10.5px] text-[var(--muted)]">Updated {new Date(page.updated_at).toLocaleDateString()}</div>
@@ -1331,7 +1332,7 @@ function PagesView({ company, pages, loading, onRefresh, isAdmin }: {
         <div className="space-y-1">
           {filtered.map((page) => (
             <div key={page.id} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--surface-2)] transition-colors cursor-pointer group">
-              <span className="text-base">{page.icon || "📝"}</span>
+              <PageIcon icon={page.icon} size={16} fallback="📝" />
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-medium text-[var(--text)] truncate">{page.title}</div>
                 <div className="text-[10px] text-[var(--muted)]">
@@ -1613,7 +1614,7 @@ function TeamHomeView({ teamId, company, member, onBack }: {
           <ArrowLeft size={16} />
         </button>
         <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shrink-0" style={{ backgroundColor: (team.color || "#6366f1") + "20" }}>
-          {team.icon || "👥"}
+          <PageIcon icon={team.icon} size={18} fallback="👥" />
         </div>
         <div className="flex-1">
           <h1 className="text-[22px] font-bold text-[var(--text)]">{team.name}</h1>
@@ -1671,7 +1672,7 @@ function TeamHomeView({ teamId, company, member, onBack }: {
             <div className="space-y-1">
               {teamPages.map((page) => (
                 <div key={page.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-[var(--surface-2)] transition-colors cursor-pointer">
-                  <span className="text-sm">{page.icon || "📝"}</span>
+                  <PageIcon icon={page.icon} size={14} fallback="📝" />
                   <div className="flex-1 min-w-0">
                     <div className="text-[12px] font-medium text-[var(--text)] truncate">{page.title}</div>
                   </div>
@@ -1771,7 +1772,7 @@ function TeamsManageView({ company, member, teams, onRefresh, onTeamClick, onSet
           {teams.map((team) => (
             <div key={team.id} className="flex items-center gap-3 p-4 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] hover:border-[var(--noska-blue)]/20 transition-colors cursor-pointer group" onClick={() => onTeamClick(team.id)}>
               <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ backgroundColor: (team.color || "#6366f1") + "20" }}>
-                {team.icon || "👥"}
+                <PageIcon icon={team.icon} size={18} fallback="👥" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-[14px] font-semibold text-[var(--text)]">{team.name}</div>

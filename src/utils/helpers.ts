@@ -6,6 +6,7 @@ import {
   getPagePermission, resolvePermission
 } from './blockModel';
 import type { TreeBlock } from './blockModel';
+import { PLAIN_LANGUAGE } from './codeLanguage';
 import type {
   Block, DatabaseBlock, TableBlock, CodeBlockData, ColumnsBlock,
   TabsBlock, FormBlock, TemplateButtonBlock, PageListBlock, GenericBlock,
@@ -219,7 +220,7 @@ export function blockFor(type: string, text: string = ''): Block {
   // checking `propsType` (the lookup key) instead of the raw `type` argument.
   else if (propsType === 'database') Object.assign(props, makeEmptyDatabase());
   else if (type === 'image') props.url = text;
-  else if (type === 'code') { props.richText = [{ text }]; props.language = 'plain'; }
+  else if (type === 'code') { props.richText = [{ text }]; props.language = PLAIN_LANGUAGE; }
   else if (type === 'divider') { /* no extra props */ }
   else if (type === 'synced-block') { props.richText = [{ text }]; }
   else if (type === 'button') { props.richText = [{ text }]; props.templateBlocks = []; }

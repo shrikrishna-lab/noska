@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { isEmojiIcon } from "@/components/PageIcon";
 import { BrainCircuit, Trash2, Star, Eye, Loader2, Search, Eraser } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -99,7 +100,7 @@ export default function MemoryManager({ agents, onToast }: {
           {agents.length > 0 && (
             <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[10px] text-[var(--text)] outline-none">
               <option value="all">All agents</option>
-              {agents.map((a) => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
+              {agents.map((a) => <option key={a.id} value={a.id}>{isEmojiIcon(a.icon) ? a.icon : "🤖"} {a.name}</option>)}
             </select>
           )}
           <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[10px] text-[var(--text)] outline-none">

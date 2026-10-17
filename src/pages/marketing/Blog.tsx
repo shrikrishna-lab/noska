@@ -205,8 +205,12 @@ export default function Blog() {
               <div className="featured-image-container">
                 <img 
                   src={featuredPost.cover_image || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80'} 
-                  alt={featuredPost.title} 
-                  loading="eager"
+                   alt={featuredPost.title}
+                   width={1200}
+                   height={800}
+                   fetchPriority="high"
+                   decoding="async"
+                   loading="eager"
                 />
                 <span className="featured-pill-badge">
                   <TrendingUp size={12} /> Featured Article

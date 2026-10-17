@@ -14,7 +14,8 @@ const AI_ACTIONS = [
   { id: 'explain', icon: Brain, label: 'Explain', prompt: 'Explain the content of this page in simple terms' },
   { id: 'grammar', icon: FileText, label: 'Fix Grammar', prompt: 'Fix any grammar and spelling issues on this page' },
   { id: 'outline', icon: ListTodo, label: 'Outline', prompt: 'Create a structured outline with sections and subsections' },
-  { id: 'docs', icon: Code2, label: 'Documentation', prompt: 'Generate API documentation from this content' }
+  { id: 'docs', icon: Code2, label: 'Documentation', prompt: 'Generate API documentation from this content' },
+  { id: 'tools', icon: Sparkles, label: 'Available Tools', prompt: 'List your available tools and capabilities in detail.' }
 ];
 
 export default function AIActionsCard({ onSendPrompt }) {

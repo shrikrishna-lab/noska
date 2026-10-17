@@ -52,6 +52,7 @@ function normalizedToNoskaModel(provider: string, m: NormalizedModel): NoskaMode
       vision: caps.imageInput ?? inferred.vision,
       audio: caps.audioInput ?? inferred.audio,
       video: caps.videoInput ?? inferred.video,
+      imageGeneration: caps.imageOutput ?? inferred.imageGeneration,
       structuredOutput: caps.structuredOutput ?? inferred.structuredOutput,
     },
     pricing: m.pricing

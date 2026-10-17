@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Copy, Trash2, Edit2, Check, X, LayoutTemplate, Layers, ChevronLeft, ChevronRight } from "lucide-react";
 import { CanvasBoardMeta, BOARD_TEMPLATES } from "./canvasStore";
@@ -115,7 +116,7 @@ export default function CanvasBoardSidebar({
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className="text-sm shrink-0">{b.icon || "🎨"}</span>
+                    <PageIcon icon={b.icon} size={14} fallback="🎨" />
                     {isEditing ? (
                       <input
                         type="text"

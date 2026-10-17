@@ -22,18 +22,25 @@ export default defineConfig({
   clearScreen: false,
   plugins: [
     react(),
-    sentryVitePlugin({
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      release: process.env.VITE_APP_VERSION
-        ? `noska@${process.env.VITE_APP_VERSION}`
-        : undefined,
-      telemetry: false,
-      sourcemaps: {
-        filesToDeleteAfterUpload: ["dist/assets/**/*.map", "dist/control/assets/**/*.map"],
-      },
-    }),
+    ...(process.env.SENTRY_AUTH_TOKEN
+      ? [sentryVitePlugin({
+          org: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+          release: process.env.VITE_APP_VERSION
+            ? `noska@${process.env.VITE_APP_VERSION}`
+            : undefined,
+          telemetry: false,
+          sourcemaps: {
+            filesToDeleteAfterUpload: [
+              "dist/assets/**/*.map",
+              "dist/control/assets/**/*.map",
+              "dist-desktop/assets/**/*.map",
+              "dist-mobile/assets/**/*.map",
+            ],
+          },
+        })]
+      : []),
   ],
   resolve: {
     alias: {
@@ -123,9 +130,6 @@ export default defineConfig({
     },
   },
   build: {
-    // Match the bundled system webviews when targeting Tauri (WebView2 /
-    // WKWebView / WebKitGTK / Android WebView); leave the default target
-    // untouched for web.
     ...(isTauri && {
       target:
         process.env.TAURI_ENV_PLATFORM === "windows" ||
@@ -133,35 +137,39 @@ export default defineConfig({
           ? "chrome105"
           : "safari13",
     }),
+    minify: "oxc",
+    cssMinify: "lightningcss",
     sourcemap: process.env.SENTRY_AUTH_TOKEN ? true : false,
     chunkSizeWarningLimit: 1000,
+    modulePreload: {
+      resolveDependencies(filename, deps, { hostType }) {
+        if (hostType !== "html") return deps;
+        return deps.filter((dep) => !dep.includes("lucide-react"));
+      },
+    },
     rolldownOptions: {
       external: ["@xenova/transformers"],
-    },
-    rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom") || id.includes("node_modules/react-router") || id.includes("node_modules/scheduler")) return "react-vendor";
-          if (id.includes("node_modules/framer-motion")) return "motion";
-          if (id.includes("node_modules/@clerk")) return "clerk";
-          if (id.includes("node_modules/@sentry")) return "sentry";
-          if (id.includes("node_modules/posthog")) return "posthog";
-          if (id.includes("node_modules/@supabase")) return "supabase";
-          if (id.includes("node_modules/@dnd-kit")) return "dnd";
-          if (id.includes("node_modules/lucide-react")) return "icons";
-          if (id.includes("node_modules/@radix-ui")) return "ui";
-          if (id.includes("node_modules/tiptap") || id.includes("node_modules/@tiptap")) return "editor";
-          if (id.includes("node_modules/recharts") || id.includes("node_modules/echarts") || id.includes("node_modules/d3-")) return "charts";
-          if (id.includes("node_modules/katex") || id.includes("node_modules/mermaid") || id.includes("node_modules/highlight.js") || id.includes("node_modules/shiki")) return "markup";
-          if (id.includes("node_modules/lenis") || id.includes("node_modules/gsap")) return "animation";
-          if (id.includes("node_modules/encoding") || id.includes("node_modules/crypto-js") || id.includes("node_modules/@noble")) return "crypto";
-          if (id.includes("node_modules/slate")) return "slate";
-          if (id.includes("node_modules/pdf-lib")) return "pdf";
-          if (id.includes("node_modules/cytoscape")) return "graph";
-          if (id.includes("node_modules/dompurify") || id.includes("node_modules/sanitize")) return "security";
-          if (id.includes("node_modules")) return "vendor";
-        }
-      }
-    }
+        codeSplitting: {
+          groups: [
+            { name: "react-vendor", test: /node_modules[\\/](?:react|react-dom|react-router|react-router-dom|scheduler)(?:[\\/]|$)/, priority: 30 },
+            { name: "clerk", test: /node_modules[\\/]@clerk[\\/]/, priority: 25 },
+            { name: "supabase", test: /node_modules[\\/]@supabase[\\/]/, priority: 25 },
+            { name: "sentry", test: /node_modules[\\/]@sentry[\\/]/, priority: 25 },
+            { name: "posthog", test: /node_modules[\\/]posthog-js[\\/]/, priority: 25 },
+            { name: "dnd", test: /node_modules[\\/]@dnd-kit[\\/]/, priority: 20 },
+            { name: "ui", test: /node_modules[\\/]@radix-ui[\\/]/, priority: 20 },
+            // NOTE: lucide-react is intentionally NOT grouped into a single
+            // chunk. A shared "icons" bundle pulled every icon used anywhere in
+            // the app into the eagerly-loaded graph (~640 kB), including icons
+            // only used by lazy routes. Left to rolldown's natural splitting,
+            // icons live with the dynamic boundary that first needs them.
+            { name: "katex", test: /node_modules[\\/](?:katex|@hugeicons)[\\/]/, priority: 15 },
+            { name: "diagrams", test: /node_modules[\\/](?:mermaid|cytoscape|dagre|@dagrejs)[\\/]/, priority: 15 },
+            { name: "three", test: /node_modules[\\/]three[\\/]/, priority: 15 },
+          ],
+        },
+      },
+    },
   }
 });

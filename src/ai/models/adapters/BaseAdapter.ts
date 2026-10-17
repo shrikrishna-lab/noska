@@ -13,6 +13,7 @@ import type {
   ValidationResult,
 } from "../normalizedSchema";
 import { KNOWN_MODEL_OVERRIDES } from "../ModelMetadataOverrides";
+import { resolveProxiedUrl, isProxiedUrl } from "../../core/providerProxy";
 
 export interface RequestOptions {
   headers?: Record<string, string>;
@@ -100,19 +101,25 @@ export function formatModelName(id: string): string {
     .join(" ");
 }
 
-const PROXY_MAP: Record<string, string> = {
-  "https://opencode.ai/zen/v1": "/api/proxy/opencode",
-  "https://openrouter.ai/api/v1": "/api/proxy/openrouter",
-  "https://api.anthropic.com/v1": "/api/proxy/anthropic",
-  "https://api.openai.com/v1": "/api/proxy/openai",
-  "https://generativelanguage.googleapis.com/v1beta": "/api/proxy/gemini",
-  "https://api.groq.com/openai/v1": "/api/proxy/groq",
-  "https://api.deepseek.com/v1": "/api/proxy/deepseek",
-  "https://api.mistral.ai/v1": "/api/proxy/mistral",
-  "https://api.together.xyz/v1": "/api/proxy/together",
-  "https://api.x.ai/v1": "/api/proxy/xai",
-  "https://integrate.api.nvidia.com/v1": "/api/proxy/nvidia",
-};
+/**
+ * Resolve the URL to call for a provider request.
+ *
+ * Browser callers get the ai-proxy relay URL; the old implementation rewrote
+ * to a same-origin "/api/proxy/<name>" path that only exists in the Vite dev
+ * server. In production vercel.json's catch-all rewrite served index.html for
+ * that path, so `GET <origin>/api/proxy/opencode/models` returned HTML with a
+ * 200 — `res.json()` threw and every provider catalog came back empty.
+ */
+export function resolveAdapterRequestUrl(
+  url: string,
+  method: string = "GET",
+  headers: Record<string, string> = {},
+): { url: string; headers: Record<string, string> } {
+  if (typeof window === "undefined" || isProxiedUrl(url)) return { url, headers };
+  const proxied = resolveProxiedUrl(url, method, headers);
+  if (!proxied?.url) return { url, headers };
+  return { url: proxied.url, headers: proxied.headers };
+}
 
 export abstract class BaseProviderAdapter implements ProviderAdapter {
   abstract provider: string;
@@ -150,15 +157,14 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
     const timeoutMs = options.timeoutMs ?? 15000;
     let attempt = 0;
 
-    let targetUrl = url;
-    if (typeof window !== "undefined" && !url.includes("/api/proxy/")) {
-      for (const [prefix, proxyPrefix] of Object.entries(PROXY_MAP)) {
-        if (url.startsWith(prefix)) {
-          targetUrl = url.replace(prefix, `${window.location.origin}${proxyPrefix}`);
-          break;
-        }
-      }
-    }
+    const mergedHeaders: Record<string, string> = {
+      "Accept": "application/json",
+      ...options.headers,
+      ...(init.headers as Record<string, string> | undefined),
+    };
+    const resolved = resolveAdapterRequestUrl(url, init.method ?? "GET", mergedHeaders);
+    const targetUrl = resolved.url;
+    const targetHeaders = resolved.headers;
 
     while (attempt <= maxRetries) {
       attempt++;
@@ -173,11 +179,7 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
         const res = await fetch(targetUrl, {
           ...init,
           signal: controller.signal,
-          headers: {
-            "Accept": "application/json",
-            ...options.headers,
-            ...init.headers,
-          },
+          headers: targetHeaders,
         });
 
         clearTimeout(timer);
@@ -239,7 +241,7 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
     const rawMethods: string[] = Array.isArray(raw?.supportedGenerationMethods) ? raw.supportedGenerationMethods : [];
 
     const id = (modelId || "").toLowerCase();
-    const isImageGen = id.includes("dall-e") || id.includes("imagen") || id.includes("flux") || rawModalities.includes("image_generation");
+    const isImageGen = id.includes("dall-e") || id.includes("gpt-image") || id.includes("imagen") || id.includes("flux") || id.includes("sdxl") || rawModalities.includes("image_generation") || rawMethods.includes("predict") || rawMethods.includes("generateImage");
     const isEmbeddings = id.includes("embedding") || id.includes("embed") || id.includes("ada-002");
 
     // Vision

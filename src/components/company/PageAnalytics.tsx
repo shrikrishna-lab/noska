@@ -31,22 +31,33 @@ export function PageAnalytics({ pageId }: PageAnalyticsProps) {
       const daysAgo = period === "7d" ? 7 : period === "30d" ? 30 : 90
       const since = new Date(Date.now() - daysAgo * 86400000).toISOString()
 
-      const { data: views } = await (supabase as any)
+      const { count: viewCount } = await (supabase as any)
         .from("page_analytics")
-        .select("*")
+        .select("id", { count: "exact", head: true })
         .eq("page_id", pageId)
         .gte("created_at", since)
 
       // Get edit count from audit logs
-      const { data: edits } = await (supabase as any)
+      const { count: editCount } = await (supabase as any)
         .from("audit_logs")
-        .select("*")
+        .select("id", { count: "exact", head: true })
         .eq("entity_id", pageId)
         .eq("action", "update")
         .gte("created_at", since)
 
-      const viewCount = views?.length || 0
-      const editCount = edits?.length || 0
+      const { data: views } = await (supabase as any)
+        .from("page_analytics")
+        .select("user_id,created_at")
+        .eq("page_id", pageId)
+        .gte("created_at", since)
+
+      const { data: edits } = await (supabase as any)
+        .from("audit_logs")
+        .select("actor_id,created_at")
+        .eq("entity_id", pageId)
+        .eq("action", "update")
+        .gte("created_at", since)
+
       const uniqueViewers = new Set((views || []).map((v: any) => v.user_id)).size
 
       // Get top editors
@@ -76,8 +87,8 @@ export function PageAnalytics({ pageId }: PageAnalyticsProps) {
       ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10)
 
       setAnalytics({
-        views: viewCount,
-        edits: editCount,
+        views: viewCount || 0,
+        edits: editCount || 0,
         uniqueViewers,
         lastViewed: views?.length ? (views[views.length - 1] as any).created_at : null,
         lastEdited: edits?.length ? (edits[edits.length - 1] as any).created_at : null,

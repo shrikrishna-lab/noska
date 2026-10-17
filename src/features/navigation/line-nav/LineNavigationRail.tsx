@@ -43,6 +43,10 @@ export function LineNavigationRail({
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const railRef = useRef<HTMLDivElement>(null);
 
+  const activePage = useMemo(() => {
+    return pages.find((p) => p.id === activeId) || null;
+  }, [pages, activeId]);
+
   // Build the hierarchical navigation tree containing strictly the Active Page, its In-Page Content Sections, and its Child Sub-Pages
   const navigationTree = useMemo(() => {
     return buildNavigationTree(pages, activeId);
@@ -335,6 +339,8 @@ export function LineNavigationRail({
             preview={activePreview}
             anchorPosition={anchorPos}
             side={position}
+            pageTexture={activePage?.pageTexture}
+            pageBg={activePage?.pageBg}
             onSelectPage={(pageId) => {
               onSelectPage(pageId);
               setHoveredId(null);

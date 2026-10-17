@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { isEmojiIcon } from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion";
 import { SPRING_PRESETS } from "../motion/MotionSystem";
 import {
@@ -353,7 +354,7 @@ function Playground({ base, apiKeyInput, setApiKeyInput, showKey, setShowKey, pa
                     >
                       <option value="">Pick page…</option>
                       {pages.slice(0, 50).map((pg) => (
-                        <option key={pg.id} value={pg.id}>{(pg.icon?.startsWith("lucide:") ? "📄" : pg.icon || "📄")} {pg.title || "(Untitled)"}</option>
+                        <option key={pg.id} value={pg.id}>{isEmojiIcon(pg.icon) ? pg.icon : "📄"} {pg.title || "(Untitled)"}</option>
                       ))}
                     </select>
                   )}

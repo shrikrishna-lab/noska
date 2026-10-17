@@ -97,7 +97,26 @@ CONNECTOR_SLACK_CLIENT_SECRET=
 5. Disconnect: Settings → Connections → Disconnect (revokes server-side;
    Slack/Google authorization can also be removed at the provider).
 
-## 4. Troubleshooting
+## 4. Referrals (invite codes + tier rewards)
+
+No console setup — fully database-driven, no secrets:
+
+- Each user gets a unique `NOSKA-XXXXXX` code on first open of Plans &
+  Billing → Referrals (stored in `referral_codes`).
+- A newcomer links a code in the same tab (or via `?ref=CODE`, which
+  prefills the box) → `user_referrals` row (`pending`).
+- On the newcomer's **first paid activation**, `billing-webhooks` flips the
+  row to `completed` and the referrer unlocks the highest tier their total
+  qualifies for (`referral_rewards`: 12 active tiers).
+- `ai_credits` tiers (250 / 500) auto-fulfill as spendable top-up grants —
+  the usage engine draws from the same pool, so credits appear instantly.
+  `xp` tiers bump the code counters. All other tiers (`pro_days`,
+  `theme`, `founder_badge`, …) are recorded as unlocked
+  (`reward_id` + `reward_claimed`) and fulfilled manually.
+- Live coupon for checkout testing: `NOSKA50` (50% off, validated
+  server-side in `billing-checkout`).
+
+## 5. Troubleshooting
 
 - *"missing OAuth client credentials — set CONNECTOR_*…"*: the env pair for
   that connector is not set on the Edge Function → step 1/2 env wiring,

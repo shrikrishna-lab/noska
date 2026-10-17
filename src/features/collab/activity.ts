@@ -3,6 +3,7 @@ import type { CollabActivityEntry } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fromActivity = () => (supabase.from('collab_activity' as any));
+const ACTIVITY_COLUMNS = 'id,page_id,user_id,user_name,action,detail,metadata,created_at';
 
 export async function logActivity(
   pageId: string,
@@ -27,7 +28,7 @@ export async function logActivity(
 
 export async function getActivity(pageId: string, limit = 50, offset = 0): Promise<CollabActivityEntry[]> {
   const { data, error } = await fromActivity()
-    .select('*')
+    .select(ACTIVITY_COLUMNS)
     .eq('page_id', pageId)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -38,7 +39,7 @@ export async function getActivity(pageId: string, limit = 50, offset = 0): Promi
 
 export async function getRecentActivityForUser(userId: string, limit = 20): Promise<CollabActivityEntry[]> {
   const { data, error } = await fromActivity()
-    .select('*')
+    .select(ACTIVITY_COLUMNS)
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit);

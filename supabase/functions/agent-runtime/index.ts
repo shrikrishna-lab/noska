@@ -2,7 +2,7 @@
 // Noska Agent OS — Server-Side Agent Runtime (Edge Function)
 //
 // The production execution engine. Invoked by:
-//   • Trigger.dev jobs (scheduler + event dispatcher)  → auth: X-Agent-Runtime-Secret
+//   • automation-tick Edge Function (Supabase cron → pg_net) → auth: X-Agent-Runtime-Secret
 //   • The Noska app (approve / save execution key)     → auth: Clerk-supabase JWT
 //
 // Executes agents/automations with real LLM calls using an opt-in encrypted
@@ -29,6 +29,12 @@ import {
   isRetryableError, backoffDelayMs,
 } from "../_shared/runtime/serverContract.ts";
 import type { RunEventType } from "../_shared/runtime/serverContract.ts";
+import {
+  generateServerImage,
+  resolveImageBaseUrl,
+  supportsServerImageGeneration,
+  type ServerImageProvider,
+} from "../_shared/runtime/imageGeneration.ts";
 import { NotificationEventService } from "../_shared/notifications/service.ts";
 
 const notificationService = new NotificationEventService(
@@ -110,24 +116,27 @@ async function emitEvent(runId: string, userId: string, type: RunEventType, meta
 
 /* ─── Model call ───────────────────────────────────────────────────────── */
 
-interface ModelConfig { provider: string; apiKey: string; modelClass: string }
+interface ModelConfig { provider: string; apiKey: string; modelClass: string; baseUrl?: string; model?: string; deadline?: number }
+interface ImageModelConfig { provider: ServerImageProvider; apiKey: string; model: string; baseUrl?: string; deadline?: number }
 
 async function callModel(cfg: ModelConfig, system: string, userPrompt: string, timeoutMs: number): Promise<{ text: string; model: string }> {
   // Real model catalogs per provider (verified against live APIs).
   const modelsByClass: Record<string, Record<string, string>> = {
     openrouter: { fast: "google/gemini-2.5-flash-preview", default: "anthropic/claude-sonnet-4-20250514", reasoning: "deepseek/deepseek-r1" },
     groq: { fast: "openai/gpt-oss-20b", default: "openai/gpt-oss-120b", reasoning: "openai/gpt-oss-120b" },
+    openai: { fast: "gpt-4o-mini", default: "gpt-4o", reasoning: "o3-mini" },
+    together: { fast: "meta-llama/Llama-3.3-70B-Instruct-Turbo", default: "meta-llama/Llama-3.3-70B-Instruct-Turbo", reasoning: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
   };
   const providerBase: Record<string, string> = {
     openrouter: "https://openrouter.ai/api/v1",
     groq: "https://api.groq.com/openai/v1",
+    openai: "https://api.openai.com/v1",
+    together: "https://api.together.xyz/v1",
   };
   // Custom OpenAI-compatible endpoints (user-supplied base URL + model)
   const isCustom = cfg.provider === "custom";
-  const base = isCustom ? String((execSettings?.custom_base_url as string) || "") : (providerBase[cfg.provider] ?? providerBase.openrouter);
-  const model = isCustom
-    ? String(execSettings?.custom_model || "")
-    : (modelsByClass[cfg.provider]?.[cfg.modelClass] ?? modelsByClass[cfg.provider]?.default ?? modelsByClass.openrouter.default);
+  const base = cfg.baseUrl || (isCustom ? "" : (providerBase[cfg.provider] ?? providerBase.openrouter));
+  const model = cfg.model || (isCustom ? "" : (modelsByClass[cfg.provider]?.[cfg.modelClass] ?? modelsByClass[cfg.provider]?.default ?? modelsByClass.openrouter.default));
   if (!base || !model) throw new HttpError(400, "custom_provider_incomplete", "Custom endpoint needs a base URL and model ID in Settings");
 
   const ctrl = new AbortController();
@@ -156,7 +165,7 @@ async function callModel(cfg: ModelConfig, system: string, userPrompt: string, t
       // Free-tier TPM windows (e.g. Groq) reset each minute — one patient retry.
       if (/429|rate limit|tokens per minute/i.test(String((err as Error).message)) && !ctrl.signal.aborted) {
         await new Promise(r => setTimeout(r, 15000));
-        if (ctrl.signal.aborted || Date.now() > (execCtx?.deadline ?? Infinity)) throw err;
+        if (ctrl.signal.aborted || Date.now() > (cfg.deadline ?? Infinity)) throw err;
         return await attempt();
       }
       throw err;
@@ -171,7 +180,7 @@ async function callModel(cfg: ModelConfig, system: string, userPrompt: string, t
 const TOOL_RE = /<<TOOL:(\w+)>>([\s\S]*?)<\/TOOL>>/g;
 const MEMORY_RE = /<<MEMORY>>([\s\S]*?)<\/MEMORY>>/g;
 
-interface ToolOutcome { name: string; ok: boolean; summary: string; mutatedPageId?: string }
+interface ToolOutcome { name: string; ok: boolean; summary: string; mutatedPageId?: string; details?: Record<string, unknown> }
 
 async function executeServerTool(
   name: string, params: Record<string, unknown>, ctx: ExecContext,
@@ -188,7 +197,7 @@ async function executeServerTool(
       return { name, ok: true, summary: `${(data ?? []).length} page(s): ${(data ?? []).map((p: { title: string }) => p.title).slice(0, 10).join(", ")}` };
     }
     case "get_page_content": {
-      const page = await loadPage(params);
+      const page = await loadPage(params, ctx);
       if (!page) return { name, ok: false, summary: `page not found` };
       const text = ((page.blocks as Array<{ text?: string }>) ?? []).map((b) => b.text || "").filter(Boolean).join("\n").slice(0, 6000);
       return { name, ok: true, summary: `Content of "${page.title}":\n${text}` };
@@ -207,7 +216,7 @@ async function executeServerTool(
       return { name, ok: true, summary: `created page "${params.title}"`, mutatedPageId: id };
     }
     case "append_blocks": {
-      const page = await loadPage(params);
+      const page = await loadPage(params, ctx);
       if (!page) return { name, ok: false, summary: "target page not found" };
       const newBlocks = markdownToBlocks(String(params.content || params.text || ""));
       if (newBlocks.length === 0) return { name, ok: false, summary: "no content to append" };
@@ -222,7 +231,7 @@ async function executeServerTool(
       return executeServerTool("append_blocks", { ...params, content: `- [ ] ${String(params.text || "")}` }, ctx, dryRun);
     }
     case "rename_page": {
-      const target = params.page_id ? await loadPage(params) : ctx.currentPage;
+      const target = params.page_id ? await loadPage(params, ctx) : ctx.currentPage;
       if (!target) return { name, ok: false, summary: "target page not found" };
       if (dryRun) return { name, ok: true, summary: `[dry-run] would rename to "${params.title}"` };
       const { error } = await db.from("pages").eq("id", target.id).eq("user_id", ctx.userId).update({ title: String(params.title || "").slice(0, 200) });
@@ -230,7 +239,7 @@ async function executeServerTool(
       return { name, ok: true, summary: `renamed to "${params.title}"`, mutatedPageId: target.id };
     }
     case "set_page_tags": {
-      const target = params.page_id ? await loadPage(params) : ctx.currentPage;
+      const target = params.page_id ? await loadPage(params, ctx) : ctx.currentPage;
       if (!target) return { name, ok: false, summary: "target page not found" };
       if (dryRun) return { name, ok: true, summary: `[dry-run] would set tags` };
       const tags = Array.isArray(target.tags) ? [...(target.tags as unknown[]), ...parseTags(params.tags)] : parseTags(params.tags);
@@ -239,12 +248,102 @@ async function executeServerTool(
       return { name, ok: true, summary: `tags updated on "${target.title}"` };
     }
     case "trash_page": {
-      const page = await loadPage(params);
+      const page = await loadPage(params, ctx);
       if (!page) return { name, ok: false, summary: "page not found" };
       if (dryRun) return { name, ok: true, summary: `[dry-run] would trash "${page.title}"` };
       const { error } = await db.from("pages").eq("id", page.id).eq("user_id", ctx.userId).update({ trashed: true });
       if (error) return { name, ok: false, summary: `trash failed: ${error.message}` };
       return { name, ok: true, summary: `trashed "${page.title}"` };
+    }
+    case "image_generate": {
+      const prompt = String(params.prompt || "").trim();
+      if (!prompt) return { name, ok: false, summary: "image_generate needs a prompt" };
+      const requestedPage = String(params.page_id || "").trim();
+      const target = requestedPage && requestedPage !== "current" ? await loadPage({ page_id: requestedPage }, ctx) : ctx.currentPage;
+      if (!target) return { name, ok: false, summary: "image_generate needs an explicit page_id when no current page is available" };
+      if (target.trashed) return { name, ok: false, summary: "image_generate cannot modify a trashed page" };
+      if (target.is_encrypted) return { name, ok: false, summary: "image_generate cannot modify an encrypted page" };
+      if (!ctx.imageConfig) return { name, ok: false, summary: "image generation is not configured for background runs" };
+
+      const size = params.size ? String(params.size).trim().slice(0, 32) : undefined;
+      const quality = params.quality ? String(params.quality).trim().slice(0, 32) : undefined;
+      const caption = params.caption ? String(params.caption).trim().slice(0, 500) : undefined;
+      const requestKey = await imageRequestKey(ctx.runId, target.id, prompt, size, quality, caption);
+      const blockId = `ai-image-${requestKey}`;
+      const existing = findImageBlock(target.blocks, blockId);
+      if (existing) {
+        return {
+          name,
+          ok: true,
+          summary: `image already generated on "${target.title}"`,
+          mutatedPageId: target.id,
+          details: { pageId: target.id, blockId, imageUrl: String(existing.text || ""), deduplicated: true },
+        };
+      }
+      if (dryRun) return { name, ok: true, summary: `[dry-run] would generate an image on "${target.title}"` };
+
+      let generated: Awaited<ReturnType<typeof generateServerImage>>;
+      try {
+        generated = await generateServerImage({
+          provider: ctx.imageConfig.provider,
+          apiKey: ctx.imageConfig.apiKey,
+          baseUrl: ctx.imageConfig.baseUrl,
+          model: ctx.imageConfig.model,
+          prompt,
+          size,
+          quality,
+          timeoutMs: Math.max(1_000, ctx.deadline - Date.now()),
+        });
+      } catch (error) {
+        return { name, ok: false, summary: `image generation failed: ${error instanceof Error ? error.message : "provider error"}` };
+      }
+
+      let imageUrl: string;
+      try {
+        imageUrl = await uploadGeneratedImage(ctx.userId, ctx.runId, requestKey, generated.bytes, generated.mimeType);
+      } catch (error) {
+        return { name, ok: false, summary: `image upload failed: ${error instanceof Error ? error.message : "storage error"}` };
+      }
+      const fresh = await loadPage({ page_id: target.id }, ctx);
+      if (!fresh) return { name, ok: false, summary: "image target page disappeared before append" };
+      const alreadyAppended = findImageBlock(fresh.blocks, blockId);
+      if (alreadyAppended) {
+        return {
+          name,
+          ok: true,
+          summary: `image already generated on "${fresh.title}"`,
+          mutatedPageId: fresh.id,
+          details: { pageId: fresh.id, blockId, imageUrl, deduplicated: true },
+        };
+      }
+      const block = {
+        id: blockId,
+        type: "image",
+        text: imageUrl,
+        ...(caption ? { caption } : {}),
+        properties: { url: imageUrl, ...(caption ? { caption } : {}) },
+      };
+      const blocks = [...(Array.isArray(fresh.blocks) ? fresh.blocks : []), block];
+      const lineage = [
+        ...((Array.isArray(fresh.lineage) ? fresh.lineage : []) as unknown[]),
+        { action: "ai-image", timestamp: new Date().toISOString(), detail: `Generated by ${ctx.sourceName}`, blockId },
+      ];
+      const { data: updated, error: updateError } = await pages
+        .eq("id", fresh.id)
+        .eq("user_id", ctx.userId)
+        .eq("updated_at", fresh.updated_at)
+        .update({ blocks: blocks as never, lineage: lineage as never })
+        .select("id")
+        .maybeSingle();
+      if (updateError || !updated) return { name, ok: false, summary: `image append failed: ${updateError?.message || "page changed concurrently"}` };
+      ctx.mutated.add(fresh.id);
+      return {
+        name,
+        ok: true,
+        summary: `generated image on "${fresh.title}"`,
+        mutatedPageId: fresh.id,
+        details: { pageId: fresh.id, blockId, imageUrl, provider: generated.provider, model: generated.model, revisedPrompt: generated.revisedPrompt },
+      };
     }
     case "send_notification": {
       if (dryRun) return { name, ok: true, summary: `[dry-run] would notify: ${params.title}` };
@@ -270,12 +369,28 @@ async function executeServerTool(
   }
 }
 
-type PageRow = { id: string; title: string; icon: string | null; tags: unknown; blocks: unknown };
+type PageRow = {
+  id: string;
+  title: string;
+  icon: string | null;
+  tags: unknown;
+  blocks: unknown;
+  trashed: boolean;
+  is_encrypted: boolean;
+  lineage: unknown;
+  updated_at: string;
+};
 
-async function loadPage(params: Record<string, unknown>): Promise<PageRow | null> {
-  const pid = String(params.page_id ?? "");
+async function loadPage(params: Record<string, unknown>, ctx: ExecContext): Promise<PageRow | null> {
+  const pid = String(params.page_id ?? "").trim();
   if (!pid || pid === "current") return null;
-  const { data } = await db.from("pages").select("id,title,icon,tags,blocks").eq("user_id", execCtx!.userId).or(`id.eq.${pid},title.ilike.${pid}`).limit(1).maybeSingle();
+  let query = db.from("pages")
+    .select("id,title,icon,tags,blocks,trashed,is_encrypted,lineage,updated_at")
+    .eq("user_id", ctx.userId)
+    .eq("trashed", false);
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pid)) query = query.eq("id", pid);
+  else query = query.ilike("title", `%${pid.replace(/[\\%_]/g, "\\$&").slice(0, 200)}%`);
+  const { data } = await query.limit(1).maybeSingle();
   return (data as unknown as PageRow) ?? null;
 }
 
@@ -302,6 +417,44 @@ function markdownToBlocks(md: string): Array<Record<string, unknown>> {
   return blocks.slice(0, 120);
 }
 
+async function imageRequestKey(runId: string, pageId: string, prompt: string, size?: string, quality?: string, caption?: string): Promise<string> {
+  const input = `${runId}:${pageId}:${prompt}:${size ?? ""}:${quality ?? ""}:${caption ?? ""}`;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest).slice(0, 16), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function findImageBlock(blocks: unknown, blockId: string): Record<string, unknown> | null {
+  if (!Array.isArray(blocks)) return null;
+  const block = blocks.find((value) => value && typeof value === "object" && (value as Record<string, unknown>).id === blockId);
+  return block && typeof block === "object" ? block as Record<string, unknown> : null;
+}
+
+async function uploadGeneratedImage(userId: string, runId: string, requestKey: string, bytes: Uint8Array, mimeType: string): Promise<string> {
+  if (!mimeType.startsWith("image/")) throw new Error("Generated image has an invalid MIME type");
+  const { data: buckets, error: bucketListError } = await db.storage.listBuckets();
+  if (bucketListError) throw new Error(`image bucket lookup failed: ${bucketListError.message}`);
+  const imageBucket = buckets?.find((bucket) => bucket.name === "images");
+  if (!imageBucket) {
+    const { error: createError } = await db.storage.createBucket("images", { public: true });
+    if (createError && !/already exists/i.test(createError.message)) throw new Error(`image bucket creation failed: ${createError.message}`);
+  } else if (!imageBucket.public) {
+    throw new Error("image storage bucket is not public");
+  }
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : mimeType === "image/gif" ? "gif" : "png";
+  const safeUserId = userId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 120);
+  const safeRunId = runId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 120);
+  const path = `ai/${safeUserId}/${safeRunId}/${requestKey}.${extension}`;
+  const { error: uploadError } = await db.storage.from("images").upload(path, bytes, {
+    cacheControl: "31536000",
+    contentType: mimeType,
+    upsert: true,
+  });
+  if (uploadError) throw new Error(`image upload failed: ${uploadError.message}`);
+  const { data: publicData } = db.storage.from("images").getPublicUrl(path);
+  if (!publicData?.publicUrl) throw new Error("image URL could not be created");
+  return publicData.publicUrl;
+}
+
 /* ─── Execution context & pipeline ─────────────────────────────────────── */
 
 interface ExecContext {
@@ -318,13 +471,12 @@ interface ExecContext {
   timeoutMs: number;
   deadline: number;
   currentPage: PageRow | null;
+  imageConfig: ImageModelConfig | null;
   mutated: Set<string>;
   counts: { modelCalls: number; toolCalls: number; delegations: number; memoryWrites: number };
 }
 
-let execCtx: ExecContext | null = null;
-/** Per-run copy of the user's execution settings (provider routing). */
-let execSettings: Record<string, unknown> | null = null;
+
 
 const SYSTEM_PROMPT = `You are a Noska workspace worker executing autonomously on a server. You are NOT a chatbot.
 
@@ -332,7 +484,7 @@ RULES:
 1. Truth comes ONLY from the Workspace Context section — never invent pages, tasks, or data.
 2. Act, don't describe: emit tool blocks to do work.
 3. Tool format: <<TOOL:name>>{"param":"value"}<\/TOOL>>
-   Available: search_pages{query}, list_pages{}, get_page_content{page_id}, create_page{title,icon?,content,tags?}, append_blocks{content,page_id?}, add_todo{text,page_id?}, rename_page{title}, set_page_tags{tags,page_id?}, trash_page{page_id}, create_flashcards{page_id,cards:"JSON array [{front,answer}]"}, send_notification{title,message}
+   Available: search_pages{query}, list_pages{}, get_page_content{page_id}, create_page{title,icon?,content,tags?}, append_blocks{content,page_id?}, add_todo{text,page_id?}, rename_page{title}, set_page_tags{tags,page_id?}, trash_page{page_id}, create_flashcards{page_id,cards:"JSON array [{front,answer}]"}, send_notification{title,message}, image_generate{prompt,page_id?,size?,quality?,caption?}
 4. To persist something worth remembering long-term, ALSO emit: <<MEMORY>>{"scope":"agent|workspace|page","content":"...","summary":"...","importance":1-4,"confidence":0-1}<\/MEMORY>> (max 2 per run; only durable facts/preferences/decisions — never chatter).
 5. After tools complete you'll be re-invoked with results — then write a short completion summary with NO tool blocks.
 6. Never expose secrets. Never claim success without tool evidence.`;
@@ -412,6 +564,47 @@ function clampConfidence(v: unknown): number {
   return Math.min(1, Math.max(0, n));
 }
 
+function normalizePermissions(raw: unknown): Record<string, string> {
+  const source = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const value = (key: string, fallback: string) => {
+    const mode = String(source[key] ?? fallback);
+    return ["auto", "approval", "disabled"].includes(mode) ? mode : fallback;
+  };
+  return {
+    read: value("read", "auto"),
+    create: value("create", "auto"),
+    update: value("update", "auto"),
+    delete: value("delete", "approval"),
+    memory: value("memory", "auto"),
+    agents: value("agents", "approval"),
+    automations: value("automations", "approval"),
+    external: value("external", "approval"),
+  };
+}
+
+function normalizeImageProvider(value: unknown): ServerImageProvider | null {
+  const provider = String(value || "").trim().toLowerCase();
+  return ["openai", "gemini", "openrouter", "together", "custom"].includes(provider) ? provider as ServerImageProvider : null;
+}
+
+function automationInstructions(def: Record<string, unknown>): string {
+  const steps = Array.isArray(def.steps) ? def.steps : [];
+  const renderedSteps = steps.map((step, index) => {
+    if (!step || typeof step !== "object") return `${index + 1}. Complete the configured step.`;
+    const value = step as Record<string, unknown>;
+    const label = String(value.label || `Step ${index + 1}`).slice(0, 200);
+    const instruction = value.instruction ? String(value.instruction).slice(0, 2_000) : "";
+    const toolName = value.toolName ? String(value.toolName).slice(0, 80) : "";
+    const toolParams = value.toolParams && typeof value.toolParams === "object" ? JSON.stringify(value.toolParams).slice(0, 1_000) : "";
+    return `${index + 1}. ${label}${instruction ? ` — ${instruction}` : toolName ? ` (use ${toolName}${toolParams ? ` with ${toolParams}` : ""})` : ""}`;
+  });
+  return [
+    `You are executing the automation "${String(def.name || "automation")}".`,
+    def.description ? `What it does: ${String(def.description).slice(0, 2_000)}` : "",
+    renderedSteps.length > 0 ? `Perform each configured step in order using your tools:\n${renderedSteps.join("\n")}` : "",
+  ].filter(Boolean).join("\n");
+}
+
 /* ─── Main executor ────────────────────────────────────────────────────── */
 
 async function executeRun(opts: {
@@ -429,7 +622,9 @@ async function executeRun(opts: {
     if (existing.status === "completed") return json({ resumed: false, runId: existing.id, status: existing.status });
   } else if (opts.idempotencyKey) {
     const { data: dup } = await db.from("agent_runs").select("id,status").eq("idempotency_key", opts.idempotencyKey).maybeSingle();
-    if (dup) return json({ deduplicated: true, runId: dup.id, status: dup.status });
+    const terminalFailure = dup && ["failed", "timed_out", "cancelled"].includes(dup.status);
+    if (dup && !terminalFailure) return json({ deduplicated: true, runId: dup.id, status: dup.status });
+    if (dup && terminalFailure) await db.from("agent_runs").delete().eq("id", dup.id);
   }
 
   // Load definition + settings.
@@ -437,22 +632,50 @@ async function executeRun(opts: {
   const idCol = "id";
   const { data: def, error: defErr } = await db.from(table).select("*").eq(idCol, opts.sourceId).eq("owner_id", opts.userId).maybeSingle();
   if (defErr || !def) throw new HttpError(404, "definition_not_found", `${opts.sourceKind} not found`);
-  const config = ((def as Record<string, unknown>).config as Record<string, unknown>) ?? {};
-  const instructions = String((def as Record<string, unknown>).instructions || "");
-  const name = String((def as Record<string, unknown>).name || opts.sourceKind);
-  const timeoutMs = Number((def as Record<string, unknown>).timeout_ms) || RESOURCE_LIMITS.defaultTimeoutMs;
+  const definition = def as Record<string, unknown>;
+  const config = (definition.config && typeof definition.config === "object" ? definition.config : {}) as Record<string, unknown>;
+  const isAutomation = opts.sourceKind === "automation";
+  const instructions = isAutomation ? automationInstructions(definition) : String(definition.instructions || "");
+  const name = String(definition.name || opts.sourceKind);
+  const timeoutMs = Number(definition.timeout_ms) || RESOURCE_LIMITS.defaultTimeoutMs;
 
-  const { data: settings } = await db.from("agent_execution_settings").select("*").eq("user_id", opts.userId).maybeSingle();
-  execSettings = (settings as unknown as Record<string, unknown>) ?? null;
+  const { data: settings } = await db.from("agent_execution_settings")
+    .select("allow_background,provider,model_class,custom_model,custom_base_url,encrypted_key,image_provider,image_model,image_base_url,encrypted_image_key")
+    .eq("user_id", opts.userId).maybeSingle();
   const allowBackground = Boolean(settings?.allow_background);
-  // Per-agent memory controls (off | run | persistent) — enforced server-side.
-  const memoryMode = String((config as Record<string, unknown>).memoryMode ?? "persistent");
+  const memoryMode = String(config.memoryMode ?? "persistent");
   let modelCfg: ModelConfig | null = null;
+  let imageCfg: ImageModelConfig | null = null;
   if (allowBackground && settings?.encrypted_key) {
     try {
-      modelCfg = { provider: settings.provider || "openrouter", apiKey: await decryptKey(settings.encrypted_key), modelClass: settings.model_class || "default" };
+      modelCfg = {
+        provider: settings.provider || "openrouter",
+        apiKey: await decryptKey(settings.encrypted_key),
+        modelClass: settings.model_class || "default",
+        baseUrl: settings.custom_base_url ? String(settings.custom_base_url) : undefined,
+        model: settings.custom_model ? String(settings.custom_model) : undefined,
+        deadline: startedAt + timeoutMs,
+      };
     } catch {
       throw new HttpError(400, "key_decrypt_failed", "Stored execution key could not be decrypted — re-save it in Settings");
+    }
+  }
+  const imageProvider = normalizeImageProvider(settings?.image_provider);
+  const imageModel = String(settings?.image_model || "").trim();
+  if (allowBackground && imageProvider && imageModel && supportsServerImageGeneration(imageProvider, imageModel)) {
+    const encryptedImageKey = String(settings?.encrypted_image_key || "") || (String(settings?.provider || "") === imageProvider ? String(settings?.encrypted_key || "") : "");
+    if (encryptedImageKey) {
+      try {
+        imageCfg = {
+          provider: imageProvider,
+          apiKey: await decryptKey(encryptedImageKey),
+          model: imageModel,
+          baseUrl: settings?.image_base_url ? String(settings.image_base_url) : undefined,
+          deadline: startedAt + timeoutMs,
+        };
+      } catch {
+        imageCfg = null;
+      }
     }
   }
   if (!modelCfg) {
@@ -462,13 +685,18 @@ async function executeRun(opts: {
   // Create or load run row.
   const runId = opts.resumeRunId ?? crypto.randomUUID();
   if (!opts.resumeRunId) {
-    await db.from("agent_runs").insert({
+    const { error: insertErr } = await db.from("agent_runs").insert({
       id: runId, user_id: opts.userId, source_kind: opts.sourceKind, source_id: opts.sourceId,
       name, trigger_type: opts.triggerType, trigger_payload: redact(opts.triggerPayload) as never,
       status: "running", started_at: new Date().toISOString(),
       idempotency_key: opts.idempotencyKey ?? null, scheduled_for: opts.scheduledFor ?? null,
       timeout_ms: timeoutMs,
     });
+    if (insertErr) {
+      if (!opts.idempotencyKey) throw new HttpError(500, "run_insert_failed", insertErr.message);
+      const { data: winner } = await db.from("agent_runs").select("id,status").eq("idempotency_key", opts.idempotencyKey).maybeSingle();
+      return json({ deduplicated: true, runId: winner?.id ?? null, status: winner?.status ?? "unknown" });
+    }
     await emitEvent(runId, opts.userId, "TRIGGER_RECEIVED", { trigger: opts.triggerType });
     await emitEvent(runId, opts.userId, "RUN_STARTED", { attemptNote: "server execution" });
   } else {
@@ -481,31 +709,34 @@ async function executeRun(opts: {
   const evt = opts.triggerPayload as { pageId?: string };
   let currentPage: PageRow | null = null;
   if (evt?.pageId) {
-    const { data } = await db.from("pages").select("id,title,icon,tags,blocks").eq("id", String(evt.pageId)).eq("user_id", opts.userId).maybeSingle();
+    const { data } = await db.from("pages")
+      .select("id,title,icon,tags,blocks,trashed,is_encrypted,lineage,updated_at")
+      .eq("id", String(evt.pageId))
+      .eq("user_id", opts.userId)
+      .eq("trashed", false)
+      .eq("is_encrypted", false)
+      .maybeSingle();
     currentPage = (data as unknown as PageRow) ?? null;
   }
   const { data: recentPages } = await db.from("pages").select("id,title,icon,trashed,blocks")
-    .eq("user_id", opts.userId).eq("trashed", false).order("updated_at", { ascending: false }).limit(15);
+    .eq("user_id", opts.userId).eq("trashed", false).eq("is_encrypted", false).order("updated_at", { ascending: false }).limit(15);
   const contextPages = (recentPages ?? []) as Array<Record<string, unknown>>;
   await emitEvent(runId, opts.userId, "CONTEXT_LOADED", { pagesLoaded: contextPages.length, hasCurrentPage: !!currentPage }, undefined, Date.now() - contextStart);
+
+  const ctx: ExecContext = {
+    userId: opts.userId, sourceKind: opts.sourceKind, sourceId: opts.sourceId, sourceName: name,
+    instructions, triggerType: opts.triggerType, triggerPayload: opts.triggerPayload,
+    permissions: normalizePermissions(isAutomation ? definition.permissions : config.permissions), dryRun: Boolean(opts.dryRun), timeoutMs, deadline: startedAt + timeoutMs,
+    runId, currentPage, imageConfig: imageCfg, mutated: new Set(), counts: { modelCalls: 0, toolCalls: 0, delegations: 0, memoryWrites: 0 },
+  };
 
   // Memory retrieval (skipped entirely when the agent's memory mode is off;
   // candidates are still discarded for mode "run" at write time below).
   const taskKeywords = extractKeywords(`${instructions} ${JSON.stringify(redact(opts.triggerPayload))}`);
   const memStart = Date.now();
-  const memories = memoryMode === "off" ? [] : await retrieveMemories(execCtx, taskKeywords, runId);
+  const memories = memoryMode === "off" ? [] : await retrieveMemories(ctx, taskKeywords, runId);
   await emitEvent(runId, opts.userId, memories.length > 0 ? "MEMORY_FOUND" : "MEMORY_SEARCH",
     { count: memories.length, summaries: memories.map((m) => m.summary).slice(0, 5) }, undefined, Date.now() - memStart);
-
-  // Build context.
-  void execCtx;
-  const ctx: ExecContext = {
-    userId: opts.userId, sourceKind: opts.sourceKind, sourceId: opts.sourceId, sourceName: name,
-    instructions, triggerType: opts.triggerType, triggerPayload: opts.triggerPayload,
-    permissions: {}, dryRun: Boolean(opts.dryRun), timeoutMs, deadline: startedAt + timeoutMs,
-    runId, currentPage, mutated: new Set(), counts: { modelCalls: 0, toolCalls: 0, delegations: 0, memoryWrites: 0 },
-  };
-  execCtx = ctx;
 
   const contextString = [
     currentPage ? `## Current Page: ${currentPage.icon ?? ""} ${currentPage.title}\n${blocksToText(currentPage.blocks).slice(0, 4000)}` : "",
@@ -514,7 +745,10 @@ async function executeRun(opts: {
     `## Trigger\n${opts.triggerType}${evt?.pageTitle ? ` on "${evt.pageTitle}"` : ""}`,
   ].filter(Boolean).join("\n\n");
 
-  const fullSystem = SYSTEM_PROMPT + `\n\nYou are running as "${name}".` +
+  const imageInstructions = imageCfg
+    ? "\n7. image_generate is available for an explicit page_id; use it only when the task asks for an image."
+    : "\n7. image_generate is unavailable because no server image profile is configured.";
+  const fullSystem = SYSTEM_PROMPT + imageInstructions + `\n\nYou are running as "${name}".` +
     (instructions ? `\n\nYour standing instructions:\n${instructions}` : "") +
     (opts.dryRun ? "\n\nDRY RUN MODE: mutating actions will be simulated and reported." : "");
 
@@ -561,7 +795,7 @@ async function executeRun(opts: {
       }
       ctx.counts.toolCalls++;
       const permCategory = categorize(call.name);
-      const mode = permMode(permCategory);
+      const mode = permMode(permCategory, ctx);
       if (mode === "disabled") { outcomes.push(`Tool ${call.name} refused: permission disabled`); continue; }
       if (mode === "approval" && !(opts.approvalGrantedFor ?? []).includes(call.name)) {
         // Pause: persist remaining work and wait — no browser required.
@@ -632,15 +866,12 @@ function categorize(tool: string): string {
   if (["create_page"].includes(tool)) return "create";
   if (["append_blocks", "add_todo", "rename_page", "set_page_tags"].includes(tool)) return "update";
   if (tool === "trash_page") return "delete";
-  if (tool === "send_notification") return "external";
+  if (["send_notification", "image_generate"].includes(tool)) return "external";
   return "update";
 }
 
-function permMode(category: string): string {
-  // Background defaults mirror FULL_AUTO_PERMISSIONS minus interactivity:
-  // deletes and external effects always require approval server-side too.
-  const map: Record<string, string> = { read: "auto", create: "auto", update: "auto", delete: "approval", external: "approval" };
-  return map[category] ?? "approval";
+function permMode(category: string, ctx: ExecContext): string {
+  return ctx.permissions[category] ?? "approval";
 }
 
 async function finishSkipped(userId: string, kind: string, sourceId: string, name: string, reason: string, idemKey?: string | null, scheduledFor?: string | null): Promise<Response> {
@@ -693,7 +924,7 @@ async function saveSettings(userId: string, body: Record<string, unknown>): Prom
   const update: Record<string, unknown> = {
     user_id: userId,
     allow_background: allowBackground,
-    provider: ["openrouter", "groq", "custom"].includes(String(body.provider)) ? String(body.provider) : "groq",
+    provider: ["openrouter", "groq", "openai", "together", "custom"].includes(String(body.provider)) ? String(body.provider) : "groq",
     custom_base_url: body.custom_base_url ? String(body.custom_base_url).slice(0, 300) : null,
     custom_model: body.custom_model ? String(body.custom_model).slice(0, 200) : null,
     model_class: ["fast", "default", "reasoning"].includes(String(body.model_class)) ? String(body.model_class) : "default",
@@ -704,9 +935,35 @@ async function saveSettings(userId: string, body: Record<string, unknown>): Prom
     update.encrypted_key = await encryptKey(body.api_key);
     update.key_hint = `…${body.api_key.slice(-4)}`;
   }
+
+  const imageFields = ["image_provider", "image_model", "image_base_url", "image_api_key", "clear_image_key"];
+  if (imageFields.some((field) => Object.prototype.hasOwnProperty.call(body, field))) {
+    const imageProvider = normalizeImageProvider(body.image_provider);
+    const imageModel = body.image_model ? String(body.image_model).trim().slice(0, 200) : "";
+    const imageBaseUrl = body.image_base_url ? String(body.image_base_url).trim().slice(0, 300) : "";
+    if (imageProvider && !imageModel) throw new HttpError(400, "image_profile_incomplete", "Choose an image model or clear the image provider");
+    if (!imageProvider && (imageModel || imageBaseUrl)) throw new HttpError(400, "image_profile_incomplete", "Choose an image provider before saving image settings");
+    if (imageProvider && imageModel) {
+      resolveImageBaseUrl(imageProvider, imageBaseUrl || undefined);
+      if (!supportsServerImageGeneration(imageProvider, imageModel)) throw new HttpError(400, "image_model_unsupported", "Choose a model that supports image generation for this provider");
+    }
+    if (body.clear_image_key === true) {
+      update.encrypted_image_key = null;
+      update.image_key_hint = null;
+    }
+    if (typeof body.image_api_key === "string" && body.image_api_key.length > 8) {
+      if (!imageProvider || !imageModel) throw new HttpError(400, "image_profile_incomplete", "Configure the image provider and model before saving an image key");
+      update.encrypted_image_key = await encryptKey(body.image_api_key);
+      update.image_key_hint = `…${body.image_api_key.slice(-4)}`;
+    }
+    update.image_provider = imageProvider;
+    update.image_model = imageModel || null;
+    update.image_base_url = imageBaseUrl || null;
+  }
+
   const { error } = await db.from("agent_execution_settings").upsert(update, { onConflict: "user_id" });
   if (error) throw new HttpError(500, "save_failed", error.message);
-  return json({ saved: true, keyHint: update.key_hint ?? null });
+  return json({ saved: true, keyHint: update.key_hint ?? null, imageKeyHint: update.image_key_hint ?? null });
 }
 
 /* ─── Retry bookkeeping helper exported for the scheduler job ──────────── */
@@ -730,7 +987,10 @@ Deno.serve(async (req: Request) => {
     // User-session actions (from the app):
     if (action === "status") {
       const userId = await requireUserJwt(req);
-      const { data: settings } = await db.from("agent_execution_settings").select("allow_background,encrypted_key,provider,model_class,key_hint,timezone,custom_base_url,custom_model").eq("user_id", userId).maybeSingle();
+      const { data: settings } = await db.from("agent_execution_settings").select("allow_background,encrypted_key,provider,model_class,key_hint,timezone,custom_base_url,custom_model,image_provider,image_model,image_base_url,image_key_hint").eq("user_id", userId).maybeSingle();
+      const imageProvider = normalizeImageProvider(settings?.image_provider);
+      const imageKeyAvailable = Boolean(settings?.image_key_hint || (settings?.encrypted_key && String(settings?.provider || "") === imageProvider));
+      const imageModelSupported = Boolean(imageProvider && settings?.image_model && supportsServerImageGeneration(imageProvider, String(settings.image_model)));
       return json({
         edgeFunction: true,
         encryptionConfigured: Boolean(ENCRYPTION_SECRET),
@@ -740,7 +1000,11 @@ Deno.serve(async (req: Request) => {
         provider: settings?.provider ?? null,
         modelClass: settings?.model_class ?? null,
         timezone: settings?.timezone ?? "UTC",
-        // Overall: only operational when everything needed is present.
+        imageProvider,
+        imageModel: settings?.image_model ?? null,
+        imageBaseUrl: settings?.image_base_url ?? null,
+        imageKeyHint: settings?.image_key_hint ?? null,
+        imageConfigured: Boolean(ENCRYPTION_SECRET && settings?.allow_background && imageModelSupported && imageKeyAvailable),
         ready: Boolean(ENCRYPTION_SECRET) && Boolean(settings?.allow_background && settings?.encrypted_key),
       });
     }

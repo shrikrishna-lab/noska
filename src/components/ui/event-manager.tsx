@@ -526,7 +526,7 @@ export function EventManager({
       inProgress,
       reminders,
       completionRate,
-      totalPages: workspaceStats?.totalPages ?? 1,
+      totalPages: workspaceStats?.totalPages ?? 0,
       activeReviews: workspaceStats?.activeReviews ?? 0,
       totalTimeSpentHours: totalTimeSpentHours.toFixed(1),
       createdPagesCount,
@@ -1388,7 +1388,7 @@ export function EventManager({
                   if (hour < 12) return "Good Morning";
                   if (hour < 17) return "Good Afternoon";
                   return "Good Evening";
-                })()}, {workspaceStats?.userName || "James Workman"}
+                })()}, {workspaceStats?.userName || "there"}
               </span>
               <motion.span
                 animate={{ rotate: [0, 14, -8, 14, -4, 10, 0] }}

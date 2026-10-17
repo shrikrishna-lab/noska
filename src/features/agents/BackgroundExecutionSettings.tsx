@@ -8,6 +8,10 @@ interface SettingsRow {
   model_class: string;
   key_hint: string | null;
   timezone: string;
+  image_provider: string;
+  image_model: string;
+  image_base_url: string;
+  image_key_hint: string | null;
 }
 
 type SetupStatus = "not_configured" | "configuring" | "operational" | "degraded" | "failing" | "disabled";
@@ -18,6 +22,10 @@ interface RuntimeStatus {
   backgroundEnabled: boolean;
   keySaved: boolean;
   keyHint: string | null;
+  imageConfigured: boolean;
+  imageProvider: string | null;
+  imageModel: string | null;
+  imageKeyHint: string | null;
   ready: boolean;
 }
 
@@ -44,10 +52,13 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export default function BackgroundExecutionSettings({ onToast }: { onToast?: (msg: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [settings, setSettings] = useState<SettingsRow>({ allow_background: false, provider: "groq", model_class: "default", key_hint: null, timezone: TIMEZONES[1] });
+  const [settings, setSettings] = useState<SettingsRow>({ allow_background: false, provider: "groq", model_class: "default", key_hint: null, timezone: TIMEZONES[1], image_provider: "", image_model: "", image_base_url: "", image_key_hint: null });
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [customModel, setCustomModel] = useState("");
+  const [imageApiKeyInput, setImageApiKeyInput] = useState("");
+  const [imageBaseUrl, setImageBaseUrl] = useState("");
+  const [imageModel, setImageModel] = useState("");
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -68,14 +79,22 @@ export default function BackgroundExecutionSettings({ onToast }: { onToast?: (ms
     void (async () => {
       try {
         const base = supabase as unknown as { from: (t: string) => any };
-        const { data } = await base.from("agent_execution_settings").select("*").maybeSingle();
-        if (data) setSettings({
-          allow_background: data.allow_background,
-          provider: data.provider,
-          model_class: data.model_class,
-          key_hint: data.key_hint ?? null,
-          timezone: data.timezone || TIMEZONES[0],
-        });
+        const { data } = await base.from("agent_execution_settings").select("allow_background,provider,model_class,key_hint,timezone,image_provider,image_model,image_base_url,image_key_hint").maybeSingle();
+        if (data) {
+          setSettings({
+            allow_background: data.allow_background,
+            provider: data.provider,
+            model_class: data.model_class,
+            key_hint: data.key_hint ?? null,
+            timezone: data.timezone || TIMEZONES[0],
+            image_provider: data.image_provider || "",
+            image_model: data.image_model || "",
+            image_base_url: data.image_base_url || "",
+            image_key_hint: data.image_key_hint ?? null,
+          });
+          setImageBaseUrl(data.image_base_url || "");
+          setImageModel(data.image_model || "");
+        }
       } catch { /* pre-migration */ }
       await refreshStatus();
       setLoading(false);
@@ -118,6 +137,10 @@ export default function BackgroundExecutionSettings({ onToast }: { onToast?: (ms
           api_key: apiKeyInput.trim() || undefined,
           custom_base_url: settings.provider === "custom" ? customBaseUrl.trim() || undefined : undefined,
           custom_model: settings.provider === "custom" ? customModel.trim() || undefined : undefined,
+          image_provider: settings.image_provider || null,
+          image_model: imageModel.trim() || null,
+          image_base_url: settings.image_provider === "custom" ? imageBaseUrl.trim() || null : null,
+          image_api_key: imageApiKeyInput.trim() || undefined,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -125,12 +148,13 @@ export default function BackgroundExecutionSettings({ onToast }: { onToast?: (ms
         onToast?.(
           body.message === "AGENT_ENCRYPTION_KEY not configured"
             ? "Background execution isn't configured yet — server encryption key missing"
-            : "Couldn't save settings",
+            : body.message || "Couldn't save settings",
         );
         return;
       }
       setApiKeyInput("");
-      setSettings((s) => ({ ...s, key_hint: (body.keyHint as string) ?? s.key_hint }));
+      setImageApiKeyInput("");
+      setSettings((s) => ({ ...s, key_hint: (body.keyHint as string) ?? s.key_hint, image_key_hint: (body.imageKeyHint as string) ?? s.image_key_hint }));
       onToast?.(settings.allow_background ? "Background execution enabled" : "Background execution disabled");
       await refreshStatus();
     } finally {
@@ -220,9 +244,11 @@ export default function BackgroundExecutionSettings({ onToast }: { onToast?: (ms
                 <div>
                   <label className="text-[10px] font-medium text-[var(--secondary)] mb-1 block">Provider</label>
                   <select value={settings.provider} onChange={(e) => setSettings((s) => ({ ...s, provider: e.target.value }))} className="w-full rounded-lg bg-[var(--bg)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text)] outline-none">
-                    <option value="groq">Groq</option>
-                    <option value="openrouter">OpenRouter</option>
-                    <option value="custom">Custom (any OpenAI-compatible URL)</option>
+                     <option value="groq">Groq</option>
+                     <option value="openrouter">OpenRouter</option>
+                     <option value="openai">OpenAI</option>
+                     <option value="together">Together</option>
+                     <option value="custom">Custom (any OpenAI-compatible URL)</option>
                   </select>
                   {settings.provider !== "custom" && <p className="text-[9px] text-[var(--muted)] mt-0.5">Must match the key above.</p>}
                 </div>
@@ -248,8 +274,71 @@ export default function BackgroundExecutionSettings({ onToast }: { onToast?: (ms
                     </div>
                   </>
                 )}
-                <div>
-                  <label className="text-[10px] font-medium text-[var(--secondary)] mb-1 block">Model quality</label>
+                 <div className="border-t border-[var(--border)] pt-2.5 space-y-2">
+                   <div>
+                     <label className="text-[10px] font-medium text-[var(--secondary)] mb-1 block">Image generation provider</label>
+                     <select
+                       value={settings.image_provider}
+                       onChange={(e) => {
+                         const value = e.target.value;
+                         setSettings((s) => ({ ...s, image_provider: value }));
+                         if (!value) setImageModel("");
+                       }}
+                       className="w-full rounded-lg bg-[var(--bg)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text)] outline-none"
+                     >
+                       <option value="">Disabled</option>
+                       <option value="openai">OpenAI</option>
+                       <option value="gemini">Google Gemini</option>
+                       <option value="together">Together</option>
+                       <option value="openrouter">OpenRouter</option>
+                       <option value="custom">Custom image endpoint</option>
+                     </select>
+                   </div>
+                   {settings.image_provider && (
+                     <>
+                       <div>
+                           <label className="text-[10px] font-medium text-[var(--secondary)] mb-1 block">Image-capable model ID</label>
+                         <input
+                           value={imageModel}
+                           onChange={(e) => setImageModel(e.target.value)}
+                           placeholder="gpt-image-1 or provider model ID"
+                           className="w-full rounded-lg bg-[var(--bg)] border border-[var(--border)] px-2 py-1.5 text-xs font-mono text-[var(--text)] outline-none"
+                           />
+                           <p className="text-[9px] text-[var(--muted)] mt-1">Noska enables image generation only when this model supports image output; your key remains yours.</p>
+                         </div>
+                         {settings.image_provider === "custom" && (
+                         <div>
+                           <label className="text-[10px] font-medium text-[var(--secondary)] mb-1 block">Image base URL</label>
+                           <input
+                             value={imageBaseUrl}
+                             onChange={(e) => setImageBaseUrl(e.target.value)}
+                             placeholder="https://gateway.example.com/v1"
+                             className="w-full rounded-lg bg-[var(--bg)] border border-[var(--border)] px-2 py-1.5 text-xs font-mono text-[var(--text)] outline-none"
+                           />
+                         </div>
+                       )}
+                       <div>
+                         <label className="flex items-center gap-1 text-[10px] font-medium text-[var(--secondary)] mb-1">
+                           Image provider key
+                           {settings.image_key_hint && <span className="ml-auto text-[9px] font-mono text-[var(--muted)]">saved {settings.image_key_hint}</span>}
+                         </label>
+                         <input
+                           type="password"
+                           value={imageApiKeyInput}
+                           onChange={(e) => setImageApiKeyInput(e.target.value)}
+                           placeholder={settings.image_key_hint ? "Replace saved image key…" : "Optional when reusing the text key"}
+                           className="w-full rounded-lg bg-[var(--bg)] border border-[var(--border)] px-2.5 py-1.5 text-xs font-mono text-[var(--text)] outline-none focus:border-[var(--accent)]/40"
+                         />
+                         <p className="text-[9px] text-[var(--muted)] mt-1">Your provider requires its own API key. Leave blank to reuse your saved text key when the providers match; a different image provider needs its own encrypted key.</p>
+                       </div>
+                     </>
+                   )}
+                   <p className="text-[9px] text-[var(--muted)]">
+                     Server image profile: {status?.imageConfigured ? "✓ configured" : settings.image_provider ? "○ incomplete" : "disabled"}
+                   </p>
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-medium text-[var(--secondary)] mb-1 block">Model quality</label>
                   <select value={settings.model_class} onChange={(e) => setSettings((s) => ({ ...s, model_class: e.target.value }))} className="w-full rounded-lg bg-[var(--bg)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text)] outline-none">
                     <option value="fast">Fast</option>
                     <option value="default">Balanced</option>
@@ -265,7 +354,7 @@ export default function BackgroundExecutionSettings({ onToast }: { onToast?: (ms
                 <div className="text-[9px] text-[var(--muted)] space-y-0.5">
                   <p>· Runtime service: {status?.edgeFunction ? "✓ reachable" : "✕ not reachable"}</p>
                   <p>· Server-side encryption: {status?.encryptionConfigured ? "✓ configured" : "✕ not configured"}</p>
-                  <p>· Worker crons run every minute via Trigger.dev when deployed</p>
+                  <p>· Scheduler: Supabase cron invokes the runtime every minute (no browser needed)</p>
                 </div>
               </div>
             )}

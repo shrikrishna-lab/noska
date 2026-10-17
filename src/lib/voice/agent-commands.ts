@@ -32,9 +32,22 @@ export function parseVoiceAgentCommand(raw: string): VoiceAgentCommand {
   if (/^(?:open|show)\s+(?:the\s+)?agents?$/i.test(text)) return { kind: "open-agents" };
   if (/^(?:open|show)\s+(?:the\s+)?automations?$/i.test(text)) return { kind: "open-automations" };
   if (/^(?:run|check|show)\s+(?:a\s+)?(?:local\s+)?(?:diagnostics|health|logs?)$/i.test(text)) return { kind: "diagnose" };
+
+  // stripCourtesyPhrases consumes the verb ("show me the agents" -> "agents"),
+  // so the prefixed patterns above can no longer match. Bare nouns are
+  // unambiguous commands — "agents" is never the start of an agentic task —
+  // so accept them directly.
+  if (/^(?:the\s+)?agents?$/i.test(text)) return { kind: "open-agents" };
+  if (/^(?:the\s+)?automations?$/i.test(text)) return { kind: "open-automations" };
+  if (/^(?:the\s+)?(?:settings|preferences)$/i.test(text)) return { kind: "open-settings" };
+  const bareView = resolveViewExact(text.replace(/^(?:the|my)\s+/i, ""));
+  if (bareView) return { kind: "open-view", view: bareView };
   let match = text.match(/^(?:report|file|create)\s+(?:a\s+)?bug(?:\s*[:,-]?\s*(.*))?$/i);
   if (match) return { kind: "report-bug", description: clean(match[1] || "") };
-  match = text.match(/^(?:create|make|build)\s+(?:a\s+)?agent(?:\s+(?:called|named))?\s+(.+?)(?:\s+(?:to|that)\s+(.+))?$/i);
+  // "an agent" / "an automation" are the natural phrasings; the article used
+  // to be written as an optional literal "a", so "create an agent called X"
+  // matched nothing and fell through to the AI panel instead of creating one.
+  match = text.match(/^(?:create|make|build)\s+(?:an?\s+)?agent(?:\s+(?:called|named))?\s+(.+?)(?:\s+(?:to|that)\s+(.+))?$/i);
   if (match?.[1]) return { kind: "create-agent", name: clean(match[1]), instructions: clean(match[2] || "Assist with the workspace and report progress clearly") };
   match = text.match(/^(?:create|make|build)\s+(?:an?\s+)?automation(?:\s+(?:called|named))?\s+(.+?)(?:\s+(?:to|that)\s+(.+))?$/i);
   if (match?.[1]) return { kind: "create-automation", name: clean(match[1]), instructions: clean(match[2] || "Run this workflow when manually started") };
@@ -49,7 +62,16 @@ export function parseVoiceAgentCommand(raw: string): VoiceAgentCommand {
   // "open the roadmap page" — a trailing page/note/document noun is phrasing,
   // not part of the title.
   if (match?.[1]) return { kind: "open-page", query: clean(match[1]).replace(/\s+(?:page|note|document)$/i, "") };
-  match = text.match(/^(?:write|add|insert|type)\s+(?:this|there|in (?:this|the) (?:page|note))?\s*[:, -]*\s*(.+)$/i);
+  // "write <text>" is unambiguous dictation, so it takes the rest of the
+  // utterance verbatim.
+  match = text.match(/^write\s+(?:this|there|in (?:this|the) (?:page|note))?\s*[:, -]*\s*(.+)$/i);
+  if (match?.[1]) return { kind: "write", text: clean(match[1]) };
+  // "add"/"insert"/"type" are NOT unambiguous — "add a bar chart of revenue"
+  // and "insert a mermaid diagram" are assistant tasks, not literal text. The
+  // deictic ("this", "there", "in this page") is what marks dictation, so
+  // require it. Without this, the user asked for a chart and got a page
+  // containing the literal words "a bar chart of revenue by region".
+  match = text.match(/^(?:add|insert|type)\s+(?:this|there|in (?:this|the) (?:page|note)|to (?:this|the) (?:page|note))\s*[:, -]*\s*(.+)$/i);
   if (match?.[1]) return { kind: "write", text: clean(match[1]) };
   match = text.match(/^(?:create|make|new)\s+(?:a\s+)?(?:page|note|document)(?:\s+(?:called|named|titled))?\s*(.+)?$/i);
   if (match) return { kind: "create-page", title: clean(match[1] || "New page") };

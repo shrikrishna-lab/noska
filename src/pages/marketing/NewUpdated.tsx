@@ -449,7 +449,7 @@ export default function NewUpdated() {
                         {/* Optional Hero Media */}
                         {item.heroImage && (
                           <div className="nu-media-frame">
-                            <img src={item.heroImage} alt={item.releaseName} loading="lazy" />
+                            <img src={item.heroImage} alt={item.releaseName} width={1200} height={800} decoding="async" loading="lazy" />
                           </div>
                         )}
 

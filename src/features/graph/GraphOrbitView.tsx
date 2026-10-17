@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
 import { compute3DOrbitPositions, computeDegrees, type Orbit3DNode } from "./graphLayouts";
-import { PageIcon } from "../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 import {
   Globe,
   RotateCw,

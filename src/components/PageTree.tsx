@@ -35,16 +35,20 @@ import {
 } from '../core/tree/TreeEngine';
 import type { FlattenedPage } from '../core/tree/TreeEngine';
 import { PageIcon } from './PageIcon';
+import { ForkedBadge } from './share/ForkedBadge';
+import { buildPageLink } from '../lib/share/origin';
 
 
 /** Builds a real /<workspace-slug>/<pageId> URL by swapping the page-id
  * segment of the current path — App.jsx's URL-sync effect keeps the
  * workspace-slug segment accurate, so this stays correct without needing to
- * thread workspaceName through the whole tree. */
+ * thread workspaceName through the whole tree. `buildPageLink` is used so the
+ * copied link points at the real web origin, never the desktop shell's
+ * `tauri.localhost`. */
 function pageUrl(pageId: string): string {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const slug = parts[0] || 'workspace';
-  return `${window.location.origin}/${slug}/${pageId}`;
+  return buildPageLink(slug, pageId);
 }
 
 /** Options bag passed to onSelect — mirrors the real shapes read at every
@@ -141,20 +145,40 @@ interface PageMenuActionProps {
   shortcut?: string;
   right?: ReactNode;
   muted?: boolean;
+  danger?: boolean;
   onClick: () => void;
 }
 
-function PageMenuAction({ icon: Icon, label, shortcut, right, muted, onClick }: PageMenuActionProps) {
+function PageMenuAction({ icon: Icon, label, shortcut, right, muted, danger, onClick }: PageMenuActionProps) {
   return (
-    <button
+    <motion.button
+      type="button"
+      whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-[13px] hover:bg-[var(--hover)] ${muted ? 'text-[var(--secondary)]' : 'text-[var(--text)]'}`}
+      className={`group flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-1.5 text-left text-[12px] font-medium transition-all duration-150 cursor-pointer select-none ${
+        danger
+          ? "text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-300"
+          : muted
+            ? "text-neutral-500 dark:text-neutral-400 hover:bg-black/[0.045] dark:hover:bg-white/[0.07] hover:text-neutral-800 dark:hover:text-white"
+            : "text-neutral-700 dark:text-neutral-200 hover:bg-black/[0.045] dark:hover:bg-white/[0.07] hover:text-neutral-950 dark:hover:text-white"
+      }`}
     >
-      <Icon size={15} className="text-[var(--secondary)]" />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {shortcut && <span className="text-[10px] text-[var(--muted)]">{shortcut}</span>}
+      <Icon
+        size={14}
+        className={`shrink-0 transition-colors ${
+          danger
+            ? "text-rose-500"
+            : "text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-700 dark:group-hover:text-neutral-200"
+        }`}
+      />
+      <span className="min-w-0 flex-1 truncate leading-tight">{label}</span>
+      {shortcut && (
+        <kbd className="ml-auto text-[9px] font-mono font-medium tracking-tight px-1.5 py-0.5 rounded-[4px] bg-black/[0.04] dark:bg-white/[0.08] text-neutral-400 dark:text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300 border border-black/[0.05] dark:border-white/[0.08] shadow-2xs leading-none shrink-0">
+          {shortcut}
+        </kbd>
+      )}
       {right}
-    </button>
+    </motion.button>
   );
 }
 
@@ -186,6 +210,7 @@ interface PremiumPageItemProps extends TreeHandlerProps {
   allBlocks: Page[];
   collapsedPages: Set<string>;
   activeId: string | null;
+  isDragging?: boolean;
 }
 
 function PremiumPageItemBase({
@@ -194,12 +219,20 @@ function PremiumPageItemBase({
   onAddInside, allBlocks, collapsedPages, activeId,
   onDuplicatePage, onRenamePage, onTrashPage, onCopyLink,
   onRemoveFromRecents, onToggleOffline, onToast,
+  isDragging,
 }: PremiumPageItemProps) {
   const { splitPage } = useTabs();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [actionsExpanded, setActionsExpanded] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    if (isDragging) {
+      isDraggingRef.current = true;
+    }
+  }, [isDragging]);
 
   const isAncestor = ancestors?.includes(page.id);
 
@@ -232,7 +265,16 @@ function PremiumPageItemBase({
           paddingRight: 8,
         }}
         onClick={(e) => {
+          if (isDraggingRef.current) {
+            isDraggingRef.current = false;
+            return;
+          }
           onSelect(page.id, selectOptionsFromEvent(e));
+        }}
+        onPointerUp={() => {
+          setTimeout(() => {
+            isDraggingRef.current = false;
+          }, 80);
         }}
         onAuxClick={(e) => {
           if (e.button !== 1) return;
@@ -281,6 +323,7 @@ function PremiumPageItemBase({
           />
           {page.favorite && <Star size={8} className="text-amber-500 shrink-0 inline fill-amber-500 ml-0.5" />}
           {page.isEncrypted && <Lock size={8} className="text-neutral-400 shrink-0 inline ml-0.5" />}
+          <ForkedBadge lineage={page.lineage} size={9} className="ml-0.5" />
         </div>
 
         {/* Right Content: Expand/Collapse Chevron */}
@@ -379,8 +422,10 @@ function PremiumPageItemBase({
         </AnimatePresence>
 
         {/* Floating Menu */}
-        <FloatingMenu open={menuOpen} anchorRef={menuButtonRef} onClose={() => setMenuOpen(false)}>
-          <div className="px-2 pb-2 text-xs font-semibold text-[var(--secondary)]">Page</div>
+        <FloatingMenu open={menuOpen} anchorRef={menuButtonRef} onClose={() => setMenuOpen(false)} width={268}>
+          <div className="px-2.5 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 select-none">
+            Page
+          </div>
           <PageMenuAction
             icon={AnimatedBookmark}
             label={page.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
@@ -392,31 +437,41 @@ function PremiumPageItemBase({
             muted
             onClick={() => { onRemoveFromRecents?.(page.id); setMenuOpen(false); }}
           />
-          <div className="my-2 border-t border-[var(--border)]" />
+          <div className="my-1 mx-1.5 h-[1px] bg-black/[0.05] dark:bg-white/[0.07]" />
           <PageMenuAction
             icon={AnimatedDownload}
             label="Available offline"
             onClick={() => { onToggleOffline?.(page.id); setMenuOpen(false); }}
             right={
-              <span className={`flex h-6 w-10 items-center rounded-full p-0.5 transition ${page.offline ? 'bg-[var(--accent)] justify-end' : 'bg-[var(--toggle)] justify-start'}`}>
-                <span className="h-5 w-5 rounded-full bg-[var(--surface-2)]" />
+              <span
+                className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-200 ease-in-out ${
+                  page.offline ? 'bg-[var(--accent)]' : 'bg-neutral-300 dark:bg-neutral-600'
+                }`}
+              >
+                <motion.span
+                  layout
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-xs ${
+                    page.offline ? 'translate-x-3' : 'translate-x-0'
+                  }`}
+                />
               </span>
             }
           />
-          <div className="my-2 border-t border-[var(--border)]" />
+          <div className="my-1 mx-1.5 h-[1px] bg-black/[0.05] dark:bg-white/[0.07]" />
           <PageMenuAction icon={Link2} label="Copy link" onClick={() => { onCopyLink?.(page.id); setMenuOpen(false); }} />
           <PageMenuAction icon={Copy} label="Duplicate" shortcut="Ctrl+D" onClick={() => { onDuplicatePage?.(page.id); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedSend} label="Rename" shortcut="Ctrl+Shift+R" onClick={() => { onRenamePage?.(page.id); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedUpload} label="Move to" shortcut="Ctrl+Shift+P" onClick={() => { onToast?.("Move to is not yet implemented"); setMenuOpen(false); }} />
-          <PageMenuAction icon={AnimatedTrash} label="Move to Trash" onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
-          <div className="my-2 border-t border-[var(--border)]" />
+          <PageMenuAction icon={AnimatedTrash} label="Move to Trash" danger onClick={() => { onTrashPage?.(page.id); setMenuOpen(false); }} />
+          <div className="my-1 mx-1.5 h-[1px] bg-black/[0.05] dark:bg-white/[0.07]" />
           <PageMenuAction icon={AnimatedUpload} label="Open in new tab" shortcut="Ctrl+Click" onClick={() => { onSelect(page.id, { openInNewTab: true }); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedCanvas} label="Open in new window" onClick={() => { window.open(pageUrl(page.id), '_blank', 'width=1200,height=800'); setMenuOpen(false); }} />
           <PageMenuAction icon={AnimatedSidebar} label="Open in side peek" shortcut="Alt+Click" onClick={() => { onSelect?.(page.id, { sidePeek: true }); setMenuOpen(false); }} />
 
           {/* Split Actions */}
-          <div className="my-2 border-t border-[var(--border)]" />
-          <div className="px-2 py-0.5 text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">
+          <div className="my-1 mx-1.5 h-[1px] bg-black/[0.05] dark:bg-white/[0.07]" />
+          <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 select-none">
             Split
           </div>
           <PageMenuAction icon={ArrowRight} label="Split right" onClick={() => { splitPage({ pageId: page.id, direction: 'right' }); setMenuOpen(false); }} />
@@ -446,8 +501,8 @@ function SortablePremiumItem({ id, focused, ...props }: SortablePremiumItemProps
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
-      <div {...listeners} className="cursor-grab active:cursor-grabbing select-none transition-transform duration-150 active:scale-[0.99]">
-        <PremiumPageItem {...props} />
+      <div {...listeners} className="cursor-grab active:cursor-grabbing select-none transition-transform duration-150 active:scale-[0.99] touch-none">
+        <PremiumPageItem {...props} isDragging={isDragging} />
       </div>
     </div>
   );
@@ -465,10 +520,10 @@ function DragGhost({ page, depth }: DragGhostProps) {
       animate={{ scale: 1.03, opacity: 1, y: 0 }}
       exit={{ scale: 0.95, opacity: 0 }}
       transition={{ type: "spring", stiffness: 450, damping: 28 }}
-      className="flex min-h-[30px] items-center gap-2 rounded-lg bg-[var(--surface-2)] border border-[var(--accent)] shadow-2xl px-3 py-1.5 text-[12px] text-[var(--text)] font-semibold backdrop-blur-md z-50 cursor-grabbing pointer-events-none"
+      className="flex min-h-[32px] items-center gap-2 rounded-xl bg-white/95 dark:bg-[#1c1c1e]/95 border border-sky-500/30 dark:border-sky-400/30 shadow-[0_20px_40px_-8px_rgba(0,0,0,0.35),0_0_0_1px_rgba(14,165,233,0.25)] px-3 py-1.5 text-[12px] text-neutral-900 dark:text-white font-medium backdrop-blur-2xl z-50 cursor-grabbing pointer-events-none ring-1 ring-sky-500/20"
     >
-      <GripVertical size={11} className="text-[var(--accent)] shrink-0" />
-      <div style={{ width: depth * 14 }} className="shrink-0" />
+      <GripVertical size={13} className="text-sky-500 shrink-0" />
+      <div style={{ width: depth * 10 }} className="shrink-0" />
       <PageIcon icon={page.icon} size={14} fallback={<span className="text-[12px] leading-none">📄</span>} />
       <span className="truncate max-w-[200px]">{page.title || 'Untitled'}</span>
     </motion.div>
@@ -515,8 +570,7 @@ export default function PageTree({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 4,
-        tolerance: 5,
+        distance: 5,
       }
     })
   );
@@ -659,6 +713,7 @@ export default function PageTree({
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveDragId(null)}
     >
       <SortableContext items={visibleIds} strategy={verticalListSortingStrategy}>
         <div

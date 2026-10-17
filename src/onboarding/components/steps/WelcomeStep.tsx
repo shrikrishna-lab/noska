@@ -4,7 +4,7 @@ import { C } from "../../theme";
 import { useOnboarding } from "../../hooks/useOnboarding";
 import { PrimaryBtn } from "../Buttons";
 
-const NoskaLogo = "/logo.png";
+const NoskaLogo = "/logo-256.webp";
 
 export default function WelcomeStep() {
   const { next } = useOnboarding();

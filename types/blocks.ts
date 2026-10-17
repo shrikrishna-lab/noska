@@ -150,14 +150,21 @@ export interface TableBlock extends BaseBlock {
   colWidths?: string[];
 }
 
-/** Code block — src/utils/helpers.js blockFor('code', ...) sets
- * `props.language = 'plain'` (mirrored onto blockModel.js's BLOCK_TYPES.code
- * default too), and src/components/editor/CodeBlock.jsx reads/writes
- * `block.language` directly (not `block.properties.language`) via the
- * generic onPatch merge-patch. src/components/Editor.jsx's "turn into"
- * slash-command handler for code blocks also writes `language: "plain"`
- * at the top level. Found via grep across every block renderer — no other
- * block type reads a top-level `language` field. */
+/** Code block — src/utils/helpers.ts blockFor('code', ...) sets
+ * `props.language = PLAIN_LANGUAGE` ("plaintext", mirrored onto
+ * blockModel.ts's BLOCK_TYPES.code default too), and
+ * src/components/editor/CodeBlock.tsx reads/writes `block.language`
+ * directly (not `block.properties.language`) via the generic onPatch
+ * merge-patch. src/components/Editor.tsx's "turn into" slash-command
+ * handler for code blocks also writes `language: "plaintext"` at the top
+ * level. Found via grep across every block renderer — no other block type
+ * reads a top-level `language` field.
+ *
+ * The value is normalized through src/utils/codeLanguage.ts on both read and
+ * write. Older documents (and markdown/Notion imports) persist non-canonical
+ * spellings like "plain", "js" or "visual basic"; highlight.js throws
+ * `Unknown language: <id>` on any id it does not register, which used to
+ * propagate out of render and crash the page via the ErrorBoundary. */
 export interface CodeBlockData extends BaseBlock {
   type: "code";
   language: string;

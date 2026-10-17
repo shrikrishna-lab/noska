@@ -3,6 +3,7 @@ import { useDocumentPermissions, useCollabSession, useComments, useVersions, use
 import { formatAction } from './activity';
 import { searchUsersByUsername, type UserSearchResult } from '../../lib/supabaseService';
 import type { CollabActivityEntry, CollabRole, CollabSession, DocumentPermission } from './types';
+import { UserAvatar } from '../../components/UserAvatar';
 
 interface CollabPanelProps {
   pageId: string;
@@ -46,12 +47,12 @@ notificationCommentId, locked = false }: CollabPanelProps) {
     if (notificationCommentId) setTab('comments');
   }, [notificationCommentId]);
 
-  const perms = useDocumentPermissions(pageId, userId);
+  const perms = useDocumentPermissions(tab === 'people' || tab === 'comments' ? pageId : null, userId);
   const session = useCollabSession(pageId, userId);
-  const comments = useComments(pageId);
-  const versions = useVersions(pageId);
+  const comments = useComments(tab === 'comments' ? pageId : null);
+  const versions = useVersions(tab === 'versions' ? pageId : null);
   const notifs = useNotifications(userId);
-  const liveUsers = usePresenceUsers(pageId);
+  const liveUsers = usePresenceUsers(tab === 'people' ? pageId : null);
 
   // Merge realtime presence (instant) with DB sessions (works even if a
   // peer's broadcast is flaky). Realtime wins for status/avatar/color; DB-only
@@ -353,13 +354,11 @@ function PeopleTab({ sessions, otherUsers, permission, allPermissions, isOwner, 
                         resolved?.userId === u.userId ? 'bg-[var(--hover)]' : 'hover:bg-[var(--hover)]'
                       }`}
                     >
-                      {u.avatarUrl ? (
-                        <img src={u.avatarUrl} alt="" className="w-6 h-6 shrink-0 rounded-full object-cover" />
-                      ) : (
-                        <span className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-[var(--accent)]">
-                          {(u.userName || u.username).charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <UserAvatar
+                        name={u.userName || u.username}
+                        avatar={u.avatarUrl}
+                        size={24}
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs text-[var(--text)]">{u.userName}</span>
                         <span className="block truncate text-[10px] text-[var(--muted)]">@{u.username}</span>
@@ -516,15 +515,11 @@ function CommentCard({ comment, userId, onResolve, onUnresolve, onDelete }: {
   return (
     <div data-comment-id={comment.id} className={`group p-2.5 rounded-lg border ${comment.resolved ? 'bg-[var(--bg)] border-[var(--border)]' : 'bg-[var(--surface)] border-[var(--border)]'}`}>
       <div className="flex items-center gap-2 mb-1">
-        {comment.user_avatar ? (
-          <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" style={{ backgroundColor: 'var(--hover)' }}>
-            {comment.user_avatar}
-          </span>
-        ) : (
-          <div className="w-5 h-5 rounded-full bg-[var(--hover)] flex items-center justify-center text-[9px] font-bold text-[var(--text)]">
-            {comment.user_name?.charAt(0)?.toUpperCase() || '?'}
-          </div>
-        )}
+        <UserAvatar
+          name={comment.user_name}
+          avatar={comment.user_avatar}
+          size={20}
+        />
         <span className="text-xs font-medium text-[var(--text)]">{comment.user_name}</span>
         <span className="text-[10px] text-[var(--muted)] ml-auto" title={new Date(comment.created_at).toLocaleString()}>
           {timeAgo(comment.created_at)}

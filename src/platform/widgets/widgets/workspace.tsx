@@ -3,6 +3,7 @@
  * Pinned Items.
  */
 import React, { useEffect, useMemo, useState } from "react";
+import PageIcon from "@/components/PageIcon";
 import { AnimatePresence, motion } from "framer-motion";
 import { Building2, Pin, PinOff, Plus, Star } from "lucide-react";
 import { timeAgo } from "../../../utils/helpers";
@@ -205,7 +206,7 @@ export function PinnedItemsWidget({ ctx }: WidgetProps) {
             >
               <button onClick={() => ctx.actions.onSelect(page.id)} className="min-w-0 flex-1 text-left cursor-pointer">
                 <span className="flex items-center gap-1.5">
-                  <span className="text-sm">{page.icon || "📝"}</span>
+                  <PageIcon icon={page.icon} size={14} fallback="📝" />
                   <span className="truncate text-[11.5px] font-semibold text-[var(--text)]">
                     {page.title || "Untitled"}
                   </span>
@@ -234,7 +235,7 @@ export function PinnedItemsWidget({ ctx }: WidgetProps) {
               }}
               className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-medium text-[var(--text)] hover:bg-[var(--panel)] cursor-pointer"
             >
-              <span>{page.icon || "📝"}</span>
+              <span><PageIcon icon={page.icon} size={18} fallback="📝" /></span>
               <span className="truncate">{page.title || "Untitled"}</span>
             </button>
           ))}

@@ -19,6 +19,7 @@ import {
   classifyNetworkError,
   configError,
 } from './core/AIError.js';
+import { AI_PROXY_BASE, resolveProxiedUrl } from './core/providerProxy';
 import {
   parseOpenAIStream,
   parseOpenAIResponsesStream,
@@ -93,32 +94,17 @@ export interface AIProvider {
 const CONNECTION_TIMEOUT = 30000;  // 30s connection timeout
 const STREAM_INACTIVITY_TIMEOUT = 90000; // 90s stream inactivity timeout
 
-const PROXY_MAP: Record<string, string> = {
-  "https://opencode.ai/zen/v1": "/api/proxy/opencode",
-  "https://openrouter.ai/api/v1": "/api/proxy/openrouter",
-  "https://api.anthropic.com/v1": "/api/proxy/anthropic",
-  "https://api.openai.com/v1": "/api/proxy/openai",
-  "https://generativelanguage.googleapis.com/v1beta": "/api/proxy/gemini",
-  "https://api.groq.com/openai/v1": "/api/proxy/groq",
-  "https://api.deepseek.com/v1": "/api/proxy/deepseek",
-  "https://api.mistral.ai/v1": "/api/proxy/mistral",
-  "https://api.together.xyz/v1": "/api/proxy/together",
-  "https://api.x.ai/v1": "/api/proxy/xai",
-  "https://integrate.api.nvidia.com/v1": "/api/proxy/nvidia",
-};
-
 /**
- * Server-side relay (supabase/functions/ai-proxy) for providers that
- * block direct browser calls — NVIDIA NIM sends no CORS headers at all
- * (and it is Noska's default provider), so its direct calls always fail
- * in the webview and need the relay. Bring-your-own-key: the user's key
- * rides in x-noska-provider-key; nothing is stored server-side.
+ * Server-side relay (supabase/functions/ai-proxy) for providers that block
+ * direct browser calls — NVIDIA NIM sends no CORS headers at all (and it is
+ * Noska's default provider), so its direct calls always fail in the webview
+ * and need the relay. Bring-your-own-key: the user's key rides in
+ * x-noska-provider-key; nothing is stored server-side.
+ *
+ * Routing lives in core/providerProxy so the discovery adapters and
+ * BaseAdapter fetch the same relay this does — they previously rewrote to a
+ * same-origin `/api/proxy/*` path that only exists in the Vite dev server.
  */
-const AI_PROXY_BASE: string | null = (() => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  return supabaseUrl ? `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/ai-proxy` : null;
-})();
-const AI_PROXY_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || "";
 
 /**
  * Fetch wrapper that adds:
@@ -155,36 +141,160 @@ async function fetchWithTimeout(
     // CORS/network fallback: relay through the ai-proxy edge function.
     // A browser CORS failure always surfaces as a network TypeError, so
     // this path is only taken when the direct call never completed.
-    if (AI_PROXY_BASE && !composedSignal.aborted) {
-      for (const [targetUrl, proxyPrefix] of Object.entries(PROXY_MAP)) {
-        if (url.startsWith(targetUrl)) {
-          const name = proxyPrefix.replace("/api/proxy/", "");
-          const rest = url.slice(targetUrl.length); // "/chat/completions" (+query)
-          const headers = new Headers(init.headers);
-          const providerKey =
-            headers.get("Authorization") ||
-            headers.get("x-api-key") ||
-            headers.get("x-goog-api-key") ||
-            "";
-          if (providerKey) {
-            headers.set("x-noska-provider-key", providerKey.replace(/^Bearer\s+/i, ""));
-            headers.delete("Authorization");
-          }
-          if (AI_PROXY_ANON_KEY) headers.set("Authorization", `Bearer ${AI_PROXY_ANON_KEY}`);
-          try {
-            return await fetch(`${AI_PROXY_BASE}/${name}${rest}`, {
-              ...init,
-              headers,
-              signal: composedSignal,
-            });
-          } catch {
-            break; // relay unreachable too — surface the original error
-          }
-        }
+    const proxied = AI_PROXY_BASE && !composedSignal.aborted
+      ? resolveProxiedUrl(url, init.method ?? "GET", init.headers)
+      : null;
+    if (proxied?.url) {
+      try {
+        return await fetch(proxied.url, {
+          ...init,
+          headers: proxied.headers,
+          signal: composedSignal,
+        });
+      } catch {
+        throw err; // relay unreachable too — surface the original error
       }
     }
     throw err;
   }
+}
+
+export interface ImageGenerationRequest {
+  providerId: string;
+  apiKey?: string;
+  baseUrl?: string;
+  model: string;
+  prompt: string;
+  size?: string;
+  quality?: string;
+  signal?: AbortSignal;
+}
+
+export interface GeneratedImage {
+  dataUrl: string;
+  mimeType: string;
+  revisedPrompt?: string;
+  provider: string;
+  model: string;
+}
+
+export function supportsImageGeneration(providerId: string, model: string, capability?: boolean): boolean {
+  if (capability === true) return true;
+  const id = String(model || "").toLowerCase();
+  if (providerId === "openai") return /dall-e|gpt-image/.test(id);
+  if (providerId === "gemini") return /imagen|image/.test(id);
+  if (providerId === "together") return /flux|stable-diffusion|sdxl/.test(id);
+  if (providerId === "openrouter" || providerId.startsWith("custom_")) return /image|imagen|flux|dall-e/.test(id);
+  return false;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  if (typeof FileReader !== "undefined") {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("Unable to read generated image"));
+      reader.readAsDataURL(blob);
+    });
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return `data:${blob.type || "image/png"};base64,${btoa(binary)}`;
+}
+
+function normalizeImageMimeType(value: unknown): string {
+  const mime = String(value || "").toLowerCase();
+  if (mime.includes("png")) return "image/png";
+  if (mime.includes("webp")) return "image/webp";
+  if (mime.includes("gif")) return "image/gif";
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "image/jpeg";
+  return mime.startsWith("image/") ? mime : "image/png";
+}
+
+function imageDataUrlFromBase64(value: string, mimeType = "image/png"): string {
+  return `data:${normalizeImageMimeType(mimeType)};base64,${value}`;
+}
+
+async function resolveImagePayload(response: Response, request: ImageGenerationRequest): Promise<GeneratedImage> {
+  const payload = await response.json().catch(() => null) as any;
+  const openAiBase64 = payload?.data?.[0]?.b64_json || payload?.data?.[0]?.image_base64;
+  const geminiPart = payload?.candidates?.[0]?.content?.parts?.find((part: any) => part?.inlineData?.data || part?.inline_data?.data);
+  const geminiBase64 = geminiPart?.inlineData?.data || geminiPart?.inline_data?.data;
+  const mimeType = normalizeImageMimeType(
+    payload?.data?.[0]?.mime_type ||
+    payload?.data?.[0]?.output_format ||
+    geminiPart?.inlineData?.mimeType ||
+    geminiPart?.inlineData?.mime_type ||
+    geminiPart?.inline_data?.mime_type ||
+    "image/png"
+  );
+  const base64 = openAiBase64 || geminiBase64;
+  if (base64) {
+    return {
+      dataUrl: imageDataUrlFromBase64(String(base64), mimeType),
+      mimeType,
+      revisedPrompt: payload?.data?.[0]?.revised_prompt,
+      provider: request.providerId,
+      model: request.model,
+    };
+  }
+
+  const remoteUrl = payload?.data?.[0]?.url || payload?.url;
+  if (remoteUrl && /^https:\/\//i.test(String(remoteUrl))) {
+    const imageResponse = await fetch(String(remoteUrl), { signal: request.signal });
+    if (imageResponse.ok) {
+      const blob = await imageResponse.blob();
+      if (blob.type.startsWith("image/")) {
+        return {
+          dataUrl: await blobToDataUrl(blob),
+          mimeType: blob.type,
+          provider: request.providerId,
+          model: request.model,
+        };
+      }
+    }
+  }
+
+  throw new Error(`${request.providerId} returned no image data`);
+}
+
+export async function generateImage(request: ImageGenerationRequest): Promise<GeneratedImage> {
+  const prompt = String(request.prompt || "").trim();
+  if (!prompt) throw new Error("Image generation needs a prompt");
+  const model = String(request.model || "").trim();
+  if (!model) throw new Error("Image generation needs a model");
+  const base = String(request.baseUrl || "").replace(/\/+$/, "");
+  if (!base) throw new Error(`Provider ${request.providerId} has no image API base URL`);
+  const isGemini = request.providerId === "gemini";
+  const url = isGemini
+    ? `${base}/models/${encodeURIComponent(model.replace(/^models\//, ""))}:generateContent`
+    : `${base}/images/generations`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (request.apiKey) {
+    if (isGemini) headers["x-goog-api-key"] = request.apiKey;
+    else headers.Authorization = `Bearer ${request.apiKey}`;
+  }
+  const body = isGemini
+    ? {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+      }
+    : {
+        model,
+        prompt,
+        n: 1,
+        ...(request.size ? { size: request.size } : {}),
+        ...(request.quality ? { quality: request.quality } : {}),
+        ...(request.providerId === "openai" && /dall-e/i.test(model) ? { response_format: "b64_json" } : {}),
+      };
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  }, request.signal, 120000);
+  await checkResponse(response, request.providerId, model);
+  return await resolveImagePayload(response, request);
 }
 
 /** Check response status and throw AIError if not ok. Also guards against
@@ -333,8 +443,57 @@ export function extractGeminiToolCalls(data: any): string {
 
 export type ZenProtocol = "anthropic_messages" | "responses" | "openai_chat";
 
+/**
+ * Reduce a stored model identifier to the bare upstream model id.
+ *
+ * Model ids reach us in three shapes: the bare upstream id (`claude-sonnet-5`),
+ * a composite registry id (`opencode_zen/claude-sonnet-5`, built by
+ * ModelDiscoveryService._enrichModel), and a colon-scoped adapter id
+ * (`opencode_zen:claude-sonnet-5`, built by OpenCodeZenAdapter.normalizeModel).
+ * All three are selectable in the UI and all three can reach here — notably
+ * when the model registry is still empty (discovery has not finished, or the
+ * catalog came back empty), because ModelRegistry.validateModel returns the
+ * requested id unchanged in that case.
+ *
+ * Protocol detection is a strict `startsWith` chain, so an un-stripped
+ * composite id silently fails every prefix test and falls through to
+ * `/chat/completions`. Zen answers that with a 401 "Model ... is not
+ * supported", which classifyProviderError then reports as an invalid API key —
+ * sending users to re-enter a perfectly good key. Strip first, always.
+ */
+export function stripProviderPrefix(modelId: string): string {
+  if (!modelId) return "";
+  let id = modelId.trim();
+  // Colon-scoped adapter id: "<provider>:<model>". Only strip a known
+  // provider name so a model id that legitimately contains a colon survives.
+  const colon = id.indexOf(":");
+  if (colon > 0) {
+    const head = id.slice(0, colon);
+    if (/^[a-z][a-z0-9_]*$/i.test(head) && KNOWN_PROVIDER_IDS.has(head.toLowerCase())) {
+      id = id.slice(colon + 1);
+    }
+  }
+  // Slash-scoped registry id: "<provider>/<model>". Zen model ids contain no
+  // slashes of their own, so a leading known provider segment is always a prefix.
+  const slash = id.indexOf("/");
+  if (slash > 0 && KNOWN_PROVIDER_IDS.has(id.slice(0, slash).toLowerCase())) {
+    id = id.slice(slash + 1);
+  }
+  // OpenRouter-style "vendor/model" and Google's "models/model" are not
+  // prefixes we own, but Zen never uses either, so anything before the last
+  // slash is still not part of the id.
+  id = id.replace(/^models\//i, "");
+  return id;
+}
+
+const KNOWN_PROVIDER_IDS = new Set([
+  "opencode_zen", "opencode", "openrouter", "anthropic", "openai", "gemini",
+  "groq", "deepseek", "mistral", "together", "xai", "nvidia", "ollama",
+  "lmstudio", "zen",
+]);
+
 export function resolveZenProtocol(modelId: string): ZenProtocol {
-  const id = modelId.toLowerCase();
+  const id = stripProviderPrefix(modelId).toLowerCase();
   if (id.startsWith("claude-") || id.startsWith("qwen")) return "anthropic_messages";
   if (id.startsWith("gpt-") || id.startsWith("grok-") || id.startsWith("muse-")) return "responses";
   return "openai_chat";
@@ -1219,20 +1378,32 @@ const PROVIDERS: Record<string, AIProvider> = {
     requiresKey: true,
     baseUrl: "https://opencode.ai/zen/v1",
     keyPlaceholder: "sk-...",
+    // Verified against GET /models on 2026-10-10. This static list is only a
+// placeholder for when discovery has not run yet — live discovery supersedes
+// it. It previously named deepseek-v4-flash-free (400 "Model is
+// unavailable") and mimo-v2.5-free (410 ModelDeprecated), both of which no
+// longer exist.
+//
+// Free models are listed for completeness but are NOT usable from a
+    // third-party client: as of 2026-10-10 Zen answers 403 FreeTierError
+    // ("OpenCode's free tier can only be used from within OpenCode") for all
+    // ten of them, including space-bunny-free, regardless of a valid API key.
+    // See models/providers/zenAvailability.ts.
     models: [
-      { id: "nemotron-3.5-lightning-free", name: "Nemotron 3.5 Lightning [Free ⚡]", context: 131072 },
-      { id: "mimo-v2.6-flash-free", name: "MiMo V2.6 Flash [Free]", context: 131072 },
-      { id: "muse-spark-1.3-contributor-free", name: "Muse Spark 1.3 Contributor [Free]", context: 200000 },
-      { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash [Free]", context: 163840 },
-      { id: "mimo-v2.5-free", name: "MiMo V2.5 [Free]", context: 131072 },
-      { id: "big-pickle", name: "Big Pickle [Free]", context: 131072 },
       { id: "claude-sonnet-5", name: "Claude Sonnet 5 (Zen)", context: 200000 },
-      { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Zen)", context: 200000 }
+      { id: "gpt-5.6-sol", name: "GPT-5.6 Sol (Zen)", context: 200000 },
+      { id: "gpt-5.6-terra", name: "GPT-5.6 Terra (Zen)", context: 200000 },
+      { id: "claude-opus-5", name: "Claude Opus 5 (Zen)", context: 200000 },
+      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Zen)", context: 1048576 },
+      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro (Zen)", context: 163840 },
+      { id: "qwen3.8-flash", name: "Qwen 3.8 Flash (Zen)", context: 131072 },
     ],
-    defaultModel: "nemotron-3.5-lightning-free",
+    // No free model is reachable from a third-party client, so the default has
+    // to be a paid one. This requires credit on the Zen account.
+    defaultModel: "claude-sonnet-5",
     async send({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, tools, onUsage, signal }) {
       const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
-      const modelId = model || this.defaultModel;
+      const modelId = stripProviderPrefix(model || this.defaultModel);
       if (!modelId) {
         throw new AIError({
           type: "config",
@@ -1311,7 +1482,7 @@ const PROVIDERS: Record<string, AIProvider> = {
     },
     async *stream({ apiKey, baseUrl, model, system, messages, maxTokens = 2048, effort, temperature, signal, tools }) {
       const url = (baseUrl || this.baseUrl || "https://opencode.ai/zen/v1").replace(/\/+$/, "");
-      const modelId = model || this.defaultModel;
+      const modelId = stripProviderPrefix(model || this.defaultModel);
       if (!modelId) {
         throw new AIError({
           type: "config",

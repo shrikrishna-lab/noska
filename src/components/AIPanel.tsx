@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import PageIcon from "./PageIcon";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Loader2, PanelLeftClose, PanelLeft, PanelRightOpen, PanelRightClose,
@@ -11,7 +12,8 @@ import { AIError, isCancelled } from "../ai/core/AIError";
 import { getAgentList, getAgent, buildAgentPrompt } from "../ai/agents";
 import { buildContext } from "../ai/ContextBuilder";
 import { textToBlocks, uid, now } from "../utils/helpers";
-import { hasToolCalls, stripToolCalls, executeAllToolCalls } from "../ai/tools";
+import { hasToolCalls, stripToolCalls } from "../ai/tools";
+import { agentRuntime, FULL_AUTO_PERMISSIONS } from "../ai/runtime";
 import { realtimeCollab } from "../lib/realtimeCollab";
 import { auditEngine } from "../lib/auditEngine";
 import { capture } from "../lib/posthog";
@@ -39,18 +41,19 @@ import { isDesktop, isMobile } from "../platform";
 
 const SPRING_APPLE = { type: "spring" as const, stiffness: 440, damping: 30, mass: 0.8 };
 
-export function getSafePageIcon(icon?: string | null) {
-  if (!icon) return <span className="text-xs">📄</span>;
-  if (icon.startsWith("data:") || icon.startsWith("http")) {
-    return <img src={icon} alt="" className="w-3.5 h-3.5 object-cover rounded-xs" />;
-  }
-  return <span className="text-xs">{icon}</span>;
-}
-
-export function getSafePageTitle(title?: string | null) {
-  if (!title || title.startsWith("data:") || !title.trim()) return "Untitled";
-  return title;
-}
+/**
+ * Page icon for the AI panel's page list.
+ *
+ * This used to be a local copy of the URL/lucide/text decision with no
+ * `lucide:` branch at all, so a page icon of "lucide:CassetteTape" printed that
+ * identifier as visible text. `pages.icon` is written in five different shapes
+ * (URL, `lucide:Name`, bare `Name`, emoji, legacy junk), and every consumer has
+ * to understand all of them. PageIcon is that one implementation; this defers
+ * to it so the two cannot drift.
+ */
+export { getSafePageIcon, getSafePageTitle };
+import { getSafePageIcon, getSafePageTitle } from "../utils/pageLabels";
+import { PageContextPicker } from "./ai/PageContextPicker";
 
 interface ChatPanelMessage {
   id?: string;
@@ -64,7 +67,7 @@ interface ChatPanelMessage {
   status?: 'streaming' | 'completed' | 'cancelled' | 'error';
 }
 
-type ToolCallResult = Awaited<ReturnType<typeof executeAllToolCalls>>[number];
+type ToolCallResult = Awaited<ReturnType<typeof agentRuntime.executeToolCalls>>[number];
 
 interface AIPanelProps {
   open: boolean;
@@ -199,13 +202,13 @@ export default function AIPanel({
 
   // Load audit events
   useEffect(() => {
-    if (!page?.id) return;
+    if (!open || !page?.id) return;
     auditEngine.getPageAudit(page.id, { limit: 20 }).then(setAuditEvents).catch(() => { });
-  }, [page?.id]);
+  }, [open, page?.id]);
 
   // Typing indicator listener
   useEffect(() => {
-    if (!page?.id || !realtimeCollab.isJoined()) return;
+    if (!open || !page?.id || !realtimeCollab.isJoined()) return;
     const unsub = realtimeCollab.on("typing", ({ pageId, userId, userName }) => {
       if (pageId !== page?.id) return;
       setTypingUsers((prev) => {
@@ -217,7 +220,7 @@ export default function AIPanel({
       }, 3000);
     });
     return unsub;
-  }, [page?.id]);
+  }, [open, page?.id]);
 
   // Presence listener
   useEffect(() => {
@@ -385,7 +388,7 @@ export default function AIPanel({
           options: { ...currentAgent.context, includeMemory: true, tokenBudget: 1500 },
           memory: null
         });
-        const systemPrompt = buildAgentPrompt(activeAgent, contextString, { tools: true });
+        const systemPrompt = buildAgentPrompt(activeAgent, contextString, { tools: true, imageGeneration: aiManager.supportsImageGeneration() });
 
         activity.setActivity('thinking');
 
@@ -479,7 +482,14 @@ export default function AIPanel({
 
         if (hasToolCalls(responseText) && toolContext) {
           activity.setActivity('thinking');
-          const results: ToolCallResult[] = await executeAllToolCalls(responseText, toolContext);
+          const results: ToolCallResult[] = await agentRuntime.executeToolCalls(responseText, {
+            goal: text,
+            sourceId: "noska-ai",
+            sourceKind: "ai",
+            trigger: "manual",
+            permissions: FULL_AUTO_PERMISSIONS,
+            getContext: () => toolContext as { currentPage?: Page; pages: Page[]; actions: Record<string, (...args: unknown[]) => unknown> },
+          });
           setToolResults(results);
 
           const toolResultText = results.map((r: { name: string; error?: string; result?: unknown }) => {
@@ -851,7 +861,7 @@ export default function AIPanel({
                   className="w-4 h-4 rounded-full flex items-center justify-center text-[10.5px] shrink-0"
                   style={{ backgroundColor: `${currentAgent.color}25`, color: currentAgent.color }}
                 >
-                  {currentAgent.icon || "✦"}
+                  <PageIcon icon={currentAgent.icon} size={14} fallback="✦" />
                 </span>
                 <span className="text-[12px] font-semibold tracking-tight">{currentAgent.name}</span>
                 <ChevronDown size={11} className={`text-muted-foreground opacity-60 transition-transform duration-200 ${agentMenuOpen ? "rotate-180" : ""}`} />
@@ -895,186 +905,12 @@ export default function AIPanel({
 
             {/* Interactive Document Page Switcher Pill */}
             {page && (
-              <div className="relative">
-                <motion.button
-                  type="button"
-                  onClick={() => setPageMenuOpen(!pageMenuOpen)}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/[0.035] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-black/[0.07] dark:border-white/[0.08] text-xs font-medium text-foreground transition-all shadow-2xs cursor-pointer select-none group"
-                  title="Click to switch active document context"
-                >
-                  <span className="flex items-center shrink-0">{getSafePageIcon(page.icon)}</span>
-                  <span className="truncate max-w-[130px] sm:max-w-[160px] font-medium text-[12px]">{getSafePageTitle(page.title)}</span>
-                  <ChevronDown size={11} className={`text-muted-foreground opacity-60 transition-transform duration-200 ${pageMenuOpen ? "rotate-180" : ""}`} />
-                </motion.button>
-
-                <AnimatePresence>
-                  {pageMenuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9, y: 6, filter: "blur(8px)" }}
-                      animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-                      exit={{ opacity: 0, scale: 0.9, y: 6, filter: "blur(6px)" }}
-                      transition={SPRING_APPLE}
-                      onMouseLeave={() => setHoveredPage(null)}
-                      className="absolute left-0 top-full mt-2 w-72 sm:w-80 origin-top-left rounded-2xl border border-black/[0.08] dark:border-white/[0.09] bg-[#fdfcfb]/95 dark:bg-[#16171a]/95 p-2 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18),0_0_1px_1px_rgba(0,0,0,0.04)] dark:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_1px_1px_rgba(255,255,255,0.06)] backdrop-blur-2xl z-50 space-y-1.5"
-                    >
-                      {/* Search Bar */}
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08]">
-                        <Search size={12} className="text-muted-foreground shrink-0" />
-                        <input
-                          type="text"
-                          autoFocus
-                          value={pageSearch}
-                          onChange={(e) => setPageSearch(e.target.value)}
-                          placeholder="Search pages..."
-                          className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-                        />
-                      </div>
-
-                      {/* Page List with Live Content Preview */}
-                      <div className="max-h-64 overflow-y-auto scrollbar-thin space-y-1 pt-1">
-                        {filteredPages.map((p) => {
-                          const displayTitle = getSafePageTitle(p.title);
-                          
-                          // Extract inside text preview snippet
-                          const snippet = (p.blocks || [])
-                            .slice(0, 4)
-                            .map((b: any) => b.text || "")
-                            .filter(Boolean)
-                            .join(" ")
-                            .slice(0, 85);
-
-                          const isHovered = hoveredPage?.id === p.id;
-
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onMouseEnter={() => setHoveredPage(p)}
-                              onClick={() => {
-                                onSelectPage?.(p);
-                                setPageMenuOpen(false);
-                                setHoveredPage(null);
-                                setPageSearch("");
-                                onToast?.(`Switched active context to “${displayTitle}”`);
-                              }}
-                              className={`w-full flex items-start gap-2.5 p-2 rounded-xl text-left transition cursor-pointer ${
-                                p.id === page.id
-                                  ? "bg-black/[0.06] dark:bg-white/[0.10] border border-black/[0.08] dark:border-white/[0.12] shadow-2xs"
-                                  : isHovered
-                                  ? "bg-black/[0.04] dark:bg-white/[0.06] text-foreground border border-black/[0.05] dark:border-white/[0.07]"
-                                  : "text-muted-foreground hover:text-foreground border border-transparent"
-                              }`}
-                            >
-                              {/* Icon / Thumbnail */}
-                              <div className="w-5 h-5 rounded-md bg-black/[0.04] dark:bg-white/[0.08] flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
-                                {getSafePageIcon(p.icon)}
-                              </div>
-
-                              {/* Title & Inside Live Snippet Preview */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-1">
-                                  <span className={`text-xs truncate font-medium ${p.id === page.id ? "text-foreground font-semibold" : ""}`}>
-                                    {displayTitle}
-                                  </span>
-                                  {p.id === page.id && <Check size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />}
-                                </div>
-                                <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5 leading-snug">
-                                  {snippet || "No content inside yet"}
-                                </p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                        {filteredPages.length === 0 && (
-                          <div className="text-center py-4 text-[11px] text-muted-foreground">
-                            No matching pages found
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ── Floating Live Inside Page Hover Preview Card ── */}
-                      <AnimatePresence>
-                        {hoveredPage && (
-                          <motion.div
-                            initial={{ opacity: 0, x: 8, scale: 0.97 }}
-                            animate={{ opacity: 1, x: 0, scale: 1 }}
-                            exit={{ opacity: 0, x: 8, scale: 0.97 }}
-                            transition={{ duration: 0.15 }}
-                            className="hidden md:block absolute left-[calc(100%+8px)] top-0 w-80 rounded-2xl border border-black/[0.08] dark:border-white/[0.09] bg-[#fdfcfb]/95 dark:bg-[#16171a]/95 p-4 shadow-2xl backdrop-blur-2xl z-50 text-left space-y-3"
-                          >
-                            {/* Header / Cover */}
-                            <div className="space-y-1.5 pb-2 border-b border-black/[0.06] dark:border-white/[0.08]">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-lg bg-black/[0.04] dark:bg-white/[0.08] flex items-center justify-center text-sm shrink-0">
-                                  {getSafePageIcon(hoveredPage.icon)}
-                                </div>
-                                <h4 className="text-xs font-bold text-foreground truncate">
-                                  {getSafePageTitle(hoveredPage.title)}
-                                </h4>
-                              </div>
-                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                <span>{(hoveredPage.blocks || []).length} blocks</span>
-                                <span>•</span>
-                                <span>Active Workspace Document</span>
-                              </div>
-                            </div>
-
-                            {/* Formatted Inside Blocks Live Snapshot */}
-                            <div className="space-y-1.5 max-h-56 overflow-y-auto scrollbar-thin text-xs">
-                              {(hoveredPage.blocks || []).length > 0 ? (
-                                (hoveredPage.blocks || []).slice(0, 6).map((b: any, idx: number) => {
-                                  const text = b.text || "";
-                                  if (!text.trim()) return null;
-
-                                  if (b.type === "heading_1" || b.type === "heading_2") {
-                                    return (
-                                      <p key={b.id || idx} className="font-bold text-foreground text-xs pt-1">
-                                        {text}
-                                      </p>
-                                    );
-                                  }
-                                  if (b.type === "bullet_list" || b.type === "todo") {
-                                    return (
-                                      <div key={b.id || idx} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                                        <span className="text-purple-600 dark:text-purple-400">•</span>
-                                        <span className="line-clamp-2 leading-relaxed">{text}</span>
-                                      </div>
-                                    );
-                                  }
-                                  if (b.type === "callout") {
-                                    return (
-                                      <div key={b.id || idx} className="p-2 rounded-lg bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08] text-[11px] text-foreground">
-                                        {text}
-                                      </div>
-                                    );
-                                  }
-                                  return (
-                                    <p key={b.id || idx} className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
-                                      {text}
-                                    </p>
-                                  );
-                                })
-                              ) : (
-                                <div className="py-6 text-center text-xs text-muted-foreground italic">
-                                  Empty page — no text content yet
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Footer Tag */}
-                            <div className="pt-2 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[10px] text-muted-foreground font-medium">
-                              <span className="text-purple-600 dark:text-purple-400 font-semibold">✦ Click to select</span>
-                              <span>Live Preview</span>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <PageContextPicker
+                page={page}
+                pages={pages}
+                onSelectPage={onSelectPage}
+                onToast={onToast}
+              />
             )}
           </div>
 

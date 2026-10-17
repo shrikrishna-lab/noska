@@ -5,6 +5,7 @@ import {
   ThumbsDown, Star, GitBranch
 } from 'lucide-react';
 import { renderAIMarkdown } from '../../utils/aiMarkdownRenderer';
+import { splitThinking } from '../../utils/thinking';
 
 function UserActions({
   text,
@@ -253,33 +254,26 @@ function AiMessageActions({
   );
 }
 
-function parseThinking(text: string) {
+/**
+ * Split a raw assistant message into its reasoning and its visible prose.
+ * Exported for tests — the multi-block <think> handling is subtle and regressed
+ * silently once already.
+ *
+ * The implementation lives in utils/thinking so every renderer strips the same
+ * blocks; this used to be a local copy, which let AIRightPanel show raw
+ * reasoning to the user.
+ */
+export function parseThinking(text: string) {
   if (!text) return { thought: null, cleanText: text };
 
   // Strip tool execution tags so raw syntax is never shown in message text
-  let sanitized = text
+  const sanitized = text
     .replace(/<<TOOL:[\s\S]*?>>[\s\S]*?<<\/TOOL>>/gi, '')
     .replace(/<<TOOL:[\s\S]*?>>/gi, '')
     .replace(/<<\/TOOL>>/gi, '')
     .trim();
 
-  // Match <think>...</think>
-  const thinkMatch = sanitized.match(/<think>([\s\S]*?)<\/think>/i);
-  if (thinkMatch) {
-    const thought = thinkMatch[1].trim();
-    const cleanText = sanitized.replace(/<think>[\s\S]*?<\/think>/i, '').trim();
-    return { thought, cleanText: cleanText || (thought ? '' : sanitized) };
-  }
-
-  // Match [Reasoning Process]... or [Thinking: ...]
-  const bracketMatch = sanitized.match(/\[(?:Thinking Process|Reasoning Process|Thinking)\]([\s\S]*?)\[\/(?:Thinking Process|Reasoning Process|Thinking)\]/i);
-  if (bracketMatch) {
-    const thought = bracketMatch[1].trim();
-    const cleanText = sanitized.replace(/\[(?:Thinking Process|Reasoning Process|Thinking)\][\s\S]*?\[\/(?:Thinking Process|Reasoning Process|Thinking)\]/i, '').trim();
-    return { thought, cleanText: cleanText || (thought ? '' : sanitized) };
-  }
-
-  return { thought: null, cleanText: sanitized };
+  return splitThinking(sanitized);
 }
 
 interface ChatMessageProps {
@@ -347,6 +341,14 @@ const ChatMessage = React.memo(function ChatMessage({
     if (isUser || isPlaceholder) return '';
     return message.html || renderAIMarkdown(cleanText || message.text || '');
   }, [isUser, isPlaceholder, message.html, cleanText, message.text]);
+
+  // Test the *rendered* html, not the raw text: markdown like a bare image or
+  // rule produces tags but no visible characters, and reasoning that has been
+  // stripped leaves nothing at all.
+  const hasVisibleBody = useMemo(
+    () => renderedHtml.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0,
+    [renderedHtml]
+  );
 
   // Don't render the "..." placeholder — the ThinkingIndicator handles that
   if (isPlaceholder) return null;
@@ -435,7 +437,7 @@ const ChatMessage = React.memo(function ChatMessage({
           {/* Content */}
           {isUser ? (
             <span className="whitespace-pre-wrap">{cleanText || message.text}</span>
-          ) : (
+          ) : hasVisibleBody ? (
             <div className={`ai-md-container ${isStreaming ? 'noska-response-reveal' : ''}`}>
               <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
               {/* Streaming cursor */}
@@ -443,6 +445,15 @@ const ChatMessage = React.memo(function ChatMessage({
                 <span className="inline-block w-[2px] h-[14px] bg-[var(--accent)] ml-0.5 align-middle animate-pulse" />
               )}
             </div>
+          ) : (
+            /* Everything this message carried was reasoning, or a tool
+               envelope that was stripped — rendering it produced an empty
+               bubble with no explanation at all. */
+            !isStreaming && (
+              <div className="ai-md-container text-[var(--muted)] italic text-[11.5px]">
+                The model returned only internal reasoning — nothing to show.
+              </div>
+            )
           )}
 
           {/* Cancelled indicator */}

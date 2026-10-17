@@ -54,7 +54,9 @@ export const agents = {
   },
 
   async get(userId: string, id: string) {
-    const { data } = await db().from("agents").select("*").eq("owner_id", userId).eq("id", id).maybeSingle();
+    const { data } = await db().from("agents")
+      .select("id,owner_id,workspace_id,name,type,description,icon,instructions,model,status,credit_cap_per_run,credit_cap_per_month,config,created_at,updated_at")
+      .eq("owner_id", userId).eq("id", id).maybeSingle();
     if (!data) throw errors.notFound("Agent");
     return data as Row;
   },
@@ -121,7 +123,9 @@ export const automations = {
   },
 
   async get(userId: string, id: string) {
-    const { data } = await db().from("automations").select("*").eq("owner_id", userId).eq("id", id).maybeSingle();
+    const { data } = await db().from("automations")
+      .select("id,owner_id,workspace_id,name,description,icon,trigger_config,conditions,steps,permissions,status,last_run_at,run_count,created_at,updated_at,timezone,next_run_at,missed_policy,timeout_ms,max_retries,last_status,failure_streak,health")
+      .eq("owner_id", userId).eq("id", id).maybeSingle();
     if (!data) throw errors.notFound("Automation");
     return data as Row;
   },
@@ -156,7 +160,7 @@ export const automations = {
   },
 
   async update(userId: string, id: string, patch: Row) {
-    const { data: cur } = await db().from("automations").select("*").eq("owner_id", userId).eq("id", id).maybeSingle();
+    const { data: cur } = await db().from("automations").select("trigger_config").eq("owner_id", userId).eq("id", id).maybeSingle();
     if (!cur) throw errors.notFound("Automation");
     const allowed: Row = {};
     for (const f of ["name", "description"] as const) {
@@ -222,7 +226,9 @@ export const runs = {
   },
 
   async get(userId: string, runId: string) {
-    const { data: run } = await db().from("agent_runs").select("*").eq("user_id", userId).eq("id", runId).maybeSingle();
+    const { data: run } = await db().from("agent_runs")
+      .select("id,workspace_id,source_kind,source_id,name,trigger_type,status,attempt,scheduled_for,started_at,completed_at,duration_ms,error_code,error_message,final_output,counts,parent_run_id,created_at,updated_at")
+      .eq("user_id", userId).eq("id", runId).maybeSingle();
     if (!run) throw errors.notFound("Agent run");
     const { data: eventsList } = await db().from("agent_run_events").select("seq,type,step,duration_ms,metadata,created_at")
       .eq("run_id", runId).order("seq");

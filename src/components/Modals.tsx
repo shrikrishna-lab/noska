@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import type { ChangeEvent } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import RolePicker, { roleHint, type AccessLevel } from "./share/RolePicker";
 import { MotionInput, SPRING_PRESETS } from "../features/motion/MotionSystem";
 import {
   Bot,
@@ -38,6 +39,7 @@ import {
   Keyboard,
   CreditCard,
   Plug,
+  PanelRight,
   Layout,
   LayoutGrid,
   type LucideIcon,
@@ -49,6 +51,7 @@ import { DeleteButton } from "./ui/delete-button";
 import { RestoreButton } from "./ui/restore-button";
 import CustomProviders from "./settings/CustomProviders";
 import IntegrationsSettings from "./settings/IntegrationsSettings";
+import NotchySettings from "./settings/NotchySettings";
 import ConnectionsSettings from "./settings/ConnectionsSettings";
 import VoiceCustomizationSettings from "./settings/VoiceCustomizationSettings";
 import NoskaAISettings from "./settings/NoskaAISettings";
@@ -58,6 +61,7 @@ import WidgetsSettings from "./settings/WidgetsSettings";
 import NotificationSettings from "../features/notifications/Settings";
 import SidebarCustomizer from "./customization/SidebarCustomizer";
 import { PageIcon } from "./PageIcon";
+import { UserAvatar } from "./UserAvatar";
 import ApiKeysManager from "../features/api/ApiKeysManager";
 import { aiManager } from "../ai/AIManager";
 import { getProviderList, testProviderConnection } from "../ai/providers";
@@ -76,6 +80,25 @@ import {
   uploadImage, ensureImagesBucket, searchUsersByUsername, preloadUserDirectory, searchUsersInMemory, type UserSearchResult
 } from "../lib/supabaseService";
 import type { Page } from "../lib/supabaseService";
+import { buildPageLink } from "../lib/share/origin";
+import {
+  fetchIncomingAccessRequests,
+  fetchPageCollaborators,
+  respondToAccessRequest,
+  revokeCollaborator,
+  setPageLinkAccess,
+  updateCollaboratorRole,
+  type AccessRequest,
+  type LinkAccess,
+  type PageCollaborator,
+  type ShareRole,
+} from "../lib/share/access";
+import {
+  fetchPageApproval,
+  requestPageApproval,
+  setPageReviewers,
+  type ApprovalState,
+} from "../lib/share/approval";
 import type { Tables } from "../../types/supabase";
 import {
   getImportedIcons,
@@ -486,6 +509,7 @@ export function SettingsModal({
                   { id: "Shortcuts", label: "Shortcuts", icon: Keyboard },
                   { id: "Voice & Dictation", label: "Voice & Dictation", icon: Mic },
                   { id: "Noska AI", label: "Noska AI", icon: Sparkles },
+                  { id: "Notchy", label: "Notchy", icon: PanelRight },
                   { id: "Integrations", label: "Integrations", icon: Plug },
                   { id: "Developer", label: "Developer", icon: Code2 },
                   { id: "Offline", label: "Offline", icon: HardDrive },
@@ -669,6 +693,12 @@ export function SettingsModal({
                 </p>
               </div>
               <IntegrationsSettings onToast={(msg) => setSaveStatus(msg)} />
+            </div>
+          )}
+
+          {tab === "Notchy" && (
+            <div className="w-full max-w-full">
+              <NotchySettings />
             </div>
           )}
 
@@ -1743,6 +1773,12 @@ interface ShareModalProps {
   page: Page;
   onClose: () => void;
   onToast?: (message: string) => void;
+  /**
+   * Persists a visibility change into the owner's page state. Without this the
+   * modal keeps reading the pre-publish `page.visibility`, so the fork option
+   * stays greyed out ("publish first") even right after publishing.
+   */
+  onVisibilityChange?: (pageId: string, visibility: "public" | "private") => void;
   /** The signed-in user's id/username — required to actually send
    * real invites (sendPageInvite requires an authenticated inviter) and
    * to build a real, working page URL (see `link` below). Optional only
@@ -1755,7 +1791,7 @@ interface ShareModalProps {
   locked?: boolean;
 }
 
-export function ShareModal({ page, onClose, onToast, currentUserId, currentUsername, workspaceSlug, locked = false }: ShareModalProps) {
+export function ShareModal({ page, onClose, onToast, onVisibilityChange, currentUserId, currentUsername, workspaceSlug, locked = false }: ShareModalProps) {
   const [tab, setTab] = useState("share");
   const [usernameInput, setUsernameInput] = useState("");
   const [access, setAccess] = useState<PageInviteRole>("editor");
@@ -1763,7 +1799,13 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
   const [invitesLoading, setInvitesLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  const [generalAccess, setGeneralAccess] = useState("Only people invited");
+  const [linkAccess, setLinkAccess] = useState<LinkAccess>(page.linkAccess || "restricted");
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [collaborators, setCollaborators] = useState<PageCollaborator[]>([]);
+  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
+  const [collaboratorsLoading, setCollaboratorsLoading] = useState(true);
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   const [generalAccessOpen, setGeneralAccessOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -1797,6 +1839,174 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
   }, [currentUserId, page.id]);
 
   React.useEffect(() => { loadSentInvites(); }, [loadSentInvites]);
+
+  // Real access state: who already collaborates, and who is waiting on a
+  // decision. Both were invisible before, so an approved collaborator never
+  // appeared in this dialog and incoming requests had nowhere to surface.
+  const loadAccessState = React.useCallback(async () => {
+    if (!currentUserId) { setCollaboratorsLoading(false); return; }
+    setCollaboratorsLoading(true);
+    setAccessError(null);
+    try {
+      const [people, requests] = await Promise.all([
+        fetchPageCollaborators(page.id),
+        fetchIncomingAccessRequests(page.id),
+      ]);
+      setCollaborators(people);
+      setAccessRequests(requests);
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Could not load access details.");
+    } finally {
+      setCollaboratorsLoading(false);
+    }
+  }, [currentUserId, page.id]);
+
+  React.useEffect(() => { loadAccessState(); }, [loadAccessState]);
+
+  // Keep the toggle in step when the page object changes underneath the modal.
+  React.useEffect(() => {
+    setLinkAccess(page.linkAccess || "restricted");
+  }, [page.id, page.linkAccess]);
+
+  const changeLinkAccess = async (next: LinkAccess) => {
+    if (locked || next === linkAccess) return;
+    // Forking hands out a full copy of the content, so it is only available
+    // for pages published to the web. Publish first, then pick fork — the
+    // server enforces the same rule.
+    if (next === "fork" && page.visibility !== "public") {
+      setGeneralAccessOpen(false);
+      setAccessError("Publish this page to the web first — forking is only offered for published pages.");
+      return;
+    }
+    const previous = linkAccess;
+    setLinkAccess(next);
+    setGeneralAccessOpen(false);
+    setAccessBusy(true);
+    setAccessError(null);
+    try {
+      await setPageLinkAccess(page.id, next);
+      onToast?.(
+        next === "restricted"
+          ? "Only invited people can open this link"
+          : next === "view"
+            ? "Anyone with the link can view this page"
+            : "Anyone with the link can take their own copy",
+      );
+    } catch (err) {
+      setLinkAccess(previous);
+      setAccessError(err instanceof Error ? err.message : "Could not change link access.");
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const decideRequest = async (request: AccessRequest, approve: boolean) => {
+    if (locked) return;
+    setAccessBusy(true);
+    setAccessError(null);
+    try {
+      await respondToAccessRequest(request.id, approve);
+      setAccessRequests((prev) => prev.filter((r) => r.id !== request.id));
+      if (approve) {
+        onToast?.(`${request.requester_username || "They"} can now edit this page with you`);
+        await loadAccessState();
+      } else {
+        onToast?.("Request declined");
+      }
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Could not respond to the request.");
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  // ── Reviewers ────────────────────────────────────────────────────────────
+  // Reviewing is an assignment, not a role: any collaborator can be nominated
+  // and keeps their existing permissions. The owner cannot be a reviewer on
+  // their own page, which is why the picker only lists collaborators.
+  const [reviewers, setReviewers] = useState<string[]>([]);
+  const [approvalState, setApprovalState] = useState<ApprovalState>("draft");
+  const [reviewerBusy, setReviewerBusy] = useState(false);
+
+  const loadApproval = useCallback(async () => {
+    try {
+      const info = await fetchPageApproval(page.id);
+      setReviewers(info?.reviewers.map((r) => r.user_id) ?? []);
+      setApprovalState(info?.approval_state ?? "draft");
+    } catch {
+      setReviewers([]);
+      setApprovalState("draft");
+    }
+  }, [page.id]);
+
+  useEffect(() => {
+    void loadApproval();
+  }, [loadApproval]);
+
+  const toggleReviewer = async (userId: string) => {
+    setReviewerBusy(true);
+    setAccessError(null);
+    try {
+      const next = reviewers.includes(userId)
+        ? reviewers.filter((id) => id !== userId)
+        : [...reviewers, userId];
+      await setPageReviewers(
+        page.id,
+        next.map((id) => ({
+          userId: id,
+          userName: collaborators.find((c) => c.user_id === id)?.user_name ?? null,
+        })),
+      );
+      await loadApproval();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Could not update reviewers.");
+    } finally {
+      setReviewerBusy(false);
+    }
+  };
+
+  const startApproval = async () => {
+    setReviewerBusy(true);
+    setAccessError(null);
+    try {
+      await requestPageApproval(page.id);
+      await loadApproval();
+      onToast("Approval requested.");
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Could not request approval.");
+    } finally {
+      setReviewerBusy(false);
+    }
+  };
+
+  const changeCollaboratorRole = async (person: PageCollaborator, role: ShareRole) => {
+    if (locked) return;
+    setPendingRequestId(person.user_id);
+    setAccessError(null);
+    try {
+      await updateCollaboratorRole(page.id, person.user_id, role);
+      setCollaborators((prev) => prev.map((c) => (c.user_id === person.user_id ? { ...c, role } : c)));
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Could not change that role.");
+    } finally {
+      setPendingRequestId(null);
+    }
+  };
+
+  const removeCollaborator = async (person: PageCollaborator) => {
+    if (locked) return;
+    setPendingRequestId(person.user_id);
+    setAccessError(null);
+    try {
+      await revokeCollaborator(page.id, person.user_id);
+      setCollaborators((prev) => prev.filter((c) => c.user_id !== person.user_id));
+      onToast?.(`${person.user_name || "Collaborator"} removed`);
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Could not remove that collaborator.");
+    } finally {
+      setPendingRequestId(null);
+    }
+  };
 
   // Preload directory in memory as soon as Share modal opens for 0ms instant typing responses
   React.useEffect(() => {
@@ -1869,11 +2079,10 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
   const userHandle = currentUsername ? `@${currentUsername}` : (currentUser?.userId || 'local@workspace');
 
   // Real, resolvable app URL (App.tsx's own <Route path="/:workspaceSlug/:pageId">)
-  // rather than the previous hardcoded "noska.local/page/..." fake domain —
-  // clicking this actually opens the page, subject to the RLS-backed
-  // ownership/permission check now enforced on `pages` (see migration
-  // rls_page_permissions_and_shared_pages).
-  const link = `${window.location.origin}/${workspaceSlug}/${page.id}`;
+  // on the canonical web origin. `window.location.origin` would hand out
+  // `http://tauri.localhost/...` inside the desktop shell, which nobody else
+  // can open.
+  const link = buildPageLink(workspaceSlug, page.id);
 
   const copyLink = () => {
     navigator.clipboard?.writeText(link);
@@ -2008,19 +2217,14 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
                   style={{ outline: "none", boxShadow: "none" }}
                 />
 
-                {/* Role Pill Dropdown */}
-                <div className="relative shrink-0">
-                  <select
-                    value={access}
-                    onChange={(e) => setAccess(e.target.value as PageInviteRole)}
-                    className="appearance-none rounded-xl border border-black/[0.08] dark:border-white/10 bg-white dark:bg-[#282724] pl-2.5 pr-6 py-1.5 text-xs font-medium text-neutral-800 dark:text-neutral-200 outline-none cursor-pointer shadow-2xs hover:bg-neutral-50 dark:hover:bg-white/10 transition"
-                  >
-                    <option value="editor">Can edit ✍️</option>
-                    <option value="commenter">Can comment 💬</option>
-                    <option value="viewer">Can view 👁️</option>
-                  </select>
-                  <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
-                </div>
+                {/* Role Picker */}
+                <RolePicker
+                  value={access}
+                  onChange={setAccess}
+                  disabled={locked}
+                  withEmoji
+                  ariaLabel="Invite access level"
+                />
 
                 {/* Invite Button */}
                 <button
@@ -2056,13 +2260,11 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
                                   : "hover:bg-black/5 dark:hover:bg-white/5"
                               }`}
                             >
-                              {user.avatarUrl ? (
-                                <img src={user.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
-                              ) : (
-                                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-neutral-200 dark:bg-white/15 text-[10px] font-bold text-neutral-800 dark:text-white">
-                                  {(user.userName || user.username)[0]?.toUpperCase()}
-                                </span>
-                              )}
+                              <UserAvatar
+                                name={user.userName || user.username}
+                                avatar={user.avatarUrl}
+                                size={28}
+                              />
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-xs font-medium text-neutral-900 dark:text-white">{user.userName}</span>
                                 <span className="block truncate text-[10px] text-neutral-400">@{user.username}</span>
@@ -2132,6 +2334,140 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
                   </span>
                 </div>
 
+                {/* Pending Access Requests — somebody opened the link and asked in */}
+                {accessRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] dark:bg-amber-500/10"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 shrink-0 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs font-bold">
+                        {(req.requester_username || "?").replace(/^@/, "")[0]?.toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-semibold text-neutral-900 dark:text-white">
+                          {req.requester_username ? `@${req.requester_username.replace(/^@/, "")}` : "Someone"}
+                        </div>
+                        {req.message && (
+                          <div className="truncate text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                            “{req.message}”
+                          </div>
+                        )}
+                        <div className="text-[11px] text-amber-700/80 dark:text-amber-300/80 mt-0.5">
+                          Wants to {req.role_requested}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => decideRequest(req, true)}
+                        disabled={accessBusy || locked}
+                        className="rounded-lg bg-[#E3CFB3] px-2.5 py-1 text-[11px] font-semibold text-neutral-900 transition hover:bg-[#d8c2a2] disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => decideRequest(req, false)}
+                        disabled={accessBusy || locked}
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-medium text-neutral-500 transition hover:bg-black/5 hover:text-neutral-800 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-white"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Accepted collaborators */}
+                {collaborators.map((person) => (
+                  <div
+                    key={person.user_id}
+                    className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#282724] shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 shrink-0 rounded-full bg-neutral-100 dark:bg-white/10 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                        {(person.user_name || "?").replace(/^@/, "")[0]?.toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-semibold text-neutral-900 dark:text-white">
+                          {person.user_name || "Collaborator"}
+                        </div>
+                        <div className="truncate text-[11px] text-neutral-400 dark:text-neutral-500">
+                          {roleHint(person.role)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Nomination for sign-off. A reviewer keeps this
+                          person's existing permissions; the badge only appears
+                          once they are on the list, so it reads as a duty
+                          rather than another access level. */}
+                      <button
+                        onClick={() => toggleReviewer(person.user_id)}
+                        disabled={accessBusy || locked || reviewerBusy}
+                        title={reviewers.includes(person.user_id)
+                          ? "Remove as reviewer"
+                          : "Require their approval before publishing"}
+                        className={`rounded-lg px-1.5 py-1 text-[10px] font-semibold transition disabled:opacity-50 ${
+                          reviewers.includes(person.user_id)
+                            ? "bg-[var(--accent)]/12 text-[var(--accent)]"
+                            : "text-neutral-400 hover:text-[var(--text)] hover:bg-[var(--hover)]"
+                        }`}
+                      >
+                        Reviewer
+                      </button>
+                      <RolePicker
+                        value={(person.role as AccessLevel) ?? "viewer"}
+                        onChange={(next) => changeCollaboratorRole(person, next)}
+                        disabled={accessBusy || locked || pendingRequestId === person.user_id}
+                        size="compact"
+                        ariaLabel={`Access level for ${person.user_name || "collaborator"}`}
+                      />
+                      <button
+                        onClick={() => removeCollaborator(person)}
+                        disabled={accessBusy || locked || pendingRequestId === person.user_id}
+                        title="Remove access"
+                        className="rounded-lg p-1.5 text-neutral-400 transition hover:bg-rose-500/10 hover:text-rose-500 disabled:opacity-50"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {!collaboratorsLoading && collaborators.length === 0 && accessRequests.length === 0 && (
+                  <p className="px-2.5 py-1.5 text-[11px] text-neutral-400 dark:text-neutral-500">
+                    Only you can open this link right now.
+                  </p>
+                )}
+
+                {/* Publishing gate. Hidden entirely unless the owner picked at
+                    least one reviewer, since a request with nobody to answer it
+                    would deadlock the owner. The server rejects it too. */}
+                {reviewers.length > 0 && approvalState !== "pending_approval" && (
+                  <div className="mt-2 rounded-xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#282724] p-3">
+                    <p className="text-[11px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+                      Require sign-off from{" "}
+                      <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+                        {reviewers.length === 1
+                          ? collaborators.find((c) => c.user_id === reviewers[0])?.user_name || "1 reviewer"
+                          : `${reviewers.length} reviewers`}
+                      </span>{" "}
+                      before this page can be published, re-shared or locked.
+                    </p>
+                    <button
+                      onClick={startApproval}
+                      disabled={accessBusy || locked || reviewerBusy}
+                      className="mt-2 rounded-lg bg-neutral-900 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-black disabled:opacity-50 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+                    >
+                      Request approval
+                    </button>
+                  </div>
+                )}
+
+                {accessError && (
+                  <p className="px-2.5 py-1.5 text-[11px] text-rose-500">{accessError}</p>
+                )}
+
                 {/* Pending Sent Invites */}
                 {!invitesLoading && sentInvites.map((inv) => (
                   <div
@@ -2171,18 +2507,18 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-9 w-9 rounded-xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#282724] flex items-center justify-center text-amber-700/80 dark:text-amber-400/80 shadow-2xs shrink-0">
-                    {generalAccess === "Public" ? <Globe size={15} /> : <Lock size={15} />}
+                    {linkAccess === "restricted" ? <Lock size={15} /> : <Globe size={15} />}
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-neutral-900 dark:text-white">
-                      {generalAccess === "Only people invited" ? "Restricted" : generalAccess}
+                      {linkAccess === "restricted" ? "Restricted" : "Anyone with the link"}
                     </div>
                     <div className="text-[11px] text-neutral-400 dark:text-neutral-500 truncate">
-                      {generalAccess === "Only people invited"
-                        ? "Only invited people can access"
-                        : generalAccess === "Anyone with the link"
+                      {linkAccess === "restricted"
+                        ? "Others must request access"
+                        : linkAccess === "view"
                         ? "Anyone with the link can view"
-                        : "Indexed on public web"}
+                        : "Anyone with the link can fork a copy"}
                     </div>
                   </div>
                 </div>
@@ -2201,26 +2537,34 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
                       className="absolute left-0 right-0 bottom-full mb-2 z-30 space-y-0.5 rounded-2xl border border-black/[0.08] dark:border-white/10 bg-white dark:bg-[#22211e] p-1.5 shadow-2xl backdrop-blur-md"
                     >
                       {[
-                        { id: "Only people invited", title: "Restricted", desc: "Only invited people can access" },
-                        { id: "Anyone with the link", title: "Anyone with the link", desc: "Anyone with the link can view" },
-                        { id: "Public", title: "Public", desc: "Indexed on public web" }
+                        { id: "restricted" as LinkAccess, title: "Restricted", desc: "Others must request access, you approve" },
+                        { id: "view" as LinkAccess, title: "Anyone with the link", desc: "They can read it, no collaboration" },
+                        {
+                          id: "fork" as LinkAccess,
+                          title: "Anyone with the link (fork)",
+                          desc: page.visibility === "public"
+                            ? "They get their own copy, you stay separate"
+                            : "Publish to web first — forks hand over a copy",
+                        }
                       ].map((option) => {
-                        const isSelected = generalAccess === option.id;
+                        const isSelected = linkAccess === option.id;
+                        const unavailable = option.id === "fork" && page.visibility !== "public";
                         return (
                           <button
                             key={option.id}
-                            onClick={() => {
-                              setGeneralAccess(option.id);
-                              setGeneralAccessOpen(false);
-                            }}
-                            className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition cursor-pointer ${
+                            onClick={() => changeLinkAccess(option.id)}
+                            disabled={accessBusy || locked}
+                            className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition cursor-pointer disabled:opacity-50 ${
                               isSelected
                                 ? "bg-neutral-100 dark:bg-white/10 font-semibold text-neutral-900 dark:text-white"
                                 : "text-neutral-600 dark:text-neutral-300 hover:bg-black/5 dark:hover:bg-white/5"
                             }`}
                           >
                             <div>
-                              <div className="font-semibold">{option.title}</div>
+                              <div className={`font-semibold ${unavailable ? "text-neutral-400 dark:text-neutral-500" : ""}`}>
+                                {unavailable && <Lock size={11} className="mr-1 inline align-[-1px]" />}
+                                {option.title}
+                              </div>
                               <div className="text-[10px] text-neutral-400 font-normal">{option.desc}</div>
                             </div>
                             {isSelected && <Check size={14} className="text-neutral-900 dark:text-white shrink-0" />}
@@ -2259,15 +2603,40 @@ export function ShareModal({ page, onClose, onToast, currentUserId, currentUsern
             <div>
               <div className="text-sm font-semibold text-neutral-900 dark:text-white">Publish this page to the web</div>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-xs mx-auto leading-relaxed">
-                Anyone with the public URL will be able to read and explore this page.
+                Anyone signed in will be able to read and explore this page. They cannot edit it.
               </p>
             </div>
+            {page.visibility === "public" && (
+              <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                This page is already published.
+              </p>
+            )}
             <button
-              onClick={() => {
+              onClick={async () => {
+                if (locked) return;
+                setAccessBusy(true);
+                setAccessError(null);
+                try {
+                  const { supabase } = await import("../lib/supabase");
+                  const { error } = await supabase
+                    .from("pages")
+                    .update({ visibility: "public" } as never)
+                    .eq("id", page.id);
+                  if (error) throw new Error(error.message);
+                  // Mirror it locally: the fork option is gated on published
+                  // state, so a stale `page.visibility` would leave the owner
+                  // staring at "publish first" after they just published.
+                  onVisibilityChange?.(page.id, "public");
+                  onToast?.("Page published to web");
+                } catch (err) {
+                  setAccessError(err instanceof Error ? err.message : "Could not publish this page.");
+                } finally {
+                  setAccessBusy(false);
+                }
                 copyLink();
-                onToast?.("Page published to web and URL copied!");
               }}
-              className="w-full py-2.5 rounded-xl bg-[#E3CFB3] hover:bg-[#d8c2a2] text-neutral-900 text-xs font-semibold shadow-2xs flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
+              disabled={accessBusy || locked}
+              className="w-full py-2.5 rounded-xl bg-[#E3CFB3] hover:bg-[#d8c2a2] text-neutral-900 text-xs font-semibold shadow-2xs flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer disabled:opacity-60"
             >
               <Globe size={14} />
               <span>Publish to web & Copy URL</span>
@@ -2285,6 +2654,7 @@ interface HelpModalProps {
 
 export function HelpModal({ onClose }: HelpModalProps) {
   const [tab, setTab] = React.useState("shortcuts");
+  const [helpQuery, setHelpQuery] = React.useState("");
   const [ticketType, setTicketType] = React.useState("bug");
   const [ticketTitle, setTicketTitle] = React.useState("");
   const [ticketBody, setTicketBody] = React.useState("");
@@ -2307,6 +2677,11 @@ export function HelpModal({ onClose }: HelpModalProps) {
     { id: "release", label: "What's New", icon: "🎉" },
     { id: "ticket", label: "Report / Request", icon: "🎫" }
   ];
+
+  const normalizedQuery = helpQuery.trim().toLowerCase();
+  const filteredTabs = normalizedQuery
+    ? tabs.filter((t) => t.label.toLowerCase().includes(normalizedQuery))
+    : tabs;
 
   const shortcuts = [
     { category: "Navigation", items: [
@@ -2340,44 +2715,103 @@ export function HelpModal({ onClose }: HelpModalProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/50 p-5 backdrop-blur-[8px] saturate-[120%] flex items-center justify-center"
+      transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/25 p-4 backdrop-blur-[18px] sm:p-6"
       onMouseDown={onClose}
     >
       <motion.div
-        initial={{ scale: 0.96, opacity: 0, y: 15 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.96, opacity: 0, y: 10 }}
+        initial={{ opacity: 0, scale: 0.965, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.975, y: 8 }}
         transition={SPRING_PRESETS.soft}
-        className="flex h-[calc(100vh-80px)] w-[820px] max-w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] shadow-[var(--shadow-modal)]"
+        className="flex h-[min(760px,calc(100vh-48px))] w-[880px] max-w-full overflow-hidden rounded-[22px] border border-black/[0.06] bg-[var(--surface-2)] shadow-[0_24px_70px_-12px_rgba(0,0,0,0.35)] ring-1 ring-black/[0.04] dark:border-white/[0.08] dark:shadow-[0_24px_70px_-12px_rgba(0,0,0,0.6)]"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        {/* Sidebar Tabs */}
-        <aside className="w-[200px] shrink-0 border-r border-[var(--border)] bg-[var(--surface-1)] p-4 space-y-1 overflow-y-auto scrollbar-thin">
-          <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Learning Center</div>
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium transition-all duration-150 ${
-                tab === t.id
-                  ? "bg-[var(--surface-3)] text-[var(--text)]"
-                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-3)]/60 hover:text-[var(--text)]"
-              }`}
-            >
-              <span className="text-sm">{t.icon}</span>
-              <span className="truncate">{t.label}</span>
-            </button>
-          ))}
+        {/* Sidebar */}
+        <aside className="flex w-[236px] shrink-0 flex-col border-r border-black/[0.06] bg-[var(--surface-1)] dark:border-white/[0.06]">
+          <div className="px-4 pb-3 pt-5">
+            <div className="text-[13px] font-semibold tracking-tight text-[var(--text)]">Noska Help</div>
+            <div className="mt-0.5 text-[11.5px] text-[var(--text-muted)]">Guides and shortcuts</div>
+          </div>
+
+          {/* Filter. A help centre you have to scroll to find anything is a
+              worse help centre, and there are only seven sections, so a plain
+              substring match over label + keywords is enough. */}
+          <div className="px-3 pb-3">
+            <div className="relative">
+              <Search
+                size={13}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+              />
+              <input
+                value={helpQuery}
+                onChange={(e) => setHelpQuery(e.target.value)}
+                placeholder="Search help"
+                aria-label="Search help"
+                className="w-full rounded-[10px] border border-black/[0.06] bg-[var(--surface-2)] py-1.5 pl-8 pr-2.5 text-[12.5px] text-[var(--text)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]/60 focus:ring-2 focus:ring-[var(--accent)]/15 dark:border-white/[0.08]"
+              />
+            </div>
+          </div>
+
+          <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4 scrollbar-thin">
+            {filteredTabs.length === 0 && (
+              <p className="px-2 py-6 text-center text-[12px] leading-relaxed text-[var(--text-muted)]">
+                No sections match “{helpQuery.trim()}”.
+              </p>
+            )}
+            <LayoutGroup id="help-tab">
+              {filteredTabs.map((t) => {
+                const active = tab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    aria-current={active ? "page" : undefined}
+                    className={`relative flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-[var(--accent)]/40 ${
+                      active
+                        ? "text-[var(--text)]"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--surface-3)]/60 hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="help-tab-pill"
+                        transition={SPRING_PRESETS.soft}
+                        className="absolute inset-0 rounded-[10px] bg-[var(--surface-3)] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                      />
+                    )}
+                    <span className="relative z-10 grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[6px] bg-black/[0.05] text-[11px] dark:bg-white/[0.07]">
+                      {t.icon}
+                    </span>
+                    <span className="relative z-10 truncate">{t.label}</span>
+                  </button>
+                );
+              })}
+            </LayoutGroup>
+          </nav>
         </aside>
 
         {/* Content */}
-        <main className="relative min-w-0 flex-1 overflow-y-auto p-8 scrollbar-thin bg-[var(--surface-2)] text-[var(--text)]">
+        <main className="relative min-w-0 flex-1 overflow-y-auto scrollbar-thin bg-[var(--surface-2)] text-[var(--text)]">
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 grid h-7 w-7 place-items-center rounded-full bg-[var(--surface)] text-[var(--secondary)] hover:bg-[var(--active)] transition"
+            aria-label="Close help"
+            className="absolute right-4 top-4 z-20 grid h-7 w-7 place-items-center rounded-full bg-black/[0.05] text-[var(--text-secondary)] transition hover:bg-black/[0.1] hover:text-[var(--text)] dark:bg-white/[0.08] dark:hover:bg-white/[0.14]"
           >
-            <X size={15} />
+            <X size={14} />
           </button>
+
+          {/* Keying on the section cross-fades the body, so switching tabs reads
+              as one surface changing rather than a hard cut. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
+              className="p-8 pt-7"
+            >
 
           {tab === "start" && (
             <div className="space-y-6 max-w-lg">
@@ -2685,6 +3119,8 @@ export function HelpModal({ onClose }: HelpModalProps) {
               )}
             </div>
           )}
+          </motion.div>
+        </AnimatePresence>
         </main>
       </motion.div>
     </motion.div>

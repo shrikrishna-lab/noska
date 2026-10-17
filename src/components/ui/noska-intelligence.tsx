@@ -123,6 +123,8 @@ const NMI_NAME = "Noska Manager Intelligence";
 const STORAGE_KEY_CHAT = "noska-nmi-chat-history";
 const STORAGE_KEY_AUTOPILOT = "noska-nmi-autopilot";
 const STORAGE_KEY_LEARNING = "noska-nmi-learning";
+const STORAGE_KEY_GOAL_STEP = "noska-nmi-goal-step";
+const STORAGE_KEY_RACE = "noska-nmi-habit-race";
 
 const WORK_DAY_START = 8; // 8 AM
 const WORK_DAY_END = 20;  // 8 PM
@@ -133,6 +135,15 @@ const BURNOUT_CONSECUTIVE_DAYS = 3;
 const BURNOUT_DAILY_THRESHOLD = 5.5;
 
 // ── SECTION 3: Cognitive Models ────────────────────────────────────────
+
+/** ISO-8601 week number for a given date (1–53) */
+function getIsoWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
 
 /** Circadian energy curve — normalized 0–10 for each hour of the day */
 function getEnergyScore(hour: number): number {
@@ -739,11 +750,14 @@ function findMatchingEvents(events: Event[], query: string): Event[] {
 
 function generateChatResponse(intent: ChatIntent, events: Event[], currentDate: Date): ChatMessage {
   const week = buildWeekProfile(currentDate, events);
-  const today = buildDayProfile(new Date(), events);
+  // Every "today"/"now" inside this function must derive from `currentDate`,
+  // not the wall clock — otherwise a caller cannot ask about a specific day and
+  // the response cannot be tested deterministically.
+  const today = buildDayProfile(currentDate, events);
   const targetDate = resolveTargetDate(intent.entities, currentDate);
   const targetDay = buildDayProfile(targetDate, events);
   const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const now = new Date();
+  const now = currentDate;
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -758,7 +772,7 @@ function generateChatResponse(intent: ChatIntent, events: Event[], currentDate: 
 
     case "UPCOMING": {
       const dayLabel = intent.entities.relativeDay === "tomorrow" ? "tomorrow" : "today";
-      const profile = dayLabel === "tomorrow" ? buildDayProfile((() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })(), events) : today;
+      const profile = dayLabel === "tomorrow" ? buildDayProfile((() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); return d; })(), events) : today;
       if (profile.eventCount === 0) {
         return {
           id, role: "nmi", timestamp: now,
@@ -1755,13 +1769,6 @@ export function NoskaIntelligencePanel({
       }
     });
 
-    if (list.length === 0) {
-      list.push(
-        { id: "p1", name: "Norsk Focus", color: "#cfaef0", dotClass: "bg-purple-400" },
-        { id: "p2", name: "TechRise Dev", color: "#88ba46", dotClass: "bg-lime-500" },
-        { id: "p3", name: "SwiftHive Strategy", color: "#10b981", dotClass: "bg-emerald-500" }
-      );
-    }
     return list;
   }, [workspaceTracks, events]);
 
@@ -1821,22 +1828,11 @@ export function NoskaIntelligencePanel({
         };
       });
 
-      const finalCapsules = capsules.length > 0 ? capsules : (
-        offset === 0 ? [
-          { id: "sample-1", title: "Focus Deep Work", left: "16%", width: "26%", gradientClass: "from-[#88ba46] to-[#5e8c28]", isPurple: false },
-          { id: "sample-2", title: "Architecture Sprint", left: "46%", width: "34%", gradientClass: "from-[#7cb470] to-[#4c7e43]", isPurple: false }
-        ] : offset === 1 ? [
-          { id: "sample-3", title: "Product Review", left: "4%", width: "44%", gradientClass: "from-[#cfaef0] to-[#996bc7]", isPurple: true },
-          { id: "sample-4", title: "UX Sync", left: "52%", width: "18%", gradientClass: "from-[#d8beee] to-[#b58ee0]", isPurple: true }
-        ] : [
-          { id: "sample-5", title: "System Refactor", left: "32%", width: "42%", gradientClass: "from-[#88ba46] to-[#517a22]", isPurple: false }
-        ]
-      );
-
+      // Days without events render an empty lane — no invented placeholders.
       return {
         date: d,
         label,
-        capsules: finalCapsules
+        capsules
       };
     });
   }, [currentDate, events, selectedProjectFilter]);
@@ -1858,13 +1854,8 @@ export function NoskaIntelligencePanel({
       return { month: monthName, day: dayNum, title, initials, category: next.category || "FUTURE FOCUS" };
     }
 
-    return {
-      month: "JUNE",
-      day: "02",
-      title: userName || "Ann Stollen",
-      initials: userName ? userName.slice(0, 2).toUpperCase() : "AS",
-      category: "FUTURE FOCUS"
-    };
+    // Honest empty state: no upcoming events means no fabricated focus card.
+    return null;
   }, [events, userName]);
 
   // Dynamic Project Time Total & Percentages Breakdown
@@ -1885,14 +1876,18 @@ export function NoskaIntelligencePanel({
     });
 
     const totalRaw = focusHours + devHours + meetHours;
-    const totalHours = totalRaw > 0 ? Math.round(totalRaw) : 68;
 
-    const fPct = totalRaw > 0 ? Math.max(10, Math.round((focusHours / (totalRaw || 1)) * 100)) : 65;
-    const dPct = totalRaw > 0 ? Math.max(10, Math.round((devHours / (totalRaw || 1)) * 100)) : 18;
-    const mPct = Math.max(5, 100 - fPct - dPct);
+    // No scheduled time means an honest zeroed bar — no invented baseline.
+    if (totalRaw <= 0) {
+      return { totalHours: 0, focusPct: 0, devPct: 0, meetPct: 0 };
+    }
+
+    const fPct = Math.round((focusHours / totalRaw) * 100);
+    const dPct = Math.round((devHours / totalRaw) * 100);
+    const mPct = Math.round((meetHours / totalRaw) * 100);
 
     return {
-      totalHours,
+      totalHours: Math.round(totalRaw),
       focusPct: fPct,
       devPct: dPct,
       meetPct: mPct
@@ -1951,7 +1946,21 @@ export function NoskaIntelligencePanel({
 
   const [scopeFilter, setScopeFilter] = useState<"assignees" | "priority" | "project">("project");
   const [sliderPos, setSliderPos] = useState<number>(90);
-  const [activeGoalStep, setActiveGoalStep] = useState<number>(3);
+  const [activeGoalStep, setActiveGoalStep] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(STORAGE_KEY_GOAL_STEP));
+      return Number.isInteger(saved) && saved >= 1 && saved <= 5 ? saved : 1;
+    } catch {
+      return 1;
+    }
+  });
+
+  const selectGoalStep = useCallback((step: number) => {
+    setActiveGoalStep(step);
+    try {
+      localStorage.setItem(STORAGE_KEY_GOAL_STEP, String(step));
+    } catch { /* storage unavailable */ }
+  }, []);
 
   // Dynamic real workspace scope counts
   const scopeCounts = useMemo(() => {
@@ -2008,7 +2017,37 @@ export function NoskaIntelligencePanel({
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskSubtitle, setNewSubtitle] = useState("");
 
-  const [racePoints, setRacePoints] = useState({ user: 24, peer: 30, peerName: "Lisa" });
+  const [racePoints, setRacePoints] = useState<{ user: number; peer: number; peerName: string }>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_RACE);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { user?: unknown; peer?: unknown; peerName?: unknown };
+        const user = Number(parsed.user);
+        const peer = Number(parsed.peer);
+        return {
+          user: Number.isFinite(user) ? Math.max(0, user) : 0,
+          peer: Number.isFinite(peer) ? Math.max(0, peer) : 0,
+          peerName: typeof parsed.peerName === "string" && parsed.peerName.trim() ? parsed.peerName : "Your partner"
+        };
+      }
+    } catch { /* ignore malformed storage */ }
+    return { user: 0, peer: 0, peerName: "Your partner" };
+  });
+
+  const logHabitPoints = useCallback((delta: number) => {
+    setRacePoints(prev => {
+      const next = { ...prev, user: Math.max(0, prev.user + delta) };
+      try {
+        localStorage.setItem(STORAGE_KEY_RACE, JSON.stringify(next));
+      } catch { /* storage unavailable */ }
+      return next;
+    });
+  }, []);
+
+  // Lane widths are proportional to real logged points (never hardcoded).
+  const raceScale = Math.max(racePoints.user, racePoints.peer, 1);
+  const racePeerWidth = Math.round((racePoints.peer / raceScale) * 86) + 12;
+  const raceUserWidth = Math.round((racePoints.user / raceScale) * 86) + 12;
   const [isActionsDrawerOpen, setIsActionsDrawerOpen] = useState(false);
   const [attachedTiles, setAttachedTiles] = useState<Array<{
     id: string;
@@ -2816,45 +2855,63 @@ export function NoskaIntelligencePanel({
                         {/* Stepped Pill Bar */}
                         <div className="h-10 rounded-full bg-gradient-to-r from-[#0a2e1d] via-[#1db954] to-neutral-200 dark:to-neutral-800 p-1 flex items-center justify-between shadow-inner">
                           {[
-                            { step: 1, label: "Create Project", done: true },
-                            { step: 2, label: "Add Media", done: true },
-                            { step: 3, label: "(Set Goals)", done: true, active: true },
-                            { step: 4, label: "Team", done: false },
-                            { step: 5, label: "Launch", done: false, isPlus: true }
-                          ].map((item) => (
-                            <button
-                              key={item.step}
-                              type="button"
-                              onClick={() => {
-                                setActiveGoalStep(item.step);
-                                onShowToast?.(`Viewing Milestone Step ${item.step}: ${item.label}`);
-                              }}
-                              className={cn(
-                                "size-8 rounded-full flex items-center justify-center font-bold text-xs transition-transform cursor-pointer shadow-xs",
-                                item.step <= activeGoalStep
-                                  ? "bg-white text-emerald-700 shadow-md scale-105"
-                                  : "bg-white/40 dark:bg-white/10 text-neutral-400"
-                              )}
-                              title={item.label}
-                            >
-                              {item.done ? (
-                                <Check size={14} strokeWidth={3} className="text-emerald-600" />
-                              ) : item.isPlus ? (
-                                <Plus size={14} strokeWidth={2.5} className="text-neutral-500" />
-                              ) : (
-                                <span className="text-[11px]">{item.step}</span>
-                              )}
-                            </button>
-                          ))}
+                            { step: 1, label: "Create Project" },
+                            { step: 2, label: "Add Media" },
+                            { step: 3, label: "(Set Goals)" },
+                            { step: 4, label: "Team" },
+                            { step: 5, label: "Launch", isPlus: true }
+                          ].map((item) => {
+                            const done = item.step < activeGoalStep;
+                            const isActive = item.step === activeGoalStep;
+                            return (
+                              <button
+                                key={item.step}
+                                type="button"
+                                onClick={() => {
+                                  selectGoalStep(item.step);
+                                  onShowToast?.(`Viewing Milestone Step ${item.step}: ${item.label}`);
+                                }}
+                                className={cn(
+                                  "size-8 rounded-full flex items-center justify-center font-bold text-xs transition-transform cursor-pointer shadow-xs",
+                                  item.step <= activeGoalStep
+                                    ? "bg-white text-emerald-700 shadow-md scale-105"
+                                    : "bg-white/40 dark:bg-white/10 text-neutral-400"
+                                )}
+                                title={item.label}
+                              >
+                                {done ? (
+                                  <Check size={14} strokeWidth={3} className="text-emerald-600" />
+                                ) : item.isPlus && !isActive ? (
+                                  <Plus size={14} strokeWidth={2.5} className="text-neutral-500" />
+                                ) : (
+                                  <span className="text-[11px]">{item.step}</span>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
 
-                        {/* Step Labels Row */}
+                        {/* Step Labels Row — reflects the persisted current step */}
                         <div className="grid grid-cols-5 text-center text-[10.5px] font-bold">
-                          <span className="text-neutral-900 dark:text-white">Create Project</span>
-                          <span className="text-neutral-900 dark:text-white">Add Media</span>
-                          <span className="text-emerald-600 dark:text-emerald-400 underline font-black">(Set Goals)</span>
-                          <span className="text-neutral-400">Team</span>
-                          <span className="text-neutral-400">Launch</span>
+                          {["Create Project", "Add Media", "(Set Goals)", "Team", "Launch"].map((label, i) => {
+                            const step = i + 1;
+                            const isActive = step === activeGoalStep;
+                            const isDone = step < activeGoalStep;
+                            return (
+                              <span
+                                key={label}
+                                className={
+                                  isActive
+                                    ? "text-emerald-600 dark:text-emerald-400 underline font-black"
+                                    : isDone
+                                      ? "text-neutral-900 dark:text-white"
+                                      : "text-neutral-400"
+                                }
+                              >
+                                {label}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -2873,11 +2930,11 @@ export function NoskaIntelligencePanel({
 
                       {/* Dual Race Tracks */}
                       <div className="pt-2 space-y-3">
-                        {/* Lane 1: Peer (Lisa) */}
+                        {/* Lane 1: Peer (real logged points only) */}
                         <div className="relative h-11 rounded-full bg-white/70 dark:bg-black/25 border border-amber-900/10 dark:border-white/10 p-1 flex items-center">
                           <motion.div
-                            initial={{ width: "30%" }}
-                            animate={{ width: "68%" }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${racePeerWidth}%` }}
                             transition={{ duration: 1, ease: "easeOut" }}
                             className="h-full rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-end pr-1 shadow-xs relative"
                           >
@@ -2886,15 +2943,17 @@ export function NoskaIntelligencePanel({
                             </div>
                           </motion.div>
                           <span className="absolute right-4 text-[11px] font-bold text-amber-900/60 dark:text-amber-200/60">
-                            {racePoints.peerName} is {racePoints.peer - racePoints.user} points ahead
+                            {racePoints.peer > racePoints.user
+                              ? `${racePoints.peerName} is ${racePoints.peer - racePoints.user} pts ahead`
+                              : `${racePoints.peerName}: ${racePoints.peer} pts`}
                           </span>
                         </div>
 
                         {/* Lane 2: User */}
                         <div className="relative h-11 rounded-full bg-white/70 dark:bg-black/25 border border-amber-900/10 dark:border-white/10 p-1 flex items-center">
                           <motion.div
-                            initial={{ width: "20%" }}
-                            animate={{ width: "48%" }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${raceUserWidth}%` }}
                             transition={{ duration: 1, delay: 0.1, ease: "easeOut" }}
                             className="h-full rounded-full bg-amber-200/80 dark:bg-amber-800/40 flex items-center justify-end pr-1 shadow-xs relative"
                           >
@@ -2915,12 +2974,12 @@ export function NoskaIntelligencePanel({
 
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-[11px] font-bold text-amber-800/80 dark:text-amber-300 flex items-center gap-1">
-                          <Trophy size={13} className="text-amber-500" /> Weekly Challenge #4
+                          <Trophy size={13} className="text-amber-500" /> Weekly Challenge #{getIsoWeekNumber(currentDate)}
                         </span>
                         <button
                           type="button"
                           onClick={() => {
-                            setRacePoints(r => ({ ...r, user: r.user + 5 }));
+                            logHabitPoints(5);
                             onShowToast?.("🎯 +5 pts logged for habit streak!");
                           }}
                           className="px-3.5 py-1.5 rounded-full bg-amber-900/15 hover:bg-amber-900/25 dark:bg-white/15 dark:hover:bg-white/25 text-amber-950 dark:text-white text-xs font-bold transition cursor-pointer"
@@ -3007,28 +3066,44 @@ export function NoskaIntelligencePanel({
                     <div className="space-y-4">
                       {/* Upcoming Milestone & Project Time Row */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Upcoming Focus Card */}
-                        <div className="p-4 rounded-3xl bg-white dark:bg-[#161722] border border-black/[0.06] dark:border-white/[0.08] shadow-xs flex items-center gap-3.5">
-                          <div className="text-center pr-3 border-r border-black/[0.06] dark:border-white/[0.08]">
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 block">
-                              {futureFocusEvent.month}
-                            </span>
-                            <span className="text-base font-black text-neutral-900 dark:text-neutral-100">
-                              {futureFocusEvent.day}
-                            </span>
+                        {/* Upcoming Focus Card — real next event or honest empty state */}
+                        {futureFocusEvent ? (
+                          <div className="p-4 rounded-3xl bg-white dark:bg-[#161722] border border-black/[0.06] dark:border-white/[0.08] shadow-xs flex items-center gap-3.5">
+                            <div className="text-center pr-3 border-r border-black/[0.06] dark:border-white/[0.08]">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 block">
+                                {futureFocusEvent.month}
+                              </span>
+                              <span className="text-base font-black text-neutral-900 dark:text-neutral-100">
+                                {futureFocusEvent.day}
+                              </span>
+                            </div>
+                            <div className="size-9 rounded-full bg-gradient-to-tr from-purple-400 to-indigo-500 p-0.5 shrink-0 shadow-xs flex items-center justify-center text-white font-bold text-xs">
+                              {futureFocusEvent.initials}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400 block truncate">
+                                {futureFocusEvent.category}
+                              </span>
+                              <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200 block truncate">
+                                {futureFocusEvent.title}
+                              </span>
+                            </div>
                           </div>
-                          <div className="size-9 rounded-full bg-gradient-to-tr from-purple-400 to-indigo-500 p-0.5 shrink-0 shadow-xs flex items-center justify-center text-white font-bold text-xs">
-                            {futureFocusEvent.initials}
+                        ) : (
+                          <div className="p-4 rounded-3xl bg-white dark:bg-[#161722] border border-black/[0.06] dark:border-white/[0.08] shadow-xs flex items-center gap-3.5">
+                            <div className="size-9 rounded-full bg-neutral-100 dark:bg-neutral-800 shrink-0 flex items-center justify-center">
+                              <CalendarCheck size={15} className="text-neutral-400" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400 block">
+                                Future Focus
+                              </span>
+                              <span className="text-xs font-bold text-neutral-500 dark:text-neutral-400 block">
+                                No upcoming events scheduled
+                              </span>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400 block truncate">
-                              {futureFocusEvent.category}
-                            </span>
-                            <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200 block truncate">
-                              {futureFocusEvent.title}
-                            </span>
-                          </div>
-                        </div>
+                        )}
 
                         {/* Project Time Multi-segment Bar Card */}
                         <div className="p-4 rounded-3xl bg-white dark:bg-[#161722] border border-black/[0.06] dark:border-white/[0.08] shadow-xs space-y-2">

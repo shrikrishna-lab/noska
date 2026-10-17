@@ -308,7 +308,7 @@ function Shell({ children, ...rest }: { children: React.ReactNode; "data-testid"
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-6 font-sans select-none">
       <div className="w-full max-w-[360px] flex flex-col items-center" {...rest}>
         <div className="w-14 h-14 mb-7 bg-white border border-slate-200/80 flex items-center justify-center p-3 shrink-0 rounded-2xl shadow-lg">
-          <img src="/logo.png" alt="Noska Logo" className="w-full h-full object-contain pointer-events-none select-none" />
+          <img src="/logo-256.webp" alt="Noska Logo" className="w-full h-full object-contain pointer-events-none select-none" />
         </div>
         {children}
       </div>

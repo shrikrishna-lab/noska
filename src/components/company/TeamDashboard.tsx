@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
+import PageIcon from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Users, FileText, MessageSquare, ListChecks, Target, Calendar,
@@ -85,7 +86,7 @@ export function TeamDashboard({ teamId, company, member, onBack, onSettings }: T
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </button>
           <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: (team.color || "#6366f1") + "20" }}>
-            {team.icon || "👥"}
+            <PageIcon icon={team.icon} size={20} fallback="👥" />
           </div>
           <div className="flex-1">
             <h1 className="text-[18px] font-bold text-[var(--text)]">{team.name}</h1>
@@ -206,7 +207,7 @@ function TeamOverview({ team, members, pages }: {
             <div className="space-y-1">
               {recentPages.map(page => (
                 <div key={page.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--surface-2)] transition cursor-pointer">
-                  <span className="text-sm">{page.icon || "📝"}</span>
+                  <PageIcon icon={page.icon} size={14} fallback="📝" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-medium text-[var(--text)] truncate">{page.title}</p>
                     <p className="text-[9px] text-[var(--muted)]">{new Date(page.updated_at).toLocaleDateString()}</p>
@@ -728,7 +729,7 @@ function TeamFiles({ teamId, companyId, pages }: {
         <div className="grid grid-cols-3 gap-3">
           {filtered.map(page => (
             <div key={page.id} className="p-4 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] hover:border-[var(--accent)]/30 transition cursor-pointer">
-              <span className="text-2xl">{page.icon || "📄"}</span>
+              <PageIcon icon={page.icon} size={24} fallback="📄" />
               <p className="text-[12px] font-medium text-[var(--text)] mt-2 truncate">{page.title}</p>
               <p className="text-[9px] text-[var(--muted)] mt-0.5">{new Date(page.updated_at).toLocaleDateString()}</p>
             </div>
@@ -738,7 +739,7 @@ function TeamFiles({ teamId, companyId, pages }: {
         <div className="space-y-1">
           {filtered.map(page => (
             <div key={page.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--surface-2)] transition cursor-pointer">
-              <span className="text-lg">{page.icon || "📄"}</span>
+              <PageIcon icon={page.icon} size={18} fallback="📄" />
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-medium text-[var(--text)] truncate">{page.title}</p>
               </div>

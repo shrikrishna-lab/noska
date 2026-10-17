@@ -77,8 +77,11 @@ export function subscribeRuns(listener: (runs: RunRecord[]) => void): () => void
 /** Pull durable history from agent_runs into the mirror (merged view). */
 export async function refreshFromRemote(): Promise<void> {
   try {
-    const anyDb = supabase as unknown as { from: (t: string) => { select: (c: string) => { order: (c: string, o: Record<string, unknown>) => Promise<{ data: Array<Record<string, unknown>> | null }> } } };
-    const { data } = await anyDb.from("agent_runs").select("*").order("started_at", { ascending: false });
+    const anyDb = supabase as unknown as { from: (t: string) => { select: (c: string) => { order: (c: string, o: Record<string, unknown>) => { limit: (n: number) => Promise<{ data: Array<Record<string, unknown>> | null }> } } } };
+    const { data } = await anyDb.from("agent_runs")
+      .select("id,source_id,source_kind,trigger_type,status,started_at,created_at,completed_at,attempt,parent_run_id,duration_ms,error_message,final_output,counts")
+      .order("started_at", { ascending: false })
+      .limit(100);
     if (!data) return;
     const remote = data.map(rowToRun);
     const merged = new Map<string, RunRecord>();
@@ -223,7 +226,7 @@ export async function recordRunEvent(evt: Omit<RunEventRow, "seq"> & { seq?: num
 export async function fetchRunEvents(runId: string): Promise<Array<Record<string, unknown>>> {
   try {
     const anyDb = supabase as unknown as { from: (t: string) => { select: (c: string) => { eq: (c: string, v: string) => { order: (c: string, o: Record<string, unknown>) => { limit: (n: number) => Promise<{ data: Array<Record<string, unknown>> | null }> } } } } };
-    const { data } = await anyDb.from("agent_run_events").select("*").eq("run_id", runId).order("created_at", { ascending: true }).limit(200);
+    const { data } = await anyDb.from("agent_run_events").select("id,seq,type,step,status,duration_ms,metadata").eq("run_id", runId).order("created_at", { ascending: true }).limit(200);
     return data ?? [];
   } catch {
     return [];

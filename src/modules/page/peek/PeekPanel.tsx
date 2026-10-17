@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import type { CSSProperties, ChangeEvent, MouseEvent as ReactMouseEvent } from "react";
 import { X, Expand, Minimize2 } from "lucide-react";
-import { PageIcon } from "../../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 import type { DatabaseRow, DatabaseSchema, PropertyDefinition } from "../../database/types/database";
 
 type PanelMode = "right" | "bottom" | "floating";

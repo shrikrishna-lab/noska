@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { realtimeCollab } from '../../lib/realtimeCollab';
+import { fetchPageCollaborators } from '../../lib/share/access';
 import { Lock, Radio, Users } from 'lucide-react';
 
 interface WorkspaceJoinBarProps {
@@ -45,6 +46,23 @@ export default function WorkspaceJoinBar({
   const [peersOnline, setPeersOnline] = useState(0);
   const [shakeKey, setShakeKey] = useState(0);
   const [shockwaveKey, setShockwaveKey] = useState(0);
+  // How many people hold an explicit grant on this page. Without this the pill
+  // can only say "Collab", which reads as if nobody else can join.
+  const [collaboratorCount, setCollaboratorCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!pageId) { setCollaboratorCount(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const people = await fetchPageCollaborators(pageId);
+        if (!cancelled) setCollaboratorCount(people.length);
+      } catch {
+        if (!cancelled) setCollaboratorCount(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pageId]);
 
   useEffect(() => {
     const unsub1 = realtimeCollab.on('workspace:join', () => setJoined(true));
@@ -92,15 +110,18 @@ export default function WorkspaceJoinBar({
   };
 
   const isInvitee = !!sharedRole;
+  // `ROLE_LABELS` entries already read as verb phrases ("can edit"), so the
+  // invitee label must not prefix another "can" — doing so rendered
+  // "you can can edit".
   const roleLabel = ROLE_LABELS[sharedRole || ''] || 'shared';
   const liveLabel = peersOnline > 0
     ? `${peersOnline} online`
     : isPageShared
-      ? (isInvitee ? `you can ${ROLE_LABELS[sharedRole || ''] || 'view'}` : 'shared')
+      ? (isInvitee ? `you ${ROLE_LABELS[sharedRole || ''] || 'can view'}` : 'shared')
       : null;
 
   const tooltip = isPrivate
-    ? "This page is Private (not Public). Click to see options to enable collaboration."
+    ? "Only you can open this page. Share it from the Share button — people you approve become collaborators."
     : isInvitee
       ? `Shared with you — ${roleLabel}. ${joined ? 'You appear online to collaborators.' : 'Click to appear online.'}`
       : isPageShared
@@ -213,7 +234,7 @@ export default function WorkspaceJoinBar({
           className="font-medium text-[11.5px] tracking-tight whitespace-nowrap flex items-center gap-1.5"
         >
           {isPrivate ? (
-            <span>Collab · Private</span>
+            <span>Only you · Share to collaborate</span>
           ) : isInvitee ? (
             <>
               <span>Shared</span>
@@ -226,10 +247,17 @@ export default function WorkspaceJoinBar({
               <Users size={11} className="opacity-75 shrink-0" />
               <span>Collab · {peersOnline} online</span>
             </>
-          ) : isPageShared && joined ? (
+          ) : isPageShared ? (
             <>
-              <Radio size={11} className="opacity-75 shrink-0 animate-pulse" />
-              <span>Collab · live</span>
+              {joined
+                ? <Radio size={11} className="opacity-75 shrink-0 animate-pulse" />
+                : <Users size={11} className="opacity-75 shrink-0" />}
+              <span>Collab{joined ? " · live" : ""}</span>
+              {collaboratorCount !== null && collaboratorCount > 0 && (
+                <span className="font-normal opacity-75 text-[10.5px]">
+                  · {collaboratorCount} other{collaboratorCount > 1 ? "s" : ""}
+                </span>
+              )}
             </>
           ) : joined ? (
             <span>Collab · on</span>

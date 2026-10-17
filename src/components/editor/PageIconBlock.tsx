@@ -19,7 +19,7 @@ import {
   FolderPlus,
   Tag
 } from "lucide-react";
-import * as LucideIcons from "lucide-react";
+import { LucideIcon, parseLucideIcon } from "../PageIcon";
 import { optimizeImage, type Page } from "../../lib/supabaseService";
 import { emojis } from "../../utils/helpers";
 import {
@@ -27,6 +27,8 @@ import {
   EMOJI_ICONS,
   searchEmojis,
   LUCIDE_ICON_NAMES,
+  LUCIDE_CATEGORIES,
+  LUCIDE_ICONS_BY_CATEGORY,
   getImportedIcons,
   addImportedIcon,
   removeImportedIcon,
@@ -140,11 +142,9 @@ export default function PageIconBlock({
   const isLucideIcon =
     typeof page.icon === "string" &&
     !isUrl &&
-    page.icon.startsWith("lucide:") &&
-    page.icon.replace("lucide:", "") in LucideIcons;
+    parseLucideIcon(page.icon) !== null;
 
-  const lucideIconName = isLucideIcon ? (page.icon as string).replace("lucide:", "") : null;
-  const SelectedLucideComp = lucideIconName ? (LucideIcons as any)[lucideIconName] : null;
+  const lucideIconName = isLucideIcon ? parseLucideIcon(page.icon as string) : null;
 
   // Filtered Emojis
   const filteredEmojis = useMemo(() => {
@@ -161,9 +161,15 @@ export default function PageIconBlock({
   // Filtered Lucide Icons
   const filteredLucideIcons = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return LUCIDE_ICON_NAMES.slice(0, 120);
-    return LUCIDE_ICON_NAMES.filter((name) => name.toLowerCase().includes(q)).slice(0, 150);
-  }, [searchQuery]);
+    let list = LUCIDE_ICON_NAMES;
+    if (selectedCategory !== "all" && LUCIDE_ICONS_BY_CATEGORY[selectedCategory]) {
+      list = LUCIDE_ICONS_BY_CATEGORY[selectedCategory];
+    }
+    if (q) {
+      return list.filter((name) => name.toLowerCase().includes(q)).slice(0, 300);
+    }
+    return selectedCategory === "all" ? list.slice(0, 500) : list;
+  }, [searchQuery, selectedCategory]);
 
   // Filtered Imported Icons
   const importedCategories = useMemo(() => getImportedCategories(), [importedIcons]);
@@ -323,7 +329,11 @@ export default function PageIconBlock({
           <img
             src={page.icon}
             alt="Page Icon"
-            className="w-full h-full object-cover pointer-events-none"
+            // object-contain, not object-cover: a user-uploaded icon that is
+            // not square was being cropped. Every other icon <img> in the app
+            // uses contain.
+            className="w-full h-full object-contain pointer-events-none"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
             style={{
               borderRadius:
                 iconBg === "circle"
@@ -331,10 +341,15 @@ export default function PageIconBlock({
                   : `${Math.max(0, iconRadius - Math.round(iconPadding / 2))}px`
             }}
           />
-        ) : isLucideIcon && SelectedLucideComp ? (
-          <SelectedLucideComp
+        ) : isLucideIcon && lucideIconName ? (
+          <LucideIcon
+            name={lucideIconName}
             size={Math.round(iconSize * 0.65)}
             className="text-[var(--text)] transition-transform"
+            // Was `{page.icon}` — which rendered the literal "lucide:Foo" string
+            // whenever a name failed to resolve. An empty fallback degrades to a
+            // blank tile; leaking an identifier does not.
+            fallback={<span className="leading-none" style={{ fontSize: `${iconSize * 0.72}px` }}>📄</span>}
           />
         ) : (
           <span
@@ -371,17 +386,17 @@ export default function PageIconBlock({
                 left: coords.left,
                 zIndex: 9999
               }}
-              className="apple-liquid-glass w-[360px] rounded-[30px] p-4 text-[12px] text-[var(--text)] select-none flex flex-col gap-3.5 cursor-default"
+              className="apple-liquid-glass w-[360px] rounded-[22px] p-3.5 text-[12px] text-[var(--text)] select-none flex flex-col gap-3 cursor-default shadow-[0_24px_55px_-10px_rgba(0,0,0,0.25),0_8px_24px_-4px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] dark:shadow-[0_28px_65px_-10px_rgba(0,0,0,0.75),0_8px_24px_-4px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.14)]"
             >
               {/* Header with Navigation Tabs - draggable handle */}
               <div className="flex items-center justify-between border-b border-black/[0.08] dark:border-white/[0.08] pb-2.5 cursor-grab active:cursor-grabbing">
-                <div className="flex items-center gap-1 apple-glass-pill p-1 rounded-2xl">
+                <div className="flex items-center gap-1 p-0.5 rounded-[12px] bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
                   <button
                     onClick={() => setActiveTab("icons")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-[11px] font-semibold transition cursor-pointer ${
                       activeTab === "icons"
-                        ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold"
-                        : "text-[var(--text-secondary)] hover:text-[var(--text)]"
+                        ? "bg-white dark:bg-[#2c2d33] text-[var(--noska-blue)] font-bold shadow-xs"
+                        : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                     }`}
                   >
                     <Smile size={12} />
@@ -389,10 +404,10 @@ export default function PageIconBlock({
                   </button>
                   <button
                     onClick={() => setActiveTab("style")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-[11px] font-semibold transition cursor-pointer ${
                       activeTab === "style"
-                        ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold"
-                        : "text-[var(--text-secondary)] hover:text-[var(--text)]"
+                        ? "bg-white dark:bg-[#2c2d33] text-[var(--noska-blue)] font-bold shadow-xs"
+                        : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                     }`}
                   >
                     <Sliders size={12} />
@@ -403,7 +418,7 @@ export default function PageIconBlock({
                 <div className="flex items-center gap-1">
                   <button
                     onClick={handleRandomize}
-                    className="apple-glass-btn h-7 w-7 rounded-full text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center cursor-pointer"
+                    className="apple-glass-btn h-7 w-7 rounded-full text-neutral-500 hover:text-neutral-900 dark:hover:text-white grid place-items-center cursor-pointer transition"
                     title="Random icon"
                   >
                     <Shuffle size={13} />
@@ -413,14 +428,14 @@ export default function PageIconBlock({
                       onPagePatch({ icon: "" });
                       onClose();
                     }}
-                    className="apple-glass-btn h-7 w-7 rounded-full hover:bg-[var(--danger)]/20 text-[var(--text-secondary)] hover:text-[var(--danger)] grid place-items-center cursor-pointer"
+                    className="apple-glass-btn h-7 w-7 rounded-full hover:bg-[var(--danger)]/20 text-neutral-500 hover:text-[var(--danger)] grid place-items-center cursor-pointer transition"
                     title="Remove icon"
                   >
                     <Trash2 size={13} />
                   </button>
                   <button
                     onClick={onClose}
-                    className="apple-glass-btn h-7 w-7 rounded-full text-[var(--text-secondary)] hover:text-[var(--text)] grid place-items-center cursor-pointer"
+                    className="apple-glass-btn h-7 w-7 rounded-full text-neutral-500 hover:text-neutral-900 dark:hover:text-white grid place-items-center cursor-pointer transition"
                     title="Close"
                   >
                     <X size={13} />
@@ -432,27 +447,27 @@ export default function PageIconBlock({
               {activeTab === "icons" && (
                 <div className="flex flex-col gap-2.5">
                   {/* Mode switcher: Emojis, Icons, Imported */}
-                  <div className="flex items-center justify-between gap-1 apple-glass-pill p-1 rounded-2xl">
+                  <div className="flex items-center justify-between gap-1 p-0.5 rounded-[12px] bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
                     <button
                       onClick={() => { setIconMode("emojis"); setSelectedCategory("all"); }}
-                      className={`flex-1 py-1.5 rounded-xl text-[10.5px] font-semibold transition cursor-pointer ${
-                        iconMode === "emojis" ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold" : "text-[var(--text-secondary)] hover:text-[var(--text)]"
+                      className={`flex-1 py-1 rounded-[9px] text-[11px] font-semibold transition cursor-pointer ${
+                        iconMode === "emojis" ? "bg-white dark:bg-[#2c2d33] text-[var(--noska-blue)] font-bold shadow-xs" : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                       }`}
                     >
                       Emojis
                     </button>
                     <button
                       onClick={() => { setIconMode("notion_icons"); setSelectedCategory("all"); }}
-                      className={`flex-1 py-1.5 rounded-xl text-[10.5px] font-semibold transition cursor-pointer ${
-                        iconMode === "notion_icons" ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold" : "text-[var(--text-secondary)] hover:text-[var(--text)]"
+                      className={`flex-1 py-1 rounded-[9px] text-[11px] font-semibold transition cursor-pointer ${
+                        iconMode === "notion_icons" ? "bg-white dark:bg-[#2c2d33] text-[var(--noska-blue)] font-bold shadow-xs" : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                       }`}
                     >
                       Icons
                     </button>
                     <button
                       onClick={() => { setIconMode("imported"); setSelectedCategory("all"); }}
-                      className={`flex-1 py-1.5 rounded-xl text-[10.5px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
-                        iconMode === "imported" ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold" : "text-[var(--text-secondary)] hover:text-[var(--text)]"
+                      className={`flex-1 py-1 rounded-[9px] text-[11px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
+                        iconMode === "imported" ? "bg-white dark:bg-[#2c2d33] text-[var(--noska-blue)] font-bold shadow-xs" : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                       }`}
                     >
                       <span>Imported</span>
@@ -469,19 +484,19 @@ export default function PageIconBlock({
                     <div className="relative flex-1">
                       <Search
                         size={12}
-                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)]"
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
                       />
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder={`Search ${iconMode === "emojis" ? "emojis..." : iconMode === "notion_icons" ? "icons..." : "imported icons..."}`}
-                        className="w-full pl-7 pr-2.5 py-1.5 rounded-xl apple-glass-pill text-[12px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--noska-blue)] transition"
+                        className="w-full pl-7 pr-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.05] dark:border-white/[0.07] text-[12px] text-[var(--text)] placeholder:text-neutral-400 outline-none focus:ring-2 focus:ring-[var(--noska-blue)]/30 focus:border-[var(--noska-blue)]/50 transition"
                       />
                     </div>
                     <button
                       onClick={() => setShowImportDialog((v) => !v)}
-                      className="apple-glass-btn flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] text-[var(--text)] font-semibold cursor-pointer"
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.07] dark:hover:bg-white/[0.1] border border-black/[0.05] dark:border-white/[0.07] text-[11px] text-[var(--text)] font-semibold cursor-pointer transition shadow-2xs"
                       title="Import custom SVG/PNG icon with auto category"
                     >
                       <Upload size={12} />
@@ -539,10 +554,28 @@ export default function PageIconBlock({
                         <button
                           key={c.id}
                           onClick={() => setSelectedCategory(c.id)}
-                          className={`px-2.5 py-1 rounded-xl shrink-0 font-medium transition cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${
                             selectedCategory === c.id
-                              ? "bg-[var(--noska-blue)] text-white font-bold shadow-md"
-                              : "apple-glass-pill text-[var(--text-secondary)] hover:text-[var(--text)]"
+                              ? "bg-[var(--noska-blue)] text-white font-bold shadow-xs"
+                              : "bg-black/[0.035] dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-300 hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
+                          }`}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {iconMode === "notion_icons" && (
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[10.5px]">
+                      {LUCIDE_CATEGORIES.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => setSelectedCategory(c.id)}
+                          className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${
+                            selectedCategory === c.id
+                              ? "bg-[var(--noska-blue)] text-white font-bold shadow-xs"
+                              : "bg-black/[0.035] dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-300 hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
                           }`}
                         >
                           {c.label}
@@ -555,10 +588,10 @@ export default function PageIconBlock({
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[10.5px]">
                       <button
                         onClick={() => setSelectedCategory("all")}
-                        className={`px-2.5 py-1 rounded-xl shrink-0 font-medium transition cursor-pointer ${
+                        className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${
                           selectedCategory === "all"
-                            ? "bg-[var(--noska-blue)] text-white font-bold shadow-md"
-                            : "apple-glass-pill text-[var(--text-secondary)] hover:text-[var(--text)]"
+                            ? "bg-[var(--noska-blue)] text-white font-bold shadow-xs"
+                            : "bg-black/[0.035] dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-300 hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
                         }`}
                       >
                         All Categories
@@ -567,10 +600,10 @@ export default function PageIconBlock({
                         <button
                           key={cat}
                           onClick={() => setSelectedCategory(cat)}
-                          className={`px-2.5 py-1 rounded-xl shrink-0 font-medium transition cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${
                             selectedCategory === cat
-                              ? "bg-[var(--noska-blue)] text-white font-bold shadow-md"
-                              : "apple-glass-pill text-[var(--text-secondary)] hover:text-[var(--text)]"
+                              ? "bg-[var(--noska-blue)] text-white font-bold shadow-xs"
+                              : "bg-black/[0.035] dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-300 hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
                           }`}
                         >
                           📁 {cat}
@@ -580,7 +613,7 @@ export default function PageIconBlock({
                   )}
 
                   {/* Grid Container */}
-                  <div className="grid grid-cols-7 gap-1.5 max-h-[195px] overflow-y-auto p-2 rounded-2xl apple-glass-pill">
+                  <div className="grid grid-cols-7 gap-1.5 max-h-[195px] overflow-y-auto p-2 rounded-xl bg-black/[0.025] dark:bg-white/[0.035] border border-black/[0.05] dark:border-white/[0.07] scrollbar-thin">
                     {iconMode === "emojis" &&
                       filteredEmojis.map((emoji) => (
                         <button
@@ -590,17 +623,21 @@ export default function PageIconBlock({
                             onClose();
                           }}
                           className={`h-9 w-9 rounded-xl flex items-center justify-center text-lg hover:bg-black/[0.06] dark:hover:bg-white/[0.1] hover:scale-115 active:scale-95 transition cursor-pointer ${
-                            page.icon === emoji ? "apple-glass-active-pill ring-2 ring-[var(--noska-blue)]" : ""
+                            page.icon === emoji ? "bg-white dark:bg-white/15 shadow-xs ring-2 ring-[var(--noska-blue)]/80" : ""
                           }`}
                         >
                           {emoji}
                         </button>
                       ))}
 
+                    {iconMode === "notion_icons" && filteredLucideIcons.length === 0 && (
+                      <div className="col-span-7 py-8 text-center text-xs text-neutral-400">
+                        No icons found matching &quot;{searchQuery}&quot;
+                      </div>
+                    )}
+
                     {iconMode === "notion_icons" &&
                       filteredLucideIcons.map((iconName) => {
-                        const IconComp = (LucideIcons as any)[iconName];
-                        if (!IconComp) return null;
                         const iconKey = `lucide:${iconName}`;
                         const isSelected = page.icon === iconKey;
                         return (
@@ -610,12 +647,12 @@ export default function PageIconBlock({
                               onPagePatch({ icon: iconKey });
                               onClose();
                             }}
-                            className={`h-9 w-9 rounded-xl flex items-center justify-center text-[var(--text)] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] hover:scale-115 active:scale-95 transition cursor-pointer ${
-                              isSelected ? "apple-glass-active-pill ring-2 ring-[var(--noska-blue)] text-[var(--noska-blue)]" : ""
+                            className={`h-9 w-9 rounded-xl overflow-hidden flex items-center justify-center text-[var(--text)] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] hover:scale-115 active:scale-95 transition cursor-pointer ${
+                              isSelected ? "bg-white dark:bg-white/15 shadow-xs ring-2 ring-[var(--noska-blue)]/80 text-[var(--noska-blue)]" : ""
                             }`}
                             title={iconName}
                           >
-                            <IconComp size={18} />
+                            <LucideIcon name={iconName} size={18} fallback={null} />
                           </button>
                         );
                       })}
@@ -635,7 +672,7 @@ export default function PageIconBlock({
                                 onClose();
                               }}
                               className={`h-9 w-9 rounded-xl flex items-center justify-center p-1 hover:bg-black/[0.06] dark:hover:bg-white/[0.1] hover:scale-115 active:scale-95 transition cursor-pointer ${
-                                isSelected ? "apple-glass-active-pill ring-2 ring-[var(--noska-blue)]" : ""
+                                isSelected ? "bg-white dark:bg-white/15 shadow-xs ring-2 ring-[var(--noska-blue)]/80" : ""
                               }`}
                               title={item.name}
                             >
@@ -668,7 +705,7 @@ export default function PageIconBlock({
                   {/* Container Box Style */}
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Background Style</span>
-                    <div className="grid grid-cols-5 gap-1 apple-glass-pill p-1 rounded-2xl">
+                    <div className="grid grid-cols-5 gap-1 p-0.5 rounded-[12px] bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
                       {[
                         { id: "transparent", label: "None" },
                         { id: "card", label: "Card" },
@@ -679,10 +716,10 @@ export default function PageIconBlock({
                         <button
                           key={style.id}
                           onClick={() => onPagePatch({ iconBg: style.id })}
-                          className={`py-1.5 rounded-xl text-[10px] font-semibold transition cursor-pointer ${
+                          className={`py-1.5 rounded-[9px] text-[10px] font-semibold transition cursor-pointer ${
                             iconBg === style.id
-                              ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold"
-                              : "text-[var(--text-secondary)] hover:text-[var(--text)]"
+                              ? "bg-white dark:bg-[#2c2d33] text-[var(--noska-blue)] font-bold shadow-xs"
+                              : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                           }`}
                         >
                           {style.label}
@@ -716,10 +753,10 @@ export default function PageIconBlock({
                         <button
                           key={preset.label}
                           onClick={() => onPagePatch({ iconSize: preset.size })}
-                          className={`py-1.5 rounded-xl text-[10px] font-semibold border transition cursor-pointer ${
+                          className={`py-1 rounded-[8px] text-[10px] font-semibold transition cursor-pointer ${
                             iconSize === preset.size
-                              ? "bg-[var(--noska-blue)] text-white border-[var(--noska-blue)] shadow-sm"
-                              : "apple-glass-pill text-[var(--text-secondary)] hover:text-[var(--text)]"
+                              ? "bg-[var(--noska-blue)] text-white shadow-xs"
+                              : "bg-black/[0.04] dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300 hover:bg-black/[0.07] dark:hover:bg-white/[0.1]"
                           }`}
                         >
                           {preset.label} ({preset.size}px)
@@ -731,7 +768,7 @@ export default function PageIconBlock({
                   {/* Alignment Presets */}
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Alignment</span>
-                    <div className="grid grid-cols-4 gap-1 apple-glass-pill p-1 rounded-2xl">
+                    <div className="grid grid-cols-4 gap-1 p-0.5 rounded-[12px] bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
                       {[
                         { id: "overlap", label: "Overlap", icon: Layers },
                         { id: "left", label: "Left", icon: AlignLeft },
@@ -741,10 +778,10 @@ export default function PageIconBlock({
                         <button
                           key={id}
                           onClick={() => onPagePatch({ iconAlign: id })}
-                          className={`flex items-center justify-center gap-1 py-1.5 rounded-xl text-[10px] font-semibold transition cursor-pointer ${
+                          className={`flex items-center justify-center gap-1 py-1.5 rounded-[9px] text-[10px] font-semibold transition cursor-pointer ${
                             iconAlign === id
-                              ? "apple-glass-active-pill text-[var(--noska-blue)] font-bold"
-                              : "text-[var(--text-secondary)] hover:text-[var(--text)]"
+                              ? "bg-white dark:bg-[#2c2d33] text-[var(--noska-blue)] font-bold shadow-xs"
+                              : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                           }`}
                         >
                           <Icon size={12} />

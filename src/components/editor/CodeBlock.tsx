@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Copy, Check, ChevronDown } from "lucide-react";
+import type { HLJSApi } from "highlight.js";
 import type { CodeBlockData } from "../../../types/blocks";
+import { normalizeCodeLanguage, safeHighlight } from "../../utils/codeLanguage";
+import { loadHighlighter } from "../../utils/highlightLoader";
 
 const LANGUAGES = [
   { id: "javascript", label: "JavaScript" },
@@ -34,32 +37,47 @@ interface CodeBlockProps {
   onDelete?: () => void;
 }
 
-let _hljs: any = null;
-let _hljsPromise: Promise<void> | null = null;
-function ensureHljs(): Promise<void> {
-  if (!_hljsPromise) {
-    _hljsPromise = import("highlight.js").then((m) => {
-      _hljs = m.default;
-      import("highlight.js/styles/github-dark.css").catch(() => {});
-    });
-  }
-  return _hljsPromise;
-}
+// Shared across every mounted CodeBlock. `loadHighlighter` loads
+// highlight.js core plus only the grammar(s) blocks actually use — see
+// src/utils/highlightLoader.ts for why the full bundle is no longer imported.
+let _hljs: HLJSApi | null = null;
 
 export default function CodeBlock({ block, onPatch, isLocked, onDelete }: CodeBlockProps) {
-  const [language, setLanguage] = useState(block.language || "javascript");
+  const [language, setLanguage] = useState(() =>
+    block.language ? normalizeCodeLanguage(block.language) : "javascript",
+  );
   const [copied, setCopied] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const codeRef = useRef<HTMLPreElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
-  const [hljsReady, setHljsReady] = useState(!!_hljs);
+  // Which language the shared highlighter has registered. Re-arms when the
+  // block's language changes so a just-selected grammar re-highlights as soon
+  // as its chunk arrives (until then safeHighlight degrades to plaintext).
+  const [readyLang, setReadyLang] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!_hljs) ensureHljs().then(() => setHljsReady(true));
-  }, []);
+    let live = true;
+    loadHighlighter(language)
+      .then((hljs) => {
+        _hljs = hljs;
+        if (live) setReadyLang(language);
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [language]);
 
-  const highlighted = block.text && hljsReady
-    ? _hljs.highlight(block.text, { language: language === "plaintext" ? "plaintext" : language }).value
+  // Blocks imported from markdown/Notion, or written by an older build, can
+  // carry a language id highlight.js does not know ("plain", "C++", "visual
+  // basic"). Normalize on read so the label and the highlight agree, and never
+  // pass an unknown id to hljs — that throws and unwinds the whole React tree.
+  useEffect(() => {
+    if (!block.language) return;
+    const canonical = normalizeCodeLanguage(block.language);
+    setLanguage((prev) => (prev === canonical ? prev : canonical));
+  }, [block.language]);
+
+  const highlighted = block.text && readyLang === language
+    ? safeHighlight(_hljs, block.text, language)
     : block.text?.replace(/</g, "&lt;").replace(/>/g, "&gt;") || "";
 
   useEffect(() => {
@@ -78,8 +96,9 @@ export default function CodeBlock({ block, onPatch, isLocked, onDelete }: CodeBl
   }, [block.text]);
 
   const handleLanguageChange = useCallback((langId: string) => {
-    setLanguage(langId);
-    onPatch({ language: langId });
+    const canonical = normalizeCodeLanguage(langId);
+    setLanguage(canonical);
+    onPatch({ language: canonical });
     setLangOpen(false);
   }, [onPatch]);
 

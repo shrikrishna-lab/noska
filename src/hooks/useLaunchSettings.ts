@@ -146,7 +146,7 @@ export function useLaunchSettings(): { settings: LaunchSettings; loading: boolea
       'launch_settings',
       async () => {
         EgressMonitor.logEvent('query', 'launch_settings');
-        const { data } = (await useSupabaseQuery('launch_settings')?.select('*').limit(1).single()) ?? {};
+        const { data } = (await useSupabaseQuery('launch_settings')?.select('id,launch_mode,login_mode,custom_login_url,launch_date,countdown_enabled,auto_switch_mode,auto_switch_at,maintenance_title,maintenance_message,registration_enabled,show_pricing,show_blog,show_docs,show_changelog,show_login,show_signup,show_waitlist,show_discord,show_community,show_social_links,page_visibility,route_protection,updated_at,published').limit(1).single()) ?? {};
         return data ? { ...DEFAULT_SETTINGS, ...(data as unknown as LaunchSettings) } : DEFAULT_SETTINGS;
       },
       5 * 60 * 1000
@@ -252,7 +252,7 @@ export function useCTAButtons(): {
       'launch_cta_buttons',
       async () => {
         EgressMonitor.logEvent('query', 'cta_buttons');
-        const { data } = (await useSupabaseQuery('cta_buttons')?.select('*').order('priority')) ?? {};
+        const { data } = (await useSupabaseQuery('cta_buttons')?.select('id,button_id,button_text,destination,variant,color,icon,open_in_new_tab,visible,enabled,animation,priority,confirmation_text,requires_auth,launch_mode_override,ab_variants,ab_enabled').order('priority')) ?? {};
         const map: Record<string, CTAButton> = {};
         if (data) {
           for (const btn of data as unknown as CTAButton[]) {
@@ -319,7 +319,7 @@ export function useAnnouncementBar(): { bar: AnnouncementBarData | null; loading
       'launch_announcement_bar',
       async () => {
         EgressMonitor.logEvent('query', 'announcement_bar');
-        const { data } = (await useSupabaseQuery('announcement_bar')?.select('*').limit(1).single()) ?? {};
+        const { data } = (await useSupabaseQuery('announcement_bar')?.select('id,enabled,text,link_url,link_text,background_color,text_color,emoji,countdown_enabled,countdown_target,dismissible,sticky,animation,position,bg_style,gradient_start,gradient_end,font_size,border_style,page_target,auto_dismiss_seconds,start_at,end_at,secondary_link_url,secondary_link_text,show_close_button').limit(1).single()) ?? {};
         return (data as unknown as AnnouncementBarData) || null;
       },
       5 * 60 * 1000
@@ -362,7 +362,7 @@ export function useLandingContent(): {
       'launch_landing_content',
       async () => {
         EgressMonitor.logEvent('query', 'landing_content');
-        const { data } = (await useSupabaseQuery('landing_content')?.select('*').order('sort_order')) ?? {};
+        const { data } = (await useSupabaseQuery('landing_content')?.select('id,section,title,subtitle,body,cta_text,cta_link,secondary_cta_text,secondary_cta_link,image_url,badge,active,sort_order').order('sort_order')) ?? {};
         return (data as unknown as LandingContent[]) || [];
       },
       5 * 60 * 1000
@@ -544,7 +544,7 @@ export function useWaitlistSettingsData(): { waitlistSettings: WaitlistSettingsD
       'launch_waitlist_settings',
       async () => {
         EgressMonitor.logEvent('query', 'waitlist_settings');
-        const { data: result } = (await useSupabaseQuery('waitlist_settings')?.select('*').limit(1).single()) ?? {};
+        const { data: result } = (await useSupabaseQuery('waitlist_settings')?.select('id,enabled,collect_name,collect_company,collect_role,collect_country,collect_referral_code,collect_phone,email_verification,double_opt_in,auto_approve,confirmation_title,confirmation_message').limit(1).single()) ?? {};
         return (result as unknown as WaitlistSettingsData) || null;
       },
       5 * 60 * 1000

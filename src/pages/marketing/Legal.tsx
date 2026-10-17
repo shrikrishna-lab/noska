@@ -119,7 +119,7 @@ export default function Legal() {
             EgressMonitor.logEvent('query', 'legal_pages', { slug });
             const { data, error } = await (supabaseAnon as any)
               .from('legal_pages')
-              .select('*')
+              .select('id,title,slug,content,published,created_at,updated_at')
               .eq('slug', slug)
               .eq('published', true)
               .single();

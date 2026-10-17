@@ -18,8 +18,6 @@ export const REAL_RELEASE_TITLE = "Update available"
 export const REAL_RELEASE_DESCRIPTION =
   "Restart the app to install the latest improvements and fixes."
 
-const LATEST_MANIFEST_URL =
-  "https://github.com/shrikrishna-lab/noska-desktop-releases/releases/latest/download/latest.json"
 const GH_RELEASE_API =
   "https://api.github.com/repos/shrikrishna-lab/noska-desktop-releases/releases/latest"
 
@@ -118,32 +116,7 @@ export async function getRealVersionInfo(): Promise<RealVersionInfo> {
     }
   }
 
-  // 2. Direct GitHub latest.json manifest check (instant live release manifest, zero cache)
-  if (typeof window !== "undefined" && window.fetch) {
-    try {
-      const res = await fetch(LATEST_MANIFEST_URL, {
-        headers: { accept: "application/json" },
-        cache: "no-store",
-      })
-      if (res.ok) {
-        const manifest = await res.json()
-        if (manifest?.version) {
-          const formattedVer = formatVersionTag(manifest.version)
-          const isNewer = isNewerVersion(formattedVer, APP_CURRENT_VERSION)
-          return {
-            version: formattedVer,
-            title: "Update available",
-            description: cleanReleaseNotes(manifest.notes),
-            isUpdateAvailable: isNewer,
-          }
-        }
-      }
-    } catch {
-      // Continue to next source
-    }
-  }
-
-  // 3. GitHub Releases REST API check (live GitHub API, zero cache)
+  // 2. GitHub Releases REST API check (live GitHub API, zero cache)
   if (typeof window !== "undefined" && window.fetch) {
     try {
       const res = await fetch(GH_RELEASE_API, {
@@ -169,7 +142,7 @@ export async function getRealVersionInfo(): Promise<RealVersionInfo> {
     }
   }
 
-  // 4. Supabase published changelog entries check
+  // 3. Supabase published changelog entries check
   try {
     const { data: entries } = await (supabaseAnon as any)
       .from("changelog_entries")
@@ -193,7 +166,7 @@ export async function getRealVersionInfo(): Promise<RealVersionInfo> {
     // Continue to fallback
   }
 
-  // 5. If no remote update is found, report current app version with isUpdateAvailable: false
+  // 4. If no remote update is found, report current app version with isUpdateAvailable: false
   return {
     version: APP_CURRENT_VERSION,
     title: "Update available",

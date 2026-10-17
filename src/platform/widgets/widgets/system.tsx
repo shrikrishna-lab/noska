@@ -2,7 +2,7 @@
  * System widgets — Sync Status, Connection Status, Noska World Clock & Timezones,
  * and Ambient Soundscapes Player.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, Loader2, RefreshCw, TriangleAlert, Wifi, WifiOff, Globe, Volume2, VolumeX, Play, Pause, CloudRain, Trees, Coffee, Waves, Sun, Moon } from "lucide-react";
 import { useWidgetEngine } from "../engine";
@@ -214,19 +214,150 @@ const SOUNDS = [
 ];
 
 export function AmbientSoundscapesWidget({ ctx }: WidgetProps) {
-  const [activeSound, setActiveSound] = useState<string | null>("rain");
+  const [activeSound, setActiveSound] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(0.6);
+  const audioRef = useRef<{ ctx: AudioContext; gain: GainNode; sources: AudioScheduledSourceNode[] } | null>(null);
+
+  const stopSoundscape = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.sources.forEach((node) => {
+        try { node.stop(); } catch { /* already stopped */ }
+        try { node.disconnect(); } catch { /* already disconnected */ }
+      });
+      try { void audio.ctx.close(); } catch { /* context already closed */ }
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
+
+  const startSoundscape = useCallback(
+    (id: string) => {
+      stopSoundscape();
+      let created: AudioContext | null = null;
+      try {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtx) throw new Error("Web Audio unsupported");
+        const ac = new AudioCtx();
+        created = ac;
+        if (ac.state === "suspended") void ac.resume();
+
+        const master = ac.createGain();
+        master.gain.value = volume * 0.15;
+        master.connect(ac.destination);
+
+        const sources: AudioScheduledSourceNode[] = [];
+
+        const noiseBuffer = (seconds: number, brownFactor: number) => {
+          const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * seconds), ac.sampleRate);
+          const out = buf.getChannelData(0);
+          let last = 0;
+          for (let i = 0; i < out.length; i++) {
+            const white = Math.random() * 2 - 1;
+            last = (last + brownFactor * white) / (1 + brownFactor);
+            out[i] = last * 3.5;
+          }
+          return buf;
+        };
+
+        if (id === "rain") {
+          const src = ac.createBufferSource();
+          src.buffer = noiseBuffer(2, 0.08);
+          src.loop = true;
+          const band = ac.createBiquadFilter();
+          band.type = "bandpass";
+          band.frequency.value = 1400;
+          band.Q.value = 0.4;
+          src.connect(band);
+          band.connect(master);
+          src.start();
+          sources.push(src);
+        } else if (id === "forest") {
+          const src = ac.createBufferSource();
+          src.buffer = noiseBuffer(2, 0.02);
+          src.loop = true;
+          const lp = ac.createBiquadFilter();
+          lp.type = "lowpass";
+          lp.frequency.value = 500;
+          src.connect(lp);
+          lp.connect(master);
+          src.start();
+          sources.push(src);
+        } else if (id === "cafe") {
+          [130.81, 196.0, 261.63].forEach((freq, i) => {
+            const osc = ac.createOscillator();
+            osc.type = i === 2 ? "sine" : "triangle";
+            osc.frequency.value = freq;
+            const oscGain = ac.createGain();
+            oscGain.gain.value = 0.22;
+            const lp = ac.createBiquadFilter();
+            lp.type = "lowpass";
+            lp.frequency.value = 700;
+            osc.connect(oscGain);
+            oscGain.connect(lp);
+            lp.connect(master);
+            osc.start();
+            sources.push(osc);
+          });
+        } else if (id === "waves") {
+          const src = ac.createBufferSource();
+          src.buffer = noiseBuffer(2, 0.02);
+          src.loop = true;
+          const lp = ac.createBiquadFilter();
+          lp.type = "lowpass";
+          lp.frequency.value = 300;
+          const swell = ac.createGain();
+          swell.gain.value = 0.7;
+          const lfo = ac.createOscillator();
+          lfo.frequency.value = 0.12;
+          const lfoGain = ac.createGain();
+          lfoGain.gain.value = 0.3;
+          lfo.connect(lfoGain);
+          lfoGain.connect(swell.gain);
+          src.connect(lp);
+          lp.connect(swell);
+          swell.connect(master);
+          src.start();
+          lfo.start();
+          sources.push(src, lfo);
+        } else {
+          void ac.close();
+          return false;
+        }
+
+        audioRef.current = { ctx: ac, gain: master, sources };
+        setActiveSound(id);
+        setIsPlaying(true);
+        return true;
+      } catch {
+        // Never leak a half-built AudioContext if node wiring fails.
+        if (created && created.state !== "closed") {
+          try { void created.close(); } catch { /* already closing */ }
+        }
+        ctx.actions.onToast?.("Audio is unavailable in this browser");
+        return false;
+      }
+    },
+    [stopSoundscape, volume, ctx.actions],
+  );
 
   const togglePlay = (id: string) => {
     if (activeSound === id && isPlaying) {
-      setIsPlaying(false);
+      stopSoundscape();
       ctx.actions.onToast?.("Soundscape paused ⏸️");
-    } else {
-      setActiveSound(id);
-      setIsPlaying(true);
+    } else if (startSoundscape(id)) {
       ctx.actions.onToast?.(`Playing ${SOUNDS.find((s) => s.id === id)?.name} 🎧`);
     }
   };
+
+  // Live volume updates without restarting the soundscape.
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.gain.gain.value = volume * 0.15;
+  }, [volume]);
+
+  // Never leave audio running after the widget unmounts.
+  useEffect(() => stopSoundscape, [stopSoundscape]);
 
   return (
     <div className="flex h-full flex-col justify-between p-2 select-none">
@@ -278,6 +409,22 @@ export function AmbientSoundscapesWidget({ ctx }: WidgetProps) {
             </motion.button>
           );
         })}
+      </div>
+
+      {/* Volume control — updates the live gain without restarting playback */}
+      <div className="flex items-center gap-2 pt-1.5">
+        <VolumeX size={12} className="text-neutral-400 shrink-0" />
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={volume}
+          onChange={(e) => setVolume(Number(e.target.value))}
+          className="h-1 flex-1 cursor-pointer accent-indigo-500"
+          aria-label="Soundscape volume"
+        />
+        <span className="w-8 text-right text-[10px] font-semibold text-neutral-400 tabular-nums">{Math.round(volume * 100)}%</span>
       </div>
     </div>
   );

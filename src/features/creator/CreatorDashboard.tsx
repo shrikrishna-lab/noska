@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { isEmojiIcon } from "@/components/PageIcon";
 import { motion, AnimatePresence } from "framer-motion";
 import { Store, Upload, Image, Video, DollarSign, Users, Settings, ExternalLink, Grid, BarChart3, ChevronLeft, Plus, Save, Trash2, Copy, Send, type LucideIcon } from "lucide-react";
 import { uid } from "../../utils/helpers";
@@ -164,7 +165,7 @@ function PublishForm({ pages, onPublish, onCancel }: {
           <select value={form.sourcePageId} onChange={e => setForm(f => ({ ...f, sourcePageId: e.target.value }))} className="w-full rounded-lg bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] outline-none">
             <option value="">Select a page...</option>
             {pages.filter(p => !p.trashed).map(p => (
-              <option key={p.id} value={p.id}>{p.icon?.startsWith("lucide:") ? "📄" : (p.icon || "📄")} {p.title || "Untitled"}</option>
+              <option key={p.id} value={p.id}>{isEmojiIcon(p.icon) ? p.icon : "📄"} {p.title || "Untitled"}</option>
             ))}
           </select>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react"
+import PageIcon from "@/components/PageIcon";
 import { useTeams } from "../../lib/TeamContext"
 import TeamSettingsModal from "./TeamSettingsModal"
 import { Plus, Settings, Mail, X } from "lucide-react"
@@ -117,7 +118,7 @@ export default function TeamSwitcher({ workspaceName, onView }: TeamSwitcherProp
             >
               <div className="flex items-center gap-2 min-w-0 pr-6">
                 <div className="flex h-5 w-5 items-center justify-center rounded-md bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.04] dark:border-white/[0.06] text-[11px] shadow-2xs shrink-0">
-                  {team.icon || "👥"}
+                  <PageIcon icon={team.icon} size={13} fallback="👥" />
                 </div>
                 <div className="min-w-0">
                   <div className="text-[11.5px] font-medium text-neutral-900 dark:text-white truncate leading-tight">{team.name}</div>

@@ -21,7 +21,7 @@ export function LaunchFooter() {
       <div className="nl-container">
         <div className="nl-footer-top">
           <a href="#nl-top" onClick={scrollTo('nl-top')} className="nl-footer-logo">
-            <img src="/logo.png" alt="Noska" />
+            <img src="/logo-256.webp" alt="Noska" />
             <span>Noska</span>
           </a>
           <div className="nl-footer-links">

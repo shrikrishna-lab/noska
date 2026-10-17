@@ -46,19 +46,18 @@ export class TogetherModelDiscovery implements ModelDiscoveryAdapter {
     if (!id) return null;
 
     // Filter to chat / language models
-    if (raw.type && raw.type !== "chat" && raw.type !== "language") {
+    if (raw.type && raw.type !== "chat" && raw.type !== "language" && raw.type !== "image" && raw.type !== "diffusion") {
       return null;
     }
 
     const lowerId = id.toLowerCase();
+    const isImageGen = raw.type === "image" || raw.type === "diffusion" || lowerId.includes("diffusion") || lowerId.includes("flux") || lowerId.includes("sdxl");
 
-    // Exclude embedding, audio, image-gen, rerank
+    // Exclude embedding, audio, rerank; retain image-capable models
     if (
       lowerId.includes("embed") ||
       lowerId.includes("whisper") ||
-      lowerId.includes("diffusion") ||
-      lowerId.includes("flux") ||
-      lowerId.includes("rerank")
+      lowerId.includes("rerank") && !isImageGen
     ) {
       return null;
     }
@@ -75,13 +74,13 @@ export class TogetherModelDiscovery implements ModelDiscoveryAdapter {
       createdAt: raw.created_at ? new Date(raw.created_at).getTime() : undefined,
       description: raw.description ? String(raw.description).slice(0, 200) : undefined,
       capabilities: {
-        streaming: true,
-        reasoning: isReasoning,
-        tools: !isReasoning,
-        vision: lowerId.includes("vision") || lowerId.includes("vl"),
+        streaming: !isImageGen,
+        reasoning: isReasoning && !isImageGen,
+        tools: !isReasoning && !isImageGen,
+        vision: !isImageGen && (lowerId.includes("vision") || lowerId.includes("vl")),
         audio: false,
         video: false,
-        imageGeneration: false,
+        imageGeneration: isImageGen,
         structuredOutput: true,
         mcp: true,
         agentMode: true,

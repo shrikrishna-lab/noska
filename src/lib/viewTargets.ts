@@ -108,8 +108,20 @@ function scoreTitleMatch(query: string, title: string): number {
 const NAV_LEAD = /^(?:please\s+)?(?:open|show|display|go\s*to|switch\s*to|navigate\s*to|take\s*me\s*to|jump\s*to)\s+/i;
 const PAGE_NOUN = /^(?:the\s+|my\s+)?(?:page|note|document)\s+(.+?)[.?!]?$/i;
 const PAGE_NOUN_TAIL = /^(?:the\s+|my\s+)?(.+?)\s+(?:page|note|document)[.?!]?$/i;
-/** Politeness wrappers people actually say: "can you open my inbox". */
-const COURTESY_LEAD = /^(?:(?:hey|ok|okay)\s+)?(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+)(?:please\s+)?/i;
+/**
+ * Politeness wrappers people actually say: "can you open my inbox",
+ * "please open my inbox", "show me the agents".
+ *
+ * A leading bare "please" used to survive stripping, so "please open my inbox"
+ * fell through the whole matcher and dead-ended. Likewise "show me the agents"
+ * kept the "me" and missed the exact-match command. Both are ordinary speech, so
+ * they are normalised here rather than duplicated into every command pattern.
+ *
+ * At least one politeness token is required, otherwise this would match the
+ * empty string at position 0 and strip nothing.
+ */
+const COURTESY_LEAD =
+  /^(?:(?:hey|ok|okay)\s+)?(?:(?:please|now)\s+|(?:(?:can|could|would|will|should)\s+you\s+)(?:please\s+)?|(?:show|tell|get)\s+me\s+(?:the\s+|my\s+)?)+/i;
 
 /** Strip politeness wrappers so command matching sees the bare request. */
 export function stripCourtesyPhrases(text: string): string {

@@ -137,9 +137,11 @@ interface FloatingMenuProps {
   children: ReactNode;
   width?: number;
   preferredAlign?: FloatingMenuAlign;
+  className?: string;
+  unstyled?: boolean;
 }
 
-export function FloatingMenu({ open, anchorRef, onClose, children, width = 320, preferredAlign = "right" }: FloatingMenuProps) {
+export function FloatingMenu({ open, anchorRef, onClose, children, width = 320, preferredAlign = "right", className = "", unstyled = false }: FloatingMenuProps) {
   const menuRef = useOutsideDismiss<HTMLDivElement>(open, onClose);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [maxHeight, setMaxHeight] = useState(480);
@@ -224,17 +226,43 @@ export function FloatingMenu({ open, anchorRef, onClose, children, width = 320, 
     }
   };
 
+  const springMenuVariants: Variants = {
+    hidden: { opacity: 0, scale: 0.94, y: -6, filter: "blur(4px)" },
+    show: {
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      filter: "blur(0px)",
+      transition: {
+        type: "spring",
+        stiffness: 460,
+        damping: 30,
+        mass: 0.6
+      }
+    },
+    exit: {
+      opacity: 0,
+      scale: 0.95,
+      y: -3,
+      filter: "blur(2px)",
+      transition: { duration: 0.12, ease: "easeOut" }
+    }
+  };
+
   return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
           ref={menuRef}
-          variants={containerVariants}
+          variants={springMenuVariants}
           initial="hidden"
           animate="show"
           exit="exit"
           style={{ top: pos.top, left: pos.left, width, maxHeight: `min(${maxHeight}px, calc(100vh - 24px))`, transformOrigin: "top left", scrollBehavior: "smooth" }}
-          className="fixed z-[100] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-[var(--text)] shadow-[var(--shadow-floating)] scrollbar-none"
+          className={unstyled
+            ? `fixed z-[120] outline-none ${className}`
+            : `fixed z-[120] overflow-y-auto rounded-[18px] border border-black/[0.08] dark:border-white/[0.12] bg-white/98 dark:bg-[#1a1b20]/98 backdrop-blur-3xl p-1.5 text-[var(--text)] shadow-[0_24px_56px_-8px_rgba(0,0,0,0.28),0_8px_20px_-4px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_28px_64px_-10px_rgba(0,0,0,0.85),0_10px_24px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.14)] scrollbar-none ${className}`
+          }
         >
           {children}
         </motion.div>
@@ -333,7 +361,7 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(fun
     const el = localRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.max(40, el.scrollHeight)}px`;
+    el.style.height = `${Math.max(28, el.scrollHeight)}px`;
   }, [value]);
 
   return (
@@ -354,7 +382,7 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(fun
       readOnly={readOnly}
       disabled={disabled}
       style={{ lineHeight: "inherit", ...style }}
-      className={`w-full resize-none overflow-hidden bg-transparent px-2 py-1.5 text-[var(--text)] outline-none placeholder:text-[var(--muted)] ${className}`}
+      className={`w-full resize-none overflow-hidden bg-transparent px-1.5 py-1 text-[var(--text)] outline-none placeholder:text-[var(--muted)] ${className}`}
     />
   );
 });
@@ -385,7 +413,7 @@ export { OptionPicker, default as OptionPickerDefault } from "./quick-option-pic
 export type { OptionPickerProps, Option } from "./quick-option-picker";
 export { OptionPickerBase, default as OptionPickerBaseDefault } from "./quick-option-picker-base";
 export type { OptionPickerBaseProps } from "./quick-option-picker-base";
-export { AiPromptInput, ReasoningEffortButton } from "./ai-prompt-input";
+
 export { LiquidMetalButton } from "./liquid-metal-button";
 export { SiriWave, default as SiriWaveDefault } from "./siri-wave";
 export type { SiriWaveProps, SiriWaveVariant } from "./siri-wave";

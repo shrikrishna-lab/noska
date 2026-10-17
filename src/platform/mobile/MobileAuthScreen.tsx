@@ -36,7 +36,7 @@ export default function MobileAuthScreen() {
   if (status === "success") {
     return (
       <div className="mobile-auth-screen mobile-auth-screen--center">
-        <img src="/logo.png" alt="Noska" className="mobile-auth-logo" />
+        <img src="/logo-256.webp" alt="Noska" className="mobile-auth-logo" />
         <h1 className="mobile-auth-title">Signed in</h1>
         <div className="mobile-auth-loading">
           <span className="mobile-spinner" aria-hidden />
@@ -55,7 +55,7 @@ export default function MobileAuthScreen() {
           : "Waiting for sign-in…";
     return (
       <div className="mobile-auth-screen mobile-auth-screen--center" data-testid="mobile-auth-waiting">
-        <img src="/logo.png" alt="Noska" className="mobile-auth-logo" />
+        <img src="/logo-256.webp" alt="Noska" className="mobile-auth-logo" />
         <h1 className="mobile-auth-title">Finish in your browser</h1>
         <p className="mobile-auth-subtitle">
           We've opened your browser to sign in securely. Noska will reopen automatically.
@@ -90,7 +90,7 @@ export default function MobileAuthScreen() {
   if (status === "resumable") {
     return (
       <div className="mobile-auth-screen mobile-auth-screen--center" data-testid="mobile-auth-resumable">
-        <img src="/logo.png" alt="Noska" className="mobile-auth-logo" />
+        <img src="/logo-256.webp" alt="Noska" className="mobile-auth-logo" />
         <h1 className="mobile-auth-title">Continue signing in?</h1>
         <p className="mobile-auth-subtitle">
           You started signing in earlier but it didn't finish.
@@ -133,7 +133,7 @@ export default function MobileAuthScreen() {
           : "Couldn't return to Noska";
     return (
       <div className="mobile-auth-screen mobile-auth-screen--center" data-testid="mobile-auth-error">
-        <img src="/logo.png" alt="Noska" className="mobile-auth-logo" />
+        <img src="/logo-256.webp" alt="Noska" className="mobile-auth-logo" />
         <h1 className="mobile-auth-title">{title}</h1>
         <p className="mobile-auth-subtitle">
           {status === "expired"
@@ -166,7 +166,7 @@ export default function MobileAuthScreen() {
   return (
     <div className="mobile-auth-screen mobile-auth-screen--center" data-testid="mobile-auth-idle">
       <div className="mobile-auth-logo-wrap">
-        <img src="/logo.png" alt="Noska" className="mobile-auth-logo" />
+        <img src="/logo-256.webp" alt="Noska" className="mobile-auth-logo" />
       </div>
       <h1 className="mobile-auth-title">Welcome to Noska</h1>
       <p className="mobile-auth-subtitle">

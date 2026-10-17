@@ -55,8 +55,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
-  if (req.method !== "POST") {
-    return json(405, { error: "ai-proxy: POST only" });
+  if (req.method !== "POST" && req.method !== "GET") {
+    return json(405, { error: "ai-proxy: POST/GET only" });
   }
 
   // Path: /functions/v1/ai-proxy/<name>/<rest...>
@@ -94,9 +94,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   let upstreamRes: Response;
   try {
     upstreamRes = await fetch(target, {
-      method: "POST",
+      method: req.method,
       headers,
-      body: await req.text(),
+      body: req.method === "GET" || req.method === "HEAD" ? undefined : await req.text(),
     });
   } catch (err) {
     return json(502, { error: `ai-proxy: upstream unreachable: ${err instanceof Error ? err.message : "unknown"}` });

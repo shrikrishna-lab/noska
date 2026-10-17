@@ -19,7 +19,7 @@
  *   // To cancel: controller.abort();
  */
 
-import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, type AIProvider, type ProviderSendOpts, type NativeToolSpec, type TokenUsageInfo } from './providers.js';
+import { getProvider, getAllProviders, mockResponse, testProviderConnection, registerCustomProvider, unregisterCustomProvider, generateImage as generateProviderImage, supportsImageGeneration, type AIProvider, type ProviderSendOpts, type NativeToolSpec, type TokenUsageInfo, type GeneratedImage } from './providers.js';
 import { buildContext, buildMinimalContext } from './ContextBuilder.js';
 import { buildAgentPrompt, getAgent } from './agents.js';
 import { initializeMemory, getMemory } from './memory.js';
@@ -472,6 +472,36 @@ class AIManager {
     return true;
   }
 
+  supportsImageGeneration(): boolean {
+    const provider = this.getActiveProvider();
+    if (!provider) return false;
+    const model = this._resolveValidModel(provider, this.config.activeModel);
+    const metadata = modelRegistry.getModel(this.config.activeModel) || modelRegistry.getModel(model);
+    return supportsImageGeneration(provider.id, model, metadata?.capabilities.imageGeneration);
+  }
+
+  async generateImage({ prompt, size, quality, signal }: { prompt: string; size?: string; quality?: string; signal?: AbortSignal }): Promise<GeneratedImage> {
+    const provider = this.getActiveProvider();
+    if (!provider) throw configError("Image generation");
+    const model = this._resolveValidModel(provider, this.config.activeModel);
+    const metadata = modelRegistry.getModel(this.config.activeModel) || modelRegistry.getModel(model);
+    if (!supportsImageGeneration(provider.id, model, metadata?.capabilities.imageGeneration)) {
+      throw new Error(`The selected model "${model}" is not an image-generation model`);
+    }
+    const config = this.config.providers[provider.id] || {};
+    if (provider.requiresKey && !config.apiKey) throw configError(provider.name);
+    return await generateProviderImage({
+      providerId: provider.id,
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl || provider.baseUrl,
+      model,
+      prompt,
+      size,
+      quality,
+      signal,
+    });
+  }
+
   getAllProviders() {
     return getAllProviders();
   }
@@ -711,7 +741,7 @@ class AIManager {
     }
 
     const agentId = agent || this.config.activeAgent;
-    const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
+    const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true, imageGeneration: this.supportsImageGeneration() });
     const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
 
     let provider = this.getActiveProvider();
@@ -777,7 +807,7 @@ class AIManager {
     }
 
     const agentId = agent || this.config.activeAgent;
-    const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true });
+    const baseSystem = system || buildAgentPrompt(agentId, contextString, { tools: true, imageGeneration: this.supportsImageGeneration() });
     const fullSystem = `${baseSystem}${this._buildReasoningDirective(effort, thinking)}`;
 
     if (!provider || (provider.requiresKey && !providerConfig.apiKey)) {
@@ -858,7 +888,7 @@ class AIManager {
       conversationState: this._conversationState,
       contextWindow: dynamicContextWindow,
       maxOutputTokens: dynamicMaxOutputTokens,
-      agentSystemPrompt: system || buildAgentPrompt(agentId, "", { tools: true }),
+      agentSystemPrompt: system || buildAgentPrompt(agentId, "", { tools: true, imageGeneration: this.supportsImageGeneration() }),
     });
 
     diagnostics.setContext({

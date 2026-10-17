@@ -666,7 +666,7 @@ const RUN_UNSUPPORTED = "Agent/automation EXECUTION runs inside the Noska app ru
 
 const agentTools: ToolDef[] = [
   {
-    name: "list-agents", group: "agents", risk: "GREEN", scope: "pages:read",
+    name: "list-agents", group: "agents", risk: "GREEN", scope: "agents:read",
     description: "List the user's Noska agents (real agents table).",
     inputSchema: { type: "object", properties: { status: { type: "string", enum: ["active", "paused"] } } },
     async handler(args, key) {
@@ -677,7 +677,7 @@ const agentTools: ToolDef[] = [
     },
   },
   {
-    name: "get-agent", group: "agents", risk: "GREEN", scope: "pages:read",
+    name: "get-agent", group: "agents", risk: "GREEN", scope: "agents:read",
     description: "Inspect one agent including instructions/model/status.",
     inputSchema: { type: "object", properties: { agent_id: { type: "string" } }, required: ["agent_id"] },
     async handler(args, key) {
@@ -688,7 +688,7 @@ const agentTools: ToolDef[] = [
     },
   },
   {
-    name: "create-agent", group: "agents", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "agents", ownerCol: "owner_id" },
+    name: "create-agent", group: "agents", risk: "YELLOW", scope: "agents:write", verifyTable: { table: "agents", ownerCol: "owner_id" },
     description: 'Create a real Noska agent, e.g. "Study Guardian that monitors overdue study tasks". Fields: name (required), instructions, icon, model(default|fast|quality), status(active|paused), triggers[], access_grants[].',
     inputSchema: {
       type: "object",
@@ -715,7 +715,7 @@ const agentTools: ToolDef[] = [
     },
   },
   {
-    name: "update-agent", group: "agents", risk: "YELLOW", scope: "pages:write",
+    name: "update-agent", group: "agents", risk: "YELLOW", scope: "agents:write",
     description: "Update an agent's fields or enable/disable via status.",
     inputSchema: { type: "object", properties: { agent_id: { type: "string" }, name: { type: "string" }, instructions: { type: "string" }, status: { type: "string", enum: ["active", "paused"] }, model: { type: "string" }, description: { type: "string" } }, required: ["agent_id"] },
     async handler(args, key) {
@@ -729,7 +729,7 @@ const agentTools: ToolDef[] = [
     },
   },
   {
-    name: "archive-agent", group: "agents", risk: "RED", scope: "pages:write",
+    name: "archive-agent", group: "agents", risk: "RED", scope: "agents:write",
     description: "Pause (soft-archive) an agent. RED risk — requires confirm:true.",
     inputSchema: { type: "object", properties: { agent_id: { type: "string" }, confirm: { type: "boolean" } }, required: ["agent_id"] },
     async handler(args, key) {
@@ -739,7 +739,7 @@ const agentTools: ToolDef[] = [
     },
   },
   {
-    name: "run-agent", group: "agents", risk: "RED", scope: "pages:write",
+    name: "run-agent", group: "agents", risk: "RED", scope: "agents:run",
     description: "Request an agent run. Execution happens in the Noska app runtime; MCP returns UNSUPPORTED_CAPABILITY rather than simulating.",
     inputSchema: { type: "object", properties: { agent_id: { type: "string" } }, required: ["agent_id"] },
     async handler() { throw E.unsupported(RUN_UNSUPPORTED); },
@@ -748,7 +748,7 @@ const agentTools: ToolDef[] = [
 
 const automationTools: ToolDef[] = [
   {
-    name: "list-automations", group: "automations", risk: "GREEN", scope: "pages:read",
+    name: "list-automations", group: "automations", risk: "GREEN", scope: "automations:read",
     description: "List the user's automations (real automations table shared with the Automations UI).",
     inputSchema: { type: "object", properties: { status: { type: "string", enum: ["active", "paused"] } } },
     async handler(args, key) {
@@ -759,7 +759,7 @@ const automationTools: ToolDef[] = [
     },
   },
   {
-    name: "create-automation", group: "automations", risk: "YELLOW", scope: "pages:write", verifyTable: { table: "automations", ownerCol: "owner_id" },
+    name: "create-automation", group: "automations", risk: "YELLOW", scope: "automations:write", verifyTable: { table: "automations", ownerCol: "owner_id" },
     description: 'Create a real automation, e.g. weekly schedule: {"type":"schedule","config":{"schedule":"weekly mon 09:00"}}. steps describe what should happen when it runs in-app.',
     inputSchema: {
       type: "object",
@@ -791,7 +791,7 @@ const automationTools: ToolDef[] = [
     },
   },
   {
-    name: "update-automation", group: "automations", risk: "YELLOW", scope: "pages:write",
+    name: "update-automation", group: "automations", risk: "YELLOW", scope: "automations:write",
     description: "Update automation fields / enable-disable via status.",
     inputSchema: { type: "object", properties: { automation_id: { type: "string" }, name: { type: "string" }, description: { type: "string" }, status: { type: "string", enum: ["active", "paused"] }, schedule: { type: "string" } }, required: ["automation_id"] },
     async handler(args, key) {
@@ -812,7 +812,7 @@ const automationTools: ToolDef[] = [
     },
   },
   {
-    name: "archive-automation", group: "automations", risk: "RED", scope: "pages:write",
+    name: "archive-automation", group: "automations", risk: "RED", scope: "automations:write",
     description: "Pause (soft-archive) an automation. RED risk — requires confirm:true.",
     inputSchema: { type: "object", properties: { automation_id: { type: "string" }, confirm: { type: "boolean" } }, required: ["automation_id"] },
     async handler(args, key) {
@@ -822,7 +822,7 @@ const automationTools: ToolDef[] = [
     },
   },
   {
-    name: "run-automation", group: "automations", risk: "RED", scope: "pages:write",
+    name: "run-automation", group: "automations", risk: "RED", scope: "automations:run",
     description: "Request an automation run. Execution lives in the Noska app runtime; returns UNSUPPORTED_CAPABILITY instead of simulating.",
     inputSchema: { type: "object", properties: { automation_id: { type: "string" } }, required: ["automation_id"] },
     async handler() { throw E.unsupported("Automation execution runs inside the Noska app scheduler/runtime. Manage and trigger from the Automations UI."); },

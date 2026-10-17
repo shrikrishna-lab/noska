@@ -22,6 +22,7 @@ export default function OnboardingSuggestions({
       ];
     }
     return [
+      { label: 'Available tools', prompt: 'What are your available tools and capabilities?' },
       { label: 'Search workspace', prompt: 'What pages do I have in my workspace?' },
       { label: 'Brainstorm ideas', prompt: 'Brainstorm 10 creative project ideas with outlines.' },
       { label: 'Draft document', prompt: 'Help me draft a clean document structure.' },

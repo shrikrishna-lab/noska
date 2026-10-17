@@ -15,6 +15,7 @@ import {
   agentRuntime, subscribeRuns, describeTrigger, parseSchedule, proposeAgent,
   type ToolContextLike, type TriggerSpec, type ScheduleSpec, type PermissionSpec, type RunRecord,
 } from "../../ai/runtime";
+import { defaultPermissions } from "../../ai/runtime/types";
 import { computeHealth } from "../../ai/runtime/agentOps";
 import RunsExplorer from "../../components/ai/RunsExplorer";
 import MemoryManager from "./MemoryManager";
@@ -230,7 +231,7 @@ export default function AgentWorkspace({ pages, currentUserId, onToast, toolCont
               <TemplateLibrary onInstalled={() => void refresh()} onToast={onToast} />
             </div>
           ) : tab === 'personal' ? (
-            <PersonalAgentView pages={pages} onToast={onToast} />
+            <PersonalAgentView pages={pages} onToast={onToast} toolContext={toolContext} />
           ) : tab === 'directory' ? (
             <AgentDirectoryView
               installed={agents.map((a) => a.name)}
@@ -271,20 +272,86 @@ function TabButton({ icon: Icon, label, active, onClick, count }: TabButtonProps
 
 /* ═══ Personal agent (local configuration surface) ═══ */
 
-function PersonalAgentView({ pages, onToast }: { pages: unknown; onToast?: (m: string) => void }) {
-  void pages;
-  void onToast;
-  const [name, setName] = useState('Noska');
-  const [avatar, setAvatar] = useState('🤖');
-  const [personality, setPersonality] = useState('helpful');
-  const [instructions, setInstructions] = useState('I am a helpful AI assistant for the workspace. I help users manage pages, take notes, and stay organized.');
+const PERSONAL_AGENT_KEY = 'noska_personal_agent';
+
+interface PersonalSkill { id: string; name: string; prompt: string; }
+
+function loadPersonalAgent(): { name: string; avatar: string; personality: string; instructions: string; skills: PersonalSkill[] } {
+  const fallback = {
+    name: 'Noska',
+    avatar: '🤖',
+    personality: 'helpful',
+    instructions: 'I am a helpful AI assistant for the workspace. I help users manage pages, take notes, and stay organized.',
+    skills: [
+      { id: 's1', name: 'Summarize Page', prompt: 'Summarize the active page in 3-5 bullet points.' },
+      { id: 's2', name: 'Extract Tasks', prompt: 'Find all todo items and tasks across the workspace and list them.' },
+    ],
+  };
+  try {
+    const raw = localStorage.getItem(PERSONAL_AGENT_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<typeof fallback>;
+    return {
+      name: typeof parsed.name === 'string' && parsed.name ? parsed.name : fallback.name,
+      avatar: typeof parsed.avatar === 'string' && parsed.avatar ? parsed.avatar : fallback.avatar,
+      personality: typeof parsed.personality === 'string' && parsed.personality ? parsed.personality : fallback.personality,
+      instructions: typeof parsed.instructions === 'string' ? parsed.instructions : fallback.instructions,
+      skills: Array.isArray(parsed.skills)
+        ? parsed.skills.filter(s => s && typeof s.id === 'string' && typeof s.name === 'string' && typeof s.prompt === 'string')
+        : fallback.skills,
+    };
+  } catch { return fallback; }
+}
+
+export function PersonalAgentView({ pages, onToast, toolContext }: { pages: unknown; onToast?: (m: string) => void; toolContext?: { currentPage?: unknown; pages?: unknown[]; actions: Record<string, (...args: never[]) => unknown> } }) {
+  const [initial] = useState(loadPersonalAgent);
+  const [name, setName] = useState(initial.name);
+  const [avatar, setAvatar] = useState(initial.avatar);
+  const [personality, setPersonality] = useState(initial.personality);
+  const [instructions, setInstructions] = useState(initial.instructions);
   const [planMode, setPlanMode] = useState(false);
-  const [skills, setSkills] = useState([
-    { id: 's1', name: 'Summarize Page', prompt: 'Summarize the active page in 3-5 bullet points.' },
-    { id: 's2', name: 'Extract Tasks', prompt: 'Find all todo items and tasks across the workspace and list them.' },
-  ]);
+  const [skills, setSkills] = useState<PersonalSkill[]>(initial.skills);
   const [showSkillEditor, setShowSkillEditor] = useState(false);
   const [newSkill, setNewSkill] = useState({ name: '', prompt: '' });
+  const [runningSkillId, setRunningSkillId] = useState<string | null>(null);
+
+  // Persist every edit — previously this whole tab was useState-only and
+  // everything entered here was lost on navigation.
+  useEffect(() => {
+    try {
+      localStorage.setItem(PERSONAL_AGENT_KEY, JSON.stringify({ name, avatar, personality, instructions, skills }));
+    } catch { /* private mode — session-only */ }
+  }, [name, avatar, personality, instructions, skills]);
+
+  const runSkill = useCallback(async (skill: PersonalSkill) => {
+    if (runningSkillId) return;
+    setRunningSkillId(skill.id);
+    onToast?.(`Running “${skill.name}”…`);
+    try {
+      const run = await agentRuntime.execute({
+        goal: skill.prompt,
+        sourceId: `personal-skill:${skill.id}`,
+        sourceKind: 'ai',
+        trigger: 'manual',
+        permissions: defaultPermissions(),
+        memoryMode: 'run',
+        maxSteps: 6,
+        getContext: () => ({
+          currentPage: toolContext?.currentPage as never,
+          pages: ((toolContext?.pages?.length ? toolContext.pages : pages) ?? []) as never,
+          actions: (toolContext?.actions ?? {}) as never,
+        }),
+        instructions: [`You are ${name || 'Noska'} (${personality} personality). ${instructions}${planMode ? ' Propose a plan first and wait for confirmation before changing anything.' : ''}`],
+      } as never);
+      const summary = (run as { status?: string; summary?: string })?.summary;
+      const status = (run as { status?: string })?.status ?? 'finished';
+      onToast?.(status === 'completed' ? `“${skill.name}” finished${summary ? `: ${summary.slice(0, 90)}` : ''}` : `“${skill.name}” ${String(status).replace('_', ' ')}`);
+    } catch (e) {
+      onToast?.(e instanceof Error ? e.message : 'Skill run failed.');
+    } finally {
+      setRunningSkillId(null);
+    }
+  }, [runningSkillId, onToast, name, personality, instructions, planMode, pages, toolContext]);
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -314,6 +381,14 @@ function PersonalAgentView({ pages, onToast }: { pages: unknown; onToast?: (m: s
               <h4 className="text-xs font-semibold text-[var(--text)]">{s.name}</h4>
               <p className="text-[10px] text-[var(--muted)] truncate">{s.prompt}</p>
             </div>
+            <button
+              onClick={() => void runSkill(s)}
+              disabled={runningSkillId !== null}
+              title={runningSkillId ? "A skill is already running" : `Run ${s.name}`}
+              className="flex items-center gap-1 rounded-md bg-[var(--accent)]/10 px-2 py-1 text-[10px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20 disabled:opacity-40"
+            >
+              <Play size={10} />{runningSkillId === s.id ? "Running…" : "Run"}
+            </button>
             <button onClick={() => setSkills(prev => prev.filter(x => x.id !== s.id))} className="text-[var(--muted)] hover:text-[var(--danger)]"><Trash2 size={11} /></button>
           </div>
         ))}

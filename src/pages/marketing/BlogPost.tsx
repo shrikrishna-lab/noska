@@ -190,7 +190,7 @@ export default function BlogPost() {
             EgressMonitor.logEvent('query', 'blog_post', { slug });
             const { data, error } = await (supabaseAnon as any)
               .from('blog_posts')
-              .select('*')
+              .select('id,title,slug,excerpt,content,author,cover_image,tags,published,published_at,read_time,featured,created_at,updated_at')
               .eq('slug', slug)
               .eq('published', true)
               .single();
@@ -449,7 +449,7 @@ export default function BlogPost() {
           {/* Cover Image */}
           {post.cover_image && (
             <div className="blog-post-cover">
-              <img src={post.cover_image} alt={post.title} loading="lazy" />
+              <img src={post.cover_image} alt={post.title} width={1200} height={800} fetchPriority="high" decoding="async" loading="eager" />
             </div>
           )}
 

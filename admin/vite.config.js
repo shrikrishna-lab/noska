@@ -23,6 +23,12 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 1500,
+    modulePreload: {
+      resolveDependencies(filename, deps, { hostType }) {
+        if (hostType !== "html") return deps;
+        return deps.filter((dep) => !dep.includes("recharts"));
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

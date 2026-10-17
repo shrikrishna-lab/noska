@@ -199,6 +199,7 @@ interface BlockLock {
 }
 
 const LOCK_TTL_MS = 30_000;
+const LOCK_COLUMNS = 'id,page_id,block_id,user_id,user_name,user_color,acquired_at,expires_at';
 let lockInterval: ReturnType<typeof setInterval> | null = null;
 
 export async function acquireBlockLock(pageId: string, blockId: string, userId: string, userName: string, userColor: string): Promise<BlockLock | null> {
@@ -206,7 +207,7 @@ export async function acquireBlockLock(pageId: string, blockId: string, userId: 
 
   const { data: existing } = await supabase
     .from('block_locks')
-    .select('*')
+    .select(LOCK_COLUMNS)
     .eq('page_id', pageId)
     .eq('block_id', blockId)
     .neq('user_id', userId)
@@ -264,7 +265,7 @@ export async function refreshBlockLock(pageId: string, blockId: string, userId: 
 export async function getBlockLocks(pageId: string): Promise<BlockLock[]> {
   const { data, error } = await supabase
     .from('block_locks')
-    .select('*')
+    .select(LOCK_COLUMNS)
     .eq('page_id', pageId)
     .gt('expires_at', new Date().toISOString());
 
@@ -275,7 +276,7 @@ export async function getBlockLocks(pageId: string): Promise<BlockLock[]> {
 export async function isBlockLocked(pageId: string, blockId: string, excludeUserId?: string): Promise<BlockLock | null> {
   let query = supabase
     .from('block_locks')
-    .select('*')
+    .select(LOCK_COLUMNS)
     .eq('page_id', pageId)
     .eq('block_id', blockId)
     .gt('expires_at', new Date().toISOString());

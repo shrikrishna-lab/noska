@@ -82,7 +82,7 @@ export function DesktopTitleBar() {
       >
         <div className="flex size-4 items-center justify-center rounded-md bg-black/[0.04] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.08] p-0.5 shadow-2xs">
           <img
-            src="/logo.png"
+            src="/logo-256.webp"
             alt="Noska"
             className="size-3 object-contain"
             onError={(e) => {

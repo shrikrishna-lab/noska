@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Search, X, CornerDownLeft } from "lucide-react";
-import { PageIcon } from "../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 import { AnimatePresence, motion } from "framer-motion";
 import { FADE_IN_VARIANTS } from "./GraphAnimations";
 import { capture } from "../../lib/posthog";

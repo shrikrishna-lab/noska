@@ -104,9 +104,15 @@ export function WaitlistSuccessCard({
       {/* High Quality Landscape Photo Background */}
       <div className="nl-success-bg-wrap">
         <img
-          src="/success-bg.png"
-          alt="Nature Landscape"
-          className="nl-success-bg-img"
+           src="/success-bg.webp"
+           srcSet="/success-bg-512.webp 512w, /success-bg.webp 1024w"
+           sizes="100vw"
+           width={1024}
+           height={1024}
+           fetchPriority="high"
+           decoding="async"
+           alt="Nature Landscape"
+           className="nl-success-bg-img"
         />
         <div className="nl-success-bg-overlay" />
       </div>

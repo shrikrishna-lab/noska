@@ -411,7 +411,11 @@ onReplace, onInsert, onClose, onToast, page, onBlockPatch, onPagePatch }: Select
                           onBlockPatch(selection.blockId, rest);
                         }
                       } else {
-                        const patch = colorTab === "bg" ? { bgColor: c.name.toLowerCase() } : { color: c.name.toLowerCase() };
+                        // Persist the palette hex (`c.value`), not `c.name.toLowerCase()`.
+                        // The renderer applies these straight into a style
+                        // object, and "brown" is not a valid CSS colour, so the
+                        // browser dropped the declaration entirely.
+                        const patch = colorTab === "bg" ? { bgColor: c.value } : { color: c.value };
                         onBlockPatch(selection.blockId, patch);
                       }
                       onToast?.(`${colorTab === "bg" ? "Background" : "Text"} color set to ${c.name}`);

@@ -93,7 +93,9 @@ export async function verifyPersisted(
   expect: Row,
   ownerCol: "user_id" | "owner_id" = "user_id",
 ): Promise<VerificationResult> {
-  const { data } = await db().from(table).select("*").eq(ownerCol, ownerId).eq("id", id).maybeSingle();
+  const fields = Object.keys(expect).filter((field) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field));
+  const select = ["id", ...fields].join(",");
+  const { data } = await db().from(table).select(select).eq(ownerCol, ownerId).eq("id", id).maybeSingle();
   const actual = (data as Row) ?? undefined;
   const checks = Object.entries(expect).map(([field, expected]) => ({
     field,

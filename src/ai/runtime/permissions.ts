@@ -25,6 +25,14 @@ const TOOL_CATEGORY: Record<string, PermissionCategory> = {
   analyze_page: "read",
   capabilities: "read",
   get_user_profile: "read",
+  export_page: "read",
+  // Asking the user a clarifying question mutates nothing. AgentRuntime
+  // intercepts it before evaluatePermission (it needs to suspend the run for
+  // the reply), but leaving it out of this map meant categoryForTool returned
+  // null — "Unknown tool" to anything else that consults the map, e.g. the
+  // verifier or a permission audit. Classifying it keeps the map complete
+  // without changing runtime behaviour.
+  ask_user: "read",
   // Navigation — UI-only, no data changes
   open_view: "read",
   open_page: "read",
@@ -37,9 +45,16 @@ const TOOL_CATEGORY: Record<string, PermissionCategory> = {
   create_page: "create",
   create_page_from_template: "create",
   duplicate_page: "create",
+  create_database: "create",
+  create_chart: "create",
+  create_columns: "create",
+  create_tabs: "create",
+  create_interactive: "create",
+  image_generate: "external",
   append_blocks: "update",
   add_todo: "update",
   insert_block: "update",
+  execute_slash_command: "update",
   // Updates
   rename_page: "update",
   update_block: "update",
@@ -60,9 +75,14 @@ const TOOL_CATEGORY: Record<string, PermissionCategory> = {
   // External / cross-cutting
   send_notification: "external",
   create_flashcards: "update",
-  // Multi-agent delegation
+  // Multi-agent delegation, agents & automations management
   call_subagent: "agents",
   create_subagent: "agents",
+  list_agents: "read",
+  manage_agent: "agents",
+  list_automations: "read",
+  manage_automation: "automations",
+  monitor_runs: "read",
 };
 
 export function categoryForTool(toolName: string): PermissionCategory | null {

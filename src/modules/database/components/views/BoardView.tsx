@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef, useCallback } from "react";
 import { Plus, MoreHorizontal } from "lucide-react";
 import { sortRowsByMultiple } from "../../utils/sortEngine";
 import { colorForOption } from "../../utils/optionColors";
-import { PageIcon } from "../../../../components/PageIcon";
+import { PageIcon } from "@/components/PageIcon";
 import type { DatabaseRow, PropertyDefinition, ViewDefinition } from "../../types/database";
 
 export interface BoardViewProps {

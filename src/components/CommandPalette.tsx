@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, History, CheckSquare, Brain, Hash } from "lucide-react";
-import * as Icons from "lucide-react";
+import { LucideIcon } from "./PageIcon";
 import { getFilteredCommands, type CommandContext, type NormalizedCommand } from "../core/commands/CommandRegistry";
 import { executeCommand } from "../core/commands/ActionExecutor";
 import { blockFor } from "../utils/helpers";
@@ -360,15 +360,7 @@ export default function CommandPalette({
     }
   }, [results, highlightedIndex, handleSelect, onClose, query]);
 
-  const renderIcon = (iconName: string) => {
-    // Cast: lucide-react's namespace import isn't indexable by an
-    // arbitrary string at the type level, but every icon name passed here
-    // comes from a command's `.icon` field, a runtime-validated string
-    // key into the same module. Same pattern as SlashCommandMenu.tsx's
-    // RenderIcon.
-    const Icon = (Icons as unknown as Record<string, React.ComponentType<{ size?: number }>>)[iconName];
-    return Icon ? <Icon size={14} /> : null;
-  };
+  const renderIcon = (iconName: string) => <LucideIcon name={iconName} size={14} />;
 
   return (
     <AnimatePresence>
