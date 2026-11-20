@@ -10,6 +10,7 @@ import { isUnauthorizedError, triggerSessionExpired } from "@/lib/session-expire
 import { Shell } from "@/components/layout/Shell";
 import { RouteGuard } from "@/components/layout/RouteGuard";
 import { Login } from "@/pages/Login";
+import { ResetPassword } from "@/pages/ResetPassword";
 import { Forbidden } from "@/pages/Forbidden";
 import { Loader2 } from "lucide-react";
 
@@ -164,6 +165,7 @@ export default function App() {
               <ErrorBoundary>
                 <Routes>
                   <Route path="/403" element={<Suspense fallback={<PageLoading />}><Forbidden /></Suspense>} />
+                  <Route path="/reset-password" element={<Suspense fallback={<PageLoading />}><ResetPassword /></Suspense>} />
                   <Route element={<AuthGate><Shell /></AuthGate>}>
                     <Route element={<RouteGuard />}>
                        <Route index element={<Suspense fallback={<PageLoading />}><Dashboard /></Suspense>} />
