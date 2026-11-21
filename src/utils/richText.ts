@@ -66,7 +66,7 @@ export function richTextToHtml(richText: RichTextSpan[] | null | undefined) {
     
     if (span.link) {
       const href = escapeHtml(span.link);
-      formats.push(`<a href="${href}" class="rich-link">`);
+      formats.push(`<a href="${href}" target="_blank" rel="noopener noreferrer" class="rich-link">`);
     }
     
     if (span.color && span.bgColor) {

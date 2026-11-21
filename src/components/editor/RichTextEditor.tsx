@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { renderInlineMarkdown } from "../../utils/helpers";
-import { richTextToHtml, htmlToRichText, richTextToPlainText, normalizeRichText, isEmptyRichText, type RichTextSpan } from "../../utils/richText";
+import { richTextToHtml, htmlToRichText, richTextToPlainText, normalizeRichText, markdownToRichText, isEmptyRichText, type RichTextSpan } from "../../utils/richText";
 import { EditorCommands } from "../../editor/EditorCommands";
 import { customPrompt } from "../../lib/custom-dialogs";
 import { ClipboardPipeline } from "../../editor/ClipboardPipeline";
@@ -100,7 +100,12 @@ const RichTextMode = React.forwardRef<HTMLElement, RichTextModeProps>(function R
     if (!el || isComposing) return null;
     const html = el.innerHTML;
     if (html === "<br>" || !html.trim()) return [];
-    return htmlToRichText(html);
+    // If content contains HTML tags (e.g. from Ctrl+B), parse as HTML;
+    // otherwise parse as markdown so **bold** becomes <strong>bold</strong>
+    const parsed = /<[a-z][\s\S]*>/i.test(html)
+      ? htmlToRichText(html)
+      : markdownToRichText(html);
+    return parsed;
   }, [isComposing]);
 
   const syncFromRichText = useCallback(() => {
@@ -109,16 +114,6 @@ const RichTextMode = React.forwardRef<HTMLElement, RichTextModeProps>(function R
 
   useLayoutEffect(() => {
     if (!divRef.current || isComposing) return;
-
-    // Never rewrite the DOM out from under an element the user is typing in.
-    // Real bug (found in live QA): an empty text block renders as a bare
-    // contenteditable with no committed `richText` yet. Keystrokes land in the
-    // DOM and `handleInput` patches upward, but if that patch hasn't round-
-    // tripped into the `richText` prop by the time this effect runs, the
-    // comparison below differs and the effect resets innerHTML to the empty
-    // prop value — silently deleting what the user just typed. Focusing is the
-    // reliable signal that the DOM is the source of truth, so defer to it.
-    if (document.activeElement === divRef.current) return;
 
     const targetHtml = syncFromRichText();
     const currentHtml = divRef.current.innerHTML;
