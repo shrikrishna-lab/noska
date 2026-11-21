@@ -5,6 +5,7 @@ import { X, ExternalLink, Clock, FileText } from "lucide-react";
 import { timeAgo, plainText } from "../../utils/helpers";
 import type { Page } from "../../lib/supabaseService";
 import { PageIcon } from "../PageIcon";
+import { renderInlineMd } from "../ui/MarkdownLite";
 
 interface PagePeekProps {
   page: Page | null | undefined;
@@ -120,15 +121,15 @@ export default function PagePeek({ page, pages, children, onNavigate, onOpenFull
                   <div className="space-y-0.5 text-xs text-[var(--secondary)] leading-relaxed">
                     {(page.blocks || []).slice(0, 5).map((block) => (
                       <div key={block.id} className="truncate">
-                        {block.type === "h1" && <span className="font-semibold text-[var(--text)]">{block.text}</span>}
-                        {block.type === "h2" && <span className="font-semibold text-[var(--text)]">{block.text}</span>}
-                        {block.type === "h3" && <span className="font-semibold text-[var(--text)]">{block.text}</span>}
-                        {block.type === "bullet" && <span>• {block.text}</span>}
-                        {block.type === "number" && <span>1. {block.text}</span>}
-                        {block.type === "quote" && <span className="italic">"{block.text}"</span>}
-                        {block.type === "todo" && <span>{block.checked ? "☑" : "☐"} {block.text}</span>}
+                        {block.type === "h1" && <span className="font-semibold text-[var(--text)]">{renderInlineMd(block.text, `peek-${block.id}-h1`)}</span>}
+                        {block.type === "h2" && <span className="font-semibold text-[var(--text)]">{renderInlineMd(block.text, `peek-${block.id}-h2`)}</span>}
+                        {block.type === "h3" && <span className="font-semibold text-[var(--text)]">{renderInlineMd(block.text, `peek-${block.id}-h3`)}</span>}
+                        {block.type === "bullet" && <span>• {renderInlineMd(block.text, `peek-${block.id}-bullet`)}</span>}
+                        {block.type === "number" && <span>1. {renderInlineMd(block.text, `peek-${block.id}-number`)}</span>}
+                        {block.type === "quote" && <span className="italic">"{renderInlineMd(block.text, `peek-${block.id}-quote`)}"</span>}
+                        {block.type === "todo" && <span>{block.checked ? "☑" : "☐"} {renderInlineMd(block.text, `peek-${block.id}-todo`)}</span>}
                         {block.type === "divider" && <hr className="border-[var(--border)] my-1" />}
-                        {(block.type === "text" || !block.type) && <span>{block.text}</span>}
+                        {(block.type === "text" || !block.type) && <span>{renderInlineMd(block.text, `peek-${block.id}`)}</span>}
                         {block.text || <span className="text-[var(--muted)] italic">Empty</span>}
                       </div>
                     ))}

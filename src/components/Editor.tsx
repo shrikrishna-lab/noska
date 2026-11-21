@@ -47,6 +47,7 @@ import ImagePicker from "./editor/ImagePicker";
 import PageIconBlock from "./editor/PageIconBlock";
 import PageTitleCustomizer, { TITLE_GRADIENTS } from "./editor/PageTitleCustomizer";
 import { PageIcon } from "./PageIcon";
+import { renderInlineMd } from "./ui/MarkdownLite";
 
 import InPageFind from "./InPageFind";
 import { CursorOverlay } from "../features/collab/CursorOverlay";
@@ -2072,15 +2073,15 @@ export default function Editor({
           <div className="flex-1 mx-auto max-w-3xl w-full px-8 py-12 space-y-6 text-lg leading-relaxed">
             {(page.blocks || []).map((block, i) => (
               <div key={block.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${i * 80}ms` }}>
-                {block.type === "h1" && <h1 className="text-3xl font-bold mt-8 mb-2">{block.text}</h1>}
-                {block.type === "h2" && <h2 className="text-2xl font-bold mt-6 mb-1">{block.text}</h2>}
-                {block.type === "h3" && <h3 className="text-xl font-semibold mt-4 mb-1">{block.text}</h3>}
-                {block.type === "bullet" && <li className="ml-6 list-disc">{block.text}</li>}
-                {block.type === "number" && <li className="ml-6 list-decimal">{block.text}</li>}
-                {block.type === "todo" && <div className="flex items-center gap-2"><input type="checkbox" checked={Boolean(block.checked)} readOnly className="accent-[var(--accent)]" /><span className={block.checked ? "line-through opacity-60" : ""}>{block.text}</span></div>}
-                {block.type === "quote" && <blockquote className="border-l-4 border-[var(--accent)] pl-4 italic opacity-80">{block.text}</blockquote>}
+                {block.type === "h1" && <h1 className="text-3xl font-bold mt-8 mb-2">{renderInlineMd(block.text, `editor-${block.id}-h1`)}</h1>}
+                {block.type === "h2" && <h2 className="text-2xl font-bold mt-6 mb-1">{renderInlineMd(block.text, `editor-${block.id}-h2`)}</h2>}
+                {block.type === "h3" && <h3 className="text-xl font-semibold mt-4 mb-1">{renderInlineMd(block.text, `editor-${block.id}-h3`)}</h3>}
+                {block.type === "bullet" && <li className="ml-6 list-disc">{renderInlineMd(block.text, `editor-${block.id}-bullet`)}</li>}
+                {block.type === "number" && <li className="ml-6 list-decimal">{renderInlineMd(block.text, `editor-${block.id}-number`)}</li>}
+                {block.type === "todo" && <div className="flex items-center gap-2"><input type="checkbox" checked={Boolean(block.checked)} readOnly className="accent-[var(--accent)]" /><span className={block.checked ? "line-through opacity-60" : ""}>{renderInlineMd(block.text, `editor-${block.id}-todo`)}</span></div>}
+                {block.type === "quote" && <blockquote className="border-l-4 border-[var(--accent)] pl-4 italic opacity-80">{renderInlineMd(block.text, `editor-${block.id}-quote`)}</blockquote>}
                 {block.type === "divider" && <hr className="border-[var(--border)]" />}
-                {(block.type === "text" || !block.type) && <p>{block.text}</p>}
+                {(block.type === "text" || !block.type) && <p>{renderInlineMd(block.text, `editor-${block.id}`)}</p>}
               </div>
             ))}
           </div>
