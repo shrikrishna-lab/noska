@@ -17,7 +17,9 @@ test
 scripts
 sdk
 src-tauri
-supabase
+# supabase/ contains edge functions imported by the admin app (e.g. support-notify/email.ts)
+# Functions and migrations are deployed separately via Supabase CLI
+# src-tauri
 trigger
 emails
 graphify-out
